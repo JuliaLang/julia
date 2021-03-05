@@ -17,32 +17,32 @@ DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
 # used by Revise.jl
-@assert precompile(Tuple{typeof(Base.parse_cache_header), String})
-@assert precompile(Base.read_dependency_src, (String, String))
+@warnpcfail precompile(Tuple{typeof(Base.parse_cache_header), String})
+@warnpcfail precompile(Base.read_dependency_src, (String, String))
 
 # used by Requires.jl
-@assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(push!), Vector{Function}, Function})
+@warnpcfail precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@warnpcfail precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@warnpcfail precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+@warnpcfail precompile(Tuple{typeof(push!), Vector{Function}, Function})
 
 # miscellaneous
-@assert precompile(Tuple{typeof(Base.require), Base.PkgId})
-@assert precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
-@assert precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
-@assert precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
-@assert precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
-@assert precompile(Tuple{typeof(Base.display_error), MethodError, Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}})
-@assert precompile(Tuple{typeof(Base.display_error), ErrorException})
-@assert precompile(Tuple{typeof(Base.display_error), BoundsError})
-@assert precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int64}}, Type{IOBuffer}})
-@assert precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
-@assert precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
+@warnpcfail precompile(Tuple{typeof(Base.require), Base.PkgId})
+@warnpcfail precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
+@warnpcfail precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
+@warnpcfail precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
+@warnpcfail precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
+@warnpcfail precompile(Tuple{typeof(Base.display_error), MethodError, Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}})
+@warnpcfail precompile(Tuple{typeof(Base.display_error), ErrorException})
+@warnpcfail precompile(Tuple{typeof(Base.display_error), BoundsError})
+@warnpcfail precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int64}}, Type{IOBuffer}})
+@warnpcfail precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
+@warnpcfail precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
     global hardcoded_precompile_statements
-    hardcoded_precompile_statements *= "@assert precompile(Tuple{typeof(show), $IO, $T})\n"
+    hardcoded_precompile_statements *= "@warnpcfail precompile(Tuple{typeof(show), $IO, $T})\n"
 end
 
 repl_script = """
@@ -108,7 +108,7 @@ have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
 if have_repl
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+    @warnpcfail precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
     """
 end
 
@@ -117,9 +117,9 @@ Distributed = get(Base.loaded_modules,
           nothing)
 if Distributed !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(Distributed.remotecall),Function,Int,Module,Vararg{Any, 100}})
-    @assert precompile(Tuple{typeof(Distributed.procs)})
-    @assert precompile(Tuple{typeof(Distributed.finalize_ref), Distributed.Future})
+    @warnpcfail precompile(Tuple{typeof(Distributed.remotecall),Function,Int,Module,Vararg{Any, 100}})
+    @warnpcfail precompile(Tuple{typeof(Distributed.procs)})
+    @warnpcfail precompile(Tuple{typeof(Distributed.finalize_ref), Distributed.Future})
     """
 # This is disabled because it doesn't give much benefit
 # and the code in Distributed is poorly typed causing many invalidations
@@ -164,9 +164,9 @@ FileWatching = get(Base.loaded_modules,
           nothing)
 if FileWatching !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
-    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
-    @assert precompile(Tuple{typeof(FileWatching._uv_hook_close), FileWatching.FileMonitor})
+    @warnpcfail precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
+    @warnpcfail precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+    @warnpcfail precompile(Tuple{typeof(FileWatching._uv_hook_close), FileWatching.FileMonitor})
     """
 end
 
@@ -184,33 +184,33 @@ Test = get(Base.loaded_modules,
           nothing)
 if Test !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
-    @assert precompile(Tuple{typeof(Test.testset_beginend), Tuple{String, Expr}, Expr, LineNumberNode})
-    @assert precompile(Tuple{Type{Test.DefaultTestSet}, String})
-    @assert precompile(Tuple{Type{Test.DefaultTestSet}, AbstractString})
-    @assert precompile(Tuple{Core.kwftype(Type{Test.DefaultTestSet}), Any, Type{Test.DefaultTestSet}, AbstractString})
-    @assert precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
-    @assert precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
-    @assert precompile(Tuple{typeof(Test._inferred), Expr, Module})
-    @assert precompile(Tuple{typeof(Test.push_testset), Test.DefaultTestSet})
-    @assert precompile(Tuple{typeof(Test.get_alignment), Test.DefaultTestSet, Int})
-    @assert precompile(Tuple{typeof(Test.get_test_result), Any, Any})
-    @assert precompile(Tuple{typeof(Test.do_test_throws), Test.ExecutionResult, Any, Any})
-    @assert precompile(Tuple{typeof(Test.print_counts), Test.DefaultTestSet, Int, Int, Int, Int, Int, Int, Int})
-    @assert precompile(Tuple{typeof(Test._check_testset), Type, Expr})
-    @assert precompile(Tuple{typeof(Test.test_expr!), Any, Any})
-    @assert precompile(Tuple{typeof(Test.test_expr!), Any, Any, Vararg{Any, 100}})
-    @assert precompile(Tuple{typeof(Test.pop_testset)})
-    @assert precompile(Tuple{typeof(Test.match_logs), Function, Tuple{Symbol, Regex}})
-    @assert precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
-    @assert precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
-    @assert precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    @assert precompile(Tuple{typeof(Core.kwfunc(Base.CoreLogging.handle_message)), typeof((exception=nothing,)), typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    @assert precompile(Tuple{typeof(Test.detect_ambiguities), Any})
-    @assert precompile(Tuple{typeof(Test.collect_test_logs), Function})
-    @assert precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
-    @assert precompile(Tuple{typeof(Test.record), Test.DefaultTestSet, Union{Test.Error, Test.Fail}})
-    @assert precompile(Tuple{typeof(Test.filter_errors), Test.DefaultTestSet})
+    @warnpcfail precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
+    @warnpcfail precompile(Tuple{typeof(Test.testset_beginend), Tuple{String, Expr}, Expr, LineNumberNode})
+    @warnpcfail precompile(Tuple{Type{Test.DefaultTestSet}, String})
+    @warnpcfail precompile(Tuple{Type{Test.DefaultTestSet}, AbstractString})
+    @warnpcfail precompile(Tuple{Core.kwftype(Type{Test.DefaultTestSet}), Any, Type{Test.DefaultTestSet}, AbstractString})
+    @warnpcfail precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
+    @warnpcfail precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
+    @warnpcfail precompile(Tuple{typeof(Test._inferred), Expr, Module})
+    @warnpcfail precompile(Tuple{typeof(Test.push_testset), Test.DefaultTestSet})
+    @warnpcfail precompile(Tuple{typeof(Test.get_alignment), Test.DefaultTestSet, Int})
+    @warnpcfail precompile(Tuple{typeof(Test.get_test_result), Any, Any})
+    @warnpcfail precompile(Tuple{typeof(Test.do_test_throws), Test.ExecutionResult, Any, Any})
+    @warnpcfail precompile(Tuple{typeof(Test.print_counts), Test.DefaultTestSet, Int, Int, Int, Int, Int, Int, Int})
+    @warnpcfail precompile(Tuple{typeof(Test._check_testset), Type, Expr})
+    @warnpcfail precompile(Tuple{typeof(Test.test_expr!), Any, Any})
+    @warnpcfail precompile(Tuple{typeof(Test.test_expr!), Any, Any, Vararg{Any, 100}})
+    @warnpcfail precompile(Tuple{typeof(Test.pop_testset)})
+    @warnpcfail precompile(Tuple{typeof(Test.match_logs), Function, Tuple{Symbol, Regex}})
+    @warnpcfail precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
+    @warnpcfail precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
+    @warnpcfail precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
+    @warnpcfail precompile(Tuple{typeof(Core.kwfunc(Base.CoreLogging.handle_message)), typeof((exception=nothing,)), typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
+    @warnpcfail precompile(Tuple{typeof(Test.detect_ambiguities), Any})
+    @warnpcfail precompile(Tuple{typeof(Test.collect_test_logs), Function})
+    @warnpcfail precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
+    @warnpcfail precompile(Tuple{typeof(Test.record), Test.DefaultTestSet, Union{Test.Error, Test.Fail}})
+    @warnpcfail precompile(Tuple{typeof(Test.filter_errors), Test.DefaultTestSet})
     """
 end
 
@@ -219,7 +219,7 @@ Profile = get(Base.loaded_modules,
           nothing)
 if Profile !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol})
+    @warnpcfail precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol})
     """
 end
 
@@ -345,6 +345,15 @@ function generate_precompile_statements()
             eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
         end
     end
+    eval(PrecompileStagingArea, quote
+         macro warnpcfail(ex::Expr)
+             quote
+                 $(esc(ex)) || @warn """precompile directive
+                                            $($(Expr(:quote, ex)))
+                                        failed."""
+             end
+         end
+    end)
 
     # Execute the collected precompile statements
     n_succeeded = 0
