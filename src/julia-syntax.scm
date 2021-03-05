@@ -1976,6 +1976,57 @@
                           ,@(apply append rows))))
              `(call ,@vcat ,@a))))))
 
+(define (expand-ncat e
+                     (hvncat '((top hvncat))))
+  (define (ncons a n l)
+    (if (< n 1)
+        l
+        (ncons a (1- n) (cons a l))))
+  (define (get-dims a d)
+    (let ((n (length a))
+          (b (car a)))
+      (if (pair? b)
+          (if (eq? (car b) 'row)
+              (if (= d 1)
+                  (list (car (get-dims (cdr b) 0)) n)
+                  (cons n (ncons 1 (- d 3) (get-dims (cdr b) 2))))
+              (let ((bd (cadr b)))
+                (if (and (= bd 1) (pair? (caddr b)))
+                    (cons n (ncons 1 (- d (1+ (1+ bd))) (get-dims (cddr b) bd)))
+                    (cons n (ncons 1 (- d (1+ bd)) (get-dims (cddr b) bd))))))
+          (cons n (ncons 1 (- d 1) '())))))
+  (define (flatten a)
+    (foldl (lambda (x y)
+             (if (and (pair? x) (eqv? (car x) 'nrow))
+                 (append (flatten (cddr x)) y)
+                 (cons x y)))
+           '()
+           a))
+  (let ((d (cadr e))
+        (a (cddr e)))
+    (let ((aflat (reverse (flatten a))))
+      (if (any assignment? aflat)
+          (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+      (if (has-parameters? aflat)
+          (error "unexpected semicolon in array expression"))
+      (expand-forms
+        (let ((is-row-first
+              ; parser ensures rows are mutually exclusive with two semicolons
+              (if (any (lambda (x)
+                         (and (pair? x) (eq? (car x) 'row)))
+                       aflat)
+                  '(true)
+                  '(false)))
+              (rows (map (lambda (x)
+                           (if (and (pair? x) (eq? (car x) 'row))
+                               (cdr x)
+                               (list x)))
+                          aflat))
+              (dims (cons 'tuple (reverse (get-dims a d)))))
+          (if (any (lambda (x) (any vararg? x)) rows)
+              (error (string "Splatting ... in an hvncat is not supported")))
+              `(call ,@hvncat ,dims ,is-row-first ,@(apply append rows)))))))
+
 (define (expand-property-destruct lhss x)
   (if (not (length= lhss 1))
       (error (string "invalid assignment location \"" (deparse lhs) "\"")))
@@ -2493,25 +2544,9 @@
 
    'vcat expand-vcat
 
-   'ncat
-   (lambda (e)
-     (let ((r (cadr e))
-           (d (caddr e))
-           (a (cdddr e)))
-       (if (any assignment? a)
-           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-       (if (has-parameters? a)
-           (error "unexpected semicolon in array expression"))
-       (expand-forms
-         (let ((rows (map (lambda (x)
-                            (if (and (pair? x) (eq? (car x) 'row))
-                                (cdr x)
-                                (list x)))
-                          a)))
-           (if (any (lambda (x) (any vararg? x)) rows)
-               (error (string "Splatting ... in an hvncat is not supported")))
-           `(call (top hvncat) ,d ,r ,@(apply append rows))))))
-
+   'ncat expand-ncat
+  
+ 
    'typed_hcat
    (lambda (e)
      (if (any assignment? (cddr e))
@@ -2527,20 +2562,8 @@
    'typed_ncat
    (lambda (e)
      (let ((t (cadr e))
-           (r (caddr e))
-           (d (cadddr e))
-           (a (cddddr e)))
-       (if (any assignment? a)
-           (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
-       (expand-forms
-         (let ((rows (map (lambda (x)
-                            (if (and (pair? x) (eq? (car x) 'row))
-                                (cdr x)
-                                (list x)))
-                          a)))
-           (if (any (lambda (x) (any vararg? x)) rows)
-               (error (string "Splatting ... in an hvncat is not supported")))
-           `(call (top typed_hvncat) ,t ,d ,r ,@(apply append rows))))))
+           (e (cdr e)))
+       (expand-ncat e `((top typed_hvncat) ,t))))
 
    '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
 
