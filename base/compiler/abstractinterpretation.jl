@@ -97,7 +97,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     applicable = applicable::Array{Any,1}
     napplicable = length(applicable)
     rettype = Bottom
-    edgecycle = false
+    edgecycle = edgelimited = false
     edges = MethodInstance[]
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
     nonbot = 0             # the index of the only non-Bottom inference result if > 0
@@ -130,8 +130,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                rt, edgecycle1, edge = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
+                rt, edgecycle1, edgelimited1, edge = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
                 edgecycle |= edgecycle1::Bool
+                edgelimited |= edgelimited1::Bool
                 if edge !== nothing
                     push!(edges, edge)
                 end
@@ -141,8 +142,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
             end
         else
-            this_rt, edgecycle1, edge = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
+            this_rt, edgecycle1, edgelimited1, edge = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
             edgecycle |= edgecycle1::Bool
+            edgelimited |= edgelimited1::Bool
             if edge !== nothing
                 push!(edges, edge)
             end
@@ -192,7 +194,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # (hopefully without doing too much work), try to do that now
         # TODO: refactor this, enable constant propagation for each (union-split) signature
         match = applicable[nonbot]::MethodMatch
-        const_rettype, result = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::MethodMatch, sv, edgecycle)
+        const_rettype, result = abstract_call_method_with_const_args(interp, rettype, f, argtypes, applicable[nonbot]::MethodMatch, sv, edgecycle, edgelimited)
         const_conditional = ignorelimited(const_rettype)
         @assert !(const_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
         const_rettype = widenwrappedconditional(const_rettype)
@@ -374,7 +376,7 @@ function const_prop_heuristic(interp::AbstractInterpreter, method::Method, mi::M
     return true
 end
 
-function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch, sv::InferenceState, edgecycle::Bool)
+function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nospecialize(rettype), @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch, sv::InferenceState, edgecycle::Bool, edgelimited::Bool)
     method = match.method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -456,7 +458,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
             infstate = sv
             cyclei = 0
             while !(infstate === nothing)
-                if method === infstate.linfo.def && any(infstate.result.overridden_by_const)
+                if (edgelimited ? method === infstate.linfo.def : mi === infstate.linfo) && any(infstate.result.overridden_by_const)
                     add_remark!(interp, sv, "[constprop] Edge cycle encountered")
                     return Any, nothing
                 end
@@ -488,7 +490,7 @@ const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Ann
 function abstract_call_method(interp::AbstractInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         add_remark!(interp, sv, "Refusing to infer into `depwarn`")
-        return Any, false, nothing
+        return Any, false, false, nothing
     end
     topmost = nothing
     # Limit argument type tuple growth of functions:
@@ -498,6 +500,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     cyclei = 0
     infstate = sv
     edgecycle = false
+    edgelimited = false
     # The `method_for_inference_heuristics` will expand the given method's generator if
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
@@ -517,7 +520,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                     # we have a self-cycle in the call-graph, but not in the inference graph (typically):
                     # break this edge now (before we record it) by returning early
                     # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                    return Any, true, nothing
+                    return Any, true, true, nothing
                 end
                 topmost = nothing
                 edgecycle = true
@@ -542,7 +545,6 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                         parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
                         if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                             topmost = infstate
-                            edgecycle = true
                             break
                         end
                     end
@@ -554,7 +556,6 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                             parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
                             if (parent.cached || parent.parent !== nothing) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
                                 topmost = infstate
-                                edgecycle = true
                             end
                         end
                     end
@@ -599,13 +600,14 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 # since it's very unlikely that we'll try to inline this,
                 # or want make an invoke edge to its calling convention return type.
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                return Any, true, nothing
+                return Any, true, true, nothing
             end
             topmost = topmost::InferenceState
             parentframe = topmost.parent
             poison_callstack(sv, parentframe === nothing ? topmost : parentframe)
             sig = newsig
             sparams = svec()
+            edgelimited = true
         end
     end
 
@@ -637,9 +639,9 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
 
     rt, edge = typeinf_edge(interp, method, sig, sparams, sv)
     if edge === nothing
-        edgecycle = true
+        edgecycle = edgelimited = true
     end
-    return rt, edgecycle, edge
+    return rt, edgecycle, edgelimited, edge
 end
 
 # This is only for use with `Conditional`.

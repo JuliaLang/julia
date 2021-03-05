@@ -3106,3 +3106,30 @@ end == [Int]
 let f() = Val(fieldnames(Complex{Int}))
     @test @inferred(f()) === Val((:re,:im))
 end
+
+# Make sure that const prop doesn't fall into cycles that aren't problematic
+# in the type domain
+f_recurse(x) = x > 1000000 ? x : f_recurse(x+1)
+g_recurse() = f_recurse(1)
+Base.return_types(g_recurse, Tuple{})[1] == Int
+
+# issue #39915
+function f33915(a_tuple, which_ones)
+    rest = my_getindex(tail(a_tuple), tail(which_ones))
+    if first(which_ones)
+        (first(a_tuple), rest...)
+    else
+        rest
+    end
+end
+
+function f33915(a_tuple::Tuple{}, which_ones::Tuple{})
+    ()
+end
+
+function g39915(a_tuple)
+    f33915(a_tuple, (true, false, true, false))
+end
+
+h39915() = g39915((1, 1.0, "a", :a))
+Base.return_types(h39915, Tuple{})[1] == Tuple{Int, String}
