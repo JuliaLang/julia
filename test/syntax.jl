@@ -2701,8 +2701,8 @@ end
 
 # #33697 n-dimensional concatenation and vectors
 @test string(:([1 2 5; 3 4 6;;; 0 9 3; 4 5 4])) ==
-    "\$(Expr(:ncat, true, :((2, 3, 2)), :(1 2 5), :(3 4 6), :(0 9 3), :(4 5 4)))" # can't express the "row" arguments directly
-@test :([1 ; 2 ;; 3 ; 4]) == Expr(:ncat, false, :((2, 2)), 1, 2, 3, 4)
+    "\$(Expr(:ncat, 3, :(\$(Expr(:nrow, 1, :(1 2 5), :(3 4 6)))), :(\$(Expr(:nrow, 1, :(0 9 3), :(4 5 4))))))" # can't express the "row" arguments directly
+@test :([1 ; 2 ;; 3 ; 4]) == Expr(:ncat, 2, Expr(:nrow, 1, 1, 2), Expr(:nrow, 1, 3, 4))
 
 @test_throws ParseError Meta.parse("[1 2 ;; 3 4]") # cannot mix spaces and ;; except as line break
 @test :([1 2 ;;
