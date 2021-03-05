@@ -735,4 +735,13 @@ end
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
 end
 
+@testset "Inner product" begin
+    A = Diagonal(rand(10) .+ im)
+    B = Diagonal(rand(10) .+ im)
+    @test dot(A, B) ≈ dot(Matrix(A), B)
+    @test dot(A, B) ≈ dot(A, Matrix(B))
+    @test dot(A, B) ≈ dot(Matrix(A), Matrix(B))
+    @test dot(A, B) ≈ conj(dot(B, A))
+end
+
 end # module TestDiagonal
