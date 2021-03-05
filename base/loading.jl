@@ -1081,7 +1081,7 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
         @assert Meta.isexpr(ast, :toplevel)
         result = nothing
         line_and_ex = Expr(:toplevel, loc, nothing)
-        for ex in ast.args
+        for ex in (ast::Expr).args
             if ex isa LineNumberNode
                 loc = ex
                 line_and_ex.args[1] = ex

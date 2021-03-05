@@ -474,7 +474,8 @@ function current_logstate()
 end
 
 # helper function to get the current logger, if enabled for the specified message type
-@noinline function current_logger_for_env(std_level::LogLevel, group, _module)
+@noinline function current_logger_for_env(std_level::LogLevel, group::Union{String,Symbol}, _module::Module)
+    @nospecialize  # block const-prop
     logstate = current_logstate()
     if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
         return logstate.logger
@@ -516,7 +517,8 @@ end
 let _debug_groups_include::Vector{Symbol} = Symbol[],
     _debug_groups_exclude::Vector{Symbol} = Symbol[],
     _debug_str::String = ""
-global function env_override_minlevel(group, _module)
+global function env_override_minlevel(group::Union{String,Symbol}, _module::Module)
+    @nospecialize  # block const-prop
     debug = get(ENV, "JULIA_DEBUG", "")
     if !(debug === _debug_str)
         _debug_str = debug
