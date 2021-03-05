@@ -110,6 +110,10 @@ struct InvokeCallInfo
     match::MethodMatch
 end
 
+struct OpaqueClosureCallInfo
+    mi::MethodInstance
+end
+
 # Stmt infos that are used by external consumers, but not by optimization.
 # These are not produced by default and must be explicitly opted into by
 # the AbstractInterpreter.

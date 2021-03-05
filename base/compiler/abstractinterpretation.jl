@@ -348,6 +348,13 @@ end
 # where we would spend a lot of time, but are probably unliekly to get an improved
 # result anyway.
 function const_prop_heuristic(interp::AbstractInterpreter, method::Method, mi::MethodInstance)
+    if method.is_for_opaque_closure
+        # Not inlining an opaque closure can be very expensive, so be generous
+        # with the const-prop-ability. It is quite possible that we can't infer
+        # anything at all without const-propping, so the inlining check below
+        # isn't particularly helpful here.
+        return true
+    end
     # Peek at the inferred result for the function to determine if the optimizer
     # was able to cut it down to something simple (inlineable in particular).
     # If so, there's a good chance we might be able to const prop all the way
@@ -371,7 +378,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     method = match.method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
-    length(argtypes) >= nargs || return Any, nothing
+    if length(argtypes) < nargs
+        return Any, nothing
+    end
     haveconst = false
     allconst = true
     # see if any or all of the arguments are constant and propagating constants may be worthwhile
@@ -428,10 +437,14 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     end
     force_inference |= allconst
     mi = specialize_method(match, !force_inference)
-    mi === nothing && return Any, nothing
+    if mi === nothing
+        add_remark!(interp, sv, "[constprop] Failed to specialize")
+        return Any, nothing
+    end
     mi = mi::MethodInstance
     # decide if it's likely to be worthwhile
     if !force_inference && !const_prop_heuristic(interp, method, mi)
+        add_remark!(interp, sv, "[constprop] Disabled by heuristic")
         return Any, nothing
     end
     inf_cache = get_inference_cache(interp)
@@ -444,6 +457,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
             cyclei = 0
             while !(infstate === nothing)
                 if method === infstate.linfo.def && any(infstate.result.overridden_by_const)
+                    add_remark!(interp, sv, "[constprop] Edge cycle encountered")
                     return Any, nothing
                 end
                 if cyclei < length(infstate.callers_in_cycle)
@@ -1199,7 +1213,20 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
 end
 
 function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::PartialOpaque, argtypes::Vector{Any}, sv::InferenceState)
-    return CallMeta(Any, nothing)
+    pushfirst!(argtypes, closure.env)
+    sig = argtypes_to_type(argtypes)
+    rt, edgecycle, edge = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, sv)
+    info = OpaqueClosureCallInfo(edge)
+    if !edgecycle
+        const_rettype, result = abstract_call_method_with_const_args(interp, rt, closure, argtypes, MethodMatch(sig, Core.svec(), closure.source::Method, false), sv, edgecycle)
+        if const_rettype ⊑ rt
+           rt = const_rettype
+        end
+        if result !== nothing
+            info = ConstCallInfo(info, result)
+        end
+    end
+    return CallMeta(rt, info)
 end
 
 function most_general_argtypes(closure::PartialOpaque)
@@ -1209,7 +1236,7 @@ function most_general_argtypes(closure::PartialOpaque)
     if !isa(argt, DataType) || argt.name !== typename(Tuple)
         argt = Tuple
     end
-    return most_general_argtypes(closure.source, argt, closure.isva)
+    return most_general_argtypes(closure.source, argt, closure.isva, false)
 end
 
 # call where the function is any lattice element
@@ -1224,7 +1251,7 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
     elseif isa(ft, DataType) && isdefined(ft, :instance)
         f = ft.instance
     elseif isa(ft, PartialOpaque)
-        return abstract_call_opaque_closure(interp, ft, argtypes, sv)
+        return abstract_call_opaque_closure(interp, ft, argtypes[2:end], sv)
     elseif isa(unwrap_unionall(ft), DataType) && unwrap_unionall(ft).name === typename(Core.OpaqueClosure)
         return CallMeta(rewrap_unionall(unwrap_unionall(ft).parameters[2], ft), false)
     else
