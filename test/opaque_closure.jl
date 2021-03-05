@@ -44,7 +44,7 @@ let ci = @code_lowered OcClos2Int(1, 2)();
             1, 2))()
     end
 end
-@test oc_self_call_clos() == 3
+@test @inferred(oc_self_call_clos()) == 3
 let opt = @code_typed oc_self_call_clos()
     @test_broken length(opt[1].code) == 1
     @test_broken isa(opt[1].code[1], Core.ReturnNode)
@@ -85,8 +85,8 @@ end
 function complicated_identity(x)
     oc_infer_pass_id()(x)
 end
-@test_broken @inferred(complicated_identity(1)) == 1
-@test_broken @inferred(complicated_identity("a")) == "a"
+@test @inferred(complicated_identity(1)) == 1
+@test @inferred(complicated_identity("a")) == "a"
 let ci = (@code_typed complicated_identity(1))[1]
     @test_broken length(ci.code) == 1
     @test_broken isa(ci.code[1], Core.ReturnNode)
