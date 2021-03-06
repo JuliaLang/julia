@@ -906,7 +906,7 @@ function require(into::Module, mod::Symbol)
 end
 
 # return hint for module name (from project deps / stdlib) or return nothing
-function modulenamehint(tn::AbstractString)
+function modulenamehint(tn::String)
     length(tn) < 3 && return nothing
     hns = Vector{String}()
     for env in load_path()
