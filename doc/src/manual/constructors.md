@@ -420,7 +420,9 @@ julia> struct OurRational{T<:Integer} <: Real
                if num == 0 && den == 0
                     error("invalid rational: 0//0")
                end
-               g = gcd(den, num)
+               num = flipsign(num, den)
+               den = flipsign(den, den)
+               g = gcd(num, den)
                num = div(num, g)
                den = div(den, g)
                new(num, den)
@@ -466,10 +468,9 @@ and `den::T` indicate that the data held in a `OurRational{T}` object are a pair
 
 Now things get interesting. `OurRational` has a single inner constructor method which checks that
 `num` and `den` aren't both zero and ensures that every rational is constructed in "lowest
-terms" with a non-negative denominator. This is accomplished by dividing the given numerator and
-denominator values by their greatest common divisor, computed using the `gcd` function. Since
-`gcd` returns the greatest common divisor of its arguments with sign matching the first argument
-(`den` here), after this division the new value of `den` is guaranteed to be non-negative. Because
+terms" with a non-negative denominator. This is accomplished by first flipping the signs of numerator
+and denominator if the denominator is negative. Then, both are divided by their greatest common
+divisor (`gcd` always returns a non-negative number, regardless of the sign of its arguments). Because
 this is the only inner constructor for `OurRational`, we can be certain that `OurRational` objects are
 always constructed in this normalized form.
 
