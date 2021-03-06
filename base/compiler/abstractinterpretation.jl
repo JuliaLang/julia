@@ -32,6 +32,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
     if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
+        add_remark!(interp, sv, "Skipped call in throw block")
         return CallMeta(Any, false)
     end
     valid_worlds = WorldRange()
@@ -365,7 +366,7 @@ function const_prop_heuristic(interp::AbstractInterpreter, method::Method, mi::M
     if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
-            cache_inlineable = inlining_policy(interp)(cache_inf)
+            cache_inlineable = inlining_policy(interp)(cache_inf) !== nothing
         end
     end
     if !cache_inlineable
