@@ -319,6 +319,14 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         vararg = mk_tuplecall!(compact, argexprs[nargs_def:end], compact.result[idx][:line])
         argexprs = Any[argexprs[1:(nargs_def - 1)]..., vararg]
     end
+    mi = item.mi
+    is_opaque = isa(mi.def, Method) && mi.def.is_for_opaque_closure
+    if is_opaque
+        # Replace the first argument by a load of the capture environment
+        argexprs[1] = insert_node_here!(compact,
+            Expr(:call, GlobalRef(Core, :getfield), argexprs[1], :captures),
+            spec.ir.argtypes[1], compact.result[idx][:line])
+    end
     flag = compact.result[idx][:flag]
     boundscheck_idx = boundscheck
     if boundscheck_idx === :default || boundscheck_idx === :propagate
@@ -1068,7 +1076,6 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), sta
             # N.B.: Narrowing the ub requires a backdge on the mi whose type
             # information we're using, since a change in that function may
             # invalidate ub result.
-            push!(state.et, unspec_call_info.mi)
             stmt.args[4] = newT
         end
     end
@@ -1266,6 +1273,12 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             else
                 info = info.call
             end
+        end
+
+        if isa(info, OpaqueClosureCallInfo)
+            result = analyze_method!(info.match, sig.atypes, state, calltype)
+            handle_single_case!(ir, stmt, idx, result, false, todo)
+            continue
         end
 
         # Handle invoke
