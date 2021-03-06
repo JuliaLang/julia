@@ -270,7 +270,7 @@ end
 module NotPkgModule; end
 
 @testset "modulenamehint()" begin
-    @test modulenamehint("Fooo") == "Foo"
+#=  @test modulenamehint("Fooo") == "Foo"
     @test modulenamehint("fooo") == "Foo"
     @test modulenamehint("foo") == "Foo"
     @test modulenamehint("xfooo") == "Foo"
@@ -281,7 +281,7 @@ module NotPkgModule; end
     @test isnothing(modulenamehint("infoodrest"))
     @test isnothing(modulenamehint("fo"))
     @test isnothing(modulenamehint("xfoxox"))
-#=
+
     # using/import foo - Error with modulemamehint = "Foo"
     @test_throws ArgumentError("""Did you mean Foo? Your entry foo is
     not found in current path. Correct your entry and try again, or run
@@ -293,7 +293,7 @@ module NotPkgModule; end
     @test_throws ArgumentError("""Package xfoxox not found in current path:
     - Run `import Pkg; Pkg.add("xfoxox")` to install the xfoxox package.
     """) using xfoxox
-    @test_throws ArgumentError import xfoxox 
+    @test_throws ArgumentError import xfoxox
 =#
 end
 
