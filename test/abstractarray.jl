@@ -1282,13 +1282,17 @@ end
 end
 
 @testset "issue #39896, modified getindex " begin
-    a=ones(20000)
+    a=ones(10)
     ax=axes(a,1)
     @test a==a[ax]
+    a=ones(10,10)
+    @test a==a[ax,ax]
     ax=UnitRange(1,10)
     @test a[ax]==ones(10)
-    a=ones(BigInt(20000))
-    ax=UnitRange(1,20000)
-    @test a[ax]== ones(BigInt(20000))
-
+    @test a[ax,ax]==ones(10,10)
+    a=ones(BigInt(10))
+    ax=UnitRange(1,10)
+    @test a[ax]== ones(BigInt(10))
+    a=ones(BigInt(10),BigInt(10))
+    @test a[ax,ax]==ones(BigInt(10),BigInt(10))
 end
