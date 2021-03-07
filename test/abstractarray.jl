@@ -1285,8 +1285,10 @@ end
     a=ones(10)
     ax=axes(a,1)
     @test a==a[ax]
+    @test a[2:8]==a[ax[2:8]]
     a=ones(10,10)
     @test a==a[ax,ax]
+    @test a[2:5,3:7]==a[ax[2:5],ax[3:7]]
     ax=UnitRange(1,10)
     @test a[ax]==ones(10)
     @test a[ax,ax]==ones(10,10)
@@ -1296,3 +1298,4 @@ end
     a=ones(BigInt(10),BigInt(10))
     @test a[ax,ax]==ones(BigInt(10),BigInt(10))
 end
+
