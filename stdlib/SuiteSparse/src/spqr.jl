@@ -133,6 +133,8 @@ function Base.size(F::QRSparse, i::Integer)
 end
 Base.axes(F::QRSparse) = map(Base.OneTo, size(F))
 
+Base.adjoint(F::QRSparse) = Adjoint(F)
+
 struct QRSparseQ{Tv<:CHOLMOD.VTypes,Ti<:Integer} <: LinearAlgebra.AbstractQ{Tv}
     factors::SparseMatrixCSC{Tv,Ti}
     τ::Vector{Tv}
