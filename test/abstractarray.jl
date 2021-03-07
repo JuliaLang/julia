@@ -1280,3 +1280,15 @@ end
     @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
     @test_throws ArgumentError Int[t...; 3 4 5]
 end
+
+@testset "issue #39896, modified getindex " begin
+    a=ones(20000)
+    ax=axes(a,1)
+    @test a==a[ax]
+    ax=UnitRange(1,10)
+    @test a[ax]==ones(10)
+    a=ones(BigInt(20000))
+    ax=UnitRange(1,20000)
+    @test a[ax]== ones(BigInt(20000))
+
+end
