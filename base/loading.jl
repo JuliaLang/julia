@@ -915,7 +915,7 @@ function modulenamehint(tn::String)
     append!(hns, readdir(Sys.STDLIB))
     isempty(hns) && return nothing
     scores = similar(hns, Int)
-    for (index, hn) in enumerate(hns)
+    for (index, hn) in collect(enumerate(hns))
         s1, s2 = length(tn) >= length(hn) ? (tn, hn) : (hn, tn)
         scores[index] = length(s1) - length(s2) + (contains(s1, s2) ? 0 :
                         contains(lowercase(s1), lowercase(s2)) ? 1 : 4)
