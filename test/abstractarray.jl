@@ -1285,10 +1285,14 @@ end
     a=collect(1:10)
     ax=axes(a,1)
     @test a==a[ax]
-    @test a[2:8]==a[ax[2:8]]
     a=reshape(collect(1:100),(10,10))
     @test a==a[ax,ax]
-    @test a[2:5,3:7]==a[ax[2:5],ax[3:7]]
+    a=collect(1:10)
+    ax=Base.OneTo(8)
+    @test a[1:8]==a[ax]
+    a=reshape(collect(1:100),(10,10))
+    ay=Base.OneTo(7)
+    @test a[1:8,1:7]==a[ax,ay]
     ax=UnitRange(1,10)
     @test a[ax]==collect(1:10)
     @test a[ax,ax]==reshape(collect(1:100),(10,10))
