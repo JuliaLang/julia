@@ -407,6 +407,7 @@ AbstractArray(F::QRPivoted) = AbstractMatrix(F)
 Matrix(F::QRPivoted) = Array(AbstractArray(F))
 Array(F::QRPivoted) = Matrix(F)
 Base.parent(F::QRCompactWY) = (F.Q * F.R)
+Base.adjoint(F::Union{QR,QRCompactWY}}) = Base.Adjoint(F)
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{QR, QRCompactWY, QRPivoted})
     summary(io, F); println(io)
