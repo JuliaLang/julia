@@ -1654,9 +1654,14 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
     if (n) {
         if (jl_is_typevar(n)) {
+            // TODO: this is disabled due to #39698; it is also inconsistent
+            // with other similar checks, where we usually only check substituted
+            // values and not the bounds of variables.
+            /*
             jl_tvar_t *N = (jl_tvar_t*)n;
             if (!(N->lb == jl_bottom_type && N->ub == (jl_value_t*)jl_any_type))
                 jl_error("TypeVar in Vararg length must have bounds Union{} and Any");
+            */
         }
         else if (!jl_is_long(n)) {
             jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, n);
@@ -2150,7 +2155,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(18,
+                        jl_perm_symsvec(19,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -2168,8 +2173,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inferred",
                             "inlineable",
                             "propagate_inbounds",
-                            "pure"),
-                        jl_svec(18,
+                            "pure",
+                            "aggressive_constprop"),
+                        jl_svec(19,
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
@@ -2187,13 +2193,14 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
+                            jl_bool_type,
                             jl_bool_type),
-                        0, 1, 18);
+                        0, 1, 19);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(22,
+                        jl_perm_symsvec(24,
                             "name",
                             "module",
                             "file",
@@ -2215,8 +2222,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             "nospecialize",
                             "nkw",
                             "isva",
-                            "pure"),
-                        jl_svec(22,
+                            "pure",
+                            "is_for_opaque_closure",
+                            "aggressive_constprop"),
+                        jl_svec(24,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -2237,6 +2246,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_int32_type,
                             jl_int32_type,
                             jl_int32_type,
+                            jl_bool_type,
+                            jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
                         0, 1, 10);
@@ -2302,10 +2313,13 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_perm_symsvec(2, "typ", "fields"),
                                        jl_svec2(jl_any_type, jl_array_any_type), 0, 0, 2);
 
+    jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
+                                          jl_perm_symsvec(3, "slot", "vtype", "elsetype"),
+                                          jl_svec(3, jl_long_type, jl_any_type, jl_any_type), 0, 0, 3);
+
     jl_method_match_type = jl_new_datatype(jl_symbol("MethodMatch"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(4, "spec_types", "sparams", "method", "fully_covers"),
                                        jl_svec(4, jl_type_type, jl_simplevector_type, jl_method_type, jl_bool_type), 0, 0, 4);
-
 
     // all Kinds share the Type method table (not the nonfunction one)
     jl_unionall_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
@@ -2381,8 +2395,22 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
 
-    // complete builtin type metadata
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
+
+    tv = jl_svec2(tvar("A"), tvar("R"));
+    jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
+        jl_perm_symsvec(6, "captures", "isva", "world", "source", "invoke", "specptr"),
+        jl_svec(6, jl_any_type, jl_bool_type, jl_long_type, jl_any_type, pointer_void, pointer_void), 0, 0, 6)->name->wrapper;
+    jl_opaque_closure_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type))->name;
+    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type));
+
+
+    jl_partial_opaque_type = jl_new_datatype(jl_symbol("PartialOpaque"), core, jl_any_type, jl_emptysvec,
+        jl_perm_symsvec(5, "typ", "env", "isva", "parent", "source"),
+        jl_svec(5, jl_type_type, jl_any_type, jl_bool_type, jl_method_instance_type, jl_method_type),
+        0, 0, 5);
+
+    // complete builtin type metadata
     jl_voidpointer_type = (jl_datatype_t*)pointer_void;
     jl_uint8pointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_uint8_type);
     jl_svecset(jl_datatype_type->types, 6, jl_voidpointer_type);

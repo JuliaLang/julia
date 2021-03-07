@@ -158,7 +158,7 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, transpose, adjoint, float, inv]
+                            isinteger, isreal, transpose, adjoint, float, complex, inv]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
@@ -171,11 +171,15 @@ Base.one(::Type{Unit}) = 1
         @test zero(Union{T, Missing}) === T(0)
         @test one(Union{T, Missing}) === T(1)
         @test oneunit(Union{T, Missing}) === T(1)
+        @test float(Union{T, Missing}) === Union{float(T), Missing}
+        @test complex(Union{T, Missing}) === Union{complex(T), Missing}
     end
 
     @test_throws MethodError zero(Union{Symbol, Missing})
     @test_throws MethodError one(Union{Symbol, Missing})
     @test_throws MethodError oneunit(Union{Symbol, Missing})
+    @test_throws MethodError float(Union{Symbol, Missing})
+    @test_throws MethodError complex(Union{Symbol, Missing})
 
     for T in (Unit,)
         @test zero(Union{T, Missing}) === T(0)
@@ -186,10 +190,14 @@ Base.one(::Type{Unit}) = 1
     @test zero(Missing) === missing
     @test one(Missing) === missing
     @test oneunit(Missing) === missing
+    @test float(Missing) === Missing
+    @test complex(Missing) === Missing
 
     @test_throws MethodError zero(Any)
     @test_throws MethodError one(Any)
     @test_throws MethodError oneunit(Any)
+    @test_throws MethodError float(Any)
+    @test_throws MethodError complex(Any)
 
     @test_throws MethodError zero(String)
     @test_throws MethodError zero(Union{String, Missing})

@@ -196,7 +196,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     if (!internal && jl_unwrap_unionall(dt->name->wrapper) == (jl_value_t*)dt) {
         tag = 6; // external primary type
     }
-    else if (!dt->isconcretetype) {
+    else if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars) {
         tag = 0; // normal struct
     }
     else if (internal) {
@@ -212,8 +212,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         tag = 11; // external, but definitely new (still needs caching, but not full unique-ing)
     }
     else {
-        // this'll need unique-ing later
-        // flag this in the backref table as special
+        // this is eligible for (and possibly requires) unique-ing later,
+        // so flag this in the backref table as special
         uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, dt);
         assert(*bp != (uintptr_t)HT_NOTFOUND);
         *bp |= 1;
@@ -348,9 +348,10 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_int8(s->s, 0);
     jl_serialize_value(s, m->parent);
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_serialize_value(s, (jl_value_t*)table[i]);
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
             jl_serialize_value(s, b->name);
             jl_value_t *e = b->value;
             if (!b->constp && e && jl_is_cpointer(e) && jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
@@ -379,11 +380,11 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint8(s->s, m->infer);
 }
 
-static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
+static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     if (v == NULL) {
         write_uint8(s->s, TAG_NULL);
-        return;
+        return 1;
     }
 
     void *tag = ptrhash_get(&ser_tag, v);
@@ -392,28 +393,29 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         if (t8 <= LAST_TAG)
             write_uint8(s->s, 0);
         write_uint8(s->s, t8);
-        return;
+        return 1;
     }
+
     if (jl_is_symbol(v)) {
         void *idx = ptrhash_get(&common_symbol_tag, v);
         if (idx != HT_NOTFOUND) {
             write_uint8(s->s, TAG_COMMONSYM);
             write_uint8(s->s, (uint8_t)(size_t)idx);
-            return;
+            return 1;
         }
     }
     else if (v == (jl_value_t*)jl_core_module) {
         write_uint8(s->s, TAG_CORE);
-        return;
+        return 1;
     }
     else if (v == (jl_value_t*)jl_base_module) {
         write_uint8(s->s, TAG_BASE);
-        return;
+        return 1;
     }
 
     if (jl_typeis(v, jl_string_type) && jl_string_len(v) == 0) {
         jl_serialize_value(s, jl_an_empty_string);
-        return;
+        return 1;
     }
     else if (!jl_is_uint8(v)) {
         void **bp = ptrhash_bp(&backref_table, v);
@@ -427,7 +429,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 write_uint8(s->s, TAG_BACKREF);
                 write_int32(s->s, pos);
             }
-            return;
+            return 1;
         }
         intptr_t pos = backref_table_numel++;
         if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
@@ -450,6 +452,62 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         pos <<= 1;
         ptrhash_put(&backref_table, v, (char*)HT_NOTFOUND + pos + 1);
+    }
+
+    return 0;
+}
+
+static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_t *codeinst, int skip_partial_opaque) JL_GC_DISABLED
+{
+    if (jl_serialize_generic(s, (jl_value_t*)codeinst)) {
+        return;
+    }
+
+    int validate = 0;
+    if (codeinst->max_world == ~(size_t)0)
+        validate = 1; // can check on deserialize if this cache entry is still valid
+    int flags = validate << 0;
+    if (codeinst->invoke == jl_fptr_const_return)
+        flags |= 1 << 2;
+    if (codeinst->precompile)
+        flags |= 1 << 3;
+
+    // CodeInstances with PartialOpaque return type are currently not allowed
+    // to be cached. We skip them in serialization here, forcing them to
+    // be re-infered on reload.
+    int write_ret_type = validate || codeinst->min_world == 0;
+    if (write_ret_type && codeinst->rettype_const &&
+            jl_typeis(codeinst->rettype_const, jl_partial_opaque_type)) {
+        if (skip_partial_opaque) {
+            jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
+            return;
+        }
+        else {
+            jl_error("Cannot serialize CodeInstance with PartialOpaque rettype");
+        }
+    }
+
+    write_uint8(s->s, TAG_CODE_INSTANCE);
+    write_uint8(s->s, flags);
+    jl_serialize_value(s, (jl_value_t*)codeinst->def);
+    if (write_ret_type) {
+        jl_serialize_value(s, codeinst->inferred);
+        jl_serialize_value(s, codeinst->rettype_const);
+        jl_serialize_value(s, codeinst->rettype);
+    }
+    else {
+        // skip storing useless data
+        jl_serialize_value(s, NULL);
+        jl_serialize_value(s, NULL);
+        jl_serialize_value(s, jl_any_type);
+    }
+    jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
+}
+
+static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
+{
+    if (jl_serialize_generic(s, v)) {
+        return;
     }
 
     size_t i;
@@ -570,7 +628,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_uint8(s->s, TAG_METHOD);
         jl_method_t *m = (jl_method_t*)v;
         int internal = 1;
-        internal = module_in_worklist(m->module);
+        internal = m->is_for_opaque_closure || module_in_worklist(m->module);
         if (!internal) {
             // flag this in the backref table as special
             uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, v);
@@ -593,6 +651,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int32(s->s, m->nkw);
         write_int8(s->s, m->isva);
         write_int8(s->s, m->pure);
+        write_int8(s->s, m->is_for_opaque_closure);
+        write_int8(s->s, m->aggressive_constprop);
         jl_serialize_value(s, (jl_value_t*)m->slot_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
         jl_serialize_value(s, (jl_value_t*)m->ccallable);
@@ -602,8 +662,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->invokes);
     }
     else if (jl_is_method_instance(v)) {
-        write_uint8(s->s, TAG_METHOD_INSTANCE);
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
+        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
+            jl_error("unimplemented: serialization of MethodInstances for OpaqueClosure");
+        }
+        write_uint8(s->s, TAG_METHOD_INSTANCE);
         int internal = 0;
         if (!jl_is_method(mi->def.method))
             internal = 1;
@@ -642,39 +705,19 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         jl_serialize_value(s, (jl_value_t*)backedges);
         jl_serialize_value(s, (jl_value_t*)NULL); //callbacks
-        jl_serialize_value(s, (jl_value_t*)mi->cache);
+        jl_serialize_code_instance(s, mi->cache, 1);
     }
     else if (jl_is_code_instance(v)) {
-        write_uint8(s->s, TAG_CODE_INSTANCE);
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)v;
-        int validate = 0;
-        if (codeinst->max_world == ~(size_t)0)
-            validate = 1; // can check on deserialize if this cache entry is still valid
-        int flags = validate << 0;
-        if (codeinst->invoke == jl_fptr_const_return)
-            flags |= 1 << 2;
-        if (codeinst->precompile)
-            flags |= 1 << 3;
-        write_uint8(s->s, flags);
-        jl_serialize_value(s, (jl_value_t*)codeinst->def);
-        if (validate || codeinst->min_world == 0) {
-            jl_serialize_value(s, codeinst->inferred);
-            jl_serialize_value(s, codeinst->rettype_const);
-            jl_serialize_value(s, codeinst->rettype);
-        }
-        else {
-            // skip storing useless data
-            jl_serialize_value(s, NULL);
-            jl_serialize_value(s, NULL);
-            jl_serialize_value(s, jl_any_type);
-        }
-        jl_serialize_value(s, codeinst->next);
+        jl_serialize_code_instance(s, (jl_code_instance_t*)v, 0);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
     }
     else if (jl_typeis(v, jl_task_type)) {
         jl_error("Task cannot be serialized");
+    }
+    else if (jl_typeis(v, jl_opaque_closure_type)) {
+        jl_error("Live opaque closures cannot be serialized");
     }
     else if (jl_typeis(v, jl_string_type)) {
         write_uint8(s->s, TAG_STRING);
@@ -1437,6 +1480,8 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->nkw = read_int32(s->s);
     m->isva = read_int8(s->s);
     m->pure = read_int8(s->s);
+    m->is_for_opaque_closure = read_int8(s->s);
+    m->aggressive_constprop = read_int8(s->s);
     m->slot_syms = jl_deserialize_value(s, (jl_value_t**)&m->slot_syms);
     jl_gc_wb(m, m->slot_syms);
     m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
@@ -1551,12 +1596,12 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     jl_gc_wb(m, m->parent);
 
     while (1) {
-        jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
-        if (name == NULL)
+        jl_sym_t *asname = (jl_sym_t*)jl_deserialize_value(s, NULL);
+        if (asname == NULL)
             break;
-        jl_binding_t *b = jl_get_binding_wr(m, name, 1);
+        jl_binding_t *b = jl_get_binding_wr(m, asname, 1);
+        b->name = (jl_sym_t*)jl_deserialize_value(s, (jl_value_t**)&b->name);
         b->value = jl_deserialize_value(s, &b->value);
-        jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
         if (b->value != NULL) jl_gc_wb(m, b->value);
         b->globalref = jl_deserialize_value(s, &b->globalref);
         if (b->globalref != NULL) jl_gc_wb(m, b->globalref);
@@ -1845,6 +1890,7 @@ static void jl_insert_methods(jl_array_t *list)
     size_t i, l = jl_array_len(list);
     for (i = 0; i < l; i += 2) {
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(list, i);
+        assert(!meth->is_for_opaque_closure);
         jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_array_ptr_ref(list, i + 1);
         assert(jl_is_method(meth));
         jl_methtable_t *mt = jl_method_table_for((jl_value_t*)meth->sig);
@@ -2413,6 +2459,7 @@ static jl_method_t *jl_lookup_method(jl_methtable_t *mt, jl_datatype_t *sig, siz
 
 static jl_method_t *jl_recache_method(jl_method_t *m)
 {
+    assert(!m->is_for_opaque_closure);
     jl_datatype_t *sig = (jl_datatype_t*)m->sig;
     jl_methtable_t *mt = jl_method_table_for((jl_value_t*)m->sig);
     assert((jl_value_t*)mt != jl_nothing);
@@ -2635,7 +2682,6 @@ void jl_init_serializer(void)
                      jl_box_int64(12), jl_box_int64(13), jl_box_int64(14),
                      jl_box_int64(15), jl_box_int64(16), jl_box_int64(17),
                      jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
-                     jl_box_int64(21),
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
@@ -2652,6 +2698,7 @@ void jl_init_serializer(void)
                      jl_namedtuple_type, jl_array_int32_type,
                      jl_typedslot_type, jl_uint32_type, jl_uint64_type,
                      jl_type_type_mt, jl_nonfunction_mt,
+                     jl_opaque_closure_type,
 
                      ptls->root_task,
 

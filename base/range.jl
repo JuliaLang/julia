@@ -47,25 +47,17 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
-    range(start[, stop]; length, stop, step=1)
+    range(start, stop, length)
+    range(start, stop; length, step)
+    range(start; length, stop, step)
+    range(;start, length, stop, step)
 
-Given a starting value, construct a range either by length or from `start` to `stop`,
-optionally with a given step (defaults to 1, a [`UnitRange`](@ref)).
-One of `length` or `stop` is required.  If `length`, `stop`, and `step` are all specified, they must agree.
-
-If `length` and `stop` are provided and `step` is not, the step size will be computed
-automatically such that there are `length` linearly spaced elements in the range.
-
-If `step` and `stop` are provided and `length` is not, the overall range length will be computed
-automatically such that the elements are `step` spaced.
-
-Special care is taken to ensure intermediate values are computed rationally.
-To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
-
-`stop` may be specified as either a positional or keyword argument.
-
-!!! compat "Julia 1.1"
-    `stop` as a positional argument requires at least Julia 1.1.
+Construct a specialized array with evenly spaced elements and optimized storage (an [`AbstractRange`](@ref)) from the arguments.
+Mathematically a range is uniquely determined by any three of `start`, `step`, `stop` and `length`.
+Valid invocations of range are:
+* Call `range` with any three of `start`, `step`, `stop`, `length`.
+* Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
+to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
 
 # Examples
 ```jldoctest
@@ -86,51 +78,126 @@ julia> range(1, 10, length=101)
 
 julia> range(1, 100, step=5)
 1:5:96
+
+julia> range(stop=10, length=5)
+6:10
+
+julia> range(stop=10, step=1, length=5)
+6:1:10
+
+julia> range(start=1, step=1, stop=10)
+1:1:10
 ```
+If `length` is not specified and `stop - start` is not an integer multiple of `step`, a range that ends before `stop` will be produced.
+```jldoctest
+julia> range(1, 3.5, step=2)
+1.0:2.0:3.0
+```
+
+Special care is taken to ensure intermediate values are computed rationally.
+To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
+
+!!! compat "Julia 1.1"
+    `stop` as a positional argument requires at least Julia 1.1.
+
+!!! compat "Julia 1.7"
+    The versions without keyword arguments and `start` as a keyword argument
+    require at least Julia 1.7.
 """
-range(start; length::Union{Integer,Nothing}=nothing, stop=nothing, step=nothing) =
+function range end
+
+range(start; stop=nothing, length::Union{Integer,Nothing}=nothing, step=nothing) =
+    _range(start, step, stop, length)
+range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) = _range(start, step, stop, length)
+range(start, stop, length::Integer) = _range(start, nothing, stop, length)
+
+range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, step=nothing) =
     _range(start, step, stop, length)
 
-range(start, stop; length::Union{Integer,Nothing}=nothing, step=nothing) =
-    _range2(start, step, stop, length)
+_range(start::Nothing, step::Nothing, stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Nothing, stop::Nothing, len::Any    ) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Nothing, stop::Any    , len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Nothing, stop::Any    , len::Any    ) = range_stop_length(stop, len)
+_range(start::Nothing, step::Any    , stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Any    , stop::Nothing, len::Any    ) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Any    , stop::Any    , len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Any    , stop::Any    , len::Any    ) = range_step_stop_length(step, stop, len)
+_range(start::Any    , step::Nothing, stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
+_range(start::Any    , step::Nothing, stop::Nothing, len::Any    ) = range_start_length(start, len)
+_range(start::Any    , step::Nothing, stop::Any    , len::Nothing) = range_start_stop(start, stop)
+_range(start::Any    , step::Nothing, stop::Any    , len::Any    ) = range_start_stop_length(start, stop, len)
+_range(start::Any    , step::Any    , stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
+_range(start::Any    , step::Any    , stop::Nothing, len::Any    ) = range_start_step_length(start, step, len)
+_range(start::Any    , step::Any    , stop::Any    , len::Nothing) = range_start_step_stop(start, step, stop)
+_range(start::Any    , step::Any    , stop::Any    , len::Any    ) = range_error(start, step, stop, len)
 
-_range2(start, ::Nothing, stop, ::Nothing) =
-    throw(ArgumentError("At least one of `length` or `step` must be specified"))
+range_stop_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(oftype(a, a-len+1), a)
+range_stop_length(a::AbstractFloat, len::Integer) = range_step_stop_length(oftype(a, 1), a, len)
+range_stop_length(a,                len::Integer) = range_step_stop_length(oftype(a-a, 1), a, len)
 
-_range2(start, step, stop, length) = _range(start, step, stop, length)
+range_step_stop_length(step, stop, length) = reverse(range_start_step_length(stop, -step, length))
 
-# Range from start to stop: range(a, [step=s,] stop=b), no length
-_range(start, step,      stop, ::Nothing) = (:)(start, step, stop)
-_range(start, ::Nothing, stop, ::Nothing) = (:)(start, stop)
+range_start_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
+range_start_length(a::AbstractFloat, len::Integer) = range_start_step_length(a, oftype(a, 1), len)
+range_start_length(a,                len::Integer) = range_start_step_length(a, oftype(a-a, 1), len)
 
-# Range of a given length: range(a, [step=s,] length=l), no stop
-_range(a::Real,          ::Nothing,         ::Nothing, len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
-_range(a::AbstractFloat, ::Nothing,         ::Nothing, len::Integer) = _range(a, oftype(a, 1),   nothing, len)
-_range(a::AbstractFloat, st::AbstractFloat, ::Nothing, len::Integer) = _range(promote(a, st)..., nothing, len)
-_range(a::Real,          st::AbstractFloat, ::Nothing, len::Integer) = _range(float(a), st,      nothing, len)
-_range(a::AbstractFloat, st::Real,          ::Nothing, len::Integer) = _range(a, float(st),      nothing, len)
-_range(a,                ::Nothing,         ::Nothing, len::Integer) = _range(a, oftype(a-a, 1), nothing, len)
+range_start_stop(start, stop) = start:stop
 
-_range(a::T, step::T, ::Nothing, len::Integer) where {T <: AbstractFloat} =
+function range_start_step_length(a::AbstractFloat, step::AbstractFloat, len::Integer)
+    range_start_step_length(promote(a, step)..., len)
+end
+
+function range_start_step_length(a::Real, step::AbstractFloat, len::Integer)
+    range_start_step_length(float(a), step, len)
+end
+
+function range_start_step_length(a::AbstractFloat, step::Real, len::Integer)
+    range_start_step_length(a, float(step), len)
+end
+
+function range_start_step_length(a::T, step::T, len::Integer) where {T <: AbstractFloat}
     _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
-_range(a::T, step, ::Nothing, len::Integer) where {T} =
+end
+
+function range_start_step_length(a::T, step, len::Integer) where {T}
     _rangestyle(OrderStyle(T), ArithmeticStyle(T), a, step, len)
+end
+
 _rangestyle(::Ordered, ::ArithmeticWraps, a::T, step::S, len::Integer) where {T,S} =
     StepRange{typeof(a+zero(step)),S}(a, step, a+step*(len-1))
 _rangestyle(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
     StepRangeLen{typeof(a+zero(step)),T,S}(a, step, len)
 
-# Malformed calls
-_range(start,     step,      ::Nothing, ::Nothing) = # range(a, step=s)
-    throw(ArgumentError("At least one of `length` or `stop` must be specified"))
-_range(start,     ::Nothing, ::Nothing, ::Nothing) = # range(a)
-    throw(ArgumentError("At least one of `length` or `stop` must be specified"))
-_range(::Nothing, ::Nothing, ::Nothing, ::Nothing) = # range(nothing)
-    throw(ArgumentError("At least one of `length` or `stop` must be specified"))
-_range(start::Real, step::Real, stop::Real, length::Integer) = # range(a, step=s, stop=b, length=l)
-    throw(ArgumentError("Too many arguments specified; try passing only one of `stop` or `length`"))
-_range(::Nothing, ::Nothing, ::Nothing, ::Integer) = # range(nothing, length=l)
-    throw(ArgumentError("Can't start a range at `nothing`"))
+range_start_step_stop(start, step, stop) = start:step:stop
+
+function range_error(start, step, stop, length)
+    hasstart  = start !== nothing
+    hasstep   = step  !== nothing
+    hasstop   = stop  !== nothing
+    haslength = start !== nothing
+
+    hint = if hasstart && hasstep && hasstop && haslength
+        "Try specifying only three arguments"
+    elseif !hasstop && !haslength
+        "At least one of `length` or `stop` must be specified."
+    elseif !hasstep && !haslength
+        "At least one of `length` or `step` must be specified."
+    elseif !hasstart && !hasstop
+        "At least one of `start` or `stop` must be specified."
+    else
+        "Try specifying more arguments."
+    end
+
+    msg = """
+    Cannot construct range from arguments:
+    start = $start
+    step = $step
+    stop = $stop
+    length = $length
+    $hint
+    """
+    throw(ArgumentError(msg))
+end
 
 ## 1-dimensional ranges ##
 
@@ -295,18 +362,22 @@ unitrange_last(start::T, stop::T) where {T} =
     ifelse(stop >= start, convert(T,start+floor(stop-start)),
                           convert(T,start-oneunit(stop-start)))
 
+unitrange(x) = UnitRange(x)
+
 if isdefined(Main, :Base)
     # Constant-fold-able indexing into tuples to functionally expose Base.tail and Base.front
-    function getindex(@nospecialize(t::Tuple), r::UnitRange)
+    function getindex(@nospecialize(t::Tuple), r::AbstractUnitRange)
         @_inline_meta
-        r.start > r.stop && return ()
-        if r.start == 1
-            r.stop == length(t)   && return t
-            r.stop == length(t)-1 && return front(t)
-            r.stop == length(t)-2 && return front(front(t))
-        elseif r.stop == length(t)
-            r.start == 2 && return tail(t)
-            r.start == 3 && return tail(tail(t))
+        require_one_based_indexing(r)
+        if length(r) <= 10
+            return ntuple(i -> t[i + first(r) - 1], length(r))
+        elseif first(r) == 1
+            last(r) == length(t)   && return t
+            last(r) == length(t)-1 && return front(t)
+            last(r) == length(t)-2 && return front(front(t))
+        elseif last(r) == length(t)
+            first(r) == 2 && return tail(t)
+            first(r) == 3 && return tail(tail(t))
         end
         return (eltype(t)[t[ri] for ri in r]...,)
     end
@@ -332,6 +403,7 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
+oneto(r) = OneTo(r)
 
 ## Step ranges parameterized by length
 
@@ -364,7 +436,7 @@ struct StepRangeLen{T,R,S} <: AbstractRange{T}
 end
 
 StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
-    StepRangeLen{typeof(ref+0*step),R,S}(ref, step, len, offset)
+    StepRangeLen{typeof(ref+zero(step)),R,S}(ref, step, len, offset)
 StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
     StepRangeLen{T,R,S}(ref, step, len, offset)
 
@@ -429,13 +501,10 @@ function LinRange(start, stop, len::Integer)
     LinRange{T}(start, stop, len)
 end
 
-function _range(start::T, ::Nothing, stop::S, len::Integer) where {T,S}
-    a, b = promote(start, stop)
-    _range(a, nothing, b, len)
-end
-_range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Real} = LinRange{T}(start, stop, len)
-_range(start::T, ::Nothing, stop::T, len::Integer) where {T} = LinRange{T}(start, stop, len)
-_range(start::T, ::Nothing, stop::T, len::Integer) where {T<:Integer} =
+range_start_stop_length(start, stop, len::Integer) =
+    range_start_stop_length(promote(start, stop)..., len)
+range_start_stop_length(start::T, stop::T, len::Integer) where {T} = LinRange{T}(start, stop, len)
+range_start_stop_length(start::T, stop::T, len::Integer) where {T<:Integer} =
     _linspace(float(T), start, stop, len)
 ## for Float16, Float32, and Float64 we hit twiceprecision.jl to lift to higher precision StepRangeLen
 # for all other types we fall back to a plain old LinRange

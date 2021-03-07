@@ -427,7 +427,7 @@ end
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractFloat} = T(r.step)
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T} = T(r.step)
 
-function _range(a::T, st::T, ::Nothing, len::Integer) where T<:Union{Float16,Float32,Float64}
+function range_start_step_length(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64}
     start_n, start_d = rat(a)
     step_n, step_d = rat(st)
     if start_d != 0 && step_d != 0 &&
@@ -591,7 +591,7 @@ end
 ## LinRange
 
 # For Float16, Float32, and Float64, this returns a StepRangeLen
-function _range(start::T, ::Nothing, stop::T, len::Integer) where {T<:IEEEFloat}
+function range_start_stop_length(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
     len < 2 && return _linspace1(T, start, stop, len)
     if start == stop
         return steprangelen_hp(T, start, zero(T), 0, len, 1)

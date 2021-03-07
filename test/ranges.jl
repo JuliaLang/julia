@@ -1,5 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+@testset "range construction" begin
+    @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
+    @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
+
+    r = 3.0:2:11
+    @test r == range(start=first(r), step=step(r), stop=last(r)                  )
+    @test r == range(start=first(r), step=step(r),               length=length(r))
+    @test r == range(start=first(r),               stop=last(r), length=length(r))
+    @test r == range(                step=step(r), stop=last(r), length=length(r))
+
+    r = 4:9
+    @test r === range(start=first(r), stop=last(r)                  )
+    @test r === range(start=first(r),               length=length(r))
+    @test r === range(                stop=last(r), length=length(r))
+    @test r === range(first(r),       last(r)                       )
+    # the next ones use ==, because it changes the eltype
+    @test r ==  range(first(r),       last(r),      length(r)       )
+    @test r ==  range(start=first(r), stop=last(r), length=length(r))
+
+    for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
+        @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
+    end
+end
+
 using Dates, Random
 isdefined(Main, :PhysQuantities) || @eval Main include("testhelpers/PhysQuantities.jl")
 using .Main.PhysQuantities
@@ -1606,8 +1630,6 @@ end
             end
         end
     end
-    # require a keyword arg
-    @test_throws ArgumentError range(1, 100)
 end
 
 @testset "Reverse empty ranges" begin
@@ -1721,4 +1743,12 @@ end
     @test isempty(range(typemin(Int), step=-1//1, length=0))
     @test eltype(range(typemin(Int), step=-1//1, length=0)) === Rational{Int}
     @test typeof(step(range(typemin(Int), step=-1//1, length=0))) === Rational{Int}
+
+    @test StepRangeLen(Int8(1), Int8(2), 3) == Int8[1, 3, 5]
+    @test eltype(StepRangeLen(Int8(1), Int8(2), 3)) === Int8
+    @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3))) === Int8
+
+    @test StepRangeLen(Int8(1), Int8(2), 3, 2) == Int8[-1, 1, 3]
+    @test eltype(StepRangeLen(Int8(1), Int8(2), 3, 2)) === Int8
+    @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3, 2))) === Int8
 end

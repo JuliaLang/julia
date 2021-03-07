@@ -86,7 +86,7 @@ julia> axes(A)
 """
 function axes(A)
     @_inline_meta
-    map(OneTo, size(A))
+    map(oneto, size(A))
 end
 
 """
@@ -107,10 +107,10 @@ require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError
 # in other applications.
 axes1(A::AbstractArray{<:Any,0}) = OneTo(1)
 axes1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
-axes1(iter) = OneTo(length(iter))
+axes1(iter) = oneto(length(iter))
 
 unsafe_indices(A) = axes(A)
-unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
+unsafe_indices(r::AbstractRange) = (oneto(unsafe_length(r)),) # Ranges use checked_sub for size
 
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
@@ -308,7 +308,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     eachindex(IndexStyle(A,B...), A, B...)
 end
-eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; OneTo(length(A)))
+eachindex(::IndexLinear, A::AbstractArray) = (@_inline_meta; oneto(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@_inline_meta; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
@@ -394,6 +394,9 @@ end
 Get the first `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
 long enough.
 
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+
 # Examples
 ```jldoctest
 julia> first(["foo", "bar", "qux"], 2)
@@ -438,6 +441,9 @@ last(a) = a[end]
 
 Get the last `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
 long enough.
+
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -1193,7 +1199,7 @@ function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
 end
 _to_linear_index(A::AbstractArray, i::Integer) = i
 _to_linear_index(A::AbstractVector, i::Integer, I::Integer...) = i
-_to_linear_index(A::AbstractArray) = 1
+_to_linear_index(A::AbstractArray) = first(LinearIndices(A))
 _to_linear_index(A::AbstractArray, I::Integer...) = (@_inline_meta; _sub2ind(A, I...))
 
 ## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
@@ -1302,7 +1308,8 @@ end
 
 Return the underlying "parent array”. This parent array of objects of types `SubArray`, `ReshapedArray`
 or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
-during object creation. If the input is not a wrapped object, return the input itself.
+during object creation. If the input is not a wrapped object, return the input itself. If the input is
+wrapped multiple times, only the outermost wrapper will be removed.
 
 # Examples
 ```jldoctest
@@ -1481,12 +1488,11 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
-    n = 0
-    for Vk in V
-        n += Int(length(Vk))::Int
-    end
-    a = similar(V[1], T, n)
+_typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
+_typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
+    _typed_vcat!(_typed_vcat_similar(V, T, mapreduce(length, +, V)), V)
+
+function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
     for k=1:Int(length(V))::Int
         Vk = V[k]
@@ -1578,9 +1584,10 @@ cat_size(A::AbstractArray, d) = size(A, d)
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
 
-cat_similar(A, T, shape) = Array{T}(undef, shape)
-cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
+cat_similar(A, ::Type{T}, shape) where T = Array{T}(undef, shape)
+cat_similar(A::AbstractArray, ::Type{T}, shape) where T = similar(A, T, shape)
 
+# These are for backwards compatibility (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
 function cat_shape(dims, shapes::Tuple)
     out_shape = ()
@@ -1589,6 +1596,11 @@ function cat_shape(dims, shapes::Tuple)
     end
     return out_shape
 end
+# The new way to compute the shape (more inferrable than combining cat_size & cat_shape, due to Varargs + issue#36454)
+cat_size_shape(dims) = ntuple(zero, Val(length(dims)))
+@inline cat_size_shape(dims, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, (), cat_size(X)), tail...)
+_cat_size_shape(dims, shape) = shape
+@inline _cat_size_shape(dims, shape, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, shape, cat_size(X)), tail...)
 
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
@@ -1632,7 +1644,7 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
-    shape = cat_shape(catdims, map(cat_size, X)::Tuple{Vararg{Union{Int,Dims}}})::Dims
+    shape = cat_size_shape(catdims, X...)
     A = cat_similar(X[1], T, shape)
     if count(!iszero, catdims)::Int > 1
         fill!(A, zero(T))
@@ -1640,28 +1652,29 @@ _cat(dims, X...) = cat_t(promote_eltypeof(X...), X...; dims=dims)
     return __cat(A, shape, catdims, X...)
 end
 
-function __cat(A, shape::NTuple{M,Int}, catdims, X...) where M
-    N = M::Int
-    offsets = zeros(Int, N)
-    inds = Vector{UnitRange{Int}}(undef, N)
-    concat = copyto!(zeros(Bool, N), catdims)
-    for x in X
-        for i = 1:N
-            if concat[i]
-                inds[i] = offsets[i] .+ cat_indices(x, i)
-                offsets[i] += cat_size(x, i)
-            else
-                inds[i] = 1:shape[i]
-            end
-        end
-        I::NTuple{N, UnitRange{Int}} = (inds...,)
-        if x isa AbstractArray
-            A[I...] = x
-        else
-            fill!(view(A, I...), x)
-        end
+# Why isn't this called `__cat!`?
+__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(zero, length(shape)), X...)
+
+function __cat_offset!(A, shape, catdims, offsets, x, X...)
+    # splitting the "work" on x from X... may reduce latency (fewer costly specializations)
+    newoffsets = __cat_offset1!(A, shape, catdims, offsets, x)
+    return __cat_offset!(A, shape, catdims, newoffsets, X...)
+end
+__cat_offset!(A, shape, catdims, offsets) = A
+
+function __cat_offset1!(A, shape, catdims, offsets, x)
+    inds = ntuple(length(offsets)) do i
+        (i <= length(catdims) && catdims[i]) ? offsets[i] .+ cat_indices(x, i) : 1:shape[i]
     end
-    return A
+    if x isa AbstractArray
+        A[inds...] = x
+    else
+        fill!(view(A, inds...), x)
+    end
+    newoffsets = ntuple(length(offsets)) do i
+        (i <= length(catdims) && catdims[i]) ? offsets[i] + cat_size(x, i) : offsets[i]
+    end
+    return newoffsets
 end
 
 """
@@ -1752,7 +1765,7 @@ typed_vcat(::Type{T}, X...) where T = cat_t(T, X...; dims=Val(1))
 typed_hcat(::Type{T}, X...) where T = cat_t(T, X...; dims=Val(2))
 
 """
-    cat(A...; dims=dims)
+    cat(A...; dims)
 
 Concatenate the input arrays along the specified dimensions in the iterable `dims`. For
 dimensions not in `dims`, all input arrays should have the same size, which will also be the
@@ -1786,6 +1799,10 @@ typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(T, A, B; dims=Va
 typed_hcat(T::Type, A::AbstractArray...) = cat_t(T, A...; dims=Val(2))
 
 # 2d horizontal and vertical concatenation
+
+# these are produced in lowering if splatting occurs inside hvcat
+hvcat_rows(rows::Tuple...) = hvcat(map(length, rows), (rows...)...)
+typed_hvcat_rows(T::Type, rows::Tuple...) = typed_hvcat(T, map(length, rows), (rows...)...)
 
 function hvcat(nbc::Integer, as...)
     # nbc = # of block columns

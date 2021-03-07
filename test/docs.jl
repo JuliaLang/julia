@@ -17,7 +17,22 @@ function docstrings_equal(d1, d2)
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
-    String(take!(io1)) == String(take!(io2))
+    s1 = String(take!(io1))
+    s2 = String(take!(io2))
+    #if s1 != s2 # for debugging
+    #    e1 = eachline(IOBuffer(s1))
+    #    e2 = eachline(IOBuffer(s2))
+    #    for (l1, l2) in zip(e1, e2)
+    #        l1 == l2 || println(l1, "\n", l2, "\n")
+    #    end
+    #    for l1 in e1
+    #        println(l1, "\n[missing]\n")
+    #    end
+    #    for l2 in e2
+    #        println("[missing]\n", l2, "\n")
+    #    end
+    #end
+    return s1 == s2
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
 
@@ -794,6 +809,8 @@ let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
 
 module Undocumented
 
+export A, B, C, at0, pt2
+
 abstract type A end
 abstract type B <: A end
 
@@ -805,13 +822,56 @@ struct D <: B
     three::Float64
 end
 
+abstract type at0{T<:Number,N} end
+abstract type at1{T>:Integer,N} <:at0{T,N} end
+
+const at_ = at0{Int64}
+
+primitive type pt2{T<:Number,N,A>:Integer} <:at0{T,N} 32 end
+
+struct st3{T<:Integer,N} <: at0{T,N}
+    a::NTuple{N,T}
+    b::Array{Int64,N}
+    c::Int64
+end
+
+struct st4{T,N} <: at0{T,N}
+    a::T
+    b::NTuple{N,T}
+end
+
+struct st5{T>:Int64,N} <:at1{T,N}
+    c::st3{T,N}
+end
+
+mutable struct mt6{T<:Integer,N} <:at1{T,N}
+    d::st5{T,N}
+end
+
+const ut7 = Union{st5, mt6}
+
+const ut8 = Union{at1, pt2, st3, st4}
+
+const ut9{T} = Union{at1{T}, pt2{T}, st3{T}, st4{T}}
+
 f = () -> nothing
 
 undocumented() = 1
 undocumented(x) = 2
 undocumented(x,y) = 3
 
-end
+end # module
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+No docstring found for module `$(curmod_prefix)Undocumented`.
+
+# Exported names:
+
+`A`, `B`, `C`, `at0`, `pt2`
+""")
+@test docstrings_equal(@doc(Undocumented), doc"$doc_str")
 
 doc_str = Markdown.parse("""
 No documentation found.
@@ -825,7 +885,7 @@ No documentation found.
 
 # Summary
 ```
-abstract type $(curmod_prefix)Undocumented.A <: Any
+abstract type $(curmod_prefix)Undocumented.A
 ```
 
 # Subtypes
@@ -841,7 +901,7 @@ No documentation found.
 
 # Summary
 ```
-abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
+abstract type $(curmod_prefix)Undocumented.B
 ```
 
 # Subtypes
@@ -861,7 +921,7 @@ No documentation found.
 
 # Summary
 ```
-mutable struct $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A
+mutable struct $(curmod_prefix)Undocumented.C
 ```
 
 # Supertype Hierarchy
@@ -876,7 +936,7 @@ No documentation found.
 
 # Summary
 ```
-struct $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B
+struct $(curmod_prefix)Undocumented.D
 ```
 
 # Fields
@@ -892,6 +952,217 @@ $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_pre
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+abstract type $(curmod_prefix)Undocumented.at0{T<:Number, N}
+```
+
+# Subtypes
+
+```
+$(curmod_prefix)Undocumented.at1{T, N} where {Integer<:T<:Number, N}
+$(curmod_prefix)Undocumented.pt2
+$(curmod_prefix)Undocumented.st3
+$(curmod_prefix)Undocumented.st4{T, N} where {T<:Number, N}
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+abstract type $(curmod_prefix)Undocumented.at1{T>:Integer, N}
+```
+
+# Subtypes
+
+```
+$(curmod_prefix)Undocumented.mt6{Integer, N} where N
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.at1{T>:Integer, N} <: $(curmod_prefix)Undocumented.at0{T>:Integer, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+abstract type $(curmod_prefix)Undocumented.at0{Int64, N}
+```
+
+# Subtypes
+
+```
+$(curmod_prefix)Undocumented.pt2{Int64, N, A} where {N, A>:Integer}
+$(curmod_prefix)Undocumented.st3{Int64, N} where N
+$(curmod_prefix)Undocumented.st4{Int64, N} where N
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+primitive type $(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
+```
+
+# Supertype Hierarchy
+
+```
+$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_prefix)Undocumented.at0{T<:Number, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+struct $(curmod_prefix)Undocumented.st3{T<:Integer, N}
+```
+
+# Fields
+```
+a :: Tuple{Vararg{T<:Integer, N}}
+b :: Array{Int64, N}
+c :: Int64
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.st3{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+struct $(curmod_prefix)Undocumented.st4{T, N}
+```
+
+# Fields
+```
+a :: T
+b :: Tuple{Vararg{T, N}}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.st4{T, N} <: $(curmod_prefix)Undocumented.at0{T, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+struct $(curmod_prefix)Undocumented.st5{T>:Int64, N}
+```
+
+# Fields
+```
+c :: $(curmod_prefix)Undocumented.st3{T>:Int64, N}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.st5{T>:Int64, N} <: $(curmod_prefix)Undocumented.at1{T>:Int64, N} <: $(curmod_prefix)Undocumented.at0{T>:Int64, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+mutable struct $(curmod_prefix)Undocumented.mt6{T<:Integer, N}
+```
+
+# Fields
+```
+d :: $(curmod_prefix)Undocumented.st5{T<:Integer, N}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.mt6{T<:Integer, N} <: $(curmod_prefix)Undocumented.at1{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+`$(curmod_prefix)Undocumented.ut7` is of type `Union`.
+
+# Union Composed of Types
+
+ - `$(curmod_prefix)Undocumented.mt6`
+ - `$(curmod_prefix)Undocumented.st5`
+""")
+@test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+`$(curmod_prefix)Undocumented.ut8` is of type `Union`.
+
+# Union Composed of Types
+
+ - `$(curmod_prefix)Undocumented.at1`
+ - `$(curmod_prefix)Undocumented.pt2`
+ - `$(curmod_prefix)Undocumented.st3`
+ - `$(curmod_prefix)Undocumented.st4`
+""")
+@test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+`$(curmod_prefix)Undocumented.ut9` is of type `UnionAll`.
+
+# Union Composed of Types
+
+ - `$(curmod_prefix)Undocumented.at1{T, N} where {T, N}`
+ - `$(curmod_prefix)Undocumented.pt2{T, N, A} where {T, N, A>:Integer}`
+ - `$(curmod_prefix)Undocumented.st3{T, N} where {T, N}`
+ - `$(curmod_prefix)Undocumented.st4`
+""")
+@test docstrings_equal(@doc(Undocumented.ut9), doc"$doc_str")
 
 let d = @doc(Undocumented.f)
     io = IOBuffer()

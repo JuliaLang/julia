@@ -55,7 +55,7 @@ function choosetests(choices = [])
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
-        "smallarrayshrink"
+        "smallarrayshrink", "opaque_closure"
     ]
 
     tests = []

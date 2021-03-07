@@ -577,17 +577,37 @@ xor(x::Integer) = x
 
 const ⊻ = xor
 
-# foldl for argument lists. expand recursively up to a point, then
-# switch to a loop. this allows small cases like `a+b+c+d` to be inlined
+# foldl for argument lists. expand fully up to a point, then
+# switch to a loop. this allows small cases like `a+b+c+d` to be managed
 # efficiently, without a major slowdown for `+(x...)` when `x` is big.
-afoldl(op,a) = a
-afoldl(op,a,b) = op(a,b)
-afoldl(op,a,b,c...) = afoldl(op, op(a,b), c...)
-function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
-    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,b),c),d),e),f),g),h),i),j),k),l),m),n),o),p)
-    for x in qs; y = op(y,x); end
-    y
+# n.b.: keep this method count small, so it can be inferred without hitting the
+# method count limit in inference
+afoldl(op, a) = a
+function afoldl(op, a, bs...)
+    l = length(bs)
+    i =  0; y = a;            l == i && return y
+    #@nexprs 15 i -> (y = op(y, bs[i]); l == i && return y)
+    i =  1; y = op(y, bs[i]); l == i && return y
+    i =  2; y = op(y, bs[i]); l == i && return y
+    i =  3; y = op(y, bs[i]); l == i && return y
+    i =  4; y = op(y, bs[i]); l == i && return y
+    i =  5; y = op(y, bs[i]); l == i && return y
+    i =  6; y = op(y, bs[i]); l == i && return y
+    i =  7; y = op(y, bs[i]); l == i && return y
+    i =  8; y = op(y, bs[i]); l == i && return y
+    i =  9; y = op(y, bs[i]); l == i && return y
+    i = 10; y = op(y, bs[i]); l == i && return y
+    i = 11; y = op(y, bs[i]); l == i && return y
+    i = 12; y = op(y, bs[i]); l == i && return y
+    i = 13; y = op(y, bs[i]); l == i && return y
+    i = 14; y = op(y, bs[i]); l == i && return y
+    i = 15; y = op(y, bs[i]); l == i && return y
+    for i in (i + 1):l
+        y = op(y, bs[i])
+    end
+    return y
 end
+typeof(afoldl).name.mt.max_args = 18
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
@@ -900,7 +920,7 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 """
     f ∘ g
 
-Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
+Compose functions: i.e. `(f ∘ g)(args...; kwargs...)` means `f(g(args...; kwargs...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
@@ -911,7 +931,10 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
     Multiple function composition requires at least Julia 1.4.
 
 !!! compat "Julia 1.5"
-    Composition of one function ∘(f)  requires at least Julia 1.5.
+    Composition of one function ∘(f) requires at least Julia 1.5.
+
+!!! compat "Julia 1.7"
+    Using keyword arguments requires at least Julia 1.7.
 
 # Examples
 ```jldoctest
@@ -973,7 +996,7 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...) = c.outer(c.inner(x...))
+(c::ComposedFunction)(x...; kw...) = c.outer(c.inner(x...; kw...))
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
@@ -1194,6 +1217,9 @@ Avoid adding methods to this function; define `in` instead.
 
 Create a function that checks whether its argument contains the given `item`, i.e.
 a function equivalent to `y -> item in y`.
+
+!!! compat "Julia 1.6"
+    This method requires Julia 1.6 or later.
 """
 ∋(x) = Fix2(∋, x)
 

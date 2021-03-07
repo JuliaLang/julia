@@ -11,12 +11,11 @@ let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no thr
 end
 
 # issue #34415 - make sure external affinity settings work
-const SYS_rrcall_check_presence = 1008
-running_under_rr() = 0 == ccall(:syscall, Int,
-    (Int, Int, Int, Int, Int, Int, Int),
-    SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
-
 if Sys.islinux()
+    const SYS_rrcall_check_presence = 1008
+    global running_under_rr() = 0 == ccall(:syscall, Int,
+        (Int, Int, Int, Int, Int, Int, Int),
+        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
     if Sys.CPU_THREADS > 1 && Sys.which("taskset") !== nothing && !running_under_rr()
         run_with_affinity(spec) = readchomp(`taskset -c $spec $(Base.julia_cmd()) -e "run(\`taskset -p \$(getpid())\`)"`)
         @test endswith(run_with_affinity("1"), "2")
@@ -100,6 +99,10 @@ function Base.uvfinalize(t::UvTestIdle)
     nothing
 end
 
+function Base.close(idle::UvTestIdle)
+    Base.uvfinalize(idle)
+end
+
 function Base.wait(idle::UvTestIdle)
     Base.iolock_begin()
     Base.preserve_handle(idle)
@@ -129,12 +132,14 @@ proc = open(pipeline(`$(Base.julia_cmd()) -e $cmd`; stderr=stderr); write=true)
 
 let idle=UvTestIdle()
     wait(idle)
+    close(idle)
 end
 
 using Base.Threads
 @threads for i = 1:1
     let idle=UvTestIdle()
         wait(idle)
+        close(idle)
     end
 end
 

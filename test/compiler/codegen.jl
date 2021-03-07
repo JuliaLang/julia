@@ -512,3 +512,42 @@ let a = Core.Intrinsics.trunc_int(UInt24, 3),
     @test sizeof(Union{UInt8,UInt24}) == 3
     @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
 end
+
+# issue #39232
+function f39232(a)
+    z = Any[]
+    for (i, ai) in enumerate(a)
+        push!(z, ai)
+    end
+    return z
+end
+@test f39232((+, -)) == Any[+, -]
+
+@testset "GC.@preserve" begin
+    # main use case
+    function f1(cond)
+        val = [1]
+        GC.@preserve val begin end
+    end
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f1, Tuple{Bool}, true, false, false))
+
+    # stack allocated objects (JuliaLang/julia#34241)
+    function f3(cond)
+        val = ([1],)
+        GC.@preserve val begin end
+    end
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f3, Tuple{Bool}, true, false, false))
+
+    # unions of immutables (JuliaLang/julia#39501)
+    function f2(cond)
+        val = cond ? 1 : 1f0
+        GC.@preserve val begin end
+    end
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f2, Tuple{Bool}, true, false, false))
+    # make sure the fix for the above doesn't regress #34241
+    function f4(cond)
+        val = cond ? ([1],) : ([1f0],)
+        GC.@preserve val begin end
+    end
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
+end

@@ -90,7 +90,8 @@ Cholesky(A::AbstractMatrix{T}, uplo::Symbol, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
 Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
     Cholesky{T,typeof(A)}(A, uplo, info)
-
+Cholesky(U::UpperTriangular{T}) where {T} = Cholesky{T,typeof(U.data)}(U.data, 'U', 0)
+Cholesky(L::LowerTriangular{T}) where {T} = Cholesky{T,typeof(L.data)}(L.data, 'L', 0)
 
 # iteration for destructuring into components
 Base.iterate(C::Cholesky) = (C.L, Val(:U))
@@ -643,14 +644,14 @@ end
 rank(C::CholeskyPivoted) = C.rank
 
 """
-    lowrankupdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankupdate!(C::Cholesky, v::AbstractVector) -> CC::Cholesky
 
 Update a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U` then
 `CC = cholesky(C.U'C.U + v*v')` but the computation of `CC` only uses `O(n^2)`
 operations. The input factorization `C` is updated in place such that on exit `C == CC`.
 The vector `v` is destroyed during the computation.
 """
-function lowrankupdate!(C::Cholesky, v::StridedVector)
+function lowrankupdate!(C::Cholesky, v::AbstractVector)
     A = C.factors
     n = length(v)
     if size(C, 1) != n
@@ -689,14 +690,14 @@ function lowrankupdate!(C::Cholesky, v::StridedVector)
 end
 
 """
-    lowrankdowndate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankdowndate!(C::Cholesky, v::AbstractVector) -> CC::Cholesky
 
 Downdate a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U` then
 `CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses `O(n^2)`
 operations. The input factorization `C` is updated in place such that on exit `C == CC`.
 The vector `v` is destroyed during the computation.
 """
-function lowrankdowndate!(C::Cholesky, v::StridedVector)
+function lowrankdowndate!(C::Cholesky, v::AbstractVector)
     A = C.factors
     n = length(v)
     if size(C, 1) != n
@@ -742,19 +743,19 @@ function lowrankdowndate!(C::Cholesky, v::StridedVector)
 end
 
 """
-    lowrankupdate(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankupdate(C::Cholesky, v::AbstractVector) -> CC::Cholesky
 
 Update a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U`
 then `CC = cholesky(C.U'C.U + v*v')` but the computation of `CC` only uses
 `O(n^2)` operations.
 """
-lowrankupdate(C::Cholesky, v::StridedVector) = lowrankupdate!(copy(C), copy(v))
+lowrankupdate(C::Cholesky, v::AbstractVector) = lowrankupdate!(copy(C), copy(v))
 
 """
-    lowrankdowndate(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankdowndate(C::Cholesky, v::AbstractVector) -> CC::Cholesky
 
 Downdate a Cholesky factorization `C` with the vector `v`. If `A = C.U'C.U`
 then `CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses
 `O(n^2)` operations.
 """
-lowrankdowndate(C::Cholesky, v::StridedVector) = lowrankdowndate!(copy(C), copy(v))
+lowrankdowndate(C::Cholesky, v::AbstractVector) = lowrankdowndate!(copy(C), copy(v))

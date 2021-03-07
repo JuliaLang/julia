@@ -130,6 +130,11 @@ JL_DLLEXPORT const char * jl_get_libdir()
 
 void * libjulia_internal = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
+    // Only initalize this once
+    if (libjulia_internal != NULL) {
+        return;
+    }
+
     // Introspect to find our own path
     const char * lib_dir = jl_get_libdir();
 
@@ -196,6 +201,8 @@ JL_DLLEXPORT int jl_load_repl(int argc, char * argv[]) {
 
 #ifdef _OS_WINDOWS_
 int __stdcall DllMainCRTStartup(void* instance, unsigned reason, void* reserved) {
+    setup_stdio();
+
     // Because we override DllMainCRTStartup, we have to manually call our constructor methods
     jl_load_libjulia_internal();
     return 1;

@@ -98,7 +98,7 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             }
             uintptr_t oldsp = thesp;
             have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
-            if (oldsp >= thesp) {
+            if (oldsp >= thesp && !jl_running_under_rr(0)) {
                 // The stack pointer is clearly bad, as it must grow downwards.
                 // But sometimes the external unwinder doesn't check that.
                 have_more_frames = 0;
@@ -546,7 +546,7 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     return unw_step(cursor) > 0;
 }
 
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
 NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize,
                                         bt_context_t *context, jl_gcframe_t *pgcstack)
 {

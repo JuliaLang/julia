@@ -102,14 +102,14 @@ struct InferenceParams
     # before computing the set of matching methods
     MAX_UNION_SPLITTING::Int
     # the maximum number of union-tuples to swap / expand
-    # when inferring a call to _apply
+    # when inferring a call to _apply_iterate
     MAX_APPLY_UNION_ENUM::Int
 
     # parameters limiting large (tuple) types
     TUPLE_COMPLEXITY_LIMIT_DEPTH::Int
 
-    # when attempting to inlining _apply, abort the optimization if the tuple
-    # contains more than this many elements
+    # when attempting to inline _apply_iterate, abort the optimization if the
+    # tuple contains more than this many elements
     MAX_TUPLE_SPLAT::Int
 
     function InferenceParams(;
@@ -210,5 +210,18 @@ add_remark!(ni::NativeInterpreter, sv, s) = nothing
 may_optimize(ni::NativeInterpreter) = true
 may_compress(ni::NativeInterpreter) = true
 may_discard_trees(ni::NativeInterpreter) = true
+verbose_stmt_info(ni::NativeInterpreter) = false
 
 method_table(ai::AbstractInterpreter) = InternalMethodTable(get_world_counter(ai))
+inlining_policy(ai::AbstractInterpreter) = default_inlining_policy
+
+# define inference bail out logic
+# `NativeInterpreter` bails out from inference when
+# - a lattice element grows up to `Any` (inter-procedural call, abstract apply)
+# - a lattice element gets down to `Bottom` (statement inference, local frame inference)
+# - inferring non-concrete toplevel call sites
+bail_out_call(interp::AbstractInterpreter, @nospecialize(t), sv)      = t === Any
+bail_out_apply(interp::AbstractInterpreter, @nospecialize(t), sv)     = t === Any
+function bail_out_toplevel_call(interp::AbstractInterpreter, @nospecialize(sig), sv)
+    return isa(sv.linfo.def, Module) && !isdispatchtuple(sig)
+end

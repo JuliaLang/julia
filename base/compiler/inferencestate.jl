@@ -10,14 +10,16 @@ mutable struct InferenceState
     slottypes::Vector{Any}
     mod::Module
     currpc::LineNum
+    pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
+    limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
 
     # info on the state of inference and the linfo
     src::CodeInfo
     world::UInt
     valid_worlds::WorldRange
     nargs::Int
-    stmt_types::Vector{Any}
-    stmt_edges::Vector{Any}
+    stmt_types::Vector{Union{Nothing, Vector{Any}}} # ::Vector{Union{Nothing, VarTable}}
+    stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
     # return type
     bestguess #::Type
@@ -39,7 +41,6 @@ mutable struct InferenceState
 
     # TODO: move these to InferenceResult / Params?
     cached::Bool
-    limited::Bool
     inferred::Bool
     dont_work_on_me::Bool
 
@@ -66,8 +67,8 @@ mutable struct InferenceState
         stmt_info = Any[ nothing for i = 1:length(code) ]
 
         n = length(code)
-        s_edges = Any[ nothing for i = 1:n ]
-        s_types = Any[ nothing for i = 1:n ]
+        s_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
+        s_types = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
 
         # initial types
         nslots = length(src.slotflags)
@@ -105,6 +106,7 @@ mutable struct InferenceState
         frame = new(
             InferenceParams(interp), result, linfo,
             sp, slottypes, inmodule, 0,
+            IdSet{InferenceState}(), IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,
             Union{}, W, 1, n,
@@ -113,7 +115,7 @@ mutable struct InferenceState
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
-            cached, false, false, false,
+            cached, false, false,
             CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame
@@ -245,55 +247,33 @@ end
 # temporarily accumulate our edges to later add as backedges in the callee
 function add_backedge!(li::MethodInstance, caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    if caller.stmt_edges[caller.currpc] === nothing
-        caller.stmt_edges[caller.currpc] = []
+    edges = caller.stmt_edges[caller.currpc]
+    if edges === nothing
+        edges = caller.stmt_edges[caller.currpc] = []
     end
-    push!(caller.stmt_edges[caller.currpc], li)
+    push!(edges, li)
     nothing
 end
 
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
 function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    if caller.stmt_edges[caller.currpc] === nothing
-        caller.stmt_edges[caller.currpc] = []
+    edges = caller.stmt_edges[caller.currpc]
+    if edges === nothing
+        edges = caller.stmt_edges[caller.currpc] = []
     end
-    push!(caller.stmt_edges[caller.currpc], mt)
-    push!(caller.stmt_edges[caller.currpc], typ)
+    push!(edges, mt)
+    push!(edges, typ)
     nothing
-end
-
-function poison_callstack(infstate::InferenceState, topmost::InferenceState, poison_topmost::Bool)
-    poison_topmost && (topmost = topmost.parent)
-    while !(infstate === topmost)
-        if call_result_unused(infstate)
-            # If we won't propagate the result any further (since it's typically unused),
-            # it's OK that we keep and cache the "limited" result in the parents
-            # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-            # TODO: we might be able to halt progress much more strongly here,
-            # since now we know we won't be able to keep anything much that we learned.
-            # We were mainly only here to compute the calling convention return type,
-            # but in most situations now, we are unlikely to be able to use that information.
-            break
-        end
-        infstate.limited = true
-        for infstate_cycle in infstate.callers_in_cycle
-            infstate_cycle.limited = true
-        end
-        infstate = infstate.parent
-        infstate === nothing && return
-    end
 end
 
 function print_callstack(sv::InferenceState)
     while sv !== nothing
         print(sv.linfo)
-        sv.limited && print("  [limited]")
         !sv.cached && print("  [uncached]")
         println()
         for cycle in sv.callers_in_cycle
             print(' ', cycle.linfo)
-            cycle.limited && print("  [limited]")
             println()
         end
         sv = sv.parent

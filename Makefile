@@ -94,6 +94,9 @@ debug release : % : julia-%
 docs: julia-sysimg-$(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no'
 
+docs-revise:
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no' revise=true
+
 check-whitespace:
 ifneq ($(NO_GIT), 1)
 	@$(JULIAHOME)/contrib/check-whitespace.sh
@@ -161,7 +164,7 @@ JL_TARGETS += julia-debug
 endif
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal
+JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal libblastrampoline
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug
 endif
@@ -187,11 +190,7 @@ endif
 ifeq ($(USE_LLVM_SHLIB),1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-11jl
 endif
-ifeq ($(OS),Darwin)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libosxunwind
-else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
-endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
@@ -344,20 +343,20 @@ else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	done
 endif
 
-	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
-	if [ $(DARWIN_FRAMEWORK) = 0 ]; then \
-		RELEASE_TARGET=$(DESTDIR)$(libdir)/libjulia.$(SHLIB_EXT); \
-		DEBUG_TARGET=$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT); \
+	# Overwrite JL_SYSTEM_IMAGE_PATH in libjulia-internal
+	if [ "$(DARWIN_FRAMEWORK)" = "0" ]; then \
+		RELEASE_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT); \
+		DEBUG_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT); \
 	else \
 		RELEASE_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib); \
 		DEBUG_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib)_debug; \
 	fi; \
 	$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
-	if [ $(BUNDLE_DEBUG_LIBS) = 1 ]; then \
+	if [ "$(BUNDLE_DEBUG_LIBS)" = "1" ]; then \
 		$(call stringreplace,$${DEBUG_TARGET},sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT)); \
 	fi;
 endif
-	
+
 	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.  We only need to do this for Linux/FreeBSD
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)

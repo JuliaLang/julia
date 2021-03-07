@@ -640,3 +640,9 @@ x = [j+7 for j in i]
         Iterators.flatten((1:2, 3:4)),
     ) == (1, 4)
 end
+
+# make sure we specialize on mapfoldl(::Type, ...)
+@test @inferred(mapfoldl(Int, +, [1, 2, 3]; init=0)) === 6
+
+# issue #39281
+@test @inferred(extrema(rand(2), dims=1)) isa Vector{Tuple{Float64,Float64}}

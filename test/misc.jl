@@ -149,7 +149,10 @@ for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 1
     GC.enable_finalizers(true)
     @test get_finalizers_inhibited() == 0
-    @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
+    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        # Note this warning only exists in debug builds
+        @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
+    end
 
     @test lock(l) === nothing
     @test try unlock(l) finally end === nothing
@@ -227,6 +230,27 @@ v11801, t11801 = @timed sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
 @test names(@__MODULE__, all = true) == names_before_timing
+
+# PR #39133, ensure that @time evaluates in the same scope
+function time_macro_scope()
+    try # try/throw/catch bypasses printing
+        @time (time_macro_local_var = 1; throw("expected"))
+        return time_macro_local_var
+    catch ex
+        ex === "expected" || rethrow()
+    end
+end
+@test time_macro_scope() == 1
+
+function timev_macro_scope()
+    try # try/throw/catch bypasses printing
+        @timev (time_macro_local_var = 1; throw("expected"))
+        return time_macro_local_var
+    catch ex
+        ex === "expected" || rethrow()
+    end
+end
+@test timev_macro_scope() == 1
 
 # interactive utilities
 
@@ -928,3 +952,15 @@ end
 @testset "issue #28188" begin
     @test `$(@__FILE__)` == let file = @__FILE__; `$file` end
 end
+
+# Test that read fault on a prot-none region does not incorrectly give
+# ReadOnlyMemoryEror, but rather crashes the program
+const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
+let script = :(let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
+    (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
+    C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0)); try
+    unsafe_load(ptr)
+    catch e; println(e) end; end)
+    @test !success(`$(Base.julia_cmd()) -e $script`)
+end
+

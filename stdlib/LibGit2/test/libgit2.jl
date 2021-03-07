@@ -1726,6 +1726,19 @@ mktempdir() do dir
         end
     end
 
+    @testset "checkout_head" begin
+        LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
+            # modify file
+            repo_file = open(joinpath(cache_repo,test_file), "a")
+            println(repo_file, commit_msg1 * randstring(10))
+            close(repo_file)
+            # and checkout HEAD once more
+            LibGit2.checkout_head(repo, options=LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE))
+            @test LibGit2.headname(repo) == master_branch
+            @test !LibGit2.isdirty(repo)
+        end
+    end
+
     @testset "checkout/headname" begin
         LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
             LibGit2.checkout!(repo, string(commit_oid1))
@@ -1733,7 +1746,6 @@ mktempdir() do dir
             @test LibGit2.headname(repo) == "(detached from $(string(commit_oid1)[1:7]))"
         end
     end
-
 
     if Sys.isunix()
         @testset "checkout/proptest" begin
@@ -2394,35 +2406,17 @@ mktempdir() do dir
         end
 
         @testset "SSH known host checking" begin
-            key_hashes(sha1::String, sha256::String) = LibGit2.KeyHashes(
-                Tuple(hex2bytes(sha1)),
-                Tuple(hex2bytes(sha256)),
-            )
-            # randomly generated hashes matching no hosts
-            random_key_hashes = key_hashes(
-                "a9971372d02a67bdfea82e2b4808b4cf478b49c0",
-                "45aac5c20d5c7f8b998fee12fa9b75086c0d3ed6e33063f7ce940409ff4efbbc"
-            )
-            # hashes of the unique github.com fingerprint
-            github_key_hashes = key_hashes(
-                "bf6b6825d2977c511a475bbefb88aad54a92ac73",
-                "9d385b83a9175292561a5ec4d4818e0aca51a264f17420112ef88ac3a139498f"
-            )
-            # hashes of the middle github.com fingerprint
-            gitlab_key_hashes = key_hashes(
-                "4db6b9ab0209fcde106cbf0fc4560ad063a962ad",
-                "1db5b783ccd48cd4a4b056ea4e25163d683606ad71f3174652b9625c5cd29d4c"
-            )
+            CHECK_MATCH    = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_MATCH
+            CHECK_MISMATCH = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_MISMATCH
+            CHECK_NOTFOUND = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND
+            CHECK_FAILURE  = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_FAILURE
 
-            # various key hash collections
-            partial_hashes(keys::LibGit2.KeyHashes) = [ keys,
-                LibGit2.KeyHashes(keys.sha1, nothing),
-                LibGit2.KeyHashes(nothing, keys.sha256),
-            ]
-            bad_hashes = LibGit2.KeyHashes(nothing, nothing)
-            random_hashes = partial_hashes(random_key_hashes)
-            github_hashes = partial_hashes(github_key_hashes)
-            gitlab_hashes = partial_hashes(gitlab_key_hashes)
+            # randomly generated hashes matching no hosts
+            random_key = "\0\0\0\assh-rsa\0\0\0\x01#\0\0\0\x81\0¿\x95\xbe9\xfc9g\n:\xcf&\x06YA\xb5`\x97\xc13A\xbf;T+C\xc9Ut J>\xc5ҍ\xc4_S\x8a \xc1S\xeb\x15FH\xd2a\x04.D\xeeb\xac\x8f\xdb\xcc\xef\xc4l G\x9bR\xafp\x17s<=\x12\xab\x04ڳif\\A\x9ba0\xde%\xdei\x04\xc3\r\xb3\x81w\x88\xec\xc0f\x15A;AÝ\xc0r\xa1\u5fe\xd3\xf6)8\x8e\xa3\xcbc\xee\xdd\$\x04\x0f\xc1\xb4\x1f\xcc\xecK\xe0\x99" |> codeunits |> collect
+            # hashes of the unique github.com fingerprint
+            github_key = "\0\0\0\assh-rsa\0\0\0\x01#\0\0\x01\x01\0\xab`;\x85\x11\xa6vy\xbd\xb5@\xdb;\xd2\x03K\0J\xe96\xd0k\xe3\xd7`\xf0\x8f˪\xdbN\xb4\xedóǑ\xc7\n\xae\x9at\xc9Xi\xe4wD!«\xea\x92\xe5T0_8\xb5\xfdAK2\b\xe5t\xc37\xe3 \x93e\x18F,vRɋ1\xe1n}\xa6R;\xd2\0t*dD\xd8?\xcd^\x172\xd06sǷ\x81\x15UH{U\xf0\xc4IO8)\xec\xe6\x0f\x94%Z\x95˚\xf57\xd7\xfc\x8c\x7f\xe4\x9e\xf3\x18GN\xf2\x92\t\x92\x05\"e\xb0\xa0n\xa6mJ\x16\x7f\xd9\xf3\xa4\x8a\x1aJ0~\xc1\xea\xaaQI\xa9i\xa6\xac]V\xa5\xefb~Q}\x81\xfbdO[t\\OG\x8e\xcd\b*\x94\x92\xf7D\xaa\xd3&\xf7l\x8cM\xc9\x10\vƫyF\x1d&W\xcbo\x06\xde\xc9.kd\xa6V/\xf0\xe3 \x84\xea\x06\xce\x0e\xa9\xd3ZX;\xfb\0\xbaӌ\x9d\x19p<T\x98\x92\xe5\xaaxܕ\xe2PQ@i" |> codeunits |> collect
+            # hashes of the middle github.com fingerprint
+            gitlab_key = "\0\0\0\vssh-ed25519\0\0\0 \a\xee\br\x95N:\xae\xc6\xfbz\bέtn\x12.\x9dA\xb6\x7f\xe79\xe1\xc7\x13\x95\x0e\xcd\x17_" |> codeunits |> collect
 
             # various known hosts files
             no_file = tempname()
@@ -2439,50 +2433,41 @@ mktempdir() do dir
                 end
             end
 
-            @testset "bad hash errors" begin
-                hash = bad_hashes
-                for host in ["github.com", "gitlab.com", "unknown.host"],
-                    files in [[no_file], [empty_file], [known_hosts]]
-                    check = LibGit2.ssh_knownhost_check(files, host, hash)
-                    @test check == LibGit2.Consts.SSH_HOST_BAD_HASH
-                end
-            end
-
-            @testset "unknown hosts" begin
+            @testset "unknown host" begin
                 host = "unknown.host"
-                for hash in [github_hashes; gitlab_hashes; random_hashes],
+                for key in [github_key, gitlab_key, random_key],
                     files in [[no_file], [empty_file], [known_hosts]]
-                    check = LibGit2.ssh_knownhost_check(files, host, hash)
-                    @test check == LibGit2.Consts.SSH_HOST_UNKNOWN
+                    check = LibGit2.ssh_knownhost_check(files, host, key)
+                    @test check == CHECK_NOTFOUND
                 end
             end
 
             @testset "known hosts" begin
-                for (host, hashes) in [
-                        "github.com" => github_hashes,
-                        "gitlab.com" => gitlab_hashes,
-                    ], hash in hashes
+                for (host, key) in [
+                        "github.com" => github_key,
+                        "gitlab.com" => gitlab_key,
+                    ]
                     for files in [[no_file], [empty_file]]
-                        check = LibGit2.ssh_knownhost_check(files, host, hash)
-                        @test check == LibGit2.Consts.SSH_HOST_UNKNOWN
+                        check = LibGit2.ssh_knownhost_check(files, host, key)
+                        @test check == CHECK_NOTFOUND
                     end
                     for files in [
                             [known_hosts],
-                            [empty_file; known_hosts],
-                            [known_hosts; empty_file],
-                            [known_hosts; wrong_hosts],
+                            [empty_file, known_hosts],
+                            [known_hosts, empty_file],
+                            [known_hosts, wrong_hosts],
                         ]
-                        check = LibGit2.ssh_knownhost_check(files, host, hash)
-                        @test check == LibGit2.Consts.SSH_HOST_KNOWN
+                        check = LibGit2.ssh_knownhost_check(files, host, key)
+                        @test check == CHECK_MATCH
                     end
                     for files in [
                             [wrong_hosts],
-                            [empty_file; wrong_hosts],
-                            [wrong_hosts; empty_file],
-                            [wrong_hosts; known_hosts],
+                            [empty_file, wrong_hosts],
+                            [wrong_hosts, empty_file],
+                            [wrong_hosts, known_hosts],
                         ]
-                        check = LibGit2.ssh_knownhost_check(files, host, hash)
-                        @test check == LibGit2.Consts.SSH_HOST_MISMATCH
+                        check = LibGit2.ssh_knownhost_check(files, host, key)
+                        @test check == CHECK_MISMATCH
                     end
                 end
             end

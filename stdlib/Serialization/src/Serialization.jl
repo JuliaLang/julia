@@ -22,7 +22,8 @@ mutable struct Serializer{I<:IO} <: AbstractSerializer
     table::IdDict{Any,Any}
     pending_refs::Vector{Int}
     known_object_data::Dict{UInt64,Any}
-    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}())
+    version::Int
+    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}(), ser_version)
 end
 
 Serializer(io::IO) = Serializer{typeof(io)}(io)
@@ -78,7 +79,10 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 13 # do not make changes without bumping the version #!
+const ser_version = 14 # do not make changes without bumping the version #!
+
+format_version(::AbstractSerializer) = ser_version
+format_version(s::Serializer) = s.version
 
 const NTAGS = length(TAGS)
 
@@ -413,6 +417,8 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.slot_syms)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
+    serialize(s, meth.is_for_opaque_closure)
+    serialize(s, meth.aggressive_constprop)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
@@ -716,6 +722,8 @@ function readheader(s::AbstractSerializer)
         error("""Cannot read stream serialized with a newer version of Julia.
                  Got data version $version > current version $ser_version""")
     end
+    s.version = version
+    return
 end
 
 """
@@ -986,7 +994,18 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     end
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
-    template = deserialize(s)
+    is_for_opaque_closure = false
+    aggressive_constprop = false
+    template_or_is_opaque = deserialize(s)
+    if isa(template_or_is_opaque, Bool)
+        is_for_opaque_closure = template_or_is_opaque
+        if format_version(s) >= 14
+            aggressive_constprop = deserialize(s)::Bool
+        end
+        template = deserialize(s)
+    else
+        template = template_or_is_opaque
+    end
     generator = deserialize(s)
     if makenew
         meth.module = mod
@@ -996,6 +1015,8 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.sig = sig
         meth.nargs = nargs
         meth.isva = isva
+        meth.is_for_opaque_closure = is_for_opaque_closure
+        meth.aggressive_constprop = aggressive_constprop
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -1012,9 +1033,11 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             linfo.def = meth
             meth.generator = linfo
         end
-        mt = ccall(:jl_method_table_for, Any, (Any,), sig)
-        if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
+        if !is_for_opaque_closure
+            mt = ccall(:jl_method_table_for, Any, (Any,), sig)
+            if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
+                ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
+            end
         end
         remember_object(s, meth, lnumber)
     end
@@ -1114,6 +1137,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci.inlineable = deserialize(s)
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
+    if format_version(s) >= 14
+        ci.aggressive_constprop = deserialize(s)::Bool
+    end
     return ci
 end
 

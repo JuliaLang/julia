@@ -90,6 +90,9 @@ If `sizeof(T) = n*sizeof(S)` for `n>1`, `A`'s first dimension must be
 of size `n` and `B` lacks `A`'s first dimension. Conversely, if `sizeof(S) = n*sizeof(T)` for `n>1`,
 `B` gets a new first dimension of size `n`. The dimensionality is unchanged if `sizeof(T) == sizeof(S)`.
 
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+
 # Examples
 
 ```jldoctest
@@ -278,7 +281,8 @@ eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A
 
 parent(a::ReinterpretArray) = a.parent
 dataids(a::ReinterpretArray) = dataids(a.parent)
-unaliascopy(a::ReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))
+unaliascopy(a::NonReshapedReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))
+unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, unaliascopy(a.parent))
 
 function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)

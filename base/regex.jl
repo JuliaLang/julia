@@ -23,6 +23,9 @@ with [`match`](@ref).
 `Regex` objects can be created using the [`@r_str`](@ref) string macro. The
 `Regex(pattern[, flags])` constructor is usually used if the `pattern` string needs
 to be interpolated. See the documentation of the string macro for details on flags.
+
+!!! note
+    To escape interpolated variables use `\\Q` and `\\E` (e.g. `Regex("\\\\Q\$x\\\\E")`)
 """
 mutable struct Regex <: AbstractPattern
     pattern::String
@@ -119,8 +122,9 @@ function show(io::IO, re::Regex)
     imsxa = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED|PCRE.UCP
     opts = re.compile_options
     if (opts & ~imsxa) == (DEFAULT_COMPILER_OPTS & ~imsxa)
-        print(io, 'r')
-        print_quoted_literal(io, re.pattern)
+        print(io, "r\"")
+        escape_raw_string(io, re.pattern)
+        print(io, "\"")
         if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
         if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
         if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
@@ -141,9 +145,6 @@ end
 """
 abstract type AbstractMatch end
 
-# TODO: map offsets into strings in other encodings back to original indices.
-# or maybe it's better to just fail since that would be quite slow
-
 struct RegexMatch <: AbstractMatch
     match::SubString{String}
     captures::Vector{Union{Nothing,SubString{String}}}
@@ -152,19 +153,24 @@ struct RegexMatch <: AbstractMatch
     regex::Regex
 end
 
+function keys(m::RegexMatch)
+    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
+    return map(eachindex(m.captures)) do i
+        # If the capture group is named, return it's name, else return it's index
+        get(idx_to_capture_name, i, i)
+    end
+end
+
 function show(io::IO, m::RegexMatch)
     print(io, "RegexMatch(")
     show(io, m.match)
-    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
-    if !isempty(m.captures)
+    capture_keys = keys(m)
+    if !isempty(capture_keys)
         print(io, ", ")
-        for i = 1:length(m.captures)
-            # If the capture group is named, show the name.
-            # Otherwise show its index.
-            capture_name = get(idx_to_capture_name, i, i)
+        for (i, capture_name) in enumerate(capture_keys)
             print(io, capture_name, "=")
             show(io, m.captures[i])
-            if i < length(m.captures)
+            if i < length(m)
                 print(io, ", ")
             end
         end
@@ -187,6 +193,10 @@ function haskey(m::RegexMatch, name::Symbol)
     return idx > 0
 end
 haskey(m::RegexMatch, name::AbstractString) = haskey(m, Symbol(name))
+
+iterate(m::RegexMatch, args...) = iterate(m.captures, args...)
+length(m::RegexMatch) = length(m.captures)
+eltype(m::RegexMatch) = eltype(m.captures)
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
@@ -479,8 +489,9 @@ isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)::Bool
 iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)::Union{Nothing,Tuple{AbstractChar,Int}}
 
 function show(io::IO, s::SubstitutionString)
-    print(io, "s")
-    print_quoted_literal(io, s.string)
+    print(io, "s\"")
+    escape_raw_string(io, s.string)
+    print(io, "\"")
 end
 
 """

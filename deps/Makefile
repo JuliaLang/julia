@@ -24,8 +24,8 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # if you are adding a new target, it can help to copy an similar, existing target
 #
 # autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
-# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind libwhich
-# CMake libs: llvm libgit2 libssh2 mbedtls
+# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack blastrampoline openblas utf8proc objconv libwhich
+# CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls
 #
 # downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
 #
@@ -38,6 +38,9 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 unexport CONFIG_SITE
 
 DEP_LIBS :=
+
+# Always use libblastrampoline
+DEP_LIBS += blastrampoline
 
 ifeq ($(USE_SYSTEM_CSL), 0)
 DEP_LIBS += csl
@@ -58,7 +61,7 @@ DEP_LIBS += unwind
 else ifeq ($(OS), FreeBSD)
 DEP_LIBS += unwind
 else ifeq ($(OS), Darwin)
-DEP_LIBS += osxunwind
+DEP_LIBS += llvmunwind
 endif
 endif
 endif
@@ -164,10 +167,10 @@ DEP_LIBS += libwhich
 endif
 
 # unlist targets that have not been converted to use the staged-install
-DEP_LIBS_STAGED := $(filter-out suitesparse-wrapper,$(DEP_LIBS))
-ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
-DEP_LIBS_STAGED := $(filter-out osxunwind,$(DEP_LIBS_STAGED))
-endif
+DEP_LIBS_STAGED := $(DEP_LIBS)
+DEP_LIBS_STAGED := $(filter-out csl,$(DEP_LIBS_STAGED))
+DEP_LIBS_STAGED := $(filter-out suitesparse,$(DEP_LIBS_STAGED))
+DEP_LIBS_STAGED := $(filter-out suitesparse-wrapper,$(DEP_LIBS_STAGED))
 
 
 ## Common build target prefixes
@@ -184,16 +187,16 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-nghttp2 get-curl get-libgit2 get-libwhich get-zlib get-p7zip get-csl
+getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-blastrampoline get-openblas get-lapack get-suitesparse get-unwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-nghttp2 get-curl get-libgit2 get-libwhich get-zlib get-p7zip get-csl
 
-# If we're building for MacOS, no matter what, `getall` should include `osxunwind`
+# If we're building for MacOS, no matter what, `getall` should include `llvmunwind`
 ifeq ($(OS),Darwin)
-getall: get-osxunwind
+getall: get-llvmunwind
 endif
 
-# Same if we're building a purely-source archive, always include `osxunwind`
-ifeq ($(USE_BINARYBUILDER_OSXUNWIND),0)
-getall: get-osxunwind
+# Same if we're building a purely-source archive, always include `llvmunwind`
+ifeq ($(USE_BINARYBUILDER_LLVMUNWIND),0)
+getall: get-llvmunwind
 endif
 
 include $(SRCDIR)/csl.mk
@@ -203,7 +206,8 @@ include $(SRCDIR)/pcre.mk
 include $(SRCDIR)/openlibm.mk
 include $(SRCDIR)/dsfmt.mk
 include $(SRCDIR)/objconv.mk
-include $(SRCDIR)/blas.mk
+include $(SRCDIR)/blastrampoline.mk
+include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/suitesparse.mk
 include $(SRCDIR)/unwind.mk

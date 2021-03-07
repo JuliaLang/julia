@@ -174,6 +174,7 @@ end
 @test_repr "a => b in c"
 @test_repr "*(a..., b)"
 @test_repr "+(a, b, c...)"
+@test_repr "f((x...)...)"
 
 # precedence tie resolution
 @test_repr "(a * b) * (c * d)"
@@ -237,6 +238,7 @@ end
 @test repr(:(;)) == ":((;))"
 @test repr(:(-(;x))) == ":(-(; x))"
 @test repr(:(+(1, 2;x))) == ":(+(1, 2; x))"
+@test repr(:(1:2...)) == ":(1:2...)"
 for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:ref, :f, Expr(:(=), :x, 1)),
            Expr(:vect, 1, 2, Expr(:kw, :x, 1)),
@@ -634,7 +636,7 @@ end
 # `where` syntax
 @test_repr "A where T<:B"
 @test_repr "A where T<:(Array{T} where T<:Real)"
-@test_repr "Array{T} where T<:Array{S} where S<:Real"
+@test_repr "Array{T} where {S<:Real, T<:Array{S}}"
 @test_repr "x::Array{T} where T"
 @test_repr "(a::b) where T"
 @test_repr "a::b where T"
@@ -1319,8 +1321,7 @@ end
 (::T20332{T})(x) where T = 0
 
 let m = which(T20332{Int}(), (Int,)),
-    mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-               m, Tuple{T20332{T}, Int} where T, Core.svec(), typemax(UInt))
+    mi = Core.Compiler.specialize_method(m, Tuple{T20332{T}, Int} where T, Core.svec())
     # test that this doesn't throw an error
     @test occursin("MethodInstance for", repr(mi))
 end
@@ -1402,14 +1403,14 @@ let fname = tempname()
     end
 end
 
-struct f_with_params{t} <: Function
+module ModFWithParams
+struct f_with_params{t} <: Function end
+(::f_with_params)(x) = 2x
 end
 
-(::f_with_params)(x) = 2x
-
 let io = IOBuffer()
-    show(io, MIME"text/html"(), f_with_params.body.name.mt)
-    @test occursin("f_with_params", String(take!(io)))
+    show(io, MIME"text/html"(), ModFWithParams.f_with_params.body.name.mt)
+    @test occursin("ModFWithParams.f_with_params", String(take!(io)))
 end
 
 @testset "printing of Val's" begin
@@ -1568,25 +1569,39 @@ end
 end
 
 let x = TypeVar(:_), y = TypeVar(:_)
-    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where _2 where _1"
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where {_1, _2}"
     @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1, _1} where _1"
     x = TypeVar(:a)
     y = TypeVar(:a)
     z = TypeVar(:a)
-    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1, a2, a} where a2 where a1 where a"
+    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1, a2, a} where {a, a1, a2}"
 end
 
 @testset "showarg" begin
+    io = IOBuffer()
+
     A = reshape(Vector(Int16(1):Int16(2*3*5)), 2, 3, 5)
     @test summary(A) == "2×3×5 Array{Int16, 3}"
+
     v = view(A, :, 3, 2:5)
     @test summary(v) == "2×4 view(::Array{Int16, 3}, :, 3, 2:5) with eltype Int16"
+    @test Base.showarg(io, v, false) === nothing
+    @test String(take!(io)) == "view(::Array{Int16, 3}, :, 3, 2:5)"
+
     r = reshape(v, 4, 2)
     @test summary(r) == "4×2 reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2) with eltype Int16"
+    @test Base.showarg(io, r, false) === nothing
+    @test String(take!(io)) == "reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2)"
+
     p = PermutedDimsArray(r, (2, 1))
     @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
+    @test Base.showarg(io, p, false) === nothing
+    @test String(take!(io)) == "PermutedDimsArray(reshape(view(::Array{Int16, 3}, :, 3, 2:5), 4, 2), (2, 1))"
+
     p = reinterpret(reshape, Tuple{Float32,Float32}, [1.0f0 3.0f0; 2.0f0 4.0f0])
     @test summary(p) == "2-element reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32}) with eltype Tuple{Float32, Float32}"
+    @test Base.showarg(io, p, false) === nothing
+    @test String(take!(io)) == "reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32})"
 end
 
 @testset "Methods" begin
@@ -2070,15 +2085,26 @@ end
 end
 
 module M37012
+export AValue, B2, SimpleU
 struct AnInteger{S<:Integer} end
 struct AStruct{N} end
 const AValue{S} = Union{AStruct{S}, AnInteger{S}}
+struct BStruct{T,S} end
+const B2{S,T} = BStruct{T,S}
+const SimpleU = Union{AnInteger, AStruct, BStruct}
 end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
 @test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector{T} where T}"
 @test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat{T} where T}"
+@test string(M37012.BStruct{T, T} where T) == "$(curmod_prefix)M37012.B2{T, T} where T"
+@test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Unsigned, S<:Signed}"
+@test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Signed, S<:T}"
+@test string(Union{M37012.SimpleU, Nothing}) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU}"
+@test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
+@test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
+@test string(Union{AbstractVector, T} where T) == "Union{AbstractVector{T} where T, T} where T"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
@@ -2122,4 +2148,17 @@ end
     @test sprint(show, :(::)) == ":(::)"
     @test sprint(show, :?) == ":?"
     @test sprint(show, :(var"?" + var"::" + var"'")) == ":(var\"?\" + var\"::\" + var\"'\")"
+end
+
+@testset "printing of function types" begin
+    s = sprint(show, MIME("text/plain"), typeof(sin))
+    @test s == "typeof(sin) (singleton type of function sin, subtype of Function)"
+    s = sprint(show, MIME("text/plain"), ModFWithParams.f_with_params)
+    @test endswith(s, "ModFWithParams.f_with_params")
+    s = sprint(show, MIME("text/plain"), ModFWithParams.f_with_params{2})
+    @test endswith(s, "ModFWithParams.f_with_params{2}")
+    s = sprint(show, MIME("text/plain"), UnionAll)
+    @test s == "UnionAll"
+    s = sprint(show, MIME("text/plain"), Function)
+    @test s == "Function"
 end

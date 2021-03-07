@@ -584,6 +584,9 @@ static void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->io_wait = 0;
+    // @time needs its compile timer disabled on error,
+    // and cannot use a try-finally as it would break scope for assignments
+    jl_measure_compile_time[ptls->tid] = 0;
     if (ptls->safe_restore)
         jl_longjmp(*ptls->safe_restore, 1);
     // During startup
@@ -676,6 +679,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
         else {
             t->bufsz = JL_STACK_SIZE;
         }
+        t->stkbuf = NULL;
     }
     else {
         // user requested dedicated stack of a certain size
@@ -701,7 +705,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->sticky = 1;
     t->gcstack = NULL;
     t->excstack = NULL;
-    t->stkbuf = NULL;
     t->started = 0;
     t->prio = -1;
     t->tid = -1;
@@ -804,9 +807,24 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 {
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
-    // install the unhandled exception hanlder at the top of our stack
+    // install the unhandled exception handler at the top of our stack
     // to call directly into our personality handler
     asm volatile ("\t.seh_handler __julia_personality, @except\n\t.text");
+#endif
+#else
+    // wipe out the call-stack unwind capability beyond this function
+    // (we are noreturn, so it is not a total lie)
+#if defined(_CPU_X86_64_)
+    // per nongnu libunwind: "x86_64 ABI specifies that end of call-chain is marked with a NULL RBP or undefined return address"
+    // so we do all 3, to be extra certain of it
+    asm volatile ("\t.cfi_undefined rip");
+    asm volatile ("\t.cfi_undefined rbp");
+    asm volatile ("\t.cfi_return_column rbp");
+#else
+    // per nongnu libunwind: "DWARF spec says undefined return address location means end of stack"
+    // we use whatever happens to be register 1 on this platform for this
+    asm volatile ("\t.cfi_undefined 1");
+    asm volatile ("\t.cfi_return_column 1");
 #endif
 #endif
 

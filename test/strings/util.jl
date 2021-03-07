@@ -403,3 +403,10 @@ end
     a, b, c... = s
     @test c === "cd"
 end
+
+@testset "endswith" begin
+    A = "Fun times with Julialang"
+    B = "A language called Julialang"
+    @test endswith(A, split(B, ' ')[end])
+    @test endswith(A, 'g')
+end

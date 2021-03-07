@@ -200,6 +200,14 @@ notify(c26506_1)
 wait(c26506_2)
 @test result26506[1] == 3
 
+# issue #38435
+f38435(::Int, ::Any) = 1
+f38435(::Any, ::Int) = 2
+g38435(x) = f38435(x, x)
+@test_throws MethodError(f38435, (1, 1), Base.get_world_counter()) g38435(1)
+f38435(::Int, ::Int) = 3.0
+@test g38435(1) === 3.0
+
 
 ## Invalidation tests
 
@@ -305,7 +313,8 @@ src4 = code_typed(applyf35855_2, (Vector{Any},))[1]
 @test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
 
 ## ambiguities do not trigger invalidation
-mi = instance(+, (AbstractChar, UInt8))
+m = which(+, (Char, UInt8))
+mi = Core.Compiler.specialize_method(m, Tuple{typeof(+), AbstractChar, UInt8}, Core.svec())
 w = worlds(mi)
 
 abstract type FixedPoint35855{T <: Integer} <: Real end

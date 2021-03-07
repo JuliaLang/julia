@@ -2814,7 +2814,7 @@ end
     @test setindex!(zeros(2), ones(2), CI0, :, CI0) == ones(2)
     @test setindex!(zeros(2), ones(2), CI0, CI0, :) == ones(2)
     @test setindex!([fill(0.0)], fill(1.0), 1) == [fill(1.0)]
-    # 0-dimensional assigment into ≥1-dimensional arrays
+    # 0-dimensional assignment into ≥1-dimensional arrays
     @test setindex!(zeros(2), fill(1.0), 1, CI0) == [1.0, 0.0]
     @test setindex!(zeros(2), fill(1.0), CI0, 1) == [1.0, 0.0]
     @test setindex!(zeros(2,2), fill(1.0), 1, 1, CI0) == [1.0 0.0; 0.0 0.0]
@@ -2897,4 +2897,10 @@ end
     as = similar(a, Int, (3, 5, 1))
     @test as isa TSlow{Int,3}
     @test size(as) == (3, 5, 1)
+end
+
+@testset "0-dimensional shape checking #39608" begin
+    @test [fill(1); [2; 2]] == [1; 2; 2]
+    @test [fill(1); fill(2, (2,1,1))] == reshape([1; 2; 2], (3, 1, 1))
+    @test_throws DimensionMismatch [fill(1); rand(2, 2, 2)]
 end

@@ -198,6 +198,9 @@ timesofar("utils")
                   ((x+y)%5==2 for x = 1:n1 for y = 1:n2))
             @test BitArray(g) == BitArray(collect(g))
         end
+        @test_throws DimensionMismatch BitVector(false)
+        @test_throws DimensionMismatch BitVector((iszero(i%4) for i in 1:n1, j in 1:n2))
+        @test_throws DimensionMismatch BitMatrix((isodd(i) for i in 1:3))
     end
 
     @testset "constructor from NTuple" begin
@@ -1221,6 +1224,7 @@ timesofar("datamove")
     end
 
     @test count(trues(2, 2), init=0x03) === 0x07
+    @test count(trues(2, 2, 2), dims=2) == fill(2, 2, 1, 2)
 end
 
 timesofar("find")

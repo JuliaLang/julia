@@ -692,6 +692,12 @@ function test_cat(::Type{TestAbstractArray})
     # 36041
     @test_throws MethodError cat(["a"], ["b"], dims=[1, 2])
     @test cat([1], [1], dims=[1, 2]) == I(2)
+
+    # inferrability
+    As = [zeros(2, 2) for _ = 1:2]
+    @test @inferred(cat(As...; dims=Val(3))) == zeros(2, 2, 2)
+    cat3v(As) = cat(As...; dims=Val(3))
+    @test @inferred(cat3v(As)) == zeros(2, 2, 2)
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -1234,6 +1240,11 @@ end
     @test Base.rest(a, st) == [3, 2, 4]
 end
 
+@testset "issue #37741, non-int cat" begin
+    @test [1; 1:BigInt(5)] == [1; 1:5]
+    @test [1:BigInt(5); 1] == [1:5; 1]
+end
+
 @testset "Base.isstored" begin
     a = rand(3, 4, 5)
     @test Base.isstored(a, 1, 2, 3)
@@ -1257,4 +1268,15 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+end
+
+@testset "splatting into hvcat" begin
+    t = (1, 2)
+    @test [t...; 3 4] == [1 2; 3 4]
+    @test [0 t...; t... 0] == [0 1 2; 1 2 0]
+    @test_throws ArgumentError [t...; 3 4 5]
+
+    @test Int[t...; 3 4] == [1 2; 3 4]
+    @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
+    @test_throws ArgumentError Int[t...; 3 4 5]
 end

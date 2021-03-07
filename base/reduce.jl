@@ -88,6 +88,8 @@ Create a mapping reducing function `rf′(acc, x) = rf(acc, f(x))`.
 struct MappingRF{F, T}
     f::F
     rf::T
+    MappingRF(f::F, rf::T) where {F,T} = new{F,T}(f, rf)
+    MappingRF(::Type{f}, rf::T) where {f,T} = new{Type{f},T}(f, rf)
 end
 
 @inline (op::MappingRF)(acc, x) = op.rf(acc, op.f(x))

@@ -1,0 +1,10 @@
+name = "LLVMLibUnwind_jll"
+uuid = "47c5dbc3-30ba-59ef-96a6-123e260183d9"
+version = "11.0.1+1"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[compat]
+julia = "1.6"

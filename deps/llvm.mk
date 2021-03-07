@@ -190,6 +190,13 @@ LLVM_CPPFLAGS += -flto
 LLVM_LDFLAGS += -flto
 endif # LLVM_LTO
 
+ifeq ($(USE_LLVM_SHLIB),1)
+ifeq ($(USECLANG),0)
+# https://bugs.llvm.org/show_bug.cgi?id=48221
+LLVM_CXXFLAGS += -fno-gnu-unique
+endif
+endif
+
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
 endif
@@ -284,7 +291,7 @@ endif
 # These libraries require unwind.h from the libunwind dependency
 ifeq ($(USE_SYSTEM_LIBUNWIND),0)
 ifeq ($(OS),Darwin)
-BUILT_UNWIND := $(build_prefix)/manifest/osxunwind
+BUILT_UNWIND := $(build_prefix)/manifest/llvmunwind
 else
 BUILT_UNWIND := $(build_prefix)/manifest/unwind
 endif # Darwin
@@ -441,6 +448,15 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
+define LLVM_PROJ_PATCH
+$$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
+	cd $$(LLVM_SRC_DIR) && patch -p2 < $$(SRCDIR)/patches/$1.patch
+	echo 1 > $$@
+# declare that applying any patch must re-run the compile step
+$$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
+LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
+endef
+
 ifeq ($(LLVM_VER_SHORT),8.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
@@ -484,6 +500,7 @@ $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 $(eval $(call LLVM_PATCH,llvm-9.0-D85499)) # landed as D85553
 $(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLVM 12
 endif # LLVM_VER 9.0
 
 ifeq ($(LLVM_VER_SHORT),10.0)
@@ -508,10 +525,13 @@ $(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa))
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
 endif
+$(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLVM 12
 endif # LLVM_VER 10.0
 
 ifeq ($(LLVM_VER_SHORT),11.0)
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1)) # remove for LLVM 12
+endif # LLVM_VER 11.0.0
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # replaced by D90969 for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS)) # Needs upstreaming
@@ -521,18 +541,33 @@ $(eval $(call LLVM_PATCH,llvm-11-D75072-SCEV-add-type))
 $(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
 $(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
+endif # LLVM_VER 11.0.0
 $(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa)) # Needs upstreaming
 ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
 endif
+ifeq ($(LLVM_VER_PATCH), 0)
 $(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D90722-rtdyld-absolute-relocs)) # remove for LLVM 12
+endif # LLVM_VER 11.0.0
 $(eval $(call LLVM_PATCH,llvm-invalid-addrspacecast-sink)) # upstreamed as D92210
 $(eval $(call LLVM_PATCH,llvm-11-D92906-ppc-setjmp)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-PR48458-X86ISelDAGToDAG)) # remove for LLVM 12
-$(eval $(call LLVM_PATCH,llvm-11-D93092-ppc-knownbits))
+$(eval $(call LLVM_PATCH,llvm-11-D93092-ppc-knownbits)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D93154-globalisel-as))
+$(eval $(call LLVM_PATCH,llvm-11-ppc-half-ctr)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-ppc-sp-from-bp)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps))
+$(eval $(call LLVM_PATCH,llvm-11-D94980-CTR-half))
+$(eval $(call LLVM_PATCH,llvm-11-D94058-sext-atomic-ops)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D96283-dagcombine-half)) # remove for LLVM 12
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-AArch64-FastIsel-bug))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97435-AArch64-movaddrreg))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97571-AArch64-loh)) # remove for LLVM 13
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
 endif # LLVM_VER 11.0
 
 
@@ -617,6 +652,12 @@ update-llvm:
 		git pull --ff-only)
 endif
 else # USE_BINARYBUILDER_LLVM
+
+# We provide a way to subversively swap out which LLVM JLL we pull artifacts from
+ifeq ($(LLVM_ASSERTIONS), 1)
+LLVM_JLL_DOWNLOAD_NAME := libLLVM_assert
+LLVM_JLL_VER := $(LLVM_ASSERT_JLL_VER)
+endif
 
 $(eval $(call bb-install,llvm,LLVM,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))

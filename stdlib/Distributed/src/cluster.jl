@@ -431,7 +431,7 @@ if istaskdone(t)   # Check if `addprocs` has completed to ensure `fetch` doesn't
     else
         fetch(t)
     end
-  end
+end
 ```
 """
 function addprocs(manager::ClusterManager; kwargs...)

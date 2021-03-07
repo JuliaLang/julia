@@ -361,6 +361,8 @@ Random.seed!(1)
         d2, s2 = logabsdet(lM)
         @test d1 ≈ d2
         @test s1 == s2
+        @test logdet(Diagonal(relty[-1,-2])) ≈ log(2)
+        @test_throws DomainError logdet(Diagonal(relty[-1,-2,-3]))
     end
 
     @testset "similar" begin
@@ -731,6 +733,15 @@ end
     @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
     @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
+end
+
+@testset "Inner product" begin
+    A = Diagonal(rand(10) .+ im)
+    B = Diagonal(rand(10) .+ im)
+    @test dot(A, B) ≈ dot(Matrix(A), B)
+    @test dot(A, B) ≈ dot(A, Matrix(B))
+    @test dot(A, B) ≈ dot(Matrix(A), Matrix(B))
+    @test dot(A, B) ≈ conj(dot(B, A))
 end
 
 end # module TestDiagonal
