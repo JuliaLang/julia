@@ -1282,20 +1282,20 @@ end
 end
 
 @testset "issue #39896, modified getindex " begin
-    a=ones(10)
+    a=collect(1:10)
     ax=axes(a,1)
     @test a==a[ax]
     @test a[2:8]==a[ax[2:8]]
-    a=ones(10,10)
+    a=reshape(collect(1:100),(10,10))
     @test a==a[ax,ax]
     @test a[2:5,3:7]==a[ax[2:5],ax[3:7]]
     ax=UnitRange(1,10)
-    @test a[ax]==ones(10)
-    @test a[ax,ax]==ones(10,10)
-    a=ones(BigInt(10))
+    @test a[ax]==collect(1:10)
+    @test a[ax,ax]==reshape(collect(1:100),(10,10))
+    a=collect(1:BigInt(10))
     ax=UnitRange(1,10)
-    @test a[ax]== ones(BigInt(10))
-    a=ones(BigInt(10),BigInt(10))
-    @test a[ax,ax]==ones(BigInt(10),BigInt(10))
+    @test a[ax]== collect(1:BigInt(10))
+    a=reshape(collect(1:BigInt(100)),(10,10))
+    @test a[ax,ax]==reshape(collect(1:BigInt(100)),(10,10))
 end
 
