@@ -2191,11 +2191,11 @@ end
 
 function _sqrt_quasitriu_diag_block!(R, A)
     n = size(R, 1)
-    t = eltype(R)
+    ta = eltype(R) <: Complex ? complex(eltype(A)) : eltype(A)
     i = 1
     @inbounds while i < n
         if iszero(A[i + 1, i])
-            R[i, i] = sqrt(t(A[i, i]))
+            R[i, i] = sqrt(ta(A[i, i]))
             i += 1
         else
             # this branch is never reached when A is complex triangular
@@ -2204,7 +2204,7 @@ function _sqrt_quasitriu_diag_block!(R, A)
         end
     end
     if i == n
-        R[n, n] = sqrt(t(A[n, n]))
+        R[n, n] = sqrt(ta(A[n, n]))
     end
     return R
 end
