@@ -760,8 +760,8 @@ static void jl_compilation_sig(
         }
         else {
             jl_value_t *unw = jl_unwrap_unionall(decl);
-            jl_value_t *lastdeclt = jl_tparam(unw, nargs - 1);
-            assert(jl_is_vararg(lastdeclt) && jl_nparams(unw) == nargs);
+            jl_value_t *lastdeclt = jl_tparam(unw, jl_nparams(unw) - 1);
+            assert(jl_is_vararg(lastdeclt));
             int nsp = jl_svec_len(sparams);
             if (nsp > 0 && jl_has_free_typevars(lastdeclt)) {
                 assert(jl_subtype_env_size(decl) == nsp);
