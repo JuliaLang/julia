@@ -230,12 +230,22 @@ end
 `@pure` gives the compiler a hint for the definition of a pure function,
 helping for type inference.
 
-A pure function can only depend on immutable information.
-This also means a `@pure` function cannot use any global mutable state, including
-generic functions. Calls to generic functions depend on method tables which are
+The criteria used by Julia to deem a function pure is stricter than the one
+used by most other languages, and incorrect `@pure` annotation may introduce
+hard to identify bugs, so it is important to keep in mind these criteria:
+
+1. A pure function must always return exactly (`===`) the same result for a given input.
+   If the return is a mutable struct this means it must always return the *same* object.
+2. A pure function cannot be extended with new methods after it is called the first time.
+3. A pure function cannot recurse (i.e., call itself).
+4. A pure function should only call built-in functions, no generic functions.
+   If you write the name of a function in the REPL and press enter it will inform
+   if the function is generic or builtin.
+
+The rationale for 2--4 comes comes the fact that a `@pure` function cannot use any
+global mutable state. Calls to generic functions depend on method tables which are
 mutable global state.
-Use with caution, incorrect `@pure` annotation of a function may introduce
-hard to identify bugs. Double check for calls to generic functions.
+
 This macro is intended for internal compiler use and may be subject to changes.
 """
 macro pure(ex)
