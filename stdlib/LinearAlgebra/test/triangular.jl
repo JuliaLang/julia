@@ -503,9 +503,11 @@ Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 @test sqrt(Atp) |> t->t*t ≈ Atp
 @test sqrt(Atp) isa UpperTriangular
 @test typeof(sqrt(Atp)[1,1]) <: Real
+@test typeof(sqrt(complex(Atp))[1,1]) <: Complex
 @test sqrt(Atu) |> t->t*t ≈ Atu
 @test sqrt(Atu) isa UnitUpperTriangular
 @test typeof(sqrt(Atu)[1,1]) <: Real
+@test typeof(sqrt(complex(Atu))[1,1]) <: Complex
 
 Areal   = randn(n, n)/2
 Aimg    = randn(n, n)/2
