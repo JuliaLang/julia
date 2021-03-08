@@ -2083,8 +2083,13 @@ julia> [a b;;; c d;;; e f]
 """
 hvncat(::Tuple{}, ::Bool) = []
 hvncat(::Tuple{}, ::Bool, xs...) = []
-hvncat(::Tuple{Int}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
+hvncat(::Tuple{Vararg{Int, 1}}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
 hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs...) = _hvncat(dims, row_first, xs...)
+
+hvncat(::Tuple{}, ::Tuple{Vararg}, ::Bool) = []
+hvncat(::Tuple{}, ::Tuple{Vararg}, ::Bool, xs...) = []
+hvncat(::Tuple{Vararg{Int, 1}}, ::Tuple{Vararg}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
+hvncat(dims::Tuple{Vararg{Int}}, shape::Tuple{Vararg}, row_first::Bool, xs...) = _hvncat(dims, shape, row_first, xs...)
 
 _hvncat(::Tuple{Vararg{Int}}, ::Bool) = []
 _hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dims, row_first, xs...)
@@ -2092,11 +2097,24 @@ _hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::T...) where T<:Number = _
 _hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), dims, row_first, xs...)
 _hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dims, row_first, xs...)
 _hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dims, row_first, xs...)
+_hvncat(::Tuple{Vararg{Int}}, ::Tuple{Vararg}, ::Bool) = []
+_hvncat(dims::Tuple{Vararg{Int}}, shape::Tuple{Vararg}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dims, shape, row_first, xs...)
+_hvncat(dims::Tuple{Vararg{Int}}, shape::Tuple{Vararg}, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, dims, shape, row_first, xs...)
+_hvncat(dims::Tuple{Vararg{Int}}, shape::Tuple{Vararg}, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), dims, shape, row_first, xs...)
+_hvncat(dims::Tuple{Vararg{Int}}, shape::Tuple{Vararg}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dims, shape, row_first, xs...)
+_hvncat(dims::Tuple{Vararg{Int}}, shape::Tuple{Vararg}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dims, shape, row_first, xs...)
+
+# might be able to just do shape and not dims later, for the unbalanced ones?
 
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-typed_hvncat(T::Type, ::Tuple{Int}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
-typed_hvncat(T::Type, dims::Tuple{Vararg{Int}}, row_first::Bool, xs...) = _typed_hvncat(T, dims, row_first, xs...)
+typed_hvncat(T::Type, ::Tuple{Vararg{Int, 1}}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
+typed_hvncat(T::Type, dims::Tuple{Vararg{Int}}, ::Bool, xs...) = _typed_hvncat(T, dims, row_first, xs...)
+
+typed_hvncat(::Type{T}, ::Tuple{}, ::Tuple{Vararg}, ::Bool) where T = Vector{T}()
+typed_hvncat(::Type{T}, ::Tuple{}, ::Tuple{Vararg}, ::Bool, xs...) where T = Vector{T}()
+typed_hvncat(T::Type, ::Tuple{Vararg{Int, 1}}, ::Tuple{Vararg}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
+typed_hvncat(T::Type, dims::Tuple{Vararg{Int}}, shape::Tuple{Vararg}, ::Bool, xs...) = _typed_hvncat(T, dims, shape, row_first, xs...)
 
 _typed_hvncat(::Type{T}, ::Tuple{Vararg{Int}}, ::Bool) where T = Vector{T}()
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where T where N
@@ -2147,7 +2165,7 @@ end
 _length(a::AbstractArray) = length(a)
 _length(::Any) = 1
 
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where T where N
+function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, as...) where T where N
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
@@ -2242,6 +2260,11 @@ function hvncat_calcindex(offsets, inneroffsets, outdims, nd)
         Ai += increment
     end
     Ai
+end
+
+_typed_hvncat(::Type{T}, ::Tuple{Vararg{Int}}, ::Tuple{Vararg}) where T = Vector{T}()
+function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, shape::Tuple{Vararg}, as...) where T where N
+    error("not yet implemented")
 end
 
 ## Reductions and accumulates ##
