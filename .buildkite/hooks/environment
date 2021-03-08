@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+# Copy this to $BUILDKITE_AGENT_ROOT/hooks/environment
+# (where $BUILDKITE_AGENT_ROOT is the directory that has buildkite-agent.cfg).
+# On Linux: /etc/buildkite-agent
+# On Mac: /usr/local/etc/buildkite-agent
+
+if [[ "BUILDKITE_REPO" != "https://github.com/JuliaLang/julia.git" ]]; then
+  echo "This agent can only be used by JuliaLang/julia"
+  exit 1
+fi
+
+secret() {
+  aws secretsmanager get-secret-value --secret-id "buildkite.$1" | jq -r .SecretString
+}
+
+# Export secrets if any of the following are true:
+# - The build is not for a PR
+# - The build is for a PR, but not from a fork (we trust committers)
+# When jobs are running directly on the agent host, variables are exported directly.
+# When they're running in Docker, they need to be added to an env file instead.
+if [[ "$BUILDKITE_PULL_REQUEST" == "false" ]] || [[ "$BUILDKITE_PULL_REQUEST_REPO" == "https://github.com/JuliaLang/julia" ]]; then
+  case "$BUILDKITE_STEP_KEY" in
+    package-*)
+      case "$OS" in
+        mac)
+          export KEYCHAIN_PASSWORD="$(secret mac_keychain_password)"
+          export MACOS_CODESIGN_IDENTITY="$(secret mac_codesign_identity)"
+          export APPLEID_PASSWORD="$(secret mac_appleid_password)"
+          ;;
+      esac
+      ;;
+    promote-*)
+      # TODO: How to do this properly?
+      # credentials="$(aws sts get-session-token | jq .Credentials)"
+      # echo "AWS_ACCESS_KEY_ID=$(echo $credentials | jq .AccessKeyId)" >> "$BUILDKITE_ENV_FILE"
+      # echo "AWS_SECRET_ACCESS_KEY=$(echo $credentials | jq .SecretAccessKey)" >> "$BUILDKITE_ENV_FILE"
+      # echo "AWS_SESSION_TOKEN=$(echo $credentials | jq .SessionToken)" >> "$BUILDKITE_ENV_FILE"
+      echo "AWS_ACCESS_KEY_ID=$(secret aws_access_key_id)" >> "$BUILDKITE_ENV_FILE"
+      echo "AWS_SECRET_ACCESS_KEY=$(secret aws_secret_access_key)" >> "$BUILDKITE_ENV_FILE"
+      ;;
+    doctest)
+      echo "DOCUMENTER_KEY=$(secret documenter_key)" >> "$BUILDKITE_ENV_FILE"
+      ;;
+  esac
+
+  if [[ "$BUILDKITE_STEP_KEY" != promote-* ]]; then
+    unset_aws_keys=true
+  fi
+else
+  unset_aws_keys=true
+fi
+
+if [[ "$unset_aws_keys" == "true" ]]; then
+  unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+  nocreds="$(grep --invert-match AWS_ $BUILDKITE_ENV_FILE)"
+  echo "$nocreds" > "$BUILDKITE_ENV_FILE"
+fi
