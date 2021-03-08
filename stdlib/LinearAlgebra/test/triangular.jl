@@ -497,8 +497,10 @@ end
 Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
 Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
 @test sqrt(Atn) |> t->t*t ≈ Atn
+@test sqrt(Atn) isa UpperTriangular
 @test typeof(sqrt(Atn)[1,1]) <: Complex
 @test sqrt(Atp) |> t->t*t ≈ Atp
+@test sqrt(Atp) isa UpperTriangular
 @test typeof(sqrt(Atp)[1,1]) <: Real
 
 Areal   = randn(n, n)/2
