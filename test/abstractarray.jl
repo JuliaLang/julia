@@ -1282,28 +1282,31 @@ end
 end
 
 @testset "issue #39896, modified getindex " begin
+    #Testing types holds for the range types in Base that use 1-based indexing
     a=collect(1:10)
     ax=axes(a,1)
     @test a==a[ax]
+    @test typeof(a)===typeof(a[ax])
     a=reshape(collect(1:100),(10,10))
     @test a[2:5]==2:5
     a=collect(1:10)
     ax=Base.OneTo(8)
     @test a[1:8]==a[ax]
+    @test typeof(a[1:8])===typeof(a[ax])
     a=reshape(collect(1:100),(10,10))
     @test a[1:8,1]==a[ax,1]
+    @test typeof(a[1:8,1])===typeof(a[ax,1])
     ax=UnitRange(1,10)
     @test a[ax]==1:10
-    @test a[ax,1]==1:10
     a=collect(1:BigInt(10))
     ax=1:BigInt(10)
     @test a[ax]==1:BigInt(10)
     a=reshape(collect(1:BigInt(100)),(10,10))
-    @test a[ax,1]==1:BigInt(10)
+    @test a[ax]==1:BigInt(10)
     a=collect(1:UInt(10))
     ax=1:UInt(10)
-    @test a[ax]== 1:UInt(10)
+    @test a[ax]==1:UInt(10)
     a=reshape(collect(1:UInt(100)),(10,10))
-    @test a[ax,1]==1:UInt(10)
+    @test a[ax]==1:UInt(10)
 end
 
