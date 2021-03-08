@@ -2317,7 +2317,7 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x2!(R, A, i, j)
     tt = typeof(zero(t)*zero(t))
     for i′ in irange, j′ in jrange
         Cij = tt(-A[i′, j′])
-        for k in (i + 2):(j - 1)
+        @simd for k in (i + 2):(j - 1)
             Cij += R[i′, k] * R[k, j′]
         end
         R[i′, j′] = Cij
