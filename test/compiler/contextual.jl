@@ -135,3 +135,31 @@ let method = which(func2, ())
 end
 func3() = func2()
 @test_throws UndefVarError func3()
+
+
+
+## overlay method tables
+
+module OverlayModule
+
+using Base.Experimental: @MethodTable, @overlay
+
+@MethodTable(mt)
+
+@overlay mt function sin(x::Float64)
+    1
+end
+
+# short function def
+@overlay mt cos(x::Float64) = 2
+
+end
+
+methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, typemax(UInt))
+@test only(methods).method.module === Base.Math
+
+methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, typemax(UInt))
+@test only(methods).method.module === OverlayModule
+
+methods = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, typemax(UInt))
+@test isempty(methods)

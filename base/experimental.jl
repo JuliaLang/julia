@@ -257,9 +257,13 @@ end
 include("opaque_closure.jl")
 
 """
-    Add a method to an overlay table
+    Experimental.@overlay mt [function def]
 
-@overlay mt [function def]
+Define a method and add it to the method table `mt` instead of to the global method table.
+This can be used to implement a method override mechanism. Regular compilation will not
+consider these methods, and you should customize the compilation flow to look in these
+method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+
 """
 macro overlay(mt, def)
     def = macroexpand(__module__, def) # to expand @inline, @generated, etc
@@ -271,9 +275,11 @@ macro overlay(mt, def)
 end
 
 """
-    Create a new MethodTable in the current module
+    Experimental.@MethodTable(name)
 
-@MethodTable(name)
+Create a new MethodTable in the current module, bound to `name`. This method table can be
+used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
+adding them to the global method table.
 """
 macro MethodTable(name)
     isa(name, Symbol) || error("name must be a symbol")
