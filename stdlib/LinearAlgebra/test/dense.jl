@@ -150,9 +150,11 @@ end
             @test asymsq*asymsq ≈ asym
             if eltype(a) <: Real  # real square root
                 apos = a * a
-                apos_sqrt = sqrt(apos)
-                @test apos_sqrt*apos_sqrt ≈ apos
-                @test eltype(apos_sqrt) <: Real
+                @test sqrt(apos)^2 ≈ apos
+                @test eltype(sqrt(apos)) <: Real
+                # test that real but Complex input produces Complex output
+                @test sqrt(complex(apos)) ≈ sqrt(apos)
+                @test eltype(sqrt(complex(apos))) <: Complex
             end
         end
 
