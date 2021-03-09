@@ -2114,46 +2114,7 @@ unw(x::Number) = ceil((imag(x) - pi) / (2 * pi))
 
 # End of auxiliary functions for matrix logarithm and matrix power
 
-function sqrt(A::UpperTriangular)
-    realmatrix = false
-    if isreal(A)
-        realmatrix = true
-        for i = 1:checksquare(A)
-            x = real(A[i,i])
-            if x < zero(x)
-                realmatrix = false
-                break
-            end
-        end
-    end
-    # Writing an explicit if instead of using Val(realmatrix) below
-    # makes the calls to sqrt(::UpperTriangular,::Val) type stable.
-    if realmatrix
-        return sqrt(A,Val(true))
-    else
-        return sqrt(A,Val(false))
-    end
-end
-function sqrt(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
-    B = A.data
-    n = checksquare(B)
-    t = realmatrix ? typeof(sqrt(zero(T))) : typeof(sqrt(complex(zero(T))))
-    R = zeros(t, n, n)
-    tt = typeof(zero(t)*zero(t))
-    @inbounds for j = 1:n
-        R[j,j] = realmatrix ? sqrt(B[j,j]) : sqrt(complex(B[j,j]))
-        for i = j-1:-1:1
-            r::tt = B[i,j]
-            @simd for k = i+1:j-1
-                r -= R[i,k]*R[k,j]
-            end
-            if !(iszero(r) || (iszero(R[i,i]) && iszero(R[j,j])))
-                R[i,j] = sylvester(R[i,i],R[j,j],-r)
-            end
-        end
-    end
-    return UpperTriangular(R)
-end
+sqrt(A::UpperTriangular) = sqrt_quasitriu(A)
 function sqrt(A::UnitUpperTriangular{T}) where T
     B = A.data
     n = checksquare(B)
