@@ -792,19 +792,20 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     elseif isreal(A)
         SchurF = schur(real(A))
         if istriu(SchurF.T)
-            return SchurF.Z * sqrt(UpperTriangular(SchurF.T)) * SchurF.Z'
+            sqrtA = SchurF.Z * sqrt(UpperTriangular(SchurF.T)) * SchurF.Z'
         else
             # real sqrt exists whenever no eigenvalues are negative
             is_sqrt_real = !any(x -> isreal(x) && real(x) < 0, SchurF.values)
             # sqrt_quasitriu uses LAPACK functions for non-triu inputs
             if typeof(sqrt(zero(T))) <: BlasFloat && is_sqrt_real
-                return SchurF.Z * sqrt_quasitriu(SchurF.T) * SchurF.Z'
+                sqrtA = SchurF.Z * sqrt_quasitriu(SchurF.T) * SchurF.Z'
             else
                 SchurS = schur(complex(SchurF.T))
                 Z = SchurF.Z * SchurS.Z
-                return Z * sqrt(UpperTriangular(SchurS.T)) * Z'
+                sqrtA = Z * sqrt(UpperTriangular(SchurS.T)) * Z'
             end
         end
+        return eltype(A) <: Complex ? complex(sqrtA) : sqrtA
     else
         SchurF = schur(A)
         R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
