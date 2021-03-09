@@ -2403,7 +2403,14 @@ function hash(A::AbstractArray, h::UInt)
     # Instead hash the tuple of firsts and lasts along each dimension
     h = hash(map(first, axes(A)), h)
     h = hash(map(last, axes(A)), h)
-    isempty(A) && return h
+
+    # For short arrays, it's not worth doing anything complicated 
+    if length(A) < 10000
+        @inbounds for p in pairs(IndexLinear(),A)
+            h ⊻= hash(p)
+        end
+        return h
+    end
 
     # Goal: Hash approximately log(N) entries with a higher density of hashed elements
     # weighted towards the end and special consideration for repeated values. Colliding
