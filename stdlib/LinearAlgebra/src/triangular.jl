@@ -1965,34 +1965,30 @@ function sqrt_diag!(A0::UpperTriangular, A::UpperTriangular, s)
     n = checksquare(A0)
     T = eltype(A)
     @inbounds for i = 1:n
-        aii = A0[i,i]
-        A[i,i] = _sqrt_pow(T <: Real ? aii : complex(aii), s)
+        a = complex(A0[i,i])
+        A[i,i] = _sqrt_pow(a, s)
     end
 end
 # compute a^(1/2^s)-1
 #   Al-Mohy, "A more accurate Briggs method for the logarithm",
 #      Numer. Algorithms, 59, (2012), 393–402.
 #   Algorithm 2
-function _sqrt_pow(a0::Number, s)
-    # TODO: don't unnecessarily complexify
-    a = complex(a0)
-    if s == 0
-        return a - 1
-    else
-        s0 = s
-        if imag(a) >= 0 && real(a) <= 0 && a != 0
-            a = sqrt(a)
-            s0 = s - 1
-        end
-        z0 = a - 1
+function _sqrt_pow(a::Number, s)
+    T = typeof(sqrt(zero(a)))
+    s == 0 && return T(a) - 1
+    s0 = s
+    if imag(a) >= 0 && real(a) <= 0 && !iszero(a)
         a = sqrt(a)
-        r = 1 + a
-        for j = 1:s0-1
-            a = sqrt(a)
-            r = r * (1 + a)
-        end
-        return z0 / r
+        s0 = s - 1
     end
+    z0 = a - 1
+    a = sqrt(a)
+    r = 1 + a
+    for j = 1:s0-1
+        a = sqrt(a)
+        r = r * (1 + a)
+    end
+    return z0 / r
 end
 
 # Used only by powm at the moment
