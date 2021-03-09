@@ -166,7 +166,7 @@ $$(build_staging)/$2.tgz: $$(BUILDDIR)/$2/build-compiled
 	rm -rf $$(build_staging)/$2
 	mkdir -p $$(build_staging)/$2$$(build_prefix)
 	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
-	cd $$(build_staging)/$2$$(build_prefix) && tar -czf $$@.tmp .
+	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) -czf $$@.tmp .
 	rm -rf $$(build_staging)/$2
 	mv $$@.tmp $$@
 
@@ -182,7 +182,7 @@ endef
 
 define staged-uninstaller
 uninstall-$(strip $1):
-	-cd $$(build_prefix) && rm -fdv -- $$$$($$(TAR) -tzf $$(build_staging)/$2.tgz --exclude './$$$$')
+	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tzf $$(build_staging)/$2.tgz | grep -v '/$$$$')
 	-rm $$(build_prefix)/manifest/$(strip $1)
 endef
 

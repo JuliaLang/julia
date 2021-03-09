@@ -73,6 +73,6 @@ endef
 
 define bb-uninstaller
 uninstall-$(strip $1):
-	-cd $$(build_prefix) && rm -fdv -- $$$$($$(TAR) -tzf $$(SRCCACHE)/$2.tar.gz --exclude './$$$$')
+	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tzf $$(SRCCACHE)/$2.tar.gz | grep -v '/$$$$')
 	-rm $$(build_prefix)/manifest/$(strip $1)
 endef
