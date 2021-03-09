@@ -1961,29 +1961,37 @@ log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 # Auxiliary functions for matrix logarithm and matrix power
 
 # Compute accurate diagonal of A = A0^s - I
-#   Al-Mohy, "A more accurate Briggs method for the logarithm",
-#      Numer. Algorithms, 59, (2012), 393–402.
 function sqrt_diag!(A0::UpperTriangular, A::UpperTriangular, s)
     n = checksquare(A0)
+    T = eltype(A)
     @inbounds for i = 1:n
-        a = complex(A0[i,i])
-        if s == 0
-            A[i,i] = a - 1
-        else
-            s0 = s
-            if imag(a) >= 0 && real(a) <= 0 && a != 0
-                a = sqrt(a)
-                s0 = s - 1
-            end
-            z0 = a - 1
+        aii = A0[i,i]
+        A[i,i] = _sqrt_pow(T <: Real ? aii : complex(aii), s)
+    end
+end
+# compute a^(1/2^s)-1
+#   Al-Mohy, "A more accurate Briggs method for the logarithm",
+#      Numer. Algorithms, 59, (2012), 393–402.
+#   Algorithm 2
+function _sqrt_pow(a0::Number, s)
+    # TODO: don't unnecessarily complexify
+    a = complex(a0)
+    if s == 0
+        return a - 1
+    else
+        s0 = s
+        if imag(a) >= 0 && real(a) <= 0 && a != 0
             a = sqrt(a)
-            r = 1 + a
-            for j = 1:s0-1
-                a = sqrt(a)
-                r = r * (1 + a)
-            end
-            A[i,i] = z0 / r
+            s0 = s - 1
         end
+        z0 = a - 1
+        a = sqrt(a)
+        r = 1 + a
+        for j = 1:s0-1
+            a = sqrt(a)
+            r = r * (1 + a)
+        end
+        return z0 / r
     end
 end
 
