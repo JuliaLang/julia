@@ -1792,7 +1792,9 @@ powm(A::LowerTriangular, p::Real) = copy(transpose(powm!(copy(transpose(A)), p::
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
 log(A::UpperTriangular{T}) where {T<:BlasFloat} = log_quasitriu(A)
+log(A::UnitUpperTriangular{T}) where {T<:BlasFloat} = log_quasitriu(A)
 log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
+log(A::UnitLowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 
 function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     maxsqrt = 100
@@ -1810,6 +1812,12 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
         A = eltype(A0) <: Complex ? real(A0) : copy(A0)
     else
         A = complex(A0)
+    end
+    if A0 isa UnitUpperTriangular
+        A = UpperTriangular(parent(A))
+        @inbounds for i in 1:n
+            A[i,i] = 1
+        end
     end
     p = 0
     m = 0

@@ -519,6 +519,16 @@ Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
         @test isreal(log(complex(A)))
         @test log(complex(A)) ≈ log(A)
     end
+
+    Au = UnitUpperTriangular(exp(triu(randn(elty, n, n), 1)))
+    @inferred Union{typeof(A),typeof(complex(A))} log(Au)
+    @test exp(Matrix(log(Au))) ≈ Au
+    if elty <: Real
+        @test typeof(log(Au)) <: UpperTriangular{elty}
+        @test typeof(log(complex(Au))) <: UpperTriangular{complex(elty)}
+        @test isreal(log(complex(Au)))
+        @test log(complex(Au)) ≈ log(Au)
+    end
 end
 
 Areal   = randn(n, n)/2
