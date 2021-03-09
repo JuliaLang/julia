@@ -1823,7 +1823,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     end
     s0 = s
     for k = 1:min(s, maxsqrt)
-        A = sqrt(A)
+        A = sqrt_quasitriu(A)
     end
 
     AmI = A - I
@@ -1879,7 +1879,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
             m = tmax
             break
         end
-        A = sqrt(A)
+        A = sqrt_quasitriu(A)
         AmI = A - I
         s = s + 1
     end
