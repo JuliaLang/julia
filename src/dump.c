@@ -972,6 +972,10 @@ static void jl_collect_lambdas_from_mod(jl_array_t *s, jl_module_t *m) JL_GC_DIS
                         jl_collect_lambdas_from_mod(s, (jl_module_t*)b->value);
                     }
                 }
+                else if (jl_is_mtable(bv)) {
+                    // a module containing an external method table
+                    jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
+                }
             }
         }
     }
