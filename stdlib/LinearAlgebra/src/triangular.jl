@@ -1912,28 +1912,8 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     # Scale back
     lmul!(2.0^s, Y)
 
-    # Compute accurate diagonal and superdiagonal of log(T)
-    for k = 1:n-1
-        Ak = A0[k,k]
-        Akp1 = A0[k+1,k+1]
-        logAk = log(Ak)
-        logAkp1 = log(Akp1)
-        Y[k,k] = logAk
-        Y[k+1,k+1] = logAkp1
-        if Ak == Akp1
-            Y[k,k+1] = A0[k,k+1] / Ak
-        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak) || iszero(Akp1 + Ak)
-            Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
-        else
-            z = (Akp1 - Ak)/(Akp1 + Ak)
-            if abs(z) > 1
-                Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
-            else
-                w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
-                Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
-            end
-        end
-    end
+    # Compute accurate diagonal and superdiagonal of log(A)
+    _log_diag_quasitriu!(Y, A0)
 
     return UpperTriangular(Y)
 end
@@ -2073,6 +2053,68 @@ function _pow_superdiag_quasitriu!(A, A0, p)
         end
         k += 1
     end
+end
+
+# Compute accurate block diagonal and superdiagonal of A = log(A0) for upper
+# quasi-triangular A0 produced by the Schur decomposition.
+function _log_diag_quasitriu!(A, A0)
+    n = checksquare(A0)
+    t = eltype(A)
+    k = 1
+    @inbounds while k < n
+        if iszero(A0[k+1,k])  # 1x1 block
+            Ak = t(A0[k,k])
+            logAk = log(Ak)
+            A[k,k] = logAk
+            if k < n - 2 && iszero(A0[k+2,k+1])
+                Akp1 = t(A0[k+1,k+1])
+                logAkp1 = log(Akp1)
+                A[k+1,k+1] = logAkp1
+                if Ak == Akp1
+                    A[k,k+1] = A0[k,k+1] / Ak
+                elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak) || iszero(Akp1 + Ak)
+                    A[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
+                else
+                    z = (Akp1 - Ak)/(Akp1 + Ak)
+                    if abs(z) > 1
+                        A[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
+                    else
+                        w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
+                        A[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
+                    end
+                end
+                k += 2
+            else
+                k += 1
+            end
+        else  # real 2x2 block
+            @views _log_diag_block_2x2!(A[k:k+1,k:k+1], A0[k:k+1,k:k+1])
+            k += 2
+        end
+    end
+    if k == n  # last 1x1 block
+        @inbounds A[n,n] = log(t(A0[n,n]))
+    end
+    return A
+end
+# compute A0 = log(A) for 2x2 real matrices A and A0, where A0 is a diagonal 2x2 block
+# produced by real Schur decomposition.
+# Al-Mohy, Higham and Relton, "Computing the Frechet derivative of the matrix
+# logarithm and estimating the condition number", SIAM J. Sci. Comput.,
+# 35(4), (2013), C394–C410.
+# Eq. 6.1
+Base.@propagate_inbounds function _log_diag_block_2x2!(A, A0)
+    a, b, c, d = A0[1,1], A0[1,2], A0[2,1], A0[2,2]
+    bc = b * c
+    s = sqrt(-bc)
+    θ = atan(s, a)
+    t = θ / s
+    a1 = log(a^2 - bc) / 2
+    A[1,1] = a1
+    A[2,1] = c*t
+    A[1,2] = b*t
+    A[2,2] = a1
+    return A
 end
 
 # Used only by powm at the moment
