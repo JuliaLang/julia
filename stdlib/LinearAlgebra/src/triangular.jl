@@ -1792,6 +1792,7 @@ powm(A::LowerTriangular, p::Real) = copy(transpose(powm!(copy(transpose(A)), p::
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
 log(A::UpperTriangular{T}) where {T<:BlasFloat} = log_quasitriu(A)
+log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 
 function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     maxsqrt = 100
@@ -1926,7 +1927,6 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
         return Yc
     end
 end
-log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 
 # Auxiliary functions for matrix logarithm and matrix power
 
