@@ -198,7 +198,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         #exp/log
-        if (elty1 == Float64 || elty1 == ComplexF64) && (t1 == UpperTriangular || t1 == LowerTriangular)
+        if elty1 ∈ (Float32,Float64,ComplexF32,ComplexF64)
             @test exp(Matrix(log(A1))) ≈ A1
         end
 
