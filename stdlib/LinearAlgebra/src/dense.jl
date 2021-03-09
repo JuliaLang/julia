@@ -801,8 +801,8 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
                 return SchurF.Z * sqrt_quasitriu(SchurF.T) * SchurF.Z'
             else
                 SchurS = schur(complex(SchurF.T))
-                sqrtT = SchurS.Z * sqrt(UpperTriangular(SchurS.T)) * SchurS.Z'
-                return SchurF.Z * sqrtT * SchurF.Z'
+                Z = SchurF.Z * SchurS.Z
+                return Z * sqrt(UpperTriangular(SchurS.T)) * Z'
             end
         end
     else
