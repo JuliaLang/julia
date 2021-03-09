@@ -60,7 +60,7 @@ static void jl_init_intrinsic_functions_codegen(void)
     float_func[fpiseq] = true;
     float_func[fpislt] = true;
     float_func[abs_float] = true;
-    //float_func[copysign_float] = false; // this is actually an integer operation
+    float_func[copysign_float] = true;
     float_func[ceil_llvm] = true;
     float_func[floor_llvm] = true;
     float_func[trunc_llvm] = true;
@@ -1252,14 +1252,8 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateCall(absintr, x);
     }
     case copysign_float: {
-        Value *bits = ctx.builder.CreateBitCast(x, t);
-        Value *sbits = ctx.builder.CreateBitCast(y, t);
-        unsigned nb = cast<IntegerType>(t)->getBitWidth();
-        APInt notsignbit = APInt::getSignedMaxValue(nb);
-        APInt signbit0(nb, 0); signbit0.setBit(nb - 1);
-        return ctx.builder.CreateOr(
-                    ctx.builder.CreateAnd(bits, ConstantInt::get(t, notsignbit)),
-                    ctx.builder.CreateAnd(sbits, ConstantInt::get(t, signbit0)));
+        FunctionCallee copyintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::copysign, makeArrayRef(t));
+        return ctx.builder.CreateCall(copyintr, {x, y});
     }
     case flipsign_int: {
         ConstantInt *cx = dyn_cast<ConstantInt>(x);

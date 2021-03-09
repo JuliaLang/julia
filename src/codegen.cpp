@@ -7540,7 +7540,7 @@ void jl_compile_workqueue(
             else {
                 // Reinfer the function. The JIT came along and removed the inferred
                 // method body. See #34993
-                if (policy == CompilationPolicy::Extern &&
+                if (policy != CompilationPolicy::Default &&
                     codeinst->inferred && codeinst->inferred == jl_nothing) {
                     src = jl_type_infer(codeinst->def, jl_world_counter, 0);
                     if (src)

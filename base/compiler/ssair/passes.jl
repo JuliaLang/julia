@@ -342,26 +342,13 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
             else
                 typ = compact_exprtype(compact, leaf)
                 if !isa(typ, Const)
-                    # Disabled since #27126
-                    return nothing
+                    # TODO: (disabled since #27126)
                     # If the leaf is an old ssa value, insert a getfield here
                     # We will revisit this getfield later when compaction gets
                     # to the appropriate point.
                     # N.B.: This can be a bit dangerous because it can lead to
                     # infinite loops if we accidentally insert a node just ahead
                     # of where we are
-                    if is_old(compact, leaf)
-                        (isa(typ, DataType) && (!typ.abstract)) || return nothing
-                        @assert !typ.mutable
-                        # If there's the potential for an undefref error on access, we cannot insert a getfield
-                        if field > typ.ninitialized && !isbitstype(fieldtype(typ, field))
-                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, make_MaybeUndef(result_t), Expr(:call, :unchecked_getfield, SSAValue(leaf.id), field), true))
-                            maybe_undef = true
-                        else
-                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, result_t, Expr(:call, getfield, SSAValue(leaf.id), field), true))
-                        end
-                        continue
-                    end
                     return nothing
                 end
                 leaf = typ.val
@@ -537,7 +524,6 @@ function getfield_elim_pass!(ir::IRCode)
         result_t = compact_exprtype(compact, SSAValue(idx))
         is_getfield = is_setfield = false
         is_ccall = false
-        is_unchecked = false
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
         if is_known_call(stmt, setfield!, compact)
             is_setfield = true
@@ -577,9 +563,6 @@ function getfield_elim_pass!(ir::IRCode)
             (isa(c1, Const) && isa(c2, Const)) && continue
             lift_comparison!(compact, idx, c1, c2, stmt, lifting_cache)
             continue
-        elseif isexpr(stmt, :call) && stmt.args[1] === :unchecked_getfield
-            is_getfield = true
-            is_unchecked = true
         elseif isexpr(stmt, :foreigncall)
             nccallargs = length(stmt.args[3]::SimpleVector)
             new_preserves = Any[]
@@ -698,11 +681,11 @@ function getfield_elim_pass!(ir::IRCode)
         val = perform_lifting!(compact, visited_phinodes, field, lifting_cache, result_t, lifted_leaves, stmt.args[2])
 
         # Insert the undef check if necessary
-        if any_undef && !is_unchecked
+        if any_undef
             if val === nothing
                 insert_node!(compact, SSAValue(idx), Nothing, Expr(:throw_undef_if_not, Symbol("##getfield##"), false))
             else
-                insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, Symbol("##getfield##"), val.x))
+                # val must be defined
             end
         else
             @assert val !== nothing
@@ -936,16 +919,30 @@ function type_lift_pass!(ir::IRCode)
         stmt = insts[idx][:inst]
         stmt isa Expr || continue
         if (stmt.head === :isdefined || stmt.head === :undefcheck)
-            val = (stmt.head === :isdefined) ? stmt.args[1] : stmt.args[2]
-            # undef can only show up by being introduced in a phi
-            # node (or an UpsilonNode() argument to a PhiC node),
-            # so lift all these nodes that have maybe undef values
-            processed = IdDict{Int, Union{SSAValue, Bool}}()
-            while isa(val, SSAValue) && isa(insts[val.id][:inst], PiNode)
-                val = (insts[val.id][:inst]::PiNode).val
+            # after optimization, undef can only show up by being introduced in
+            # a phi node (or an UpsilonNode() argument to a PhiC node), so lift
+            # all these nodes that have maybe undef values
+            val = stmt.args[(stmt.head === :isdefined) ? 1 : 2]
+            if stmt.head === :isdefined && (val isa Slot || val isa GlobalRef ||
+                    isexpr(val, :static_parameter) || val isa Argument || val isa Symbol)
+                # this is a legal node, so assume it was not introduced by
+                # slot2ssa (at worst, we might leave in a runtime check that
+                # shouldn't have been there)
+                continue
             end
-            if !isa(val, SSAValue) || (!isa(insts[val.id][:inst], PhiNode) && !isa(insts[val.id][:inst], PhiCNode))
-                (isa(val, GlobalRef) || isexpr(val, :static_parameter)) && continue
+            # otherwise, we definitely have a corrupt node from slot2ssa, and
+            # must fix or delete that now
+            processed = IdDict{Int, Union{SSAValue, Bool}}()
+            def = val
+            while true
+                # peek through PiNodes
+                isa(val, SSAValue) || break
+                def = insts[val.id][:inst]
+                isa(def, PiNode) || break
+                val = def.val
+            end
+            if !isa(val, SSAValue) || (!isa(def, PhiNode) && !isa(def, PhiCNode))
+                # in most cases, reaching this statement implies we had a value
                 if stmt.head === :undefcheck
                     insts[idx][:inst] = nothing
                 else
@@ -955,7 +952,6 @@ function type_lift_pass!(ir::IRCode)
             end
             stmt_id = val.id
             worklist = Tuple{Int, Int, SSAValue, Int}[(stmt_id, 0, SSAValue(0), 0)]
-            def = insts[stmt_id][:inst]
             if !haskey(lifted_undef, stmt_id)
                 first = true
                 while !isempty(worklist)
@@ -1031,11 +1027,11 @@ function type_lift_pass!(ir::IRCode)
                     end
                 end
             end
-            if stmt.head === :isdefined
-                insts[idx][:inst] = lifted_undef[stmt_id]
-            else
-                insts[idx][:inst] = Expr(:throw_undef_if_not, stmt.args[1], lifted_undef[stmt_id])
+            inst = lifted_undef[stmt_id]
+            if stmt.head === :undefcheck
+                inst = Expr(:throw_undef_if_not, stmt.args[1], inst)
             end
+            insts[idx][:inst] = inst
         end
     end
     ir
