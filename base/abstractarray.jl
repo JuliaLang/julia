@@ -2404,7 +2404,7 @@ function hash(A::AbstractArray, h::UInt)
     h = hash(map(first, axes(A)), h)
     h = hash(map(last, axes(A)), h)
 
-    # For short arrays, it's not worth doing anything complicated 
+    # For short arrays, it's not worth doing anything complicated
     if length(A) < 8192
         @inbounds for x in A
             h = hash(x,h)
