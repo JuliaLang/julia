@@ -713,27 +713,29 @@ function log(A::StridedMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
         logHermA = log(Hermitian(A))
-        return isa(logHermA, Hermitian) ? copytri!(parent(logHermA), 'U', true) : parent(logHermA)
-    end
-
-    # Use Schur decomposition
-    n = checksquare(A)
-    if istriu(A)
-        return triu!(parent(log(UpperTriangular(complex(A)))))
+        return ishermitian(logHermA) ? copytri!(parent(logHermA), 'U', true) : parent(logHermA)
+    elseif istriu(A)
+        return triu!(parent(log(UpperTriangular(A))))
+    elseif isreal(A)
+        SchurF = schur(real(A))
+        if istriu(SchurF.T)
+            logA = SchurF.Z * log(UpperTriangular(SchurF.T)) * SchurF.Z'
+        else
+            # real log exists whenever all eigenvalues are positive
+            is_log_real = !any(x -> isreal(x) && real(x) ≤ 0, SchurF.values)
+            if is_log_real
+                logA = SchurF.Z * log_quasitriu(SchurF.T) * SchurF.Z'
+            else
+                SchurS = schur(complex(SchurF.T))
+                Z = SchurF.Z * SchurS.Z
+                logA = Z * log(UpperTriangular(SchurS.T)) * Z'
+            end
+        end
+        return eltype(A) <: Complex ? complex(logA) : logA
     else
-        if isreal(A)
-            SchurF = schur(real(A))
-        else
-            SchurF = schur(A)
-        end
-        if !istriu(SchurF.T)
-            SchurS = schur(complex(SchurF.T))
-            logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
-            return SchurF.Z * logT * SchurF.Z'
-        else
-            R = log(UpperTriangular(complex(SchurF.T)))
-            return SchurF.Z * R * SchurF.Z'
-        end
+        SchurF = schur(A)
+        R = triu!(parent(log(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
+        return SchurF.vectors * R * SchurF.vectors'
     end
 end
 
