@@ -1804,7 +1804,11 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
          2.879093714241194e-001]
     tmax = size(theta, 1)
     n = size(A0, 1)
-    A = copy(A0)
+    if isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
+        A = eltype(A0) <: Complex ? real(A0) : copy(A0)
+    else
+        A = complex(A0)
+    end
     p = 0
     m = 0
 
