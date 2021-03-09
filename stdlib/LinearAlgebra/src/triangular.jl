@@ -1804,6 +1804,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
          2.879093714241194e-001]
     tmax = size(theta, 1)
     n = size(A0, 1)
+    # allocate real A if log(A) will be real and complex A otherwise
     if isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
         A = eltype(A0) <: Complex ? real(A0) : copy(A0)
     else
@@ -1916,7 +1917,9 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     # Compute accurate diagonal and superdiagonal of log(A)
     _log_diag_quasitriu!(Y, A0)
 
+    # return complex result for complex input
     Yc = eltype(A0) <: Complex ? complex(Y) : Y
+
     if A0 isa UpperTriangular || A0 isa UnitUpperTriangular
         return UpperTriangular(Yc)
     else
