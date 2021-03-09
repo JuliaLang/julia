@@ -679,7 +679,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    log(A{T}::StridedMatrix{T})
+    log(A::StridedMatrix)
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -688,9 +688,10 @@ matrix function is returned whenever possible.
 
 If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used, if `A` is triangular an improved version of the inverse scaling and squaring method is
-employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur form
-([`schur`](@ref)) is computed and the triangular algorithm is used on the
-triangular factor.
+employed (see [^AH12] and [^AHR13]). For general matrices, if a real logarithm exists, then
+the real Schur form is computed. Otherwise, the complex Schur form is computed. Then
+the upper (quasi-)triangular algorithm in [^AHR13] is used on the upper (quasi-)triangular
+factor.
 
 [^AH12]: Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling and squaring algorithms for the matrix logarithm", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. [doi:10.1137/110852553](https://doi.org/10.1137/110852553)
 
