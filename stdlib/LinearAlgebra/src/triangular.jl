@@ -1885,7 +1885,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     end
 
     # Compute accurate superdiagonal of A
-    blockpower!(A, A0, 0.5^s)
+    _pow_superdiag_quasitriu!(A, A0, 0.5^s)
 
     # Compute accurate block diagonal of A
     _sqrt_pow_diag_quasitriu!(A, A0, s)
@@ -2029,6 +2029,50 @@ Base.@propagate_inbounds function _sqrt_pow_diag_block_2x2!(A, A0, s)
         A[2,2] = (p11*z22 - p12*z21) * c
     end
     return A
+end
+# Compute accurate superdiagonal of A = A0^s - I for upper quasi-triangular A0 produced
+# by a Schur decomposition.
+# Higham and Lin, "A Schur–Padé Algorithm for Fractional Powers of a Matrix"
+# SIAM J. Matrix Anal. Appl., 32(3), (2011), 1056–1078.
+# Equation 5.6
+# see also blockpower for when A0 is upper triangular
+function _pow_superdiag_quasitriu!(A, A0, p)
+    n = checksquare(A0)
+    t = eltype(A)
+    k = 1
+    @inbounds while k < n
+        if !iszero(A[k+1,k])
+            k += 2
+            continue
+        end
+        if !(k == n - 1 || iszero(A[k+2,k+1]))
+            k += 3
+            continue
+        end
+        Ak = t(A0[k,k])
+        Akp1 = t(A0[k+1,k+1])
+
+        Akp = Ak^p
+        Akp1p = Akp1^p
+
+        if Ak == Akp1
+            A[k,k+1] = p * A0[k,k+1] * Ak^(p-1)
+        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak) || iszero(Akp1 + Ak)
+            A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
+        else
+            logAk = log(Ak)
+            logAkp1 = log(Akp1)
+            z = (Akp1 - Ak)/(Akp1 + Ak)
+            if abs(z) > 1
+                A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
+            else
+                w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
+                dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
+                A[k,k+1] = A0[k,k+1] * dd
+            end
+        end
+        k += 1
+    end
 end
 
 # Used only by powm at the moment
