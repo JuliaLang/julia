@@ -2177,13 +2177,46 @@ sqrt(A::UnitLowerTriangular) = copy(transpose(sqrt(copy(transpose(A)))))
 
 # Auxiliary functions for matrix square root
 
-# square root of complex upper triangular or real upper quasitriangular matrix produced by
-# a real or complex Schur decomposition
-function sqrt_quasitriu(A)
-    n = size(A, 1)
-    S = eltype(sqrt(zero(eltype(A))))
-    R = zeros(S, n, n)
-    # compute square roots of diagonal block
+# square root of upper triangular or real upper quasitriangular matrix
+function sqrt_quasitriu(A0)
+    n = checksquare(A0)
+    T = eltype(A0)
+    Tr = typeof(sqrt(real(zero(T))))
+    Tc = typeof(sqrt(complex(zero(T))))
+    if isreal(A0)
+        is_sqrt_real = true
+        if istriu(A0)
+            for i in 1:n
+                Aii = real(A0[i,i])
+                if Aii < zero(Aii)
+                    is_sqrt_real = false
+                    break
+                end
+            end
+        end
+        if is_sqrt_real
+            R = zeros(Tr, n, n)
+            A = real(A0)
+        else
+            R = zeros(Tc, n, n)
+            A = A0
+        end
+    else
+        A = A0
+        R = zeros(Tc, n, n)
+    end
+    _sqrt_quasitriu!(R, A)
+    Rc = eltype(A0) <: Real ? R : complex(R)
+    if A0 isa UpperTriangular
+        return UpperTriangular(Rc)
+    elseif A0 isa UnitUpperTriangular
+        return UnitUpperTriangular(Rc)
+    else
+        return Rc
+    end
+end
+
+function _sqrt_quasitriu!(R, A)
     _sqrt_quasitriu_diag_block!(R, A)
     _sqrt_quasitriu_offdiag_block!(R, A)
     return R
