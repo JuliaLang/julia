@@ -1916,7 +1916,12 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     # Compute accurate diagonal and superdiagonal of log(A)
     _log_diag_quasitriu!(Y, A0)
 
-    return UpperTriangular(Y)
+    Yc = eltype(A0) <: Complex ? complex(Y) : Y
+    if A0 isa UpperTriangular || A0 isa UnitUpperTriangular
+        return UpperTriangular(Yc)
+    else
+        return Yc
+    end
 end
 log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 
