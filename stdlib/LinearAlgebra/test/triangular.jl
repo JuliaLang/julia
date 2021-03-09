@@ -509,6 +509,18 @@ Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 @test typeof(sqrt(Atu)[1,1]) <: Real
 @test typeof(sqrt(complex(Atu))[1,1]) <: Complex
 
+@testset "check matrix logarithm type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+    A = UpperTriangular(exp(triu(randn(elty, n, n))))
+    @inferred Union{typeof(A),typeof(complex(A))} log(A)
+    @test exp(Matrix(log(A))) ≈ A
+    if elty <: Real
+        @test typeof(log(A)) <: UpperTriangular{elty}
+        @test typeof(log(complex(A))) <: UpperTriangular{complex(elty)}
+        @test isreal(log(complex(A)))
+        @test log(complex(A)) ≈ log(A)
+    end
+end
+
 Areal   = randn(n, n)/2
 Aimg    = randn(n, n)/2
 A2real  = randn(n, n)/2
