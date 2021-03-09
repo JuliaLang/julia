@@ -2396,8 +2396,9 @@ pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
 ## hashing AbstractArray ##
 
+const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
 function hash(A::AbstractArray, h::UInt)
-    h = hash(AbstractArray, h)
+    h += hash_abstractarray_seed
     # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
     # Instead hash the tuple of firsts and lasts along each dimension
     h = hash(map(first, axes(A)), h)
