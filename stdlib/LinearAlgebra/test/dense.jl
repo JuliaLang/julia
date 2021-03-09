@@ -744,6 +744,11 @@ end
     @test exp(log(A4)) ≈ A4
 end
 
+@testset "matrix logarithm is type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+    A1 = randn(elty, 4, 4)
+    @inferred Union{Matrix{elty},Matrix{complex(elty)}} log(A1)
+end
+
 @testset "issue #7181" begin
     A = [ 1  5  9
           2  6 10
