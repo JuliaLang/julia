@@ -2405,9 +2405,9 @@ function hash(A::AbstractArray, h::UInt)
     h = hash(map(last, axes(A)), h)
 
     # For short arrays, it's not worth doing anything complicated 
-    if length(A) < 10000
-        @inbounds for p in pairs(IndexLinear(),A)
-            h ⊻= hash(p)
+    if length(A) < 8192
+        @inbounds for x in A
+            h = hash(x,h)
         end
         return h
     end
@@ -2441,9 +2441,8 @@ function hash(A::AbstractArray, h::UInt)
     n = 0
     while true
         n += 1
-        # Hash the current key-index and its element
-        elt = A[keyidx]
-        h = hash(keyidx=>elt, h)
+        # Hash the element
+        h = hash(A[keyidx], h)
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
