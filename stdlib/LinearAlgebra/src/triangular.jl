@@ -1977,7 +1977,7 @@ function _sqrt_pow(a::Number, s)
     T = typeof(sqrt(zero(a)))
     s == 0 && return T(a) - 1
     s0 = s
-    if imag(a) >= 0 && real(a) <= 0 && !iszero(a)
+    if imag(a) >= 0 && real(a) <= 0 && !iszero(a)  # angle(a) ≥ π / 2
         a = sqrt(a)
         s0 = s - 1
     end
