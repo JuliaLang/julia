@@ -2439,7 +2439,7 @@ function hash(A::AbstractArray, h::UInt)
     fibskip = prevfibskip = oneunit(linidx)
     first_linear = first(LinearIndices(linear_to_key))
     n = 0
-    while true
+    @inbounds while true
         n += 1
         # Hash the element
         h = hash(A[keyidx], h)
