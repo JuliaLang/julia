@@ -1600,6 +1600,9 @@ static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **is
         return 0;
     if (is_subty)
         return 1;
+    // TODO: sometimes type intersection returns types with free variables
+    if (jl_has_free_typevars(t1) || jl_has_free_typevars(t2))
+        return 1;
     // determine if type-intersection can be convinced to give a better, non-bad answer
     // if the intersection was imprecise, see if we can do better by switching the types
     *isect2 = jl_type_intersection(t2, t1);

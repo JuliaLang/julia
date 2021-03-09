@@ -1894,3 +1894,10 @@ let T = Type{T} where T<:(AbstractArray{I}) where I<:(Base.IteratorsMD.Cartesian
     @test I <: S
     @test_broken I == typeintersect(S, T)
 end
+
+# issue #39948
+let A = Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1} where T, Vector},
+    I = typeintersect(A, Tuple{Vararg{Vector{T}}} where T)
+    @test_broken I <: A
+    @test_broken !Base.has_free_typevars(I)
+end
