@@ -796,7 +796,7 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
         else
             # real sqrt exists whenever no eigenvalues are negative
             is_sqrt_real = !any(x -> isreal(x) && real(x) < 0, SchurF.values)
-            # sqrt_quasitriu uses LAPACK functions
+            # sqrt_quasitriu uses LAPACK functions for non-triu inputs
             if typeof(sqrt(zero(T))) <: BlasFloat && is_sqrt_real
                 return SchurF.Z * sqrt_quasitriu(SchurF.T) * SchurF.Z'
             else
