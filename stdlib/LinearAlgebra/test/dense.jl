@@ -716,9 +716,6 @@ end
     A11 = convert(Matrix{elty}, [3 2; -5 -3])
     @test exp(log(A11)) ≈ A11
 
-    A12 = convert(Matrix{elty}, [1 -1; 1 -1])
-    @test typeof(log(A12)) == Array{ComplexF64, 2}
-
     A13 = convert(Matrix{elty}, [2 0; 0 2])
     @test typeof(log(A13)) == Array{elty, 2}
 
