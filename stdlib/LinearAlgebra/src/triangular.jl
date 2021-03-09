@@ -1884,30 +1884,11 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
         s = s + 1
     end
 
-    # Compute accurate superdiagonal of T
+    # Compute accurate superdiagonal of A
     blockpower!(A, A0, 0.5^s)
 
-    # Compute accurate diagonal of T
-    for i = 1:n
-        a = A0[i,i]
-        if s == 0
-            A[i,i] = a - 1
-            continue
-        end
-        s0 = s
-        if angle(a) >= pi / 2
-            a = sqrt(a)
-            s0 = s - 1
-        end
-        z0 = a - 1
-        a = sqrt(a)
-        r = 1 + a
-        for j = 1:s0-1
-            a = sqrt(a)
-            r = r * (1 + a)
-        end
-        A[i,i] = z0 / r
-    end
+    # Compute accurate block diagonal of A
+    _sqrt_pow_diag_quasitriu!(A, A0, s)
 
     # Get the Gauss-Legendre quadrature points and weights
     R = zeros(Float64, m, m)
@@ -1969,6 +1950,27 @@ function sqrt_diag!(A0::UpperTriangular, A::UpperTriangular, s)
         A[i,i] = _sqrt_pow(a, s)
     end
 end
+# Compute accurate block diagonal of A = A0^s - I for upper quasi-triangular A0 produced
+# by the Schur decomposition. Diagonal is made of 1x1 and 2x2 blocks.
+# 2x2 blocks are real with non-negative conjugate pair eigenvalues
+function _sqrt_pow_diag_quasitriu!(A, A0, s)
+    n = checksquare(A0)
+    t = typeof(sqrt(zero(eltype(A))))
+    i = 1
+    @inbounds while i < n
+        if iszero(A0[i+1,i])  # 1x1 block
+            A[i,i] = _sqrt_pow(t(A0[i,i]), s)
+            i += 1
+        else  # 2x2 block
+            @views _sqrt_pow_diag_block_2x2!(A[i:i+1,i:i+1], A0[i:i+1,i:i+1], s)
+            i += 2
+        end
+    end
+    if i == n  # last block is 1x1
+        @inbounds A[n,n] = _sqrt_pow(t(A0[n,n]), s)
+    end
+    return A
+end
 # compute a^(1/2^s)-1
 #   Al-Mohy, "A more accurate Briggs method for the logarithm",
 #      Numer. Algorithms, 59, (2012), 393–402.
@@ -1989,6 +1991,44 @@ function _sqrt_pow(a::Number, s)
         r = r * (1 + a)
     end
     return z0 / r
+end
+# compute A0 = A^(1/2^s)-I for 2x2 real matrices A and A0
+# A has non-negative conjugate pair eigenvalues
+# "Improved Inverse Scaling and Squaring Algorithms for the Matrix Logarithm"
+# SIAM J. Sci. Comput., 34(4), (2012) C153–C169. doi: 10.1137/110852553
+# Algorithm 5.1
+Base.@propagate_inbounds function _sqrt_pow_diag_block_2x2!(A, A0, s)
+    _sqrt_real_2x2!(A, A0)
+    if isone(s)
+        A[1,1] -= 1
+        A[2,2] -= 1
+    else
+        # Z = A - I
+        z11, z21, z12, z22 = A[1,1] - 1, A[2,1], A[1,2], A[2,2] - 1
+        # A = sqrt(A)
+        _sqrt_real_2x2!(A, A)
+        # P = A + I
+        p11, p21, p12, p22 = A[1,1] + 1, A[2,1], A[1,2], A[2,2] + 1
+        for i in 1:(s - 2)
+            # A = sqrt(A)
+            _sqrt_real_2x2!(A, A)
+            a11, a21, a12, a22 = A[1,1], A[2,1], A[1,2], A[2,2]
+            # P += P * A
+            r11 = p11*(1 + a11) + p12*a21
+            r22 = p21*a12 + p22*(1 + a22)
+            p21 = p21*(1 + a11) + p22*a21
+            p12 = p11*a12 + p12*(1 + a22)
+            p11 = r11
+            p22 = r22
+        end
+        # A = Z / P
+        c = inv(p11*p22 - p21*p12)
+        A[1,1] = (p22*z11 - p21*z12) * c
+        A[2,1] = (p22*z21 - p21*z22) * c
+        A[1,2] = (p11*z12 - p12*z11) * c
+        A[2,2] = (p11*z22 - p12*z21) * c
+    end
+    return A
 end
 
 # Used only by powm at the moment
