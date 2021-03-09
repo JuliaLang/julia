@@ -1947,7 +1947,7 @@ function _sqrt_pow_diag_quasitriu!(A, A0, s)
         if iszero(A0[i+1,i])  # 1x1 block
             A[i,i] = _sqrt_pow(t(A0[i,i]), s)
             i += 1
-        else  # 2x2 block
+        else  # real 2x2 block
             @views _sqrt_pow_diag_block_2x2!(A[i:i+1,i:i+1], A0[i:i+1,i:i+1], s)
             i += 2
         end
