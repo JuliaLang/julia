@@ -3202,3 +3202,13 @@ end
         return y
     end == Any[Union{Nothing, Tuple{String, Union{Nothing, String}}}]
 end
+
+@test Base.return_types((Int,)) do x
+    if x === 0
+        Some(0.0)
+    elseif x == 1
+        Some(1)
+    else
+        Some(0x2)
+    end
+end == [Union{Some{Float64}, Some{Int64}, Some{UInt8}}]
