@@ -36,18 +36,17 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(Any, false)
     end
     valid_worlds = WorldRange()
-    atype_params = unwrap_unionall(atype).parameters
-    splitunions = 1 < unionsplitcost(atype_params) <= InferenceParams(interp).MAX_UNION_SPLITTING
+    # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
+    splitunions = 1 < unionsplitcost(argtypes) <= InferenceParams(interp).MAX_UNION_SPLITTING
     mts = Core.MethodTable[]
     fullmatch = Bool[]
     if splitunions
-        splitsigs = switchtupleunion(atype)
         split_argtypes = switchtupleunion(argtypes)
         applicable = Any[]
         applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
         infos = MethodMatchInfo[]
-        for j in 1:length(splitsigs)
-            sig_n = splitsigs[j]
+        for arg_n in split_argtypes
+            sig_n = argtypes_to_type(arg_n)
             mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
             if mt === nothing
                 add_remark!(interp, sv, "Could not identify method table for call")
@@ -60,11 +59,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 return CallMeta(Any, false)
             end
             push!(infos, MethodMatchInfo(matches))
-            append!(applicable, matches)
-            for _ in 1:length(matches)
-                push!(applicable_argtypes, split_argtypes[j])
+            for m in matches
+                push!(applicable, m)
+                push!(applicable_argtypes, arg_n)
             end
-            # @assert argtypes_to_type(split_argtypes[j]) === sig_n "invalid union split"
             valid_worlds = intersect(valid_worlds, matches.valid_worlds)
             thisfullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
             found = false
@@ -106,7 +104,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     applicable = applicable::Array{Any,1}
     napplicable = length(applicable)
     rettype = Bottom
-    edgecycle = false
     edges = MethodInstance[]
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
     seen = 0               # number of signatures actually inferred
@@ -132,16 +129,15 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             rettype = Any
             break
         end
-        sigtuple = unwrap_unionall(sig)::DataType
         this_rt = Bottom
         splitunions = false
-        # TODO: splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).MAX_UNION_SPLITTING
-        # this used to trigger a bug in inference recursion detection, and is unmaintained now
+        # TODO: this used to trigger a bug in inference recursion detection, and is unmaintained now
+        # sigtuple = unwrap_unionall(sig)::DataType
+        # splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).MAX_UNION_SPLITTING
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                rt, edgecycle1, edge = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
-                edgecycle |= edgecycle1::Bool
+                rt, edgecycle, edge = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
                 if edge !== nothing
                     push!(edges, edge)
                 end
@@ -160,8 +156,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
             end
         else
-            this_rt, edgecycle1, edge = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
-            edgecycle |= edgecycle1::Bool
+            this_rt, edgecycle, edge = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
             if edge !== nothing
                 push!(edges, edge)
             end
@@ -618,7 +613,7 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
                      istopfunction(f, :(==)) || istopfunction(f, :!=) ||
                      istopfunction(f, :<=) || istopfunction(f, :>=) || istopfunction(f, :<) || istopfunction(f, :>) ||
                      istopfunction(f, :<<) || istopfunction(f, :>>))
-        # it is almost useless to inline the op of when all the same type,
+        # it is almost useless to inline the op when all the same type,
         # but highly worthwhile to inline promote of a constant
         length(argtypes) > 2 || return false
         t1 = widenconst(argtypes[2])
@@ -635,7 +630,7 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
 end
 
 # This is a heuristic to avoid trying to const prop through complicated functions
-# where we would spend a lot of time, but are probably unliekly to get an improved
+# where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
 function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, method::Method, mi::MethodInstance)
     if method.is_for_opaque_closure

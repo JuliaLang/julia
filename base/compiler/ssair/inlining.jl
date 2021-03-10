@@ -1177,7 +1177,7 @@ function maybe_handle_const_call!(ir::IRCode, idx::Int, stmt::Expr,
         state::InliningState,
         isinvoke::Bool, todo::Vector{Pair{Int, Any}})
     # when multiple matches are found, bail out and later inliner will union-split this signature
-    # TODO effectively use mutliple constant analysis results here
+    # TODO effectively use multiple constant analysis results here
     length(info.results) == 1 || return false
     result = info.results[1]
     isa(result, InferenceResult) || return false
