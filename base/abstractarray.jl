@@ -2035,12 +2035,17 @@ end
 # nd concatenation
 
 """
-    hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, values...)
+    hvncat(dims::Tuple{Vararg{Int}}, row_first, values...)
+    hvncat(shape::Tuple{Vararg{Tuple}}, row_first, values...)
 
 Horizontal, vertical, and n-dimensional concatenation in one call. This function is called
-for block matrix syntax. The first argument specifies the number of arguments in `values`
-along the first axis for each dimension. `row_first` indicates whether `values` are ordered
-first by rows (true) or first by columns (false).
+for block matrix syntax. The first argument either specifies the shape of the concatenation,
+similar to `hvcat`, as a tuple of tuples, or the dimensions that specify the key number of
+elements along each axis, and is used to determine the output dimensions. The `dims` form
+is more performant, and is used by default when the concatenation operation has the same
+number of elements along each axis (e.g., [a b; c d;;; e f ; g h]). The `shape` form is used
+when the number of elements along each axis is unbalanced (e.g., [a b ; c]). Unbalanced
+syntax needs additional validation overhead.
 
 # Examples
 ```jldoctest
@@ -2079,43 +2084,35 @@ julia> [a b;;; c d;;; e f]
 
 [:, :, 3] =
  5  6
+
+julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
+1×3×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2  3
+
+[:, :, 2] =
+ 4  5  6
 ```
 """
 hvncat(::Tuple{}, ::Bool) = []
 hvncat(::Tuple{}, ::Bool, xs...) = []
-hvncat(::Tuple{Vararg{Int, 1}}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
-hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs...) = _hvncat(dims, row_first, xs...)
+hvncat(::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
+hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
 
-hvncat(::Tuple{}, ::Tuple{Vararg}, ::Bool) = []
-hvncat(::Tuple{}, ::Tuple{Vararg}, ::Bool, xs...) = []
-hvncat(::Tuple{Vararg{Tuple, 1}}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
-hvncat(shape::Tuple{Vararg{Tuple}}, row_first::Bool, xs...) = _hvncat(shape, row_first, xs...)
-
-_hvncat(::Tuple{Vararg{Int}}, ::Bool) = []
-_hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dims, row_first, xs...)
-_hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, dims, row_first, xs...)
-_hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), dims, row_first, xs...)
-_hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dims, row_first, xs...)
-_hvncat(dims::Tuple{Vararg{Int}}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dims, row_first, xs...)
-_hvncat(::Tuple{Vararg{Tuple}}, ::Bool) = []
-_hvncat(shape::Tuple{Vararg{Tuple}}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), shape, row_first, xs...)
-_hvncat(shape::Tuple{Vararg{Tuple}}, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, shape, row_first, xs...)
-_hvncat(shape::Tuple{Vararg{Tuple}}, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), shape, row_first, xs...)
-_hvncat(shape::Tuple{Vararg{Tuple}}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), shape, row_first, xs...)
-_hvncat(shape::Tuple{Vararg{Tuple}}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, shape, row_first, xs...)
-
-# might be able to just do shape and not dims later, for the unbalanced ones?
+_hvncat(::Tuple, ::Bool) = []
+_hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dimsshape, row_first, xs...)
+_hvncat(dimsshape::Tuple, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, dimsshape, row_first, xs...)
+_hvncat(dimsshape::Tuple, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), dimsshape, row_first, xs...)
+_hvncat(dimsshape::Tuple, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dimsshape, row_first, xs...)
+_hvncat(dimsshape::Tuple, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dimsshape, row_first, xs...)
 
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-typed_hvncat(T::Type, ::Tuple{Vararg{Int, 1}}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
-typed_hvncat(T::Type, dims::Tuple{Vararg{Int}}, row_first::Bool, xs...) = _typed_hvncat(T, dims, row_first, xs...)
-
-typed_hvncat(T::Type, ::Tuple{Vararg{Tuple, 1}}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
-typed_hvncat(T::Type, shape::Tuple{Vararg{Tuple}}, row_first::Bool, xs...) = _typed_hvncat(T, dims, shape, row_first, xs...)
+typed_hvncat(T::Type, ::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
+typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 
 _typed_hvncat(::Type{T}, ::Tuple{Vararg{Int}}, ::Bool) where T = Vector{T}()
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where T where N
+function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
     a = Array{T, N}(undef, dims...)
     lengtha = length(a)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
     lengthx = length(xs) # Cuts from 3 allocations to 1.
@@ -2163,7 +2160,7 @@ end
 _length(a::AbstractArray) = length(a)
 _length(::Any) = 1
 
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where T where N
+function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
@@ -2248,76 +2245,61 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     A
 end
 
-function hvncat_calcindex(offsets, inneroffsets, outdims, nd)
-    Ai = inneroffsets[1] + offsets[1] + 1
-    for j ∈ 2:nd
-        increment = inneroffsets[j] + offsets[j]
-        for k ∈ 1:j-1
-            increment *= outdims[k]
-        end
-        Ai += increment
-    end
-    Ai
-end
-
 _typed_hvncat(::Type{T}, ::Tuple{Vararg{Tuple}}, ::Bool) where T = Vector{T}()
-function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Bool, as...) where T where N
+function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Bool, as...) where {T, N}
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
-
-    shape = collect(shape) # collecting avoids extra allocations when indexing into later
-
-    shape[end][1] == length(as) || throw(ArgumentError("number of elements does not match shape; expected $(shape[end][1]), got $(length(as))"))
+    shape = collect(shape) # saves allocations later
+    @inbounds shapelength = shape[end][1]
+    lengthas = length(as)
+    shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
     
     # discover dimensions
-    nd = max(N, ndims(as[1]))
+    @inbounds nd = max(N, ndims(as[1]))
     outdims = zeros(Int, nd)
-
-
-    # TODO: figure out a way to do all dimensions at once.
-    # check that the other elements match this
     currentdims = zeros(Int, nd)
-    blockcount = 0
-    @inbounds for d ∈ (d1, d2, 3:N...)
-        i = 1
-        j = 1
-        l = 1
-        isfixed = false
-        k = d < 3 ? 1 : d - 1
-        while i <= length(as)
-            if !isfixed
-                outdims[d] += cat_size(as[i], d)
-            else
-                currentdims[d] += cat_size(as[i], d)
-            end
-            
-            blockcount += d == d1 ? 1 : shape[k][j]
+    blockcounts = zeros(Int, nd)
+    shapepos = ones(Int, nd)
 
-            if blockcount == (d == d1 ? shape[1][l] : shape[k + 1][l])
-                if isfixed
-                    if currentdims[d] < outdims[d]
-                        ArgumentError("argument $i has too few elements along axis $d") |> throw
-                    elseif currentdims[d] > outdims[d]
-                        ArgumentError("argument $i has too many elements along axis $d") |> throw
-                    else
-                        currentdims[d] = 0
-                    end
-                else
-                    isfixed = true
-                end
-                blockcount = 0
-                l += 1
+    @inbounds for i ∈ eachindex(as)
+        wasstartblock = false
+        for d ∈ 1:N
+            ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
+            dsize = cat_size(as[i], ad)
+            blockcounts[d] += 1
+
+            if d == 1 || i == 1 || wasstartblock
+                currentdims[d] += dsize
+            elseif dsize != cat_size(as[i - 1], ad)
+                ArgumentError("argument1 $i has a mismatched number of elements along axis $ad; expected $(cat_size(as[i - 1], ad)), got $dsize") |> throw
             end
-            i += d == d1 ? 1 : shape[k][j]
-            j += 1
+
+            wasstartblock = blockcounts[d] == 1 # remember for next dimension
+            
+            isendblock = blockcounts[d] == shape[d][shapepos[d]]
+            if isendblock
+                if outdims[d] == 0
+                    outdims[d] = currentdims[d]
+                elseif outdims[d] != currentdims[d]
+                    ArgumentError("argument2 $i has a mismatched number of elements along axis $ad; expected $(abs(outdims[d] - (currentdims[d] - dsize))), got $dsize") |> throw
+                end
+                currentdims[d] = 0
+                blockcounts[d] = 0
+                shapepos[d] += 1
+            end
         end
     end
+
+    @inbounds outdims[1], outdims[2] = outdims[2], outdims[1]
+
+    # @assert all(==(0), currentdims)
+    # @assert all(==(0), blockcounts)
 
     # copy into final array
     A = Array{T, nd}(undef, outdims...)
 
-    offsets = currentdims # should be zeroed out
-    inneroffsets = zeros(Int, nd)
+    offsets = currentdims
+    inneroffsets = blockcounts
     @inbounds for a ∈ as
         if isa(a, AbstractArray)
             for ai ∈ a
@@ -2342,6 +2324,18 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
         end
     end
     A
+end
+
+function hvncat_calcindex(offsets, inneroffsets, outdims, nd)
+    Ai = inneroffsets[1] + offsets[1] + 1
+    for j ∈ 2:nd
+        increment = inneroffsets[j] + offsets[j]
+        for k ∈ 1:j-1
+            increment *= outdims[k]
+        end
+        Ai += increment
+    end
+    Ai
 end
 
 ## Reductions and accumulates ##
