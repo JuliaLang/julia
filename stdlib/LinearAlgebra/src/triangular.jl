@@ -2459,7 +2459,7 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x1!(R, A, i, j)
     tt = typeof(zero(t)*zero(t))
     r1 = tt(-A[i, j])
     r2 = tt(-A[i + 1, j])
-    @simd for k in (i + 1):(j - 1)
+    @simd for k in (i + 2):(j - 1)
         rkj = R[k, j]
         r1 += R[i, k] * rkj
         r2 += R[i + 1, k] * rkj
