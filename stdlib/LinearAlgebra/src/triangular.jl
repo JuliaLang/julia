@@ -1833,7 +1833,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     end
     s0 = s
     for k = 1:min(s, maxsqrt)
-        A = sqrt_quasitriu(A)
+        _sqrt_quasitriu!(A isa UpperTriangular ? parent(A) : A, A)
     end
 
     AmI = A - I
@@ -1889,7 +1889,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
             m = tmax
             break
         end
-        A = sqrt_quasitriu(A)
+        _sqrt_quasitriu!(A isa UpperTriangular ? parent(A) : A, A)
         AmI = A - I
         s = s + 1
     end
