@@ -1919,8 +1919,13 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     # Compute the Padé approximation
     t = eltype(A)
     Y = zeros(t, n, n)
+    B = similar(A)
     for k = 1:m
-        Y = Y + t(w[k]) * rdiv_quasitriu!(A, t(x[k]) * A + I)
+        B .= t(x[k]) .* A
+        @inbounds for i in 1:n
+            B[i,i] += 1
+        end
+        Y .+= t(w[k]) .* rdiv_quasitriu!(A, B)
     end
 
     # Scale back
