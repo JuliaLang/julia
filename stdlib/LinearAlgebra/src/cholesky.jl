@@ -436,6 +436,7 @@ permutation:
  1
 
 julia> C.U[:, C.p]' * C.U[:, C.p] ≈ A
+true
 
 julia> l, u = C; # destructuring via iteration
 
