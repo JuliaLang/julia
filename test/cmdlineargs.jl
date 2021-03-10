@@ -71,6 +71,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
     let v = readchomperrors(`$exename -i -e '
             empty!(LOAD_PATH)
+            @eval Sys STDLIB=mktempdir()
             Base.unreference_module(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
             '`)
         # simulate not having a working version of InteractiveUtils,
@@ -204,7 +205,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
     # We want to test oversubscription, but on manycore machines, this can
     # actually exhaust limited PID spaces
-    cpu_threads = max(2*cpu_threads, min(200, 10*cpu_threads))
+    cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
+    if Sys.WORD_SIZE == 32
+        cpu_threads = min(cpu_threads, 50)
+    end
     @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
     withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
         @test read(`$exename -e $code`, String) == string(cpu_threads)
@@ -316,15 +320,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test popfirst!(got) == "       80     []"
         if Sys.WORD_SIZE == 64
             # P64 pools with 64 bit tags
-            @test popfirst!(got) == "       32     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         elseif 12 == (() -> @allocated ccall(:jl_gc_allocobj, Ptr{Cvoid}, (Csize_t,), 8))()
             # See if we have a 12-byte pool with 32 bit tags (MAX_ALIGN = 4)
-            @test popfirst!(got) == "       24     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       36     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "       12     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       24     Base.invokelatest(g, x)"
         else # MAX_ALIGN >= 8
-            @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       48     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "        8     Base.invokelatest(g, 0)"
+            @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         end
         @test popfirst!(got) == "       80     []"
         @test popfirst!(got) == "        - end"

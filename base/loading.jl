@@ -290,6 +290,10 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
             path = manifest_uuid_path(env, pkg)
             path === nothing || return entry_path(path, pkg.name)
         end
+        # Allow loading of stdlibs if the name/uuid are given
+        # e.g. if they have been explicitly added to the project/manifest
+        path = manifest_uuid_path(Sys.STDLIB::String, pkg)
+        path === nothing || return entry_path(path, pkg.name)
     end
     return nothing
 end

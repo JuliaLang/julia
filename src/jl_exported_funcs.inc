@@ -177,12 +177,12 @@
     XX(jl_expand_with_loc_warn) \
     XX(jl_extern_c) \
     XX(jl_f__abstracttype) \
-    XX(jl_f_applicable) \
     XX(jl_f__apply) \
-    XX(jl_f__apply_in_world) \
     XX(jl_f__apply_iterate) \
-    XX(jl_f__apply_latest) \
     XX(jl_f__apply_pure) \
+    XX(jl_f__call_in_world) \
+    XX(jl_f__call_latest) \
+    XX(jl_f_applicable) \
     XX(jl_f_apply_type) \
     XX(jl_f_arrayref) \
     XX(jl_f_arrayset) \

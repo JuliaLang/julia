@@ -703,12 +703,11 @@ call obsolete versions of a function `f`.
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
+    kwargs = Base.merge(NamedTuple(), kwargs)
     if isempty(kwargs)
-        return Core._apply_latest(f, args)
+        return Core._call_latest(f, args...)
     end
-    # We use a closure (`inner`) to handle kwargs.
-    inner() = f(args...; kwargs...)
-    Core._apply_latest(inner)
+    return Core._call_latest(Core.kwfunc(f), kwargs, f, args...)
 end
 
 """
@@ -738,11 +737,11 @@ of [`invokelatest`](@ref).
     world age refers to system state unrelated to the main Julia session.
 """
 function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
+    kwargs = Base.merge(NamedTuple(), kwargs)
     if isempty(kwargs)
-        return Core._apply_in_world(world, f, args)
+        return Core._call_in_world(world, f, args...)
     end
-    inner() = f(args...; kwargs...)
-    Core._apply_in_world(world, inner)
+    return Core._call_in_world(world, Core.kwfunc(f), kwargs, f, args...)
 end
 
 # TODO: possibly make this an intrinsic

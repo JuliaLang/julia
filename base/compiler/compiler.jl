@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compiler
+getfield(Core, :eval)(Core, :(baremodule Compiler
 
 using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
-             _apply, _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
+             _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
              MethodInstance, CodeInstance, MethodMatch
 
 const getproperty = Core.getfield

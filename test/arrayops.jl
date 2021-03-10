@@ -2866,3 +2866,9 @@ end
     @test only(Base.return_types(f, (Int,))) === Union{Array{Int,0}, Array{Nothing,0}}
     @test only(Base.return_types(f, (UnitRange{Int},))) <: Vector
 end
+
+@testset "0-dimensional shape checking #39608" begin
+    @test [fill(1); [2; 2]] == [1; 2; 2]
+    @test [fill(1); fill(2, (2,1,1))] == reshape([1; 2; 2], (3, 1, 1))
+    @test_throws DimensionMismatch [fill(1); rand(2, 2, 2)]
+end

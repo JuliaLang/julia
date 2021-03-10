@@ -126,36 +126,13 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
     return 1;
 }
 
-static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env) JL_NOTSAFEPOINT
+static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env, int tvar_names) JL_NOTSAFEPOINT
 {
     if (a == b)
         return 1;
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
     if (dt != (jl_datatype_t*)jl_typeof(b))
         return 0;
-    if (dt == jl_tvar_type) {
-        jl_typeenv_t *pe = env;
-        while (pe != NULL) {
-            if (pe->var == (jl_tvar_t*)a)
-                return pe->val == b;
-            pe = pe->prev;
-        }
-        return 0;
-    }
-    if (dt == jl_uniontype_type) {
-        return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env) &&
-            egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env);
-    }
-    if (dt == jl_unionall_type) {
-        jl_unionall_t *ua = (jl_unionall_t*)a;
-        jl_unionall_t *ub = (jl_unionall_t*)b;
-        if (ua->var->name != ub->var->name)
-            return 0;
-        if (!(egal_types(ua->var->lb, ub->var->lb, env) && egal_types(ua->var->ub, ub->var->ub, env)))
-            return 0;
-        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
-        return egal_types(ua->body, ub->body, &e);
-    }
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
@@ -165,12 +142,40 @@ static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env) JL_NOTSAF
         if (jl_nparams(dtb) != l)
             return 0;
         for (i = 0; i < l; i++) {
-            if (!egal_types(jl_tparam(dta, i), jl_tparam(dtb, i), env))
+            if (!egal_types(jl_tparam(dta, i), jl_tparam(dtb, i), env, tvar_names))
                 return 0;
         }
         return 1;
     }
+    if (dt == jl_tvar_type) {
+        jl_typeenv_t *pe = env;
+        while (pe != NULL) {
+            if (pe->var == (jl_tvar_t*)a)
+                return pe->val == b;
+            pe = pe->prev;
+        }
+        return 0;
+    }
+    if (dt == jl_unionall_type) {
+        jl_unionall_t *ua = (jl_unionall_t*)a;
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        if (tvar_names && ua->var->name != ub->var->name)
+            return 0;
+        if (!(egal_types(ua->var->lb, ub->var->lb, env, tvar_names) && egal_types(ua->var->ub, ub->var->ub, env, tvar_names)))
+            return 0;
+        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
+        return egal_types(ua->body, ub->body, &e, tvar_names);
+    }
+    if (dt == jl_uniontype_type) {
+        return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
+            egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
+    }
     return jl_egal(a, b);
+}
+
+JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b)
+{
+    return egal_types(a, b, NULL, 0);
 }
 
 JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
@@ -207,7 +212,7 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE
     if (nf == 0 || !dt->layout->haspadding)
         return bits_equal(a, b, sz);
     if (dt == jl_unionall_type)
-        return egal_types(a, b, NULL);
+        return egal_types(a, b, NULL, 1);
     return compare_fields(a, b, dt);
 }
 
@@ -504,9 +509,7 @@ STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
     *n_alloc = newalloc;
 }
 
-static jl_function_t *jl_iterate_func JL_GLOBALLY_ROOTED;
-
-static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
+static jl_value_t *do_apply( jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
 {
     jl_function_t *f = args[0];
     if (nargs == 2) {
@@ -548,12 +551,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
         }
     }
     if (extra && iterate == NULL) {
-        if (jl_iterate_func == NULL) {
-            jl_iterate_func = jl_get_function(jl_top_module, "iterate");
-            if (jl_iterate_func == NULL)
-                jl_undefined_var_error(jl_symbol("iterate"));
-        }
-        iterate = jl_iterate_func;
+        jl_undefined_var_error(jl_symbol("iterate"));
     }
     // allocate space for the argument array and gc roots for it
     // based on our previous estimates
@@ -677,13 +675,7 @@ static jl_value_t *do_apply(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl
 JL_CALLABLE(jl_f__apply_iterate)
 {
     JL_NARGSV(_apply_iterate, 2);
-    return do_apply(F, args+1, nargs-1, args[0]);
-}
-
-JL_CALLABLE(jl_f__apply)
-{
-    JL_NARGSV(_apply, 1);
-    return do_apply(F, args, nargs, NULL);
+    return do_apply(args + 1, nargs - 1, args[0]);
 }
 
 // this is like `_apply`, but with quasi-exact checks to make sure it is pure
@@ -701,7 +693,7 @@ JL_CALLABLE(jl_f__apply_pure)
         // and `promote` works better this way
         size_t last_age = ptls->world_age;
         ptls->world_age = jl_world_counter;
-        ret = jl_f__apply(NULL, args, nargs);
+        ret = do_apply(args, nargs, NULL);
         ptls->world_age = last_age;
         ptls->in_pure_callback = last_in;
     }
@@ -712,21 +704,21 @@ JL_CALLABLE(jl_f__apply_pure)
     return ret;
 }
 
-// this is like `_apply`, but always runs in the newest world
-JL_CALLABLE(jl_f__apply_latest)
+// this is like a regular call, but always runs in the newest world
+JL_CALLABLE(jl_f__call_latest)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     size_t last_age = ptls->world_age;
     if (!ptls->in_pure_callback)
         ptls->world_age = jl_world_counter;
-    jl_value_t *ret = jl_f__apply(NULL, args, nargs);
+    jl_value_t *ret = jl_apply(args, nargs);
     ptls->world_age = last_age;
     return ret;
 }
 
-// Like `_apply`, but runs in the specified world.
+// Like call_in_world, but runs in the specified world.
 // If world > jl_world_counter, run in the latest world.
-JL_CALLABLE(jl_f__apply_in_world)
+JL_CALLABLE(jl_f__call_in_world)
 {
     JL_NARGSV(_apply_in_world, 2);
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -734,10 +726,9 @@ JL_CALLABLE(jl_f__apply_in_world)
     JL_TYPECHK(_apply_in_world, ulong, args[0]);
     size_t world = jl_unbox_ulong(args[0]);
     world = world <= jl_world_counter ? world : jl_world_counter;
-    if (!ptls->in_pure_callback) {
+    if (!ptls->in_pure_callback)
         ptls->world_age = world;
-    }
-    jl_value_t *ret = do_apply(NULL, args+1, nargs-1, NULL);
+    jl_value_t *ret = jl_apply(&args[1], nargs - 1);
     ptls->world_age = last_age;
     return ret;
 }
@@ -1376,7 +1367,7 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     while (jl_is_unionall(a)) {
         jl_unionall_t *ua = (jl_unionall_t*)a;
         jl_unionall_t *ub = (jl_unionall_t*)b;
-        if (!jl_egal(ua->var->lb, ub->var->lb) || !jl_egal(ua->var->ub, ub->var->ub) ||
+        if (!jl_types_egal(ua->var->lb, ub->var->lb) || !jl_types_egal(ua->var->ub, ub->var->ub) ||
             ua->var->name != ub->var->name)
             goto no;
         a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
@@ -1550,13 +1541,12 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     // internal functions
     jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);
-    jl_builtin__apply = add_builtin_func("_apply", jl_f__apply);
     jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
-    add_builtin_func("_apply_latest", jl_f__apply_latest);
-    add_builtin_func("_apply_in_world", jl_f__apply_in_world);
+    add_builtin_func("_call_latest", jl_f__call_latest);
+    add_builtin_func("_call_in_world", jl_f__call_in_world);
     add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("_structtype", jl_f__structtype);
     add_builtin_func("_abstracttype", jl_f__abstracttype);

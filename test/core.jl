@@ -3521,9 +3521,6 @@ end
 @test_throws TypeError Union{Int, 1}
 
 @test_throws ErrorException Vararg{Any,-2}
-@test_throws ErrorException Vararg{Int, N} where N<:T where T
-@test_throws ErrorException Vararg{Int, N} where N<:Integer
-@test_throws ErrorException Vararg{Int, N} where N>:Integer
 
 mutable struct FooNTuple{N}
     z::Tuple{Integer, Vararg{Int, N}}
@@ -4123,15 +4120,6 @@ let ex = quote
          end
     @test ex.args[2] == :test
 end
-
-# issue #25652
-x25652 = 1
-x25652_2 = let (x25652, _) = (x25652, nothing)
-    x25652 = x25652 + 1
-    x25652
-end
-@test x25652_2 == 2
-@test x25652 == 1
 
 # issue #15180
 function f15180(x::T) where T
@@ -5305,6 +5293,16 @@ if Sys.WORD_SIZE == 64
         return
     end
     @test_nowarn tester20360()
+end
+
+# issue #39717
+let a = Base.StringVector(2^17)
+    b = String(a)
+    c = String(a)
+    GC.gc()
+    @test sizeof(a) == 0
+    @test sizeof(b) == 2^17
+    @test sizeof(c) == 0
 end
 
 @test_throws ArgumentError eltype(Bottom)
@@ -7288,11 +7286,27 @@ end
 
 # issue #36104
 module M36104
+using Test
 struct T36104
     v::Vector{M36104.T36104}
 end
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
+end
+# with a gensymmed unionall
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+@test_throws ErrorException begin
+    struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data::S
+        uplo::Char
+    end
 end
 end
 @test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)

@@ -2645,3 +2645,32 @@ end
 
 # issue #38501
 @test :"a $b $("str") c" == Expr(:string, "a ", :b, " ", Expr(:string, "str"), " c")
+
+# issue #25652
+x25652 = 1
+x25652_2 = let (x25652, _) = (x25652, nothing)
+    x25652 = x25652 + 1
+    x25652
+end
+@test x25652_2 == 2
+@test x25652 == 1
+
+@test let x = x25652
+    x25652 = x+3
+    x25652
+end == 4
+@test let (x,) = (x25652,)
+    x25652 = x+3
+    x25652
+end == 4
+
+@testset "issue #39600" begin
+    A = 1:.5:2
+    @test (!).(1 .< A .< 2) == [true, false, true]
+    @test .!(1 .< A .< 2) == [true, false, true]
+    @test (.!)(1 .< A .< 2) == [true, false, true]
+
+    @test ncalls_in_lowered(:((!).(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:(.!(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:((.!)(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
+end

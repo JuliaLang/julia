@@ -404,7 +404,7 @@ function report_bug(kind)
     else
         BugReporting = Base.require(BugReportingId)
     end
-    return Base.invokelatest(BugReporting.make_interactive_report, kind)
+    return Base.invokelatest(BugReporting.make_interactive_report, kind, ARGS)
 end
 
 end

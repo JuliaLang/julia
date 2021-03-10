@@ -838,11 +838,10 @@ static const std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map = {
     { &jl_f_isa,                new JuliaFunction{"jl_f_isa", get_func_sig, get_func_attrs} },
     { &jl_f_typeassert,         new JuliaFunction{"jl_f_typeassert", get_func_sig, get_func_attrs} },
     { &jl_f_ifelse,             new JuliaFunction{"jl_f_ifelse", get_func_sig, get_func_attrs} },
-    { &jl_f__apply,             new JuliaFunction{"jl_f__apply", get_func_sig, get_func_attrs} },
     { &jl_f__apply_iterate,     new JuliaFunction{"jl_f__apply_iterate", get_func_sig, get_func_attrs} },
     { &jl_f__apply_pure,        new JuliaFunction{"jl_f__apply_pure", get_func_sig, get_func_attrs} },
-    { &jl_f__apply_latest,      new JuliaFunction{"jl_f__apply_latest", get_func_sig, get_func_attrs} },
-    { &jl_f__apply_in_world,    new JuliaFunction{"jl_f__apply_in_world", get_func_sig, get_func_attrs} },
+    { &jl_f__call_latest,       new JuliaFunction{"jl_f__call_latest", get_func_sig, get_func_attrs} },
+    { &jl_f__call_in_world,     new JuliaFunction{"jl_f__call_in_world", get_func_sig, get_func_attrs} },
     { &jl_f_throw,              new JuliaFunction{"jl_f_throw", get_func_sig, get_func_attrs} },
     { &jl_f_tuple,              jltuple_func },
     { &jl_f_svec,               new JuliaFunction{"jl_f_svec", get_func_sig, get_func_attrs} },
@@ -2337,8 +2336,13 @@ static jl_cgval_t emit_getfield(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_s
 }
 
 template<typename Func>
-static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Func &&func)
+static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Constant *defval, Func &&func)
 {
+    if (auto Cond = dyn_cast<ConstantInt>(ifnot)) {
+        if (Cond->isZero())
+            return defval;
+        return func();
+    }
     BasicBlock *currBB = ctx.builder.GetInsertBlock();
     BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "guard_pass", ctx.f);
     BasicBlock *exitBB = BasicBlock::Create(jl_LLVMContext, "guard_exit", ctx.f);
@@ -2348,10 +2352,18 @@ static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Fu
     passBB = ctx.builder.GetInsertBlock();
     ctx.builder.CreateBr(exitBB);
     ctx.builder.SetInsertPoint(exitBB);
-    PHINode *phi = ctx.builder.CreatePHI(T_int1, 2);
-    phi->addIncoming(ConstantInt::get(T_int1, defval), currBB);
+    if (defval == nullptr)
+        return nullptr;
+    PHINode *phi = ctx.builder.CreatePHI(defval->getType(), 2);
+    phi->addIncoming(defval, currBB);
     phi->addIncoming(res, passBB);
     return phi;
+}
+
+template<typename Func>
+static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Func &&func)
+{
+    return emit_guarded_test(ctx, ifnot, ConstantInt::get(T_int1, defval), func);
 }
 
 template<typename Func>
@@ -2695,13 +2707,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (((f == jl_builtin__apply && nargs == 2) ||
-              (f == jl_builtin__apply_iterate && nargs == 3)) && ctx.vaSlot > 0) {
-        int arg_start = f == jl_builtin__apply ? 2 : 3;
-        // turn Core._apply(f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
-        if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[arg_start].V)) {
+    else if ((f == jl_builtin__apply_iterate && nargs == 3) && ctx.vaSlot > 0) {
+        // turn Core._apply_iterate(iter, f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
+        if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[3].V)) {
             if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
-                Value *theF = boxed(ctx, argv[arg_start-1]);
+                Value *theF = boxed(ctx, argv[2]);
                 Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
                 nva = ctx.builder.CreateTrunc(nva, T_int32);
@@ -3310,8 +3320,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     }
 
     if (returninfo.return_roots) {
-        AllocaInst *return_roots = emit_static_alloca(ctx, T_prjlvalue);
-        return_roots->setOperand(0, ConstantInt::get(T_int32, returninfo.return_roots));
+        AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(T_prjlvalue, returninfo.return_roots));
         argvals[idx] = return_roots;
         idx++;
     }
@@ -4711,8 +4720,11 @@ static void emit_cfunc_invalidate(
         break;
     }
     case jl_returninfo_t::SRet: {
-        if (return_roots)
-            ctx.builder.CreateStore(gf_ret, gf_thunk->arg_begin() + 1);
+        if (return_roots) {
+            Value *root1 = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
+            root1 = ctx.builder.CreateConstInBoundsGEP2_32(root1->getType()->getPointerElementType(), root1, 0, 0);
+            ctx.builder.CreateStore(gf_ret, root1);
+        }
         emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(rettype), julia_alignment(rettype));
         ctx.builder.CreateRetVoid();
         break;
@@ -5088,8 +5100,7 @@ static Function* gen_cfun_wrapper(
             args.push_back(result);
         }
         if (returninfo.return_roots) {
-            AllocaInst *return_roots = emit_static_alloca(ctx, T_prjlvalue);
-            return_roots->setOperand(0, ConstantInt::get(T_int32, returninfo.return_roots));
+            AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(T_prjlvalue, returninfo.return_roots));
             args.push_back(return_roots);
         }
         for (size_t i = 0; i < nargs + 1; i++) {
@@ -5509,8 +5520,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         break;
     }
     if (f.return_roots) {
-        AllocaInst *return_roots = emit_static_alloca(ctx, T_prjlvalue);
-        return_roots->setOperand(0, ConstantInt::get(T_int32, f.return_roots));
+        AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(T_prjlvalue, f.return_roots));
         args[idx] = return_roots;
         idx++;
     }
@@ -5657,7 +5667,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     }
 
     if (props.return_roots) {
-        fsig.push_back(T_pprjlvalue);
+        fsig.push_back(ArrayType::get(T_prjlvalue, props.return_roots)->getPointerTo(0));
         unsigned argno = fsig.size();
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoAlias);
         attributes = attributes.addAttribute(jl_LLVMContext, argno, Attribute::NoCapture);
@@ -6845,7 +6855,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     auto undef_value_for_type = [&](Type *T) {
         auto tracked = CountTrackedPointers(T);
-        Value *undef;
+        Constant *undef;
         if (tracked.count)
             // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
             undef = Constant::getNullValue(T);
@@ -6928,23 +6938,31 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     if (val.typ == (jl_value_t*)jl_bottom_type) {
                         V = undef_value_for_type(VN->getType());
                     }
-                    else if (VN && VN->getType() == T_prjlvalue) {
+                    else if (VN->getType() == T_prjlvalue) {
                         // Includes the jl_is_uniontype(phiType) && !TindexN case
+                        // TODO: if convert_julia_type says it is wasted effort and to skip it, is it worth using V_rnull (dynamically)?
                         V = boxed(ctx, val);
                     }
                     else {
-                        // XXX: must emit undef here (rather than a bitcast or
-                        //      load of val) if the runtime type of val isn't phiType
-                        V = emit_unbox(ctx, VN->getType(), val, phiType);
+                        // must be careful to emit undef here (rather than a bitcast or
+                        // load of val) if the runtime type of val isn't phiType
+                        Value *isvalid = emit_isa(ctx, val, phiType, NULL).first;
+                        V = emit_guarded_test(ctx, isvalid, undef_value_for_type(VN->getType()), [&] {
+                            return emit_unbox(ctx, VN->getType(), val, phiType);
+                        });
                     }
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());
                     assert(!TindexN);
                 }
                 else if (dest && val.typ != (jl_value_t*)jl_bottom_type) {
-                    // XXX: must emit undef here (rather than a bitcast or
-                    //      load of val) if the runtime type of val isn't phiType
+                    // must be careful to emit undef here (rather than a bitcast or
+                    // load of val) if the runtime type of val isn't phiType
                     assert(lty != T_prjlvalue);
-                    (void)emit_unbox(ctx, lty, val, phiType, maybe_decay_tracked(ctx, dest));
+                    Value *isvalid = emit_isa(ctx, val, phiType, NULL).first;
+                    emit_guarded_test(ctx, isvalid, nullptr, [&] {
+                        (void)emit_unbox(ctx, lty, val, phiType, maybe_decay_tracked(ctx, dest));
+                        return nullptr;
+                    });
                 }
             }
             else {

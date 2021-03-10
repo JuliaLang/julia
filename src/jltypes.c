@@ -1166,9 +1166,14 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         if (jl_is_vararg_type((jl_value_t*)dt) && ntp == 2) {
             jl_value_t *lenparam = iparams[1];
             if (jl_is_typevar(lenparam)) {
+                // TODO: this is disabled due to #39698; it is also inconsistent
+                // with other similar checks, where we usually only check substituted
+                // values and not the bounds of variables.
+                /*
                 jl_tvar_t *N = (jl_tvar_t*)lenparam;
                 if (!(N->lb == jl_bottom_type && N->ub == (jl_value_t*)jl_any_type))
                     jl_error("TypeVar in Vararg length must have bounds Union{} and Any");
+                */
             }
             else if (!jl_is_long(lenparam)) {
                 jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, lenparam);

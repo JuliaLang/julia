@@ -401,8 +401,8 @@ void jl_init_threading(void)
         jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
-    jl_measure_compile_time = realloc( jl_measure_compile_time, jl_n_threads * sizeof *jl_measure_compile_time );
-    jl_cumulative_compile_time = realloc( jl_cumulative_compile_time, jl_n_threads * sizeof *jl_cumulative_compile_time );
+    jl_measure_compile_time = (uint8_t*)realloc(jl_measure_compile_time, jl_n_threads * sizeof(*jl_measure_compile_time));
+    jl_cumulative_compile_time = (uint64_t*)realloc(jl_cumulative_compile_time, jl_n_threads * sizeof(*jl_cumulative_compile_time));
 #ifndef __clang_analyzer__
     jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
 #endif
