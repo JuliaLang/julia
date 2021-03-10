@@ -1797,34 +1797,6 @@ log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 log(A::UnitLowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 
 function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
-    n = checksquare(A0)
-
-    # copy A0, making it real if the logarithm will be real
-    if A0 isa UnitUpperTriangular
-        Ap = (T <: Complex && isreal(A0)) ? real(parent(A0)) : copy(parent(A0))
-        @inbounds for i in 1:n
-            Ap[i,i] = 1
-        end
-        A = UpperTriangular(Ap)
-    elseif isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
-        A = T <: Complex ? real(A0) : copy(A0)
-    else
-        A = complex(A0)
-    end
-
-    Y0 = _log_quasitriu(A)
-
-    # return complex result for complex input
-    Y = T <: Complex ? complex(Y0) : Y0
-
-    if A0 isa UpperTriangular || A0 isa UnitUpperTriangular
-        return UpperTriangular(Y)
-    else
-        return Y
-    end
-end
-
-function _log_quasitriu(A0)
     maxsqrt = 100
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,
@@ -1835,10 +1807,21 @@ function _log_quasitriu(A0)
          2.879093714241194e-001]
     tmax = size(theta, 1)
     n = size(A0, 1)
+    # allocate real A if log(A) will be real and complex A otherwise
+    if isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
+        A = eltype(A0) <: Complex ? real(A0) : copy(A0)
+    else
+        A = complex(A0)
+    end
+    if A0 isa UnitUpperTriangular
+        A = UpperTriangular(parent(A))
+        @inbounds for i in 1:n
+            A[i,i] = 1
+        end
+    end
     p = 0
     m = 0
 
-    A = A0
     # Compute repeated roots
     d = complex(diag(A))
     dm1 = d .- 1
@@ -1943,7 +1926,14 @@ function _log_quasitriu(A0)
     # Compute accurate diagonal and superdiagonal of log(A)
     _log_diag_quasitriu!(Y, A0)
 
-    return Y
+    # return complex result for complex input
+    Yc = eltype(A0) <: Complex ? complex(Y) : Y
+
+    if A0 isa UpperTriangular || A0 isa UnitUpperTriangular
+        return UpperTriangular(Yc)
+    else
+        return Yc
+    end
 end
 
 # Auxiliary functions for matrix logarithm and matrix power
