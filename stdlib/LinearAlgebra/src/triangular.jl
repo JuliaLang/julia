@@ -1811,7 +1811,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     if isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
         A = eltype(A0) <: Complex ? real(A0) : copy(A0)
     else
-        A = complex(A0)
+        A = eltype(A0) <: Complex ? copy(A0) : complex(A0)
     end
     if A0 isa UnitUpperTriangular
         A = UpperTriangular(parent(A))
