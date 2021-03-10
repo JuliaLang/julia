@@ -634,12 +634,19 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                 new_stmt = Expr(:call, argexprs[2], def, state...)
                 state1 = insert_node!(ir, idx, call.rt, new_stmt)
                 new_sig = with_atype(call_sig(ir, new_stmt)::Signature)
-                if isa(call.info, ConstCallInfo)
-                    handle_const_call!(ir, state1.id, new_stmt, call.info, new_sig,
+                info = call.info
+                handled = false
+                if isa(info, ConstCallInfo)
+                    if maybe_handle_const_call!(ir, state1.id, new_stmt, info, new_sig,
                         call.rt, istate, false, todo)
-                elseif isa(call.info, MethodMatchInfo) || isa(call.info, UnionSplitInfo)
-                    info = isa(call.info, MethodMatchInfo) ?
-                        MethodMatchInfo[call.info] : call.info.matches
+                        handled = true
+                    else
+                        info = info.call
+                    end
+                end
+                if !handled && (isa(info, MethodMatchInfo) || isa(info, UnionSplitInfo))
+                    info = isa(info, MethodMatchInfo) ?
+                        MethodMatchInfo[info] : info.matches
                     # See if we can inline this call to `iterate`
                     analyze_single_call!(ir, todo, state1.id, new_stmt,
                         new_sig, call.rt, info, istate)
@@ -736,7 +743,8 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
         src = copy(src)
     end
 
-    state.et !== nothing && push!(state.et, todo.mi)
+    et = state.et
+    et !== nothing && push!(et, todo.mi)
     return InliningTodo(todo.mi, src)
 end
 
@@ -1164,25 +1172,33 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
     return nothing
 end
 
-function handle_const_call!(ir::IRCode, idx::Int, stmt::Expr,
+function maybe_handle_const_call!(ir::IRCode, idx::Int, stmt::Expr,
         info::ConstCallInfo, sig::Signature, @nospecialize(calltype),
         state::InliningState,
         isinvoke::Bool, todo::Vector{Pair{Int, Any}})
-    item = InliningTodo(info.result, sig.atypes, calltype)
-    validate_sparams(item.mi.sparam_vals) || return
+    # when multiple matches are found, bail out and later inliner will union-split this signature
+    # TODO effectively use multiple constant analysis results here
+    length(info.results) == 1 || return false
+    result = info.results[1]
+    isa(result, InferenceResult) || return false
+
+    item = InliningTodo(result, sig.atypes, calltype)
+    validate_sparams(item.mi.sparam_vals) || return true
     mthd_sig = item.mi.def.sig
     mistypes = item.mi.specTypes
     state.mi_cache !== nothing && (item = resolve_todo(item, state))
     if sig.atype <: mthd_sig
-        return handle_single_case!(ir, stmt, idx, item, isinvoke, todo)
+        handle_single_case!(ir, stmt, idx, item, isinvoke, todo)
+        return true
     else
-        item === nothing && return
+        item === nothing && return true
         # Union split out the error case
         item = UnionSplit(false, sig.atype, Pair{Any, Any}[mistypes => item])
         if isinvoke
             stmt.args = rewrite_invoke_exprargs!(stmt.args)
         end
         push!(todo, idx=>item)
+        return true
     end
 end
 
@@ -1216,9 +1232,11 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # it'll have performed a specialized analysis for just this case. Use its
         # result.
         if isa(info, ConstCallInfo)
-            handle_const_call!(ir, idx, stmt, info, sig, calltype, state,
-                sig.f === Core.invoke, todo)
-            continue
+            if maybe_handle_const_call!(ir, idx, stmt, info, sig, calltype, state, sig.f === Core.invoke, todo)
+                continue
+            else
+                info = info.call
+            end
         end
 
         # Handle invoke
