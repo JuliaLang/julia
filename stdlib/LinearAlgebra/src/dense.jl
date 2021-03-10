@@ -727,7 +727,7 @@ function log(A::StridedMatrix)
             if is_log_real
                 logA = SchurF.Z * log_quasitriu(SchurF.T) * SchurF.Z'
             else
-                SchurS = schur(complex(SchurF.T))
+                SchurS = schur!(complex(SchurF.T))
                 Z = SchurF.Z * SchurS.Z
                 logA = Z * log(UpperTriangular(SchurS.T)) * Z'
             end
@@ -803,7 +803,7 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
             if typeof(sqrt(zero(T))) <: BlasFloat && is_sqrt_real
                 sqrtA = SchurF.Z * sqrt_quasitriu(SchurF.T) * SchurF.Z'
             else
-                SchurS = schur(complex(SchurF.T))
+                SchurS = schur!(complex(SchurF.T))
                 Z = SchurF.Z * SchurS.Z
                 sqrtA = Z * sqrt(UpperTriangular(SchurS.T)) * Z'
             end
