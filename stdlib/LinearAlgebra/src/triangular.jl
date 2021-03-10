@@ -1917,7 +1917,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     t = eltype(A)
     Y = zeros(t, n, n)
     for k = 1:m
-        Y = Y + t(w[k]) * rdiv_quasitriu(A, t(x[k]) * A + I)
+        Y = Y + t(w[k]) * rdiv_quasitriu!(A, t(x[k]) * A + I)
     end
 
     # Scale back
@@ -2265,34 +2265,19 @@ end
 unw(x::Real) = 0
 unw(x::Number) = ceil((imag(x) - pi) / (2 * pi))
 
-# compute A / B for upper quasi-triangular B
-function rdiv_quasitriu(A, B)
-    istriu(B) && return A / UpperTriangular(B)
-    n = checksquare(B)
-    # complete LU decomposition with no pivoting
-    factors = copy(B)
+# compute A / B for upper quasi-triangular B, possibly overwriting B
+function rdiv_quasitriu!(A, B)
+    n = checksquare(A)
+    AG = copy(A)
+    # use Givens rotations to annihilate 2x2 blocks
     @inbounds for k in 1:(n-1)
-        s = factors[k+1,k]
+        s = B[k+1,k]
         iszero(s) && continue  # 1x1 block
-        s /= factors[k,k]
-        factors[k+1,k] = s
-        for j in k+1:n
-            factors[k+1,j] -= s * factors[k,j]
-        end
+        G = first(givens(B[k+1,k+1], s, k, k+1))
+        rmul!(B, G)
+        rmul!(AG, G)
     end
-    # Y = A / U
-    Y = A / UpperTriangular(factors)
-    # Y = Y / L
-    m = size(Y, 1)
-    @inbounds for k in (n-1):-1:1
-        s = factors[k+1,k]
-        if !iszero(s)
-            for i in 1:m
-                Y[i,k] -= s * Y[i,k+1]
-            end
-        end
-    end
-    return Y
+    return rdiv!(AG, UpperTriangular(B))
 end
 
 # End of auxiliary functions for matrix logarithm and matrix power
