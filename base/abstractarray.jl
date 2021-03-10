@@ -2253,7 +2253,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     @inbounds shapelength = shape[end][1]
     lengthas = length(as)
     shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
-    
+
     # discover dimensions
     @inbounds nd = max(N, ndims(as[1]))
     outdims = zeros(Int, nd)
@@ -2275,7 +2275,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
             end
 
             wasstartblock = blockcounts[d] == 1 # remember for next dimension
-            
+
             isendblock = blockcounts[d] == shape[d][shapepos[d]]
             if isendblock
                 if outdims[d] == 0
