@@ -1048,6 +1048,32 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, info::InvokeCallIn
     return nothing
 end
 
+function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
+    if isa(info, OpaqueClosureCreateInfo)
+        unspec_call_info = info.unspec.info
+        if isa(unspec_call_info, ConstCallInfo)
+            unspec_call_info = unspec_call_info.call
+        end
+        isa(unspec_call_info, OpaqueClosureCallInfo) || return
+        lbt = argextype(stmt.args[3], ir, ir.sptypes)
+        lb, exact = instanceof_tfunc(lbt)
+        exact || return
+        ubt = argextype(stmt.args[4], ir, ir.sptypes)
+        ub, exact = instanceof_tfunc(ubt)
+        exact || return
+        # Narrow opaque closure type
+
+        newT = widenconst(tmeet(tmerge(lb, info.unspec.rt), ub))
+        if newT != ub
+            # N.B.: Narrowing the ub requires a backdge on the mi whose type
+            # information we're using, since a change in that function may
+            # invalidate ub result.
+            push!(state.et, unspec_call_info.mi)
+            stmt.args[4] = newT
+        end
+    end
+end
+
 # Handles all analysis and inlining of intrinsics and builtins. In particular,
 # this method does not access the method table or otherwise process generic
 # functions.
@@ -1056,6 +1082,9 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
     stmt isa Expr || return nothing
     if stmt.head === :splatnew
         inline_splatnew!(ir, idx)
+        return nothing
+    elseif stmt.head === :new_opaque_closure
+        narrow_opaque_closure!(ir, stmt, ir.stmts[idx][:info], state)
         return nothing
     end
 
