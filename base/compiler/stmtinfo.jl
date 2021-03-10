@@ -97,7 +97,7 @@ constant information.
 """
 struct ConstCallInfo
     call::Any
-    result::InferenceResult
+    results::Vector{Union{Nothing,InferenceResult}}
 end
 
 """
