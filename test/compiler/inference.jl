@@ -111,7 +111,7 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{}, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) ==
-    Union{Vector{Bool}, Vector{Int64}, Vector{String}}
+    Union{Vector{Bool}, Vector{Int}, Vector{String}}
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
@@ -3217,4 +3217,4 @@ end
     else
         Some(0x2)
     end
-end == [Union{Some{Float64}, Some{Int64}, Some{UInt8}}]
+end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
