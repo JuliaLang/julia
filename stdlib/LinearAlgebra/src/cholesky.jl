@@ -110,7 +110,7 @@ positive semi-definite matrix `A`. This is the return type of [`cholesky(_, Val(
 the corresponding matrix factorization function.
 
 The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`
-via `F.L` and `F.U`, and the permutation via `F.p`, where `A[C.p, C.p] ≈ C.U' * C.U ≈ C.L * C.L'`,
+via `F.L` and `F.U`, and the permutation via `F.p`, where `A[F.p, F.p] ≈ F.U' * F.U ≈ F.L * F.L'`,
 or alternatively `A ≈ F.U[:, F.p]' * F.U[:, F.p] ≈ F.L[F.p, :] * F.L[F.p, :]'`.
 
 The following functions are available for `CholeskyPivoted` objects:
@@ -398,7 +398,7 @@ and return a [`CholeskyPivoted`](@ref) factorization. The matrix `A` can either 
 or [`Hermitian`](@ref) [`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
 
 The triangular Cholesky factor can be obtained from the factorization `F` via `F.L` and `F.U`,
-and the permutation via `F.p`, where `A[C.p, C.p] ≈ C.U' * C.U ≈ C.L * C.L'`, or alternatively
+and the permutation via `F.p`, where `A[F.p, F.p] ≈ F.U' * F.U ≈ F.L * F.L'`, or alternatively
 `A ≈ F.U[:, F.p]' * F.U[:, F.p] ≈ F.L[F.p, :] * F.L[F.p, :]'`.
 
 The following functions are available for `CholeskyPivoted` objects:
