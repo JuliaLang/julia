@@ -1797,17 +1797,8 @@ log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 log(A::UnitLowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 
 function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
-    maxsqrt = 100
-    theta = [1.586970738772063e-005,
-         2.313807884242979e-003,
-         1.938179313533253e-002,
-         6.209171588994762e-002,
-         1.276404810806775e-001,
-         2.060962623452836e-001,
-         2.879093714241194e-001]
-    tmax = size(theta, 1)
-    n = size(A0, 1)
     # allocate real A if log(A) will be real and complex A otherwise
+    n = checksquare(A0)
     if isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
         A = T <: Complex ? real(A0) : copy(A0)
     else
@@ -1819,6 +1810,30 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
             A[i,i] = 1
         end
     end
+    Y0 = _log_quasitriu!(A0, A)
+    # return complex result for complex input
+    Y = T <: Complex ? complex(Y0) : Y0
+
+    if A0 isa UpperTriangular || A0 isa UnitUpperTriangular
+        return UpperTriangular(Y)
+    else
+        return Y
+    end
+end
+# type-stable implementation of log_quasitriu
+# A is a copy of A0 that is overwritten while computing the result. It has the same eltype
+# as the result.
+function _log_quasitriu!(A0, A)
+    maxsqrt = 100
+    theta = [1.586970738772063e-005,
+         2.313807884242979e-003,
+         1.938179313533253e-002,
+         6.209171588994762e-002,
+         1.276404810806775e-001,
+         2.060962623452836e-001,
+         2.879093714241194e-001]
+    tmax = size(theta, 1)
+    n = size(A0, 1)
     p = 0
     m = 0
 
@@ -1934,14 +1949,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     # Compute accurate diagonal and superdiagonal of log(A)
     _log_diag_quasitriu!(Y, A0)
 
-    # return complex result for complex input
-    Yc = T <: Complex ? complex(Y) : Y
-
-    if A0 isa UpperTriangular || A0 isa UnitUpperTriangular
-        return UpperTriangular(Yc)
-    else
-        return Yc
-    end
+    return Y
 end
 
 # Auxiliary functions for matrix logarithm and matrix power
