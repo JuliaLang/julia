@@ -552,3 +552,29 @@ end
     me = try missing(1) catch e e end
     @test sprint(showerror, me) == "MethodError: objects of type Missing are not callable"
 end
+
+@testset "sort and sortperm with $(eltype(X))" for (X, P, RP) in
+    (([2, missing, -2, 5, missing], [3, 1, 4, 2, 5], [2, 5, 4, 1, 3]),
+     ([NaN, missing, 5, -0.0, NaN, missing, Inf, 0.0, -Inf],
+      [9, 4, 8, 3, 7, 1, 5, 2, 6], [2, 6, 1, 5, 7, 3, 8, 4, 9]),
+     ([missing, "a", "c", missing, "b"], [2, 5, 3, 1, 4], [1, 4, 3, 5, 2]))
+    @test sortperm(X) == P
+    @test sortperm(X, alg=QuickSort) == P
+    @test sortperm(X, alg=MergeSort) == P
+
+    XP = X[P]
+    @test isequal(sort(X), XP)
+    @test isequal(sort(X, alg=QuickSort), XP)
+    @test isequal(sort(X, alg=MergeSort), XP)
+
+    @test sortperm(X, rev=true) == RP
+    @test sortperm(X, alg=QuickSort, rev=true) == RP
+    @test sortperm(X, alg=MergeSort, rev=true) == RP
+
+    XRP = X[RP]
+    @test isequal(sort(X, rev=true), XRP)
+    @test isequal(sort(X, alg=QuickSort, rev=true), XRP)
+    @test isequal(sort(X, alg=MergeSort, rev=true), XRP)
+end
+
+sortperm(reverse([NaN, missing, NaN, missing]))
