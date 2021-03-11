@@ -1773,12 +1773,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     frame.src.ssavaluetypes[pc] = t
                     lhs = stmt.args[1]
                     if isa(lhs, Slot)
-                        changes = StateUpdate(lhs, VarState(t, false), changes)
+                        changes = StateUpdate(lhs, VarState(t, false), changes, false)
                     end
                 elseif hd === :method
                     fname = stmt.args[1]
                     if isa(fname, Slot)
-                        changes = StateUpdate(fname, VarState(Any, false), changes)
+                        changes = StateUpdate(fname, VarState(Any, false), changes, false)
                     end
                 elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect
                     # these do not generate code
@@ -1843,7 +1843,7 @@ end
 
 function conditional_changes(changes::VarTable, @nospecialize(typ), var::Slot)
     if typ ⊑ (changes[slot_id(var)]::VarState).typ
-        return StateUpdate(var, VarState(typ, false), changes)
+        return StateUpdate(var, VarState(typ, false), changes, true)
     end
     return changes
 end

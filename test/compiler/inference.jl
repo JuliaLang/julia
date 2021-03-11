@@ -1795,6 +1795,31 @@ end
     end == Any[Union{Nothing,Expr}]
 end
 
+@testset "branching on conditional object" begin
+    # simple
+    @test Base.return_types((Union{Nothing,Int},)) do a
+        b = a === nothing
+        return b ? 0 : a # ::Int
+    end == Any[Int]
+
+    # can use multiple times (as far as the subject of condition hasn't changed)
+    @test Base.return_types((Union{Nothing,Int},)) do a
+        b = a === nothing
+        c = b ? 0 : a # c::Int
+        d = !b ? a : 0 # d::Int
+        return c, d # ::Tuple{Int,Int}
+    end == Any[Tuple{Int,Int}]
+
+    # shouldn't use the old constraint when the subject of condition has changed
+    @test Base.return_types((Union{Nothing,Int},)) do a
+        b = a === nothing
+        c = b ? 0 : a # c::Int
+        a = 0
+        d = b ? a : 1 # d::Int, not d::Union{Nothing,Int}
+        return c, d # ::Tuple{Int,Int}
+    end == Any[Tuple{Int,Int}]
+end
+
 function f25579(g)
     h = g[]
     t = (h === nothing)
