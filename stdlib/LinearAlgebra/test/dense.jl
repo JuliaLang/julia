@@ -792,6 +792,84 @@ end
     @inferred Union{Matrix{elty},Matrix{complex(elty)}} log(A1)
 end
 
+@testset "Additional matrix square root tests" for elty in (Float64, ComplexF64)
+    A11 = convert(Matrix{elty}, [3 2; -5 -3])
+    @test sqrt(A11)^2 ≈ A11
+
+    A13 = convert(Matrix{elty}, [2 0; 0 2])
+    @test typeof(sqrt(A13)) == Array{elty, 2}
+
+    T = elty == Float64 ? Symmetric : Hermitian
+    @test typeof(sqrt(T(A13))) == T{elty, Array{elty, 2}}
+
+    A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
+    sqrtA1 = convert(Matrix{elty}, [1.971197119306979 0.5113118387140085 -0.03301921523780871;
+                                   0.23914631173809942 1.9546875116880718 0.2556559193570036;
+                                   0.23914631173810008 0.22263670411919556 1.9877067269258815])
+    @test sqrt(A1) ≈ sqrtA1
+    @test sqrt(A1)^2 ≈ A1
+    @test typeof(sqrt(A1)) == Matrix{elty}
+
+    A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
+                                 1/3 1/4 1/5 1/6;
+                                 1/4 1/5 1/6 1/7;
+                                 1/5 1/6 1/7 1/8])
+                                 sqrtA4 = convert(
+        Matrix{elty},
+        [0.590697761556362 0.3055006800405779 0.19525404749300546 0.14007621469988107;
+         0.30550068004057784 0.2825388389385975 0.21857572599211642 0.17048692323164674;
+         0.19525404749300565 0.21857572599211622 0.21155429252242863 0.18976816626246887;
+         0.14007621469988046 0.17048692323164724 0.1897681662624689 0.20075085592778794],
+    )
+    @test sqrt(A4) ≈ sqrtA4
+    @test sqrt(A4)^2 ≈ A4
+    @test typeof(sqrt(A4)) == Matrix{elty}
+
+    # real triu matrix
+    A5  = convert(Matrix{elty}, [1 2 3; 0 4 5; 0 0 6])  # triu
+    sqrtA5 = convert(Matrix{elty}, [1.0 0.6666666666666666 0.6525169217864183;
+                                   0.0 2.0 1.1237243569579454;
+                                   0.0 0.0 2.449489742783178])
+    @test sqrt(A5) ≈ sqrtA5
+    @test sqrt(A5)^2 ≈ A5
+    @test typeof(sqrt(A5)) == Matrix{elty}
+
+    # real quasitriangular schur form with 2 2x2 blocks, 2 1x1 blocks, and all positive eigenvalues
+    A6 = convert(Matrix{elty}, [2 3 2 2 3 1;
+                                1 3 3 2 3 1;
+                                3 3 3 1 1 2;
+                                2 1 2 2 2 2;
+                                1 1 2 2 3 1;
+                                2 2 2 2 1 3])
+    @test sqrt(A6)^2 ≈ A6
+    @test typeof(sqrt(A6)) == Matrix{elty}
+
+    # real quasitriangular schur form with a negative eigenvalue
+    A7 = convert(Matrix{elty}, [1 3 3 2 2 2;
+                                1 2 1 3 1 2;
+                                3 1 2 3 2 1;
+                                3 1 2 2 2 1;
+                                3 1 3 1 2 1;
+                                1 1 3 1 1 3])
+    @test sqrt(A7)^2 ≈ A7
+    @test typeof(sqrt(A7)) == Matrix{complex(elty)}
+
+    if elty <: Complex
+        A8 = convert(Matrix{elty}, [1 + 1im 1 + 1im 1 - 1im;
+                                    1 + 1im -1 + 1im 1 + 1im;
+                                    1 - 1im 1 + 1im -1 - 1im])
+        sqrtA8 = convert(
+            Matrix{elty},
+            [1.2559748527474284 + 0.6741878819930323im 0.20910077991005582 + 0.24969165051825476im 0.591784212275146 - 0.6741878819930327im;
+             0.2091007799100553 + 0.24969165051825515im 0.3320953202361413 + 0.2915044496279425im 0.33209532023614136 + 1.0568713143581219im;
+             0.5917842122751455 - 0.674187881993032im 0.33209532023614147 + 1.0568713143581223im 0.7147787526012315 - 0.6323750828833452im],
+        )
+        @test sqrt(A8) ≈ sqrtA8
+        @test sqrt(A8)^2 ≈ A8
+        @test typeof(sqrt(A8)) == Matrix{elty}
+    end
+end
+
 @testset "issue #7181" begin
     A = [ 1  5  9
           2  6 10
