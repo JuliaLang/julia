@@ -728,6 +728,7 @@ end
                                     0.2310490602 0.1969543025 1.363756107])
     @test log(A1) ≈ logA1
     @test exp(log(A1)) ≈ A1
+    @test typeof(log(A1)) == Matrix{elty}
 
     A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
                                  1/3 1/4 1/5 1/6;
@@ -739,6 +740,51 @@ end
                                     0.2414170219 0.5865285289 3.318413247 -5.444632124])
     @test log(A4) ≈ logA4
     @test exp(log(A4)) ≈ A4
+    @test typeof(log(A4)) == Matrix{elty}
+
+    # real triu matrix
+    A5  = convert(Matrix{elty}, [1 2 3; 0 4 5; 0 0 6])  # triu
+    logA5 = convert(Matrix{elty}, [0.0 0.9241962407465937 0.5563245488984037;
+                                   0.0 1.3862943611198906 1.0136627702704109;
+                                   0.0 0.0 1.791759469228055])
+    @test log(A5) ≈ logA5
+    @test exp(log(A5)) ≈ A5
+    @test typeof(log(A5)) == Matrix{elty}
+
+    # real quasitriangular schur form with 2 2x2 blocks, 2 1x1 blocks, and all positive eigenvalues
+    A6 = convert(Matrix{elty}, [2 3 2 2 3 1;
+                                1 3 3 2 3 1;
+                                3 3 3 1 1 2;
+                                2 1 2 2 2 2;
+                                1 1 2 2 3 1;
+                                2 2 2 2 1 3])
+    @test exp(log(A6)) ≈ A6
+    @test typeof(log(A6)) == Matrix{elty}
+
+    # real quasitriangular schur form with a negative eigenvalue
+    A7 = convert(Matrix{elty}, [1 3 3 2 2 2;
+                                1 2 1 3 1 2;
+                                3 1 2 3 2 1;
+                                3 1 2 2 2 1;
+                                3 1 3 1 2 1;
+                                1 1 3 1 1 3])
+    @test exp(log(A7)) ≈ A7
+    @test typeof(log(A7)) == Matrix{complex(elty)}
+
+    if elty <: Complex
+        A8 = convert(Matrix{elty}, [1 + 1im 1 + 1im 1 - 1im;
+                                    1 + 1im -1 + 1im 1 + 1im;
+                                    1 - 1im 1 + 1im -1 - 1im])
+        logA8 = convert(
+            Matrix{elty},
+            [0.9478628953131517 + 1.3725201223387407im -0.2547157147532057 + 0.06352318334299434im 0.8560050197863862 - 1.0471975511965979im;
+             -0.2547157147532066 + 0.06352318334299467im -0.16285783922644065 + 0.2617993877991496im 0.2547157147532063 + 2.1579182857361894im;
+             0.8560050197863851 - 1.0471975511965974im 0.25471571475320665 + 2.1579182857361903im 0.9478628953131519 - 0.8489213467404436im],
+        )
+        @test log(A8) ≈ logA8
+        @test exp(log(A8)) ≈ A8
+        @test typeof(log(A8)) == Matrix{elty}
+    end
 end
 
 @testset "matrix logarithm is type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
