@@ -158,7 +158,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m J
                 jl_svec_t *nc = jl_alloc_svec_uninit(ncl);
                 if (i > 0)
                     memcpy((char*)jl_svec_data(nc), jl_svec_data(specializations), sizeof(void*) * i);
-                for(int j = 0; j < ncl - cl; j++)
+                for (int j = 0; j < ncl - cl; j++)
                     jl_svecset(nc, j+i, jl_nothing);
                 if (i < cl)
                     memcpy((char*)jl_svec_data(nc) + sizeof(void*) * (i + ncl - cl),
