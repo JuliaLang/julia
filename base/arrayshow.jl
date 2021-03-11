@@ -313,9 +313,19 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
         if show_full
             _show_nd_label(io, a, idxs)
         end
-        slice = view(a, axes(a,1), axes(a,2), idxs...)
-        print_matrix(io, slice)
-        print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+        slice = view(a, axs[1], axs[2], idxs...)
+        if show_full
+            print_matrix(io, slice)
+            print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+        else
+            idxdiff = lastidxs .- idxs .< 0
+            if any(idxdiff)
+                lastchangeindex = 2 + findlast(idxdiff)
+                [print(io, ";") for i ∈ 1:lastchangeindex]
+                print(io, " ")
+            end
+            print_matrix(io, slice)
+        end
         @label skip
         lastidxs = idxs
     end
@@ -393,7 +403,10 @@ end
 `_show_nonempty(io, X::AbstractMatrix, prefix)` prints matrix X with opening and closing square brackets,
 preceded by `prefix`, supposed to encode the type of the elements.
 """
-function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
+_show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
+    _show_nonempty(io, inferencebarrier(X), prefix, false, axes(X))
+
+function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
     indr, indc = axs
@@ -440,7 +453,7 @@ end
 
 
 _show_nonempty(io::IO, X::AbstractArray, prefix::String) =
-    show_nd(io, X, (io, slice) -> _show_nonempty(io, slice, prefix, true), false)
+    show_nd(io, X, (io, slice) -> _show_nonempty(io, inferencebarrier(slice), prefix, true, axes(slice)), false)
 
 # a specific call path is used to show vectors (show_vector)
 _show_nonempty(::IO, ::AbstractVector, ::String) =
