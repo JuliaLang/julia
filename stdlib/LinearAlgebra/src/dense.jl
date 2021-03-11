@@ -735,8 +735,7 @@ function log(A::StridedMatrix)
         return eltype(A) <: Complex ? complex(logA) : logA
     else
         SchurF = schur(A)
-        R = triu!(parent(log(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
-        return SchurF.vectors * R * SchurF.vectors'
+        return SchurF.vectors * log(UpperTriangular(SchurF.T)) * SchurF.vectors'
     end
 end
 
@@ -811,8 +810,7 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
         return eltype(A) <: Complex ? complex(sqrtA) : sqrtA
     else
         SchurF = schur(A)
-        R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
-        return SchurF.vectors * R * SchurF.vectors'
+        return SchurF.vectors * sqrt(UpperTriangular(SchurF.T)) * SchurF.vectors'
     end
 end
 
