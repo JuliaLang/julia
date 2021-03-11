@@ -20,7 +20,7 @@ let ci = @code_lowered const_int()
             Expr(:opaque_closure_method, 0, lno, ci)))
     end
 end
-@test_broken isa(oc_simple_inf(), Core.OpaqueClosure{Tuple{}, Int})
+@test isa(oc_simple_inf(), Core.OpaqueClosure{Tuple{}, Int})
 @test oc_simple_inf()() == 1
 
 struct OcClos2Int
@@ -44,7 +44,7 @@ let ci = @code_lowered OcClos2Int(1, 2)();
             1, 2))()
     end
 end
-@test oc_self_call_clos() == 3
+@test @inferred(oc_self_call_clos()) == 3
 let opt = @code_typed oc_self_call_clos()
     @test_broken length(opt[1].code) == 1
     @test_broken isa(opt[1].code[1], Core.ReturnNode)
@@ -71,8 +71,8 @@ let ci = @code_lowered OcClos1Any(1)()
             :x))
     end
 end
-@test_broken isa(oc_infer_pass_clos(1), Core.OpaqueClosure{Tuple{}, typeof(1)})
-@test_broken isa(oc_infer_pass_clos("a"), Core.OpaqueClosure{Tuple{}, typeof("a")})
+@test isa(oc_infer_pass_clos(1), Core.OpaqueClosure{Tuple{}, typeof(1)})
+@test isa(oc_infer_pass_clos("a"), Core.OpaqueClosure{Tuple{}, typeof("a")})
 @test oc_infer_pass_clos(1)() == 1
 @test oc_infer_pass_clos("a")() == "a"
 
@@ -85,8 +85,8 @@ end
 function complicated_identity(x)
     oc_infer_pass_id()(x)
 end
-@test_broken @inferred(complicated_identity(1)) == 1
-@test_broken @inferred(complicated_identity("a")) == "a"
+@test @inferred(complicated_identity(1)) == 1
+@test @inferred(complicated_identity("a")) == "a"
 let ci = (@code_typed complicated_identity(1))[1]
     @test_broken length(ci.code) == 1
     @test_broken isa(ci.code[1], Core.ReturnNode)
@@ -131,12 +131,14 @@ function test_oc_world_age end
 mk_oc_world_age() = @opaque ()->test_oc_world_age()
 g_world_age = @opaque ()->test_oc_world_age()
 h_world_age = mk_oc_world_age()
+@test isa(h_world_age, Core.OpaqueClosure{Tuple{}, Union{}})
 test_oc_world_age() = 1
 @test_throws MethodError g_world_age()
 @test_throws MethodError h_world_age()
 @test mk_oc_world_age()() == 1
 g_world_age = @opaque ()->test_oc_world_age()
 @test g_world_age() == 1
+@test isa(mk_oc_world_age(), Core.OpaqueClosure{Tuple{}, Int})
 
 # Evil, dynamic Vararg stuff (don't do this - made to work for consistency)
 function maybe_opaque(isva::Bool)

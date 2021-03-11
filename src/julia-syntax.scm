@@ -470,15 +470,16 @@
           (filter (lambda (s)
                     (not (any (lambda (p) (eq? (car p) (car s)))
                               positional-sparams)))
-                  sparams)))
-    (let ((kw      (gensy))
-          (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
-          (mangled (let ((und (and name (undot-name name))))
-                     (symbol (string (if (and name (= (string.char (string name) 0) #\#))
-                                         ""
-                                         "#")
-                                     (or und '_) "#"
-                                     (string (current-julia-module-counter)))))))
+                  sparams))
+         (kw      (gensy))
+         (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
+         (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
+         (mangled (let ((und (and name (undot-name name))))
+                    (symbol (string (if (and name (= (string.char (string name) 0) #\#))
+                                        ""
+                                        "#")
+                                    (or und '_) "#"
+                                    (string (current-julia-module-counter)))))))
       ;; this is a hack: nest these statements inside a call so they get closure
       ;; converted together, allowing all needed types to be defined before any methods.
       `(call (core ifelse) (false) (false) (block
@@ -579,7 +580,7 @@
                                     (list `(... ,(arg-name (car vararg)))))))))))
         ;; return primary function
         ,(if (not (symbol? name))
-             '(null) name))))))
+             '(null) name)))))
 
 ;; prologue includes line number node and eventual meta nodes
 (define (extract-method-prologue body)
@@ -1971,6 +1972,24 @@
                           ,@(apply append rows))))
              `(call ,@vcat ,@a))))))
 
+(define (expand-property-destruct lhss x)
+  (if (not (length= lhss 1))
+      (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+  (let* ((xx (if (symbol-like? x) x (make-ssavalue)))
+         (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x))))))
+    `(block
+       ,@ini
+       ,@(map
+           (lambda (field)
+             (let ((prop (cond ((symbol? field) field)
+                               ((and (pair? field) (eq? (car field) '|::|) (symbol? (cadr field)))
+                                (cadr field))
+                               (else
+                                (error (string "invalid assignment location \"" (deparse lhs) "\""))))))
+               (expand-forms `(= ,field (call (top getproperty) ,xx (quote ,prop))))))
+           (cdar lhss))
+       (unnecessary ,xx))))
+
 (define (expand-tuple-destruct lhss x)
   (define (sides-match? l r)
     ;; l and r either have equal lengths, or r has a trailing ...
@@ -2187,18 +2206,7 @@
                 (x    (caddr e)))
             (if (has-parameters? lhss)
                 ;; property destructuring
-                (if (length= lhss 1)
-                    (let* ((xx (if (symbol-like? x) x (make-ssavalue)))
-                           (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x))))))
-                      `(block
-                         ,@ini
-                         ,@(map (lambda (field)
-                                  (if (not (symbol? field))
-                                      (error (string "invalid assignment location \"" (deparse lhs) "\"")))
-                                  (expand-forms `(= ,field (call (top getproperty) ,xx (quote ,field)))))
-                             (cdar lhss))
-                         (unnecessary ,xx)))
-                    (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+                (expand-property-destruct lhss x)
                 ;; multiple assignment
                 (expand-tuple-destruct lhss x))))
          ((typed_hcat)
@@ -2228,6 +2236,9 @@
                    `(call (top setindex!) ,arr ,r ,@new-idxs))
                  (unnecessary ,r))))))
          ((|::|)
+          ;; (= (|::| T) rhs) is an error
+          (if (null? (cddr lhs))
+              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
           ;; (= (|::| x T) rhs)
           (let ((x (cadr lhs))
                 (T (caddr lhs))

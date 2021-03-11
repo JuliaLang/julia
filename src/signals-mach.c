@@ -127,7 +127,7 @@ static void allocate_segv_handler()
     }
 }
 
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
 volatile mach_port_t mach_profiler_thread = 0;
 static kern_return_t profiler_segv_handler
                 (mach_port_t                          exception_port,
@@ -146,12 +146,6 @@ typedef x86_exception_state64_t host_exception_state_t;
 #define HOST_EXCEPTION_STATE x86_EXCEPTION_STATE64
 #define HOST_EXCEPTION_STATE_COUNT x86_EXCEPTION_STATE64_COUNT
 
-enum x86_trap_flags {
-    USER_MODE = 0x4,
-    WRITE_FAULT = 0x2,
-    PAGE_PRESENT = 0x1
-};
-
 #elif defined(_CPU_AARCH64_)
 typedef arm_thread_state64_t host_thread_state_t;
 typedef arm_exception_state64_t host_exception_state_t;
@@ -167,18 +161,34 @@ static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
     uint64_t rsp = (uint64_t)ptls2->signal_stack + sig_stack_size;
     assert(rsp % 16 == 0);
 
+#ifdef _CPU_X86_64_
     // push (null) $RIP onto the stack
     rsp -= sizeof(void*);
     *(void**)rsp = NULL;
 
-#ifdef _CPU_X86_64_
     state->__rsp = rsp; // set stack pointer
     state->__rip = (uint64_t)fptr; // "call" the function
 #else
     state->__sp = rsp;
     state->__pc = (uint64_t)fptr;
+    state->__lr = 0;
 #endif
 }
+
+#ifdef _CPU_X86_64_
+int is_write_fault(host_exception_state_t exc_state) {
+    return exc_reg_is_write_fault(exc_state.__err);
+}
+#elif defined(_CPU_AARCH64_)
+int is_write_fault(host_exception_state_t exc_state) {
+    return exc_reg_is_write_fault(exc_state.__esr);
+}
+#else
+#warning Implement this query for consistent PROT_NONE handling
+int is_write_fault(host_exception_state_t exc_state) {
+    return 0;
+}
+#endif
 
 static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
 {
@@ -212,7 +222,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     unsigned int exc_count = HOST_EXCEPTION_STATE_COUNT;
     host_exception_state_t exc_state;
     host_thread_state_t state;
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
     if (thread == mach_profiler_thread) {
         return profiler_segv_handler(exception_port, thread, task, exception, code, code_count);
     }
@@ -279,8 +289,8 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         }
 #endif
         else {
-            if (!(exc_state.__err & WRITE_FAULT))
-                return KERN_INVALID_ARGUMENT; // rethrow the SEGV since it wasn't an error with writing to read-only memory
+            if (!is_write_fault(exc_state))
+                return KERN_INVALID_ARGUMENT;
             excpt = jl_readonlymemory_exception;
         }
         jl_throw_in_thread(tid, thread, excpt);
@@ -413,7 +423,7 @@ static pthread_t profiler_thread;
 clock_serv_t clk;
 static mach_port_t profile_port = 0;
 
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
 volatile static int forceDwarf = -2;
 static unw_context_t profiler_uc;
 
@@ -477,7 +487,7 @@ void *mach_profile_listener(void *arg)
     int i;
     const int max_size = 512;
     attach_exception_port(mach_thread_self(), 1);
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
     mach_profiler_thread = mach_thread_self();
 #endif
     mig_reply_error_t *bufRequest = (mig_reply_error_t*)malloc_s(max_size);
@@ -501,7 +511,7 @@ void *mach_profile_listener(void *arg)
             unw_context_t *uc;
             jl_thread_suspend_and_get_state(i, &uc);
             if (running) {
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
                 /*
                  *  Unfortunately compact unwind info is incorrectly generated for quite a number of
                  *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info

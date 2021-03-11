@@ -263,7 +263,7 @@ typedef struct _jl_line_info_node_t {
 typedef struct _jl_code_info_t {
     // ssavalue-indexed arrays of properties:
     jl_array_t *code;  // Any array of statements
-    jl_value_t *codelocs; // Int32 array of indicies into the line table
+    jl_value_t *codelocs; // Int32 array of indices into the line table
     jl_value_t *ssavaluetypes; // types of ssa values (or count of them)
     jl_array_t *ssaflags; // flags associated with each statement:
         // 0 = inbounds
@@ -634,6 +634,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_argument_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_const_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_partial_struct_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_partial_opaque_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_interconditional_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;

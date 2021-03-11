@@ -9,7 +9,7 @@ module Iterators
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
+    @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, AbstractRange,
     LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple
@@ -178,18 +178,6 @@ end
 end
 
 """
-    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
-
-Transforms an indexable container into an Dictionary-view of the same data.
-Modifying the key-space of the underlying data may invalidate this object.
-"""
-struct Pairs{K, V, I, A} <: AbstractDict{K, V}
-    data::A
-    itr::I
-    Pairs(data::A, itr::I) where {A, I} = new{eltype(I), eltype(A), I, A}(data, itr)
-end
-
-"""
     pairs(IndexLinear(), A)
     pairs(IndexCartesian(), A)
     pairs(IndexStyle(A), A)
@@ -240,11 +228,11 @@ pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
 
 # preserve indexing capabilities for known indexable types
 # faster than zip(keys(a), values(a)) for arrays
+pairs(tuple::Tuple) = Pairs{Int}(tuple, keys(tuple))
+pairs(nt::NamedTuple) = Pairs{Symbol}(nt, keys(nt))
+pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
-pairs(tuple::Tuple) = Pairs(tuple, keys(tuple))
-pairs(nt::NamedTuple) = Pairs(nt, keys(nt))
-pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
 length(v::Pairs) = length(v.itr)
@@ -266,7 +254,7 @@ reverse(v::Pairs) = Pairs(v.data, reverse(v.itr))
 
 haskey(v::Pairs, key) = (key in v.itr)
 keys(v::Pairs) = v.itr
-values(v::Pairs) = v.data
+values(v::Pairs) = v.data # TODO: this should be a view of data subset by itr
 getindex(v::Pairs, key) = v.data[key]
 setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
 get(v::Pairs, key, default) = get(v.data, key, default)

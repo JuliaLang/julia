@@ -828,7 +828,7 @@ let ε=1, μ=2, x=3, î=4
     @test µ == μ == 2
     # NFC normalization of identifiers:
     @test Meta.parse("\u0069\u0302") === Meta.parse("\u00ee")
-    @test î == 4
+    @test î == 4
     # latin vs greek ε (#14751)
     @test Meta.parse("\u025B") === Meta.parse("\u03B5")
     @test ɛ == ε == 1
@@ -2677,6 +2677,21 @@ end
     @test f((b=3, a=4)) == (4, 3)
     @test f((b=3, c=2, a=4)) == (4, 3)
     @test_throws ErrorException f((;))
+
+    # with type annotation
+    let num, den, a, b
+        res = begin (; num::UInt8, den::Float64) = 1 // 2 end
+        @test res === 1 // 2
+        @test num === 0x01
+        @test den === 2.0
+
+        res = begin (; b, a::Bool) = (a=1.0, b=2, c=0x03) end
+        @test res === (a=1.0, b=2, c=0x03)
+        @test b === 2
+        @test a === true
+    end
+
+    @test Meta.isexpr(Meta.@lower(f((; a, b::Int)) = a + b), :error)
 end
 
 # issue #25652
@@ -2712,6 +2727,7 @@ end
 @eval f39705(x) = $(Expr(:||)) && x
 @test f39705(1) === false
 
+
 struct A x end
 Base.dotgetproperty(::A, ::Symbol) = [0, 0, 0]
 
@@ -2725,3 +2741,13 @@ Base.dotgetproperty(::A, ::Symbol) = [0, 0, 0]
     @test begin A(b).x .+= 1 end == [2, 3, 4]
     @test b == [1, 2, 3]
 end
+
+@test Meta.@lower((::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
+@test Meta.@lower((::T,) = x) == Expr(:error, "invalid assignment location \"::T\"")
+@test Meta.@lower((; ::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
+
+# flisp conversion for quoted SSAValues
+@test eval(:(x = $(QuoteNode(Core.SSAValue(1))))) == Core.SSAValue(1)
+@test eval(:(x = $(QuoteNode(Core.SlotNumber(1))))) == Core.SlotNumber(1)
+@test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
+@test_throws ErrorException("syntax: Slot objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))

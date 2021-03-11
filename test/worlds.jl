@@ -313,7 +313,8 @@ src4 = code_typed(applyf35855_2, (Vector{Any},))[1]
 @test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
 
 ## ambiguities do not trigger invalidation
-mi = instance(+, (AbstractChar, UInt8))
+m = which(+, (Char, UInt8))
+mi = Core.Compiler.specialize_method(m, Tuple{typeof(+), AbstractChar, UInt8}, Core.svec())
 w = worlds(mi)
 
 abstract type FixedPoint35855{T <: Integer} <: Real end
