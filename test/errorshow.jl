@@ -678,6 +678,7 @@ end
     @test getline(outputc) == getline(output0) + 2
 end
 
+
 # issue #30633
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
@@ -763,3 +764,29 @@ let err = nothing
         @test !occursin("2d", err_str)
     end
 end
+
+# issue #37587
+# TODO: enable on more platforms
+if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
+    single_repeater() = single_repeater()
+    pair_repeater_a() = pair_repeater_b()
+    pair_repeater_b() = pair_repeater_a()
+
+    @testset "repeated stack frames" begin
+        let bt = try single_repeater()
+            catch
+                catch_backtrace()
+            end
+            bt_str = sprint(Base.show_backtrace, bt)
+            @test occursin(r"repeats \d+ times", bt_str)
+        end
+
+        let bt = try pair_repeater_a()
+            catch
+                catch_backtrace()
+            end
+            bt_str = sprint(Base.show_backtrace, bt)
+            @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
+        end
+    end
+end  # Sys.isapple()
