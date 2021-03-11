@@ -333,8 +333,9 @@ struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
     NonIsBitsDimsUndef() = new()
 end
-@test Core.Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
-@test !Core.Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
+params = Core.Compiler.OptimizationParams()
+@test Core.Compiler.is_inlineable_constant(params, NonIsBitsDimsUndef())
+@test !Core.Compiler.is_inlineable_constant(params, (("a"^1000, "b"^1000), nothing))
 
 # More nothrow modeling for apply_type
 f_apply_type_typeof(x) = (Ref{typeof(x)}; nothing)

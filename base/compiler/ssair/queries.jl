@@ -3,7 +3,7 @@
 """
 Determine whether a statement is side-effect-free, i.e. may be removed if it has no uses.
 """
-function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::Vector{Any})
+function stmt_effect_free(interp::AbstractInterpreter, @nospecialize(stmt), @nospecialize(rt), src, sptypes::Vector{Any})
     isa(stmt, PiNode) && return true
     isa(stmt, PhiNode) && return true
     isa(stmt, ReturnNode) && return false
@@ -27,18 +27,18 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::
             is_return_type(f) && return true
             if isa(f, IntrinsicFunction)
                 intrinsic_effect_free_if_nothrow(f) || return false
-                return intrinsic_nothrow(f,
+                return intrinsic_nothrow(interp, f,
                         Any[argextype(ea[i], src, sptypes) for i = 2:length(ea)])
             end
             contains_is(_PURE_BUILTINS, f) && return true
             contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
             rt === Bottom && return false
-            return _builtin_nothrow(f, Any[argextype(ea[i], src, sptypes) for i = 2:length(ea)], rt)
+            return _builtin_nothrow(interp, f, Any[argextype(ea[i], src, sptypes) for i = 2:length(ea)], rt)
         elseif head === :new
             a = ea[1]
             typ = argextype(a, src, sptypes)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(typ)
+            typ, isexact = instanceof_tfunc(interp, typ)
             isexact || return false
             isconcretedispatch(typ) || return false
             typ = typ::DataType

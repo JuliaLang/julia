@@ -11,9 +11,9 @@ end
 
 # In theory, there could be a `cache` containing a matching `InferenceResult`
 # for the provided `linfo` and `given_argtypes`. The purpose of this function is
-# to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
+# to return a valid value for `cache_lookup(interp, linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
-function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
+function matching_cache_argtypes(interp::AbstractInterpreter, linfo::MethodInstance, given_argtypes::Vector)
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
     @assert length(given_argtypes) >= (nargs - 1)
@@ -24,13 +24,13 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
             isva_given_argtypes[i] = argtype_by_index(given_argtypes, i)
         end
         if length(given_argtypes) >= nargs || !isvarargtype(given_argtypes[end])
-            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[nargs:end])
+            isva_given_argtypes[nargs] = tuple_tfunc(interp, given_argtypes[nargs:end])
         else
-            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[end:end])
+            isva_given_argtypes[nargs] = tuple_tfunc(interp, given_argtypes[end:end])
         end
         given_argtypes = isva_given_argtypes
     end
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(interp, linfo, nothing)
     if nargs === length(given_argtypes)
         for i in 1:nargs
             given_argtype = given_argtypes[i]
@@ -45,7 +45,7 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector)
     return cache_argtypes, overridden_by_const
 end
 
-function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(specTypes),
+function most_general_argtypes(interp::AbstractInterpreter, method::Union{Method, Nothing}, @nospecialize(specTypes),
     isva::Bool, withfirst::Bool = true)
     toplevel = method === nothing
     linfo_argtypes = Any[unwrap_unionall(specTypes).parameters...]
@@ -90,7 +90,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                         vargtype_elements[i] = Const(atyp.parameters[1])
                     end
                 end
-                vargtype = tuple_tfunc(vargtype_elements)
+                vargtype = tuple_tfunc(interp, vargtype_elements)
             end
         end
         cache_argtypes[nargs] = vargtype
@@ -134,14 +134,14 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
     cache_argtypes
 end
 
-function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
+function matching_cache_argtypes(interp::AbstractInterpreter, linfo::MethodInstance, ::Nothing)
     mthd = isa(linfo.def, Method) ? linfo.def::Method : nothing
-    cache_argtypes = most_general_argtypes(mthd, linfo.specTypes, isa(mthd, Method) ?
+    cache_argtypes = most_general_argtypes(interp, mthd, linfo.specTypes, isa(mthd, Method) ?
             mthd.isva : false)
     return cache_argtypes, falses(length(cache_argtypes))
 end
 
-function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
+function cache_lookup(interp::AbstractInterpreter, linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
     method = linfo.def::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -160,7 +160,7 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
             end
         end
         if method.isva && cache_match
-            cache_match = is_argtype_match(tuple_tfunc(given_argtypes[(nargs + 1):end]),
+            cache_match = is_argtype_match(tuple_tfunc(interp, given_argtypes[(nargs + 1):end]),
                                            cache_argtypes[end],
                                            cache_overridden_by_const[end])
         end

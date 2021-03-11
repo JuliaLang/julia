@@ -145,11 +145,11 @@ end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
 
-function tuple_tail_elem(@nospecialize(init), ct::Vector{Any})
+function tuple_tail_elem(interp::AbstractInterpreter, @nospecialize(init), ct::Vector{Any})
     t = init
     for x in ct
         # FIXME: this is broken: it violates subtyping relations and creates invalid types with free typevars
-        t = tmerge(t, tvar_extent(unwrapva(x)))
+        t = tmerge(interp, t, tvar_extent(unwrapva(x)))
     end
     return Vararg{widenconst(t)}
 end

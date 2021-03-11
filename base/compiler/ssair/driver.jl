@@ -111,32 +111,32 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     return ir
 end
 
-function slot2reg(ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
+function slot2reg(interp::AbstractInterpreter, ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.slottypes) # consumes `ir`
+    @timeit "construct_ssa" ir = construct_ssa!(interp, ci, ir, domtree, defuse_insts, nargs, sv.slottypes) # consumes `ir`
     return ir
 end
 
-function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
+function run_passes(interp::AbstractInterpreter, ci::CodeInfo, nargs::Int, sv::OptimizationState)
     preserve_coverage = coverage_enabled(sv.mod)
     ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, sv)
-    ir = slot2reg(ir, ci, nargs, sv)
+    ir = slot2reg(interp, ir, ci, nargs, sv)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @timeit "compact 1" ir = compact!(ir)
-    @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    @timeit "compact 1" ir = compact!(ir, interp)
+    @timeit "Inlining" ir = ssa_inlining_pass!(interp, ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     #@timeit "verify 2" verify_ir(ir)
-    ir = compact!(ir)
+    ir = compact!(ir, interp)
     #@Base.show ("before_sroa", ir)
-    @timeit "SROA" ir = getfield_elim_pass!(ir)
+    @timeit "SROA" ir = getfield_elim_pass!(interp, ir)
     #@Base.show ir.new_nodes
     #@Base.show ("after_sroa", ir)
-    ir = adce_pass!(ir)
+    ir = adce_pass!(interp, ir)
     #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
-    @timeit "compact 3" ir = compact!(ir)
+    @timeit "compact 3" ir = compact!(ir, interp)
     #@Base.show ir
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))

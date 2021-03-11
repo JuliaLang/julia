@@ -164,12 +164,12 @@ function simple_walk_constraint(compact::IncrementalCompact, @nospecialize(defid
 end
 
 """
-    walk_to_defs(compact, val, intermediaries)
+    walk_to_defs(interp, compact, val, intermediaries)
 
 Starting at `val` walk use-def chains to get all the leaves feeding into
 this val (pruning those leaves rules out by path conditions).
 """
-function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), visited_phinodes::Vector{Any}=Any[])
+function walk_to_defs(interp::AbstractInterpreter, compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), visited_phinodes::Vector{Any}=Any[])
     if !isa(defssa, AnySSAValue) || !isa(compact[defssa], PhiNode)
         return Any[defssa]
     end
@@ -220,7 +220,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                             # path, with a different type constraint. We may have
                             # to redo some work here with the wider typeconstraint
                             push!(worklist_defs, new_def)
-                            push!(worklist_constraints, tmerge(new_constraint, visited[new_def]))
+                            push!(worklist_constraints, tmerge(interp, new_constraint, visited[new_def]))
                         end
                         continue
                     end
@@ -269,7 +269,7 @@ function is_pending(compact::IncrementalCompact, old::OldSSAValue)
     return old.id > length(compact.ir.stmts) + length(compact.ir.new_nodes)
 end
 
-function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
+function lift_leaves(params, compact::IncrementalCompact, @nospecialize(stmt),
         @nospecialize(result_t), field::Int, leaves::Vector{Any})
     # For every leaf, the lifted value
     lifted_leaves = IdDict{Any, Any}()
@@ -369,7 +369,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
         !ismutable(leaf) || return nothing
         isdefined(leaf, field) || return nothing
         val = getfield(leaf, field)
-        is_inlineable_constant(val) || return nothing
+        is_inlineable_constant(params, val) || return nothing
         lifted_leaves[leaf_key] = RefValue{Any}(quoted(val))
     end
     lifted_leaves, maybe_undef
@@ -377,7 +377,8 @@ end
 
 make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
-function lift_comparison!(compact::IncrementalCompact, idx::Int,
+function lift_comparison!(interp::AbstractInterpreter,
+        compact::IncrementalCompact, idx::Int,
         @nospecialize(c1), @nospecialize(c2), stmt::Expr,
         lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
     if isa(c1, Const)
@@ -397,12 +398,12 @@ function lift_comparison!(compact::IncrementalCompact, idx::Int,
     end
 
     visited_phinodes = Any[]
-    leaves = walk_to_defs(compact, val, typeconstraint, visited_phinodes)
+    leaves = walk_to_defs(interp, compact, val, typeconstraint, visited_phinodes)
 
     # Let's check if we evaluate the comparison for each one of the leaves
     lifted_leaves = IdDict{Any, Any}()
     for leaf in leaves
-        r = egal_tfunc(compact_exprtype(compact, leaf), cmp)
+        r = egal_tfunc(interp, compact_exprtype(compact, leaf), cmp)
         if isa(r, Const)
             lifted_leaves[leaf] = RefValue{Any}(r.val)
         else
@@ -510,7 +511,7 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 assertion_counter = 0
-function getfield_elim_pass!(ir::IRCode)
+function getfield_elim_pass!(interp::AbstractInterpreter, ir::IRCode)
     compact = IncrementalCompact(ir)
     insertions = Vector{Any}()
     defuses = IdDict{Int, Tuple{IdSet{Int}, SSADefUse}}()
@@ -561,7 +562,7 @@ function getfield_elim_pass!(ir::IRCode)
                 continue
             end
             (isa(c1, Const) && isa(c2, Const)) && continue
-            lift_comparison!(compact, idx, c1, c2, stmt, lifting_cache)
+            lift_comparison!(interp, compact, idx, c1, c2, stmt, lifting_cache)
             continue
         elseif isexpr(stmt, :foreigncall)
             nccallargs = length(stmt.args[3]::SimpleVector)
@@ -652,14 +653,14 @@ function getfield_elim_pass!(ir::IRCode)
         end
 
         visited_phinodes = Any[]
-        leaves = walk_to_defs(compact, def, typeconstraint, visited_phinodes)
+        leaves = walk_to_defs(interp, compact, def, typeconstraint, visited_phinodes)
 
         isempty(leaves) && continue
 
         field = try_compute_fieldidx(struct_typ, field)
         field === nothing && continue
 
-        r = lift_leaves(compact, stmt, result_t, field, leaves)
+        r = lift_leaves(OptimizationParams(interp), compact, stmt, result_t, field, leaves)
         r === nothing && continue
         lifted_leaves, any_undef = r
 
@@ -704,7 +705,7 @@ function getfield_elim_pass!(ir::IRCode)
     # below we need it consistent with the state of the IR here (after tracking
     # phi node arguments, but before dce).
     used_ssas = copy(compact.used_ssas)
-    simple_dce!(compact)
+    simple_dce!(interp, compact)
     ir = complete(compact)
 
     # Compute domtree, needed below, now that we have finished compacting the
@@ -828,12 +829,12 @@ function getfield_elim_pass!(ir::IRCode)
     ir
 end
 
-function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int)
+function adce_erase!(interp::AbstractInterpreter, phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int)
     # return whether this made a change
     if isa(compact.result[idx][:inst], PhiNode)
-        return maybe_erase_unused!(extra_worklist, compact, idx, val -> phi_uses[val.id] -= 1)
+        return maybe_erase_unused!(interp, extra_worklist, compact, idx, val -> phi_uses[val.id] -= 1)
     else
-        return maybe_erase_unused!(extra_worklist, compact, idx)
+        return maybe_erase_unused!(interp, extra_worklist, compact, idx)
     end
 end
 
@@ -862,7 +863,7 @@ function mark_phi_cycles(compact::IncrementalCompact, safe_phis::BitSet, phi::In
     end
 end
 
-function adce_pass!(ir::IRCode)
+function adce_pass!(interp::AbstractInterpreter, ir::IRCode)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
     compact = IncrementalCompact(ir)
@@ -880,10 +881,10 @@ function adce_pass!(ir::IRCode)
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        adce_erase!(phi_uses, extra_worklist, compact, idx)
+        adce_erase!(interp, phi_uses, extra_worklist, compact, idx)
     end
     while !isempty(extra_worklist)
-        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+        adce_erase!(interp, phi_uses, extra_worklist, compact, pop!(extra_worklist))
     end
     # Go back and erase any phi cycles
     changed = true
@@ -902,7 +903,7 @@ function adce_pass!(ir::IRCode)
             end
         end
         while !isempty(extra_worklist)
-            if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+            if adce_erase!(interp, phi_uses, extra_worklist, compact, pop!(extra_worklist))
                 changed = true
             end
         end
@@ -1037,7 +1038,7 @@ function type_lift_pass!(ir::IRCode)
     ir
 end
 
-function cfg_simplify!(ir::IRCode)
+function cfg_simplify!(ir::IRCode, interp::AbstractInterpreter = NativeInterpreter())
     bbs = ir.cfg.blocks
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))
@@ -1188,5 +1189,5 @@ function cfg_simplify!(ir::IRCode)
         end
     end
     compact.active_result_bb = length(bb_starts)
-    return finish(compact)
+    return finish(compact, interp)
 end

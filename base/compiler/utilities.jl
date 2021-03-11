@@ -72,13 +72,13 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
-function count_const_size(@nospecialize(x), count_self::Bool = true)
+function count_const_size(params::OptimizationParams, @nospecialize(x), count_self::Bool = true)
     (x isa Type || x isa Symbol) && return 0
-    ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
+    ismutable(x) && return params.inline_const_size + 1
     isbits(x) && return Core.sizeof(x)
     dt = typeof(x)
     sz = count_self ? sizeof(dt) : 0
-    sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
+    sz > params.inline_const_size && return params.inline_const_size + 1
     dtfd = DataTypeFieldDesc(dt)
     for i = 1:nfields(x)
         isdefined(x, i) || continue
@@ -86,14 +86,14 @@ function count_const_size(@nospecialize(x), count_self::Bool = true)
         if !dtfd[i].isptr && datatype_pointerfree(typeof(f))
             continue
         end
-        sz += count_const_size(f, dtfd[i].isptr)
-        sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
+        sz += count_const_size(params, f, dtfd[i].isptr)
+        sz > params.inline_const_size && return params.inline_const_size + 1
     end
     return sz
 end
 
-function is_inlineable_constant(@nospecialize(x))
-    return count_const_size(x) <= MAX_INLINE_CONST_SIZE
+function is_inlineable_constant(params::OptimizationParams, @nospecialize(x))
+    return count_const_size(params, x) <= params.inline_const_size
 end
 
 ###########################

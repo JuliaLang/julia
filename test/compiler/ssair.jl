@@ -166,8 +166,9 @@ let ci = make_ci([
         # block 6
         Core.Compiler.ReturnNode(Core.SSAValue(8))
     ])
+    interp = Core.Compiler.NativeInterpreter()
     ir = Core.Compiler.inflate_ir(ci)
-    ir = Core.Compiler.compact!(ir, true)
+    ir = Core.Compiler.compact!(ir, interp, true)
     @test Core.Compiler.verify_ir(ir) == nothing
 end
 
@@ -176,8 +177,9 @@ let ci = make_ci([
         Expr(:call, GlobalRef(Main, :something_not_defined_please))
         ReturnNode(SSAValue(1))
     ])
+    interp = Core.Compiler.NativeInterpreter()
     ir = Core.Compiler.inflate_ir(ci)
-    ir = Core.Compiler.compact!(ir, true)
+    ir = Core.Compiler.compact!(ir, interp, true)
     @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
 end
 
@@ -198,8 +200,9 @@ let ci = make_ci([
         # Block 3
         Core.Compiler.ReturnNode(1000)
     ])
+    interp = Core.Compiler.NativeInterpreter()
     ir = Core.Compiler.inflate_ir(ci)
-    ir = Core.Compiler.compact!(ir, true)
+    ir = Core.Compiler.compact!(ir, interp, true)
     # Make sure that if there is a call to `something` (block 2 should be
     # removed entirely with working DCE), it doesn't use any SSA values that
     # come after it.
@@ -224,8 +227,9 @@ let ci = make_ci([
         Core.PhiNode(Int32[1, 2], Any[100, 200]),
         Core.Compiler.ReturnNode(Core.SSAValue(3))
     ])
+    interp = Core.Compiler.NativeInterpreter()
     ir = Core.Compiler.inflate_ir(ci)
-    ir = Core.Compiler.compact!(ir, true)
+    ir = Core.Compiler.compact!(ir, interp, true)
     @test Core.Compiler.verify_ir(ir) == nothing
 end
 

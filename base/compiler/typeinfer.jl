@@ -210,7 +210,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
 end
 
-function finish!(interp::AbstractInterpreter, caller::InferenceResult)
+function finish!(caller::InferenceResult, interp::AbstractInterpreter)
     # If we didn't transform the src for caching, we may have to transform
     # it anyway for users like typeinf_ext. Do that here.
     opt = caller.src
@@ -279,7 +279,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         if cached
             cache_result!(interp, caller)
         end
-        finish!(interp, caller)
+        finish!(caller, interp)
     end
     return true
 end
@@ -594,7 +594,7 @@ function record_slot_assign!(sv::InferenceState)
                     elseif otherTy === Any
                         slottypes[id] = Any
                     else
-                        slottypes[id] = tmerge(otherTy, vt)
+                        slottypes[id] = tmerge(sv.interp, otherTy, vt)
                     end
                 end
             end
@@ -812,7 +812,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     if frame === false
         # completely new
         lock_mi_inference(interp, mi)
-        result = InferenceResult(mi)
+        result = InferenceResult(interp, mi)
         frame = InferenceState(result, #=cached=#true, interp) # always use the cache for edge targets
         if frame === nothing
             # can't get the source for this, so we know nothing
@@ -841,14 +841,14 @@ end
 function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atypes, sparams)::MethodInstance
     ccall(:jl_typeinf_begin, Cvoid, ())
-    result = InferenceResult(mi)
+    result = InferenceResult(interp, mi)
     frame = InferenceState(result, false, interp)
     frame === nothing && return (nothing, Any)
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
         result.src = OptimizationState(frame, opt_params, interp)
         optimize(interp, result.src, opt_params, ignorelimited(result.result))
-        frame.src = finish!(interp, result)
+        frame.src = finish!(result, interp)
     end
     ccall(:jl_typeinf_end, Cvoid, ())
     frame.inferred || return (nothing, Any)
@@ -906,7 +906,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         return retrieve_code_info(mi)
     end
     lock_mi_inference(interp, mi)
-    frame = InferenceState(InferenceResult(mi), #=cached=#true, interp)
+    frame = InferenceState(InferenceResult(interp, mi), #=cached=#true, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_end, Cvoid, ())
@@ -929,7 +929,7 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
             return code.rettype
         end
     end
-    frame = InferenceResult(mi)
+    frame = InferenceResult(interp, mi)
     typeinf(interp, frame, true)
     ccall(:jl_typeinf_end, Cvoid, ())
     frame.result isa InferenceState && return nothing
@@ -948,7 +948,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
             # toplevel lambda - infer directly
             ccall(:jl_typeinf_begin, Cvoid, ())
             if !src.inferred
-                result = InferenceResult(linfo)
+                result = InferenceResult(interp, linfo)
                 frame = InferenceState(result, src, #=cached=#true, interp)
                 typeinf(interp, frame)
                 @assert frame.inferred # TODO: deal with this better
@@ -982,7 +982,7 @@ function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospeciali
             match = match::Core.MethodMatch
             ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
-            rt = tmerge(rt, ty)
+            rt = tmerge(interp, rt, ty)
             rt === Any && break
         end
     end

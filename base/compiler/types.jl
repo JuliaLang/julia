@@ -29,10 +29,12 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     valid_worlds::WorldRange # if inference and optimization is finished
-    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
+    function InferenceResult(interp::AbstractInterpreter, linfo::MethodInstance, given_argtypes = nothing)
+        argtypes, overridden_by_const = matching_cache_argtypes(interp, linfo, given_argtypes)
         return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
     end
+    InferenceResult(linfo::MethodInstance, given_argtypes = nothing) =
+        InferenceResult(NativeInterpreter(), linfo, given_argtypes)
 end
 
 
@@ -47,6 +49,7 @@ struct OptimizationParams
     inline_nonleaf_penalty::Int # penalty for dynamic dispatch
     inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
     inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
+    inline_const_size::Int
 
     # Duplicating for now because optimizer inlining requires it.
     # Keno assures me this will be removed in the near future
@@ -62,6 +65,7 @@ struct OptimizationParams
             inline_nonleaf_penalty::Int = 1000,
             inline_tupleret_bonus::Int = 250,
             inline_error_path_cost::Int = 20,
+            inline_const_size::Int = 256,
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
@@ -73,6 +77,7 @@ struct OptimizationParams
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
             inline_error_path_cost,
+            inline_const_size,
             max_methods,
             tuple_splat,
             union_splitting,
@@ -112,6 +117,9 @@ struct InferenceParams
     # tuple contains more than this many elements
     MAX_TUPLE_SPLAT::Int
 
+    MAX_TYPEUNION_COMPLEXITY::Int
+    MAX_TYPEUNION_LENGTH::Int
+
     function InferenceParams(;
             ipo_constant_propagation::Bool = true,
             aggressive_constant_propagation::Bool = false,
@@ -121,6 +129,8 @@ struct InferenceParams
             apply_union_enum::Int = 8,
             tupletype_depth::Int = 3,
             tuple_splat::Int = 32,
+            typeunion_complexity::Int = 3,
+            typeunion_length::Int = 3,
         )
         return new(
             ipo_constant_propagation,
@@ -131,6 +141,8 @@ struct InferenceParams
             apply_union_enum,
             tupletype_depth,
             tuple_splat,
+            typeunion_complexity,
+            typeunion_length,
         )
     end
 end

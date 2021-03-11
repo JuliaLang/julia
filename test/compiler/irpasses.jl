@@ -178,9 +178,10 @@ let m = Meta.@lower 1 + 1
     nstmts = length(src.code)
     src.codelocs = fill(Int32(1), nstmts)
     src.ssaflags = fill(Int32(0), nstmts)
+    interp = Core.Compiler.NativeInterpreter()
     ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
     @test Core.Compiler.verify_ir(ir) === nothing
-    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir)
+    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(interp, ir)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
@@ -219,11 +220,12 @@ let m = Meta.@lower 1 + 1
     src.ssavaluetypes = nstmts
     src.codelocs = fill(Int32(1), nstmts)
     src.ssaflags = fill(Int32(0), nstmts)
+    interp = Core.Compiler.NativeInterpreter()
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
-    ir = Core.Compiler.compact!(ir)
+    ir = Core.Compiler.compact!(ir, interp)
     @test length(ir.cfg.blocks) == 1 && Core.Compiler.length(ir.stmts) == 1
 end
 

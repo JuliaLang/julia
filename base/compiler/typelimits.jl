@@ -1,33 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #########################
-# limitation parameters #
-#########################
-
-const MAX_TYPEUNION_COMPLEXITY = 3
-const MAX_TYPEUNION_LENGTH = 3
-const MAX_INLINE_CONST_SIZE = 256
-
-#########################
 # limitation heuristics #
 #########################
 
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
 # the outermost tuple type is permitted to have up to `allowed_tuplelen` parameters
-function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tupledepth::Int, allowed_tuplelen::Int)
+function limit_type_size(interp::AbstractInterpreter, @nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tupledepth::Int, allowed_tuplelen::Int)
     source = svec(unwrap_unionall(compare), unwrap_unionall(source))
     source[1] === source[2] && (source = svec(source[1]))
     type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
-    r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
+    r = _limit_type_size(interp, t, compare, source, 1, allowed_tuplelen)
     #@assert t <: r # this may fail if t contains a typevar in invariant and multiple times
         # in covariant position and r looses the occurence in invariant position (see #36407)
     if !(t <: r) # ideally, this should never happen
         # widen to minimum complexity to obtain a valid result
-        r = _limit_type_size(t, Any, source, 1, allowed_tuplelen)
+        r = _limit_type_size(interp, t, Any, source, 1, allowed_tuplelen)
         t <: r || (r = Any) # final escape hatch
     end
-    #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
+    #@assert r === _limit_type_size(interp, r, t, source) # this monotonicity constraint is slightly stronger than actually required,
       # since we only actually need to demonstrate that repeated application would reaches a fixed point,
       #not that it is already at the fixed point
     return r
@@ -78,7 +70,7 @@ end
 
 # The goal of this function is to return a type of greater "size" and less "complexity" than
 # both `t` or `c` over the lattice defined by `sources`, `depth`, and `allowed_tuplelen`.
-function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
+function _limit_type_size(interp::AbstractInterpreter, @nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
     if t === c
         return t # quick egal test
     elseif t === Union{}
@@ -102,27 +94,27 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         if isa(t, TypeVar) && t.ub === c.ub && (t.lb === Union{} || t.lb === c.lb)
             return t # it's ok to change the name, or widen `lb` to Union{}, so we can handle this immediately here
         end
-        return _limit_type_size(t, c.ub, sources, depth, allowed_tuplelen)
+        return _limit_type_size(interp, t, c.ub, sources, depth, allowed_tuplelen)
     end
     if isa(c, UnionAll)
-        return _limit_type_size(t, c.body, sources, depth, allowed_tuplelen)
+        return _limit_type_size(interp, t, c.body, sources, depth, allowed_tuplelen)
     end
     if isa(t, UnionAll)
-        tbody = _limit_type_size(t.body, c, sources, depth, allowed_tuplelen)
+        tbody = _limit_type_size(interp, t.body, c, sources, depth, allowed_tuplelen)
         tbody === t.body && return t
         return UnionAll(t.var, tbody)
     elseif isa(t, TypeVar)
         # don't have a matching TypeVar in comparison, so we keep just the upper bound
-        return _limit_type_size(t.ub, c, sources, depth, allowed_tuplelen)
+        return _limit_type_size(interp, t.ub, c, sources, depth, allowed_tuplelen)
     elseif isa(t, Union)
         if isa(c, Union)
-            a = _limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen)
-            b = _limit_type_size(t.b, c.b, sources, depth, allowed_tuplelen)
+            a = _limit_type_size(interp, t.a, c.a, sources, depth, allowed_tuplelen)
+            b = _limit_type_size(interp, t.b, c.b, sources, depth, allowed_tuplelen)
             return Union{a, b}
         end
     elseif isa(t, Core.TypeofVararg)
         isa(c, Core.TypeofVararg) || return Vararg
-        VaT = _limit_type_size(unwrapva(t), unwrapva(c), sources, depth + 1, 0)
+        VaT = _limit_type_size(interp, unwrapva(t), unwrapva(c), sources, depth + 1, 0)
         if isdefined(t, :N) && (isa(t.N, TypeVar) || (isdefined(c, :N) && t.N === c.N))
             return Vararg{VaT, t.N}
         end
@@ -141,7 +133,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                     Q = Any[ tP[i] for i in 1:np ]
                     if ltP > np
                         # combine tp[np:end] into tP[np] using Vararg
-                        Q[np] = tuple_tail_elem(Bottom, Any[ tP[i] for i in np:ltP ])
+                        Q[np] = tuple_tail_elem(interp, Bottom, Any[ tP[i] for i in np:ltP ])
                     end
                     for i = 1:np
                         # now apply limit element-wise to Q
@@ -153,14 +145,14 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                         else
                             cPi = Any
                         end
-                        Q[i] = _limit_type_size(Q[i], cPi, sources, depth + 1, 0)
+                        Q[i] = _limit_type_size(interp, Q[i], cPi, sources, depth + 1, 0)
                     end
                     return Tuple{Q...}
                 end
             end
         elseif isa(c, Core.TypeofVararg)
             # Tuple{Vararg{T}} --> Tuple{T} is OK
-            return _limit_type_size(t, c.T, sources, depth, 0)
+            return _limit_type_size(interp, t, c.T, sources, depth, 0)
         end
         if isType(t) # allow taking typeof as Type{...}, but ensure it doesn't start nesting
             tt = unwrap_unionall(t.parameters[1])
@@ -275,24 +267,24 @@ end
 union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstract(x.b)
 union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
-function issimpleenoughtype(@nospecialize t)
+function issimpleenoughtype(interp::AbstractInterpreter, @nospecialize(t))
     t = ignorelimited(t)
-    return unionlen(t) + union_count_abstract(t) <= MAX_TYPEUNION_LENGTH &&
-           unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
+    return unionlen(t) + union_count_abstract(t) <= InferenceParams(interp).MAX_TYPEUNION_LENGTH &&
+           unioncomplexity(t) <= InferenceParams(interp).MAX_TYPEUNION_COMPLEXITY
 end
 
 # pick a wider type that contains both typea and typeb,
 # with some limits on how "large" it can get,
 # but without losing too much precision in common cases
 # and also trying to be mostly associative and commutative
-function tmerge(@nospecialize(typea), @nospecialize(typeb))
+function tmerge(interp::AbstractInterpreter, @nospecialize(typea), @nospecialize(typeb))
     typea === Union{} && return typeb
     typeb === Union{} && return typea
     suba = typea ⊑ typeb
-    suba && issimpleenoughtype(typeb) && return typeb
+    suba && issimpleenoughtype(interp, typeb) && return typeb
     subb = typeb ⊑ typea
     suba && subb && return typea
-    subb && issimpleenoughtype(typea) && return typea
+    subb && issimpleenoughtype(interp, typea) && return typea
 
     # type-lattice for LimitedAccuracy wrapper
     # the merge create a slightly narrower type than needed, but we can't
@@ -306,15 +298,16 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         else
             causes = union!(copy(typea.causes), typeb.causes)
         end
-        return LimitedAccuracy(tmerge(typea.typ, typeb.typ), causes)
+        return LimitedAccuracy(tmerge(interp, typea.typ, typeb.typ), causes)
     elseif isa(typea, LimitedAccuracy)
-        return LimitedAccuracy(tmerge(typea.typ, typeb), typea.causes)
+        return LimitedAccuracy(tmerge(interp, typea.typ, typeb), typea.causes)
     elseif isa(typeb, LimitedAccuracy)
-        return LimitedAccuracy(tmerge(typea, typeb.typ), typeb.causes)
+        return LimitedAccuracy(tmerge(interp, typea, typeb.typ), typeb.causes)
     end
     # type-lattice for MaybeUndef wrapper
     if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
         return MaybeUndef(tmerge(
+            interp,
             isa(typea, MaybeUndef) ? typea.typ : typea,
             isa(typeb, MaybeUndef) ? typeb.typ : typeb))
     end
@@ -335,8 +328,8 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
         if is_same_conditionals(typea, typeb)
-            vtype = tmerge(typea.vtype, typeb.vtype)
-            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            vtype = tmerge(interp, typea.vtype, typeb.vtype)
+            elsetype = tmerge(interp, typea.elsetype, typeb.elsetype)
             if vtype != elsetype
                 return Conditional(typea.var, vtype, elsetype)
             end
@@ -364,8 +357,8 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     if isa(typea, InterConditional) && isa(typeb, InterConditional)
         if is_same_conditionals(typea, typeb)
-            vtype = tmerge(typea.vtype, typeb.vtype)
-            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            vtype = tmerge(interp, typea.vtype, typeb.vtype)
+            elsetype = tmerge(interp, typea.elsetype, typeb.elsetype)
             if vtype != elsetype
                 return InterConditional(typea.slot, vtype, elsetype)
             end
@@ -381,8 +374,8 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
        (isa(typeb, PartialStruct) || isa(typeb, Const)) &&
         widenconst(typea) === widenconst(typeb)
 
-       typea_nfields = nfields_tfunc(typea)
-       typeb_nfields = nfields_tfunc(typeb)
+       typea_nfields = nfields_tfunc(interp, typea)
+       typeb_nfields = nfields_tfunc(interp, typeb)
        if !isa(typea_nfields, Const) || !isa(typeb_nfields, Const) || typea_nfields.val !== typeb_nfields.val
             return widenconst(typea)
        end
@@ -391,8 +384,9 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
        fields = Vector{Any}(undef, type_nfields)
        anyconst = false
        for i = 1:type_nfields
-            fields[i] = tmerge(getfield_tfunc(typea, Const(i)),
-                               getfield_tfunc(typeb, Const(i)))
+            fields[i] = tmerge(interp,
+                               getfield_tfunc(interp, typea, Const(i)),
+                               getfield_tfunc(interp, typeb, Const(i)))
             anyconst |= has_nontrivial_const_info(fields[i])
        end
        return anyconst ? PartialStruct(widenconst(typea), fields) :
@@ -404,7 +398,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
              typea.parent === typeb.parent)
             return widenconst(typea)
         end
-        return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
+        return PartialOpaque(typea.typ, tmerge(interp, typea.env, typeb.env),
             typea.isva, typea.parent, typea.source)
     end
     # no special type-inference lattice, join the types
@@ -452,7 +446,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
                         # try to widen Tuple slower: make a single non-concrete Tuple containing both
                         # converge the Tuple element-wise if they are the same length
                         # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
-                        widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
+                        widen = tuplemerge(interp, unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
                         widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
                     else
                         wr = typenames[i].wrapper
@@ -480,7 +474,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     u = Union{types...}
     # don't let type unions get too big, if the above didn't reduce it enough
-    if issimpleenoughtype(u)
+    if issimpleenoughtype(interp, u)
         return u
     end
     # don't let the slow widening of Tuple cause the whole type to grow too fast
@@ -494,7 +488,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
             end
             types[i] = widen
             u = Union{types...}
-            if issimpleenoughtype(u)
+            if issimpleenoughtype(interp, u)
                 return u
             end
             break
@@ -505,7 +499,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
 end
 
 # the inverse of switchtupleunion, with limits on max element union size
-function tuplemerge(a::DataType, b::DataType)
+function tuplemerge(interp::AbstractInterpreter, a::DataType, b::DataType)
     @assert a.name === b.name === Tuple.name "assertion failure"
     ap, bp = a.parameters, b.parameters
     lar = length(ap)::Int
@@ -523,7 +517,7 @@ function tuplemerge(a::DataType, b::DataType)
     p = Vector{Any}(undef, lt + vt)
     for i = 1:lt
         ui = Union{ap[i], bp[i]}
-        p[i] = issimpleenoughtype(ui) ? ui : Any
+        p[i] = issimpleenoughtype(interp, ui) ? ui : Any
     end
     # merge the remaining tail into a single, simple Tuple{Vararg{T}} (#22120)
     if vt
@@ -581,7 +575,7 @@ end
 
 # compute typeintersect over the extended inference lattice
 # where v is in the extended lattice, and t is a Type
-function tmeet(@nospecialize(v), @nospecialize(t))
+function tmeet(interp::AbstractInterpreter, @nospecialize(v), @nospecialize(t))
     if isa(v, Const)
         if !has_free_typevars(t) && !isa(v.val, t)
             return Bottom
@@ -603,13 +597,13 @@ function tmeet(@nospecialize(v), @nospecialize(t))
             if isa(v.fields[i], Core.TypeofVararg)
                 new_fields[i] = v.fields[i]
             else
-                new_fields[i] = tmeet(v.fields[i], widenconst(getfield_tfunc(t, Const(i))))
+                new_fields[i] = tmeet(interp, v.fields[i], widenconst(getfield_tfunc(interp, t, Const(i))))
                 if new_fields[i] === Bottom
                     return Bottom
                 end
             end
         end
-        return tuple_tfunc(new_fields)
+        return tuple_tfunc(interp, new_fields)
     elseif isa(v, Conditional)
         if !(Bool <: t)
             return Bottom

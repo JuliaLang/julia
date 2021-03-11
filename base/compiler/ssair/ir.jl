@@ -1265,7 +1265,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
 end
 
-function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing)
+function maybe_erase_unused!(interp::AbstractInterpreter, extra_worklist, compact, idx, callback = x->nothing)
     stmt = compact.result[idx][:inst]
     stmt === nothing && return false
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
@@ -1273,7 +1273,7 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     elseif isa(compact.result[idx][:info], MethodResultPure)
         effect_free = true
     else
-        effect_free = stmt_effect_free(stmt, compact.result[idx][:type], compact, compact.ir.sptypes)
+        effect_free = stmt_effect_free(interp, stmt, compact.result[idx][:type], compact, compact.ir.sptypes)
     end
     if effect_free
         for ops in userefs(stmt)
@@ -1360,16 +1360,16 @@ function just_fixup!(compact::IncrementalCompact)
     end
 end
 
-function simple_dce!(compact::IncrementalCompact)
+function simple_dce!(interp::AbstractInterpreter, compact::IncrementalCompact)
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        maybe_erase_unused!(extra_worklist, compact, idx)
+        maybe_erase_unused!(interp, extra_worklist, compact, idx)
     end
     while !isempty(extra_worklist)
-        maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist))
+        maybe_erase_unused!(interp, extra_worklist, compact, pop!(extra_worklist))
     end
 end
 
@@ -1384,9 +1384,9 @@ function non_dce_finish!(compact::IncrementalCompact)
     nothing
 end
 
-function finish(compact::IncrementalCompact)
+function finish(compact::IncrementalCompact, interp::AbstractInterpreter)
     non_dce_finish!(compact)
-    simple_dce!(compact)
+    simple_dce!(interp, compact)
     return complete(compact)
 end
 
@@ -1396,11 +1396,11 @@ function complete(compact::IncrementalCompact)
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
-function compact!(code::IRCode, allow_cfg_transforms::Bool=false)
+function compact!(code::IRCode, interp::AbstractInterpreter, allow_cfg_transforms::Bool=false)
     compact = IncrementalCompact(code, allow_cfg_transforms)
     # Just run through the iterator without any processing
     for _ in compact; end # _ isa Pair{Int, Any}
-    return finish(compact)
+    return finish(compact, interp)
 end
 
 struct BBIdxIter

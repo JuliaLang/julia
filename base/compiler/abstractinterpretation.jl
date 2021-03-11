@@ -150,7 +150,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 if const_result !== nothing
                     any_const_result = true
                 end
-                this_rt = tmerge(this_rt, rt)
+                this_rt = tmerge(interp, this_rt, rt)
                 if bail_out_call(interp, this_rt, sv)
                     break
                 end
@@ -176,7 +176,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         this_rt = widenwrappedconditional(this_rt)
         @assert !(this_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
         seen += 1
-        rettype = tmerge(rettype, this_rt)
+        rettype = tmerge(interp, rettype, this_rt)
         if this_conditional !== Bottom && is_lattice_bool(rettype) && fargs !== nothing
             if conditionals === nothing
                 conditionals = Any[Bottom for _ in 1:length(argtypes)],
@@ -189,12 +189,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     vtype = this_conditional.vtype
                     elsetype = this_conditional.elsetype
                 else
-                    elsetype = vtype = tmeet(argtypes[i], fieldtype(sig, i))
+                    elsetype = vtype = tmeet(interp, argtypes[i], fieldtype(sig, i))
                     condval === true && (elsetype = Union{})
                     condval === false && (vtype = Union{})
                 end
-                conditionals[1][i] = tmerge(conditionals[1][i], vtype)
-                conditionals[2][i] = tmerge(conditionals[2][i], elsetype)
+                conditionals[1][i] = tmerge(interp, conditionals[1][i], vtype)
+                conditionals[2][i] = tmerge(interp, conditionals[2][i], elsetype)
             end
         end
         if bail_out_call(interp, rettype, sv)
@@ -233,7 +233,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 elseif new_vtype ⊑ vtype
                     vtype = new_vtype
                 else
-                    vtype = tmeet(vtype, widenconst(new_vtype))
+                    vtype = tmeet(interp, vtype, widenconst(new_vtype))
                 end
                 new_elsetype = conditionals[2][i]
                 if condval === true
@@ -241,7 +241,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 elseif new_elsetype ⊑ elsetype
                     elsetype = new_elsetype
                 else
-                    elsetype = tmeet(elsetype, widenconst(new_elsetype))
+                    elsetype = tmeet(interp, elsetype, widenconst(new_elsetype))
                 end
                 if (slot > 0 || condval !== false) && !(old ⊑ vtype) # essentially vtype ⋤ old
                     slot = id
@@ -413,7 +413,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
             comparison = method.sig
         end
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
+        newsig = limit_type_size(interp, sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
@@ -453,7 +453,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         #     while !(newsig in seen)
         #         push!(seen, newsig)
         #         lsig = length((unwrap_unionall(sig)::DataType).parameters)
-        #         newsig = limit_type_size(newsig, sig, sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, lsig)
+        #         newsig = limit_type_size(interp, newsig, sig, sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, lsig)
         #         recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), newsig, method.sig)::SimpleVector
         #         newsig = recomputed[2]
         #     end
@@ -475,7 +475,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     mi === nothing && return Any, nothing
     # try constant prop'
     inf_cache = get_inference_cache(interp)
-    inf_result = cache_lookup(mi, argtypes, inf_cache)
+    inf_result = cache_lookup(interp, mi, argtypes, inf_cache)
     if inf_result === nothing
         if edgecycle
             # if there might be a cycle, check to make sure we don't end up
@@ -496,7 +496,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
                 end
             end
         end
-        inf_result = InferenceResult(mi, argtypes)
+        inf_result = InferenceResult(interp, mi, argtypes)
         frame = InferenceState(inf_result, #=cache=#false, interp)
         frame === nothing && return Any, nothing # this is probably a bad generated function (unsound), but just ignore it
         frame.parent = sv
@@ -720,7 +720,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
                 return Any[Vararg{Any}], nothing
             end
             for j in 1:length(t.parameters)
-                result[j] = tmerge(result[j], rewrap_unionall(t.parameters[j], tti0))
+                result[j] = tmerge(interp, result[j], rewrap_unionall(t.parameters[j], tti0))
             end
         end
         return result, nothing
@@ -785,13 +785,13 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         if !isa(stateordonet_widened, DataType) || !(stateordonet_widened <: Tuple) || isvatuple(stateordonet_widened) || length(stateordonet_widened.parameters) != 2
             break
         end
-        nstatetype = getfield_tfunc(stateordonet, Const(2))
+        nstatetype = getfield_tfunc(interp, stateordonet, Const(2))
         # If there's no new information in this statetype, don't bother continuing,
         # the iterator won't be finite.
         if nstatetype ⊑ statetype
             return Any[Bottom], nothing
         end
-        valtype = getfield_tfunc(stateordonet, Const(1))
+        valtype = getfield_tfunc(interp, stateordonet, Const(1))
         push!(ret, valtype)
         statetype = nstatetype
         call = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv)
@@ -817,8 +817,8 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
             end
             break
         end
-        valtype = tmerge(valtype, nounion.parameters[1])
-        statetype = tmerge(statetype, nounion.parameters[2])
+        valtype = tmerge(interp, valtype, nounion.parameters[1])
+        statetype = tmerge(interp, statetype, nounion.parameters[2])
     end
     push!(ret, Vararg{valtype})
     return ret, nothing
@@ -865,7 +865,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
                     argt = unwrapva(argt)
                 end
                 for i in 1:(length(cti)-1)
-                    argt = tmerge(argt, cti[i])
+                    argt = tmerge(interp, argt, cti[i])
                 end
                 cti = Any[Vararg{argt}]
             end
@@ -879,7 +879,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
                     # drop the info
                     info = nothing
 
-                    tail = tuple_tail_elem(unwrapva(ct[end]), cti)
+                    tail = tuple_tail_elem(interp, unwrapva(ct[end]), cti)
                     push!(ctypes´, push!(ct[1:(end - 1)], tail))
                 else
                     push!(ctypes´, append!(ct[:], cti))
@@ -899,14 +899,14 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
         # truncate argument list at the first Vararg
         for i = 1:lct-1
             if isvarargtype(ct[i])
-                ct[i] = tuple_tail_elem(ct[i], ct[(i+1):lct])
+                ct[i] = tuple_tail_elem(interp, ct[i], ct[(i+1):lct])
                 resize!(ct, i)
                 break
             end
         end
         call = abstract_call(interp, nothing, ct, sv, max_methods)
         push!(retinfos, ApplyCallInfo(call.info, arginfo))
-        res = tmerge(res, call.rt)
+        res = tmerge(interp, res, call.rt)
         if bail_out_apply(interp, res, sv)
             if i != length(ctypes)
                 # No point carrying forward the info, we're not gonna inline it anyway
@@ -986,12 +986,12 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 a = ssa_def_slot(fargs[3], sv)
                 b = ssa_def_slot(fargs[4], sv)
                 if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
-                    tx = (cnd.vtype ⊑ tx ? cnd.vtype : tmeet(tx, widenconst(cnd.vtype)))
+                    tx = (cnd.vtype ⊑ tx ? cnd.vtype : tmeet(interp, tx, widenconst(cnd.vtype)))
                 end
                 if isa(b, Slot) && slot_id(cnd.var) == slot_id(b)
-                    ty = (cnd.elsetype ⊑ ty ? cnd.elsetype : tmeet(ty, widenconst(cnd.elsetype)))
+                    ty = (cnd.elsetype ⊑ ty ? cnd.elsetype : tmeet(interp, ty, widenconst(cnd.elsetype)))
                 end
-                return tmerge(tx, ty)
+                return tmerge(interp, tx, ty)
             end
         end
     end
@@ -1016,7 +1016,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 elseif rt === Const(true)
                     return Conditional(a, aty, Union{})
                 end
-                tty_ub, isexact_tty = instanceof_tfunc(argtypes[3])
+                tty_ub, isexact_tty = instanceof_tfunc(interp, argtypes[3])
                 if isexact_tty && !isa(tty_ub, TypeVar)
                     tty_lb = tty_ub # TODO: this would be wrong if !isexact_tty, but instanceof_tfunc doesn't preserve this info
                     if !has_free_typevars(tty_lb) && !has_free_typevars(tty_ub)
@@ -1113,7 +1113,7 @@ end
 function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
     ft = widenconst(argtype_by_index(argtypes, 2))
     ft === Bottom && return CallMeta(Bottom, false)
-    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
+    (types, isexact, isconcrete, istype) = instanceof_tfunc(interp, argtype_by_index(argtypes, 3))
     types === Bottom && return CallMeta(Bottom, false)
     isexact || return CallMeta(Any, false)
     argtype = argtypes_to_type(argtype_tail(argtypes, 4))
@@ -1172,7 +1172,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif la == 3
             ub_var = argtypes[3]
         end
-        return CallMeta(typevar_tfunc(n, lb_var, ub_var), false)
+        return CallMeta(typevar_tfunc(interp, n, lb_var, ub_var), false)
     elseif f === UnionAll
         return CallMeta(abstract_call_unionall(argtypes), false)
     elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
@@ -1247,14 +1247,14 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     return CallMeta(rt, info)
 end
 
-function most_general_argtypes(closure::PartialOpaque)
+function most_general_argtypes(interp::AbstractInterpreter, closure::PartialOpaque)
     ret = Any[]
     cc = widenconst(closure)
     argt = unwrap_unionall(cc).parameters[1]
     if !isa(argt, DataType) || argt.name !== typename(Tuple)
         argt = Tuple
     end
-    return most_general_argtypes(closure.source, argt, closure.isva, false)
+    return most_general_argtypes(interp, closure.source, argt, closure.isva, false)
 end
 
 # call where the function is any lattice element
@@ -1406,7 +1406,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             t = callinfo.rt
         end
     elseif e.head === :new
-        t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
+        t = instanceof_tfunc(interp, abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
         if isconcretetype(t) && !t.mutable
             args = Vector{Any}(undef, length(e.args)-1)
             ats = Vector{Any}(undef, length(e.args)-1)
@@ -1443,7 +1443,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             end
         end
     elseif e.head === :splatnew
-        t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
+        t = instanceof_tfunc(interp, abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
         if length(e.args) == 2 && isconcretetype(t) && !t.mutable
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
@@ -1463,13 +1463,13 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             if argtypes === nothing
                 t = Bottom
             else
-                t = _opaque_closure_tfunc(argtypes[1], argtypes[2], argtypes[3],
+                t = _opaque_closure_tfunc(interp, argtypes[1], argtypes[2], argtypes[3],
                     argtypes[4], argtypes[5], argtypes[6:end], sv.linfo)
                 if isa(t, PartialOpaque)
                     # Infer this now so that the specialization is available to
                     # optimization.
                     callinfo = abstract_call_opaque_closure(interp, t,
-                        most_general_argtypes(t), sv)
+                        most_general_argtypes(interp, t), sv)
                     sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
                 end
             end
@@ -1695,7 +1695,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         changes_else = conditional_changes(changes_else, condt.elsetype, condt.var)
                         changes      = conditional_changes(changes,      condt.vtype,    condt.var)
                     end
-                    newstate_else = stupdate!(s[l], changes_else)
+                    newstate_else = stupdate!(interp, s[l], changes_else)
                     if newstate_else !== nothing
                         # add else branch to active IP list
                         if l < frame.pc´´
@@ -1731,7 +1731,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
                 if tchanged(rt, bestguess)
                     # new (wider) return type for frame
-                    bestguess = tmerge(bestguess, rt)
+                    bestguess = tmerge(interp, bestguess, rt)
                     # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
                     frame.bestguess = bestguess
                     for (caller, caller_pc) in frame.cycle_backedges
@@ -1751,7 +1751,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 frame.cur_hand = Pair{Any,Any}(l, frame.cur_hand)
                 # propagate type info to exception handler
                 old = s[l]
-                newstate_catch = stupdate!(old, changes)
+                newstate_catch = stupdate!(interp, old, changes)
                 if newstate_catch !== nothing
                     if l < frame.pc´´
                         frame.pc´´ = l
@@ -1799,7 +1799,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # the handling for Expr(:enter) propagates all changes from before the try/catch
                     # so this only needs to propagate any changes
                     l = frame.cur_hand.first::Int
-                    if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
+                    if stupdate1!(interp, s[l]::VarTable, changes::StateUpdate) !== false
                         if l < frame.pc´´
                             frame.pc´´ = l
                         end
@@ -1817,7 +1817,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
             pc´ > n && break # can't proceed with the fast-path fall-through
             frame.handler_at[pc´] = frame.cur_hand
-            newstate = stupdate!(s[pc´], changes)
+            newstate = stupdate!(interp, s[pc´], changes)
             if isa(stmt, GotoNode) && frame.pc´´ < pc´
                 # if we are processing a goto node anyways,
                 # (such as a terminator for a loop, if-else, or try block),

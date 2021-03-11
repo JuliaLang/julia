@@ -559,7 +559,7 @@ function compute_live_ins(cfg::CFG, defuse)
     BlockLiveness(bb_defs, bb_uses)
 end
 
-function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Vector{Any}, slottypes::Vector{Any})
+function recompute_type(interp::AbstractInterpreter, node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Vector{Any}, slottypes::Vector{Any})
     new_typ = Union{}
     for i = 1:length(node.values)
         if isa(node, PhiNode) && !isassigned(node.values, i)
@@ -578,13 +578,13 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
         while isa(typ, DelayedTyp)
             typ = types(ir)[typ.phi::NewSSAValue]
         end
-        new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
+        new_typ = tmerge(interp, new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
     end
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int,
-                        slottypes::Vector{Any})
+function construct_ssa!(interp::AbstractInterpreter, ci::CodeInfo, ir::IRCode,
+                        domtree::DomTree, defuse, nargs::Int, slottypes::Vector{Any})
     code = ir.stmts.inst
     cfg = ir.cfg
     left = Int[]
@@ -719,7 +719,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)
             end
-            new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(old_entry[:type], typ)
+            new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(interp, old_entry[:type], typ)
             old_entry[:type] = new_typ
             old_entry[:inst] = node
             incoming_vals[slot] = ssaval
@@ -852,7 +852,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 while isa(typ, DelayedTyp)
                     typ = types(ir)[typ.phi::NewSSAValue]
                 end
-                new_typ = tmerge(new_typ, typ)
+                new_typ = tmerge(interp, new_typ, typ)
             end
             node[:type] = new_typ
         end
@@ -865,7 +865,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         changed = false
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
-            new_typ = recompute_type(node[:inst], ci, ir, ir.sptypes, slottypes)
+            new_typ = recompute_type(interp, node[:inst], ci, ir, ir.sptypes, slottypes)
             if !(node[:type] ⊑ new_typ) || !(new_typ ⊑ node[:type])
                 node[:type] = new_typ
                 changed = true

@@ -221,7 +221,7 @@ function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceStat
         # typically, we expect that old ⊑ new (that output information only
         # gets less precise with worse input information), but to actually
         # guarantee convergence we need to use tmerge here to ensure that is true
-        frame.src.ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
+        frame.src.ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(frame.interp, old, new)
         W = frame.ip
         s = frame.stmt_types
         for r in frame.ssavalue_uses[ssa_id]
