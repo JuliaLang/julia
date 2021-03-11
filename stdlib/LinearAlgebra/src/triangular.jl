@@ -1809,9 +1809,9 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     n = size(A0, 1)
     # allocate real A if log(A) will be real and complex A otherwise
     if isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
-        A = eltype(A0) <: Complex ? real(A0) : copy(A0)
+        A = T <: Complex ? real(A0) : copy(A0)
     else
-        A = eltype(A0) <: Complex ? copy(A0) : complex(A0)
+        A = T <: Complex ? copy(A0) : complex(A0)
     end
     if A0 isa UnitUpperTriangular
         A = UpperTriangular(parent(A))
@@ -1935,7 +1935,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     _log_diag_quasitriu!(Y, A0)
 
     # return complex result for complex input
-    Yc = eltype(A0) <: Complex ? complex(Y) : Y
+    Yc = T <: Complex ? complex(Y) : Y
 
     if A0 isa UpperTriangular || A0 isa UnitUpperTriangular
         return UpperTriangular(Yc)
