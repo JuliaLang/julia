@@ -2288,6 +2288,6 @@ end
 end
 
 @testset "printing inline n-dimensional arrays" begin
-    @test replstr([Int64[1 2 3 ;;; 4 5 6]]) == "1-element Vector{Array{$(Int), 3}}:\n [1 2 3;;; 4 5 6]"
+    @test replstr([Int[1 2 3 ;;; 4 5 6]]) == "1-element Vector{Array{$(Int), 3}}:\n [1 2 3;;; 4 5 6]"
     @test replstr([fill(1, (20,20,20))]) == "1-element Vector{Array{$(Int), 3}}:\n [1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; … ;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1]"
 end
