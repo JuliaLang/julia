@@ -492,3 +492,12 @@ end
 
 @test @inferred(count(false:true, dims=:, init=0x0004)) === 0x0005
 @test @inferred(count(isodd, reshape(1:9, 3, 3), dims=:, init=Int128(0))) === Int128(5)
+
+@testset "reduced_index for BigInt (issue #39995)" begin
+    r = big(1):big(2)
+    ax = axes(r, 1)
+    axred = Base.reduced_index(ax)
+    @test axred == Base.OneTo(1)
+    @test typeof(axred) === typeof(ax)
+    @test reduce(+, r, dims = 1) == [3]
+end
