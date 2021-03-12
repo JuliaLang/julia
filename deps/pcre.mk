@@ -18,7 +18,7 @@ $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).ta
 	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/Makefile.am
 	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/Makefile.in
 	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/configure
-	echo $1 > $@
+	echo 1 > $@
 
 checksum-pcre2: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
