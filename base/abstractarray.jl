@@ -2406,7 +2406,7 @@ function hash(A::AbstractArray, h::UInt)
 
     # For short arrays, it's not worth doing anything complicated
     if length(A) < 8192
-        @inbounds for x in A
+        for x in A
             h = hash(x,h)
         end
         return h
