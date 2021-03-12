@@ -1674,14 +1674,18 @@
                          `(scope-block ,body))))
                `(block (= ,coll ,(car itrs))
                        (local ,next)
+                       (inbounds (true))
                        (= ,next (call (top iterate) ,coll))
+                       (inbounds pop)
                        ;; TODO avoid `local declared twice` error from this
                        ;;,@(if outer `((local ,lhs)) '())
                        ,@(if outer `((require-existing-local ,lhs)) '())
                        (if (call (top not_int) (call (core ===) ,next (null)))
-                           (_do_while
-			    (block ,body
-				   (= ,next (call (top iterate) ,coll ,state)))
+                         (_do_while
+                           (block ,body
+                                  (inbounds (true))
+                                  (= ,next (call (top iterate) ,coll ,state))
+                                  (inbounds pop))
 			    (call (top not_int) (call (core ===) ,next (null))))))))))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
