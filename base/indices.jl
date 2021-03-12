@@ -394,7 +394,12 @@ last(S::IdentityUnitRange) = last(S.indices)
 size(S::IdentityUnitRange) = (length(S.indices),)
 length(S::IdentityUnitRange) = length(S.indices)
 unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
-getindex(S::IdentityUnitRange, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+function getindex(S::IdentityUnitRange, i::Integer)
+    @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+    @boundscheck checkbounds(S, i)
+    i
+end
 getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")

@@ -279,6 +279,16 @@ end
         end
         R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+
+        @testset "indexing with Integers (issue #39997)" begin
+            r = Base.IdentityUnitRange(1:1000)
+            val = r[5]
+            for T in [Int8, Int16, Int32, Int64, Int128, BigInt]
+                @test r[T(5)] == val
+            end
+            # indexing with a single Bool should throw an error
+            @test_throws ArgumentError r[true]
+        end
     end
 end
 
