@@ -1827,6 +1827,9 @@ JL_DLLEXPORT void JL_NORETURN jl_sig_throw(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
 
+typedef void *(*jl_task_switch_hook_t)(jl_task_t *t JL_PROPAGATES_ROOT);
+JL_DLLEXPORT void jl_hook_task_switch(jl_task_switch_hook_t hook);
+
 #include "locks.h"   // requires jl_task_t definition
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
