@@ -299,6 +299,31 @@ function task_local_storage(body::Function, key, val)
     end
 end
 
+# N.B. `task` must either be the current task, or a known-stopped task
+function attach_task_hook!(task::Task, hook::Ptr{Cvoid})
+    if task.hooks === nothing
+        hooks = Ptr{Cvoid}[]
+        task.hooks = hooks
+    else
+        hooks = task.hooks
+    end
+    if findfirst(==(hook), hooks) === nothing
+        push!(hooks, hook)
+    end
+    return
+end
+attach_task_hook!(hook::Ptr{Cvoid}) = attach_task_hook!(current_task(), hook)
+
+function detach_task_hook!(task::Task, hook::Ptr{Cvoid})
+    if task.hooks === nothing
+        return
+    end
+    hooks = task.hooks::Vector{Ptr{Cvoid}}
+    deleteat!(hooks, findall(==(hook), hooks))
+    return
+end
+detach_task_hook!(hook::Ptr{Cvoid}) = detach_task_hook!(current_task(), hook)
+
 # just wait for a task to be done, no error propagation
 function _wait(t::Task)
     if !istaskdone(t)

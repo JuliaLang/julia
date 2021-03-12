@@ -1925,6 +1925,7 @@ typedef struct _jl_task_t {
     // 4 byte padding on 32-bit systems
     // uint32_t padding0;
     uint64_t rngState[JL_RNG_SIZE];
+    jl_value_t *hooks;
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
@@ -1978,6 +1979,9 @@ JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
+
+typedef void *(*jl_task_switch_hook_t)(uint8_t is_switch,
+                                       jl_value_t *t JL_PROPAGATES_ROOT);
 
 #include "julia_locks.h"   // requires jl_task_t definition
 

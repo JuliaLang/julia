@@ -290,9 +290,35 @@ JL_NO_ASAN static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *l
 /* Rooted by the base module */
 static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
+void run_task_hooks(uint8_t code, jl_value_t *t)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_array_t *hooks = (jl_array_t *)ct->hooks;
+    if ((jl_value_t *)hooks != jl_nothing) {
+        jl_ptls_t ptls = ct->ptls;
+        int last_in = ptls->in_pure_callback;
+        ptls->in_pure_callback = 1;
+        for (int i = 0; i < jl_array_len(hooks); i++) {
+            jl_task_switch_hook_t hook =
+                ((jl_task_switch_hook_t *)jl_array_data(hooks))[i];
+            JL_TRY {
+                hook(code, t);
+            }
+            JL_CATCH {
+                jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: task hook threw an error:\n");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
+            }
+        }
+        ptls->in_pure_callback = last_in;
+    }
+}
+
 void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
     jl_task_t *ct = jl_current_task;
+    run_task_hooks(4, jl_nothing);
     JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
     if (jl_atomic_load_relaxed(&t->_isexception))
@@ -635,9 +661,11 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
     if (ptls->in_pure_callback)
-        jl_error("task switch not allowed from inside staged nor pure functions");
+        jl_error("task switch not allowed from inside staged nor pure functions or callbacks");
     if (!jl_set_task_tid(t, jl_atomic_load_relaxed(&ct->tid))) // manually yielding to a task
         jl_error("cannot switch to task running on another thread");
+
+    run_task_hooks(2, jl_nothing);
 
     JL_PROBE_RT_PAUSE_TASK(ct);
 
@@ -688,6 +716,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
         jl_sigint_safepoint(ptls);
 
     JL_PROBE_RT_RUN_TASK(ct);
+    run_task_hooks(3, jl_nothing);
     jl_gc_unsafe_leave(ptls, gc_state);
 }
 
@@ -1078,6 +1107,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->next = jl_nothing;
     t->queue = jl_nothing;
     t->tls = jl_nothing;
+    t->hooks = jl_nothing;
     jl_atomic_store_relaxed(&t->_state, JL_TASK_STATE_RUNNABLE);
     t->start = start;
     t->result = jl_nothing;
@@ -1119,6 +1149,11 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 #ifdef _COMPILER_ASAN_ENABLED_
     t->ctx.asan_fake_stack = NULL;
 #endif
+
+    JL_GC_PUSH1(&t);
+    run_task_hooks(0, (jl_value_t *)t);
+    JL_GC_POP();
+
     return t;
 }
 
@@ -1234,6 +1269,9 @@ CFI_NORETURN
 
     ct->started = 1;
     JL_PROBE_RT_START_TASK(ct);
+
+    run_task_hooks(1, jl_nothing);
+
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&ct->excstack, ct->result,
@@ -1670,6 +1708,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->next = jl_nothing;
     ct->queue = jl_nothing;
     ct->tls = jl_nothing;
+    ct->hooks = jl_nothing;
     jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     ct->start = NULL;
     ct->result = jl_nothing;

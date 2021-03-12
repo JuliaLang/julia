@@ -179,7 +179,7 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
         yield()
         gf_err_ref[] += 1000
     end
-    Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
+    Expected = ErrorException("task switch not allowed from inside staged nor pure functions or callbacks")
     @test_throws Expected gf_err()
     @test_throws Expected gf_err()
     @test gf_err_ref[] == 4
