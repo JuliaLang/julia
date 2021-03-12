@@ -182,3 +182,10 @@ end
 end
 @test isa(oc_trivial_generated(), Core.OpaqueClosure{Tuple{}, Any})
 @test oc_trivial_generated()() == 1
+
+# Constprop through varargs OpaqueClosure
+function oc_varargs_constprop()
+    oc = @opaque (args...)->args[1]+args[2]+args[3]
+    return Val{oc(1,2,3)}()
+end
+Base.return_types(oc_varargs_constprop, Tuple{}) == Any[Val{6}]

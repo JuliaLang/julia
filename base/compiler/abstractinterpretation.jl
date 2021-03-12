@@ -142,7 +142,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     push!(edges, edge)
                 end
                 this_argtypes = applicable_argtypes === nothing ? argtypes : applicable_argtypes[i]
-                const_rt, const_result = abstract_call_method_with_const_args(interp, rt, f, this_argtypes, match, sv, edgecycle)
+                const_rt, const_result = abstract_call_method_with_const_args(interp, rt, f, this_argtypes, match, sv, edgecycle, false)
                 if const_rt !== rt && const_rt ⊑ rt
                     rt = const_rt
                 end
@@ -163,7 +163,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
             this_argtypes = applicable_argtypes === nothing ? argtypes : applicable_argtypes[i]
-            const_this_rt, const_result = abstract_call_method_with_const_args(interp, this_rt, f, this_argtypes, match, sv, edgecycle)
+            const_this_rt, const_result = abstract_call_method_with_const_args(interp, this_rt, f, this_argtypes, match, sv, edgecycle, false)
             if const_this_rt !== this_rt && const_this_rt ⊑ this_rt
                 this_rt = const_this_rt
             end
@@ -470,7 +470,8 @@ end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nospecialize(rettype),
                                               @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
-                                              sv::InferenceState, edgecycle::Bool)
+                                              sv::InferenceState, edgecycle::Bool,
+                                              va_override::Bool)
     mi = maybe_get_const_prop_profitable(interp, rettype, f, argtypes, match, sv, edgecycle)
     mi === nothing && return Any, nothing
     # try constant prop'
@@ -496,7 +497,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
                 end
             end
         end
-        inf_result = InferenceResult(mi, argtypes)
+        inf_result = InferenceResult(mi, argtypes, va_override)
         frame = InferenceState(inf_result, #=cache=#false, interp)
         frame === nothing && return Any, nothing # this is probably a bad generated function (unsound), but just ignore it
         frame.parent = sv
@@ -1236,7 +1237,9 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     rt, edgecycle, edge = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, sv)
     info = OpaqueClosureCallInfo(edge)
     if !edgecycle
-        const_rettype, result = abstract_call_method_with_const_args(interp, rt, closure, argtypes, MethodMatch(sig, Core.svec(), closure.source::Method, false), sv, edgecycle)
+        const_rettype, result = abstract_call_method_with_const_args(interp, rt, closure, argtypes,
+            MethodMatch(sig, Core.svec(), closure.source::Method, false),
+            sv, edgecycle, closure.isva)
         if const_rettype ⊑ rt
            rt = const_rettype
         end
