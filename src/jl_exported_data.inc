@@ -12,6 +12,7 @@
     XX(jl_argumenterror_type) \
     XX(jl_array_any_type) \
     XX(jl_array_int32_type) \
+    XX(jl_array_voidpointer_type) \
     XX(jl_array_symbol_type) \
     XX(jl_array_type) \
     XX(jl_array_typename) \

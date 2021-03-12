@@ -484,9 +484,7 @@ jl_array_t *jl_task_switch_hooks JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT void jl_hook_task_switch(jl_task_switch_hook_t hook)
 {
     if (jl_task_switch_hooks == NULL) {
-        jl_value_t *array_ptr_void_type = jl_apply_type2(
-            (jl_value_t *)jl_array_type, (jl_value_t *)jl_voidpointer_type, jl_box_long(1));
-        jl_task_switch_hooks = jl_alloc_array_1d(array_ptr_void_type, 0);
+        jl_task_switch_hooks = jl_alloc_array_1d(jl_array_voidpointer_type, 0);
     }
     jl_array_grow_end(jl_task_switch_hooks, 1);
     ((jl_task_switch_hook_t *)jl_array_data(
