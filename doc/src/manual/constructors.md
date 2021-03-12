@@ -490,7 +490,7 @@ The first and most basic definition just makes `a ⊘ b` construct a `OurRationa
 is already a rational number, we construct a new rational for the resulting ratio slightly differently;
 this behavior is actually identical to division of a rational with an integer.
 Finally, applying
-`⊘` to complex integral values creates an instance of `Complex{OurRational}` -- a complex
+`⊘` to complex integral values creates an instance of `Complex{<:OurRational}` -- a complex
 number whose real and imaginary parts are rationals:
 
 ```jldoctest rational
@@ -499,12 +499,12 @@ julia> z = (1 + 2im) ⊘ (1 - 2im);
 julia> typeof(z)
 Complex{OurRational{Int64}}
 
-julia> typeof(z) <: Complex{OurRational}
-false
+julia> typeof(z) <: Complex{<:OurRational}
+true
 ```
 
 Thus, although the `⊘` operator usually returns an instance of `OurRational`, if either
-of its arguments are complex integers, it will return an instance of `Complex{OurRational}` instead.
+of its arguments are complex integers, it will return an instance of `Complex{<:OurRational}` instead.
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
 
