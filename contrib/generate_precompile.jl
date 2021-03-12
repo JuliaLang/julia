@@ -141,9 +141,9 @@ if Artifacts !== nothing
     precompile_script *= """
     using Artifacts, Base.BinaryPlatforms, Libdl
     artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
-    # cd(() -> (name = "c_simple"; @artifact_str(name)), dirname(artifacts_toml))
+    # cd(() -> (name = "HelloWorldC"; @artifact_str(name)), dirname(artifacts_toml))
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
-    platforms = [Artifacts.unpack_platform(e, "c_simple", artifacts_toml) for e in artifacts["c_simple"]]
+    platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
     dlopen("libjulia$(ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
