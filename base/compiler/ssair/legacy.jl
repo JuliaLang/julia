@@ -3,7 +3,7 @@
 function inflate_ir(interp::AbstractInterpreter, ci::CodeInfo, linfo::MethodInstance)
     sptypes = sptypes_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = matching_cache_argtypes(interp, linfo, nothing)
+        argtypes, _ = matching_cache_argtypes(interp, linfo, nothing, false)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end

@@ -828,7 +828,7 @@ let ε=1, μ=2, x=3, î=4
     @test µ == μ == 2
     # NFC normalization of identifiers:
     @test Meta.parse("\u0069\u0302") === Meta.parse("\u00ee")
-    @test î == 4
+    @test î == 4
     # latin vs greek ε (#14751)
     @test Meta.parse("\u025B") === Meta.parse("\u03B5")
     @test ɛ == ε == 1
@@ -2726,6 +2726,21 @@ end
 # issue #39705
 @eval f39705(x) = $(Expr(:||)) && x
 @test f39705(1) === false
+
+
+struct A x end
+Base.dotgetproperty(::A, ::Symbol) = [0, 0, 0]
+
+@testset "dotgetproperty" begin
+    a = (x = [1, 2, 3],)
+    @test @inferred((a -> a.x .+= 1)(a)) == [2, 3, 4]
+
+    b = [1, 2, 3]
+    @test A(b).x === b
+    @test begin A(b).x .= 1 end == [1, 1, 1]
+    @test begin A(b).x .+= 1 end == [2, 3, 4]
+    @test b == [1, 2, 3]
+end
 
 @test Meta.@lower((::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
 @test Meta.@lower((::T,) = x) == Expr(:error, "invalid assignment location \"::T\"")

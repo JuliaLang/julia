@@ -8,7 +8,7 @@ const lno = LineNumberNode(1, :none)
 let ci = @code_lowered const_int()
     @eval function oc_trivial()
         $(Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
-            Expr(:opaque_closure_method, 0, lno, ci)))
+            Expr(:opaque_closure_method, nothing, 0, lno, ci)))
     end
 end
 @test isa(oc_trivial(), Core.OpaqueClosure{Tuple{}, Any})
@@ -17,7 +17,7 @@ end
 let ci = @code_lowered const_int()
     @eval function oc_simple_inf()
         $(Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any,
-            Expr(:opaque_closure_method, 0, lno, ci)))
+            Expr(:opaque_closure_method, nothing, 0, lno, ci)))
     end
 end
 @test isa(oc_simple_inf(), Core.OpaqueClosure{Tuple{}, Int})
@@ -31,7 +31,7 @@ end
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_trivial_clos()
         $(Expr(:new_opaque_closure, Tuple{}, false, Int, Int,
-            Expr(:opaque_closure_method, 0, lno, ci),
+            Expr(:opaque_closure_method, nothing, 0, lno, ci),
             1, 2))
     end
 end
@@ -40,7 +40,7 @@ end
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_self_call_clos()
         $(Expr(:new_opaque_closure, Tuple{}, false, Int, Int,
-            Expr(:opaque_closure_method, 0, lno, ci),
+            Expr(:opaque_closure_method, nothing, 0, lno, ci),
             1, 2))()
     end
 end
@@ -57,7 +57,7 @@ end
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_pass_clos(x)
         $(Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
-            Expr(:opaque_closure_method, 0, lno, ci),
+            Expr(:opaque_closure_method, nothing, 0, lno, ci),
             :x))
     end
 end
@@ -67,7 +67,7 @@ end
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_infer_pass_clos(x)
         $(Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any,
-            Expr(:opaque_closure_method, 0, lno, ci),
+            Expr(:opaque_closure_method, nothing, 0, lno, ci),
             :x))
     end
 end
@@ -79,7 +79,7 @@ end
 let ci = @code_lowered identity(1)
     @eval function oc_infer_pass_id()
         $(Expr(:new_opaque_closure, Tuple{Any}, false, Any, Any,
-            Expr(:opaque_closure_method, 1, lno, ci)))
+            Expr(:opaque_closure_method, nothing, 1, lno, ci)))
     end
 end
 function complicated_identity(x)
@@ -101,7 +101,7 @@ end
 let ci = @code_lowered OcOpt([1 2])()
     @eval function oc_opt_ndims(A)
         $(Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any,
-            Expr(:opaque_closure_method, 0, lno, ci),
+            Expr(:opaque_closure_method, nothing, 0, lno, ci),
             :A))
     end
 end
@@ -160,7 +160,7 @@ mk_va_opaque() = @opaque (x...)->x
 function mk_ocg(args...)
     ci = @code_lowered const_int()
     cig = Meta.lower(@__MODULE__, Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
-        Expr(:opaque_closure_method, 0, lno, ci))).args[1]
+        Expr(:opaque_closure_method, nothing, 0, lno, ci))).args[1]
     cig.slotnames = Symbol[Symbol("#self#")]
     cig.slottypes = Any[Any]
     cig.slotflags = UInt8[0x00]
@@ -182,3 +182,10 @@ end
 end
 @test isa(oc_trivial_generated(), Core.OpaqueClosure{Tuple{}, Any})
 @test oc_trivial_generated()() == 1
+
+# Constprop through varargs OpaqueClosure
+function oc_varargs_constprop()
+    oc = @opaque (args...)->args[1]+args[2]+args[3]
+    return Val{oc(1,2,3)}()
+end
+Base.return_types(oc_varargs_constprop, Tuple{}) == Any[Val{6}]

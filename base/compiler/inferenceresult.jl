@@ -13,12 +13,12 @@ end
 # for the provided `linfo` and `given_argtypes`. The purpose of this function is
 # to return a valid value for `cache_lookup(interp, linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
-function matching_cache_argtypes(interp::AbstractInterpreter, linfo::MethodInstance, given_argtypes::Vector)
+function matching_cache_argtypes(interp::AbstractInterpreter, linfo::MethodInstance, given_argtypes::Vector, va_override)
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
     @assert length(given_argtypes) >= (nargs - 1)
     given_argtypes = anymap(widenconditional, given_argtypes)
-    if linfo.def.isva
+    if va_override || linfo.def.isva
         isva_given_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs - 1)
             isva_given_argtypes[i] = argtype_by_index(given_argtypes, i)
@@ -30,7 +30,7 @@ function matching_cache_argtypes(interp::AbstractInterpreter, linfo::MethodInsta
         end
         given_argtypes = isva_given_argtypes
     end
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(interp, linfo, nothing)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(interp, linfo, nothing, va_override)
     if nargs === length(given_argtypes)
         for i in 1:nargs
             given_argtype = given_argtypes[i]
@@ -134,10 +134,10 @@ function most_general_argtypes(interp::AbstractInterpreter, method::Union{Method
     cache_argtypes
 end
 
-function matching_cache_argtypes(interp::AbstractInterpreter, linfo::MethodInstance, ::Nothing)
+function matching_cache_argtypes(interp::AbstractInterpreter, linfo::MethodInstance, ::Nothing, va_override::Bool)
     mthd = isa(linfo.def, Method) ? linfo.def::Method : nothing
-    cache_argtypes = most_general_argtypes(interp, mthd, linfo.specTypes, isa(mthd, Method) ?
-            mthd.isva : false)
+    cache_argtypes = most_general_argtypes(interp, mthd, linfo.specTypes,
+        va_override || (isa(mthd, Method) ? mthd.isva : false))
     return cache_argtypes, falses(length(cache_argtypes))
 end
 
