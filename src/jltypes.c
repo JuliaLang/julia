@@ -397,7 +397,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
         int has_free = temp[i]!=NULL && jl_has_free_typevars(temp[i]);
         for(j=0; j < nt; j++) {
             if (j != i && temp[i] && temp[j]) {
-                if (temp[i] == temp[j] || temp[i] == jl_bottom_type ||
+                if (temp[i] == jl_bottom_type ||
                     temp[j] == (jl_value_t*)jl_any_type ||
                     jl_egal(temp[i], temp[j]) ||
                     (!has_free && !jl_has_free_typevars(temp[j]) &&

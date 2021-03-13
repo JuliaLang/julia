@@ -1296,7 +1296,25 @@ STATIC_INLINE int jl_is_array_zeroinit(jl_array_t *a) JL_NOTSAFEPOINT
 
 // object identity
 JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__bits(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__special(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
+
+STATIC_INLINE int jl_egal_(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
+{
+    if (a == b)
+        return 1;
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
+    if (dt != (jl_datatype_t*)jl_typeof(b))
+        return 0;
+    if (dt->mutabl) {
+        if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
+            return jl_egal__special(a, b, dt);
+        return 0;
+    }
+    return jl_egal__bits(a, b, dt);
+}
+#define jl_egal(a, b) jl_egal_((a), (b))
 
 // type predicates and basic operations
 JL_DLLEXPORT int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
