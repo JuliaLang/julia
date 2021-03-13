@@ -441,3 +441,15 @@ for T = (UInt, BigInt)
         @test findprev(isletter, astr, T(x)) isa Int
     end
 end
+
+# Issue #40006
+@testset "sign-sensitive find functions" begin
+    @test findfirst(==(Int8(-1)), [0xff]) === nothing
+    @test findnext(==(Int8(-1)), [0xff], 1) === nothing
+    @test findlast(==(Int8(-1)), [0xff]) === nothing
+    @test findprev(==(Int8(-1)), [0xff], 1) === nothing
+    @test findfirst(Int8[-1], [0xff]) === nothing
+    @test findnext(Int8[-1], [0xff], 1) === nothing
+    @test findlast(Int8[-1], [0xff]) === nothing
+    @test findprev(Int8[-1], [0xff], 1) === nothing
+end

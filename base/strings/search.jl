@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const Byte = Union{Int8,UInt8}
+const ByteArray{T<:Byte} = Vector{T}
+
 nothing_sentinel(i) = i == 0 ? nothing : i
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
@@ -19,13 +22,13 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
 end
 
-findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
+findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},T}, a::ByteArray{T}) where T<:Byte =
     nothing_sentinel(_search(a, pred.x))
 
-findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
+findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},T}, a::ByteArray{T}, i::Integer) where T<:Byte =
     nothing_sentinel(_search(a, pred.x, i))
 
-function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
+function _search(a::Union{String,ByteArray}, b::Byte, i::Integer = 1)
     if i < 1
         throw(BoundsError(a, i))
     end
@@ -59,13 +62,13 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
 end
 
-findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
+findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},T}, a::ByteArray{T}) where T<:Byte =
     nothing_sentinel(_rsearch(a, pred.x))
 
-findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
+findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:T}, a::ByteArray{T}, i::Integer) where T<:Byte =
     nothing_sentinel(_rsearch(a, pred.x, i))
 
-function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
+function _rsearch(a::Union{String,ByteArray}, b::Byte, i::Integer = sizeof(a))
     if i < 1
         return i == 0 ? 0 : throw(BoundsError(a, i))
     end
