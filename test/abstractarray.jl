@@ -1288,16 +1288,17 @@ end
             @test arr[inds] isa AbstractVector{eltype(arr)}
         end
     end
+    
+    for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
+        @test arr[true:true] == [arr[1]]
+        @test arr[true:true] isa AbstractVector{eltype(arr)}
+        @test arr[false:false] == []
+        @test arr[false:false] isa AbstractVector{eltype(arr)}
+    end
+    
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        @test_throws BoundsError arr[true:true]
+        @test_throws BoundsError arr[false:false]
+    end
 
-for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
-    @test arr[true:true] == [arr[1]]
-    @test arr[true:true] isa AbstractVector{eltype(arr)}
-    @test arr[false:false] == []
-    @test arr[false:false] isa AbstractVector{eltype(arr)}
-end
-for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
-    @test_throws BoundsError arr[true:true]
-    @test_throws BoundsError arr[false:false]
-end
-
-end
+    end
