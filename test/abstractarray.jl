@@ -1299,4 +1299,3 @@ end
         @test_throws BoundsError arr[false:false]
     end
 end
-
