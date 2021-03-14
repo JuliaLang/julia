@@ -2,6 +2,15 @@
 
 # extensions to Core types to add features in Base
 
+"""
+    VecElement{T}
+
+Element type of vectors with elements of type `T`. Homogeneous tuples with
+this type element represent a SIMD (single instruction, multiple data) vector
+(e.g., `NTuple{4,VecElement{Float32}}`).
+"""
+VecElement
+
 # hook up VecElement constructor to Base.convert
 VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
