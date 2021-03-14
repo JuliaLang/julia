@@ -1283,30 +1283,19 @@ end
 
 @testset "issue #39896, modified getindex " begin
     #Testing types holds for the range types in Base that use 1-based indexing
-    a=collect(1:10)
-    ax=axes(a,1)
-    @test a==a[ax]
-    @test typeof(a)===typeof(a[ax])
-    a=reshape(collect(1:100),(10,10))
-    @test a[2:5]==2:5
-    a=collect(1:10)
-    ax=Base.OneTo(8)
-    @test a[1:8]==a[ax]
-    @test typeof(a[1:8])===typeof(a[ax])
-    a=reshape(collect(1:100),(10,10))
-    @test a[1:8,1]==a[ax,1]
-    @test typeof(a[1:8,1])===typeof(a[ax,1])
-    ax=UnitRange(1,10)
-    @test a[ax]==1:10
-    a=collect(1:BigInt(10))
-    ax=1:BigInt(10)
-    @test a[ax]==1:BigInt(10)
-    a=reshape(collect(1:BigInt(100)),(10,10))
-    @test a[ax]==1:BigInt(10)
-    a=collect(1:UInt(10))
-    ax=1:UInt(10)
-    @test a[ax]==1:UInt(10)
-    a=reshape(collect(1:UInt(100)),(10,10))
-    @test a[ax]==1:UInt(10)
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3))
+            @test arr[inds] == arr[collect(inds)]
+            @test eltype(arr[inds]) === eltype(arr)
+            @test ndims(arr[inds])==1
+            @test arr[inds] isa AbstractVector{eltype(arr)}
+        end
+    end
+    
+    arr=[[1],[1,2]]
+    inds=[false:false,true:true]
+    @test arr[1][inds[1]]==[]
+    @test arr[1][inds[2]]==[arr[1][1]]
+    @test_throws BoundsError  arr[2][inds[1]]
+    @test_throws BoundsError  arr[2][inds[2]] 
 end
-

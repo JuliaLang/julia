@@ -813,6 +813,9 @@ function getindex(A::Array, I::AbstractUnitRange{<:Integer})
     end
     return X
 end
+
+getindex(a::Array, r::AbstractUnitRange{Bool}) = getindex(a, to_index(r))
+
 function getindex(A::Array, c::Colon)
     lI = length(A)
     X = similar(A, lI)
