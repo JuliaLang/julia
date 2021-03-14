@@ -1293,7 +1293,7 @@ end
         @test arr[true:true] isa AbstractVector{eltype(arr)}
         @test arr[false:false] == []
         @test arr[false:false] isa AbstractVector{eltype(arr)}
-    end 
+    end
     for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
         @test_throws BoundsError arr[true:true]
         @test_throws BoundsError arr[false:false]
