@@ -679,8 +679,8 @@ When `AbstractArray` subtypes implement the [`Base.IndexStyle`](@ref) trait,
 other functions such as `map` can dispatch on this information to pick
 the best algorithm (see [Abstract Array Interface](@ref man-interface-array)).
 This means that each subtype does not need to implement a custom version of `map`,
-since the generic definitions + trait classes will enable the system to select the fastest version.
-Here a toy implementation of `map` illustrating the trait-based dispatch:
+since the generic definition's + trait classes will enable the system to select the fastest version.
+Here is a toy implementation of `map` illustrating the trait-based dispatch:
 
 ```julia
 map(f, a::AbstractArray, b::AbstractArray) = map(Base.IndexStyle(a, b), f, a, b)
