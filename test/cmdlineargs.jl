@@ -110,9 +110,13 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # ~ expansion in --project and JULIA_PROJECT
     if !Sys.iswindows()
-        expanded = abspath(expanduser("~/foo"))
-        @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
-        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir())))
+        expanded_a = abspath(expanduser("~/foo"))
+        @test occursin(expanded_a, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
+        @test occursin(expanded_a, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir())))
+
+        expanded_b = abspath(Base.load_path_expand("@foo"))
+        @test occursin(expanded_b, readchomp(`$exename --project='@foo' -E 'Base.active_project()'`))
+        @test occursin(expanded_b, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir())))
     end
 
     # --quiet, --banner
