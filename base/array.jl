@@ -814,6 +814,7 @@ function getindex(A::Array, I::AbstractUnitRange{<:Integer})
     return X
 end
 
+# getindex for carrying out logical indexing for AbstractUnitRange{Bool} as Bool <: Integer
 getindex(a::Array, r::AbstractUnitRange{Bool}) = getindex(a, to_index(r))
 
 function getindex(A::Array, c::Colon)
