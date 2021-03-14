@@ -551,6 +551,7 @@ of any arbitrary subtype of `AbstractArray`:
 
 ```julia
 abstract type AbstractArray{T, N} end
+eltype(::Type{<:AbstractArray}) = Any
 eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
 using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
