@@ -1282,20 +1282,22 @@ end
 end
 
 @testset "issue #39896, modified getindex " begin
-    #Testing types holds for the range types in Base that use 1-based indexing
     for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
         for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3))
             @test arr[inds] == arr[collect(inds)]
-            @test eltype(arr[inds]) === eltype(arr)
-            @test ndims(arr[inds])==1
             @test arr[inds] isa AbstractVector{eltype(arr)}
         end
     end
-    
-    arr=[[1],[1,2]]
-    inds=[false:false,true:true]
-    @test arr[1][inds[1]]==[]
-    @test arr[1][inds[2]]==[arr[1][1]]
-    @test_throws BoundsError  arr[2][inds[1]]
-    @test_throws BoundsError  arr[2][inds[2]] 
+
+for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
+    @test arr[true:true] == [arr[1]]
+    @test arr[true:true] isa AbstractVector{eltype(arr)}
+    @test arr[false:false] == []
+    @test arr[false:false] isa AbstractVector{eltype(arr)}
+end
+for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+    @test_throws BoundsError arr[true:true]
+    @test_throws BoundsError arr[false:false]
+end
+
 end
