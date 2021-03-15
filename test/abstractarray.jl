@@ -289,6 +289,35 @@ end
             # indexing with a single Bool should throw an error
             @test_throws ArgumentError r[true]
         end
+        @testset "logical indexing" begin
+            for (ur, inds) in Any[(1:2, false:true), (1:1, true:true), (1:1, false:false), (1:0, true:false)]
+                iur = Base.IdentityUnitRange(ur)
+                @test iur[inds] == ur[inds]
+                @test iur[inds] == collect(iur)[inds]
+                @test iur[StepRange(inds)] == ur[StepRange(inds)]
+                @test iur[StepRange(inds)] == collect(iur)[StepRange(inds)]
+            end
+
+            for inds in [true:true, false:false, false:true]
+                @test_throws BoundsError Base.IdentityUnitRange(1:0)[inds]
+                @test_throws BoundsError Base.IdentityUnitRange(1:0)[StepRange(inds)]
+            end
+
+            for inds in [true:false, false:true]
+                @test_throws BoundsError Base.IdentityUnitRange(1:1)[inds]
+                @test_throws BoundsError Base.IdentityUnitRange(1:1)[StepRange(inds)]
+            end
+
+            for inds in [true:false, true:true, false:false]
+                @test_throws BoundsError Base.IdentityUnitRange(1:2)[inds]
+                @test_throws BoundsError Base.IdentityUnitRange(1:2)[StepRange(inds)]
+            end
+
+            for inds in [true:false, true:true, false:false, false:true]
+                @test_throws BoundsError Base.IdentityUnitRange(1:4)[inds]
+                @test_throws BoundsError Base.IdentityUnitRange(1:4)[StepRange(inds)]
+            end
+        end
     end
 end
 

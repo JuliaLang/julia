@@ -400,8 +400,46 @@ function getindex(S::IdentityUnitRange, i::Integer)
     @boundscheck checkbounds(S, i)
     i
 end
-getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+function getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer})
+    @_inline_meta
+    @boundscheck checkbounds(S, i)
+    if eltype(i) === Bool
+        # logical indexing
+        if length(i) == 0
+            return range(first(S), length = 0)
+        elseif length(i) == 1
+            if first(i)
+                return range(first(S), length = length(S))
+            else
+                return range(first(S), length=0)
+            end
+        else # length(i) == 2
+            return range(first(S) + one(first(S)), length=1)
+        end
+    else
+        return i
+    end
+end
+function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
+    @_inline_meta
+    @boundscheck checkbounds(S, i)
+    if eltype(i) === Bool
+        # logical indexing
+        if length(i) == 0
+            return range(first(S), step=one(eltype(S)), length=0)
+        elseif length(i) == 1
+            if first(i)
+                return range(first(S), step=one(eltype(S)), length=1)
+            else
+                return range(first(S), step=one(eltype(S)), length=0)
+            end
+        else # length(i) == 2
+            return range(first(S) + one(first(S)), step=one(eltype(S)), length=1)
+        end
+    else
+        return i
+    end
+end
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
