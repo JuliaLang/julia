@@ -788,7 +788,7 @@ end
     end
 end
 
-@testset "proper patition for non-1-indexed vector" begin
+@testset "proper partition for non-1-indexed vector" begin
     @test Iterators.partition(OffsetArray(1:10,10), 5) |> collect == [1:5,6:10] # OffsetVector
     @test Iterators.partition(OffsetArray(collect(1:10),10), 5) |> collect == [1:5,6:10] # OffsetVector
     @test Iterators.partition(OffsetArray(reshape(1:9,3,3), (3,3)), 5) |> collect == [1:5,6:9] #OffsetMatrix
@@ -821,4 +821,13 @@ end
     @test (@view x[y[begin], end])[] == 2
     @test (@view x[end, -y[end]])[] == 3
     @test (@view x[y[end], end])[] == 4
+end
+
+@testset "CartesianIndices (issue #40035)" begin
+    A = OffsetArray(big(1):big(2), 0);
+    B = OffsetArray(1:2, 0);
+    # axes of an OffsetArray may be converted to an AbstractUnitRange,
+    # but the conversion to an OrdinalRange was not defined.
+    # this is fixed in #40038, so the evaluation of its CartesianIndices should work
+    @test CartesianIndices(A) == CartesianIndices(B)
 end
