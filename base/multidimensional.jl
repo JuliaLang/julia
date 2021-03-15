@@ -274,11 +274,6 @@ module IteratorsMD
         indices = map(r->convert(OrdinalRangeInt, r), inds)
         CartesianIndices{N, typeof(indices)}(indices)
     end
-    # specialized method in case conversion to an OrdinalRange is not defined for the indices (see issue #40035)
-    function CartesianIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N}
-        indices = map(r->convert(AbstractUnitRange{Int}, r), inds)
-        CartesianIndices{N, typeof(indices)}(indices)
-    end
 
     CartesianIndices(index::CartesianIndex) = CartesianIndices(index.I)
     CartesianIndices(inds::NTuple{N,Union{<:Integer,OrdinalRange{<:Integer}}}) where {N} =
