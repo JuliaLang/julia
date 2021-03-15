@@ -4,6 +4,11 @@
 import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
+const INTERP = Core.Compiler.NativeInterpreter()
+tmerge(@nospecialize(a), @nospecialize(b)) = Core.Compiler.tmerge(INTERP, a, b)
+limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tupledepth::Int, allowed_tuplelen::Int) =
+    Core.Compiler.limit_type_size(INTERP, t, compare, source, allowed_tupledepth, allowed_tuplelen)
+
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
@@ -16,32 +21,32 @@ let ast = only(code_typed(f39082, Tuple{Rational, Vararg{Rational}}))[1]
 end
 
 # demonstrate some of the type-size limits
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
-@test Core.Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
+@test limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
+@test limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
 
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
-    @test Core.Compiler.limit_type_size(sig, comparison, comparison, 100, 100) == Tuple{Tuple, Tuple}
-    @test Core.Compiler.limit_type_size(sig, ref, comparison, 100, 100) == Tuple{Any, Any}
-    @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 100) == Tuple{Tuple{Any, Any}}
-    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  100) == Tuple{Tuple{X, X} where X<:Tuple, Tuple{X, X} where X<:Tuple}
-    @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
+    @test limit_type_size(sig, comparison, comparison, 100, 100) == Tuple{Tuple, Tuple}
+    @test limit_type_size(sig, ref, comparison, 100, 100) == Tuple{Any, Any}
+    @test limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 100) == Tuple{Tuple{Any, Any}}
+    @test limit_type_size(sig, ref, Tuple{comparison}, 100,  100) == Tuple{Tuple{X, X} where X<:Tuple, Tuple{X, X} where X<:Tuple}
+    @test limit_type_size(ref, sig, Union{}, 100, 100) == ref
 end
 
 let ref = Tuple{T, Val{T}} where T<:Val
     sig = Tuple{T, Val{T}} where T<:(Val{T} where T<:Val)
-    @test Core.Compiler.limit_type_size(sig, ref, Union{}, 100, 100) == Tuple{Val, Val}
-    @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
+    @test limit_type_size(sig, ref, Union{}, 100, 100) == Tuple{Val, Val}
+    @test limit_type_size(ref, sig, Union{}, 100, 100) == ref
 end
 let ref = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} where T<:Val)))
     sig = Tuple{T, Val{T}} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} where T<:(Val{T} where T<:Val))))
-    @test Core.Compiler.limit_type_size(sig, ref, Union{}, 100, 100) == Tuple{Val, Val}
-    @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
+    @test limit_type_size(sig, ref, Union{}, 100, 100) == Tuple{Val, Val}
+    @test limit_type_size(ref, sig, Union{}, 100, 100) == ref
 end
 
 let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
-    @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
+    @test t <: limit_type_size(t, c, Union{}, 1, 100)
 end
 
 @test Core.Compiler.unionlen(Union{}) == 1
@@ -68,11 +73,11 @@ end
 
 # PR 22120
 function tmerge_test(a, b, r, commutative=true)
-    @test r == Core.Compiler.tuplemerge(a, b)
+    @test r == Core.Compiler.tuplemerge(INTERP, a, b)
     if commutative
-        @test r == Core.Compiler.tuplemerge(b, a)
+        @test r == Core.Compiler.tuplemerge(INTERP, b, a)
     else
-        @test_broken r == Core.Compiler.tuplemerge(b, a)
+        @test_broken r == Core.Compiler.tuplemerge(INTERP, b, a)
     end
 end
 tmerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
@@ -102,14 +107,14 @@ tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{Comple
     Tuple{Vararg{Complex}}, false)
 tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
-@test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+@test tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
-@test Core.Compiler.tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+@test tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
-@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) == Vector
-@test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
-@test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
-@test Core.Compiler.tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
+@test tmerge(Vector{Int}, tmerge(Vector{String}, Vector{Bool})) == Vector
+@test tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
+@test tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
+@test tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
 
 struct SomethingBits
     x::Base.BitIntegerType
@@ -219,7 +224,9 @@ barTuple2() = fooTuple{tuple(:y)}()
 @test Base.return_types(barTuple1,Tuple{})[1] == Base.return_types(barTuple2,Tuple{})[1] == fooTuple{(:y,)}
 
 # issue #6050
-@test Core.Compiler.getfield_tfunc(
+getfield_tfunc(@nospecialize(s00), @nospecialize(name)) =
+    Core.Compiler.getfield_tfunc(INTERP, s00, name)
+@test getfield_tfunc(
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
           Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
@@ -654,8 +661,9 @@ mutable struct HasAbstractlyTypedField
 end
 f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
 @test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Type{Union{Int,String}}]
-let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
-    fieldtype_nothrow = Core.Compiler.fieldtype_nothrow
+let fieldtype_tfunc,
+    fieldtype_nothrow(@nospecialize(s0), @nospecialize(name)) = Core.Compiler.fieldtype_nothrow(INTERP, s0, name)
+    fieldtype_tfunc(@nospecialize(t), n) = Core.Compiler.fieldtype_tfunc(INTERP, t, n)
     @test fieldtype_tfunc(Union{}, :x) == Union{}
     @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
@@ -1051,7 +1059,7 @@ let f(x) = isdefined(x, :NonExistentField) ? 1 : ""
     @test Base.return_types(f, (ComplexF32,)) == Any[String]
     @test Union{Int,String} <: Base.return_types(f, (AbstractArray,))[1]
 end
-import Core.Compiler: isdefined_tfunc
+isdefined_tfunc(@nospecialize(T), f) = Core.Compiler.isdefined_tfunc(INTERP, T, f)
 @test isdefined_tfunc(ComplexF32, Const(())) === Union{}
 @test isdefined_tfunc(ComplexF32, Const(1)) === Const(true)
 @test isdefined_tfunc(ComplexF32, Const(2)) === Const(true)
@@ -1262,7 +1270,8 @@ isdefined_f3(x) = isdefined(x, 3)
 @test @inferred(isdefined_f3(())) == false
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]), isdefined, 3)
 
-let isa_tfunc = Core.Compiler.isa_tfunc
+let isa_tfunc
+    isa_tfunc(@nospecialize(v), @nospecialize(tt)) = Core.Compiler.isa_tfunc(INTERP, v, tt)
     @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
@@ -1302,6 +1311,7 @@ let isa_tfunc = Core.Compiler.isa_tfunc
 end
 
 let subtype_tfunc = Core.Compiler.subtype_tfunc
+    subtype_tfunc(@nospecialize(a), @nospecialize(b)) = Core.Compiler.subtype_tfunc(INTERP, a, b)
     @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray{Int}}) == Bool
@@ -1353,8 +1363,8 @@ end
 
 let egal_tfunc
     function egal_tfunc(a, b)
-        r = Core.Compiler.egal_tfunc(a, b)
-        @test r === Core.Compiler.egal_tfunc(b, a)
+        r = Core.Compiler.egal_tfunc(INTERP, a, b)
+        @test r === Core.Compiler.egal_tfunc(INTERP, b, a)
         return r
     end
     @test egal_tfunc(Const(12345.12345), Const(12344.12345 + 1)) == Const(true)
@@ -1422,7 +1432,10 @@ egal_conditional_lattice3(x, y) = x === y + y ? "" : 1
 @test Base.return_types(egal_conditional_lattice3, (Int64, Int64)) == Any[Union{Int, String}]
 @test Base.return_types(egal_conditional_lattice3, (Int32, Int64)) == Any[Int]
 
-using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
+using Core.Compiler: PartialStruct
+nfields_tfunc(@nospecialize(x)) = Core.Compiler.nfields_tfunc(INTERP, x)
+sizeof_tfunc(@nospecialize(x)) = Core.Compiler.sizeof_tfunc(INTERP, x)
+sizeof_nothrow(@nospecialize(x)) = Core.Compiler.sizeof_nothrow(INTERP, x)
 @test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
 @test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
 @test sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
@@ -1456,7 +1469,7 @@ end
 @test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
 @test nfields_tfunc(Union{Tuple{Int, Float64}, Tuple{Int, Int}}) === Const(2)
 
-using Core.Compiler: typeof_tfunc
+typeof_tfunc(@nospecialize t) = Core.Compiler.typeof_tfunc(INTERP, t)
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
 @test typeof_tfunc(Tuple{Any}) == Type{<:Tuple{Any}}
 @test typeof_tfunc(Type{Array}) === DataType
@@ -1538,12 +1551,11 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
 
 # inference of `T.mutable`
-@test Core.Compiler.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
-@test Core.Compiler.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
-@test Core.Compiler.getfield_tfunc(DataType, Const(:mutable)) == Bool
+@test getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
+@test getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
+@test getfield_tfunc(DataType, Const(:mutable)) == Bool
 
 # getfield on abstract named tuples. issue #32698
-import Core.Compiler.getfield_tfunc
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
                      Const(:y)) == Union{Missing, Float64}
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
@@ -2508,7 +2520,7 @@ end
 @test @inferred(foo30783(2)) == Val(1)
 
 # PartialStruct tmerge
-using Core.Compiler: PartialStruct, tmerge, Const, ⊑
+using Core.Compiler: PartialStruct, Const, ⊑
 struct FooPartial
     a::Int
     b::Int
@@ -2644,7 +2656,7 @@ const DenseIdx = Union{IntRange,Integer}
 # Non uniformity in expresions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
-    @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),
+    @test Core.Compiler.apply_type_nothrow(INTERP, [Core.Compiler.Const(NTuple),
         Core.Compiler.PartialTypeVar(N, true, true),
         Core.Compiler.Const(Any)], Type{Tuple{Vararg{Any,N}}})
 end
@@ -2884,8 +2896,8 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 
 # Issue #36710 - sizeof(::UnionAll) tfunc correctness
 @test (sizeof(Ptr),) == sizeof.((Ptr,)) == sizeof.((Ptr{Cvoid},))
-@test Core.Compiler.sizeof_tfunc(UnionAll) === Int
-@test !Core.Compiler.sizeof_nothrow(UnionAll)
+@test sizeof_tfunc(UnionAll) === Int
+@test !sizeof_nothrow(UnionAll)
 
 @test Base.return_types(Expr) == Any[Expr]
 
@@ -2949,9 +2961,10 @@ f_apply_cglobal(args...) = cglobal(args...)
 @test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}}) == Union{}
 
 # issue #37532
-@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{Int}}, Int])
-@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{T}} where T, Ptr])
-@test !Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr}, Ptr])
+intrinsic_nothrow(f, argtypes) = Core.Compiler.intrinsic_nothrow(INTERP, f, argtypes)
+@test intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{Int}}, Int])
+@test intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{T}} where T, Ptr])
+@test !intrinsic_nothrow(Core.bitcast, Any[Type{Ptr}, Ptr])
 f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 @test Base.return_types(f37532, Tuple{Any, Int}) == Any[Int]
 

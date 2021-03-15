@@ -193,7 +193,7 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
 end
 
 # Convert IRCode back to CodeInfo and compute inlining cost and sideeffects
-function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir, @nospecialize(result))
+function finish(opt::OptimizationState, params::OptimizationParams, ir, @nospecialize(result), interp::AbstractInterpreter)
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
 
@@ -211,7 +211,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             for i in 1:length(ir.stmts)
                 node = ir.stmts[i]
                 stmt = node[:inst]
-                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, node[:type], ir, ir.sptypes)
+                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(interp, stmt, node[:type], ir, ir.sptypes)
                     proven_pure = false
                     break
                 end
@@ -236,7 +236,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             # to the `jl_call_method_internal` fast path
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
-            if !(isa(result, Const) && !is_inlineable_constant(result.val))
+            if !(isa(result, Const) && !is_inlineable_constant(params, result.val))
                 opt.const_api = true
             end
             force_noinline || (opt.src.inlineable = true)
@@ -288,8 +288,8 @@ end
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
     nargs = Int(opt.nargs) - 1
-    @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
-    finish(interp, opt, params, ir, result)
+    @timeit "optimizer" ir = run_passes(interp, opt.src, nargs, opt)
+    finish(opt, params, ir, result, interp)
 end
 
 

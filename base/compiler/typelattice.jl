@@ -289,13 +289,13 @@ widenconst(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 
-function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
+function smerge(interp::AbstractInterpreter, sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
     sa === sb && return sa
     sa === NOT_FOUND && return sb
     sb === NOT_FOUND && return sa
     issubstate(sa, sb) && return sb
     issubstate(sb, sa) && return sa
-    return VarState(tmerge(sa.typ, sb.typ), sa.undef | sb.undef)
+    return VarState(tmerge(interp, sa.typ, sb.typ), sa.undef | sb.undef)
 end
 
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
@@ -316,7 +316,7 @@ widenconditional(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 ignorelimited(@nospecialize typ) = typ
 ignorelimited(typ::LimitedAccuracy) = typ.typ
 
-function stupdate!(state::Nothing, changes::StateUpdate)
+function stupdate!(interp::AbstractInterpreter, state::Nothing, changes::StateUpdate)
     newst = copy(changes.state)
     if isa(changes.var, Slot)
         changeid = slot_id(changes.var::Slot)
@@ -342,9 +342,9 @@ function stupdate!(state::Nothing, changes::StateUpdate)
     return newst
 end
 
-function stupdate!(state::VarTable, changes::StateUpdate)
+function stupdate!(interp::AbstractInterpreter, state::VarTable, changes::StateUpdate)
     if !isa(changes.var, Slot)
-        return stupdate!(state, changes.state)
+        return stupdate!(interp, state, changes.state)
     end
     newstate = nothing
     changeid = slot_id(changes.var::Slot)
@@ -369,30 +369,30 @@ function stupdate!(state::VarTable, changes::StateUpdate)
         end
         if schanged(newtype, oldtype)
             newstate = state
-            state[i] = smerge(oldtype, newtype)
+            state[i] = smerge(interp, oldtype, newtype)
         end
     end
     return newstate
 end
 
-function stupdate!(state::VarTable, changes::VarTable)
+function stupdate!(interp::AbstractInterpreter, state::VarTable, changes::VarTable)
     newstate = nothing
     for i = 1:length(state)
         newtype = changes[i]
         oldtype = state[i]
         if schanged(newtype, oldtype)
             newstate = state
-            state[i] = smerge(oldtype, newtype)
+            state[i] = smerge(interp, oldtype, newtype)
         end
     end
     return newstate
 end
 
-stupdate!(state::Nothing, changes::VarTable) = copy(changes)
+stupdate!(interp, state::Nothing, changes::VarTable) = copy(changes)
 
-stupdate!(state::Nothing, changes::Nothing) = nothing
+stupdate!(interp, state::Nothing, changes::Nothing) = nothing
 
-function stupdate1!(state::VarTable, change::StateUpdate)
+function stupdate1!(interp::AbstractInterpreter, state::VarTable, change::StateUpdate)
     if !isa(change.var, Slot)
         return false
     end
@@ -418,7 +418,7 @@ function stupdate1!(state::VarTable, change::StateUpdate)
     newtype = change.vtype
     oldtype = state[changeid]
     if schanged(newtype, oldtype)
-        state[changeid] = smerge(oldtype, newtype)
+        state[changeid] = smerge(interp, oldtype, newtype)
         return true
     end
     return false
