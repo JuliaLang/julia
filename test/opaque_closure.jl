@@ -189,3 +189,18 @@ function oc_varargs_constprop()
     return Val{oc(1,2,3)}()
 end
 Base.return_types(oc_varargs_constprop, Tuple{}) == Any[Val{6}]
+
+# OpaqueClosure ABI
+f_oc_noinline(x) = @opaque function (y)
+    @Base._noinline_meta
+    x + y
+end
+
+let oc = Base.inferencebarrier(f_oc_noinline(1))
+    @test oc(2) == 3
+end
+
+function f_oc_noinline_call(x, y)
+    return f_oc_noinline(x)(y)
+end
+@test f_oc_noinline_call(1, 2) == 3
