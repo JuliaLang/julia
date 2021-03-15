@@ -432,6 +432,10 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         (uw isa DataType && ti <: uw.name.wrapper) || return Any
         typenames[i] = uw.name
     end
+    u = Union{types...}
+    if issimpleenoughtype(u)
+        return u
+    end
     # see if any of the union elements have the same TypeName
     # in which case, simplify this tmerge by replacing it with
     # the widest possible version of itself (the wrapper)
