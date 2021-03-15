@@ -330,7 +330,7 @@ function ⊉ end
     ⊉(b, a) -> Bool
 
 Negation of `⊆` and `⊇`, i.e. checks that `a` is not a subset of `b`.
-Here are some operators related to subset: [`issubset`](@ref)(⊆), [`⊊`](@ref).
+Here are some operators related to subset: [`issubset`](@ref) (`⊆`), [`⊊`](@ref).
 
 # Examples
 ```jldoctest
