@@ -306,7 +306,7 @@ function ⊋ end
     ⊋(b, a) -> Bool
 
 Determines if `a` is a subset of, but not equal to, `b`.
-Here are some operators related to subset: [`issubset`](@ref)(⊆), [`⊈`](@ref).
+Here are some operators related to subset: [`issubset`](@ref) (`⊆`), [`⊈`](@ref).
 
 # Examples
 ```jldoctest
