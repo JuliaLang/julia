@@ -55,6 +55,40 @@ let n = 10
         H = UpperHessenberg(Areal)
         @test Array(Hc + H) == Array(Hc) + Array(H)
         @test Array(Hc - H) == Array(Hc) - Array(H)
+        @testset "Preserve UpperHessenberg shape (issue #39388)" begin
+            A = rand(n,n)
+            d = rand(n)
+            dl = rand(n-1)
+            du = rand(n-1)
+            @testset "$op" for op = (+,-)
+                for x = (I, Diagonal(d), Bidiagonal(d,dl,:U), Bidiagonal(d,dl,:L),
+                         Tridiagonal(dl,d,du), SymTridiagonal(d,dl),
+                         UpperTriangular(A), UnitUpperTriangular(A))
+                    @test op(H,x) == op(Array(H),x)
+                    @test op(x,H) == op(x,Array(H))
+                    @test op(H,x) isa UpperHessenberg
+                    @test op(x,H) isa UpperHessenberg
+                end
+            end
+            @testset "Multiplication/division" begin
+                for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
+                         UpperTriangular(A), UnitUpperTriangular(A))
+                    @test H*x == Array(H)*x
+                    @test x*H == x*Array(H)
+                    @test H/x == Array(H)/x
+                    @test x\H == x\Array(H)
+                    @test H*x isa UpperHessenberg
+                    @test x*H isa UpperHessenberg
+                    @test H/x isa UpperHessenberg
+                    @test x\H isa UpperHessenberg
+                end
+                x = Bidiagonal(d, dl, :L)
+                @test H*x == Array(H)*x
+                @test x*H == x*Array(H)
+                @test H/x == Array(H)/x
+                @test_broken x\H == x\Array(H) # issue 40037
+            end
+        end
     end
 
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int), herm in (false, true)

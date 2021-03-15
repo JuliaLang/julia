@@ -102,9 +102,91 @@ fillstored!(H::UpperHessenberg, x) = (fillband!(H.data, x, -1, size(H,2)-1); H)
 -(A::UpperHessenberg, B::UpperHessenberg) = UpperHessenberg(A.data-B.data)
 # (future: we could also have specialized routines for UpperHessenberg ± UpperTriangular)
 
-# shift Hessenberg by λI
-+(H::UpperHessenberg, J::UniformScaling) = UpperHessenberg(H.data + J)
--(J::UniformScaling, H::UpperHessenberg) = UpperHessenberg(J - H.data)
+for T = (:UniformScaling, :Diagonal, :Bidiagonal, :Tridiagonal, :SymTridiagonal,
+         :UpperTriangular, :UnitUpperTriangular)
+    for op = (:+, :-)
+        @eval begin
+            $op(H::UpperHessenberg, x::$T) = UpperHessenberg($op(H.data, x))
+            $op(x::$T, H::UpperHessenberg) = UpperHessenberg($op(x, H.data))
+        end
+    end
+end
+
+for T = (:Number, :UniformScaling, :Diagonal)
+    @eval begin
+        *(H::UpperHessenberg, x::$T) = UpperHessenberg(H.data * x)
+        *(x::$T, H::UpperHessenberg) = UpperHessenberg(x * H.data)
+        /(H::UpperHessenberg, x::$T) = UpperHessenberg(H.data / x)
+        \(x::$T, H::UpperHessenberg) = UpperHessenberg(x \ H.data)
+    end
+end
+
+function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
+    T = _inner_type_promotion(H,U)
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    rmul!(HH, convert(AbstractArray{T}, U))
+    UpperHessenberg(HH)
+end
+function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
+    T = _inner_type_promotion(U,H)
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    lmul!(convert(AbstractArray{T}, U), HH)
+    UpperHessenberg(HH)
+end
+
+function /(H::UpperHessenberg, U::UpperTriangular)
+    T = typeof((zero(eltype(H))*zero(eltype(U)) + zero(eltype(H))*zero(eltype(U)))/one(eltype(H)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    rdiv!(HH, convert(AbstractArray{T}, U))
+    UpperHessenberg(HH)
+end
+function /(H::UpperHessenberg, U::UnitUpperTriangular)
+    T = _inner_type_promotion(H,U)
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    rdiv!(HH, convert(AbstractArray{T}, U))
+    UpperHessenberg(HH)
+end
+
+function \(U::UpperTriangular, H::UpperHessenberg)
+    T = typeof((zero(eltype(U))*zero(eltype(H)) + zero(eltype(U))*zero(eltype(H)))/one(eltype(U)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    ldiv!(convert(AbstractArray{T}, U), HH)
+    UpperHessenberg(HH)
+end
+function \(U::UnitUpperTriangular, H::UpperHessenberg)
+    T = _inner_type_promotion(U,H)
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    ldiv!(convert(AbstractArray{T}, U), HH)
+    UpperHessenberg(HH)
+end
+
+function *(H::UpperHessenberg, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(H), eltype(B))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperHessenberg(zeros(TS, size(H)...)), H, B)
+    else
+        A_mul_B_td!(zeros(TS, size(H)...), H, B)
+    end
+end
+function *(B::Bidiagonal, H::UpperHessenberg)
+    TS = promote_op(matprod, eltype(B), eltype(H))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperHessenberg(zeros(TS, size(B)...)), B, H)
+    else
+        A_mul_B_td!(zeros(TS, size(B)...), B, H)
+    end
+end
+
+function /(H::UpperHessenberg, B::Bidiagonal)
+    A = Base.@invoke /(H::AbstractMatrix, B::Bidiagonal)
+    B.uplo == 'U' ? UpperHessenberg(A) : A
+end
 
 # Solving (H+µI)x = b: we can do this in O(m²) time and O(m) memory
 # (in-place in x) by the RQ algorithm from:
