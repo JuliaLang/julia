@@ -1144,7 +1144,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
         end
         return allconst ? Const(ty) : Type{ty}
     end
-    istuple = (headtype == Tuple)
+    istuple = isa(headtype, Type) && (headtype == Tuple)
     if !istuple && !isa(headtype, UnionAll)
         return Union{}
     end

@@ -2985,3 +2985,8 @@ g38888() = S38888(Base.inferencebarrier(3), nothing)
 # issue #38971
 f28971() = (1, [2,3]...)::Tuple{Int,Int,Int}
 @test @inferred(Tuple{Int,Vararg{Int}}, f28971()) == (1, 2, 3)
+
+# issue #39862
+let f() = sin{Int}()
+    @test Base.return_types(f, ()) == Any[Union{}]
+end
