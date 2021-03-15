@@ -396,9 +396,9 @@ length(S::IdentityUnitRange) = length(S.indices)
 unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
 function getindex(S::IdentityUnitRange, i::Integer)
     @_inline_meta
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck checkbounds(S, i)
-    i
+    j = to_indices(S, (i,))[1]
+    return j
 end
 function getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer})
     @_inline_meta
@@ -409,15 +409,15 @@ function getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer})
             return range(first(S), length = 0)
         elseif length(i) == 1
             if first(i)
-                return range(first(S), length = length(S))
+                return range(first(S), length = 1)
             else
                 return range(first(S), length=0)
             end
         else # length(i) == 2
-            return range(first(S) + one(first(S)), length=1)
+            return range(last(S), length=1)
         end
     else
-        return i
+        return map(Int, i)
     end
 end
 function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
@@ -426,18 +426,18 @@ function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
     if eltype(i) === Bool
         # logical indexing
         if length(i) == 0
-            return range(first(S), step=one(eltype(S)), length=0)
+            return range(first(S), step=oneunit(eltype(S)), length=0)
         elseif length(i) == 1
             if first(i)
-                return range(first(S), step=one(eltype(S)), length=1)
+                return range(first(S), step=oneunit(eltype(S)), length=1)
             else
-                return range(first(S), step=one(eltype(S)), length=0)
+                return range(first(S), step=oneunit(eltype(S)), length=0)
             end
         else # length(i) == 2
-            return range(first(S) + one(first(S)), step=one(eltype(S)), length=1)
+            return range(last(S), step=oneunit(eltype(S)), length=1)
         end
     else
-        return i
+        return map(Int, i)
     end
 end
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")

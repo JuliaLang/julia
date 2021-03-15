@@ -285,6 +285,7 @@ end
             val = r[5]
             for T in [Int8, Int16, Int32, Int64, Int128, BigInt]
                 @test r[T(5)] == val
+                @test r[T(5)] isa eltype(r)
             end
             # indexing with a single Bool should throw an error
             @test_throws ArgumentError r[true]
