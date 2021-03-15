@@ -245,7 +245,8 @@ function ⊇ end
     ⊇(b, a) -> Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
-Here are some operators related to subset: [`⊊`](@ref), [`⊈`](@ref).
+
+See also [`⊊`](@ref), [`⊈`](@ref).
 
 # Examples
 ```jldoctest
