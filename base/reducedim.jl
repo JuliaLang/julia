@@ -971,7 +971,7 @@ end
 
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
-`NaN` is treated as less than all other values except `missing`.
+`NaN` is treated as less than all other values except `missing` and `nothing`.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
@@ -982,7 +982,7 @@ end
     findmin(A; dims) -> (minval, index)
 
 For an array input, returns the value and index of the minimum over the given dimensions.
-`NaN` is treated as less than all other values except `missing`.
+`NaN` is treated as less than all other values except `missing` and `nothing`.
 
 # Examples
 ```jldoctest
@@ -1018,7 +1018,7 @@ end
 
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
-`NaN` is treated as greater than all other values except `missing`.
+`NaN` is treated as greater than all other values except `missing` and `nothing`.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
@@ -1029,7 +1029,7 @@ end
     findmax(A; dims) -> (maxval, index)
 
 For an array input, returns the value and index of the maximum over the given dimensions.
-`NaN` is treated as greater than all other values except `missing`.
+`NaN` is treated as greater than all other values except `missing` and `nothing`.
 
 # Examples
 ```jldoctest
@@ -1066,7 +1066,7 @@ reducedim1(R, A) = length(axes1(R)) == 1
     argmin(A; dims) -> indices
 
 For an array input, return the indices of the minimum elements over the given dimensions.
-`NaN` is treated as less than all other values except `missing`.
+`NaN` is treated as less than all other values except `missing` and `nothing`.
 
 # Examples
 ```jldoctest
@@ -1091,7 +1091,7 @@ argmin(A::AbstractArray; dims=:) = findmin(A; dims=dims)[2]
     argmax(A; dims) -> indices
 
 For an array input, return the indices of the maximum elements over the given dimensions.
-`NaN` is treated as greater than all other values except `missing`.
+`NaN` is treated as greater than all other values except `missing` and `nothing`.
 
 # Examples
 ```jldoctest

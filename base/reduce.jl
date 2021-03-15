@@ -831,7 +831,7 @@ are multiple minimal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
 
-`NaN` is treated as less than all other values except `missing`.
+`NaN` is treated as less than all other values except `missing` and `nothing`.
 
 !!! compat "Julia 1.7"
     This method requires Julia 1.7 or later.
@@ -861,7 +861,7 @@ _rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
 
 Return the minimal element of the collection `itr` and its index or key.
 If there are multiple minimal elements, then the first one will be returned.
-`NaN` is treated as less than all other values except `missing`.
+`NaN` is treated as less than all other values except `missing` and `nothing`.
 
 # Examples
 
@@ -935,7 +935,7 @@ If there are multiple minimal values for `f(x)` then the first one will be found
 
 `domain` must be a non-empty iterable.
 
-`NaN` is treated as less than all other values except `missing`.
+`NaN` is treated as less than all other values except `missing` and `nothing`.
 
 !!! compat "Julia 1.7"
     This method requires Julia 1.7 or later.
@@ -963,7 +963,7 @@ If there are multiple minimal elements, then the first one will be returned.
 
 The collection must not be empty.
 
-`NaN` is treated as less than all other values except `missing`.
+`NaN` is treated as less than all other values except `missing` and `nothing`.
 
 # Examples
 ```jldoctest

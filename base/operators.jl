@@ -142,7 +142,7 @@ is defined, it is expected to satisfy the following:
 
 Values that are normally unordered, such as `NaN`,
 are ordered after regular values.
-[`missing`](@ref) values are ordered last.
+[`missing`](@ref) and [`nothing`](@ref) values are ordered second last and last, respectively.
 
 This is the default comparison used by [`sort`](@ref).
 
@@ -168,19 +168,23 @@ isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
+isless(::Any, ::Nothing) = true
+isless(::Nothing, ::Any) = false
+isless(::Nothing, ::Nothing) = false
+
 """
     isgreater(x, y)
 
 Not the inverse of `isless`! Test whether `x` is greater than `y`, according to
 a fixed total order compatible with `min`.
 
-Defined with `isless`, this function is usually `isless(y, x)`, but `NaN` and
-[`missing`](@ref) are ordered as smaller than any ordinary value with `missing`
-smaller than `NaN`.
+Defined with `isless`, this function is usually `isless(y, x)`, but `NaN`,
+[`missing`](@ref) and [`nothing`] are ordered as smaller than any ordinary value, with
+`nothing` smaller than `missing` which is smaller than `NaN`.
 
-So `isless` defines an ascending total order with `NaN` and `missing` as the
-largest values and `isgreater` defines a descending total order with `NaN` and
-`missing` as the smallest values.
+So `isless` defines an ascending total order with `NaN`, `missing` and `nothing` as the
+largest values and `isgreater` defines a descending total order with `NaN`, `missing` and
+`nothing` as the smallest values.
 
 !!! note
 
@@ -217,7 +221,7 @@ isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
 """
     isunordered(x)
 
-Return true if `x` is a value that is not normally orderable, such as `NaN` or `missing`.
+Return true if `x` is a value that is not normally orderable, such as `NaN`, `missing` or `nothing`.
 
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
@@ -225,6 +229,7 @@ Return true if `x` is a value that is not normally orderable, such as `NaN` or `
 isunordered(x) = false
 isunordered(x::AbstractFloat) = isnan(x)
 isunordered(x::Missing) = true
+isunordered(x::Nothing) = true
 
 function ==(T::Type, S::Type)
     @_pure_meta
@@ -334,6 +339,10 @@ false
 ```
 """
 <(x, y) = isless(x, y)
+
+<(x, y::Nothing) = throw(MethodError(<, (x, y)))
+<(x::Nothing, y) = throw(MethodError(<, (x, y)))
+<(x::Nothing, y::Nothing) = throw(MethodError(<, (x, y)))
 
 """
     >(x, y)

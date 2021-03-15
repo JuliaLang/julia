@@ -31,7 +31,7 @@ New library functions
 ---------------------
 
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
-* `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
+* `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN`, `missing` or `nothing`.
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
 
@@ -57,6 +57,7 @@ Standard library changes
 * `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
 * `keys(::Generator)` is now defined to return the iterator's keys ([#34678])
 * `RegexMatch` now iterate to give their captures. ([#34355]).
+* `isless` now works with `nothing` ([#40031]).
 
 #### Package Manager
 
