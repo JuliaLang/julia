@@ -1235,7 +1235,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     pushfirst!(argtypes, closure.env)
     sig = argtypes_to_type(argtypes)
     rt, edgecycle, edge = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, sv)
-    add_backedge!(edge, sv)
+    edge !== nothing && add_backedge!(edge, sv)
     tt = closure.typ
     sigT = unwrap_unionall(tt).parameters[1]
     match = MethodMatch(sig, Core.svec(), closure.source::Method, sig <: rewrap_unionall(sigT, tt))
