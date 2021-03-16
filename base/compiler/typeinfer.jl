@@ -961,6 +961,20 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
 end
 
 
+const docstring_return_type =
+"""
+    return_type(f, ArgType)
+
+Estimate the return type of `f` given arguments of type `ArgType`. In other words this gives an upper bound for `typeof(f((args::ArgType)...))`.
+
+!!! warning
+
+    This function is not part of the stable API. It is an implementation detail of the compiler,
+    that can and will change any time. For instance it might give sharper bounds as
+    inference improves or looser bounds to improve latency.
+    Using `return_type` is very likely to lead to unpredictable behaviour. Programs that rely on `return_type`
+    are typically fragile and will have desired behaviour for some types and broken behaviour for others.
+"""
 function return_type(@nospecialize(f), @nospecialize(t))
     world = ccall(:jl_get_tls_world_age, UInt, ())
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_return_type, f, t, world], 4)
