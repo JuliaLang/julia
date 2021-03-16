@@ -111,7 +111,7 @@ struct InvokeCallInfo
 end
 
 struct OpaqueClosureCallInfo
-    mi::MethodInstance
+    match::MethodMatch
 end
 
 struct OpaqueClosureCreateInfo

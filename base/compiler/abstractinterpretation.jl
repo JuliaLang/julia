@@ -1235,11 +1235,14 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     pushfirst!(argtypes, closure.env)
     sig = argtypes_to_type(argtypes)
     rt, edgecycle, edge = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, sv)
-    info = OpaqueClosureCallInfo(edge)
+    add_backedge!(edge, sv)
+    tt = closure.typ
+    sigT = unwrap_unionall(tt).parameters[1]
+    match = MethodMatch(sig, Core.svec(), closure.source::Method, sig <: rewrap_unionall(sigT, tt))
+    info = OpaqueClosureCallInfo(match)
     if !edgecycle
         const_rettype, result = abstract_call_method_with_const_args(interp, rt, closure, argtypes,
-            MethodMatch(sig, Core.svec(), closure.source::Method, false),
-            sv, edgecycle, closure.isva)
+            match, sv, edgecycle, closure.isva)
         if const_rettype ⊑ rt
            rt = const_rettype
         end
