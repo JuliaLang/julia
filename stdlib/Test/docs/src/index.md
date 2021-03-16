@@ -200,6 +200,12 @@ Test Failed at none:1
    Evaluated: 1 ≈ 0.999999
 ERROR: There was an error during testing
 ```
+You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
+after the `≈` comparison:
+```jldoctest
+julia> @test 1 ≈ 0.999999  rtol=1e-5
+Test Passed
+```
 
 ```@docs
 Test.@inferred
