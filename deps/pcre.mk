@@ -14,9 +14,9 @@ $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).ta
 	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/pcre2-$(PCRE_VER)/config.sub
 	cd $(SRCCACHE)/pcre2-$(PCRE_VER) && patch -p1 -f < $(SRCDIR)/patches/pcre2-cet-flags.patch
 	# Fix some old targets modified by the patching
+	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/aclocal.m4
 	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/Makefile.am
 	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/Makefile.in
-	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/aclocal.m4
 	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/configure
 	echo $1 > $@
 
