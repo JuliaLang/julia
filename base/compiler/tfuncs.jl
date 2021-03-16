@@ -948,8 +948,8 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
     end
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         # For a generic DataType, one of the fields could still be a TypeVar
-        # which is not a Type
-        return Union{Type, TypeVar}
+        # which is not a Type. Tuple{...} can also contain Symbols etc.
+        return Any
     end
     # fieldtype only accepts Types
     if isa(s0, Const) && !(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union))
@@ -977,14 +977,14 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
         return tmerge(_fieldtype_tfunc(rewrap(u.a, s), exact, name),
                       _fieldtype_tfunc(rewrap(u.b, s), exact, name))
     end
-    u isa DataType || return Union{Type, TypeVar}
+    u isa DataType || return Any
     if u.abstract
         # Abstract types have no fields
         exact && return Bottom
         # Type{...} without free typevars has no subtypes, so it is actually
         # exact, even if `exact` is false.
         isType(u) && !has_free_typevars(u.parameters[1]) && return Bottom
-        return Union{Type, TypeVar}
+        return Any
     end
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
         # TODO: better approximate inference
@@ -1011,8 +1011,15 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
                 else
                     ft1 = Type{ft1}
                 end
+            elseif ft1 isa Type || ft1 isa TypeVar
+                if ft1 === Any && u.name === Tuple.name
+                    # Tuple{:x} is possible in this case
+                    ft1 = Any
+                else
+                    ft1 = Type{ft} where ft<:ft1
+                end
             else
-                ft1 = Type{ft} where ft<:ft1
+                ft1 = Const(ft1)
             end
             t = tmerge(t, ft1)
             t === Any && break
@@ -1035,6 +1042,9 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
     else
         ft = ftypes[fld]
     end
+    if !isa(ft, Type) && !isa(ft, TypeVar)
+        return Const(ft)
+    end
 
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
@@ -1043,6 +1053,10 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
             return Const(ft) # ft unique via type cache
         end
         return Type{ft}
+    end
+    if u.name === Tuple.name && ft === Any
+        # Tuple{:x} is possible
+        return Any
     end
     return Type{<:ft}
 end
