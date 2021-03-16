@@ -1039,7 +1039,7 @@ function symlink(target::AbstractString, link::AbstractString;
         @static if Sys.iswindows()
             # creating file/directory symlinks requires Administrator privileges
             # while junction points apparently do not
-            if !(flags & UV_FS_SYMLINK_JUNCTION) && err == UV__EPERM
+            if flags & UV_FS_SYMLINK_JUNCTION == 0 && err == UV__EPERM
                 msg = "On Windows, creating symlinks requires Administrator privileges.\n$msg"
             end
         end

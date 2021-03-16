@@ -107,3 +107,34 @@ declare void @llvm.memcpy.p11i8.p0i8.i64(i8 addrspace(11)* nocapture writeonly, 
 declare token @llvm.julia.gc_preserve_begin(...)
 declare void @llvm.julia.gc_preserve_end(token)
 """)
+
+# CHECK-LABEL: @memref_collision
+# CHECK: call {}*** @julia.ptls_states()
+# CHECK-NOT: store {}
+# CHECK: store i
+# CHECK-NOT: store {}
+# CHECK: L1:
+# CHECK: load {}
+# CHECK: L2:
+# CHECK: load i
+println("""
+define void @memref_collision($isz %x) {
+  %ptls = call {}*** @julia.ptls_states()
+  %ptls_i8 = bitcast {}*** %ptls to i8*
+  %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
+  %v_p = bitcast {} addrspace(10)* %v to $isz addrspace(10)*
+  store $isz %x, $isz addrspace(10)* %v_p
+  br i1 0, label %L1, label %L2
+
+L1:
+  %v1 = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
+  %v1_x = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %v1
+  ret void
+
+L2:
+  %v2 = bitcast {} addrspace(10)* %v to $isz addrspace(10)*
+  %v2_x = load i64, i64 addrspace(10)* %v2
+  ret void
+}
+""")
+# CHECK-LABEL: }{{$}}
