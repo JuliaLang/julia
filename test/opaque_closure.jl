@@ -188,7 +188,7 @@ function oc_varargs_constprop()
     oc = @opaque (args...)->args[1]+args[2]+args[3]
     return Val{oc(1,2,3)}()
 end
-Base.return_types(oc_varargs_constprop, Tuple{}) == Any[Val{6}]
+@test Base.return_types(oc_varargs_constprop, Tuple{}) == Any[Val{6}]
 
 # OpaqueClosure ABI
 f_oc_noinline(x) = @opaque function (y)
