@@ -269,6 +269,17 @@ function is_pending(compact::IncrementalCompact, old::OldSSAValue)
     return old.id > length(compact.ir.stmts) + length(compact.ir.new_nodes)
 end
 
+function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
+    isa(def, Expr) || return false
+    length(def.args) >= 3 || return false
+    is_known_call(def, getfield, compact) || return false
+    which = compact_exprtype(compact, def.args[3])
+    isa(which, Const) || return false
+    which.val === :captures || return false
+    oc = compact_exprtype(compact, def.args[2])
+    return oc ⊑ Core.OpaqueClosure
+end
+
 function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
         @nospecialize(result_t), field::Int, leaves::Vector{Any})
     # For every leaf, the lifted value
@@ -277,31 +288,40 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
     for leaf in leaves
         leaf_key = leaf
         if isa(leaf, AnySSAValue)
-            if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
-                leaf = compact.ssa_rename[leaf.id]
-                if isa(leaf, AnySSAValue)
-                    leaf = simple_walk(compact, leaf)
-                end
-                if isa(leaf, AnySSAValue)
-                    def = compact[leaf]
-                else
-                    def = leaf
-                end
-            else
-                def = compact[leaf]
-            end
-            if is_tuple_call(compact, def) && 1 <= field < length(def.args)
-                lifted = def.args[1+field]
+            function lift_arg(ref::Core.Compiler.UseRef)
+                lifted = ref[]
                 if is_old(compact, leaf) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    ninst = effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted)))
-                    lifted = insert_node!(compact, leaf, ninst)
-                    def.args[1+field] = lifted
+                    lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
+                    ref[] = lifted
                     (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
                 end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
+                nothing
+            end
+            function walk_leaf(@nospecialize(leaf))
+                if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
+                    leaf = compact.ssa_rename[leaf.id]
+                    if isa(leaf, AnySSAValue)
+                        leaf = simple_walk(compact, leaf)
+                    end
+                    if isa(leaf, AnySSAValue)
+                        def = compact[leaf]
+                    else
+                        def = leaf
+                    end
+                elseif isa(leaf, AnySSAValue)
+                    def = compact[leaf]
+                else
+                    def = leaf
+                end
+                return Pair{Any, Any}(def, leaf)
+            end
+            (def, leaf) = walk_leaf(leaf)
+            if is_tuple_call(compact, def) && 1 <= field < length(def.args)
+                lift_arg(UseRef(def, 1 + field))
                 continue
             elseif isexpr(def, :new)
                 typ = widenconst(types(compact)[leaf])
@@ -344,6 +364,18 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
+            elseif is_getfield_captures(def, compact)
+                # Walk to new_opaque_closure
+                ocleaf = def.args[2]
+                if isa(ocleaf, AnySSAValue)
+                    ocleaf = simple_walk(compact, ocleaf)
+                end
+                ocdef, _ = walk_leaf(ocleaf)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 <= field <= length(ocdef.args)-5
+                    lift_arg(UseRef(ocdef, 5 + field))
+                    continue
+                end
+                return nothing
             else
                 typ = compact_exprtype(compact, leaf)
                 if !isa(typ, Const)
