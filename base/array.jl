@@ -455,7 +455,8 @@ fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
     zeros([T=Float64,] dims::Tuple)
     zeros([T=Float64,] dims...)
 
-Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
+Create an `Array`, with element type `T`, of all zeros with size specified by `dims`. This is by
+default equivalent to `fill(zero(T), dims...)`, i.e. each entry will be the same zero.
 See also [`fill`](@ref), [`ones`](@ref).
 
 # Examples
@@ -468,6 +469,11 @@ julia> zeros(Int8, 2, 3)
 2×3 Matrix{Int8}:
  0  0  0
  0  0  0
+
+julia> a = zeros(BigInt, 2);
+
+julia> a[1] === a[2]
+true
 ```
 """
 function zeros end
@@ -477,6 +483,7 @@ function zeros end
     ones([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
+This is by default equivalent to `fill(one(T), dims...)`, i.e. each entry will be the same one.
 See also: [`fill`](@ref), [`zeros`](@ref).
 
 # Examples
