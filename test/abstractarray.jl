@@ -281,14 +281,27 @@ end
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
 
         @testset "indexing with Integers (issue #39997)" begin
-            r = Base.IdentityUnitRange(1:1000)
-            val = r[5]
-            for T in [Int8, Int16, Int32, Int64, Int128, BigInt]
-                @test r[T(5)] == val
-                @test r[T(5)] isa eltype(r)
+            for ur in [1:1000, big(2):big(2)^65]
+                r = Base.IdentityUnitRange(ur)
+                val = r[5]
+                for T in [Int8, Int16, Int32, Int64, Int128, BigInt]
+                    @test r[T(5)] == val
+                    @test r[T(5)] isa eltype(r)
+                end
+                # indexing with a single Bool should throw an error
+                @test_throws ArgumentError r[true]
+
+                @testset "iteration" begin
+                    @test first(r) === r[begin]
+                    @test last(r) === r[end]
+                    v, st = iterate(r)
+                    @test v == r[begin]
+                    @test v isa eltype(r)
+                    v, st = iterate(r, st)
+                    @test v == r[begin + 1]
+                    @test v isa eltype(r)
+                end
             end
-            # indexing with a single Bool should throw an error
-            @test_throws ArgumentError r[true]
         end
         @testset "logical indexing" begin
             for (ur, inds) in Any[(1:2, false:true), (1:1, true:true), (1:1, false:false), (1:0, true:false)]

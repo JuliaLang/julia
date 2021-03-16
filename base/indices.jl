@@ -377,17 +377,17 @@ Represent an AbstractUnitRange `range` as an offset vector such that `range[i] =
 
 `IdentityUnitRange`s are frequently used as axes for offset arrays.
 """
-struct IdentityUnitRange{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
-    indices::T
+struct IdentityUnitRange{T<:Integer, I<:AbstractUnitRange{T}} <: AbstractUnitRange{T}
+    indices::I
 end
 IdentityUnitRange(S::IdentityUnitRange) = S
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
 unsafe_indices(S::IdentityUnitRange) = (S,)
 axes1(S::IdentityUnitRange) = S
-axes(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
-unsafe_indices(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
-axes1(S::IdentityUnitRange{<:OneTo}) = S.indices
+axes(S::IdentityUnitRange{T, OneTo{T}}) where {T<:Integer} = (S.indices,)
+unsafe_indices(S::IdentityUnitRange{T, OneTo{T}}) where {T<:Integer} = (S.indices,)
+axes1(S::IdentityUnitRange{T, OneTo{T}}) where {T<:Integer} = S.indices
 
 first(S::IdentityUnitRange) = first(S.indices)
 last(S::IdentityUnitRange) = last(S.indices)
@@ -396,9 +396,9 @@ length(S::IdentityUnitRange) = length(S.indices)
 unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
 function getindex(S::IdentityUnitRange, i::Integer)
     @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck checkbounds(S, i)
-    j = to_indices(S, (i,))[1]
-    return j
+    return eltype(S)(i)
 end
 function getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer})
     @_inline_meta
@@ -417,7 +417,7 @@ function getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer})
             return range(last(S), length=1)
         end
     else
-        return map(Int, i)
+        return map(eltype(S), i)
     end
 end
 function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
@@ -437,7 +437,7 @@ function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
             return range(last(S), step=oneunit(eltype(S)), length=1)
         end
     else
-        return map(Int, i)
+        return map(eltype(S), i)
     end
 end
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
