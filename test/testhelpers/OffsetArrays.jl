@@ -72,7 +72,7 @@ offset_coerce(::Type{I}, r::AbstractUnitRange) where I<:AbstractUnitRange{T} whe
 @inline Base.length(r::IdOffsetRange) = length(r.parent)
 Base.reduced_index(i::IdOffsetRange) = typeof(i)(first(i):first(i))
 # Workaround for #92 on Julia < 1.4
-Base.reduced_index(i::IdentityUnitRange{<:IdOffsetRange}) = typeof(i)(first(i):first(i))
+Base.reduced_index(i::IdentityUnitRange{<:Integer, <:IdOffsetRange}) = typeof(i)(first(i):first(i))
 for f in [:firstindex, :lastindex]
     @eval Base.$f(r::IdOffsetRange) = $f(r.parent) .+ r.offset
 end
@@ -362,7 +362,6 @@ Broadcast.broadcast_unalias(dest::OffsetArray, src::OffsetArray) = parent(dest) 
 ### Special handling for AbstractRange
 
 const OffsetRange{T} = OffsetArray{T,1,<:AbstractRange{T}}
-const IIUR = IdentityUnitRange{S} where S<:AbstractUnitRange{T} where T<:Integer
 
 Base.step(a::OffsetRange) = step(parent(a))
 
@@ -370,25 +369,25 @@ Base.step(a::OffsetRange) = step(parent(a))
 @propagate_inbounds function Base.getindex(a::OffsetRange, r::IdOffsetRange)
     OffsetArray(a.parent[r.parent .+ (r.offset - a.offsets[1])], r.offset)
 end
-@propagate_inbounds Base.getindex(r::OffsetRange, s::IIUR) =
+@propagate_inbounds Base.getindex(r::OffsetRange, s::IdentityUnitRange) =
     OffsetArray(r[s.indices], s)
 @propagate_inbounds Base.getindex(a::OffsetRange, r::AbstractRange) = a.parent[r .- a.offsets[1]]
 @propagate_inbounds Base.getindex(a::AbstractRange, r::OffsetRange) = OffsetArray(a[parent(r)], r.offsets)
 
-@propagate_inbounds Base.getindex(r::UnitRange, s::IIUR) =
+@propagate_inbounds Base.getindex(r::UnitRange, s::IdentityUnitRange) =
     OffsetArray(r[s.indices], s)
 
-@propagate_inbounds Base.getindex(r::StepRange, s::IIUR) =
+@propagate_inbounds Base.getindex(r::StepRange, s::IdentityUnitRange) =
     OffsetArray(r[s.indices], s)
 
 # this method is needed for ambiguity resolution
-@propagate_inbounds Base.getindex(r::StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision}, s::IIUR) where T =
+@propagate_inbounds Base.getindex(r::StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision}, s::IdentityUnitRange) where T =
     OffsetArray(r[s.indices], s)
 
-@propagate_inbounds Base.getindex(r::StepRangeLen{T}, s::IIUR) where {T} =
+@propagate_inbounds Base.getindex(r::StepRangeLen{T}, s::IdentityUnitRange) where {T} =
     OffsetArray(r[s.indices], s)
 
-@propagate_inbounds Base.getindex(r::LinRange, s::IIUR) =
+@propagate_inbounds Base.getindex(r::LinRange, s::IdentityUnitRange) =
     OffsetArray(r[s.indices], s)
 
 function Base.show(io::IO, r::OffsetRange)
@@ -407,7 +406,7 @@ Base.append!(A::OffsetVector, items) = (append!(A.parent, items); A)
 Base.empty!(A::OffsetVector) = (empty!(A.parent); A)
 
 # These functions keep the summary compact
-function Base.inds2string(inds::Tuple{Vararg{Union{IdOffsetRange,IdentityUnitRange{<:IdOffsetRange}}}})
+function Base.inds2string(inds::Tuple{Vararg{Union{IdOffsetRange,IdentityUnitRange{<:Integer,<:IdOffsetRange}}}})
     Base.inds2string(map(UnitRange, inds))
 end
 Base.showindices(io::IO, ind1::IdOffsetRange, inds::IdOffsetRange...) = Base.showindices(io, map(UnitRange, (ind1, inds...))...)
