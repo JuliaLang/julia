@@ -269,7 +269,7 @@ Create a counting semaphore that allows at most `sem_size`
 acquires to be in use at any time.
 Each acquire must be matched with a release.
 """
-mutable struct Semaphore
+mutable struct Semaphore <: AbstractLock
     sem_size::Int
     curr_cnt::Int
     cond_wait::Threads.Condition
@@ -314,6 +314,24 @@ function release(s::Semaphore)
     return
 end
 
+lock(s::Semaphore) = acquire(s)
+unlock(s::Semaphore) = release(s)
+islocked(s::Semaphore) = s.curr_cnt >= s.sem_size
+
+function trylock(s::Semaphore)
+    if trylock(s.cond_wait)
+        try
+            if s.curr_cnt < s.sem_size
+                s.curr_cnt = s.curr_cnt + 1
+                return true
+            end
+        finally
+            unlock(s.cond_wait)
+        end
+    end
+
+    return false
+end
 
 """
     Event()
