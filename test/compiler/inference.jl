@@ -677,8 +677,8 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
-    @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Type
-    @test fieldtype_tfunc(Type{<:Tuple}, Any) == Type
+    @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Any
+    @test fieldtype_tfunc(Type{<:Tuple}, Any) == Any
     @test fieldtype_nothrow(Type{Base.RefValue{<:Real}}, Const(:x))
     @test !fieldtype_nothrow(Type{Union{}}, Const(:x))
     @test !fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Int32} where {T<:Real}, Const(:x))
@@ -2965,10 +2965,10 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Union{Type, TypeVar}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Union{Type, TypeVar}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Union{Type, TypeVar}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Union{Type, TypeVar}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Any
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Any, Vararg}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Any
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Any
