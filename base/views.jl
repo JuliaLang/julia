@@ -125,13 +125,16 @@ julia> A
 macro view(ex)
     if Meta.isexpr(ex, :ref)
         ex = replace_ref_begin_end!(ex)
-        if Meta.isexpr(ex, :ref)
-            ex = Expr(:call, view, ex.args...)
-        else # ex replaced by let ...; foo[...]; end
-            @assert Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref)
-            ex.args[2] = Expr(:call, view, ex.args[2].args...)
+        if !Meta.isexpr(ex, :let)
+            # wrap in a let block to prevent accidentally redefining `view` if used on the LHS, e.g.
+            #   @view(A[x]) = 2
+            ex = Expr(:let, Expr(:block), ex)
         end
-        Expr(:&&, true, esc(ex))
+        @assert Meta.isexpr(ex.args[2], :block)
+        @assert Meta.isexpr(ex.args[2], :ref)
+        ex.args[1].args = map(esc,ex.args[1].args)
+        ex.args[2] = :(view($(map(esc, ex.args[2].args)...)))
+        return ex
     else
         throw(ArgumentError("Invalid use of @view macro: argument must be a reference expression A[...]."))
     end
