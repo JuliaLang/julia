@@ -218,14 +218,14 @@ rmul!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) = typeof(A)(rmul!(
 function rmul!(A::UnitLowerTriangular, D::Diagonal)
     rmul!(A.data, D)
     for i = 1:size(A, 1)
-        A.data[i,i] = D.diag[i]
+        @inbounds A.data[i,i] = D.diag[i]
     end
     LowerTriangular(A.data)
 end
 function rmul!(A::UnitUpperTriangular, D::Diagonal)
     rmul!(A.data, D)
     for i = 1:size(A, 1)
-        A.data[i,i] = D.diag[i]
+        @inbounds A.data[i,i] = D.diag[i]
     end
     UpperTriangular(A.data)
 end
@@ -233,14 +233,14 @@ end
 function lmul!(D::Diagonal, B::UnitLowerTriangular)
     lmul!(D, B.data)
     for i = 1:size(B, 1)
-        B.data[i,i] = D.diag[i]
+        @inbounds B.data[i,i] = D.diag[i]
     end
     LowerTriangular(B.data)
 end
 function lmul!(D::Diagonal, B::UnitUpperTriangular)
     lmul!(D, B.data)
     for i = 1:size(B, 1)
-        B.data[i,i] = D.diag[i]
+        @inbounds B.data[i,i] = D.diag[i]
     end
     UpperTriangular(B.data)
 end
@@ -424,7 +424,7 @@ function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     if length(v) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
     end
-    for i = 1:length(D.diag)
+    @inbounds for i = 1:length(D.diag)
         d = D.diag[i]
         if iszero(d)
             throw(SingularException(i))
@@ -438,13 +438,13 @@ function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
-    for i = 1:length(D.diag)
+    @inbounds for i = 1:length(D.diag)
         d = D.diag[i]
         if iszero(d)
             throw(SingularException(i))
         end
         for j = 1:size(V,2)
-            @inbounds V[i,j] = d\V[i,j]
+            V[i,j] = d\V[i,j]
         end
     end
     V
@@ -617,7 +617,7 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
     end
     (m == 0 || n == 0) && return B
-    for j = 1:n
+    @inbounds for j = 1:n
         for i = 1:m
             di = D.diag[i]
             if di == 0
@@ -636,7 +636,7 @@ end
 
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
-    for i = 1:length(D.diag)
+    @inbounds for i = 1:length(D.diag)
         if D.diag[i] == zero(T)
             throw(SingularException(i))
         end
@@ -647,7 +647,7 @@ end
 
 function pinv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
-    for i = 1:length(D.diag)
+    @inbounds for i = 1:length(D.diag)
         isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
     end
     Diagonal(Di)
@@ -655,7 +655,7 @@ end
 function pinv(D::Diagonal{T}, tol::Real) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     if( !isempty(D.diag) ) maxabsD = maximum(abs.(D.diag)) end
-    for i = 1:length(D.diag)
+    @inbounds for i = 1:length(D.diag)
         if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
             Di[i]=inv(D.diag[i])
         else
@@ -718,7 +718,7 @@ function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     info = 0
     for (i, di) in enumerate(A.diag)
         if isreal(di) && real(di) > 0
-            A.diag[i] = √di
+            @inbounds A.diag[i] = √di
         elseif check
             throw(PosDefException(i))
         else
