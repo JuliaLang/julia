@@ -251,7 +251,7 @@ const any_gc_flag = Condition()
 function start_gc_msgs_task()
     @async while true
         wait(any_gc_flag)
-        flush_gc_msgs()
+        Base.invokelatest(flush_gc_msgs)
     end
 end
 
