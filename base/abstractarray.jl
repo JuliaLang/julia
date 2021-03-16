@@ -2403,7 +2403,14 @@ function hash(A::AbstractArray, h::UInt)
     # Instead hash the tuple of firsts and lasts along each dimension
     h = hash(map(first, axes(A)), h)
     h = hash(map(last, axes(A)), h)
-    isempty(A) && return h
+
+    # For short arrays, it's not worth doing anything complicated
+    if length(A) < 8192
+        for x in A
+            h = hash(x, h)
+        end
+        return h
+    end
 
     # Goal: Hash approximately log(N) entries with a higher density of hashed elements
     # weighted towards the end and special consideration for repeated values. Colliding
@@ -2434,9 +2441,8 @@ function hash(A::AbstractArray, h::UInt)
     n = 0
     while true
         n += 1
-        # Hash the current key-index and its element
-        elt = A[keyidx]
-        h = hash(keyidx=>elt, h)
+        # Hash the element
+        h = hash(A[keyidx], h)
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
