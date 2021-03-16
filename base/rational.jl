@@ -215,6 +215,8 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)::Rational{T}
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
+rationalize(x::Rational; kvs...) = x
+rationalize(x::Integer; kvs...) = Rational(x)
 
 """
     numerator(x)

@@ -31,6 +31,8 @@ using Test
     @test_throws ArgumentError inv(typemin(Int)//typemax(Int))
     @test_throws ArgumentError Rational(0x1, typemin(Int32))
 
+    @test rationalize(2) === 2//1
+    @test rationalize(1//2) === 1//2
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
     @test_throws OverflowError rationalize(UInt, -2.0)
