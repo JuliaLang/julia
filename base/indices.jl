@@ -377,17 +377,26 @@ Represent an AbstractUnitRange `range` as an offset vector such that `range[i] =
 
 `IdentityUnitRange`s are frequently used as axes for offset arrays.
 """
-struct IdentityUnitRange{T<:Integer, I<:AbstractUnitRange{T}} <: AbstractUnitRange{T}
+struct IdentityUnitRange{I<:AbstractUnitRange, T} <: AbstractUnitRange{T}
     indices::I
+    function IdentityUnitRange{I,T}(indices::I) where {I<:AbstractUnitRange, T}
+        T === eltype(I) || throw(ArgumentError("type parameter T must be be the eltype of the indices ($(eltype(I))), received $T"))
+        new{I,T}(indices)
+    end
 end
+function IdentityUnitRange{I,T}(indices::AbstractUnitRange) where {I<:AbstractUnitRange, T}
+    IdentityUnitRange{I,T}(convert(I, indices)::I)
+end
+IdentityUnitRange{I}(indices::I) where {I<:AbstractUnitRange} = IdentityUnitRange{I, eltype(I)}(indices)
+IdentityUnitRange(indices::I) where {I<:AbstractUnitRange} = IdentityUnitRange{I}(indices)
 IdentityUnitRange(S::IdentityUnitRange) = S
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
 unsafe_indices(S::IdentityUnitRange) = (S,)
 axes1(S::IdentityUnitRange) = S
-axes(S::IdentityUnitRange{T, OneTo{T}}) where {T<:Integer} = (S.indices,)
-unsafe_indices(S::IdentityUnitRange{T, OneTo{T}}) where {T<:Integer} = (S.indices,)
-axes1(S::IdentityUnitRange{T, OneTo{T}}) where {T<:Integer} = S.indices
+axes(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
+unsafe_indices(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
+axes1(S::IdentityUnitRange{<:OneTo}) = S.indices
 
 first(S::IdentityUnitRange) = first(S.indices)
 last(S::IdentityUnitRange) = last(S.indices)
