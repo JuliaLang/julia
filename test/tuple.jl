@@ -622,3 +622,11 @@ f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
     @test_throws BoundsError (1, 2)[0:2]
     @test_throws ArgumentError (1, 2)[OffsetArrays.IdOffsetRange(1:2, -1)]
 end
+
+@testset "isassigned" begin
+    t = (1, 2, 3)
+    @test isassigned(t, 0) === false
+    @test isassigned(t, 1) === true
+    @test isassigned(t, 3) === true
+    @test isassigned(t, 4) === false
+end

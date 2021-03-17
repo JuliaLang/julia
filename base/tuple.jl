@@ -465,6 +465,11 @@ revargs(x, r...) = (revargs(r...)..., x)
 
 reverse(t::Tuple) = revargs(t...)
 
+function isassigned(v::Tuple, i::Integer)
+    @boundscheck 1 <= i <= length(v) || return false
+    true
+end
+
 ## specialized reduction ##
 
 # TODO: these definitions cannot yet be combined, since +(x...)
