@@ -355,6 +355,7 @@ include("toml_parser.jl")
 include("loading.jl")
 
 # misc useful functions & macros
+include("random.jl")
 include("timing.jl")
 include("util.jl")
 

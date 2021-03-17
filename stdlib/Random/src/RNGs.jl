@@ -6,57 +6,6 @@
 SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
 const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
 
-if Sys.iswindows()
-    struct RandomDevice <: AbstractRNG
-        buffer::Vector{UInt128}
-
-        RandomDevice() = new(Vector{UInt128}(undef, 1))
-    end
-
-    function rand(rd::RandomDevice, sp::SamplerBoolBitInteger)
-        rand!(rd, rd.buffer)
-        @inbounds return rd.buffer[1] % sp[]
-    end
-else # !windows
-    struct RandomDevice <: AbstractRNG
-        unlimited::Bool
-
-        RandomDevice(; unlimited::Bool=true) = new(unlimited)
-    end
-
-    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
-    rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
-
-    function getfile(rd::RandomDevice)
-        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
-        # TODO: there is a data-race, this can leak up to nthreads() copies of the file descriptors,
-        # so use a "thread-once" utility once available
-        isassigned(devrandom) || (devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random"))
-        devrandom[]
-    end
-
-    const DEV_RANDOM  = Ref{IOStream}()
-    const DEV_URANDOM = Ref{IOStream}()
-
-end # os-test
-
-# NOTE: this can't be put within the if-else block above
-for T in (Bool, BitInteger_types...)
-    if Sys.iswindows()
-        @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
-            Base.windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
-                (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-                  A, sizeof(A)))
-            A
-        end
-    else
-        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(getfile(rd), A)
-    end
-end
-
-# RandomDevice produces natively UInt64
-rng_native_52(::RandomDevice) = UInt64
-
 """
     RandomDevice()
 
@@ -64,9 +13,21 @@ Create a `RandomDevice` RNG object.
 Two such objects will always generate different streams of random numbers.
 The entropy is obtained from the operating system.
 """
-RandomDevice
+struct RandomDevice <: AbstractRNG
+    impl::Base.CoreRandom.RandomDevice
+    RandomDevice(; kwargs...) = new(Base.CoreRandom.RandomDevice(; kwargs...))
+end
 
 RandomDevice(::Nothing) = RandomDevice()
+
+# Interface `Base.CoreRandom`:
+rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = Base.CoreRandom.rand(rd.impl, sp[])
+rand!(rd::RandomDevice, A::Array{T}, ::SamplerType{T}) where {T <: Union{Bool, BitInteger}} =
+    Base.CoreRandom.rand!(rd.impl, A)
+
+# RandomDevice produces natively UInt64
+rng_native_52(::RandomDevice) = UInt64
+
 seed!(rng::RandomDevice) = rng
 
 
