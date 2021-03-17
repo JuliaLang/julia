@@ -257,3 +257,6 @@ let p1 = Ptr{Int8}(1), p2 = Ptr{Int32}(1), p3 = Ptr{Int8}(2)
     @test isless(p1, p3)
     @test_throws MethodError isless(p1, p2)
 end
+
+# PR #40083
+@test hash(1:1000) == hash(collect(1:1000))
