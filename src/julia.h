@@ -297,9 +297,6 @@ typedef struct _jl_method_t {
     JL_DATA_TYPE
     jl_sym_t *name;  // for error reporting
     struct _jl_module_t *module;
-    // = NULL if part of the internal method table. Otherwise keeps a reference
-    // to the method table that this method is a part of.
-    jl_value_t *external_mt;
     jl_sym_t *file;
     int32_t line;
     size_t primary_world;
@@ -313,6 +310,7 @@ typedef struct _jl_method_t {
     jl_array_t *speckeyset; // index lookup by hash into specializations
 
     jl_value_t *slot_syms; // compacted list of slot names (String)
+    jl_value_t *external_mt; // reference to the method table this method is part of, null if part of the internal table
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
