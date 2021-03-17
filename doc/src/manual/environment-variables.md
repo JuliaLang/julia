@@ -165,6 +165,16 @@ PkgServer protocol, and instead access the packages directly from their hosts (G
 export JULIA_PKG_SERVER=""
 ```
 
+### `JULIA_DEPOT_PATH`
+
+A directory path that points to the default location for storage of julia packages. If `$JULIA_DEPOT_PATH` is not set, then `Base.DEPOT_PATH` defaults to
+
+```
+$HOME/.julia
+$HOME/.julia/julia-$major.$minor/local/share/julia
+$HOME/.julia/julia-$major.$minor/share/julia
+```
+
 ## External applications
 
 ### `JULIA_SHELL`
