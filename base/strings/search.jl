@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const Byte = Union{Int8,UInt8}
-const ByteArray{T<:Byte} = Vector{T}
+const ByteArray = Union{Vector{Int8},Vector{UInt8}}
 
 nothing_sentinel(i) = i == 0 ? nothing : i
 
