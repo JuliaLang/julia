@@ -2442,7 +2442,8 @@ function hash(A::AbstractArray, h::UInt)
     while true
         n += 1
         # Hash the element
-        h = hash(A[keyidx], h)
+        elt = A[keyidx]
+        h = hash(elt, h)
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
