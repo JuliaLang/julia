@@ -46,7 +46,7 @@ function union end
 _in(itr) = x -> x in itr
 
 union(s, sets...) = union!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
-union(s::AbstractSet) = copy(s)
+union(s::AbstractSet) = copymutable(s)
 
 const ∪ = union
 
@@ -212,7 +212,7 @@ Int64[]
 ```
 """
 symdiff(s, sets...) = symdiff!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
-symdiff(s) = symdiff!(copy(s))
+symdiff(s) = symdiff!(copymutable(s))
 
 """
     symdiff!(s::Union{AbstractSet,AbstractVector}, itrs...)
