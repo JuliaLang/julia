@@ -828,17 +828,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        if length(s) == 0
-            return r
-        elseif length(s) == 1
-            if first(s)
-                return r
-            else
-                return range(first(r), length=0)
-            end
-        else # length(s) == 2
-            return range(last(r), length=1)
-        end
+        range(ifelse(first(s), first(r), last(r)), length = Int(last(s)))
     else
         f = first(r)
         st = oftype(f, f + first(s)-1)
@@ -857,17 +847,7 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        if length(s) == 0
-            return range(first(r), step=one(eltype(r)), length=0)
-        elseif length(s) == 1
-            if first(s)
-                return range(first(r), step=one(eltype(r)), length=1)
-            else
-                return range(first(r), step=one(eltype(r)), length=0)
-            end
-        else # length(s) == 2
-            return range(last(r), step=one(eltype(r)), length=1)
-        end
+        range(ifelse(first(s), first(r), last(r)), step=oneunit(eltype(r)), length = Int(last(s)))
     else
         st = oftype(first(r), first(r) + s.start-1)
         return range(st, step=step(s), length=length(s))
