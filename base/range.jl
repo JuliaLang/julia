@@ -828,7 +828,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        range(ifelse(first(s), first(r), last(r)), length = Int(last(s)))
+        range(first(s) ? first(r) : last(r), length = Int(last(s)))
     else
         f = first(r)
         st = oftype(f, f + first(s)-1)
