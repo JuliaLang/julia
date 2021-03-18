@@ -12,6 +12,8 @@ module OffsetArrays
 using Base: tail, @propagate_inbounds
 using Base: IdentityUnitRange
 
+const IIUR = IdentityUnitRange{AbstractUnitRange{T},T} where T<:Integer
+
 export OffsetArray, OffsetMatrix, OffsetVector
 
 struct IdOffsetRange{T<:Integer,I<:AbstractUnitRange{T}} <: AbstractUnitRange{T}
@@ -95,7 +97,7 @@ end
 @propagate_inbounds function Base.getindex(r::IdOffsetRange, s::AbstractUnitRange{<:Integer})
     return r.parent[s .- r.offset] .+ r.offset
 end
-@propagate_inbounds function Base.getindex(r::IdOffsetRange, s::IdentityUnitRange)
+@propagate_inbounds function Base.getindex(r::IdOffsetRange, s::IIUR)
     return IdOffsetRange(r.parent[s .- r.offset], r.offset)
 end
 @propagate_inbounds function Base.getindex(r::IdOffsetRange, s::IdOffsetRange)
@@ -360,9 +362,7 @@ Base.dataids(A::OffsetArray) = Base.dataids(parent(A))
 Broadcast.broadcast_unalias(dest::OffsetArray, src::OffsetArray) = parent(dest) === parent(src) ? src : Broadcast.unalias(dest, src)
 
 ### Special handling for AbstractRange
-
 const OffsetRange{T} = OffsetArray{T,1,<:AbstractRange{T}}
-const IIUR = IdentityUnitRange{AbstractUnitRange{T},T} where T<:Integer
 
 Base.step(a::OffsetRange) = step(parent(a))
 
