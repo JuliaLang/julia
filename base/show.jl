@@ -583,6 +583,8 @@ function make_typealias(@nospecialize(x::Type))
     end
 end
 
+isgensym(s::Symbol) = '#' in string(s)
+
 function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVector, skip::Int)
     elide == 0 && return false
     wheres[elide] === p || return false
@@ -612,9 +614,9 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
             if i == n && egal_var(p, orig[i]) && show_can_elide(p, wheres, elide, env, i)
                 n -= 1
                 elide -= 1
-            elseif p.lb === Union{} && show_can_elide(p, wheres, elide, env, i)
+            elseif p.lb === Union{} && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
                 elide -= 1
-            elseif p.ub === Any && show_can_elide(p, wheres, elide, env, i)
+            elseif p.ub === Any && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
                 elide -= 1
             end
         end
@@ -624,10 +626,10 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
         for i = 1:n
             p = env[i]
             if p isa TypeVar
-                if p.lb === Union{} && something(findfirst(w -> w === p, wheres), 0) > elide
+                if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
                     print(io, "<:")
                     show(io, p.ub)
-                elseif p.ub === Any && something(findfirst(w -> w === p, wheres), 0) > elide
+                elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
                     print(io, ">:")
                     show(io, p.lb)
                 else
