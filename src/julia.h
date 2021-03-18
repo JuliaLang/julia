@@ -269,7 +269,8 @@ typedef struct _jl_code_info_t {
         // 0 = inbounds
         // 1,2 = <reserved> inlinehint,always-inline,noinline
         // 3 = <reserved> strict-ieee (strictfp)
-        // 4-6 = <unused>
+        // 4 = effect-free (may be deleted if unused)
+        // 5-6 = <unused>
         // 7 = has out-of-band info
     // miscellaneous data:
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
