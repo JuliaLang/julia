@@ -323,6 +323,16 @@ function _all_match_first(f::F, inds, A, B...) where F<:Function
 end
 _all_match_first(f::F, inds) where F<:Function = true
 
+"""
+    eachstoredindex(A)
+
+Returns an iterable over the indices of `A` where the values are structurally non-zero.
+It falls back to `eachindex(A)` and can be redefined by array types.
+`eachstoredindex(A)` is not guaranteed to return the same shape as `eachindex(A)`.
+"""
+eachstoredindex(A) = eachindex(A)
+
+
 # keys with an IndexStyle
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
 
