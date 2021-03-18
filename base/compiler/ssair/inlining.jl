@@ -555,12 +555,16 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
                     compact.active_result_bb -= 1
                     refinish = true
                 end
-                # At the moment we will allow globalrefs in argument position, turn those into ssa values
+                # It is possible for GlobalRefs and Exprs to be in argument position
+                # at this point in the IR, though in that case they are required
+                # to be effect-free. However, we must still move them out of argument
+                # position, since `Argument` is allowed in PhiNodes, but `GlobalRef`
+                # and `Expr` are not, so a substitution could anger the verifier.
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
-                    if isa(aexpr, Expr)
-                        argexprs[aidx] = insert_node_here!(compact,
-                            NewInstruction(aexpr, compact_exprtype(compact, aexpr), compact.result[idx][:line]))
+                    if isa(aexpr, Expr) || isa(aexpr, GlobalRef)
+                        ninst = effect_free(NewInstruction(aexpr, compact_exprtype(compact, aexpr), compact.result[idx][:line]))
+                        argexprs[aidx] = insert_node_here!(compact, ninst)
                     end
                 end
                 if isa(item, InliningTodo)
