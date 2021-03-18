@@ -1170,6 +1170,7 @@ function getindex(A::AbstractArray, I...)
     _getindex(IndexStyle(A), A, to_indices(A, I)...)
 end
 # To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
+@_propagate_inbounds_meta
 getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
 
 function unsafe_getindex(A::AbstractArray, I...)
