@@ -337,6 +337,41 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         return parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
     end
 
+    function edge_matches_sv(frame::InferenceState)
+        inf_method2 = frame.src.method_for_inference_limit_heuristics # limit only if user token match
+        inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
+        if callee_method2 !== inf_method2
+            return false
+        end
+        if !hardlimit
+            # if this is a soft limit,
+            # also inspect the parent of this edge,
+            # to see if they are the same Method as sv
+            # in which case we'll need to ensure it is convergent
+            # otherwise, we don't
+
+            # check in the cycle list first
+            # all items in here are mutual parents of all others
+            if !_any(matches_sv, frame.callers_in_cycle)
+                let parent = frame.parent
+                    parent !== nothing || return false
+                    parent = parent::InferenceState
+                    (parent.cached || parent.parent !== nothing) || return false
+                    matches_sv(parent) || return false
+                end
+            end
+
+            # If the method defines a recursion relation, give it a chance
+            # to tell us that this recursion is actually ok.
+            if isdefined(method, :recursion_relation)
+                if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, frame.linfo.specTypes])
+                    return false
+                end
+            end
+        end
+        return true
+    end
+
     for infstate in InfStackUnwind(sv)
         if method === infstate.linfo.def
             if infstate.linfo.specTypes == sig
@@ -355,40 +390,19 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 break
             end
             topmost === nothing || continue
-            inf_method2 = infstate.src.method_for_inference_limit_heuristics # limit only if user token match
-            inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
-            if callee_method2 === inf_method2
-                if !hardlimit
-                    # if this is a soft limit,
-                    # also inspect the parent of this edge,
-                    # to see if they are the same Method as sv
-                    # in which case we'll need to ensure it is convergent
-                    # otherwise, we don't
-
-                    # check in the cycle list first
-                    # all items in here are mutual parents of all others
-                    if !_any(matches_sv, infstate.callers_in_cycle)
-                        let parent = infstate.parent
-                            parent !== nothing || continue
-                            parent = parent::InferenceState
-                            (parent.cached || parent.parent !== nothing) || continue
-                            matches_sv(parent) || continue
-                        end
-                    end
-                end
-
+            if edge_matches_sv(infstate)
                 topmost = infstate
                 edgecycle = true
             end
         end
     end
 
-    if !(topmost === nothing)
-        topmost = topmost::InferenceState
+    if topmost !== nothing
         sigtuple = unwrap_unionall(sig)::DataType
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
         ls = length(sigtuple.parameters)
+
         if method === sv.linfo.def
             # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
@@ -398,6 +412,13 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         else
             comparison = method.sig
         end
+
+        if isdefined(method, :recursion_relation)
+            # We don't recquire the recursion_relation to be transitive, so
+            # apply a hard limit
+            hardlimit = true
+        end
+
         # see if the type is actually too big (relative to the caller), and limit it if required
         newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
