@@ -14,7 +14,7 @@
 #include <errno.h>
 
 #if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
-#include <getopt.h>
+#include "getopt.h"
 #endif
 
 #if defined(_OS_FREEBSD_)

@@ -5,12 +5,7 @@
 
 #include "julia.h"
 
-#ifndef _MSC_VER
-#include <unistd.h>
-#include <getopt.h>
-#else
 #include "getopt.h"
-#endif
 #include "julia_assert.h"
 
 #ifdef _OS_WINDOWS_
