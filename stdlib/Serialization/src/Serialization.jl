@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 14 # do not make changes without bumping the version #!
+const ser_version = 15 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -426,6 +426,11 @@ function serialize(s::AbstractSerializer, meth::Method)
     end
     if isdefined(meth, :generator)
         serialize(s, Base._uncompressed_ast(meth, meth.generator.inferred)) # XXX: what was this supposed to do?
+    else
+        serialize(s, nothing)
+    end
+    if isdefined(meth, :recursion_relation)
+        serialize(s, method.recursion_relation)
     else
         serialize(s, nothing)
     end
@@ -1007,6 +1012,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         template = template_or_is_opaque
     end
     generator = deserialize(s)
+    recursion_relation = nothing
+    if format_version(s) >= 15
+        recursion_relation = deserialize(s)
+    end
     if makenew
         meth.module = mod
         meth.name = name
@@ -1032,6 +1041,9 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             linfo.inferred = generator
             linfo.def = meth
             meth.generator = linfo
+        end
+        if recursion_relation !== nothing
+            meth.recursion_relation = recursion_relation
         end
         if !is_for_opaque_closure
             mt = ccall(:jl_method_table_for, Any, (Any,), sig)
