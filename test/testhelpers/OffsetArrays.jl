@@ -362,7 +362,7 @@ Broadcast.broadcast_unalias(dest::OffsetArray, src::OffsetArray) = parent(dest) 
 ### Special handling for AbstractRange
 
 const OffsetRange{T} = OffsetArray{T,1,<:AbstractRange{T}}
-const IIUR = IdentityUnitRange{S} where S<:AbstractUnitRange{T} where T<:Integer
+const IIUR = IdentityUnitRange{AbstractUnitRange{T},T} where T<:Integer
 
 Base.step(a::OffsetRange) = step(parent(a))
 
