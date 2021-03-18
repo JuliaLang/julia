@@ -379,8 +379,11 @@ Represent an AbstractUnitRange `range` as an offset vector such that `range[i] =
 """
 struct IdentityUnitRange{I<:AbstractUnitRange, T} <: AbstractUnitRange{T}
     indices::I
+
+    _eltypecheck(::Type{T}, ::Type{Eltype}) where {T,Eltype} = throw(ArgumentError("type parameter T must be the element type ($Eltype), received T = $T"))
+    _eltypecheck(::Type{T}, ::Type{T}) where {T} = nothing
     function IdentityUnitRange{I,T}(indices::I) where {I<:AbstractUnitRange, T}
-        T === eltype(I) || throw(ArgumentError("type parameter T must be be the eltype of the indices ($(eltype(I))), received $T"))
+        _eltypecheck(T, eltype(I))
         new{I,T}(indices)
     end
 end
@@ -414,17 +417,7 @@ function getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer})
     @boundscheck checkbounds(S, i)
     if eltype(i) === Bool
         # logical indexing
-        if length(i) == 0
-            return range(first(S), length = 0)
-        elseif length(i) == 1
-            if first(i)
-                return range(first(S), length = 1)
-            else
-                return range(first(S), length=0)
-            end
-        else # length(i) == 2
-            return range(last(S), length=1)
-        end
+        return range(first(i) ? first(S) : last(S), length = Int(last(i)))
     else
         return map(eltype(S), i)
     end
@@ -434,17 +427,7 @@ function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
     @boundscheck checkbounds(S, i)
     if eltype(i) === Bool
         # logical indexing
-        if length(i) == 0
-            return range(first(S), step=oneunit(eltype(S)), length=0)
-        elseif length(i) == 1
-            if first(i)
-                return range(first(S), step=oneunit(eltype(S)), length=1)
-            else
-                return range(first(S), step=oneunit(eltype(S)), length=0)
-            end
-        else # length(i) == 2
-            return range(last(S), step=oneunit(eltype(S)), length=1)
-        end
+        return range(first(i) ? first(S) : last(S), step = oneunit(step(i)), length = Int(last(i)))
     else
         return map(eltype(S), i)
     end
