@@ -380,18 +380,19 @@ Represent an AbstractUnitRange `range` as an offset vector such that `range[i] =
 struct IdentityUnitRange{I<:AbstractUnitRange, T} <: AbstractUnitRange{T}
     indices::I
 
-    _eltypecheck(::Type{T}, ::Type{Eltype}) where {T,Eltype} = throw(ArgumentError("type parameter T must be the element type ($Eltype), received T = $T"))
-    _eltypecheck(::Type{T}, ::Type{T}) where {T} = nothing
     function IdentityUnitRange{I,T}(indices::I) where {I<:AbstractUnitRange, T}
         _eltypecheck(T, eltype(I))
         new{I,T}(indices)
     end
 end
+_eltypecheck(::Type{T}, ::Type{T}) where {T} = nothing
+_eltypecheck(::Type{T}, ::Type{Eltype}) where {T,Eltype} = throw(ArgumentError("type parameter T must be the element type ($Eltype), received T = $T"))
+
 function IdentityUnitRange{I,T}(indices::AbstractUnitRange) where {I<:AbstractUnitRange, T}
     IdentityUnitRange{I,T}(convert(I, indices)::I)
 end
 IdentityUnitRange{I}(indices::I) where {I<:AbstractUnitRange} = IdentityUnitRange{I, eltype(I)}(indices)
-IdentityUnitRange(indices::I) where {I<:AbstractUnitRange} = IdentityUnitRange{I}(indices)
+IdentityUnitRange(indices::I) where {I<:AbstractUnitRange} = IdentityUnitRange{I, eltype(I)}(indices)
 IdentityUnitRange(S::IdentityUnitRange) = S
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
