@@ -1570,7 +1570,7 @@ end
 
 let x = TypeVar(:_), y = TypeVar(:_)
     @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair"
-    @test repr(UnionAll(y, UnionAll(x, Pair{x,y}))) == "Pair{<:Any, _1} where _1"
+    @test repr(UnionAll(y, UnionAll(x, Pair{x,y}))) == "Pair{_2, _1} where {_1, _2}"
     @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref}"
     @test repr(UnionAll(y, UnionAll(x, Pair{UnionAll(y,Ref{x}),y}))) == "Pair{Ref{_2}, _1} where {_1, _2}"
 end
@@ -1584,9 +1584,9 @@ let x, y, x
 end
 
 let x = TypeVar(:_, Number), y = TypeVar(:_, Number)
-    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{<:Number, <:Number}"
-    @test repr(UnionAll(y, UnionAll(x, Pair{x,y}))) == "Pair{<:Number, _1} where _1<:Number"
-    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{<:Number}, <:Number}"
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where {_1<:Number, _2<:Number}"
+    @test repr(UnionAll(y, UnionAll(x, Pair{x,y}))) == "Pair{_2, _1} where {_1<:Number, _2<:Number}"
+    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1<:Number, _1} where _1<:Number"
     @test repr(UnionAll(y, UnionAll(x, Pair{UnionAll(y,Ref{x}),y}))) == "Pair{Ref{_2}, _1} where {_1<:Number, _2<:Number}"
 end
 
@@ -1771,7 +1771,7 @@ end
     @test replstr([[1.0]=>1.0]) == "1-element Vector{Pair{Vector{Float64}, Float64}}:\n [1.0] => 1.0"
 
     # issue #28159
-    @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Vector{NamedTuple{<:Any, Tuple{$Int, $Int}}}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
+    @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Vector{NamedTuple{names, Tuple{$Int, $Int}} where names}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
 
     @test replstr(Vector[Any[1]]) == "1-element Vector{Vector}:\n Any[1]"
     @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
@@ -2172,8 +2172,8 @@ end
 @test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat}"
 @test string(Union{Nothing, AbstractVecOrMat{<:Integer}}) == "Union{Nothing, AbstractVecOrMat{<:Integer}}"
 @test string(M37012.BStruct{T, T} where T) == "$(curmod_prefix)M37012.B2{T, T} where T"
-@test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{<:Signed, T} where T<:Unsigned"
-@test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{<:T, T} where T<:Signed"
+@test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Unsigned, S<:Signed}"
+@test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Signed, S<:T}"
 @test string(Union{M37012.SimpleU, Nothing}) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU}"
 @test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
