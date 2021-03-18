@@ -1157,9 +1157,9 @@ No documentation found.
 
 # Union Composed of Types
 
- - `$(curmod_prefix)Undocumented.at1{<:Any}`
- - `$(curmod_prefix)Undocumented.pt2{<:Any}`
- - `$(curmod_prefix)Undocumented.st3{<:Any}`
+ - `$(curmod_prefix)Undocumented.at1{T} where T`
+ - `$(curmod_prefix)Undocumented.pt2{T} where T`
+ - `$(curmod_prefix)Undocumented.st3{T} where T`
  - `$(curmod_prefix)Undocumented.st4`
 """)
 @test docstrings_equal(@doc(Undocumented.ut9), doc"$doc_str")
