@@ -12,7 +12,7 @@ module OffsetArrays
 using Base: tail, @propagate_inbounds
 using Base: IdentityUnitRange
 
-const IIUR = IdentityUnitRange{AbstractUnitRange{T},T} where T<:Integer
+const IIUR = IdentityUnitRange{<:AbstractUnitRange{T},T} where T<:Integer
 
 export OffsetArray, OffsetMatrix, OffsetVector
 
