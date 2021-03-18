@@ -337,6 +337,7 @@ mutable struct UseRef
     stmt::Any
     op::Int
     UseRef(@nospecialize(a)) = new(a, 0)
+    UseRef(@nospecialize(a), op::Int) = new(a, op)
 end
 struct UseRefIterator
     use::Tuple{UseRef, Nothing}
