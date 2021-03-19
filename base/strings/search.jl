@@ -566,6 +566,15 @@ julia> findprev("Julia", "JuliaLang", 6)
 """
 findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, Int(i))
 
+function findprev(a::Union{String,SubString{String}}, b::Union{String,SubString{String}}, stop::Integer)
+    i = Int(stop)
+    i < firstindex(b) - 1 && return nothing
+    n = ncodeunits(b)
+    i > n && throw(BoundsError(b, i))
+    offset = search_backward(codeunits(a), codeunits(b), n + 1 - nextind(b, i))
+    return offset ≥ 0 ? (offset+1:offset+lastindex(a)) : nothing
+end
+
 """
     findprev(ch::AbstractChar, string::AbstractString, start::Integer)
 
@@ -690,6 +699,55 @@ function search_forward(a::AbstractVector{T}, b::AbstractVector{T}, k::Int) wher
                 p += m +  1
             else
                 p += 1
+            end
+        end
+    end
+    return -1
+end
+
+function search_backward(a::AbstractVector{T}, b::AbstractVector{T}, k::Int) where T <: Union{Int8,UInt8}
+    m = length(a)
+    n = length(b) - k
+    if m > n
+        return -1
+    elseif m == 0
+        return k
+    end
+
+    # preprocess
+    a_begin = a[begin]
+    filter = bloom_filter_bit(a_begin)
+    displacement = m
+    @inbounds for i in lastindex(a):-1:firstindex(a)+1
+        filter |= bloom_filter_bit(a[i])
+        if a[i] == a_begin
+            displacement = firstindex(a) - i
+        end
+    end
+
+    # main loop
+    first = firstindex(b)
+    p = lastindex(b) + 1 - (m + k)
+    @inbounds while p ≥ first
+        if a_begin == b[p]
+            # the first byte is matching
+            i = lastindex(a)
+            while i > firstindex(a)
+                a[i] == b[p+i-1] || break
+                i -= 1
+            end
+            if i == firstindex(a)
+                return p - first
+            elseif p - 1 ≥ first && !mayhave(filter, b[p-1])
+                p -= m + 1
+            else
+                p -= displacement
+            end
+        else
+            if p - 1 ≥ first && !mayhave(filter, b[p-1])
+                p -= m + 1
+            else
+                p -= 1
             end
         end
     end
