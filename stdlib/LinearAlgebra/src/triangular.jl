@@ -1824,6 +1824,54 @@ end
 # A is a copy of A0 that is overwritten while computing the result. It has the same eltype
 # as the result.
 function _log_quasitriu!(A0, A)
+    # Find Padé degree m and s while replacing A with A^(1/2^s)
+    m, s = _find_params_log_quasitriu!(A)
+
+    # Compute accurate superdiagonal of A
+    _pow_superdiag_quasitriu!(A, A0, 0.5^s)
+
+    # Compute accurate block diagonal of A
+    _sqrt_pow_diag_quasitriu!(A, A0, s)
+
+    # Get the Gauss-Legendre quadrature points and weights
+    R = zeros(Float64, m, m)
+    for i = 1:m - 1
+        R[i,i+1] = i / sqrt((2 * i)^2 - 1)
+        R[i+1,i] = R[i,i+1]
+    end
+    x,V = eigen(R)
+    w = Vector{Float64}(undef, m)
+    for i = 1:m
+        x[i] = (x[i] + 1) / 2
+        w[i] = V[1,i]^2
+    end
+
+    # Compute the Padé approximation
+    t = eltype(A)
+    n = size(A, 1)
+    Y = zeros(t, n, n)
+    B = similar(A)
+    for k = 1:m
+        B .= t(x[k]) .* A
+        @inbounds for i in 1:n
+            B[i,i] += 1
+        end
+        Y .+= t(w[k]) .* rdiv_quasitriu!(A, B)
+    end
+
+    # Scale back
+    lmul!(2.0^s, Y)
+
+    # Compute accurate diagonal and superdiagonal of log(A)
+    _log_diag_quasitriu!(Y, A0)
+
+    return Y
+end
+
+# Auxiliary functions for matrix logarithm and matrix power
+
+# Find Padé degree m and s while replacing A with A^(1/2^s)
+function _find_params_log_quasitriu!(A)
     maxsqrt = 100
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,
@@ -1833,7 +1881,7 @@ function _log_quasitriu!(A0, A)
          2.060962623452836e-001,
          2.879093714241194e-001]
     tmax = size(theta, 1)
-    n = size(A0, 1)
+    n = size(A, 1)
     p = 0
     m = 0
 
@@ -1911,48 +1959,8 @@ function _log_quasitriu!(A0, A)
         end
         s = s + 1
     end
-
-    # Compute accurate superdiagonal of A
-    _pow_superdiag_quasitriu!(A, A0, 0.5^s)
-
-    # Compute accurate block diagonal of A
-    _sqrt_pow_diag_quasitriu!(A, A0, s)
-
-    # Get the Gauss-Legendre quadrature points and weights
-    R = zeros(Float64, m, m)
-    for i = 1:m - 1
-        R[i,i+1] = i / sqrt((2 * i)^2 - 1)
-        R[i+1,i] = R[i,i+1]
-    end
-    x,V = eigen(R)
-    w = Vector{Float64}(undef, m)
-    for i = 1:m
-        x[i] = (x[i] + 1) / 2
-        w[i] = V[1,i]^2
-    end
-
-    # Compute the Padé approximation
-    t = eltype(A)
-    Y = zeros(t, n, n)
-    B = similar(A)
-    for k = 1:m
-        B .= t(x[k]) .* A
-        @inbounds for i in 1:n
-            B[i,i] += 1
-        end
-        Y .+= t(w[k]) .* rdiv_quasitriu!(A, B)
-    end
-
-    # Scale back
-    lmul!(2.0^s, Y)
-
-    # Compute accurate diagonal and superdiagonal of log(A)
-    _log_diag_quasitriu!(Y, A0)
-
-    return Y
+    return m, s
 end
-
-# Auxiliary functions for matrix logarithm and matrix power
 
 # Compute accurate diagonal of A = A0^s - I
 function sqrt_diag!(A0::UpperTriangular, A::UpperTriangular, s)
