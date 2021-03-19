@@ -6449,7 +6449,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                         B::AbstractMatrix{$elty}, C::AbstractMatrix{$elty}, isgn::Int=1)
             require_one_based_indexing(A, B, C)
             chkstride1(A, B, C)
-            m, n = checksquare(A, B)
+            m, n = checksquare(A), checksquare(B)
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             m1, n1 = size(C)
