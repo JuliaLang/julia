@@ -95,6 +95,7 @@ function Format(f::AbstractString)
     len = length(bytes)
     pos = 1
     numarguments = 0
+
     b = 0x00
     while pos <= len
         b = bytes[pos]
@@ -251,6 +252,7 @@ const HEX = b"0123456789ABCDEF"
 end
 
 
+
 @inline function rmdynamic(spec::Spec{T}, args, argp) where {T}
     zero, width, precision = spec.zero, spec.width, spec.precision
     if spec.dynamic_width
@@ -351,6 +353,7 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
         (T == Val{'o'} && hash ? 1 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
     arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) : arglen
+
     if !leftalign && !zero && arglen2 < width
         # pad left w/ spaces
         for _ = 1:(width - arglen2)
@@ -821,6 +824,7 @@ end
 
 plength(f::Spec{T}, x) where {T <: Chars} = max(f.width, 1) + (ncodeunits(x isa AbstractString ? x[1] : Char(x)) - 1)
 
+
 function plength(f::Spec{T}, x) where {T <: Chars}
     c = Char(first(x))
     w = textwidth(c)
@@ -926,8 +930,8 @@ Use shorter of decimal or scientific 1.23 1.23e+07
 
 julia> @printf "Use dynamic width and precision  %*.*f" 10 2 0.12345
 Use dynamic width and precision        0.12
-```
 
+```
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
 See also [`@sprintf`](@ref).
 

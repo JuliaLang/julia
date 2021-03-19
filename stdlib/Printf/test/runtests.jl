@@ -755,6 +755,7 @@ end
 
 end
 
+
 @testset "%n" begin
     x = Ref{Int}()
     @test (Printf.@sprintf("%d4%n", 123, x); x[] == 4)
@@ -1107,6 +1108,7 @@ end
     @test Printf.@sprintf("%*.X", 20, 305441741) == Printf.@sprintf("%20.X",  305441741)
     @test Printf.@sprintf("%*.0X", 20, UInt(3989525555)) == Printf.@sprintf("%20.0X",  UInt(3989525555))
     @test Printf.@sprintf("%*.X", 20, UInt(0)) == Printf.@sprintf("%20.X",  UInt(0))
+
 
 @testset "%n" begin
     x = Ref{Int}()
