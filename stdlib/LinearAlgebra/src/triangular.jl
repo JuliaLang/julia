@@ -1885,7 +1885,8 @@ function _find_params_log_quasitriu!(A)
     p = 0
     m = 0
 
-    # Compute repeated roots
+    # Find s0, the smallest s such that the ρ(triu(A)^(1/2^s) - I) ≤ theta[tmax], where ρ(X)
+    # is the spectral radius of X
     d = complex(diag(A))
     dm1 = d .- 1
     s = 0
@@ -1895,6 +1896,8 @@ function _find_params_log_quasitriu!(A)
         s = s + 1
     end
     s0 = s
+
+    # Compute repeated roots
     for k = 1:min(s, maxsqrt)
         _sqrt_quasitriu!(A isa UpperTriangular ? parent(A) : A, A)
     end
