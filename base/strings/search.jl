@@ -303,7 +303,7 @@ findnext(t::AbstractString, s::AbstractString, start::Integer) = _search(s, t, I
 
 function findnext(a::Union{String,SubString{String}}, b::Union{String,SubString{String}}, start::Integer)
     i = Int(start)
-    i > lastindex(b) + 1 && return nothing
+    i > ncodeunits(b) + 1 && return nothing
     i < firstindex(b) && throw(BoundsError(b, i))
     if i ≠ thisind(b, i)
         i = nextind(b, i)
