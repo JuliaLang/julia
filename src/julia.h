@@ -322,6 +322,12 @@ typedef struct _jl_method_t {
     // the most specific for the argument types.
     jl_typemap_t *invokes;
 
+    // A function that compares two specializations of this method, returning
+    // `true` if the first signature is to be considered "smaller" than the
+    // second for purposes of recursion analysis. Set to NULL to use
+    // the default recusion relation.
+    jl_value_t *recursion_relation;
+
     int32_t nargs;
     int32_t called;        // bit flags: whether each of the first 8 arguments is called
     int32_t nospecialize;  // bit flags: which arguments should not be specialized
