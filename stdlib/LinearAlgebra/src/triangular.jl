@@ -1913,7 +1913,7 @@ function _find_params_log_quasitriu!(A)
     end
 
     while !foundm
-        more = false
+        more_sqrt = false
         if s > s0
             d3 = cbrt(opnorm(AmI^3, 1))
         end
@@ -1930,12 +1930,12 @@ function _find_params_log_quasitriu!(A)
                 m = j
                 break
             elseif alpha3 / 2 <= theta[5] && p < 2
-                more = true
+                more_sqrt = true
                 p = p + 1
            end
         end
 
-        if !more
+        if !more_sqrt
             d5 = opnorm(AmI^5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
