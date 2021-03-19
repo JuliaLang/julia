@@ -1629,8 +1629,8 @@ reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
 # helper functions
 cat_size(A) = (1,)
 cat_size(A::AbstractArray) = size(A)
-cat_size(A, d) = 1
-cat_size(A::AbstractArray, d) = size(A, d)
+cat_size(A, d::Int) = 1
+cat_size(A::AbstractArray, d::Int) = size(A, d)
 
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
@@ -2098,18 +2098,20 @@ hvncat(::Tuple{}, ::Bool) = []
 hvncat(::Tuple{}, ::Bool, xs...) = []
 hvncat(::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
+hvncat(dim::Int, xs...) = _hvncat(dim, true, xs...)
 
-_hvncat(::Tuple, ::Bool) = []
-_hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dimsshape, row_first, xs...)
-_hvncat(dimsshape::Tuple, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, dimsshape, row_first, xs...)
-_hvncat(dimsshape::Tuple, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), dimsshape, row_first, xs...)
-_hvncat(dimsshape::Tuple, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dimsshape, row_first, xs...)
-_hvncat(dimsshape::Tuple, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dimsshape, row_first, xs...)
+_hvncat(::Union{Tuple, Int}, ::Bool) = []
+_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dimsshape, row_first, xs...)
+_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, dimsshape, row_first, xs...)
+_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), dimsshape, row_first, xs...)
+_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dimsshape, row_first, xs...)
+_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dimsshape, row_first, xs...)
 
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
 typed_hvncat(T::Type, ::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
 typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
+typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
@@ -2148,6 +2150,74 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
             A[k] = xs[k]
         end
     end
+end
+
+_typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
+_typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
+_typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...)
+function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
+    # optimization for arrays that can be concatenated by copying them linearly into the destination
+    # conditions: the elements must all have 1- or 0-length dimensions above N
+    @inbounds for a ∈ as
+        ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
+            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
+    end
+
+    nd = max(N, ndims(as[1]))
+
+    Ndim = 0
+    @inbounds for i ∈ 1:lastindex(as)
+        Ndim += cat_size(as[i], N)
+        for d ∈ 1:N - 1
+            cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
+        end
+    end
+
+    @inbounds A = Array{T, nd}(undef, ntuple(d -> cat_size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
+    k = 1
+    @inbounds for a ∈ as
+        for i ∈ eachindex(a)
+            A[k] = a[i]
+            k += 1
+        end
+    end
+    return A
+end
+
+# I don't understand why this function performs better when the first vararg is a number vs. an array
+# const y = fill(2)
+# _typed_hvncat(Int, Val(3), 2, y, y, y): 1 allocations and 56 ns
+# _typed_hvncat(Int, Val(3), y, y, y, 2): 2 allocations and 1.2 μs
+# both are still better than the (1, 1, 1, 2) argument variant
+# Apparently an issue with triggering specialization? #36307
+function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
+    # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
+    # into the destination
+    nd = N
+    Ndim = 0
+    @inbounds for a ∈ as
+        if a isa AbstractArray
+            cat_size(a, N) == length(a) ||
+                throw(ArgumentError("all dimensions of elements other than $N must be of length 1"))
+            nd = max(nd, ndims(a))
+        end
+        Ndim += cat_size(a, N)
+    end
+
+    @inbounds A = Array{T, nd}(undef, ntuple(x -> 1, N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
+
+    k = 1
+    @inbounds for a ∈ as
+        if a isa AbstractArray
+            lena = length(a)
+            copyto!(A, k, a, 1, lena)
+            k += lena
+        else
+            A[k] = a
+            k += 1
+        end
+    end
+    return A
 end
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
