@@ -62,6 +62,8 @@ already work:
 - vim
 - nvim
 - nano
+- micro
+- kak
 - textmate
 - mate
 - kate
