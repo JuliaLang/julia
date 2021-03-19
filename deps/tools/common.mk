@@ -23,6 +23,10 @@ CMAKE_CXX_ARG := $(CXX_ARG)
 CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
 CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir) -DCMAKE_INSTALL_BINDIR=$(build_bindir)
 CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
+ifeq ($(OS), Darwin)
+CMAKE_COMMON += -DCMAKE_MACOSX_RPATH=1
+endif
+
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
@@ -35,13 +39,11 @@ CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
 ifneq ($(strip $(CMAKE_CXX_ARG)),)
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
-CMAKE_COMMON += -DCMAKE_LINKER="$(LD)" -DCMAKE_AR="$(shell which $(AR))" -DCMAKE_RANLIB="$(shell which $(RANLIB))"
+CMAKE_COMMON += -DCMAKE_LINKER="$$(which $(LD))" -DCMAKE_AR="$$(which $(AR))" -DCMAKE_RANLIB="$$(which $(RANLIB))"
 
 ifeq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
-ifneq ($(BUILD_OS),WINNT)
 CMAKE_COMMON += -DCMAKE_RC_COMPILER="$$(which $(CROSS_COMPILE)windres)"
-endif
 endif
 
 # For now this is LLVM specific, but I expect it won't be in the future
@@ -144,9 +146,6 @@ endef
 define staged-install
 stage-$(strip $1): $$(build_staging)/$2.tgz
 install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
-uninstall-$(strip $1):
-	-rm $$(build_prefix)/manifest/$(strip $1)
-	-cd $$(build_prefix) && rm -dv -- $$$$($(TAR) -tzf $$(build_staging)/$2.tgz --exclude './$$$$')
 
 ifeq (exists, $$(shell [ -e $$(build_staging)/$2.tgz ] && echo exists ))
 # clean depends on uninstall only if the staged file exists
@@ -167,15 +166,24 @@ $$(build_staging)/$2.tgz: $$(BUILDDIR)/$2/build-compiled
 	rm -rf $$(build_staging)/$2
 	mkdir -p $$(build_staging)/$2$$(build_prefix)
 	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
-	cd $$(build_staging)/$2$$(build_prefix) && tar -czf $$@.tmp .
+	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) -czf $$@.tmp .
 	rm -rf $$(build_staging)/$2
 	mv $$@.tmp $$@
 
+UNINSTALL_$(strip $1) := $2 staged-uninstaller
+
 $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix)/manifest
+	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
 	mkdir -p $$(build_prefix)
 	$(UNTAR) $$< -C $$(build_prefix)
 	$6
-	echo $2 > $$@
+	echo '$$(UNINSTALL_$(strip $1))' > $$@
+endef
+
+define staged-uninstaller
+uninstall-$(strip $1):
+	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tzf $$(build_staging)/$2.tgz | grep -v '/$$$$')
+	-rm $$(build_prefix)/manifest/$(strip $1)
 endef
 
 
@@ -189,16 +197,11 @@ define symlink_install # (target-name, rel-from, abs-to)
 clean-$1: uninstall-$1
 install-$1: $$(build_prefix)/manifest/$1
 reinstall-$1: install-$1
-uninstall-$1:
-ifeq ($$(BUILD_OS), WINNT)
-	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3 &&)
-else
-	-rm -r $3/$1
-endif
-	-rm $$(build_prefix)/manifest/$1
+
+UNINSTALL_$(strip $1) := $2 symlink-uninstaller $3
 
 $$(build_prefix)/manifest/$1: $$(BUILDDIR)/$2/build-compiled | $3 $$(build_prefix)/manifest
-	+[ ! \( -e $3/$1 -o -h $3/$1 \) ] || $$(MAKE) uninstall-$1
+	-+[ ! \( -e $3/$1 -o -h $3/$1 \) ] || $$(MAKE) uninstall-$1
 ifeq ($$(BUILD_OS), WINNT)
 	cmd //C mklink //J $$(call mingw_to_dos,$3/$1,cd $3 &&) $$(call mingw_to_dos,$$(BUILDDIR)/$2,)
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
@@ -208,7 +211,17 @@ else ifdef JULIA_VAGRANT_BUILD
 else
 	ln -sf $$(abspath $$(BUILDDIR)/$2) $3/$1
 endif
-	echo $2 > $$@
+	echo '$$(UNINSTALL_$(strip $1))' > $$@
+endef
+
+define symlink-uninstaller
+uninstall-$1:
+ifeq ($$(BUILD_OS), WINNT)
+	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3 &&)
+else
+	-rm -r $3/$1
+endif
+	-rm $$(build_prefix)/manifest/$1
 endef
 
 

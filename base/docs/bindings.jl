@@ -25,6 +25,7 @@ function splitexpr(x::Expr)
     error("Invalid @var syntax `$x`.")
 end
 splitexpr(s::Symbol) = Expr(:macrocall, getfield(Base, Symbol("@__MODULE__")), nothing), quot(s)
+splitexpr(r::GlobalRef) = r.mod, quot(r.name)
 splitexpr(other)     = error("Invalid @var syntax `$other`.")
 
 macro var(x)

@@ -89,6 +89,20 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     return sgn, base, j
 end
 
+@inline function __convert_digit(_c::UInt32, base)
+    _0 = UInt32('0')
+    _9 = UInt32('9')
+    _A = UInt32('A')
+    _a = UInt32('a')
+    _Z = UInt32('Z')
+    _z = UInt32('z')
+    a::UInt32 = base <= 36 ? 10 : 36
+    d = _0 <= _c <= _9 ? _c-_0             :
+        _A <= _c <= _Z ? _c-_A+ UInt32(10) :
+        _a <= _c <= _z ? _c-_a+a           : UInt32(base)
+end
+
+
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if sgn == 0 && base == 0 && i == 0
@@ -115,19 +129,10 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
            base == 16 ? div(typemax(T) - T(15), T(16)) :
                         div(typemax(T) - base + 1, base)
     n::T = 0
-    a::Int = base <= 36 ? 10 : 36
-    _0 = UInt32('0')
-    _9 = UInt32('9')
-    _A = UInt32('A')
-    _a = UInt32('a')
-    _Z = UInt32('Z')
-    _z = UInt32('z')
     while n <= m
         # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
         _c = reinterpret(UInt32, c) >> 24
-        d::T = _0 <= _c <= _9 ? _c-_0             :
-               _A <= _c <= _Z ? _c-_A+ UInt32(10) :
-               _a <= _c <= _z ? _c-_a+a           : base
+        d::T = __convert_digit(_c, base)
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return nothing
@@ -145,9 +150,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     while !isspace(c)
         # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
         _c = reinterpret(UInt32, c) >> 24
-        d::T = _0 <= _c <= _9 ? _c-_0             :
-               _A <= _c <= _Z ? _c-_A+ UInt32(10) :
-               _a <= _c <= _z ? _c-_a+a           : base
+        d::T = __convert_digit(_c, base)
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return nothing

@@ -57,8 +57,17 @@ julia> using Profile
 julia> @profile myfunc()
 ```
 
-To see the profiling results, there is a [graphical browser](https://github.com/timholy/ProfileView.jl)
-available, but here we'll use the text-based display that comes with the standard library:
+To see the profiling results, there are several graphical browsers.
+One "family" of visualizers is based on [FlameGraphs.jl](https://github.com/timholy/FlameGraphs.jl), with each family member providing a different user interface:
+- [Juno](https://junolab.org/) is a full IDE with built-in support for profile visualization
+- [ProfileView.jl](https://github.com/timholy/ProfileView.jl) is a stand-alone visualizer based on GTK
+- [ProfileVega.jl](https://github.com/davidanthoff/ProfileVega.jl) uses VegaLight and integrates well with Jupyter notebooks
+- [StatProfilerHTML](https://github.com/tkluck/StatProfilerHTML.jl) produces HTML and presents some additional summaries, and also integrates well with Jupyter notebooks
+- [ProfileSVG](https://github.com/timholy/ProfileSVG.jl) renders SVG
+
+An entirely independent approach to profile visualization is [PProf.jl](https://github.com/vchuravy/PProf.jl), which uses the external `pprof` tool.
+
+Here, though, we'll use the text-based display that comes with the standard library:
 
 ```julia-repl
 julia> Profile.print()
@@ -286,7 +295,7 @@ Of course, you can decrease the delay as well as increase it; however, the overh
 grows once the delay becomes similar to the amount of time needed to take a backtrace (~30 microseconds
 on the author's laptop).
 
-# Memory allocation analysis
+## Memory allocation analysis
 
 One of the most common techniques to improve performance is to reduce memory allocation. The
 total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
@@ -312,7 +321,7 @@ you want to analyze, then call [`Profile.clear_malloc_data()`](@ref) to reset al
  Finally, execute the desired commands and quit Julia to trigger the generation of the `.mem`
 files.
 
-# External Profiling
+## External Profiling
 
 Currently Julia supports `Intel VTune`, `OProfile` and `perf` as external profiling tools.
 
@@ -329,11 +338,12 @@ For example with `OProfile` you can try a simple recording :
 >opreport -l `which ./julia`
 ```
 
-Or similary with with `perf` :
+Or similary with `perf` :
 
 ```
 $ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf ./julia /test/fastmath.jl
-$ perf report --call-graph -G
+$ perf inject --jit --input /tmp/perf.data --output /tmp/perf-jit.data
+$ perf report --call-graph -G -i /tmp/perf-jit.data
 ```
 
 There are many more interesting things that you can measure about your program, to get a comprehensive list

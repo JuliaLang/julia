@@ -12,9 +12,11 @@ struct Some{T}
     value::T
 end
 
+Some(::Type{T}) where {T} = Some{Type{T}}(T)
+
 promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
 
-nonnothingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Nothing)
+nonnothingtype(::Type{T}) where {T} = typesplit(T, Nothing)
 promote_rule(T::Type{Nothing}, S::Type) = Union{S, Nothing}
 function promote_rule(T::Type{>:Nothing}, S::Type)
     R = nonnothingtype(T)
@@ -30,7 +32,10 @@ function nonnothingtype_checked(T::Type)
     return R
 end
 
-convert(T::Type{>:Nothing}, x) = convert(nonnothingtype_checked(T), x)
+convert(::Type{T}, x::T) where {T>:Nothing} = x
+convert(::Type{T}, x) where {T>:Nothing} = convert(nonnothingtype_checked(T), x)
+convert(::Type{Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
+convert(::Type{Nothing}, ::Nothing) = nothing
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
 
@@ -60,8 +65,7 @@ Return `true` if `x === nothing`, and return `false` if not.
 !!! compat "Julia 1.1"
     This function requires at least Julia 1.1.
 """
-isnothing(::Any) = false
-isnothing(::Nothing) = true
+isnothing(x) = x === nothing
 
 
 """
@@ -70,6 +74,8 @@ isnothing(::Nothing) = true
 Return the first value in the arguments which is not equal to [`nothing`](@ref),
 if any. Otherwise throw an error.
 Arguments of type [`Some`](@ref) are unwrapped.
+
+See also [`coalesce`](@ref).
 
 # Examples
 ```jldoctest

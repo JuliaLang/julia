@@ -123,6 +123,16 @@ using Base.Meta
 @test isexpr(:(1+1),(:call,))
 @test isexpr(1,:call)==false
 @test isexpr(:(1+1),:call,3)
+
+let
+    fakeline = LineNumberNode(100000,"A")
+    # Interop with __LINE__
+    @test macroexpand(@__MODULE__, replace_sourceloc!(fakeline, :(@__LINE__))) == fakeline.line
+    # replace_sourceloc! should recurse:
+    @test replace_sourceloc!(fakeline, :((@a) + 1)).args[2].args[2] == fakeline
+    @test replace_sourceloc!(fakeline, :(@a @b)).args[3].args[2] == fakeline
+end
+
 ioB = IOBuffer()
 show_sexpr(ioB,:(1+1))
 
@@ -210,3 +220,28 @@ let a = 1
     @test !macroexpand(@__MODULE__, :(@is_dollar_expr $a))
     @test @macroexpand @is_dollar_expr $a
 end
+
+@test Meta.parseatom("@foo", 1, filename=:bar)[1].args[2].file == :bar
+@test Meta.parseall("@foo", filename=:bar).args[1].file == :bar
+
+_lower(m::Module, ex, world::UInt) = ccall(:jl_expand_in_world, Any, (Any, Ref{Module}, Cstring, Cint, Csize_t), ex, m, "none", 0, world)
+
+module TestExpandInWorldModule
+macro m() 1 end
+wa = Base.get_world_counter()
+macro m() 2 end
+end
+
+@test _lower(TestExpandInWorldModule, :(@m), TestExpandInWorldModule.wa) == 1
+
+f(::T) where {T} = T
+ci = code_lowered(f, Tuple{Int})[1]
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(f),Int}, Any[Int], 0, 0, :propagate) ==
+    Any[Core.ReturnNode(QuoteNode(Int))]
+
+g(::Val{x}) where {x} = x ? 1 : 0
+ci = code_lowered(g, Tuple{Val{true}})[1]
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[Val{true}], 0, 0, :propagate)[1] ==
+   Core.GotoIfNot(QuoteNode(Val{true}), 3)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[Val{true}], 0, 2, :propagate)[1] ==
+   Core.GotoIfNot(QuoteNode(Val{true}), 5)

@@ -33,6 +33,12 @@ end
     @test_throws KeyError ENV[key]
     @test get(ENV,key,"default") == "default"
     @test get(() -> "default", ENV, key) == "default"
+
+    key = randstring(25)
+    @test !haskey(ENV, key)
+    @test get!(ENV, key, "default") == "default"
+    @test haskey(ENV, key)
+    @test ENV[key] == "default"
 end
 @testset "#17956" begin
     @test length(ENV) > 1

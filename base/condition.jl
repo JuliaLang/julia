@@ -22,7 +22,6 @@ function trylock end
 function islocked end
 unlockall(l::AbstractLock) = unlock(l) # internal function for implementing `wait`
 relockall(l::AbstractLock, token::Nothing) = lock(l) # internal function for implementing `wait`
-assert_havelock(l::AbstractLock) = assert_havelock(l, Threads.threadid())
 assert_havelock(l::AbstractLock, tid::Integer) =
     (islocked(l) && tid == Threads.threadid()) ? nothing : concurrency_violation()
 assert_havelock(l::AbstractLock, tid::Task) =
@@ -59,7 +58,7 @@ islocked(::AlwaysLockedST) = true
     GenericCondition
 
 Abstract implementation of a condition object
-for synchonizing tasks objects with a given lock.
+for synchronizing tasks objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
     waitq::InvasiveLinkedList{Task}
@@ -78,6 +77,14 @@ islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
 unlock(f, c::GenericCondition) = unlock(f, c.lock)
+
+# have waiter wait for c
+function _wait2(c::GenericCondition, waiter::Task)
+    ct = current_task()
+    assert_havelock(c)
+    push!(c.waitq, waiter)
+    return
+end
 
 """
     wait([x])
@@ -100,13 +107,12 @@ proceeding.
 """
 function wait(c::GenericCondition)
     ct = current_task()
-    assert_havelock(c)
-    push!(c.waitq, ct)
+    _wait2(c, ct)
     token = unlockall(c.lock)
     try
         return wait()
     catch
-        list_deletefirst!(c.waitq, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
         rethrow()
     finally
         relockall(c.lock, token)
@@ -162,3 +168,8 @@ this, and can be used for level-triggered events.
 This object is NOT thread-safe. See [`Threads.Condition`](@ref) for a thread-safe version.
 """
 const Condition = GenericCondition{AlwaysLockedST}
+
+lock(c::GenericCondition{AlwaysLockedST}) =
+    throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))
+unlock(c::GenericCondition{AlwaysLockedST}) =
+    throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))

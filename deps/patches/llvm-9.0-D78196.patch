@@ -1,0 +1,15 @@
+diff --git a/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp b/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
+--- a/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
++++ b/lib/Target/PowerPC/MCTargetDesc/PPCMCTargetDesc.cpp
+@@ -210,6 +210,10 @@
+     for (auto *Sym : UpdateOther)
+       if (Sym->isVariable())
+         copyLocalEntry(Sym, Sym->getVariableValue());
++
++    // Clear the set of symbols that needs to be updated so the streamer can
++    // be reused without issues.
++    UpdateOther.clear();
+   }
+ 
+ private:
+

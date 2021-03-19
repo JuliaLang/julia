@@ -40,6 +40,17 @@ Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:UnitLowerTriangular}, ::Struc
 Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:UnitUpperTriangular}, ::StructuredMatrixStyle{<:Union{Diagonal,UpperTriangular,UnitUpperTriangular}}) =
     StructuredMatrixStyle{UpperTriangular}()
 
+Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:Union{LowerTriangular,UnitLowerTriangular}}, ::StructuredMatrixStyle{<:Union{UpperTriangular,UnitUpperTriangular}}) =
+    StructuredMatrixStyle{Matrix}()
+Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:Union{UpperTriangular,UnitUpperTriangular}}, ::StructuredMatrixStyle{<:Union{LowerTriangular,UnitLowerTriangular}}) =
+    StructuredMatrixStyle{Matrix}()
+
+# Make sure that `StructuredMatrixStyle{<:Matrix}` doesn't ever end up falling
+# through and give back `DefaultArrayStyle{2}`
+Broadcast.BroadcastStyle(T::StructuredMatrixStyle{<:Matrix}, ::StructuredMatrixStyle) = T
+Broadcast.BroadcastStyle(::StructuredMatrixStyle, T::StructuredMatrixStyle{<:Matrix}) = T
+Broadcast.BroadcastStyle(T::StructuredMatrixStyle{<:Matrix}, ::StructuredMatrixStyle{<:Matrix}) = T
+
 # All other combinations fall back to the default style
 Broadcast.BroadcastStyle(::StructuredMatrixStyle, ::StructuredMatrixStyle) = DefaultArrayStyle{2}()
 
@@ -49,13 +60,22 @@ structured_broadcast_alloc(bc, ::Type{<:Diagonal}, ::Type{ElType}, n) where {ElT
 # Bidiagonal is tricky as we need to know if it's upper or lower. The promotion
 # system will return Tridiagonal when there's more than one Bidiagonal, but when
 # there's only one, we need to make figure out upper or lower
-find_bidiagonal() = throw(ArgumentError("could not find Bidiagonal within broadcast expression"))
-find_bidiagonal(a::Bidiagonal, rest...) = a
-find_bidiagonal(bc::Broadcast.Broadcasted, rest...) = find_bidiagonal(find_bidiagonal(bc.args...), rest...)
-find_bidiagonal(x, rest...) = find_bidiagonal(rest...)
+merge_uplos(::Nothing, ::Nothing) = nothing
+merge_uplos(a, ::Nothing) = a
+merge_uplos(::Nothing, b) = b
+merge_uplos(a, b) = a == b ? a : 'T'
+
+find_uplo(a::Bidiagonal) = a.uplo
+find_uplo(a) = nothing
+find_uplo(bc::Broadcasted) = mapreduce(find_uplo, merge_uplos, bc.args, init=nothing)
+
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
-    ex = find_bidiagonal(bc)
-    return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1), ex.uplo)
+    uplo = n > 0 ? find_uplo(bc) : 'U'
+    n1 = max(n - 1, 0)
+    if uplo == 'T'
+        return Tridiagonal(Array{ElType}(undef, n1), Array{ElType}(undef, n), Array{ElType}(undef, n1))
+    end
+    return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n1), uplo)
 end
 structured_broadcast_alloc(bc, ::Type{<:SymTridiagonal}, ::Type{ElType}, n) where {ElType} =
     SymTridiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1))
@@ -69,6 +89,8 @@ structured_broadcast_alloc(bc, ::Type{<:UnitLowerTriangular}, ::Type{ElType}, n)
     UnitLowerTriangular(Array{ElType}(undef, n, n))
 structured_broadcast_alloc(bc, ::Type{<:UnitUpperTriangular}, ::Type{ElType}, n) where {ElType} =
     UnitUpperTriangular(Array{ElType}(undef, n, n))
+structured_broadcast_alloc(bc, ::Type{<:Matrix}, ::Type{ElType}, n) where {ElType} =
+    Matrix(Array{ElType}(undef, n, n))
 
 # A _very_ limited list of structure-preserving functions known at compile-time. This list is
 # derived from the formerly-implemented `broadcast` methods in 0.6. Note that this must
@@ -78,14 +100,22 @@ isstructurepreserving(bc::Broadcasted) = isstructurepreserving(bc.f, bc.args...)
 isstructurepreserving(::Union{typeof(abs),typeof(big)}, ::StructuredMatrix) = true
 isstructurepreserving(::TypeFuncs, ::StructuredMatrix) = true
 isstructurepreserving(::TypeFuncs, ::Ref{<:Type}, ::StructuredMatrix) = true
+function isstructurepreserving(::typeof(Base.literal_pow), ::Ref{typeof(^)}, ::StructuredMatrix, ::Ref{Val{N}}) where N
+    return N isa Integer && N > 0
+end
 isstructurepreserving(f, args...) = false
 
 _iszero(n::Number) = iszero(n)
 _iszero(x) = x == 0
 fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && _iszero(v))
-# Very conservatively only allow Numbers and Types in this speculative zero-test pass
+# Like sparse matrices, we assume that the zero-preservation property of a broadcasted
+# expression is stable.  We can test the zero-preservability by applying the function
+# in cases where all other arguments are known scalars against a zero from the structured
+# matrix. If any non-structured matrix argument is not a known scalar, we give up.
 fzero(x::Number) = x
 fzero(::Type{T}) where T = T
+fzero(r::Ref) = r[]
+fzero(t::Tuple{Any}) = t[1]
 fzero(S::StructuredMatrix) = zero(eltype(S))
 fzero(x) = missing
 function fzero(bc::Broadcast.Broadcasted)

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Experimental multithreading support.
+Multithreading support.
 """
 module Threads
 

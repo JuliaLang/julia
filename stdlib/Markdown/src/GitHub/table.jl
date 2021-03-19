@@ -45,7 +45,6 @@ function github_table(stream::IO, md::MD)
         align = nothing
         while (row = parserow(stream)) !== nothing
             if length(rows) == 0
-                isempty(row[1]) && return false
                 cols = length(row)
             end
             if align === nothing && length(rows) == 1 # Must have a --- row
@@ -65,8 +64,10 @@ function html(io::IO, md::Table)
     withtag(io, :table) do
         for (i, row) in enumerate(md.rows)
             withtag(io, :tr) do
-                for c in md.rows[i]
-                    withtag(io, i == 1 ? :th : :td) do
+                for (j, c) in enumerate(md.rows[i])
+                    alignment = md.align[j]
+                    alignment = alignment === :l ? "left" : alignment === :r ? "right" : "center"
+                     withtag(io, i == 1 ? :th : :td, ("align", alignment)) do
                         htmlinline(io, c)
                     end
                 end
@@ -81,9 +82,9 @@ colwidths(rows; len = length, min = 0) =
     reduce((x,y) -> max.(x,y), [min; convert(Vector{Vector{Int}}, mapmap(len, rows))])
 
 padding(width, twidth, a) =
-    a == :l ? (0, twidth - width) :
-    a == :r ? (twidth - width, 0) :
-    a == :c ? (floor(Int, (twidth-width)/2), ceil(Int, (twidth-width)/2)) :
+    a === :l ? (0, twidth - width) :
+    a === :r ? (twidth - width, 0) :
+    a === :c ? (floor(Int, (twidth-width)/2), ceil(Int, (twidth-width)/2)) :
     error("Invalid alignment $a")
 
 function padcells!(rows, align; len = length, min = 0)
@@ -97,9 +98,9 @@ function padcells!(rows, align; len = length, min = 0)
 end
 
 _dash(width, align) =
-    align == :l ? ":" * "-"^width * " " :
-    align == :r ? " " * "-"^width * ":" :
-    align == :c ? ":" * "-"^width * ":" :
+    align === :l ? ":" * "-"^width * " " :
+    align === :r ? " " * "-"^width * ":" :
+    align === :c ? ":" * "-"^width * ":" :
     throw(ArgumentError("Invalid alignment $align"))
 
 function plain(io::IO, md::Table)

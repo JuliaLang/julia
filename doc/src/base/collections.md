@@ -138,6 +138,7 @@ Base.filter!
 Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
+Base.rest
 ```
 
 ## Indexable Collections
@@ -210,8 +211,9 @@ Base.keys
 Base.values
 Base.pairs
 Base.merge
-Base.merge!(::AbstractDict, ::AbstractDict...)
-Base.merge!(::Function, ::AbstractDict, ::AbstractDict...)
+Base.mergewith
+Base.merge!
+Base.mergewith!
 Base.sizehint!
 Base.keytype
 Base.valtype
@@ -251,6 +253,7 @@ Base.issubset
 Base.:⊈
 Base.:⊊
 Base.issetequal
+Base.isdisjoint
 ```
 
 Fully implemented by:
@@ -267,6 +270,7 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
+Base.popat!
 Base.pushfirst!
 Base.popfirst!
 Base.insert!

@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base: eltype
+
+abstract type AbstractRemoteRef end
+
 """
     client_refs
 
@@ -8,9 +12,7 @@ Tracks whether a particular `AbstractRemoteRef`
 
 The `client_refs` lock is also used to synchronize access to `.refs` and associated `clientset` state.
 """
-const client_refs = WeakKeyDict{Any, Nothing}() # used as a WeakKeySet
-
-abstract type AbstractRemoteRef end
+const client_refs = WeakKeyDict{AbstractRemoteRef, Nothing}() # used as a WeakKeySet
 
 """
     Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing)
@@ -118,6 +120,8 @@ function RemoteChannel(f::Function, pid::Integer=myid())
         RemoteChannel{typeof(rv.c)}(myid(), rrid)
     end
 end
+
+Base.eltype(::Type{RemoteChannel{T}}) where {T} = eltype(T)
 
 hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
@@ -538,7 +542,7 @@ fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
     fetch(c::RemoteChannel)
 
 Wait for and get a value from a [`RemoteChannel`](@ref). Exceptions raised are the
-same as for a `Future`. Does not remove the item fetched.
+same as for a [`Future`](@ref). Does not remove the item fetched.
 """
 fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
 

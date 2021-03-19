@@ -18,6 +18,11 @@ You can also use a stream for large amounts of data:
     HTML() do io
       println(io, "<div>foo</div>")
     end
+
+!!! warning
+    `HTML` is currently exported to maintain
+    backwards-compatibility, but is considered
+    to be deprecated and should not be used.
 """
 mutable struct HTML{T}
     content::T
@@ -63,6 +68,11 @@ You can also use a stream for large amounts of data:
     Text() do io
       println(io, "foo")
     end
+
+!!! warning
+    `Text` is currently exported to maintain
+    backwards-compatibility, but is considered
+    to be deprecated and should not be used.
 """
 mutable struct Text{T}
     content::T

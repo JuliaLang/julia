@@ -85,6 +85,8 @@ let text =
 
         And *another* paragraph.
 
+    \tAnd a third paragraph indented with a *tab*.
+
     This isn't part of the footnote.
     """,
     md = Markdown.parse(text)
@@ -97,7 +99,7 @@ let text =
     @test md.content[2].id == "1"
     @test md.content[3].id == "note"
 
-    @test length(md.content[3].text) == 4
+    @test length(md.content[3].text) == 5
 
     let expected =
             """
@@ -115,6 +117,8 @@ let text =
                 ```
 
                 And *another* paragraph.
+
+                And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -137,6 +141,8 @@ let text =
                    some.code
 
                And *another* paragraph.
+
+               And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -232,6 +238,13 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 @test sprint(term, md"[x](@ref something)") == "  x"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
 
+# math (LaTeX)
+@test sprint(term, md"""
+```math
+A = Q R
+```
+""") == "  A = Q R"
+
 # enumeration is normalized
 let doc = Markdown.parse(
         """
@@ -258,6 +271,42 @@ end
     |---|
     | L |
 """) == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
+
+# Issue #38275
+function test_list_wrap(str, lenmin, lenmax)
+    strs = split(str, '\n')
+    l = length.(strs)
+    for i = 1:length(l)-1
+        if l[i] != 0 && l[i+1] != 0    # the next line isn't blank, so this line should be "full"
+            lenmin <= l[i] <= lenmax || return false
+        else
+            l[i] <= lenmax || return false   # this line isn't too long (but there is no min)
+        end
+    end
+    # Check consistent indentation
+    rngs = findfirst.((". ",), strs)
+    k = last(rngs[1])
+    rex = Regex('^' * " "^k * "\\w")
+    for (i, rng) in enumerate(rngs)
+        isa(rng, AbstractRange) && last(rng) == k && continue  # every numbered line starts the text at the same position
+        rng === nothing && (isempty(strs[i]) || match(rex, strs[i]) !== nothing) && continue  # every unnumbered line is indented to text in numbered lines
+        return false
+    end
+    return true
+end
+
+let doc =
+    md"""
+    1. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+    2. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+    """
+    str = sprint(term, doc, 50)
+    @test test_list_wrap(str, 40, 50)
+    str = sprint(term, doc, 60)
+    @test test_list_wrap(str, 50, 60)
+    str = sprint(term, doc, 80)
+    @test test_list_wrap(str, 70, 80)
+end
 
 # HTML output
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
@@ -327,7 +376,7 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n\n    •    list2"
+        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •  list1\n\n    •  list2"
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -481,6 +530,12 @@ foo()
                                                           "f"]],
                                                   [:l, :r, :r]))
 @test md"""
+    |   | b |
+    |:--|--:|
+    | 1 |   |""" == MD(Table(Any[[Any[],"b"],
+                                 ["1",Any[]]], [:l, :r]))
+
+@test md"""
 no|table
 no error
 """ == MD([Paragraph(Any["no|table no error"])])
@@ -510,6 +565,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">Markdown</th><th align="center">Table</th><th align="right">Test</th></tr><tr><td align="left">foo</td><td align="center"><code>bar</code></td><td align="right"><em>baz</em></td></tr><tr><td align="left"><code>bar</code></td><td align="center">baz</td><td align="right"><em>foo</em></td></tr></table>\n"""
 end
 let text =
     """
@@ -519,6 +575,7 @@ let text =
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
+    @test Markdown.html(table) == """<table><tr><th align="left">a</th><th align="right">b</th></tr><tr><td align="left"><code>x | y</code></td><td align="right">2</td></tr></table>\n"""
 end
 
 # LaTeX extension
@@ -662,6 +719,8 @@ let t_1 =
         !!! note
             foo bar baz
 
+        \tsecond tab-indented paragraph
+
         !!! warning "custom title"
             - foo
             - bar
@@ -705,6 +764,7 @@ let t_1 =
     @test m_2.content[1].category == "note"
     @test m_2.content[1].title == "Note"
     @test isa(m_2.content[1].content[1], Markdown.Paragraph)
+    @test isa(m_2.content[1].content[2], Markdown.Paragraph)
 
     @test isa(m_2.content[2], Markdown.Admonition)
     @test m_2.content[2].category == "warning"
@@ -801,6 +861,8 @@ let t_1 =
             !!! note
                 foo bar baz
 
+                second tab-indented paragraph
+
 
             !!! warning "custom title"
                   * foo
@@ -829,6 +891,8 @@ let t_1 =
             """
             .. note::
                foo bar baz
+
+               second tab-indented paragraph
 
 
             .. warning:: custom title
@@ -1128,4 +1192,24 @@ end
 let m = Markdown.parse("---"), io = IOBuffer()
     show(io, "text/latex", m)
     @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
+end
+
+# issue #16194: interpolation in md"..." strings
+@testset "issue #16194: interpolation in md\"...\" strings" begin
+    x = "X"
+    contains_X(md) = occursin(x, sprint(show, MIME("text/plain"), md))
+    @test contains_X(md"# $x") # H1
+    @test contains_X(md"## $x") # H2
+    @test contains_X(md"### $x") # H3
+    @test contains_X(md"x = $x") # Paragraph
+    @test contains_X(md"- $x") # List
+    @test contains_X(md"[$x](..)") # Link
+    @test contains_X(md"**$x**") # Bold
+    @test contains_X(md"*$x*") # Italic
+    @test contains_X( # Table
+        md"""
+        | name |
+        |------|
+        |  $x  |
+        """)
 end

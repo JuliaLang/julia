@@ -10,10 +10,11 @@ import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
              hash, ==, kill, close, isopen, showerror
 
 # imports for use
-using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, @sync_add,
+using Base: Process, Semaphore, JLOptions, buffer_writes, @sync_add,
             VERSION_STRING, binding_module, atexit, julia_exename,
             julia_cmd, AsyncGenerator, acquire, release, invokelatest,
-            shell_escape_posixly, uv_error, something, notnothing, isbuffered
+            shell_escape_posixly, shell_escape_wincmd, escape_microsoft_c_args,
+            uv_error, something, notnothing, isbuffered, mapany
 using Base.Threads: Event
 
 using Serialization, Sockets
@@ -82,6 +83,20 @@ function _require_callback(mod::Base.PkgId)
     end
 end
 
+const REF_ID = Ref(1)
+next_ref_id() = (id = REF_ID[]; REF_ID[] = id+1; id)
+
+struct RRID
+    whence::Int
+    id::Int
+
+    RRID() = RRID(myid(),next_ref_id())
+    RRID(whence, id) = new(whence,id)
+end
+
+hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
+==(r::RRID, s::RRID) = (r.whence==s.whence && r.id==s.id)
+
 include("clusterserialize.jl")
 include("cluster.jl")   # cluster setup and management, addprocs
 include("messages.jl")
@@ -91,7 +106,6 @@ include("macros.jl")      # @spawn and friends
 include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
-include("precompile.jl")
 
 function __init__()
     init_parallel()

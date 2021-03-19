@@ -14,16 +14,16 @@ extern "C" {
 // Marking callbacks for global roots and tasks, respectively. These,
 // along with custom mark functions must not alter the GC state except
 // through calling jl_gc_mark_queue_obj() and jl_gc_mark_queue_objarray().
-typedef void (*jl_gc_cb_root_scanner_t)(int full);
-typedef void (*jl_gc_cb_task_scanner_t)(jl_task_t *task, int full);
+typedef void (*jl_gc_cb_root_scanner_t)(int full) JL_NOTSAFEPOINT;
+typedef void (*jl_gc_cb_task_scanner_t)(jl_task_t *task, int full) JL_NOTSAFEPOINT;
 
 // Callbacks that are invoked before and after a collection.
-typedef void (*jl_gc_cb_pre_gc_t)(int full);
-typedef void (*jl_gc_cb_post_gc_t)(int full);
+typedef void (*jl_gc_cb_pre_gc_t)(int full) JL_NOTSAFEPOINT;
+typedef void (*jl_gc_cb_post_gc_t)(int full) JL_NOTSAFEPOINT;
 
 // Callbacks to track external object allocations.
-typedef void (*jl_gc_cb_notify_external_alloc_t)(void *addr, size_t size);
-typedef void (*jl_gc_cb_notify_external_free_t)(void *addr);
+typedef void (*jl_gc_cb_notify_external_alloc_t)(void *addr, size_t size) JL_NOTSAFEPOINT;
+typedef void (*jl_gc_cb_notify_external_free_t)(void *addr) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_gc_set_cb_root_scanner(jl_gc_cb_root_scanner_t cb, int enable);
 JL_DLLEXPORT void jl_gc_set_cb_task_scanner(jl_gc_cb_task_scanner_t cb, int enable);
@@ -125,7 +125,17 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p);
 // the size of that stack buffer upon return. Also, if task is a thread's
 // current task, that thread's id will be stored in *tid; otherwise,
 // *tid will be set to -1.
+//
+// DEPRECATED: use jl_active_task_stack() instead.
 JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid);
+
+// Query the active and total stack range for the given task, and set
+// *active_start and *active_end respectively *total_start and *total_end
+// accordingly. The range for the active part is a best-effort approximation
+// and may not be tight.
+JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
+                                       char **active_start, char **active_end,
+                                       char **total_start, char **total_end);
 
 #ifdef __cplusplus
 }

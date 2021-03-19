@@ -7,6 +7,9 @@
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
 #include <string.h> // memcpy
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
 #if defined(_COMPILER_INTEL_)
 #include <mathimf.h>
 #else
@@ -26,7 +29,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-#if !defined(_COMPILER_MINGW_)
+#if !defined(_COMPILER_GCC_)
 
 #define strtoull                                            _strtoui64
 #define strtoll                                             _strtoi64
@@ -39,7 +42,7 @@
 #define STDOUT_FILENO                                       1
 #define STDERR_FILENO                                       2
 
-#endif /* !_COMPILER_MINGW_ */
+#endif /* !_COMPILER_GCC_ */
 
 #endif /* _OS_WINDOWS_ */
 
@@ -60,15 +63,28 @@
 */
 
 #ifdef _OS_WINDOWS_
-#define STDCALL __stdcall
+#define STDCALL  __stdcall
 # ifdef LIBRARY_EXPORTS
 #  define JL_DLLEXPORT __declspec(dllexport)
 # else
 #  define JL_DLLEXPORT __declspec(dllimport)
 # endif
+#define JL_DLLIMPORT   __declspec(dllimport)
 #else
 #define STDCALL
-#define JL_DLLEXPORT __attribute__ ((visibility("default")))
+# define JL_DLLEXPORT __attribute__ ((visibility("default")))
+#define JL_DLLIMPORT
+#endif
+
+/*
+ * Debug builds include `-fstack-protector`, which adds a bit of extra prologue to
+ * functions, even naked ones.  We don't want that, but we also don't want the
+ * compiler warnings when `no_stack_protector` has no effect.
+ */
+#ifdef JL_DEBUG_BUILD
+#define JL_NAKED __attribute__ ((naked,no_stack_protector))
+#else
+#define JL_NAKED __attribute__ ((naked))
 #endif
 
 #ifdef _OS_LINUX_
@@ -111,7 +127,7 @@
 #  define STATIC_INLINE static inline
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)
 #  define NOINLINE_DECL(f) __declspec(noinline) f
 #else
@@ -227,7 +243,7 @@ STATIC_INLINE unsigned int next_power_of_two(unsigned int val) JL_NOTSAFEPOINT
     return val;
 }
 
-#define LLT_ALIGN(x, sz) (((x) + (sz)-1) & -(sz))
+#define LLT_ALIGN(x, sz) (((x) + (sz)-1) & ~((sz)-1))
 
 // branch prediction annotations
 #ifdef __GNUC__
@@ -344,5 +360,42 @@ STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOI
     memcpy(ptr, &val, 2);
 }
 
+#ifdef _OS_WINDOWS_
+#include <errhandlingapi.h>
+#endif
+
+STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    void *p = malloc(sz);
+    if (p == NULL) {
+        perror("(julia) malloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
+}
+
+STATIC_INLINE void *realloc_s(void *p, size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    p = realloc(p, sz);
+    if (p == NULL) {
+        perror("(julia) realloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
+}
 
 #endif /* DTYPES_H */

@@ -2,6 +2,8 @@
 
 ## semantic version numbers (https://semver.org/)
 
+const VerTuple = Tuple{Vararg{Union{UInt64,String}}}
+
 const VInt = UInt32
 """
     VersionNumber
@@ -24,12 +26,12 @@ struct VersionNumber
     major::VInt
     minor::VInt
     patch::VInt
-    prerelease::Tuple{Vararg{Union{UInt64,String}}}
-    build::Tuple{Vararg{Union{UInt64,String}}}
+    prerelease::VerTuple
+    build::VerTuple
 
     function VersionNumber(major::VInt, minor::VInt, patch::VInt,
-            pre::Tuple{Vararg{Union{UInt64,String}}},
-            bld::Tuple{Vararg{Union{UInt64,String}}})
+            pre::VerTuple,
+            bld::VerTuple)
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -99,16 +101,14 @@ $"ix
 
 function split_idents(s::AbstractString)
     idents = split(s, '.')
-    ntuple(length(idents)) do i
-        ident = idents[i]
-        occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
-    end
+    pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
+    return tuple(pidents...)::VerTuple
 end
 
-function VersionNumber(v::AbstractString)
+function tryparse(::Type{VersionNumber}, v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
     m = match(VERSION_REGEX, v)
-    m === nothing && throw(ArgumentError("invalid version string: $v"))
+    m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
     major = parse(VInt, major)
     minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
@@ -118,8 +118,16 @@ function VersionNumber(v::AbstractString)
     end
     prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
-    return VersionNumber(major, minor, patch, prerl, build)
+    return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
 end
+
+function parse(::Type{VersionNumber}, v::AbstractString)
+    ver = tryparse(VersionNumber, v)
+    ver === nothing && throw(ArgumentError("invalid version string: $v"))
+    return ver
+end
+
+VersionNumber(v::AbstractString) = parse(VersionNumber, v)
 
 """
     @v_str
@@ -137,25 +145,22 @@ v"2.0.1-rc1"
 """
 macro v_str(v); VersionNumber(v); end
 
-typemin(::Type{VersionNumber}) = v"0-"
-
 function typemax(::Type{VersionNumber})
     ∞ = typemax(VInt)
     VersionNumber(∞, ∞, ∞, (), ("",))
 end
+
+typemin(::Type{VersionNumber}) = v"0-"
 
 ident_cmp(a::Integer, b::Integer) = cmp(a, b)
 ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
 ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
 ident_cmp(a::String,  b::String ) = cmp(a, b)
 
-function ident_cmp(
-    A::Tuple{Vararg{Union{Integer,String}}},
-    B::Tuple{Vararg{Union{Integer,String}}},
-)
-    for (a, b) in zip(A, B)
-       c = ident_cmp(a,b)
-       (c != 0) && return c
+function ident_cmp(A::VerTuple, B::VerTuple)
+    for (a, b) in Iterators.Zip{Tuple{VerTuple,VerTuple}}((A, B))
+        c = ident_cmp(a, b)
+        (c != 0) && return c
     end
     length(A) < length(B) ? -1 :
     length(B) < length(A) ? +1 : 0
@@ -221,7 +226,7 @@ A `VersionNumber` object describing which version of Julia is in use. For detail
 """
 const VERSION = try
     ver = VersionNumber(VERSION_STRING)
-    if !isempty(ver.prerelease)
+    if !isempty(ver.prerelease) && !GIT_VERSION_INFO.tagged_commit
         if GIT_VERSION_INFO.build_number >= 0
             ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
         else
@@ -237,7 +242,15 @@ catch e
     VersionNumber(0)
 end
 
-const libllvm_version = VersionNumber(libllvm_version_string)
+const libllvm_version = if endswith(libllvm_version_string, "jl")
+    # strip the "jl" SONAME suffix (JuliaLang/julia#33058)
+    # (LLVM does never report a prerelease version anyway)
+    VersionNumber(libllvm_version_string[1:end-2])
+else
+    VersionNumber(libllvm_version_string)
+end
+
+libllvm_path() = ccall(:jl_get_libllvm, Any, ())
 
 function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit

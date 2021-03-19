@@ -68,18 +68,31 @@ registries, packages, etc. installed and managed by system administrators.
 `DEPOT_PATH` is populated based on the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH)
 environment variable if set.
 
+## DEPOT_PATH contents
+
+Each entry in `DEPOT_PATH` is a path to a directory which contains subdirectories used by Julia for various purposes.
+Here is an overview of some of the subdirectories that may exist in a depot:
+
+* `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
+* `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
+* `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
+* `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
+* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
+* `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
+* `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
+
 See also:
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
-[Code Loading](@ref Code-Loading).
+[Code Loading](@ref code-loading).
 """
 const DEPOT_PATH = String[]
 
 function append_default_depot_path!(DEPOT_PATH)
     path = joinpath(homedir(), ".julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
+    path = abspath(Sys.BINDIR::String, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path = abspath(Sys.BINDIR::String, "..", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
 end
 
@@ -101,7 +114,7 @@ function init_depot_path()
     end
 end
 
-## LOAD_PATH, HOME_PROJECT & ACTIVE_PROJECT ##
+## LOAD_PATH & ACTIVE_PROJECT ##
 
 # JULIA_LOAD_PATH: split on `:` (or `;` on Windows)
 # first empty entry is replaced with DEFAULT_LOAD_PATH, the rest are skipped
@@ -152,9 +165,10 @@ See also:
 [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
 [`JULIA_PROJECT`](@ref JULIA_PROJECT),
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
-[Code Loading](@ref Code-Loading).
+[Code Loading](@ref code-loading).
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
+# HOME_PROJECT is no longer used, here just to avoid breaking things
 const HOME_PROJECT = Ref{Union{String,Nothing}}(nothing)
 const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing)
 
@@ -209,16 +223,19 @@ function init_load_path()
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
         paths = filter!(env -> env !== nothing,
-            [env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
+            String[env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
     end
+    append!(empty!(LOAD_PATH), paths)
+end
+
+function init_active_project()
     project = (JLOptions().project != C_NULL ?
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
-    HOME_PROJECT[] =
+    ACTIVE_PROJECT[] =
         project === nothing ? nothing :
         project == "" ? nothing :
         project == "@." ? current_project() : abspath(expanduser(project))
-    append!(empty!(LOAD_PATH), paths)
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
@@ -230,7 +247,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
-        env == "@stdlib" && return Sys.STDLIB
+        env == "@stdlib" && return Sys.STDLIB::String
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)
@@ -261,11 +278,19 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
 end
 load_path_expand(::Nothing) = nothing
 
+"""
+    active_project()
+
+Return the path of the active `Project.toml` file.
+"""
 function active_project(search_load_path::Bool=true)
-    for project in (ACTIVE_PROJECT[], HOME_PROJECT[])
+    for project in (ACTIVE_PROJECT[],)
         project == "@" && continue
         project = load_path_expand(project)
         project === nothing && continue
+        # while this seems well-inferred, nevertheless without the type annotation below
+        # there are backedges here from abspath(::AbstractString, ::String)
+        project = project::String
         if !isfile_casesensitive(project) && basename(project) ∉ project_names
             project = abspath(project, "Project.toml")
         end
@@ -293,22 +318,32 @@ end
 
 ## atexit: register exit hooks ##
 
-const atexit_hooks = Callable[Filesystem.temp_cleanup_purge]
+const atexit_hooks = Callable[
+    () -> Filesystem.temp_cleanup_purge(force=true)
+]
 
 """
     atexit(f)
 
 Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
 called in last in first out (LIFO) order and run before object finalizers.
+
+Exit hooks are allowed to call `exit(n)`, in which case Julia will exit with
+exit code `n` (instead of the original exit code). If more than one exit hook
+calls `exit(n)`, then Julia will exit with the exit code corresponding to the
+last called exit hook that calls `exit(n)`. (Because exit hooks are called in
+LIFO order, "last called" is equivalent to "first registered".)
 """
 atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
 function _atexit()
-    for f in atexit_hooks
+    while !isempty(atexit_hooks)
+        f = popfirst!(atexit_hooks)
         try
             f()
-        catch err
-            show(stderr, err)
+        catch ex
+            showerror(stderr, ex)
+            Base.show_backtrace(stderr, catch_backtrace())
             println(stderr)
         end
     end
