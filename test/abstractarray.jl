@@ -1337,7 +1337,8 @@ end
 
     result = [a; b c ;;; d e f ; g ;;;;; h ;;;; i j]
     @test size(result) == (3,3,3,4,7)
-    @test [a; b c ;;; d e f ; g ;;;;; h ;;;; i j] == [a; [b ;; c] ;;; [d e f] ; g ;;;;; h ;;;; i ;; j]
+    @test result == [a; [b ;; c] ;;; [d e f] ; g ;;;;; h ;;;; i ;; j]
+    @test result == cat(cat([a ; b c], [d e f ; g], dims = 3), cat(h, [i j], dims = 4), dims = 5)
 
     # terminating semicolons extend dimensions
     @test [1;] == [1]
