@@ -1871,6 +1871,9 @@ end
 # Auxiliary functions for matrix logarithm and matrix power
 
 # Find Padé degree m and s while replacing A with A^(1/2^s)
+#   Al-Mohy and Higham, "Improved inverse scaling and squaring algorithms for
+#     the matrix logarithm", SIAM J. Sci. Comput., 34(4), (2012), pp. C153–C169.
+#   from Algorithm 4.1
 function _find_params_log_quasitriu!(A)
     maxsqrt = 100
     theta = [1.586970738772063e-005,
