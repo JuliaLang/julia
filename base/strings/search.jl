@@ -303,8 +303,8 @@ findnext(t::AbstractString, s::AbstractString, start::Integer) = _search(s, t, I
 
 function findnext(a::Union{String,SubString{String}}, b::Union{String,SubString{String}}, start::Integer)
     i = Int(start)
-    i > ncodeunits(b) + 1 && return nothing
     i < firstindex(b) && throw(BoundsError(b, i))
+    i > ncodeunits(b) + 1 && return nothing
     if i ≠ thisind(b, i)
         i = nextind(b, i)
     end
@@ -353,8 +353,16 @@ julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 """
 findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
          A::AbstractVector{<:Union{Int8,UInt8}},
-         start::Integer) =
-    _search(A, pattern, start)
+         start::Integer) = _search(A, pattern, start)
+
+function findnext(a::AbstractVector{T}, b::AbstractVector{T}, start::Integer) where T <: Union{Int8,UInt8}
+    i = Int(start)
+    first = firstindex(b)
+    i < first && throw(BoundsError(b, i))
+    i > lastindex(b) + 1 && return nothing
+    offset = search_forward(a, b, i - 1)
+    return offset ≥ 0 ? (offset+first:offset+first+lastindex(a)-1) : nothing
+end
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
@@ -613,8 +621,18 @@ julia> findprev([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 """
 findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
          A::AbstractVector{<:Union{Int8,UInt8}},
-         start::Integer) =
-    _rsearch(A, pattern, start)
+         start::Integer) = _rsearch(A, pattern, start)
+
+function findprev(a::AbstractVector{T}, b::AbstractVector{T}, stop::Integer) where T <: Union{Int8,UInt8}
+    i = Int(stop)
+    first = firstindex(b)
+    i < first - 1 && return nothing
+    i > lastindex(b) && throw(BoundsError(b, i))
+    offset = search_backward(a, b, lastindex(b) - i)
+    return offset ≥ 0 ? (offset+first:offset+first+lastindex(a)-1) : nothing
+end
+
+
 """
     occursin(needle::Union{AbstractString,AbstractPattern,AbstractChar}, haystack::AbstractString)
 
@@ -711,7 +729,7 @@ function search_backward(a::AbstractVector{T}, b::AbstractVector{T}, k::Int) whe
     if m > n
         return -1
     elseif m == 0
-        return k
+        return n
     end
 
     # preprocess
