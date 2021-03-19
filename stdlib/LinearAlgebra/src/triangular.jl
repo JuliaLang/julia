@@ -1887,7 +1887,7 @@ function _find_params_log_quasitriu!(A)
 
     # Find s0, the smallest s such that the ρ(triu(A)^(1/2^s) - I) ≤ theta[tmax], where ρ(X)
     # is the spectral radius of X
-    d = complex(diag(A))
+    d = complex.(@view(A[diagind(A)]))
     dm1 = d .- 1
     s = 0
     while norm(dm1, Inf) > theta[tmax] && s < maxsqrt
@@ -1902,9 +1902,12 @@ function _find_params_log_quasitriu!(A)
         _sqrt_quasitriu!(A isa UpperTriangular ? parent(A) : A, A)
     end
 
-    AmI = A - I
-    d2 = sqrt(opnorm(AmI^2, 1))
-    d3 = cbrt(opnorm(AmI^3, 1))
+    # these three never needed at the same time, so reuse the same temporary
+    AmI = AmI4 = AmI5 = A - I
+    AmI2 = AmI * AmI
+    AmI3 = AmI2 * AmI
+    d2 = sqrt(opnorm(AmI2, 1))
+    d3 = cbrt(opnorm(AmI3, 1))
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
@@ -1914,10 +1917,8 @@ function _find_params_log_quasitriu!(A)
 
     while !foundm
         more_sqrt = false
-        if s > s0
-            d3 = cbrt(opnorm(AmI^3, 1))
-        end
-        d4 = opnorm(AmI^4, 1)^(1/4)
+        mul!(AmI4, AmI2, AmI2)
+        d4 = opnorm(AmI4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
             local j
@@ -1936,7 +1937,8 @@ function _find_params_log_quasitriu!(A)
         end
 
         if !more_sqrt
-            d5 = opnorm(AmI^5, 1)^(1/5)
+            mul!(AmI5, AmI3, AmI2)
+            d5 = opnorm(AmI5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
@@ -1960,6 +1962,9 @@ function _find_params_log_quasitriu!(A)
         for i in 1:n
             @inbounds AmI[i,i] -= 1
         end
+        mul!(AmI2, AmI, AmI)
+        mul!(AmI3, AmI2, AmI)
+        d3 = cbrt(opnorm(AmI3, 1))
         s = s + 1
     end
     return m, s
