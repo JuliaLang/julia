@@ -755,6 +755,7 @@ end
 
 end
 
+
 @testset "%n" begin
     x = Ref{Int}()
     @test (Printf.@sprintf("%d4%n", 123, x); x[] == 4)
