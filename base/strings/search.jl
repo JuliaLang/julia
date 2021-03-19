@@ -301,6 +301,17 @@ julia> findnext("Lang", "JuliaLang", 2)
 """
 findnext(t::AbstractString, s::AbstractString, start::Integer) = _search(s, t, Int(start))
 
+function findnext(a::Union{String,SubString{String}}, b::Union{String,SubString{String}}, start::Integer)
+    i = Int(start)
+    i > lastindex(b) + 1 && return nothing
+    i < firstindex(b) && throw(BoundsError(b, i))
+    if i ≠ thisind(b, i)
+        i = nextind(b, i)
+    end
+    offset = search_forward(codeunits(a), codeunits(b), i - 1)
+    return offset ≥ 0 ? (offset+1:offset+lastindex(a)) : nothing
+end
+
 """
     findnext(ch::AbstractChar, string::AbstractString, start::Integer)
 
@@ -635,3 +646,56 @@ The returned function is of type `Base.Fix2{typeof(occursin)}`.
 occursin(haystack) = Base.Fix2(occursin, haystack)
 
 in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
+
+function search_forward(a::AbstractVector{T}, b::AbstractVector{T}, k::Int) where T <: Union{Int8,UInt8}
+    m = length(a)
+    n = length(b) - k
+    if m > n
+        return -1
+    elseif m == 0
+        return k
+    end
+
+    # preprocess
+    a_end = a[end]
+    filter = bloom_filter_bit(a_end)
+    displacement = m
+    @inbounds for i in firstindex(a):lastindex(a)-1
+        filter |= bloom_filter_bit(a[i])
+        if a[i] == a_end
+            displacement = lastindex(a) - i
+        end
+    end
+
+    # main loop
+    last = lastindex(b)
+    p = firstindex(b) + k
+    @inbounds while p + m - 1 ≤ last
+        if a_end == b[p+m-1]
+            # the last byte is matching
+            i = firstindex(a)
+            while i < lastindex(a)
+                a[i] == b[p+i-1] || break
+                i += 1
+            end
+            if i == lastindex(a)
+                return p - firstindex(b)
+            elseif p + m ≤ last && !mayhave(filter, b[p+m])
+                p += m + 1
+            else
+                p += displacement
+            end
+        else
+            if p + m ≤ last && !mayhave(filter, b[p+m])
+                p += m +  1
+            else
+                p += 1
+            end
+        end
+    end
+    return -1
+end
+
+# Bloom filter using a 64-bit integer
+bloom_filter_bit(x::Union{Int8,UInt8}) = UInt64(1) << (x & 63)
+mayhave(filter::UInt64, x::Union{Int8,UInt8}) = filter & bloom_filter_bit(x) ≠ 0
