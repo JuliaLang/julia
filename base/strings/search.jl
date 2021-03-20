@@ -351,11 +351,7 @@ julia> findnext([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 4:5
 ```
 """
-findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
-         A::AbstractVector{<:Union{Int8,UInt8}},
-         start::Integer) = _search(A, pattern, start)
-
-function findnext(a::AbstractVector{T}, b::AbstractVector{T}, start::Integer) where T <: Union{Int8,UInt8}
+function findnext(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}, start::Integer)
     i = Int(start)
     first = firstindex(b)
     i < first && throw(BoundsError(b, i))
@@ -619,11 +615,7 @@ julia> findprev([0x52, 0x62], [0x40, 0x52, 0x62, 0x52, 0x62], 3)
 2:3
 ```
 """
-findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
-         A::AbstractVector{<:Union{Int8,UInt8}},
-         start::Integer) = _rsearch(A, pattern, start)
-
-function findprev(a::AbstractVector{T}, b::AbstractVector{T}, stop::Integer) where T <: Union{Int8,UInt8}
+function findprev(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}, stop::Integer)
     i = Int(stop)
     first = firstindex(b)
     i < first - 1 && return nothing
@@ -674,7 +666,7 @@ occursin(haystack) = Base.Fix2(occursin, haystack)
 
 in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
 
-function search_forward(a::AbstractVector{T}, b::AbstractVector{T}, k::Int) where T <: Union{Int8,UInt8}
+function search_forward(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}, k::Int)
     m = length(a)
     n = length(b) - k
     if m > n
@@ -723,7 +715,7 @@ function search_forward(a::AbstractVector{T}, b::AbstractVector{T}, k::Int) wher
     return -1
 end
 
-function search_backward(a::AbstractVector{T}, b::AbstractVector{T}, k::Int) where T <: Union{Int8,UInt8}
+function search_backward(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}, k::Int)
     m = length(a)
     n = length(b) - k
     if m > n
