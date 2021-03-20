@@ -194,10 +194,7 @@ end
 @test findlast("∄", u8str) == nothing
 @test findlast("∀", u8str) == 1:1
 @test findprev("∀", u8str, 0) == nothing
-#TODO: setting the limit in the middle of a wide char
-#      makes findnext fail but findprev succeed.
-#      Should findprev fail as well?
-#@test findprev("∀", u8str, 2) == nothing # gives 1:3
+@test findprev("∀", u8str, 2) == 1:1
 @test findlast("∃", u8str) == 13:13
 @test findprev("∃", u8str, 12) == nothing
 @test findlast("x", u8str) == 43:43
