@@ -47,7 +47,7 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
         _search(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
     end
 end
-
+#=
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::String, i::Integer)
     c = pred.x
@@ -60,7 +60,7 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
         i = prevind(s, i)
     end
 end
-
+=#
 findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
     nothing_sentinel(_rsearch(a, pred.x))
 
