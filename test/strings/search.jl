@@ -4,23 +4,24 @@
 astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
-# I think these should give error on 4 also, and "" is not treated
-# consistently with SubString("",1,1), nor with Char[]
-for ind in (0, 5)
-    @test_throws BoundsError findnext(SubString("",1,1), "foo", ind)
-    @test_throws BoundsError findprev(SubString("",1,1), "foo", ind)
-end
+# FIXME: The following indented test cases seem useless. What are they really testing?
+    # I think these should give error on 4 also, and "" is not treated
+    # consistently with SubString("",1,1), nor with Char[]
+    for ind in (0, 5)
+        @test_throws BoundsError findnext(SubString("",1,1), "foo", ind)
+        @test_throws BoundsError findprev(SubString("",1,1), "foo", ind)
+    end
 
-# Note: the commented out test will be enabled after fixes to make
-# sure that findnext/findprev are consistent
-# no matter what type of AbstractString the second argument is
-@test_throws BoundsError findnext(isequal('a'), "foo", 0)
-#@test_throws BoundsError findnext(in(Char[]), "foo", 5)
-# @test_throws BoundsError findprev(in(Char[]), "foo", 0)
-@test_throws BoundsError findprev(in(Char[]), "foo", 5)
+    # Note: the commented out test will be enabled after fixes to make
+    # sure that findnext/findprev are consistent
+    # no matter what type of AbstractString the second argument is
+    @test_throws BoundsError findnext(isequal('a'), "foo", 0)
+    #@test_throws BoundsError findnext(in(Char[]), "foo", 5)
+    # @test_throws BoundsError findprev(in(Char[]), "foo", 0)
+    @test_throws BoundsError findprev(in(Char[]), "foo", 5)
 
-# @test_throws ErrorException in("foobar","bar")
-@test_throws BoundsError findnext(isequal(0x1),b"\x1\x2",0)
+    # @test_throws ErrorException in("foobar","bar")
+    @test_throws BoundsError findnext(isequal(0x1),b"\x1\x2",0)
 
 # ascii forward search
 for str in [astr, GenericString(astr)]
@@ -313,6 +314,7 @@ end
 
 # string backward search with a two-char UTF-8 (2 byte) string literal
 @test findlast("éé", "éé") == 1:3        # should really be 1:4!
+# FIXME: Throwing an BoundsError is consistent with findnext. Why this OoB indexing is allowed in findprev?
 #@test findprev("éé", "éé", lastindex("ééé")) == 1:3
 # string backward search with a two-char UTF-8 (3 byte) string literal
 @test findlast("€€", "€€") == 1:4        # should really be 1:6!
@@ -414,6 +416,7 @@ end
         @test findprev(pattern, A, 3) === 2:3
         @test findprev(pattern, A, 5) === 4:5
         @test findprev(pattern, A, 2) === nothing
+        # FIXME: The consistent behavior is to throw BoundsError but it's breaking.
         #@test findprev(pattern, A, length(A)+1) == findlast(pattern, A)
         #@test findprev(pattern, A, length(A)+2) == findlast(pattern, A)
         @test findprev(pattern, A, -3) === nothing
