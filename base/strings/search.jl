@@ -56,8 +56,6 @@ julia> findfirst([0x52, 0x62], [0x40, 0x52, 0x62, 0x63])
 findfirst(a::AbstractVector{<:Union{Int8,UInt8}},
           b::AbstractVector{<:Union{Int8,UInt8}}) = findnext(a, b, firstindex(b))
 
-in(a::AbstractChar, b::AbstractString) = findfirst(isequal(a), b) !== nothing
-
 """
     findnext(pattern::AbstractString, string::AbstractString, start::Integer)
     findnext(pattern::AbstractPattern, string::String, start::Integer)
@@ -436,6 +434,7 @@ The returned function is of type `Base.Fix2{typeof(occursin)}`.
 """
 occursin(haystack) = Base.Fix2(occursin, haystack)
 
+in(a::AbstractChar, b::AbstractString) = findfirst(isequal(a), b) !== nothing
 in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
 
 function search_forward(a::Union{Int8,UInt8}, b::AbstractVector{<:Union{Int8,UInt8}}, k::Int)
