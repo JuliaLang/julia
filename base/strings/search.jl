@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-nothing_sentinel(i) = i == 0 ? nothing : i
+const Fix2Eq{T} = Fix2{<:Union{typeof(isequal),typeof(==)},T}
 
+nothing_sentinel(i) = i == 0 ? nothing : i
+#=
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::String, i::Integer)
     if i < 1 || i > sizeof(s)
@@ -18,7 +20,7 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
         i = nextind(s, i)
     end
 end
-
+=#
 findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
     nothing_sentinel(_search(a, pred.x))
 
@@ -329,8 +331,27 @@ julia> findnext('o', "Hello to the world", 6)
 8
 ```
 """
-findnext(ch::AbstractChar, string::AbstractString, start::Integer) =
-    findnext(==(ch), string, start)
+findnext(ch::AbstractChar, string::AbstractString, start::Integer) = findnext(==(ch), string, start)
+
+function findnext(p::Fix2Eq{<:AbstractChar}, b::Union{String,SubString{String}}, start::Integer)
+    i = Int(start)
+    first = firstindex(b)
+    i < first && throw(BoundsError(b, i))
+    i > ncodeunits(b) && return nothing
+    if i ≠ thisind(b, i)
+        i = nextind(b, i)
+    end
+    probe = first_utf8_byte(p.x)
+    while true
+        offset = search_forward(probe, codeunits(b), i - 1)
+        if offset < 0
+            return nothing
+        elseif p(b[offset+first])
+            return offset + first
+        end
+        i = nextind(b, i)
+    end
+end
 
 """
     findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
@@ -596,8 +617,26 @@ julia> findprev('o', "Hello to the world", 18)
 15
 ```
 """
-findprev(ch::AbstractChar, string::AbstractString, start::Integer) =
-    findprev(==(ch), string, start)
+findprev(ch::AbstractChar, string::AbstractString, start::Integer) = findprev(==(ch), string, start)
+
+function findprev(p::Fix2Eq{<:AbstractChar}, b::Union{String,SubString{String}}, stop::Integer)
+    i = Int(stop)
+    first = firstindex(b)
+    i < first && return nothing
+    n = ncodeunits(b)
+    i > n && throw(BoundsError(b, i))
+    i = thisind(b, i)
+    probe = first_utf8_byte(p.x)
+    while true
+        offset = search_backward(probe, codeunits(b), n - i)
+        if offset < 0
+            return nothing
+        elseif p(b[offset+first])
+            return offset + first
+        end
+        i = prevind(b, i)
+    end
+end
 
 """
     findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
@@ -665,6 +704,38 @@ The returned function is of type `Base.Fix2{typeof(occursin)}`.
 occursin(haystack) = Base.Fix2(occursin, haystack)
 
 in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
+
+function search_forward(a::Union{Int8,UInt8}, b::AbstractVector{<:Union{Int8,UInt8}}, k::Int)
+    typemin(eltype(b)) ≤ a ≤ typemax(eltype(b)) || return -1
+    @inbounds for i in firstindex(b)+k:lastindex(b)
+        a == b[i] && return i - firstindex(b)
+    end
+    return -1
+end
+
+function search_forward(a::Union{Int8,UInt8}, b::Union{Vector{<:Union{Int8,UInt8}},CodeUnits{<:Union{Int8,UInt8},<:Union{String,SubString{String}}}}, k::Int)
+    typemin(eltype(b)) ≤ a ≤ typemax(eltype(b)) || return -1
+    n = length(b)
+    n ≤ k && return -1
+    p = GC.@preserve b ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Cint, Csize_t), pointer(b) + k, a, n - k)
+    return p ≠ C_NULL ? Int(p - pointer(b)) : -1
+end
+
+function search_backward(a::Union{Int8,UInt8}, b::AbstractVector{<:Union{Int8,UInt8}}, k::Int)
+    typemin(eltype(b)) ≤ a ≤ typemax(eltype(b)) || return -1
+    @inbounds for i in lastindex(b)-k:-1:firstindex(b)
+        a == b[i] && return i - firstindex(b)
+    end
+    return -1
+end
+
+function search_backward(a::Union{Int8,UInt8}, b::Union{Vector{<:Union{Int8,UInt8}},CodeUnits{<:Union{Int8,UInt8},<:Union{String,SubString{String}}}}, k::Int)
+    typemin(eltype(b)) ≤ a ≤ typemax(eltype(b)) || return -1
+    n = length(b)
+    n ≤ k && return -1
+    p = GC.@preserve b ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Cint, Csize_t), pointer(b), a, n - k)
+    return p ≠ C_NULL ? Int(p - pointer(b)) : -1
+end
 
 function search_forward(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}, k::Int)
     m = length(a)
