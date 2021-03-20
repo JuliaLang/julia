@@ -2,8 +2,9 @@
 
 const Fix2Eq{T} = Fix2{<:Union{typeof(isequal),typeof(==)},T}
 
-nothing_sentinel(i) = i == 0 ? nothing : i
 #=
+nothing_sentinel(i) = i == 0 ? nothing : i
+
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::String, i::Integer)
     if i < 1 || i > sizeof(s)
@@ -26,7 +27,6 @@ findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a
 
 findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_search(a, pred.x, i))
-=#
 
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
@@ -48,7 +48,7 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
         _search(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
     end
 end
-#=
+
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::String, i::Integer)
     c = pred.x
@@ -66,7 +66,6 @@ findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a:
 
 findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_rsearch(a, pred.x, i))
-=#
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
@@ -88,6 +87,7 @@ function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
         _rsearch(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
     end
 end
+=#
 
 """
     findfirst(pattern::AbstractString, string::AbstractString)
@@ -104,8 +104,7 @@ julia> findfirst("Julia", "JuliaLang")
 1:5
 ```
 """
-findfirst(pattern::AbstractString, string::AbstractString) =
-    findnext(pattern, string, firstindex(string))
+findfirst(a::AbstractString, b::AbstractString) = findnext(a, b, firstindex(b))
 
 """
     findfirst(ch::AbstractChar, string::AbstractString)
@@ -124,7 +123,7 @@ julia> findfirst('z', "happy") === nothing
 true
 ```
 """
-findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
+findfirst(a::AbstractChar, b::AbstractString) = findfirst(isequal(a), b)
 
 """
     findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
@@ -160,8 +159,9 @@ function findnext(p::Function, b::AbstractString, start::Integer)
     return nothing
 end
 
-in(c::AbstractChar, s::AbstractString) = findfirst(isequal(c), s) !== nothing
+in(a::AbstractChar, b::AbstractString) = findfirst(isequal(a), b) !== nothing
 
+#=
 function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
@@ -275,6 +275,7 @@ function _search(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
         nothing
     end
 end
+=#
 
 """
     findnext(pattern::AbstractString, string::AbstractString, start::Integer)
@@ -350,7 +351,7 @@ julia> findnext('o', "Hello to the world", 6)
 8
 ```
 """
-findnext(ch::AbstractChar, string::AbstractString, start::Integer) = findnext(==(ch), string, start)
+findnext(a::AbstractChar, b::AbstractString, start::Integer) = findnext(isequal(a), b, start)
 
 function findnext(p::Fix2Eq{<:AbstractChar}, b::Union{String,SubString{String}}, start::Integer)
     i = Int(start)
@@ -461,7 +462,7 @@ julia> findlast('z', "happy") === nothing
 true
 ```
 """
-findlast(ch::AbstractChar, string::AbstractString) = findlast(==(ch), string)
+findlast(a::AbstractChar, b::AbstractString) = findlast(isequal(a), b)
 
 # AbstractString implementation of the generic findprev interface
 function findprev(p::Function, b::AbstractString, stop::Integer)
@@ -477,6 +478,7 @@ function findprev(p::Function, b::AbstractString, stop::Integer)
     return nothing
 end
 
+#=
 function _rsearchindex(s::AbstractString,
                        t::Union{AbstractString,AbstractChar,Int8,UInt8},
                        i::Integer)
@@ -593,6 +595,7 @@ function _rsearch(s::Union{AbstractString,AbstractVector{<:Union{Int8,UInt8}}},
         nothing
     end
 end
+=#
 
 """
     findprev(pattern::AbstractString, string::AbstractString, start::Integer)
@@ -660,7 +663,7 @@ julia> findprev('o', "Hello to the world", 18)
 15
 ```
 """
-findprev(ch::AbstractChar, string::AbstractString, start::Integer) = findprev(==(ch), string, start)
+findprev(a::AbstractChar, b::AbstractString, start::Integer) = findprev(isequal(a), b, start)
 
 function findprev(p::Fix2Eq{<:AbstractChar}, b::Union{String,SubString{String}}, stop::Integer)
     i = Int(stop)
