@@ -56,22 +56,6 @@ julia> findfirst([0x52, 0x62], [0x40, 0x52, 0x62, 0x63])
 findfirst(a::AbstractVector{<:Union{Int8,UInt8}},
           b::AbstractVector{<:Union{Int8,UInt8}}) = findnext(a, b, firstindex(b))
 
-# AbstractString implementation of the generic findnext interface
-function findnext(p::Function, b::AbstractString, start::Integer)
-    i = Int(start)
-    i < firstindex(b) && throw(BoundsError(b, i))
-    last = lastindex(b)
-    i > last && return nothing
-    if i ≠ thisind(b, i)
-        i = nextind(b, i)
-    end
-    @inbounds while i ≤ last
-        p(b[i]) && return i
-        i = nextind(b, i)
-    end
-    return nothing
-end
-
 in(a::AbstractChar, b::AbstractString) = findfirst(isequal(a), b) !== nothing
 
 """
@@ -149,6 +133,22 @@ julia> findnext('o', "Hello to the world", 6)
 ```
 """
 findnext(a::AbstractChar, b::AbstractString, start::Integer) = findnext(isequal(a), b, start)
+
+# AbstractString implementation of the generic findnext interface
+function findnext(p::Function, b::AbstractString, start::Integer)
+    i = Int(start)
+    i < firstindex(b) && throw(BoundsError(b, i))
+    last = lastindex(b)
+    i > last && return nothing
+    if i ≠ thisind(b, i)
+        i = nextind(b, i)
+    end
+    @inbounds while i ≤ last
+        p(b[i]) && return i
+        i = nextind(b, i)
+    end
+    return nothing
+end
 
 function findnext(p::Fix2Eq{<:AbstractChar}, b::Union{String,SubString{String}}, start::Integer)
     i = Int(start)
@@ -261,20 +261,6 @@ true
 """
 findlast(a::AbstractChar, b::AbstractString) = findlast(isequal(a), b)
 
-# AbstractString implementation of the generic findprev interface
-function findprev(p::Function, b::AbstractString, stop::Integer)
-    i = Int(stop)
-    first = firstindex(b)
-    i < first && return nothing
-    i > lastindex(b) && throw(BoundsError(b, i))
-    i = thisind(b, i)
-    @inbounds while i ≥ first
-        p(b[i]) && return i
-        i = prevind(s, i)
-    end
-    return nothing
-end
-
 """
     findprev(pattern::AbstractString, string::AbstractString, start::Integer)
 
@@ -342,6 +328,20 @@ julia> findprev('o', "Hello to the world", 18)
 ```
 """
 findprev(a::AbstractChar, b::AbstractString, start::Integer) = findprev(isequal(a), b, start)
+
+# AbstractString implementation of the generic findprev interface
+function findprev(p::Function, b::AbstractString, stop::Integer)
+    i = Int(stop)
+    first = firstindex(b)
+    i < first && return nothing
+    i > lastindex(b) && throw(BoundsError(b, i))
+    i = thisind(b, i)
+    @inbounds while i ≥ first
+        p(b[i]) && return i
+        i = prevind(s, i)
+    end
+    return nothing
+end
 
 function findprev(p::Fix2Eq{<:AbstractChar}, b::Union{String,SubString{String}}, stop::Integer)
     i = Int(stop)
