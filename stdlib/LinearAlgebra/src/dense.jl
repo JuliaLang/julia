@@ -688,7 +688,7 @@ matrix function is returned whenever possible.
 
 If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used, if `A` is triangular an improved version of the inverse scaling and squaring method is
-employed (see [^AH12] and [^AHR13]). For general matrices, if a real logarithm exists, then
+employed (see [^AH12] and [^AHR13]). If `A` is real with no negative eigenvalues, then
 the real Schur form is computed. Otherwise, the complex Schur form is computed. Then
 the upper (quasi-)triangular algorithm in [^AHR13] is used on the upper (quasi-)triangular
 factor.
