@@ -20,12 +20,13 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
         i = nextind(s, i)
     end
 end
-=#
+
 findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
     nothing_sentinel(_search(a, pred.x))
 
 findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_search(a, pred.x, i))
+=#
 
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
@@ -60,12 +61,12 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
         i = prevind(s, i)
     end
 end
-=#
 findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
     nothing_sentinel(_rsearch(a, pred.x))
 
 findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_rsearch(a, pred.x, i))
+=#
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
@@ -381,6 +382,17 @@ function findnext(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVector{<:Un
     return offset ≥ 0 ? (offset+first:offset+first+lastindex(a)-1) : nothing
 end
 
+function findnext(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}, start::Integer)
+    i = Int(start)
+    first = firstindex(b)
+    i < first && throw(BoundsError(b, i))
+    i > lastindex(b) && return nothing
+    offset = search_forward(p.x, b, i - 1)
+    return offset ≥ 0 ? offset + first : nothing
+end
+
+findfirst(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}) = findnext(p, b, firstindex(b))
+
 """
     findlast(pattern::AbstractString, string::AbstractString)
 
@@ -663,6 +675,16 @@ function findprev(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVector{<:Un
     return offset ≥ 0 ? (offset+first:offset+first+lastindex(a)-1) : nothing
 end
 
+function findprev(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}, stop::Integer)
+    i = Int(stop)
+    first = firstindex(b)
+    i < first && return nothing
+    i > lastindex(b) && throw(BoundsError(b, i))
+    offset = search_backward(p.x, b, length(b) - i)
+    return offset ≥ 0 ? offset + first : nothing
+end
+
+findlast(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}) = findprev(p, b, lastindex(b))
 
 """
     occursin(needle::Union{AbstractString,AbstractPattern,AbstractChar}, haystack::AbstractString)
