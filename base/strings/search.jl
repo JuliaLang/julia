@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const Fix2Eq{T} = Fix2{<:Union{typeof(isequal),typeof(==)},T}
+const ByteVector = Union{Vector{Int8},Vector{UInt8},CodeUnits{UInt8}}
 
 """
     findfirst(pattern::AbstractString, string::AbstractString)
@@ -195,7 +196,7 @@ function findnext(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVector{<:Un
     return offset ≥ 0 ? (offset+first:offset+first+lastindex(a)-1) : nothing
 end
 
-function findnext(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}, start::Integer)
+function findnext(p::Fix2Eq{<:Union{Int8,UInt8}}, b::ByteVector, start::Integer)
     i = Int(start)
     first = firstindex(b)
     i < first && throw(BoundsError(b, i))
@@ -204,7 +205,7 @@ function findnext(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8
     return offset ≥ 0 ? offset + first : nothing
 end
 
-findfirst(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}) = findnext(p, b, firstindex(b))
+findfirst(p::Fix2Eq{<:Union{Int8,UInt8}}, b::ByteVector) = findnext(p, b, firstindex(b))
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
@@ -383,7 +384,7 @@ function findprev(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVector{<:Un
     return offset ≥ 0 ? (offset+first:offset+first+lastindex(a)-1) : nothing
 end
 
-function findprev(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}, stop::Integer)
+function findprev(p::Fix2Eq{<:Union{Int8,UInt8}}, b::ByteVector, stop::Integer)
     i = Int(stop)
     first = firstindex(b)
     i < first && return nothing
@@ -392,7 +393,7 @@ function findprev(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8
     return offset ≥ 0 ? offset + first : nothing
 end
 
-findlast(p::Fix2Eq{<:Union{Int8,UInt8}}, b::AbstractVector{<:Union{Int8,UInt8}}) = findprev(p, b, lastindex(b))
+findlast(p::Fix2Eq{<:Union{Int8,UInt8}}, b::ByteVector) = findprev(p, b, lastindex(b))
 
 """
     occursin(needle::Union{AbstractString,AbstractPattern,AbstractChar}, haystack::AbstractString)
