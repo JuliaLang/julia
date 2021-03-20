@@ -334,7 +334,7 @@ function findprev(p::Function, b::AbstractString, stop::Integer)
     i = thisind(b, i)
     @inbounds while i ≥ first
         p(b[i]) && return i
-        i = prevind(s, i)
+        i = prevind(b, i)
     end
     return nothing
 end
