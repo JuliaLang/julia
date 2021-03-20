@@ -132,7 +132,6 @@ julia> findnext('o', "Hello to the world", 6)
 """
 findnext(a::AbstractChar, b::AbstractString, start::Integer) = findnext(isequal(a), b, start)
 
-# AbstractString implementation of the generic findnext interface
 function findnext(p::Function, b::AbstractString, start::Integer)
     i = Int(start)
     i < firstindex(b) && throw(BoundsError(b, i))
@@ -327,7 +326,6 @@ julia> findprev('o', "Hello to the world", 18)
 """
 findprev(a::AbstractChar, b::AbstractString, start::Integer) = findprev(isequal(a), b, start)
 
-# AbstractString implementation of the generic findprev interface
 function findprev(p::Function, b::AbstractString, stop::Integer)
     i = Int(stop)
     first = firstindex(b)
@@ -436,6 +434,17 @@ occursin(haystack) = Base.Fix2(occursin, haystack)
 
 in(a::AbstractChar, b::AbstractString) = findfirst(isequal(a), b) !== nothing
 in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
+
+# Both search_forward and search_backward take three arguments:
+#   1. needle   (`a`)
+#   2. haystack (`b`)
+#   3. trimming (`k`)
+# The search_forward funtion ignores `k` bytes from the head of `b` and the
+# search_backward function ignores `k` bytes from the tail of `b`. `k` must be
+# nonnegative, but `k` may be larger than the length of `b` (`a` matches
+# nowhere in this case). These two functions return an offset if any match is
+# found in `b`. That means the actual starting position of the match is `offset
+# + firstindex(b)`. If there is no match, a negative integer is returned.
 
 function search_forward(a::Union{Int8,UInt8}, b::AbstractVector{<:Union{Int8,UInt8}}, k::Int)
     typemin(eltype(b)) ≤ a ≤ typemax(eltype(b)) || return -1
