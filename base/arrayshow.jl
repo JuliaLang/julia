@@ -284,6 +284,7 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
     show_full || print(io, "[")
     Is = CartesianIndices(tailinds)
     lastidxs = first(Is).I
+    reached_last_d = false
     for I in Is
         idxs = I.I
         if limit
@@ -299,7 +300,7 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                                 @goto skip
                             end
                         end
-                        show_full || [print(io, ";") for i ∈ 1:i+2]
+                        [print(io, ";") for i ∈ 1:i+2]
                         print(io, " \u2026 ")
                         show_full && print(io, "\n\n")
                         @goto skip
@@ -322,6 +323,7 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
             if any(idxdiff)
                 lastchangeindex = 2 + findlast(idxdiff)
                 [print(io, ";") for i ∈ 1:lastchangeindex]
+                lastchangeindex == ndims(a) && (reached_last_d = true)
                 print(io, " ")
             end
             print_matrix(io, slice)
@@ -329,8 +331,10 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
         @label skip
         lastidxs = idxs
     end
-    show_full || print(io, "]")
-    return nothing
+    if !show_full
+        reached_last_d || [print(io, ";") for i ∈ 1:nd+2]
+        print(io, "]")
+    end
 end
 
 function _show_nd_label(io::IO, a::AbstractArray, idxs)
@@ -447,7 +451,10 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
         end
         last(rr) != last(indr) && rdots && print(io, "\u2026 ; ")
     end
-    drop_brackets || print(io, "]")
+    if !drop_brackets
+        nc > 1 || [print(io, ";") for i ∈ 1:2]
+        print(io, "]")
+    end
     return nothing
 end
 

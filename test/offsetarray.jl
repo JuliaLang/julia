@@ -231,9 +231,9 @@ targets1 = ["0-dimensional OffsetArray(::Array{Float64, 0}) with eltype Float64:
             "1×1×1×1 OffsetArray(::Array{Float64, 4}, 2:2, 3:3, 4:4, 5:5) with eltype Float64 with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
-            "([1.0], [1.0])",
-            "([1.0], [1.0])",
-            "([1.0], [1.0])"]
+            "([1.0;;], [1.0;;])",
+            "([1.0;;;], [1.0;;;])",
+            "([1.0;;;;], [1.0;;;;])"]
 @testset "printing of OffsetArray with n=$n" for n = 0:4
     a = OffsetArray(fill(1.,ntuple(Returns(1),n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
