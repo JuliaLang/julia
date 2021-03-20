@@ -141,9 +141,8 @@ julia> findfirst([0x52, 0x62], [0x40, 0x52, 0x62, 0x63])
 2:3
 ```
 """
-findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
-          A::AbstractVector{<:Union{Int8,UInt8}}) =
-    _search(A, pattern, firstindex(A))
+findfirst(a::AbstractVector{<:Union{Int8,UInt8}},
+          b::AbstractVector{<:Union{Int8,UInt8}}) = findnext(a, b, firstindex(b))
 
 # AbstractString implementation of the generic findnext interface
 function findnext(p::Function, b::AbstractString, start::Integer)
@@ -161,7 +160,7 @@ function findnext(p::Function, b::AbstractString, start::Integer)
     return nothing
 end
 
-in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
+in(c::AbstractChar, s::AbstractString) = findfirst(isequal(c), s) !== nothing
 
 function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
@@ -427,8 +426,7 @@ julia> findfirst("Julia", "JuliaLang")
 1:5
 ```
 """
-findlast(pattern::AbstractString, string::AbstractString) =
-    findprev(pattern, string, lastindex(string))
+findlast(a::AbstractString, b::AbstractString) = findprev(a, b, ncodeunits(b))
 
 """
     findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
@@ -443,9 +441,8 @@ julia> findlast([0x52, 0x62], [0x52, 0x62, 0x52, 0x62])
 3:4
 ```
 """
-findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
-         A::AbstractVector{<:Union{Int8,UInt8}}) =
-    findprev(pattern, A, lastindex(A))
+findlast(a::AbstractVector{<:Union{Int8,UInt8}},
+         b::AbstractVector{<:Union{Int8,UInt8}}) = findprev(a, b, lastindex(b))
 
 """
     findlast(ch::AbstractChar, string::AbstractString)
@@ -743,8 +740,7 @@ false
 
 See also: [`contains`](@ref).
 """
-occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
-    _searchindex(haystack, needle, firstindex(haystack)) != 0
+occursin(a::Union{AbstractString,AbstractChar}, b::AbstractString) = findfirst(a, b) !== nothing
 
 """
     occursin(haystack)
