@@ -438,3 +438,16 @@ for T = (UInt, BigInt)
         @test findprev(isletter, astr, T(x)) isa Int
     end
 end
+
+@testset "empty strings" begin
+    a = ""
+    b = "abc"
+    for i in 1:4
+        @test findnext(a, b, i) === i:i-1
+        @test findprev(a, b, i-1) === i:i-1
+    end
+    @test findnext(a, b, 5) === nothing
+    @test findprev(a, b, -1) === nothing
+    @test findfirst(a, b) === 1:0
+    @test findlast(a, b) === 4:3
+end
