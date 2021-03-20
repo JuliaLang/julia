@@ -146,19 +146,20 @@ findfirst(pattern::AbstractVector{<:Union{Int8,UInt8}},
     _search(A, pattern, firstindex(A))
 
 # AbstractString implementation of the generic findnext interface
-function findnext(testf::Function, s::AbstractString, i::Integer)
-    i = Int(i)
-    z = ncodeunits(s) + 1
-    1 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
-    e = lastindex(s)
-    while i <= e
-        testf(@inbounds s[i]) && return i
-        i = @inbounds nextind(s, i)
+function findnext(p::Function, b::AbstractString, start::Integer)
+    i = Int(start)
+    i < firstindex(b) && throw(BoundsError(b, i))
+    last = lastindex(b)
+    i > last && return nothing
+    if i ≠ thisind(b, i)
+        i = nextind(b, i)
+    end
+    @inbounds while i ≤ last
+        p(b[i]) && return i
+        i = nextind(b, i)
     end
     return nothing
 end
-
 
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 
@@ -448,15 +449,15 @@ true
 findlast(ch::AbstractChar, string::AbstractString) = findlast(==(ch), string)
 
 # AbstractString implementation of the generic findprev interface
-function findprev(testf::Function, s::AbstractString, i::Integer)
-    i = Int(i)
-    z = ncodeunits(s) + 1
-    0 ≤ i ≤ z || throw(BoundsError(s, i))
-    i == z && return nothing
-    @inbounds i == 0 || isvalid(s, i) || string_index_err(s, i)
-    while i >= 1
-        testf(@inbounds s[i]) && return i
-        i = @inbounds prevind(s, i)
+function findprev(p::Function, b::AbstractString, stop::Integer)
+    i = Int(stop)
+    first = firstindex(b)
+    i < first && return nothing
+    i > lastindex(b) && throw(BoundsError(b, i))
+    i = thisind(b, i)
+    @inbounds while i ≥ first
+        p(b[i]) && return i
+        i = prevind(s, i)
     end
     return nothing
 end
