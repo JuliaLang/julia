@@ -497,6 +497,7 @@ function search_forward(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVecto
             displacement = lastindex(a) - i
         end
     end
+    @assert displacement > 0
 
     # main loop
     last = lastindex(b)
@@ -543,9 +544,10 @@ function search_backward(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVect
     @inbounds for i in lastindex(a):-1:firstindex(a)+1
         filter |= bloom_filter_bit(a[i])
         if a[i] == a_begin
-            displacement = firstindex(a) - i
+            displacement = i - firstindex(a)
         end
     end
+    @assert displacement > 0
 
     # main loop
     first = firstindex(b)
