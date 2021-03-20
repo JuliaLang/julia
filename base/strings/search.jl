@@ -303,7 +303,25 @@ julia> findnext("Lang", "JuliaLang", 2)
 6:9
 ```
 """
-findnext(t::AbstractString, s::AbstractString, start::Integer) = _search(s, t, Int(start))
+function findnext(a::AbstractString, b::AbstractString, start::Integer)
+    i = Int(start)
+    i < firstindex(b) && throw(BoundsError(b, i))
+    i > ncodeunits(b) + 1 && return nothing
+    if i ≠ thisind(b, i)
+        i = nextind(b, i)
+    end
+    isempty(a) && return i:i-1
+    a1 = first(a)
+    last = lastindex(b)
+    while i ≤ last
+        i = findnext(a1, b, i)
+        i === nothing && break
+        # TODO: If a and b are the same type, this is fine. But if not?
+        startswith(SubString(b, i, last), a) && return i:i+lastindex(a)-1
+        i = nextind(b, i)
+    end
+    return nothing
+end
 
 function findnext(a::Union{String,SubString{String}}, b::Union{String,SubString{String}}, start::Integer)
     i = Int(start)
@@ -602,7 +620,22 @@ julia> findprev("Julia", "JuliaLang", 6)
 1:5
 ```
 """
-findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, Int(i))
+function findprev(a::AbstractString, b::AbstractString, stop::Integer)
+    i = Int(stop)
+    first = firstindex(b)
+    i < first - 1 && return nothing
+    n = ncodeunits(b)
+    i > n && throw(BoundsError(b, i))
+    isempty(a) && return i-1:i
+    while i ≥ first
+        i = findprev(isequal(a), b, i)
+        i === nothing && break
+        # TODO: If a and b are the same type, this is fine. But if not?
+        endswith(SubString(b, first, i), a) && return i-lastindex(a)+1:i
+        i = prevind(b, i)
+    end
+    return nothing
+end
 
 function findprev(a::Union{String,SubString{String}}, b::Union{String,SubString{String}}, stop::Integer)
     i = Int(stop)
