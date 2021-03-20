@@ -639,6 +639,8 @@ _firstbyteidx(s::String) = 1
 _firstbyteidx(s::AbstractVector{UInt8}) = first(eachindex(s))
 _lastbyteidx(s::String) = sizeof(s)
 _lastbyteidx(s::AbstractVector{UInt8}) = lastindex(s)
+_nthbyte(s::String, i) = codeunit(s, i)
+_nthbyte(s::AbstractVector{UInt8}, i) = s[i + firstindex(s) - 1]
 
 """
     hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
