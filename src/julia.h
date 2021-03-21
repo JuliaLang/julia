@@ -269,7 +269,8 @@ typedef struct _jl_code_info_t {
         // 0 = inbounds
         // 1,2 = <reserved> inlinehint,always-inline,noinline
         // 3 = <reserved> strict-ieee (strictfp)
-        // 4-6 = <unused>
+        // 4 = effect-free (may be deleted if unused)
+        // 5-6 = <unused>
         // 7 = has out-of-band info
     // miscellaneous data:
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
@@ -320,6 +321,12 @@ typedef struct _jl_method_t {
     // cases where this method was called even though it was not necessarily
     // the most specific for the argument types.
     jl_typemap_t *invokes;
+
+    // A function that compares two specializations of this method, returning
+    // `true` if the first signature is to be considered "smaller" than the
+    // second for purposes of recursion analysis. Set to NULL to use
+    // the default recusion relation.
+    jl_value_t *recursion_relation;
 
     int32_t nargs;
     int32_t called;        // bit flags: whether each of the first 8 arguments is called
@@ -1296,7 +1303,25 @@ STATIC_INLINE int jl_is_array_zeroinit(jl_array_t *a) JL_NOTSAFEPOINT
 
 // object identity
 JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__bits(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__special(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
+
+STATIC_INLINE int jl_egal_(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
+{
+    if (a == b)
+        return 1;
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
+    if (dt != (jl_datatype_t*)jl_typeof(b))
+        return 0;
+    if (dt->mutabl) {
+        if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
+            return jl_egal__special(a, b, dt);
+        return 0;
+    }
+    return jl_egal__bits(a, b, dt);
+}
+#define jl_egal(a, b) jl_egal_((a), (b))
 
 // type predicates and basic operations
 JL_DLLEXPORT int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;

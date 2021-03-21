@@ -6449,7 +6449,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                         B::AbstractMatrix{$elty}, C::AbstractMatrix{$elty}, isgn::Int=1)
             require_one_based_indexing(A, B, C)
             chkstride1(A, B, C)
-            m, n = checksquare(A, B)
+            m, n = checksquare(A), checksquare(B)
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             m1, n1 = size(C)
@@ -6457,7 +6457,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                 throw(DimensionMismatch("dimensions of A, ($m,$n), and C, ($m1,$n1), must match"))
             end
             ldc = max(1, stride(C, 2))
-            scale = Vector{$relty}(undef, 1)
+            scale = Ref{$relty}()
             info  = Ref{BlasInt}()
             ccall((@blasfunc($fn), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
@@ -6467,7 +6467,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                 A, lda, B, ldb, C, ldc,
                 scale, info, 1, 1)
             chklapackerror(info[])
-            C, scale[1]
+            C, scale[]
         end
     end
 end

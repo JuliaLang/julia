@@ -69,6 +69,36 @@ void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #  define JL_USE_IFUNC 0
 #endif
 
+// If we've smashed the stack, (and not just normal NORETURN)
+// this will smash stack-unwind too
+#ifdef _OS_WINDOWS_
+#if defined(_CPU_X86_64_)
+    // install the unhandled exception handler at the top of our stack
+    // to call directly into our personality handler
+#define CFI_NORETURN \
+    asm volatile ("\t.seh_handler __julia_personality, @except\n\t.text");
+#else
+#define CFI_NORETURN
+#endif
+#else
+// wipe out the call-stack unwind capability beyond this function
+// (we are noreturn, so it is not a total lie)
+#if defined(_CPU_X86_64_)
+// per nongnu libunwind: "x86_64 ABI specifies that end of call-chain is marked with a NULL RBP or undefined return address"
+// so we do all 3, to be extra certain of it
+#define CFI_NORETURN \
+    asm volatile ("\t.cfi_undefined rip"); \
+    asm volatile ("\t.cfi_undefined rbp"); \
+    asm volatile ("\t.cfi_return_column rbp");
+#else
+    // per nongnu libunwind: "DWARF spec says undefined return address location means end of stack"
+    // we use whatever happens to be register 1 on this platform for this
+#define CFI_NORETURN \
+    asm volatile ("\t.cfi_undefined 1"); \
+    asm volatile ("\t.cfi_return_column 1");
+#endif
+#endif
+
 // If this is detected in a backtrace of segfault, it means the functions
 // that use this value must be reworked into their async form with cb arg
 // provided and with JL_UV_LOCK used around the calls
@@ -913,7 +943,7 @@ size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
-void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data, size_t *bt_size);
+void jl_critical_error(int sig, bt_context_t *context);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;

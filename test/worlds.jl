@@ -89,8 +89,8 @@ B265(x::Any, dummy::Nothing) = B265{UInt8}(x, dummy)
 @test (B265_(2)::B265{Float64}).field1 === 2.0e0
 @test (B265_(3)::B265{UInt8}).field1 === 0x03
 
-@test Base.return_types(B265_, (Int,)) == Any[B265]
-@test Core.Compiler.return_type(B265_, (Int,)) == B265
+@test B265{UInt8} <: only(Base.return_types(B265_, (Int,))) <: B265
+@test B265{UInt8} <: Core.Compiler.return_type(B265_, (Int,)) <: B265
 
 
 # test oldworld call / inference

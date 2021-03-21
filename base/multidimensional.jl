@@ -278,6 +278,7 @@ module IteratorsMD
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
+    _convert2ind(sz::Bool) = Base.OneTo(Int(sz))
     _convert2ind(sz::Integer) = Base.OneTo(sz)
     _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
     _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)

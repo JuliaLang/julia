@@ -18,7 +18,7 @@ extern "C" {
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
-jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
 
 // Resolve references to non-locally-defined variables to become references to global
@@ -71,16 +71,17 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         else {
             size_t i = 0, nargs = jl_array_len(e->args);
             if (e->head == opaque_closure_method_sym) {
-                if (nargs != 3) {
+                if (nargs != 4) {
                     jl_error("opaque_closure_method: invalid syntax");
                 }
-                jl_value_t *nargs = jl_exprarg(e, 0);
-                jl_value_t *functionloc = jl_exprarg(e, 1);
-                jl_value_t *ci = jl_exprarg(e, 2);
+                jl_value_t *name = jl_exprarg(e, 0);
+                jl_value_t *nargs = jl_exprarg(e, 1);
+                jl_value_t *functionloc = jl_exprarg(e, 2);
+                jl_value_t *ci = jl_exprarg(e, 3);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
                 }
-                return (jl_value_t*)jl_make_opaque_closure_method(module, nargs, functionloc, (jl_code_info_t*)ci);
+                return (jl_value_t*)jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci);
             }
             if (e->head == cfunction_sym) {
                 JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
@@ -491,6 +492,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == new_opaque_closure_sym) {
                 linfo->uninferred = jl_copy_ast((jl_value_t*)func);
+                jl_gc_wb(linfo, linfo->uninferred);
                 break;
             }
         }
@@ -660,6 +662,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->nospecialize = module->nospecialize;
     m->nkw = 0;
     m->invokes = NULL;
+    m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;
     m->primary_world = 1;
@@ -672,7 +675,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 
 // method definition ----------------------------------------------------------
 
-jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
 {
     jl_method_t *m = jl_new_method_uninit(module);
@@ -682,7 +685,12 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
     // Unused for opaque closures. va-ness is determined on construction
     m->isva = 0;
     m->is_for_opaque_closure = 1;
-    m->name = jl_symbol("opaque closure");
+    if (name == jl_nothing) {
+        m->name = jl_symbol("opaque closure");
+    } else {
+        assert(jl_is_symbol(name));
+        m->name = (jl_sym_t*)name;
+    }
     m->nargs = jl_unbox_long(nargs) + 1;
     assert(jl_is_linenode(functionloc));
     jl_value_t *file = jl_linenode_file(functionloc);

@@ -1092,6 +1092,9 @@ end
 @test occursin("identical", sprint(show, help_result("===")))
 @test occursin("broadcast", sprint(show, help_result(".<=")))
 
+# Issue 39427
+@test occursin("does not exist", sprint(show, help_result(":=")))
+
 # Issue #25930
 
 # Brief and extended docs (issue #25930)
