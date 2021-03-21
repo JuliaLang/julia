@@ -520,7 +520,7 @@ function search_forward(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVecto
             end
         else
             if p + m ≤ last && !mayhave(filter, b[p+m])
-                p += m +  1
+                p += m + 1
             else
                 p += 1
             end
