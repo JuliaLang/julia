@@ -1537,11 +1537,12 @@ function Base.eachstoredindex(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
 end
 
 function Base.eachstoredindex(S::Union{Adjoint{T, ST}, Transpose{T, ST}}) where {T, ST <: AbstractSparseMatrixCSC{T}}
-    numnz = nnz(S)
+    P = parent(S)
+    numnz = nnz(P)
     indices = Vector{CartesianIndex{2}}(undef, numnz)
     count = 1
-    @inbounds for col = 1 : size(S, 2), k = getcolptr(S)[col] : (getcolptr(S)[col+1]-1)
-        indices[count] = CartesianIndex(col, rowvals(S)[k])
+    @inbounds for col = 1 : size(P, 2), k = getcolptr(P)[col] : (getcolptr(P)[col+1]-1)
+        indices[count] = CartesianIndex(col, rowvals(P)[k])
         count += 1
     end
     return indices
