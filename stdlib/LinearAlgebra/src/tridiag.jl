@@ -211,15 +211,6 @@ end
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-for op = (:+, :-)
-    @eval begin
-        $op(A::SymTridiagonal, B::Symmetric) = Symmetric($op(A, B.data), sym_uplo(B.uplo))
-        $op(A::Symmetric, B::SymTridiagonal) = Symmetric($op(A.data, B), sym_uplo(A.uplo))
-        $op(A::SymTridiagonal{<:Real}, B::Hermitian) = Hermitian($op(A, B.data), sym_uplo(B.uplo))
-        $op(A::Hermitian, B::SymTridiagonal{<:Real}) = Hermitian($op(A.data, B), sym_uplo(A.uplo))
-    end
-end
-
 @inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
              alpha::Number, beta::Number) =
     _mul!(A, B, C, MulAddMul(alpha, beta))
