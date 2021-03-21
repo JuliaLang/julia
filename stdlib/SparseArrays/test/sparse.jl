@@ -2877,6 +2877,14 @@ end
         @test SparseMatrixCSC(at(wr(A))) == Matrix(at(wr(B)))
     end
 
+    @testset "eachstoredindex($(wr))" for wr in (UpperTriangular, LowerTriangular,
+                                                 UnitUpperTriangular, UnitLowerTriangular,
+                                                 Hermitian, (Hermitian, :L), Symmetric, (Symmetric, :L), Transpose, Adjoint)
+        S = dowrap(wr, A)
+        sum(S[Base.eachstoredindex(S)]) == sum(S)
+        sum(S[Base.eachstoredindex(S)]) == sum(Matrix(S))
+    end
+
     @test sparse([1,2,3,4,5]') == SparseMatrixCSC([1 2 3 4 5])
     @test sparse(UpperTriangular(A')) == UpperTriangular(B')
     @test sparse(Adjoint(UpperTriangular(A'))) == Adjoint(UpperTriangular(B'))
