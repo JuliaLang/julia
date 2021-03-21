@@ -489,6 +489,15 @@ end
 @test f19333(0) == 7
 @test x19333 == 5
 
+@test @Core.Typeof(42) == Int
+@test @Core.Typeof(Int) == Type{Int}
+function two_nested_closures()
+    f() = 3
+    g(::@Core.Typeof(f)) = 4
+    return g(f)
+end
+@test two_nested_closures() == 4
+
 function h19333()
     s = 0
     for (i, j) in ((1, 2),)

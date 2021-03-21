@@ -270,6 +270,15 @@
                (map (lambda (x) (replace-vars x renames))
                     (cdr e))))))
 
+(define (replace-typeof-exprs e namemap)
+  (cond ((or (not (pair? e)) (quoted? e))  e)
+        ((eq? 'Typeof (car e))
+         (get namemap (cadr e) `(call (core Typeof) ,(cadr e))))
+        (else
+         (cons (car e)
+               (map (lambda (x) (replace-typeof-exprs x namemap))
+                    (cdr e))))))
+
 (define (make-generator-function name sp-names arg-names body)
   (let ((arg-names (append sp-names
                            (map (lambda (n)
@@ -3762,9 +3771,11 @@ f(x) = yt(x)
                              (let* ((iskw ;; TODO jb/functions need more robust version of this
                                      (contains (lambda (x) (eq? x 'kwftype)) sig))
                                     (renamemap (map cons closure-param-names closure-param-syms))
-                                    (arg-defs (replace-vars
-                                               (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
-                                               renamemap)))
+                                    (arg-defs (replace-typeof-exprs
+                                               (replace-vars
+                                                (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
+                                                 renamemap)
+                                               namemap)))
                                (append (map (lambda (gs tvar)
                                               (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
                                             closure-param-syms closure-param-names)
@@ -3845,7 +3856,10 @@ f(x) = yt(x)
            (cons (car e)
                  (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq))))))))
 
-(define (closure-convert e) (cl-convert e #f #f #f #f #f #f #f))
+(define (closure-convert e)
+  (replace-typeof-exprs
+   (cl-convert e #f #f #f #f #f #f #f)
+   (table)))
 
 ;; pass 5: convert to linear IR
 

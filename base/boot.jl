@@ -242,6 +242,9 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
+macro Typeof(x)
+    _expr(:Typeof, _expr(:escape, x))
+end
 
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
