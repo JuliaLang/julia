@@ -489,6 +489,19 @@ end
 
 function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
     n = lastindex(str)::Int
+    if splitter isa AbstractString && isempty(splitter)
+        # TODO: Fix this ad-hoc handling of empty strings (see #40117).
+        if isempty(str)
+            keepempty && pushfirst!(strs, SubString(str, 1, 0))
+        else
+            while n > 0 && length(strs) != limit - 1
+                pushfirst!(strs, SubString(str, n, n))
+                n = prevind(str, n)::Int
+            end
+            n > 0 && pushfirst!(strs, SubString(str, 1, n))
+        end
+        return strs
+    end
     r = something(findlast(splitter, str)::Union{Nothing,Int,UnitRange{Int}}, 0)
     j, k = first(r), last(r)
     while j > 0 && k > 0 && length(strs) != limit-1

@@ -156,9 +156,8 @@ end
 
     # zero-width splits
     @test split("", "") == rsplit("", "") == [""]
-    # FIXME
-    #@test split("abc", "") == rsplit("abc", "") == ["a","b","c"]
-    #@test rsplit("abc", "", limit=2) == ["ab","c"]
+    @test split("abc", "") == rsplit("abc", "") == ["a","b","c"]
+    @test rsplit("abc", "", limit=2) == ["ab","c"]
     @test split("abc", "", limit=2) == ["a","bc"]
 
     @test split("", r"") == [""]
