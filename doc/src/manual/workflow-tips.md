@@ -69,9 +69,9 @@ See the package home for details.
 
 ## Revise-based workflows
 
-Whether you're at the REPL or in IJulia, you can typically improve
-your development experience with
-[Revise](https://github.com/timholy/Revise.jl).
+Whether you're at the REPL or in IJulia, it is highly recommended
+that you consider a 
+[Revise](https://github.com/timholy/Revise.jl) based workflow.
 It is common to configure Revise to start whenever julia is started,
 as per the instructions in the [Revise documentation](https://timholy.github.io/Revise.jl/stable/).
 Once configured, Revise will track changes to files in any loaded modules,
