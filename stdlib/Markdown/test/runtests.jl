@@ -1213,3 +1213,45 @@ end
         |  $x  |
         """)
 end
+
+@testset "issue #25992: status quo of parsing of interpolated Julia expressions" begin
+    # Status quo
+    @test Markdown.parse(raw" $(1 + 1)$(1 + 1)") == MD(Paragraph([LaTeX("(1 + 1)"), "(1 + 1)"]))
+    @test Markdown.parse(raw" $(1 + 1) $(1 + 1)") == MD(Paragraph([:(1 + 1), " ", :(1 + 1)]))
+    @test Markdown.parse(raw"$(1 + 1) $(1 + 1)") == MD([:(1 + 1), Paragraph([:(1 + 1)])])
+    @test Markdown.parse(raw"$(1 + 1)$(1 + 1)") == MD([LaTeX("(1 + 1)"), Paragraph(["(1 + 1)"])])
+
+    # Potential future 'consistent' results? (e.g. if parsing was consistent with string interpolation behavior)
+    @test_broken Markdown.parse(raw" $(1 + 1)$(1 + 1)") == MD(Paragraph([:(1 + 1), :(1 + 1)]))
+    @test Markdown.parse(raw" $(1 + 1) $(1 + 1)") == MD(Paragraph([:(1 + 1), " ", :(1 + 1)]))
+    @test_broken Markdown.parse(raw"$(1 + 1) $(1 + 1)") == MD(Paragraph([:(1 + 1), " ", :(1 + 1)]))
+    @test_broken Markdown.parse(raw"$(1 + 1)$(1 + 1)") == MD(Paragraph([:(1 + 1), :(1 + 1)]))
+
+end
+
+# Document how combining interpolation and Latex leads to puzzling results, inconsistent with backtick syntax
+# (especially relevant in context of Pluto.jl)
+@testset "Latex + Interpolation Intrigues" begin
+    # Status quo
+    var_a_epsilon_dollar_1 = raw" $(a) $ \epsilon $"
+    var_a_epsilon_tick_1 = raw" $(a) `` \epsilon ``"
+
+    var_a_epsilon_dollar_2 = raw"$(a) $\epsilon$"
+    var_a_epsilon_tick_2 = raw"$(a) ``\epsilon``"
+
+    var_a_epsilon_dollar_3 = raw" $(a) $\epsilon$ $(a)"
+    var_a_epsilon_tick_3 = raw" $(a) ``\epsilon`` $(a)"
+
+    @test Markdown.parse(var_a_epsilon_dollar_1) == MD([Paragraph([:a, raw" $ \epsilon $"])]) # current behavior
+    @test Markdown.parse(var_a_epsilon_tick_1) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon")])])  # result using backtick
+    @test_broken Markdown.parse(var_a_epsilon_dollar_1) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon")])]) # if $ syntax were identical to backtick
+
+    @test Markdown.parse(var_a_epsilon_dollar_2) == MD([LaTeX(raw"(a) $\epsilon")]) # current behavior
+    @test Markdown.parse(var_a_epsilon_tick_2) == MD([:a, Paragraph([LaTeX(raw"\epsilon")])]) # result using backtick
+    @test_broken Markdown.parse(var_a_epsilon_dollar_2) == MD([:a, Paragraph([LaTeX(raw"\epsilon")])]) # if $ syntax were identical to backtick
+
+
+    @test Markdown.parse(var_a_epsilon_dollar_3) == MD(Paragraph([LaTeX(raw"(a) $\epsilon"), " ", :a])) # current behavior
+    @test Markdown.parse(var_a_epsilon_tick_3) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon"), " ", :a])]) # result using backtick
+    @test_broken Markdown.parse(var_a_epsilon_dollar_3) == MD([Paragraph([:a, " ", LaTeX(raw"\epsilon"), " ", :a])]) # if $ syntax were identical to backtick
+end
