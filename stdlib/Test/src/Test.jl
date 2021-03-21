@@ -1334,7 +1334,6 @@ function get_testset_depth()
     return length(testsets)
 end
 
-_args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 _materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
 
 """
@@ -1412,32 +1411,20 @@ function _inferred(ex, mod, allow = :(Union{}))
         ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
             farg, ex.args[2:end]...)
     end
-    Base.remove_linenums!(quote
+    result_ex = esc(ex)
+    inftypes_ex = gen_call_with_extracted_types(mod, Base.return_types, ex)
+    quote
         let
             allow = $(esc(allow))
             allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
-            $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
-                # Has keywords
-                args = gensym()
-                kwargs = gensym()
-                quote
-                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                    inftypes = $(gen_call_with_extracted_types(mod, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
-                end
-            else
-                # No keywords
-                quote
-                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
-                    result = $(esc(ex.args[1]))(args...)
-                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
-                end
-            end)
+            result = $(result_ex)
+            inftypes = $(inftypes_ex)
             @assert length(inftypes) == 1
             rettype = result isa Type ? Type{result} : typeof(result)
             rettype <: allow || rettype == typesplit(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
             result
         end
-    end)
+    end |> Base.remove_linenums!
 end
 
 function is_in_mods(m::Module, recursive::Bool, mods)
