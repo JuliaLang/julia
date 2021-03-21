@@ -106,26 +106,34 @@ IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
 promote_shape(::Tuple{}, ::Tuple{}) = ()
 
-function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
-    if a[1] != b[1]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
+# Consistent error message for promote_shape mismatch, hiding implementation details like
+# OneTo. When b ≡ nothing, it is omitted; i can be supplied for an index.
+function throw_promote_shape_mismatch(a, b, i = nothing)
+    _normalize(d) = map(x -> x isa AbstractUnitRange ? (firstindex(x):lastindex(x)) : x, d)
+    msg = "dimensions must match: a has dims $(_normalize(a))"
+    if b ≢ nothing
+        msg *= ", b has dims $(_normalize(b))"
     end
+    if i ≢ nothing
+        msg *= ", mismatch at $(i)"
+    end
+    throw(DimensionMismatch(msg))
+end
+
+function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
+    a[1] != b[1] && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
-    if a[1] != b[1] || a[2] != 1
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != 1) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
 
 function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
-    if a[1] != b[1] || a[2] != b[2]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != b[2]) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
@@ -153,14 +161,10 @@ function promote_shape(a::Dims, b::Dims)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
@@ -174,14 +178,10 @@ function promote_shape(a::Indices, b::Indices)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1:1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1:1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
