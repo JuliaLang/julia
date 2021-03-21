@@ -1833,7 +1833,9 @@ end
     # test that stored zeros are still stored zeros in the diagonal
     S = sparse([1,3],[1,3],[0.0,0.0]); V = diag(S)
     @test nonzeroinds(V) == [1,3]
+    @test Base.eachstoredindex(V) == [1,3]
     @test nonzeros(V) == [0.0,0.0]
+    @test V[Base.eachstoredindex(V)] == nonzeros(V)
 end
 
 @testset "expandptr" begin

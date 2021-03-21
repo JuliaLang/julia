@@ -1525,6 +1525,17 @@ function findnz(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     return (I, J, V)
 end
 
+function Base.eachstoredindex(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+    numnz = nnz(S)
+    indices = Vector{CartesianIndex{2}}(undef, numnz)
+    count = 1
+    @inbounds for col = 1 : size(S, 2), k = getcolptr(S)[col] : (getcolptr(S)[col+1]-1)
+        indices[count] = CartesianIndex(rowvals(S)[k], col)
+        count += 1
+    end
+    return indices
+end
+
 function _sparse_findnextnz(m::AbstractSparseMatrixCSC, ij::CartesianIndex{2})
     row, col = Tuple(ij)
     col > size(m, 2) && return nothing
