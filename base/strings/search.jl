@@ -507,8 +507,7 @@ function search_forward(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVecto
         if a_end == b[p+m-1]
             # the last byte is matching
             i = firstindex(a)
-            while i < lastindex(a)
-                a[i] == b[p+i-1] || break
+            while i < lastindex(a) && a[i] == b[p+i-1]
                 i += 1
             end
             if i == lastindex(a)
@@ -557,8 +556,7 @@ function search_backward(a::AbstractVector{<:Union{Int8,UInt8}}, b::AbstractVect
         if a_begin == b[p]
             # the first byte is matching
             i = lastindex(a)
-            while i > firstindex(a)
-                a[i] == b[p+i-1] || break
+            while i > firstindex(a) && a[i] == b[p+i-1]
                 i -= 1
             end
             if i == firstindex(a)
