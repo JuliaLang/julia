@@ -111,10 +111,7 @@ end
 
 parent(D::Diagonal) = D.diag
 
-function Base.eachstoredindex(D::Diagonal)
-    n = length(D.diag)
-    return 1:n+1:(n*n)
-end
+Base.eachstoredindex(D::Diagonal) = diagind(D)
 
 ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
