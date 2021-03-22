@@ -95,6 +95,14 @@ end
 @test !isless((a=2,b=1), (a=1,b=2))
 @test_throws MethodError isless((a=1,), (x=2,))
 
+@test (a=1,b=2) < (a=1,b=3)
+@test_broken (a=1,) < (a=1,b=2)
+@test !((a=1,b=2) < (a=1,b=2))
+@test !((a=2,b=1) < (a=1,b=2))
+@test_throws MethodError (a=1,) < (x=2,)
+@test !((a=-0.0) < (a=0.0))
+@test ismissing((a=missing) < (a=missing))
+
 @test map(-, (x=1, y=2)) == (x=-1, y=-2)
 @test map(+, (x=1, y=2), (x=10, y=20)) == (x=11, y=22)
 @test_throws ArgumentError map(+, (x=1, y=2), (y=10, x=20))
