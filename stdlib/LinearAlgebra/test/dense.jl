@@ -870,6 +870,14 @@ end
     end
 end
 
+@testset "issue #40141" begin
+    x = [-1 -eps() 0 0; eps() -1 0 0; 0 0 -1 -eps(); 0 0 eps() -1]
+    @test sqrt(x)^2 ≈ x
+
+    x2 =  [-1 -eps() 0 0; 3eps() -1 0 0; 0 0 -1 -3eps(); 0 0 eps() -1]
+    @test sqrt(x2)^2 ≈ x2
+end
+
 @testset "issue #7181" begin
     A = [ 1  5  9
           2  6 10
