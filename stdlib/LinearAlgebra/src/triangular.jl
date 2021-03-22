@@ -2521,7 +2521,7 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x2!(R, A, i, j)
     Rii = @view R[irange, irange]
     Rjj = @view R[jrange, jrange]
     Rij = @view R[irange, jrange]
-    if !(iszero(Rij) && all(isfinite, A) && all(isfinite, B))
+    if !(iszero(Rij) && all(isfinite, Rii) && all(isfinite, Rjj))
         _sylvester_2x2!(Rii, Rjj, Rij)
     end
     return R
