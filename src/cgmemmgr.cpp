@@ -23,6 +23,7 @@
 #endif
 #ifdef _OS_FREEBSD_
 #  include <sys/types.h>
+#  include <sys/resource.h>
 #endif
 #include "julia_assert.h"
 
