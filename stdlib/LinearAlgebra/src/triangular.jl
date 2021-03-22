@@ -2446,11 +2446,11 @@ Base.@propagate_inbounds function _sqrt_real_2x2!(R, A)
         α = μ / sqrt(2 * (sqrt(θ^2 + μ²) - θ))
     end
     c = 2α
-    d = α - θ / c
-    R[1, 1] = a11 / c + d
+    d = (a11 - a22) / 4α
+    R[1, 1] = α + d
     R[2, 1] = a21 / c
     R[1, 2] = a12 / c
-    R[2, 2] = a22 / c + d
+    R[2, 2] = α - d
     return R
 end
 
