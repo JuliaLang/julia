@@ -59,6 +59,28 @@ function Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken}
 end
 Lexer(str::AbstractString, T::Type{TT} = Token) where TT <: AbstractToken = Lexer(IOBuffer(str), T)
 
+function Base.copy(l::Lexer{IO_t, TT}) where IO_t where TT
+    return Lexer{IO_t, TT}(
+        l.io,
+        l.io_startpos,
+
+        l.token_start_row,
+        l.token_start_col,
+        l.token_startpos,
+
+        l.current_row,
+        l.current_col,
+        l.current_pos,
+
+        l.last_token,
+        l.charstore,
+        l.chars,
+        l.charspos,
+        l.doread,
+        l.dotop
+    )
+end
+
 @inline token_type(l::Lexer{IO_t, TT}) where {IO_t, TT} = TT
 
 """
@@ -818,10 +840,12 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                 return false
             elseif c == '('
                 o = 1
-                l2 = deepcopy(l)
+                l2 = copy(l)
                 while o > 0
                     prevpos = position(l2)
+                    prevpos_io = position(l2.io)
                     t = next_token(l2)
+                    seek(l.io, prevpos_io)
 
                     for _ in 1:(position(l2) - prevpos)
                         readchar(l)
