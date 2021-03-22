@@ -876,6 +876,9 @@ end
 
     x2 =  [-1 -eps() 0 0; 3eps() -1 0 0; 0 0 -1 -3eps(); 0 0 eps() -1]
     @test sqrt(x2)^2 ≈ x2
+
+    x3 = [-1 -eps() 0 0; eps() -1 0 0; 0 0 -1 -eps(); 0 0 eps() Inf]
+    @test all(isnan, sqrt(x3))
 end
 
 @testset "issue #7181" begin
