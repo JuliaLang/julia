@@ -33,7 +33,7 @@ end
 function GitCredential(user_pass_cred::UserPasswordCredential, url::AbstractString)
     cred = parse(GitCredential, url)
     cred.username = user_pass_cred.user
-    cred.password = user_pass_cred.pass
+    cred.password = deepcopy(user_pass_cred.pass)
     return cred
 end
 
