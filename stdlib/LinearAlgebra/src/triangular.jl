@@ -2442,7 +2442,10 @@ Base.@propagate_inbounds function _sqrt_real_2x2!(R, A)
     a11, a21, a12, a22 = A[1, 1], A[2, 1], A[1, 2], A[2, 2]
     d = a11 - a22
     θ = (a11 + a22) / 2
-    μ = sqrt(-d^2 - 4 * a21 * a12) / 2
+    # avoid overflow/underflow of μ
+    # for real sqrt, |d| ≤ 2 max(|a12|,|a21|)
+    μₛ = max(abs(a12), abs(a21))
+    μ = μₛ * sqrt(-(d / μₛ)^2 - 4 * (a21 / μₛ) * (a12 / μₛ)) / 2
     α = _real_sqrt(θ, μ)
     c = 2α
     f = d / 4α
