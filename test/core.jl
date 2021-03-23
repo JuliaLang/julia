@@ -7224,6 +7224,11 @@ end
 @test_broken isbitstype(Tuple{B33954})
 @test_broken isbitstype(B33954)
 
+struct B40050 <: Ref{Tuple{B40050}}
+end
+@test string((B40050(),)) == "($B40050(),)"
+@test_broken isbitstype(Tuple{B40050})
+
 # Issue #34206/34207
 function mre34206(a, n)
     va = view(a, :)
