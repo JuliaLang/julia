@@ -205,7 +205,7 @@ after the `≈` comparison:
 ```jldoctest
 julia> @test 1 ≈ 0.999999  rtol=1e-5
 Test Passed
-```
+Note that this is not a specific feature of the `≈` but rather a general feature of the `@test` macro: `@test a <op> b key=val` is transformed by the macro into `@test op(a, b, key=val)`. It is, however, particularly useful for `≈` tests.
 
 ```@docs
 Test.@inferred
