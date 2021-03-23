@@ -114,7 +114,6 @@ New library features
   inserting or consuming the first dimension depending on the ratio of `sizeof(T)` and `sizeof(S)`.
 * New `append!(vector, collections...)` and `prepend!(vector, collections...)` methods accept multiple
   collections to be appended or prepended ([#36227]).
-* The postfix operator `'ᵀ` can now be used as an alias for `transpose` ([#38062]).
 * `keys(io::IO)` has been added, which returns all keys of `io` if `io` is an `IOContext` and an empty
   `Base.KeySet` otherwise ([#37753]).
 * `count` now accepts an optional `init` argument to control the accumulation type ([#37461]).
