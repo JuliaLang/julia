@@ -2455,7 +2455,6 @@ end
 
 # real part of square root of θ+im*μ
 @inline function _real_sqrt(θ, μ)
-    iszero(θ) && iszero(μ) && return sqrt(zero(θ)^2 + zero(μ)^2)
     t = sqrt((abs(θ) + hypot(θ, μ)) / 2)
     return θ ≥ 0 ? t : μ / 2t
 end
