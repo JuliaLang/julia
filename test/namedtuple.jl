@@ -90,13 +90,13 @@ end
 @test Tuple((a=1, b=2, c=3)) == (1, 2, 3)
 
 @test isless((a=1,b=2), (a=1,b=3))
-@test MethodError isless((a=1,), (a=1,b=2))
+@test_throws MethodError isless((a=1,), (a=1,b=2))
 @test !isless((a=1,b=2), (a=1,b=2))
 @test !isless((a=2,b=1), (a=1,b=2))
 @test_throws MethodError isless((a=1,), (x=2,))
 
 @test (a=1,b=2) < (a=1,b=3)
-@test MethodError (a=1,) < (a=1,b=2)
+@test_throws MethodError (a=1,) < (a=1,b=2)
 @test !((a=1,b=2) < (a=1,b=2))
 @test !((a=2,b=1) < (a=1,b=2))
 @test_throws MethodError (a=1,) < (x=2,)
