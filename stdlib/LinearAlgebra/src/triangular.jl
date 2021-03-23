@@ -2435,22 +2435,29 @@ function _sqrt_quasitriu_offdiag_block!(R, A)
     return R
 end
 
+# real square root of 2x2 diagonal block of quasi-triangular matrix from real Schur
+# decomposition. Eqs 6.8-6.9 and Algorithm 6.5 of
+# Higham, 2008, "Functions of Matrices: Theory and Computation", SIAM.
 Base.@propagate_inbounds function _sqrt_real_2x2!(R, A)
     a11, a21, a12, a22 = A[1, 1], A[2, 1], A[1, 2], A[2, 2]
+    d = a11 - a22
     θ = (a11 + a22) / 2
-    μ² = -(a11 - a22)^2 / 4 - a21 * a12
-    if θ > 0
-        α = sqrt((sqrt(θ^2 + μ²) + θ) / 2)
-    else
-        α = sqrt(μ² / (2 * (sqrt(θ^2 + μ²) - θ)))
-    end
+    μ = sqrt(-d^2 - 4 * a21 * a12) / 2
+    α = _real_sqrt(θ, μ)
     c = 2α
-    d = (a11 - a22) / 4α
-    R[1, 1] = α + d
+    f = d / 4α
+    R[1, 1] = α + f
     R[2, 1] = a21 / c
     R[1, 2] = a12 / c
-    R[2, 2] = α - d
+    R[2, 2] = α - f
     return R
+end
+
+# real part of square root of θ+im*μ
+@inline function _real_sqrt(θ, μ)
+    iszero(θ) && iszero(μ) && return sqrt(zero(θ)^2 + zero(μ)^2)
+    t = sqrt((abs(θ) + hypot(θ, μ)) / 2)
+    return θ ≥ 0 ? t : μ / 2t
 end
 
 Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x1!(R, A, i, j)
