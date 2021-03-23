@@ -879,6 +879,13 @@ end
 
     x3 = [-1 -eps() 0 0; eps() -1 0 0; 0 0 -1 -eps(); 0 0 eps() Inf]
     @test all(isnan, sqrt(x3))
+
+    # test overflow/underflow handled
+    x4 = [0 -1e200; 1e200 0]
+    @test sqrt(x4)^2 ≈ x4
+
+    x5 = [0 -1e-200; 1e-200 0]
+    @test sqrt(x5)^2 ≈ x5
 end
 
 @testset "issue #7181" begin
