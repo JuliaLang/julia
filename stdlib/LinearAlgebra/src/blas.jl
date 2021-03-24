@@ -66,9 +66,9 @@ export
 const libblastrampoline = "libblastrampoline"
 libblastrampoline_handle = C_NULL
 
-# Legacy bindings that some packages (such as NNlib.jl) use.
-# We maintain these for backwards-compatibility but new packages
-# should not look at these, instead preferring to parse the output
+# Legacy binding that some packages (such as NNlib.jl) use.
+# We maintain this for backwards-compatibility but new packages
+# should not look at this, instead preferring to parse the output
 # of BLAS.get_config()
 const libblas = libblastrampoline
 
