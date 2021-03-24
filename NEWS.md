@@ -18,6 +18,8 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* The Julia `--project` option and the `JULIA_PROJECT` environment variable now support selecting shared environments like `.julia/environments/myenv` the same way the package management console does: use `julia --project=@myenv` resp. `export JULIA_PROJECT="@myenv"` ([#40025]).
+
 
 Multi-threading changes
 -----------------------
