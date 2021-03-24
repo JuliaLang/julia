@@ -71,7 +71,6 @@ libblastrampoline_handle = C_NULL
 # should not look at these, instead preferring to parse the output
 # of BLAS.get_config()
 const libblas = libblastrampoline
-const liblapack = libblastrampoline
 
 import LinearAlgebra
 import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1, axpy!

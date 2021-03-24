@@ -702,4 +702,7 @@ let A = [NaN NaN; NaN NaN]
     @test_throws ArgumentError eigen(A)
 end
 
+# # https://github.com/JuliaLang/julia/pull/39845
+@test LinearAlgebra.LAPACK.liblapack == "libblastrampoline"
+
 end # module TestLAPACK
