@@ -2156,12 +2156,17 @@ end
 # 35(4), (2013), C394–C410.
 # Eq. 6.1
 Base.@propagate_inbounds function _log_diag_block_2x2!(A, A0)
-    a, b, c, d = A0[1,1], A0[1,2], A0[2,1], A0[2,2]
-    bc = b * c
-    s = sqrt(-bc)
+    a, b, c = A0[1,1], A0[1,2], A0[2,1]
+    # avoid underflow/overflow for large/small b and c
+    s = sqrt(abs(b)) * sqrt(abs(c))
     θ = atan(s, a)
     t = θ / s
-    a1 = log(a^2 - bc) / 2
+    au = abs(a)
+    if au > s
+        a1 = log1p((s / au)^2) / 2 + log(au)
+    else
+        a1 = log1p((au / s)^2) / 2 + log(s)
+    end
     A[1,1] = a1
     A[2,1] = c*t
     A[1,2] = b*t
