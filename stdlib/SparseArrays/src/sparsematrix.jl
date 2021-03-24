@@ -1515,7 +1515,7 @@ function findnz(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     V = Vector{Tv}(undef, numnz)
 
     count = 1
-    @inbounds for col = 1 : size(S, 2), k = getcolptr(S)[col] : (getcolptr(S)[col+1]-1)
+    @inbounds for col in 1:size(S, 2), k in nzrange(S, col)
         I[count] = rowvals(S)[k]
         J[count] = col
         V[count] = nonzeros(S)[k]
@@ -1529,7 +1529,7 @@ function Base.eachstoredindex(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
     indices = Vector{CartesianIndex{2}}(undef, numnz)
     count = 1
-    @inbounds for col = 1 : size(S, 2), k in nzrange(S, col)
+    @inbounds for col in 1:size(S, 2), k in nzrange(S, col)
         indices[count] = CartesianIndex(rowvals(S)[k], col)
         count += 1
     end
