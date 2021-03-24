@@ -395,10 +395,7 @@ function abspath(a::String)::String
         cwd = pwd()
         a_drive, a_nodrive = splitdrive(a)
         if a_drive != "" && lowercase(splitdrive(cwd)[1]) != lowercase(a_drive)
-            cwd = get(ENV, "=" * a_drive, nothing) # check DOS directory
-            if cwd === nothing || !endswith(cwd, '\\') || !isabspath(cwd)
-                cwd = a_drive * path_separator
-            end
+            cwd = a_drive * path_separator
             a = joinpath(cwd, a_nodrive)
         else
             a = joinpath(cwd, a)
