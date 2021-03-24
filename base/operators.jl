@@ -79,6 +79,9 @@ handle comparison to other types via promotion rules where possible.
 [`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
 [`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
 should therefore also implement [`hash`](@ref).
+
+If some type defines `==`, [`isequal`](@ref), and [`isless`](@ref) then it should
+also implement [`<`](@ref) to ensure consistency of comparisons.
 """
 ==
 
@@ -319,7 +322,6 @@ a partial order.
 New numeric types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
-(x < y) | (x == y)
 
 # Examples
 ```jldoctest
