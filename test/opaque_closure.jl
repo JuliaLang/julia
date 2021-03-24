@@ -204,3 +204,18 @@ function f_oc_noinline_call(x, y)
     return f_oc_noinline(x)(y)
 end
 @test f_oc_noinline_call(1, 2) == 3
+
+# named OpaqueClosures
+@opaque oc_named1(x) = x + 1
+@test oc_named1(1) == 2
+@test repr(oc_named1) == "oc_named1(::Any)::Any->◌"
+
+@opaque function oc_named2(x)
+    x + 2
+end
+@test oc_named2(1) == 3
+@test repr(oc_named2) == "oc_named2(::Any)::Any->◌"
+
+@opaque oc_named2(::Int) = 7
+@test oc_named2(1) == 7
+@test repr(oc_named2) == "oc_named2(::$Int)::Any->◌"
