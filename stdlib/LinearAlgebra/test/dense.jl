@@ -886,6 +886,9 @@ end
 
     x5 = [0 -1e-200; 1e-200 0]
     @test sqrt(x5)^2 ≈ x5
+
+    x6 = [1.0 1e200; -1e-200 1.0]
+    @test sqrt(x6)^2 ≈ x6
 end
 
 @testset "issue #7181" begin
