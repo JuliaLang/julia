@@ -11,7 +11,10 @@
 #define CurrentYear GetDateTimeString('yyyy', '', '')
 
 #ifndef AppId
-#define AppId AppNameLong
+#define AppId DirName
+OR
+#define AppId AppName + "-" + AppVersion
+
 #endif
 
 
