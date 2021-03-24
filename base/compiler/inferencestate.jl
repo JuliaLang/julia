@@ -124,6 +124,29 @@ mutable struct InferenceState
     end
 end
 
+"""
+    Iterate through all callers of the given InferenceState in the abstract
+    interpretation stack (including the given InferenceState itself), vising
+    children before their parents (i.e. ascending the tree from the given
+    InferenceState). Note that cycles may be visited in any order.
+"""
+struct InfStackUnwind
+    inf::InferenceState
+end
+iterate(unw::InfStackUnwind) = (unw.inf, (unw.inf, 0))
+function iterate(unw::InfStackUnwind, (infstate, cyclei)::Tuple{InferenceState, Int})
+    # iterate through the cycle before walking to the parent
+    if cyclei < length(infstate.callers_in_cycle)
+        cyclei += 1
+        infstate = infstate.callers_in_cycle[cyclei]
+    else
+        cyclei = 0
+        infstate = infstate.parent
+    end
+    infstate === nothing && return nothing
+    (infstate::InferenceState, (infstate, cyclei))
+end
+
 method_table(interp::AbstractInterpreter, sv::InferenceState) = sv.method_table
 
 function InferenceState(result::InferenceResult, cached::Bool, interp::AbstractInterpreter)

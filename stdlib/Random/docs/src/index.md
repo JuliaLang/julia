@@ -13,7 +13,9 @@ type, which is a wrapper over the OS provided entropy.
 Most functions related to random generation accept an optional `AbstractRNG` object as first argument,
 which defaults to the global one if not provided. Moreover, some of them accept optionally
 dimension specifications `dims...` (which can be given as a tuple) to generate arrays of random
-values.
+values.  In a multi-threaded program, you should generally use different RNG objects from different threads
+in order to be thread-safe. However, the default global RNG is thread-safe as of Julia 1.3 (because
+it internally corresponds to a per-thread RNG).
 
 A `MersenneTwister` or `RandomDevice` RNG can generate uniformly random numbers of the following types:
 [`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref), [`BigFloat`](@ref), [`Bool`](@ref),

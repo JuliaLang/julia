@@ -42,6 +42,7 @@ wrapped_lines(io::IO, f::Function, args...; width = 80, i = 0) =
 
 function print_wrapped(io::IO, s...; width = 80, pre = "", i = 0)
     lines = wrapped_lines(io, s..., width = width, i = i)
+    isempty(lines) && return 0, 0
     print(io, lines[1])
     for line in lines[2:end]
         print(io, '\n', pre, line)

@@ -99,6 +99,10 @@ using .Order
 include("sort.jl")
 using .Sort
 
+# We don't include some.jl, but this definition is still useful.
+something(x::Nothing, y...) = something(y...)
+something(x::Any, y...) = x
+
 ############
 # compiler #
 ############

@@ -198,7 +198,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         #exp/log
-        if (elty1 == Float64 || elty1 == ComplexF64) && (t1 == UpperTriangular || t1 == LowerTriangular)
+        if elty1 ∈ (Float32,Float64,ComplexF32,ComplexF64)
             @test exp(Matrix(log(A1))) ≈ A1
         end
 
@@ -496,10 +496,40 @@ end
 # Matrix square root
 Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
 Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
+Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 @test sqrt(Atn) |> t->t*t ≈ Atn
+@test sqrt(Atn) isa UpperTriangular
 @test typeof(sqrt(Atn)[1,1]) <: Complex
 @test sqrt(Atp) |> t->t*t ≈ Atp
+@test sqrt(Atp) isa UpperTriangular
 @test typeof(sqrt(Atp)[1,1]) <: Real
+@test typeof(sqrt(complex(Atp))[1,1]) <: Complex
+@test sqrt(Atu) |> t->t*t ≈ Atu
+@test sqrt(Atu) isa UnitUpperTriangular
+@test typeof(sqrt(Atu)[1,1]) <: Real
+@test typeof(sqrt(complex(Atu))[1,1]) <: Complex
+
+@testset "check matrix logarithm type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+    A = UpperTriangular(exp(triu(randn(elty, n, n))))
+    @inferred Union{typeof(A),typeof(complex(A))} log(A)
+    @test exp(Matrix(log(A))) ≈ A
+    if elty <: Real
+        @test typeof(log(A)) <: UpperTriangular{elty}
+        @test typeof(log(complex(A))) <: UpperTriangular{complex(elty)}
+        @test isreal(log(complex(A)))
+        @test log(complex(A)) ≈ log(A)
+    end
+
+    Au = UnitUpperTriangular(exp(triu(randn(elty, n, n), 1)))
+    @inferred Union{typeof(A),typeof(complex(A))} log(Au)
+    @test exp(Matrix(log(Au))) ≈ Au
+    if elty <: Real
+        @test typeof(log(Au)) <: UpperTriangular{elty}
+        @test typeof(log(complex(Au))) <: UpperTriangular{complex(elty)}
+        @test isreal(log(complex(Au)))
+        @test log(complex(Au)) ≈ log(Au)
+    end
+end
 
 Areal   = randn(n, n)/2
 Aimg    = randn(n, n)/2

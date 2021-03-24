@@ -92,7 +92,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         RtlCaptureContext(&Context);
         if (sig == SIGILL)
             jl_show_sigill(&Context);
-        jl_critical_error(sig, &Context, ptls->bt_data, &ptls->bt_size);
+        jl_critical_error(sig, &Context);
         raise(sig);
     }
 }
@@ -309,8 +309,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
-        jl_critical_error(0, ExceptionInfo->ContextRecord,
-                          ptls->bt_data, &ptls->bt_size);
+        jl_critical_error(0, ExceptionInfo->ContextRecord);
         static int recursion = 0;
         if (recursion++)
             exit(1);
@@ -384,10 +383,12 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     if (hBtThread == NULL) {
 
-        if (MMSYSERR_NOERROR != timeGetDevCaps(&timecaps, sizeof(timecaps))) {
+        TIMECAPS _timecaps;
+        if (MMSYSERR_NOERROR != timeGetDevCaps(&_timecaps, sizeof(_timecaps))) {
             fputs("failed to get timer resolution", stderr);
             return -2;
         }
+        timecaps = _timecaps;
 
         hBtThread = CreateThread(
             NULL,                   // default security attributes

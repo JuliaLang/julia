@@ -132,7 +132,12 @@ const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
 const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
 
-const IR_FLAG_INBOUNDS = 0x01
+# This statement was marked as @inbounds by the user. If replaced by inlining,
+# any contained boundschecks may be removed
+const IR_FLAG_INBOUNDS       = 0x01
+# This statement may be removed if its result is unused. In particular it must
+# thus be both pure and effect free.
+const IR_FLAG_EFFECT_FREE    = 0x01 << 4
 
 # known to be always effect-free (in particular nothrow)
 const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]

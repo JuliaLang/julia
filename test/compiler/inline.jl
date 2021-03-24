@@ -375,3 +375,8 @@ let ci = code_typed(f_convert_missing, Tuple{Union{Int64, Missing}})[1][1],
     @test length(ci.code) >
         length(ci_unopt.code)
 end
+
+# OC getfield elim
+using Base.Experimental: @opaque
+f_oc_getfield(x) = (@opaque ()->x)()
+@test fully_eliminated(f_oc_getfield, Tuple{Int})

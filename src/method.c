@@ -662,6 +662,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->nospecialize = module->nospecialize;
     m->nkw = 0;
     m->invokes = NULL;
+    m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;
     m->primary_world = 1;

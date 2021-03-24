@@ -1213,3 +1213,12 @@ end
         |  $x  |
         """)
 end
+
+@testset "issue 40080: empty list item breaks display()" begin
+    d = TextDisplay(devnull)
+    display(d, md"""
+               1. hello
+               2.
+               """)
+end
+

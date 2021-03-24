@@ -727,4 +727,29 @@ end
     end
 end
 
+@testset "Addition/subtraction with SymTridiagonal" begin
+    TR = SymTridiagonal(randn(Float64,5), randn(Float64,4))
+    TC = SymTridiagonal(randn(ComplexF64,5), randn(ComplexF64,4))
+    SR = Symmetric(randn(Float64,5,5))
+    SC = Symmetric(randn(ComplexF64,5,5))
+    HR = Hermitian(randn(Float64,5,5))
+    HC = Hermitian(randn(ComplexF64,5,5))
+    for op = (+,-)
+        for T = (TR, TC), S = (SR, SC)
+            @test op(T, S) == op(Array(T), S)
+            @test op(S, T) == op(S, Array(T))
+            @test op(T, S) isa Symmetric
+            @test op(S, T) isa Symmetric
+        end
+        for H = (HR, HC)
+            for T = (TR, TC)
+                @test op(T, H) == op(Array(T), H)
+                @test op(H, T) == op(H, Array(T))
+            end
+            @test op(TR, H) isa Hermitian
+            @test op(H, TR) isa Hermitian
+        end
+    end
+end
+
 end # module TestSymmetric

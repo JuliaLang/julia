@@ -280,7 +280,4 @@ end
     @test ∋(0)(-2:2)
 end
 
-a = rand(3, 3)
-@test transpose(a) === a'ᵀ
-
 @test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]

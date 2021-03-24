@@ -167,6 +167,11 @@ julia> d, u, p = S; # destructuring via iteration
 julia> d == S.D && u == S.U && p == S.p
 true
 
+julia> S.U*S.D*S.U' - S.P*A*S.P'
+2×2 Matrix{Float64}:
+ 0.0  0.0
+ 0.0  0.0
+
 julia> S = bunchkaufman(Symmetric(A, :L))
 BunchKaufman{Float64, Matrix{Float64}}
 D factor:
@@ -181,6 +186,11 @@ permutation:
 2-element Vector{Int64}:
  2
  1
+
+julia> S.L*S.D*S.L' - A[S.p, S.p]
+2×2 Matrix{Float64}:
+ 0.0  0.0
+ 0.0  0.0
 ```
 """
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
@@ -226,62 +236,6 @@ function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar, 
     return p
 end
 
-"""
-    getproperty(B::BunchKaufman, d::Symbol)
-
-Extract the factors of the Bunch-Kaufman factorization `B`. The factorization can take the
-two forms `P'*L*D*L'*P` or `P'*U*D*U'*P` (or `L*D*transpose(L)` in the complex symmetric case)
-where `P` is a (symmetric) permutation matrix, `L` is a [`UnitLowerTriangular`](@ref) matrix, `U` is a
-[`UnitUpperTriangular`](@ref), and `D` is a block diagonal symmetric or Hermitian matrix with
-1x1 or 2x2 blocks. The argument `d` can be
-
-- `:D`: the block diagonal matrix
-- `:U`: the upper triangular factor (if factorization is `U*D*U'`)
-- `:L`: the lower triangular factor (if factorization is `L*D*L'`)
-- `:p`: permutation vector
-- `:P`: permutation matrix
-
-# Examples
-```jldoctest
-julia> A = [1 2 3; 2 1 2; 3 2 1]
-3×3 Matrix{Int64}:
- 1  2  3
- 2  1  2
- 3  2  1
-
-julia> F = bunchkaufman(Symmetric(A, :L))
-BunchKaufman{Float64, Matrix{Float64}}
-D factor:
-3×3 Tridiagonal{Float64, Vector{Float64}}:
- 1.0  3.0    ⋅
- 3.0  1.0   0.0
-  ⋅   0.0  -1.0
-L factor:
-3×3 UnitLowerTriangular{Float64, Matrix{Float64}}:
- 1.0   ⋅    ⋅
- 0.0  1.0   ⋅
- 0.5  0.5  1.0
-permutation:
-3-element Vector{Int64}:
- 1
- 3
- 2
-
-julia> F.L*F.D*F.L' - A[F.p, F.p]
-3×3 Matrix{Float64}:
- 0.0  0.0  0.0
- 0.0  0.0  0.0
- 0.0  0.0  0.0
-
-julia> F = bunchkaufman(Symmetric(A));
-
-julia> F.U*F.D*F.U' - F.P*A*F.P'
-3×3 Matrix{Float64}:
- 0.0  0.0  0.0
- 0.0  0.0  0.0
- 0.0  0.0  0.0
-```
-"""
 function getproperty(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
     n = size(B, 1)
     if d === :p

@@ -467,7 +467,6 @@ export
 # linear algebra
     var"'", # to enable syntax a' for adjoint
     adjoint,
-    var"'ᵀ",
     transpose,
     kron,
     kron!,

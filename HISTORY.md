@@ -113,7 +113,6 @@ New library features
   inserting or consuming the first dimension depending on the ratio of `sizeof(T)` and `sizeof(S)`.
 * New `append!(vector, collections...)` and `prepend!(vector, collections...)` methods accept multiple
   collections to be appended or prepended ([#36227]).
-* The postfix operator `'ᵀ` can now be used as an alias for `transpose` ([#38062]).
 * `keys(io::IO)` has been added, which returns all keys of `io` if `io` is an `IOContext` and an empty
   `Base.KeySet` otherwise ([#37753]).
 * `count` now accepts an optional `init` argument to control the accumulation type ([#37461]).
@@ -163,6 +162,10 @@ Standard library changes
   results table ([#38042]).
 * `@testset` now supports the option `verbose` to show the test result summary
   of the children even if they all pass ([#33755]).
+* In `LinearIndices(::Tuple)` and `CartesianIndices(::Tuple)`, integers (as opposed to ranges of integers) in the
+  argument tuple now consistently describe 1-based ranges, e.g, `CartesianIndices((3, 1:3))` is equivalent to
+  `CartesianIndices((1:3, 1:3))`. This is how tuples of integers have always been documented to work, but a
+  bug had caused erroneous behaviors with heterogeneous tuples containing both integers and ranges ([#37829], [#37928]).
 
 #### Package Manager
 

@@ -141,5 +141,7 @@ conventions:
   * Functions that write to their arguments have names that end in `!`. These are sometimes called
     "mutating" or "in-place" functions because they are intended to produce changes in their arguments
     after the function is called, not just return a value.
+  * Names starting with an underscore denote functions, macros or variables that are only used internally
+    by a package and are not part of its public API.
 
 For more information about stylistic conventions, see the [Style Guide](@ref).
