@@ -81,7 +81,7 @@ struct Format{S, T}
       # and so on, then at the end, str[substringranges[end]]
     substringranges::Vector{UnitRange{Int}}
     formats::T # Tuple of Specs
-    arguments::Int  # required for dynamic format specifiers
+    numarguments::Int  # required for dynamic format specifiers
 end
 
 # what number base should be used for a given format specifier?
@@ -94,7 +94,7 @@ function Format(f::AbstractString)
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
-    arguments = 0
+    numarguments = 0
     b = 0x00
     while pos <= len
         b = bytes[pos]
@@ -142,9 +142,9 @@ function Format(f::AbstractString)
         # parse width
         width = 0
         dynamic_width = false
-        if b  == UInt8('*')
+        if b == UInt8('*')
             dynamic_width = true
-            arguments += 1
+            numarguments += 1
             b = bytes[pos]
             pos += 1
         else
@@ -167,7 +167,7 @@ function Format(f::AbstractString)
             if pos <= len
                 if b == UInt8('*')
                     dynamic_precision = true
-                    arguments += 1
+                    numarguments += 1
                     b = bytes[pos]
                     pos += 1
                 else
@@ -209,7 +209,7 @@ function Format(f::AbstractString)
         elseif type <: Floats && !parsedprecdigits
             precision = 6
         end
-        arguments += 1
+        numarguments += 1
         push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision, dynamic_width, dynamic_precision))
         start = pos
         while pos <= len
@@ -228,7 +228,7 @@ function Format(f::AbstractString)
         end
         push!(strs, start:pos - 1 - (b == UInt8('%')))
     end
-    return Format(bytes, strs, Tuple(fmts), arguments)
+    return Format(bytes, strs, Tuple(fmts), numarguments)
 end
 
 macro format_str(str)
@@ -261,20 +261,22 @@ end
     spec
 end
 
+@inline function rmdynamic(spec::Spec{T}, args, argp) where {T}
+    width, precision = spec.width, spec.precision
+    if spec.dynamic_width
+        width = args[argp]
+        argp += 1
+    end
+    if spec.dynamic_precision
+        precision = args[argp]
+        argp += 1
+    end
+    (Spec{T}(spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, width, precision, false, false), argp)
+end
 
 @inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
-    dynamic_width, dynamic_precision = spec.dynamic_width, spec.dynamic_precision
-    if dynamic_width || dynamic_precision
-        width, precision = spec.width, spec.precision
-        if dynamic_width
-            width = args[argp]
-            argp += 1
-        end
-        if dynamic_precision
-            precision = args[argp]
-            argp += 1
-        end
-        spec = Spec{T}(spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, width, precision, false, false)
+    if spec.dynamic_width || spec.dynamic_precision
+        spec, argp = rmdynamic(spec, args, argp)
         spec = patch_zero(spec)
     end
     (fmt(buf, pos, args[argp], spec), argp+1)
@@ -359,7 +361,6 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
         (T == Val{'o'} && hash ? 1 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
     arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) : arglen
-
     if !leftalign && !zero && arglen2 < width
         # pad left w/ spaces
         for _ = 1:(width - arglen2)
@@ -824,18 +825,8 @@ end
 
 
 @inline function plength(f::Spec{T}, args, argp) where {T}
-    dynamic_width, dynamic_precision = f.dynamic_width, f.dynamic_precision
-    if dynamic_width || dynamic_precision
-        width, precision = f.width, f.precision
-        if dynamic_width
-            width = args[argp]
-            argp += 1
-        end
-        if dynamic_precision
-            precision = args[argp]
-            argp += 1
-        end
-        f = Spec{T}(f.leftalign, f.plus, f.space, f.zero, f.hash, width, precision, f.dynamic_width, f.dynamic_precision)
+    if f.dynamic_width || f.dynamic_precision
+        f, argp = rmdynamic(f, args, argp)
     end
     (plength(f, args[argp]), argp+1)
 end
@@ -900,7 +891,7 @@ for more details on C `printf` support.
 function format end
 
 function format(io::IO, f::Format, args...) # => Nothing
-    f.arguments == length(args) || argmismatch(f.arguments, length(args))
+    f.numarguments == length(args) || argmismatch(f.numarguments, length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
     write(io, resize!(buf, pos - 1))
@@ -908,7 +899,7 @@ function format(io::IO, f::Format, args...) # => Nothing
 end
 
 function format(f::Format, args...) # => String
-    f.arguments == length(args) || argmismatch(f.arguments, length(args))
+    f.numarguments == length(args) || argmismatch(f.numarguments, length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
     return String(resize!(buf, pos - 1))
