@@ -12,9 +12,6 @@
 
 #ifndef AppId
 #define AppId DirName
-OR
-#define AppId AppName + "-" + AppVersion
-
 #endif
 
 
