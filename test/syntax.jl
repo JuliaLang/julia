@@ -1357,7 +1357,6 @@ end
 @test Meta.parse("√3x^2") == Expr(:call, :*, Expr(:call, :√, 3), Expr(:call, :^, :x, 2))
 @test Meta.parse("-3x^2") == Expr(:call, :*, -3, Expr(:call, :^, :x, 2))
 @test_throws ParseError Meta.parse("2!3")
-@test_throws ParseError Meta.parse("2√3")
 
 # issue #27914
 @test Meta.parse("2f(x)")        == Expr(:call, :*, 2, Expr(:call, :f, :x))
