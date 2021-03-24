@@ -2439,21 +2439,18 @@ end
 # decomposition. Eqs 6.8-6.9 and Algorithm 6.5 of
 # Higham, 2008, "Functions of Matrices: Theory and Computation", SIAM.
 Base.@propagate_inbounds function _sqrt_real_2x2!(R, A)
-    a11, a21, a12, a22 = A[1, 1], A[2, 1], A[1, 2], A[2, 2]
-    d = a11 - a22
-    θ = (a11 + a22) / 2
+    # in the real Schur form, A[1, 1] == A[2, 2], and A[2, 1] * A[1, 2] < 0
+    θ, a21, a12 = A[1, 1], A[2, 1], A[1, 2]
     # avoid overflow/underflow of μ
     # for real sqrt, |d| ≤ 2 max(|a12|,|a21|)
     μₛ = max(abs(a12), abs(a21))
-    μₛ⁻¹ = inv(μₛ)
-    μ = μₛ * sqrt(-(d * μₛ⁻¹)^2 - 4 * (a21 * μₛ⁻¹) * (a12 * μₛ⁻¹)) / 2
+    μ = sqrt(-(a21 / μₛ) * (a12 / μₛ)) * μₛ
     α = _real_sqrt(θ, μ)
     c = 2α
-    f = d / 4α
-    R[1, 1] = α + f
+    R[1, 1] = α
     R[2, 1] = a21 / c
     R[1, 2] = a12 / c
-    R[2, 2] = α - f
+    R[2, 2] = α
     return R
 end
 
