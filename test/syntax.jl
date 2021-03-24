@@ -2751,3 +2751,8 @@ end
 @test eval(:(x = $(QuoteNode(Core.SlotNumber(1))))) == Core.SlotNumber(1)
 @test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
 @test_throws ErrorException("syntax: Slot objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
+
+# juxtaposition of radical symbols (#40094)
+@test Meta.parse("2√3") == Expr(:call, :*, 2, Expr(:call, :√, 3))
+@test Meta.parse("2∛3") == Expr(:call, :*, 2, Expr(:call, :∛, 3))
+@test Meta.parse("2∜3") == Expr(:call, :*, 2, Expr(:call, :∜, 3))
