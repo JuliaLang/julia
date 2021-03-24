@@ -253,16 +253,19 @@ end
 
 
 @inline function rmdynamic(spec::Spec{T}, args, argp) where {T}
-    width, precision = spec.width, spec.precision
+    zero, width, precision = spec.zero, spec.width, spec.precision
     if spec.dynamic_width
         width = args[argp]
         argp += 1
     end
     if spec.dynamic_precision
         precision = args[argp]
+        if zero && T <: Ints && precision > 0
+            zero = false
+        end
         argp += 1
     end
-    (Spec{T}(spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, width, precision, false, false), argp)
+    (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
 end
 
 
