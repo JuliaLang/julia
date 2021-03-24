@@ -40,9 +40,8 @@ julia> run(mycommand);
 hello
 ```
 
-The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). The run method itself
-returns `nothing`, and throws an [`ErrorException`](@ref) if the external command fails to run
-successfully.
+The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). If the external command fails to run
+successfully, the run method throws an [`ErrorException`](@ref).
 
 If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
 can be used instead:
