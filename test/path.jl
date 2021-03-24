@@ -12,7 +12,7 @@
     if Sys.iswindows()
         @testset "issue #38491" begin
             pwd_drive = uppercase(splitdrive(pwd())[1])
-            drive = if (pwd_drive != "X:") "X:" else "Y:" end
+            drive = (pwd_drive == "X:") ? "Y:" : "X:"
             @test abspath("$(lowercase(drive))a\\b\\c") == "$(lowercase(drive))\\a\\b\\c"
             @test abspath("$(uppercase(drive))a\\b\\c") == "$(uppercase(drive))\\a\\b\\c"
             @test abspath("$(lowercase(drive))a") == "$(lowercase(drive))\\a"
