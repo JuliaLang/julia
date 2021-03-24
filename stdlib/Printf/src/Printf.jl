@@ -250,34 +250,26 @@ const HEX = b"0123456789ABCDEF"
     return pos
 end
 
-@inline function patch_zero(spec::Spec{T}) where {T <: Ints}
-    if spec.precision > 0
-        Spec{T}(spec.leftalign, spec.plus, spec.space, false, spec.hash, spec.width, spec.precision, spec.dynamic_width, spec.dynamic_precision)
-    else
-        spec
-    end
-end
-@inline function patch_zero(spec::Spec{T}) where {T}
-    spec
-end
 
 @inline function rmdynamic(spec::Spec{T}, args, argp) where {T}
-    width, precision = spec.width, spec.precision
+    zero, width, precision = spec.zero, spec.width, spec.precision
     if spec.dynamic_width
         width = args[argp]
         argp += 1
     end
     if spec.dynamic_precision
         precision = args[argp]
+        if zero && T <: Ints && precision > 0
+            zero = false
+        end
         argp += 1
     end
-    (Spec{T}(spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, width, precision, false, false), argp)
+    (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
 end
 
 @inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
     if spec.dynamic_width || spec.dynamic_precision
         spec, argp = rmdynamic(spec, args, argp)
-        spec = patch_zero(spec)
     end
     (fmt(buf, pos, args[argp], spec), argp+1)
 end
