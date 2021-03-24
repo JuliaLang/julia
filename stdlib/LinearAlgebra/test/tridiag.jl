@@ -589,7 +589,7 @@ end
     A2 = SymTridiagonal(fill(1.0, 3), fill(-1.0, 2))
     F2 = eigen(A2)
     test_approx_eq_modphase(F.vectors, F2.vectors)
-    @test F.values ≈ F2.values
+    @test F.values ≈ F2.values ≈ eigvals(A) ≈ eigvals(A2)
 end
 
 @testset "non-commutative algebra (#39701)" begin
