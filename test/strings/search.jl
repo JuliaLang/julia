@@ -454,3 +454,14 @@ end
     @test findfirst(a, b) === 1:0
     @test findlast(a, b) === 4:3
 end
+
+@testset "sign-sensitive find functions (#40006)" begin
+    @test findfirst(==(Int8(-1)), [0xff]) === nothing
+    @test findnext(==(Int8(-1)), [0xff], 1) === nothing
+    @test findlast(==(Int8(-1)), [0xff]) === nothing
+    @test findprev(==(Int8(-1)), [0xff], 1) === nothing
+    @test findfirst(Int8[-1], [0xff]) === nothing
+    @test findnext(Int8[-1], [0xff], 1) === nothing
+    @test findlast(Int8[-1], [0xff]) === nothing
+    @test findprev(Int8[-1], [0xff], 1) === nothing
+end
