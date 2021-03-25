@@ -9,6 +9,23 @@
         @test isabspath(S(homedir()))
         @test !isabspath(S("foo"))
     end
+    if Sys.iswindows()
+        @testset "issue #38491" begin
+            pwd_drive = uppercase(splitdrive(pwd())[1])
+            drive = (pwd_drive == "X:") ? "Y:" : "X:"
+            @test abspath("$(lowercase(drive))a\\b\\c") == "$(lowercase(drive))\\a\\b\\c"
+            @test abspath("$(uppercase(drive))a\\b\\c") == "$(uppercase(drive))\\a\\b\\c"
+            @test abspath("$(lowercase(drive))a") == "$(lowercase(drive))\\a"
+            @test abspath("$(uppercase(drive))a") == "$(uppercase(drive))\\a"
+            @test abspath(lowercase(drive)) == "$(lowercase(drive))\\"
+            @test abspath(uppercase(drive)) == "$(uppercase(drive))\\"
+
+            @test lowercase(abspath("$(pwd_drive)a\\b\\c")) == lowercase(joinpath(pwd(), "a\\b\\c"))
+            @test lowercase(abspath("$(pwd_drive)a")) == lowercase(joinpath(pwd(), "a"))
+            @test lowercase(abspath(lowercase(pwd_drive))) == lowercase("$(pwd())\\")
+            @test lowercase(abspath(uppercase(pwd_drive))) == lowercase("$(pwd())\\")
+        end
+    end
     @test basename(S("foo$(sep)bar")) == "bar"
     @test dirname(S("foo$(sep)bar")) == "foo"
 
