@@ -128,9 +128,15 @@ julia> dt2 = Date("2015-01-02",df)
 You can also use the `dateformat""` string macro. This macro creates the `DateFormat` object once when the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
 
 ```jldoctest
-julia> for i = 1:10^5
-           Date("2015-01-01", dateformat"y-m-d")
-       end
+julia> years = string.(2000:10000);
+
+julia> dates = Date.(years, dateformat"yyyy");
+
+julia> dates[1:3]
+3-element Vector{Date}:
+ 2000-01-01
+ 2001-01-01
+ 2002-01-01
 ```
 
 As well as via the constructors, a `Date` or `DateTime` can be constructed from
