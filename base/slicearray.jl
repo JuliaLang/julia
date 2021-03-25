@@ -29,9 +29,9 @@ end
 
 unitaxis(::AbstractArray) = Base.OneTo(1)
 
-function Slices{N,L}(A::P, axes::AX) where {N,L,P,AX}
+function Slices{N,L}(A::P, ax::AX) where {N,L,P,AX}
     S = Base._return_type(view, Tuple{P, map((a,l) -> l === (:) ? Colon : eltype(a), axes(A), L)...})
-    Slices{N,L,P,AX,S}(A, axes)
+    Slices{N,L,P,AX,S}(A, ax)
 end
 
 
@@ -49,8 +49,8 @@ end
         # axes = (axes(A,3), axes(A,1))
         # L = (2, :, 1, :)
         ax = map(dim -> axes(A,dim), dims)
-        L = ntuple(dim -> coalesce(findfirst(isequal(dim), dims), (:)), N)
-        return Slices{M,L}(A, iter)
+        L = ntuple(dim -> something(findfirst(isequal(dim), dims), (:)), N)
+        return Slices{M,L}(A, ax)
     else
         # if N = 4, dims = (3,1) then
         # axes = (axes(A,1), OneTo(1), axes(A,3), OneTo(1))
@@ -212,7 +212,7 @@ IteratorSize(::Type{Slices{N,L,P,AX,S}}) where {N,L,P,AX,S} = HasShape{N}()
 axes(s::Slices) = s.axes
 size(s::Slices) = map(length, s.axes)
 
-@inline function _slice_index(s::Slices{N,L}, c::Vararg{Int,N}) where {N,L}
+@inline function _slice_index(s::Slices{N,L}, c...) where {N,L}
     return map(l -> l === (:) ? (:) : c[l], L)
 end
 
