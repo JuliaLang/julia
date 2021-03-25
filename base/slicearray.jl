@@ -16,7 +16,7 @@ These should typically be constructed by [`eachslice`](@ref), [`eachcol`](@ref) 
 
 [`parent(S::SliceArray)`](@ref) will return the parent array.
 """
-struct SliceArray{N,L,P,CI,S} <: AbstractArray{S,N}
+struct SliceArray{N,L,P,AX,S} <: AbstractArray{S,N}
     """
     Parent array
     """
@@ -24,14 +24,14 @@ struct SliceArray{N,L,P,CI,S} <: AbstractArray{S,N}
     """
     `CartesianIndices` iterator used to index each slice
     """
-    cartiter::CI
+    axes::AX
 end
 
 unitaxis(::AbstractArray) = Base.OneTo(1)
 
-function SliceArray{N,L}(A::P, iter::CI) where {N,L,P,CI}
+function SliceArray{N,L}(A::P, axes::AX) where {N,L,P,AX}
     S = Base._return_type(view, Tuple{P, map((a,l) -> l === nothing ? Colon : eltype(a), axes(A), L)...})
-    SliceArray{N,L,P,CI,S}(A, iter)
+    SliceArray{N,L,P,AX,S}(A, axes)
 end
 
 
@@ -48,14 +48,14 @@ end
         # if N = 4, dims = (3,1) then
         # iter = CartesianIndices(axes(A,3), axes(A,1))
         # L = (2, nothing, 1, nothing)
-        iter = CartesianIndices(map(dim -> axes(A,dim), dims))
+        axes = map(dim -> axes(A,dim), dims)
         L = ntuple(dim -> findfirst(isequal(dim), dims), N)
         return SliceArray{M,L}(A, iter)
     else
         # if N = 4, dims = (3,1) then
         # iter = CartesianIndices(axes(A,1), OneTo(1), axes(A,3), OneTo(1))
         # L = (1, nothing, 3, nothing)
-        iter = CartesianIndices(ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N))
+        axes = ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N)
         L = ntuple(dim -> dim in dims ? dim : nothing, N)
         return SliceArray{N,L}(A, iter)
     end
@@ -188,33 +188,31 @@ eachcol(A::AbstractMatrix) = _eachslice(A, (2,), true)
 eachcol(A::AbstractVector) = eachcol(reshape(A, size(A,1), 1))
 
 """
-    Rows{M,CI,S}
+    Rows{M,AX,S}
 
 A special case of [`SliceArray`](@ref) that is a vector of row slices of a matrix, as
 constructed by [`eachrow`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const Rows{P<:AbstractMatrix,CI,S<:AbstractVector} = SliceArray{1,(1,nothing),P,CI,S}
+const Rows{P<:AbstractMatrix,AX,S<:AbstractVector} = SliceArray{1,(1,nothing),P,AX,S}
 
 """
-    Columns{M,CI,S}
+    Columns{M,AX,S}
 
 A special case of [`SliceArray`](@ref) that is a vector of column slices of a matrix, as
 constructed by [`eachcol`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const Columns{P<:AbstractMatrix,CI,S<:AbstractVector} = SliceArray{1,(nothing,1),P,CI,S}
+const Columns{P<:AbstractMatrix,AX,S<:AbstractVector} = SliceArray{1,(nothing,1),P,AX,S}
 
 
-IteratorSize(::Type{SliceArray{N,L,P,CI,S}}) where {N,L,P,CI,S} = IteratorSize(CI)
-size(s::SliceArray) = size(s.cartiter)
-size(s::SliceArray, dim) = size(s.cartiter, dim)
-length(s::SliceArray) = length(s.cartiter)
+IteratorSize(::Type{SliceArray{N,L,P,AX,S}}) where {N,L,P,AX,S} = HasShape{N}()
+axes(s::SliceArray) = s.axes
+size(s::SliceArray) = map(length, s.axes)
 
-@inline function _slice_index(s::SliceArray{N,L,P,CI,S}, I...) where {N,L,P,CI,S}
-    c = s.cartiter[I...]
+@inline function _slice_index(s::SliceArray{N,L}, c::Vararg{Int,N}) where {N,L}
     return map(l -> l === nothing ? (:) : c[l], L)
 end
 
