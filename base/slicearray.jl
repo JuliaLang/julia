@@ -1,5 +1,5 @@
 """
-    Slices{N,L,P,CI,S} <: AbstractArray{S,N}
+    Slices{N,L,P,AX,S} <: AbstractArray{S,N}
 
 An `AbstractArray` of slices into a parent array.
 
@@ -8,7 +8,7 @@ An `AbstractArray` of slices into a parent array.
   - an integer `i`: this is the `i`th dimension of the outer `Slices`.
   - `:`: an "inner" dimension
 - `P` is the type of the parent array
-- `CI` is the type of the Cartesian iterator
+- `AX` is the type of the `axes` field
 - `S` is the element type of the `Slices` (the return type of `view`).
 
 These should typically be constructed by [`eachslice`](@ref), [`eachcol`](@ref) or
@@ -48,16 +48,16 @@ end
         # if N = 4, dims = (3,1) then
         # axes = (axes(A,3), axes(A,1))
         # L = (2, :, 1, :)
-        axes = map(dim -> axes(A,dim), dims)
+        ax = map(dim -> axes(A,dim), dims)
         L = ntuple(dim -> coalesce(findfirst(isequal(dim), dims), (:)), N)
         return Slices{M,L}(A, iter)
     else
         # if N = 4, dims = (3,1) then
         # axes = (axes(A,1), OneTo(1), axes(A,3), OneTo(1))
         # L = (1, :, 3, :)
-        axes = ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N)
+        ax = ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N)
         L = ntuple(dim -> dim in dims ? dim : (:), N)
-        return Slices{N,L}(A, iter)
+        return Slices{N,L}(A, ax)
     end
 end
 @inline function _eachslice(A::AbstractArray{T,N}, dim::Integer, drop::Bool) where {T,N}
