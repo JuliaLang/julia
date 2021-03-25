@@ -93,7 +93,7 @@ ERROR: cannot assign a value to variable Base.sqrt from module Main
 ## Allowed Variable Names
 
 Variable names must begin with a letter (A-Z or a-z), underscore, or a subset of Unicode code
-points greater than 00A0; in particular, [Unicode character categories](http://www.fileformat.info/info/unicode/category/index.htm)
+points greater than 00A0; in particular, [Unicode character categories](http://www.fileformat.info/info/unicode/category/index.html)
 Lu/Ll/Lt/Lm/Lo/Nl (letters), Sc/So (currency and other symbols), and a few other letter-like characters
 (e.g. a subset of the Sm math symbols) are allowed. Subsequent characters may also include ! and
 digits (0-9 and other characters in categories Nd/No), as well as other Unicode code points: diacritics
@@ -109,6 +109,19 @@ primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator wi
 A space is required between an operator that ends with a subscript/superscript letter and a subsequent
 variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
 it from `+ ᵃx` where `ᵃx` is the variable name.
+
+
+One special variable name is `_`, which can only be assigned values, but cannot be used to assign values to other variables.
+More technically, `_` can only be used as an [L-value](https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue), but not as an
+ [R-value](https://en.wikipedia.org/wiki/R-value):
+
+```julia-repl
+julia> x, _ = size([2 2; 1 1])
+(2, 2)
+
+julia> y = _
+ERROR: syntax: all-underscore identifier used as rvalue
+```
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
 
