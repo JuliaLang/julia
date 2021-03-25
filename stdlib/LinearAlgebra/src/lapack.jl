@@ -7,6 +7,11 @@ Interfaces to LAPACK subroutines.
 
 const libblastrampoline = "libblastrampoline"
 
+# Legacy binding maintained for backwards-compatibility but new packages
+# should not look at this, instead preferring to parse the output
+# of BLAS.get_config()
+const liblapack = libblastrampoline
+
 import ..LinearAlgebra.BLAS.@blasfunc
 
 import ..LinearAlgebra: BlasFloat, BlasInt, LAPACKException,
