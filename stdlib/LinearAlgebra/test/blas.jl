@@ -600,4 +600,8 @@ end
     @test BLAS.get_num_threads() === default
 end
 
+# https://github.com/JuliaLang/julia/pull/39845
+@test LinearAlgebra.BLAS.libblas == "libblastrampoline"
+@test LinearAlgebra.BLAS.liblapack == "libblastrampoline"
+
 end # module TestBLAS
