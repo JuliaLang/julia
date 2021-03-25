@@ -477,6 +477,17 @@ end
                                                  [4.000000000000000  -1.414213562373094  -1.414213562373095
                                                   -1.414213562373095   4.999999999999996  -0.000000000000000
                                                   0  -0.000000000000002   3.000000000000000])
+
+        # cis always returns a complex matrix
+        if elty <: Real
+            eltyim = Complex{elty}
+        else
+            eltyim = elty
+        end
+
+        @test cis(A1) ≈ convert(Matrix{eltyim}, [-0.339938 + 0.000941506im   0.772659  - 0.8469im     0.52745  + 0.566543im;
+                                                  0.650054 - 0.140179im     -0.0762135 + 0.284213im   0.38633  - 0.42345im ;
+                                                  0.650054 - 0.140179im      0.913779  + 0.143093im  -0.603663 - 0.28233im ]) rtol=7e-7
     end
 
     @testset "Additional tests for $elty" for elty in (Float64, ComplexF64)
@@ -560,8 +571,13 @@ end
             @test cos(A) ≈ cos(-A)
             @test sin(A) ≈ -sin(-A)
             @test tan(A) ≈ sin(A) / cos(A)
+
             @test cos(A) ≈ real(exp(im*A))
             @test sin(A) ≈ imag(exp(im*A))
+            @test cos(A) ≈ real(cis(A))
+            @test sin(A) ≈ imag(cis(A))
+            @test cis(A) ≈ cos(A) + im * sin(A)
+
             @test cosh(A) ≈ 0.5 * (exp(A) + exp(-A))
             @test sinh(A) ≈ 0.5 * (exp(A) - exp(-A))
             @test cosh(A) ≈ cosh(-A)
@@ -605,6 +621,9 @@ end
 
         @test cos(A5) ≈ 0.5 * (exp(im*A5) + exp(-im*A5))
         @test sin(A5) ≈ -0.5im * (exp(im*A5) - exp(-im*A5))
+        @test cos(A5) ≈ 0.5 * (cis(A5) + cis(-A5))
+        @test sin(A5) ≈ -0.5im * (cis(A5) - cis(-A5))
+
         @test cosh(A5) ≈ 0.5 * (exp(A5) + exp(-A5))
         @test sinh(A5) ≈ 0.5 * (exp(A5) - exp(-A5))
     end

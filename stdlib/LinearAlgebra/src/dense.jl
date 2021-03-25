@@ -558,6 +558,23 @@ exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
 """
+    cis(A::AbstractMatrix)
+
+Compute ``\\exp(i A)`` for a generic matrix ``A``.
+
+# Examples
+```jldoctest
+julia> cis([π 0; 0 π]) ≈ -I
+true
+```
+"""
+Base.cis(A::AbstractMatrix) = exp(im * A)  # fallback
+Base.cis(A::AbstractMatrix{<:Base.HWNumber}) = exp_maybe_inplace(float.(im .* A))
+
+exp_maybe_inplace(A::StridedMatrix{<:Union{ComplexF32, ComplexF64}}) = exp!(A)
+exp_maybe_inplace(A) = exp(A)
+
+"""
     ^(b::Number, A::AbstractMatrix)
 
 Matrix exponential, equivalent to ``\\exp(\\log(b)A)``.

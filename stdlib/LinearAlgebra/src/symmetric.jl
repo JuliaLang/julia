@@ -938,6 +938,12 @@ for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh)
     end
 end
 
+function cis(A::Union{RealHermSymComplexHerm,SymTridiagonal{<:Real}})
+    F = eigen(A)
+    # The returned matrix is unitary, and is complex-symmetric for real A
+    return F.vectors * Diagonal(cis.(F.values)) * F.vectors'
+end
+
 for func in (:acos, :asin)
     @eval begin
         function ($func)(A::HermOrSym{<:Real})
