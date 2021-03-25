@@ -30,7 +30,7 @@ Base.StridedArray
 Base.StridedVector
 Base.StridedMatrix
 Base.StridedVecOrMat
-Base.SliceArray
+Base.Slices
 Base.Rows
 Base.Columns
 Base.getindex(::Type, ::Any...)

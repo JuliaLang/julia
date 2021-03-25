@@ -1,22 +1,22 @@
 """
-    SliceArray{N,L,P,CI,S} <: AbstractArray{S,N}
+    Slices{N,L,P,CI,S} <: AbstractArray{S,N}
 
 An `AbstractArray` of slices into a parent array.
 
 - `N` is the dimension of the array of slices.
 - `L` is a tuple of length `ndims(parent)`, denoting how each dimension should be handled:
-  - an integer `i`: this is the `i`th dimension of the outer `SliceArray`.
+  - an integer `i`: this is the `i`th dimension of the outer `Slices`.
   - `nothing`: an "inner" dimension
 - `P` is the type of the parent array
 - `CI` is the type of the Cartesian iterator
-- `S` is the element type of the `SliceArray` (the return type of `view`).
+- `S` is the element type of the `Slices` (the return type of `view`).
 
 These should typically be constructed by [`eachslice`](@ref), [`eachcol`](@ref) or
 [`eachrow`](@ref).
 
-[`parent(S::SliceArray)`](@ref) will return the parent array.
+[`parent(S::Slices)`](@ref) will return the parent array.
 """
-struct SliceArray{N,L,P,AX,S} <: AbstractArray{S,N}
+struct Slices{N,L,P,AX,S} <: AbstractArray{S,N}
     """
     Parent array
     """
@@ -29,9 +29,9 @@ end
 
 unitaxis(::AbstractArray) = Base.OneTo(1)
 
-function SliceArray{N,L}(A::P, axes::AX) where {N,L,P,AX}
+function Slices{N,L}(A::P, axes::AX) where {N,L,P,AX}
     S = Base._return_type(view, Tuple{P, map((a,l) -> l === nothing ? Colon : eltype(a), axes(A), L)...})
-    SliceArray{N,L,P,AX,S}(A, axes)
+    Slices{N,L,P,AX,S}(A, axes)
 end
 
 
@@ -50,14 +50,14 @@ end
         # L = (2, nothing, 1, nothing)
         axes = map(dim -> axes(A,dim), dims)
         L = ntuple(dim -> findfirst(isequal(dim), dims), N)
-        return SliceArray{M,L}(A, iter)
+        return Slices{M,L}(A, iter)
     else
         # if N = 4, dims = (3,1) then
         # iter = CartesianIndices(axes(A,1), OneTo(1), axes(A,3), OneTo(1))
         # L = (1, nothing, 3, nothing)
         axes = ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N)
         L = ntuple(dim -> dim in dims ? dim : nothing, N)
-        return SliceArray{N,L}(A, iter)
+        return Slices{N,L}(A, iter)
     end
 end
 @inline function _eachslice(A::AbstractArray{T,N}, dim::Integer, drop::Bool) where {T,N}
@@ -67,13 +67,13 @@ end
 """
     eachslice(A::AbstractArray; dims, drop=true)
 
-Create a [`SliceArray`](@ref) that is indexed over dimensions `dims` of `A`, returning
+Create a [`Slices`](@ref) that is indexed over dimensions `dims` of `A`, returning
 views that select all the data from the other dimensions in `A`. `dims` can either by an
 integer or a tuple of integers.
 
-If `drop = true` (the default), the outer `SliceArray` will drop the inner dimensions, and
+If `drop = true` (the default), the outer `Slices` will drop the inner dimensions, and
 the ordering of the dimensions will match those in `dims`. If `drop = false`, then the
-`SliceArray` will have the same dimensionality as the underlying array, with inner
+`Slices` will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
 See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
@@ -106,7 +106,7 @@ julia> S[1]
  3
 
 julia> T = eachslice(M,dims=1,drop=false)
-3×1 SliceArray{2, (1, nothing), Matrix{Int64}, CartesianIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+3×1 Slices{2, (1, nothing), Matrix{Int64}, CartesianIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
@@ -190,33 +190,33 @@ eachcol(A::AbstractVector) = eachcol(reshape(A, size(A,1), 1))
 """
     Rows{M,AX,S}
 
-A special case of [`SliceArray`](@ref) that is a vector of row slices of a matrix, as
+A special case of [`Slices`](@ref) that is a vector of row slices of a matrix, as
 constructed by [`eachrow`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const Rows{P<:AbstractMatrix,AX,S<:AbstractVector} = SliceArray{1,(1,nothing),P,AX,S}
+const Rows{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{1,(1,nothing),P,AX,S}
 
 """
     Columns{M,AX,S}
 
-A special case of [`SliceArray`](@ref) that is a vector of column slices of a matrix, as
+A special case of [`Slices`](@ref) that is a vector of column slices of a matrix, as
 constructed by [`eachcol`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const Columns{P<:AbstractMatrix,AX,S<:AbstractVector} = SliceArray{1,(nothing,1),P,AX,S}
+const Columns{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{1,(nothing,1),P,AX,S}
 
 
-IteratorSize(::Type{SliceArray{N,L,P,AX,S}}) where {N,L,P,AX,S} = HasShape{N}()
-axes(s::SliceArray) = s.axes
-size(s::SliceArray) = map(length, s.axes)
+IteratorSize(::Type{Slices{N,L,P,AX,S}}) where {N,L,P,AX,S} = HasShape{N}()
+axes(s::Slices) = s.axes
+size(s::Slices) = map(length, s.axes)
 
-@inline function _slice_index(s::SliceArray{N,L}, c::Vararg{Int,N}) where {N,L}
+@inline function _slice_index(s::Slices{N,L}, c::Vararg{Int,N}) where {N,L}
     return map(l -> l === nothing ? (:) : c[l], L)
 end
 
-getindex(s::SliceArray, I...) = view(s.parent, _slice_index(s, I...)...)
-setindex!(s::SliceArray, val, I...) = s.parent[_slice_index(s, I...)...] = val
+getindex(s::Slices, I...) = view(s.parent, _slice_index(s, I...)...)
+setindex!(s::Slices, val, I...) = s.parent[_slice_index(s, I...)...] = val
 
-parent(s::SliceArray) = s.parent
+parent(s::Slices) = s.parent

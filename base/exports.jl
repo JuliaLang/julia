@@ -84,7 +84,7 @@ export
     Rows,
     Set,
     Some,
-    SliceArray,
+    Slices,
     StepRange,
     StepRangeLen,
     StridedArray,
