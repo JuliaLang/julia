@@ -2012,8 +2012,7 @@ end
 """
     <(A::AbstractVector, B::AbstractVector)
 
-Returns true when `A` is less than `B` in lexicographic order using <
-to perform comparisons of the elements of both vectors.
+Compare `A` and `B` in lexicographic order by applying `<` to their elements.
 """
 function <(A::AbstractVector, B::AbstractVector)
     for (a, b) in zip(A, B)
