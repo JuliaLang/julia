@@ -198,24 +198,22 @@ end
 #
 # 2. Approximate b^r by 7th-degree minimax polynomial p_b(r) on the interval [-log(b,2)/2, log(b,2)/2].
 # 3. Scale back: b^x = 2^N * p_b(r)
-
 # For both, a little extra care needs to be taken if b^r is subnormal.
 # The solution is to do the scaling back in 2 steps as just messing with the exponent wouldn't work.
-for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
-    @eval begin
-        function ($func)(x::T) where T<:Float64
-            N_float = muladd(x, LogBo256INV($base, T), MAGIC_ROUND_CONST(T))
-            N = reinterpret(UInt64, N_float) % Int32
-            N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV($base, T))
-            r = muladd(N_float, LogBo256U($base, T), x)
-            r = muladd(N_float, LogBo256L($base, T), r)
+
+@inline function exp_impl(x::T, base) where T<:Float64
+    N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
+            N = reinterpret(uinttype(T), N_float) % Int32
+    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
+    r = muladd(N_float, LogBo256U(base, T), x)
+    r = muladd(N_float, LogBo256L(base, T), r)
             k = N >> 8
             jU, jL = table_unpack(N&255 +1)
-            small_part =  muladd(jU, expm1b_kernel($base, r), jL) + jU
+    small_part =  muladd(jU, expm1b_kernel(base, r), jL) + jU
 
-            if !(abs(x) <= SUBNORM_EXP($base, T))
-                x >= MAX_EXP($base, T) && return Inf
-                x <= MIN_EXP($base, T) && return 0.0
+    if !(abs(x) <= SUBNORM_EXP(base, T))
+        x >= MAX_EXP(base, T) && return Inf
+        x <= MIN_EXP(base, T) && return 0.0
                 if k <= -53
                     # The UInt64 forces promotion. (Only matters for 32 bit systems.)
                     twopk = (k + UInt64(53)) << 52
@@ -226,15 +224,28 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
             return reinterpret(T, twopk + reinterpret(Int64, small_part))
         end
 
-        function ($func)(x::T) where T<:Float32
-            N_float = round(x*LogBINV($base, T))
+@inline function exp_impl_fast(x::T,base) where T<:Float64
+    N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
+    N = reinterpret(uinttype(T), N_float) % Int32
+    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
+    r = muladd(N_float, LogBo256U(base, T), x)
+    r = muladd(N_float, LogBo256L(base, T), r)
+    k = N >> 8
+    jU = reinterpret(Float64, JU_CONST | (@inbounds J_TABLE[k] & JU_MASK))
+    small_part =  muladd(jU, expm1b_kernel(base, r), jU)
+    twopk = Int64(k) << 52
+    return reinterpret(T, twopk + reinterpret(Int64, small_part))
+end
+
+@inline function exp_impl(x::T, base) where T<:Float32
+    N_float = round(x*LogBINV(base, T))
             N = unsafe_trunc(Int32, N_float)
-            r = muladd(N_float, LogBU($base, T), x)
-            r = muladd(N_float, LogBL($base, T), r)
-            small_part = expb_kernel($base, r)
-            if !(abs(x) <= SUBNORM_EXP($base, T))
-                x > MAX_EXP($base, T) && return Inf32
-                x < MIN_EXP($base, T) && return 0.0f0
+    r = muladd(N_float, LogBU(base, T), x)
+    r = muladd(N_float, LogBL(base, T), r)
+    small_part = expb_kernel(base, r)
+    if !(abs(x) <= SUBNORM_EXP(base, T))
+        x > MAX_EXP(base, T) && return Inf32
+        x < MIN_EXP(base, T) && return 0.0f0
                 if N<=Int32(-24)
                     twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
                     return (twopk*small_part)*(2f0^(-24))
@@ -245,20 +256,37 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
             return twopk*small_part
         end
 
-        function ($func)(a::Float16)
+@inline function exp_impl_fast(x::T, base) where T<:Float32
+    N_float = round(x*LogBINV(base, T))
+    N = unsafe_trunc(Int32, N_float)
+    r = muladd(N_float, LogBU(base, T), x)
+    r = muladd(N_float, LogBL(base, T), r)
+    small_part = expb_kernel(base, r)
+    twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
+    return twopk*small_part
+end
+
+@inline function exp_impl(a::Float16, base)
             T = Float32
             x = T(a)
-            N_float = round(x*LogBINV($base, T))
+    N_float = round(x*LogBINV(base, T))
             N = unsafe_trunc(Int32, N_float)
-            r = muladd(N_float, LogB($base, Float16), x)
-            small_part = expb_kernel($base, r)
-            if !(abs(x) <= SUBNORM_EXP($base, T))
-                x > MAX_EXP($base, T) && return Inf16
+    r = muladd(N_float, LogB(base, Float16), x)
+    small_part = expb_kernel(base, r)
+    if !(abs(x) <= SUBNORM_EXP(base, T))
+        x > MAX_EXP(base, T) && return Inf16
                 N<=Int32(-24) && return zero(Float16)
             end
             twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
             return Float16(twopk*small_part)
         end
+
+for (func, fast_func, base) in ((:exp2,  :exp2_fast,  Val(2)),
+                                (:exp,   :exp_fast,   Val(:ℯ)), 
+                                (:exp10, :exp10_fast, Val(10)))
+    @eval begin
+        $func(x::Union{Float16,Float32,Float64}) = exp_impl(x,$base)
+        $fast_func(x::Union{Float32,Float64}) = exp_impl_fast(x,$base)
     end
 end
 @doc """
