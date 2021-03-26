@@ -560,7 +560,10 @@ exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 """
     cis(A::AbstractMatrix)
 
-Compute ``\\exp(i A)`` for a generic matrix ``A``.
+Compute ``\\exp(i A)`` for a square matrix ``A``.
+
+!!! compat "Julia 1.7"
+    Support for using `cis` with matrices was added in Julia 1.7.
 
 # Examples
 ```jldoctest
