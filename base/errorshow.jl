@@ -71,7 +71,7 @@ function showerror(io::IO, ex::TypeError)
             targs = ("Type{", ex.got, "}")
         else
             targs = ("a value of type $(typeof(ex.got))",)
-            if ex.func == Symbol("Type") && ex.context == "parameter"
+            if ex.func === :Type && ex.context == "parameter"
                 expected = "isbits value or Type"
             end
         end
