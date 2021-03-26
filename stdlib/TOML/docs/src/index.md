@@ -78,7 +78,7 @@ julia> fname = tempname();
 
 julia> open(fname, "w") do io
            TOML.print(io, data)
-        end
+       end
 
 julia> TOML.parsefile(fname)
 Dict{String, Any} with 2 entries:
