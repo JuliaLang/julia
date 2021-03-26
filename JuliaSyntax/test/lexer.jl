@@ -303,9 +303,11 @@ end
 
 
 @testset "interpolation" begin
-    ts = collect(tokenize(""""str: \$(g("str: \$(h("str"))"))" """))
+    str = """"str: \$(g("str: \$(h("str"))"))" """
+    ts = collect(tokenize(str))
     @test length(ts)==3
     @test ts[1].kind == Tokens.STRING
+    @test ts[1].val == strip(str)
     ts = collect(tokenize("""\"\$\""""))
     @test ts[1].kind == Tokens.STRING
     # issue 73:
