@@ -237,10 +237,9 @@ julia> dlpath("libjulia")
 ```
 """
 function dlpath(libname::Union{AbstractString, Symbol})
-    handle = dlopen(libname)
-    path = dlpath(handle)
-    dlclose(handle)
-    return path
+    dlopen(libname, RTLD_NOLOAD) do handle
+        return dlpath(handle)
+    end
 end
 
 if Sys.isapple()
