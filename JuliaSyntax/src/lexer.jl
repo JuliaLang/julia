@@ -73,7 +73,7 @@ function Base.copy(l::Lexer{IO_t, TT}) where IO_t where TT
         l.current_pos,
 
         l.last_token,
-        l.charstore,
+        IOBuffer(),
         l.chars,
         l.charspos,
         l.doread,
