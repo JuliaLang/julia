@@ -861,11 +861,12 @@ static void jl_dump_asm_internal(
     }
 
     if (raw_code) {
-        // Print the complete address at the top (instruction addresses are abbreviated)
-        std::string Buffer{"; Address starting from "};
+        // Print the complete address and the size at the top (instruction addresses are abbreviated)
+        std::string Buffer{"; code origin: "};
         llvm::raw_string_ostream Stream{Buffer};
         auto Address = reinterpret_cast<uintptr_t>(memoryObject.data());
         llvm::write_hex(Stream, Address, HexPrintStyle::Lower, 16);
+        Stream << ", code size: " << memoryObject.size();
         Streamer->emitRawText(Stream.str());
     }
 
