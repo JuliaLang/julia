@@ -821,8 +821,6 @@ function parse_number_or_date_start(l::Parser)
             ate && return parse_int(l, contains_underscore)
         elseif accept(l, isdigit)
             return parse_local_time(l)
-        elseif peek(l) !== '.'
-            return ParserError(ErrLeadingZeroNotAllowedInteger)
         end
     end
 
