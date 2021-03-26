@@ -3,7 +3,7 @@
 module TestEigen
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
+using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted, UtiAUi!
 
 n = 10
 
@@ -73,6 +73,31 @@ aimg  = randn(n,n)/2
             d,v = eigen(asym_sg, a_sg'a_sg)
             @test d == f.values
             @test v == f.vectors
+
+            # solver for in-place U' \ A / U (#14896)
+            if !(eltya <: Integer)
+                for atyp in (eltya <: Real ? (Symmetric, Hermitian) : (Hermitian,))
+                    for utyp in (UpperTriangular, Diagonal)
+                        A = atyp(asym_sg)
+                        U = utyp(a_sg'a_sg)
+                        @test UtiAUi!(copy(A), U) ≈ U' \ A / U
+                    end
+                end
+            end
+
+            # matrices of different types (#14896)
+            if eltya <: Real
+                fs = eigen(Symmetric(asym_sg), a_sg'a_sg)
+                @test fs.values ≈ f.values
+                @test abs.(fs.vectors) ≈ abs.(f.vectors)  # may change sign
+                gs = eigen(Symmetric(asym_sg), Diagonal(a_sg'a_sg))
+                @test Symmetric(asym_sg)*gs.vectors ≈ (Diagonal(a_sg'a_sg)*gs.vectors) * Diagonal(gs.values)
+            end
+            fh = eigen(Hermitian(asym_sg), a_sg'a_sg)
+            @test fh.values ≈ f.values
+            @test abs.(fh.vectors) ≈ abs.(f.vectors)  # may change sign
+            gh = eigen(Hermitian(asym_sg), Diagonal(a_sg'a_sg))
+            @test Hermitian(asym_sg)*gh.vectors ≈ (Diagonal(a_sg'a_sg)*gh.vectors) * Diagonal(gh.values)
         end
         @testset "Non-symmetric generalized eigenproblem" begin
             if isa(a, Array)
