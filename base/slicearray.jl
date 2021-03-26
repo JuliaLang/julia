@@ -15,12 +15,12 @@ struct Slices{N,P,SM,AX,S} <: AbstractArray{S,N}
     parent::P
     """
     A tuple of length `ndims(parent)`, denoting how each dimension should be handled:
-      - an integer `i`: this is the `i`th dimension of the outer `Slices`.
+      - an integer `i`: this is the `i`th dimension of the outer `Slices` object.
       - `:`: an "inner" dimension
     """
     slicemap::SM
     """
-    A tuple of length `N` containing the axes.
+    A tuple of length `N` containing the [`axes`](@ref) of the `Slices` object.
     """
     axes::AX
 end
@@ -91,7 +91,7 @@ julia> M = [1 2 3; 4 5 6; 7 8 9]
  7  8  9
 
 julia> S = eachslice(M,dims=1)
-3-element Rows{Matrix{Int64}, CartesianIndices{1, Tuple{Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+3-element Rows{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
@@ -103,7 +103,7 @@ julia> S[1]
  3
 
 julia> T = eachslice(M,dims=1,drop=false)
-3×1 Slices{2, (1, Colon()), Matrix{Int64}, CartesianIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+3×1 Slices{2, Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
@@ -135,7 +135,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> S = eachrow(a)
-2-element Rows{Matrix{Int64}, CartesianIndices{1, Tuple{Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+2-element Rows{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2]
  [3, 4]
 
@@ -171,7 +171,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> S = eachcol(a)
-2-element Columns{Matrix{Int64}, CartesianIndices{1, Tuple{Base.OneTo{Int64}}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
+2-element Columns{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
  [1, 3]
  [2, 4]
 
@@ -192,7 +192,7 @@ constructed by [`eachrow`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const Rows{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{1,(1,:),P,AX,S}
+const Rows{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{1,P,Tuple{Int,Colon},AX,S}
 
 """
     Columns{M,AX,S}
@@ -202,7 +202,7 @@ constructed by [`eachcol`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const Columns{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{1,(:,1),P,AX,S}
+const Columns{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{1,P,Tuple{Colon,Int},AX,S}
 
 
 IteratorSize(::Type{S}) where {S<:Slices{N}} where {N} = HasShape{N}()
