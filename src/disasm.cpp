@@ -742,17 +742,29 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
 } // namespace
 
 // Stringify raw bytes as a comment string.
-std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory)
+std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory, const llvm::Triple& Triple)
 {
     std::string Buffer{"; "};
     llvm::raw_string_ostream Stream{Buffer};
     auto Address = reinterpret_cast<uintptr_t>(Memory.data());
-    // abbreviate address
+    // write abbreviated address
     llvm::write_hex(Stream, Address & 0xffff, HexPrintStyle::Lower, 4);
     Stream << ":";
-    for (uint8_t Byte : Memory) {
+    auto Arch = Triple.getArch();
+    bool FixedLength = !(Arch == Triple::x86 || Arch == Triple::x86_64);
+    if (FixedLength)
         Stream << " ";
-        llvm::write_hex(Stream, Byte, HexPrintStyle::Lower, 2);
+    if (FixedLength && Triple.isLittleEndian()) {
+        for (auto Iter = Memory.rbegin(); Iter != Memory.rend(); ++Iter)
+            llvm::write_hex(Stream, *Iter, HexPrintStyle::Lower, 2);
+    }
+    else {
+        // variable-length or (fixed-length) big-endian format
+        for (auto Byte : Memory) {
+            if (!FixedLength)
+                Stream << " ";
+            llvm::write_hex(Stream, Byte, HexPrintStyle::Lower, 2);
+        }
     }
     return Stream.str();
 }
@@ -1013,7 +1025,7 @@ static void jl_dump_asm_internal(
                         }
                     }
                     if (raw_code)
-                        Streamer->emitRawText(rawCodeComment(memoryObject.slice(Index, insSize)));
+                        Streamer->emitRawText(rawCodeComment(memoryObject.slice(Index, insSize), TheTriple));
                     Streamer->emitInstruction(Inst, *STI);
                 }
                 break;
