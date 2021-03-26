@@ -65,15 +65,15 @@ function showerror(io::IO, ex::TypeError)
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
     else
         expected = ex.expected
+        type_param_error = false
         if isvarargtype(ex.got)
             targs = (ex.got,)
         elseif isa(ex.got, Type)
             targs = ("Type{", ex.got, "}")
+        elseif ex.func === :Type && ex.context == "parameter"
+            type_param_error = true
         else
             targs = ("a value of type $(typeof(ex.got))",)
-            if ex.func === :Type && ex.context == "parameter"
-                expected = "isbits value or Type"
-            end
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
@@ -82,7 +82,17 @@ function showerror(io::IO, ex::TypeError)
         else
             ctx = "in $(ex.func), in $(ex.context)"
         end
-        print(io, ctx, ", expected ", expected, ", got ", targs...)
+        if type_param_error
+            print(io, """
+                      values of type $(typeof(ex.got)) are not valid as type parameters. Valid type parameters are
+                          - Types
+                          - Bits values
+                          - Symbols
+                          - Tuples of symbols or bits values
+                      """)
+        else
+            print(io, ctx, ", expected ", expected, ", got ", targs...)
+        end
     end
     Experimental.show_error_hints(io, ex)
 end
