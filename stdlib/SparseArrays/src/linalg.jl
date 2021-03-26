@@ -646,7 +646,7 @@ function _ldiv!(L::LowerTriangularPlain, B::StridedVecOrMat)
     for k = 1:ncolB
         for j = 1:nrowB
             i1 = ia[j]
-            i2 = ia[j + 1] - 1
+            i2 = ia[j + 1] - one(eltype(ia))
 
             # find diagonal element
             ii = searchsortedfirst(ja, j, i1, i2, Base.Order.Forward)
@@ -688,7 +688,7 @@ function _ldiv!(U::UpperTriangularPlain, B::StridedVecOrMat)
     for k = 1:ncolB
         for j = nrowB:-1:1
             i1 = ia[j]
-            i2 = ia[j + 1] - 1
+            i2 = ia[j + 1] - one(eltype(ia))
 
             # find diagonal element
             ii = searchsortedlast(ja, j, i1, i2, Base.Order.Forward)
