@@ -470,7 +470,8 @@ static void jl_dump_asm_internal(
         DIContext *di_ctx,
         raw_ostream &rstream,
         const char* asm_variant,
-        const char* debuginfo);
+        const char* debuginfo,
+        bool raw_code);
 
 // This isn't particularly fast, but neither is printing assembly, and they're only used for interactive mode
 static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
@@ -506,7 +507,7 @@ static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
 
 // print a native disassembly for the function starting at fptr
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo)
+jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo, char raw_code)
 {
     assert(fptr != 0);
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -543,7 +544,8 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
             Section, context,
             stream,
             asm_variant,
-            debuginfo);
+            debuginfo,
+            raw_code);
     jl_gc_safe_leave(ptls, gc_state);
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
@@ -739,6 +741,21 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
 }
 } // namespace
 
+// Stringify raw bytes as a comment string.
+std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory)
+{
+    std::string Buffer{"; "};
+    llvm::raw_string_ostream Stream{Buffer};
+    auto Address = reinterpret_cast<uintptr_t>(Memory.data());
+    // abbreviate address
+    llvm::write_hex(Stream, Address & 0xffff, HexPrintStyle::Lower, 4);
+    Stream << ":";
+    for (uint8_t Byte : Memory) {
+        Stream << " ";
+        llvm::write_hex(Stream, Byte, HexPrintStyle::Lower, 2);
+    }
+    return Stream.str();
+}
 
 static void jl_dump_asm_internal(
         uintptr_t Fptr, size_t Fsize, int64_t slide,
@@ -746,7 +763,8 @@ static void jl_dump_asm_internal(
         DIContext *di_ctx,
         raw_ostream &rstream,
         const char* asm_variant,
-        const char* debuginfo)
+        const char* debuginfo,
+        bool raw_code)
 {
     // GC safe
     // Get the host information
@@ -840,6 +858,15 @@ static void jl_dump_asm_internal(
         if (j + 1 < nlineinfo) {
             di_lineinfo.resize(j + 1);
         }
+    }
+
+    if (raw_code) {
+        // Print the complete address at the top (instruction addresses are abbreviated)
+        std::string Buffer{"; Address starting from "};
+        llvm::raw_string_ostream Stream{Buffer};
+        auto Address = reinterpret_cast<uintptr_t>(memoryObject.data());
+        llvm::write_hex(Stream, Address, HexPrintStyle::Lower, 16);
+        Streamer->emitRawText(Stream.str());
     }
 
     // Take two passes: In the first pass we record all branch labels,
@@ -984,6 +1011,8 @@ static void jl_dump_asm_internal(
                             }
                         }
                     }
+                    if (raw_code)
+                        Streamer->emitRawText(rawCodeComment(memoryObject.slice(Index, insSize)));
                     Streamer->emitInstruction(Inst, *STI);
                 }
                 break;
