@@ -53,11 +53,33 @@ function Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken}
             c3 = read(io, Char)
             p3 = position(io)
         end
-        
+
     end
     Lexer{IO_t,T}(io, position(io), 1, 1, position(io), 1, 1, position(io), Tokens.ERROR, IOBuffer(), (c1,c2,c3), (p1,p2,p3), false, false)
 end
 Lexer(str::AbstractString, T::Type{TT} = Token) where TT <: AbstractToken = Lexer(IOBuffer(str), T)
+
+function Base.copy(l::Lexer{IO_t, TT}) where IO_t where TT
+    return Lexer{IO_t, TT}(
+        l.io,
+        l.io_startpos,
+
+        l.token_start_row,
+        l.token_start_col,
+        l.token_startpos,
+
+        l.current_row,
+        l.current_col,
+        l.current_pos,
+
+        l.last_token,
+        l.charstore,
+        l.chars,
+        l.charspos,
+        l.doread,
+        l.dotop
+    )
+end
 
 @inline token_type(l::Lexer{IO_t, TT}) where {IO_t, TT} = TT
 
@@ -280,7 +302,7 @@ function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_E
     tok = RawToken(kind, (l.token_start_row, l.token_start_col),
                   (l.current_row, l.current_col - 1),
                   startpos(l), position(l) - 1, err, l.dotop, suffix)
-    
+
     l.dotop = false
     l.last_token = kind
     readoff(l)
@@ -717,7 +739,7 @@ function lex_prime(l, doemit = true)
         l.last_token ==  Tokens.RPAREN ||
         l.last_token ==  Tokens.RSQUARE ||
         l.last_token ==  Tokens.RBRACE ||
-        l.last_token == Tokens.PRIME || 
+        l.last_token == Tokens.PRIME ||
         l.last_token == Tokens.END || isliteral(l.last_token)
         return emit(l, Tokens.PRIME)
     else
@@ -818,21 +840,23 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                 return false
             elseif c == '('
                 o = 1
+                l2 = copy(l)
                 while o > 0
-                    c = readchar(l)
-                    eof(c) && return false
-                    if c == '('
+                    prevpos = position(l2)
+                    prevpos_io = position(l2.io)
+                    t = next_token(l2)
+                    seek(l.io, prevpos_io)
+
+                    for _ in 1:(position(l2) - prevpos)
+                        readchar(l)
+                    end
+
+                    if Tokens.kind(t) == Tokens.ENDMARKER
+                        return false
+                    elseif Tokens.kind(t) == Tokens.LPAREN
                         o += 1
-                    elseif c == ')'
+                    elseif Tokens.kind(t) == Tokens.RPAREN
                         o -= 1
-                    elseif c == '"'
-                        lex_quote(l, false)
-                    elseif c == '`'
-                        lex_cmd(l, false)
-                    elseif c == '#'
-                        lex_comment(l, false)
-                    elseif c == '\''
-                        lex_prime(l, false)
                     end
                 end
             end
@@ -955,7 +979,7 @@ end
 
 # A ` has been consumed
 function lex_cmd(l::Lexer, doemit=true)
-    if accept(l, '`') # 
+    if accept(l, '`') #
         if accept(l, '`') # """
             if read_string(l, Tokens.TRIPLE_CMD)
                 return doemit ? emit(l, Tokens.TRIPLE_CMD) : EMPTY_TOKEN(token_type(l))
@@ -965,7 +989,7 @@ function lex_cmd(l::Lexer, doemit=true)
         else # empty cmd
             return doemit ? emit(l, Tokens.CMD) : EMPTY_TOKEN(token_type(l))
         end
-    else 
+    else
         if read_string(l, Tokens.CMD)
             return doemit ? emit(l, Tokens.CMD) : EMPTY_TOKEN(token_type(l))
         else
