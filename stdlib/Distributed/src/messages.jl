@@ -8,7 +8,7 @@ abstract type AbstractMsg end
 # Each message has three parts, which are written in order to the worker's stream.
 #  1) A header of type MsgHeader is serialized to the stream (via `serialize`).
 #  2) A message of type AbstractMsg is then serialized.
-#  3) Finally, a fixed bounday of 10 bytes is written.
+#  3) Finally, a fixed boundary of 10 bytes is written.
 
 # Message header stored separately from body to be able to send back errors if
 # a deserialization error occurs when reading the message body.
