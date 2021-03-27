@@ -509,6 +509,13 @@ Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 @test typeof(sqrt(Atu)[1,1]) <: Real
 @test typeof(sqrt(complex(Atu))[1,1]) <: Complex
 
+@testset "matrix square root quasi-triangular blockwise" begin
+    @testset for T in (Float64, ComplexF64)
+        A = schur(rand(T, 100, 100)^2).T
+        @test LinearAlgebra.sqrt_quasitriu(A; blockwidth=16)^2 ≈ A
+    end
+end
+
 @testset "sylvester quasi-triangular blockwise" begin
     @testset for T in (Float64, ComplexF64), m in (15, 40), n in (15, 45)
         A = schur(rand(T, m, m)).T
