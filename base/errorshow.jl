@@ -570,6 +570,8 @@ stacktrace_linebreaks()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 stacktrace_color_lines()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_COLOR_LINES", "true")) === true
+stacktrace_color_modules()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_COLOR_MODULES", "true")) === true
 
 stacktrace_line_color() = stacktrace_color_lines() ? :light_black : :normal
 
@@ -682,7 +684,7 @@ end
 # from `modulecolorcycler`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
-    if m !== nothing
+    if m !== nothing && stacktrace_color_modules()
         while parentmodule(m) !== m
             pm = parentmodule(m)
             pm == Main && break
