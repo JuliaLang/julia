@@ -568,6 +568,10 @@ stacktrace_contract_userdir()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_HOMEDIR", "true")) === true
 stacktrace_linebreaks()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
+stacktrace_color_lines()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_COLOR_LINES", "true")) === true
+
+stacktrace_line_color() = stacktrace_color_lines() ? :light_black : :normal
 
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     num_frames = length(trace)
@@ -660,7 +664,8 @@ function show_reduced_backtrace(io::IO, t::Vector)
             popfirst!(repeated_cycle)
             printstyled(io,
                 "--- the last ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
+                  repetitions, " more time", repetitions>1 ? "s" : "", " ---",
+                  color=stacktrace_line_color())
             if i < length(displayed_stackframes)
                 println(io)
                 stacktrace_linebreaks() && println(io)
@@ -715,12 +720,12 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
     if n > 1
-        printstyled(io, " (repeats $n times)"; color=:light_black)
+        printstyled(io, " (repeats $n times)"; color=stacktrace_line_color())
     end
     println(io)
 
     # @
-    printstyled(io, " " ^ (digit_align_width + 2) * "@ ", color = :light_black)
+    printstyled(io, " " ^ (digit_align_width + 2) * "@ "; color=stacktrace_line_color())
 
     # module
     if modul !== nothing
@@ -732,14 +737,15 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     pathparts = splitpath(file)
     folderparts = pathparts[1:end-1]
     if !isempty(folderparts)
-        printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :light_black)
+        printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/");
+                    color=stacktrace_line_color())
     end
 
     # filename, separator, line
     # use escape codes for formatting, printstyled can't do underlined and color
     # codes are bright black (90) and underlined (4)
     function print_underlined(io::IO, s...)
-        colored = get(io, :color, false)::Bool
+        colored = get(io, :color, false)::Bool && stacktrace_hascolor()
         start_s = colored ? "\033[90;4m" : ""
         end_s   = colored ? "\033[0m"    : ""
         print(io, start_s, s..., end_s)
@@ -747,7 +753,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     print_underlined(io, pathparts[end], ":", line)
 
     # inlined
-    printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+    printstyled(io, inlined ? " [inlined]" : ""; color=stacktrace_line_color())
 end
 
 
