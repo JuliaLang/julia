@@ -2342,7 +2342,7 @@ sqrt(A::UnitLowerTriangular) = copy(transpose(sqrt(copy(transpose(A)))))
 # Auxiliary functions for matrix square root
 
 # square root of upper triangular or real upper quasitriangular matrix
-function sqrt_quasitriu(A0)
+function sqrt_quasitriu(A0; blockwidth=64)
     n = checksquare(A0)
     T = eltype(A0)
     Tr = typeof(sqrt(real(zero(T))))
@@ -2369,7 +2369,7 @@ function sqrt_quasitriu(A0)
         A = A0
         R = zeros(Tc, n, n)
     end
-    _sqrt_quasitriu!(R, A)
+    _sqrt_quasitriu!(R, A; blockwidth=blockwidth, n=n)
     Rc = eltype(A0) <: Real ? R : complex(R)
     if A0 isa UpperTriangular
         return UpperTriangular(Rc)
@@ -2380,7 +2380,32 @@ function sqrt_quasitriu(A0)
     end
 end
 
-function _sqrt_quasitriu!(R, A)
+# in-place recursive sqrt of upper quasi-triangular matrix A from
+# Deadman E., Higham N.J., Ralha R. (2013) Blocked Schur Algorithms for Computing the Matrix
+# Square Root. Applied Parallel and Scientific Computing. PARA 2012. Lecture Notes in
+# Computer Science, vol 7782.
+function _sqrt_quasitriu!(R, A; blockwidth=64, n=checksquare(A))
+    if n ≤ blockwidth || !(eltype(R) <: BlasFloat) # base case, perform "point" algorithm
+        _sqrt_quasitriu_block!(R, A)
+    else  # compute blockwise recursion
+        split = div(n, 2)
+        iszero(A[split+1, split]) || (split += 1) # don't split 2x2 diagonal block
+        r1 = 1:split
+        r2 = (split + 1):n
+        n1, n2 = split, n - split
+        A11, A12, A22 = @views A[r1,r1], A[r1,r2], A[r2,r2]
+        R11, R12, R22 = @views R[r1,r1], R[r1,r2], R[r2,r2]
+        # solve diagonal blocks recursively
+        _sqrt_quasitriu!(R11, A11; blockwidth=blockwidth, n=n1)
+        _sqrt_quasitriu!(R22, A22; blockwidth=blockwidth, n=n2)
+        # solve off-diagonal block
+        R12 .= .- A12
+        _sylvester_quasitriu!(R11, R22, R12; blockwidth=blockwidth, nA=n1, nB=n2, catcherr=true)
+    end
+    return R
+end
+
+function _sqrt_quasitriu_block!(R, A)
     _sqrt_quasitriu_diag_block!(R, A)
     _sqrt_quasitriu_offdiag_block!(R, A)
     return R
