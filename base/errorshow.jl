@@ -736,7 +736,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     end
 
     # filename, separator, line; use more prominent color than the rest of the filepath
-    printstyled(io, pathparts[end], ":", line; color=:normal)
+    printstyled(io, pathparts[end], ":", line; color=:underline)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
