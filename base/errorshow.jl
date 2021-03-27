@@ -735,16 +735,8 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
         printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :light_black)
     end
 
-    # filename, separator, line
-    # use escape codes for formatting, printstyled can't do underlined and color
-    # codes are bright black (90) and underlined (4)
-    function print_underlined(io::IO, s...)
-        colored = get(io, :color, false)::Bool
-        start_s = colored ? "\033[90;4m" : ""
-        end_s   = colored ? "\033[0m"    : ""
-        print(io, start_s, s..., end_s)
-    end
-    print_underlined(io, pathparts[end], ":", line)
+    # filename, separator, line; use more prominent color than the rest of the filepath
+    printstyled(io, pathparts[end], ":", line; color=:normal)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
