@@ -2526,6 +2526,66 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x2!(R, A, i, j)
     return R
 end
 
+# solve Sylvester's equation AX + XB = -C using blockwise recursion until the dimension of
+# A and B are no greater than blockwidth, based on Algorithm 1 from
+# Jonsson I, Kågström B. Recursive blocked algorithms for solving triangular systems—
+# Part I: one-sided and coupled Sylvester-type matrix equations. (2002) ACM Trans Math Softw.
+# 28(4).
+function _sylvester_quasitriu!(A, B, C; blockwidth=64, nA=checksquare(A), nB=checksquare(B), catcherr=false)
+    kwargs = (blockwidth=blockwidth, catcherr=catcherr)
+    if 1 ≤ nA ≤ blockwidth && 1 ≤ nB ≤ blockwidth  # base case
+        try
+            _, scale = LAPACK.trsyl!('N', 'N', A, B, C)
+            rmul!(C, -inv(scale))
+        catch e
+            if !(catcherr && e isa LAPACKException)
+                throw(e)
+            end
+        end
+    elseif nA ≥ 2nB ≥ 2  # split A
+        iA = div(nA, 2)
+        iszero(A[iA + 1, iA]) || (iA += 1)  # don't split 2x2 diagonal block
+        rA1, rA2 = 1:iA, (iA + 1):nA
+        nA1, nA2 = iA, nA-iA
+        A11, A12, A22 = @views A[rA1,rA1], A[rA1,rA2], A[rA2,rA2]
+        C1, C2 = @views C[rA1,:], C[rA2,:]
+        _sylvester_quasitriu!(A22, B, C2; nA=nA2, nB=nB, kwargs...)
+        mul!(C1, A12, C2, true, true)
+        _sylvester_quasitriu!(A11, B, C1; nA=nA1, nB=nB, kwargs...)
+    elseif nB ≥ 2nA ≥ 2  # split B
+        iB = div(nB, 2)
+        iszero(B[iB + 1, iB]) || (iB += 1)  # don't split 2x2 diagonal block
+        rB1, rB2 = 1:iB, (iB + 1):nB
+        nB1, nB2 = iB, nB-iB
+        B11, B12, B22 = @views B[rB1,rB1], B[rB1,rB2], B[rB2,rB2]
+        C1, C2 = @views C[:,rB1], C[:,rB2]
+        _sylvester_quasitriu!(A, B11, C1; nA=nA, nB=nB1, kwargs...)
+        mul!(C2, C1, B12, true, true)
+        _sylvester_quasitriu!(A, B22, C2; nA=nA, nB=nB2, kwargs...)
+    else  # split A and B
+        iA = div(nA, 2)
+        iszero(A[iA + 1, iA]) || (iA += 1)  # don't split 2x2 diagonal block
+        iB = div(nB, 2)
+        iszero(B[iB + 1, iB]) || (iB += 1)  # don't split 2x2 diagonal block
+        rA1, rA2 = 1:iA, (iA + 1):nA
+        nA1, nA2 = iA, nA-iA
+        rB1, rB2 = 1:iB, (iB + 1):nB
+        nB1, nB2 = iB, nB-iB
+        A11, A12, A22 = @views A[rA1,rA1], A[rA1,rA2], A[rA2,rA2]
+        B11, B12, B22 = @views B[rB1,rB1], B[rB1,rB2], B[rB2,rB2]
+        C11, C21, C12, C22 = @views C[rA1,rB1], C[rA2,rB1], C[rA1,rB2], C[rA2,rB2]
+        _sylvester_quasitriu!(A22, B11, C21; nA=nA2, nB=nB1, kwargs...)
+        mul!(C11, A12, C21, true, true)
+        _sylvester_quasitriu!(A11, B11, C11; nA=nA1, nB=nB1, kwargs...)
+        mul!(C22, C21, B12, true, true)
+        _sylvester_quasitriu!(A22, B22, C22; nA=nA2, nB=nB2, kwargs...)
+        mul!(C12, A12, C22, true, true)
+        mul!(C12, C11, B12, true, true)
+        _sylvester_quasitriu!(A11, B22, C12; nA=nA1, nB=nB2, kwargs...)
+    end
+    return C
+end
+
 # End of auxiliary functions for matrix square root
 
 # Generic eigensystems

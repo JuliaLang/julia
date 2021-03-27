@@ -509,6 +509,18 @@ Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 @test typeof(sqrt(Atu)[1,1]) <: Real
 @test typeof(sqrt(complex(Atu))[1,1]) <: Complex
 
+@testset "sylvester quasi-triangular blockwise" begin
+    @testset for T in (Float64, ComplexF64), m in (15, 40), n in (15, 45)
+        A = schur(rand(T, m, m)).T
+        B = schur(rand(T, n, n)).T
+        C = randn(T, m, n)
+        Ccopy = copy(C)
+        X = LinearAlgebra._sylvester_quasitriu!(A, B, C; blockwidth=16)
+        @test X === C
+        @test A * X + X * B ≈ -Ccopy
+    end
+end
+
 @testset "check matrix logarithm type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
     A = UpperTriangular(exp(triu(randn(elty, n, n))))
     @inferred Union{typeof(A),typeof(complex(A))} log(A)
