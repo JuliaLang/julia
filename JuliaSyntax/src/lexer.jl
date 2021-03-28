@@ -842,12 +842,11 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                 o = 1
                 l2 = copy(l)
                 while o > 0
-                    prevpos = position(l2)
                     prevpos_io = position(l2.io)
                     t = next_token(l2)
                     seek(l.io, prevpos_io)
 
-                    for _ in 1:(position(l2) - prevpos)
+                    while position(l) < position(l2)
                         readchar(l)
                     end
 
