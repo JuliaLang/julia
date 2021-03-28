@@ -310,12 +310,20 @@ end
     @test ts[1].val == strip(str)
     ts = collect(tokenize("""\"\$\""""))
     @test ts[1].kind == Tokens.STRING
+    
     # issue 73:
     t_err = tok("\"\$(fdsf\"")
     @test t_err.kind == Tokens.ERROR
     @test t_err.token_error == Tokens.EOF_STRING
     @test Tokenize.Tokens.startpos(t_err) == (1,1)
     @test Tokenize.Tokens.endpos(t_err) == (1,8)
+
+    # issue 178:
+    str = """"\$uₕx \$(uₕx - ux)" """
+    ts = collect(tokenize(str))
+    @test length(ts)==3
+    @test ts[1].kind == Tokens.STRING
+    @test ts[1].val == strip(str)
 end
 
 @testset "inferred" begin
