@@ -1890,6 +1890,12 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test pop!(lines2) == "   │          \$(QuoteNode(4))"
     @test pop!(lines2) == "17 │          \$(QuoteNode(3))" # TODO: this should print after the next statement
     @test lines1 == lines2
+
+    # verbose linetable
+    io = IOBuffer()
+    Base.IRShow.show_ir(io, ir; verbose_linetable=true)
+    seekstart(io)
+    @test count(contains(r"my_fun28173 at none:\d+"), eachline(io)) == 9
 end
 
 # Verify that extra instructions at the end of the IR
