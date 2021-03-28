@@ -1906,7 +1906,7 @@ let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     push!(ir.stmts.inst, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
     @test isempty(pop!(lines))
-    @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
+    @test pop!(lines) == "   !!! ──       unreachable::#UNDEF"
 end
 
 @testset "printing and interpolating nothing" begin
