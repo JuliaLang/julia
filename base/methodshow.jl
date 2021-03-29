@@ -264,6 +264,9 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     end
 end
 
+# const
+METHODLIST_MODULECOLORS = [:cyan, :green, :yellow, :magenta]
+
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
     mt = ms.mt
     name = mt.name
@@ -278,12 +281,20 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
+    modulecolordict = Dict{Module, Symbol}()
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(METHODLIST_MODULECOLORS))
+    modulecolordict[parentmodule_before_main(mt.module)] = :light_black
+
     for meth in ms
         if max==-1 || n<max
             n += 1
             println(io)
             print(io, "[$n] ")
-            show(io, meth)
+
+            m = parentmodule_before_main(meth.module)
+            modulecolor = get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+            show(io, meth; modulecolor)
+
             file, line = updated_methodloc(meth)
             if last_shown_line_infos !== nothing
                 push!(last_shown_line_infos, (string(file), line))
