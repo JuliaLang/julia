@@ -630,19 +630,11 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
     return bb_idx
 end
 
-function ircode_new_nodes_iter(code::IRCode, used::BitSet)
+function ircode_new_nodes_iter(code::IRCode)
     stmts = code.stmts
     new_nodes = code.new_nodes.stmts
     new_nodes_info = code.new_nodes.info
-    new_nodes_perm = if any(i -> !isassigned(new_nodes.inst, i), 1:length(new_nodes))
-        printstyled(io, "ERROR: New node array has unset entry\n", color=:red)
-        filter(i -> isassigned(new_nodes.inst, i), 1:length(new_nodes))
-    else
-        collect(1:length(new_nodes))
-    end
-    for nn in new_nodes_perm
-        scan_ssa_use!(push!, used, new_nodes[nn][:inst])
-    end
+    new_nodes_perm = filter(i -> isassigned(new_nodes.inst, i), 1:length(new_nodes))
     sort!(new_nodes_perm, by = x -> (x = new_nodes_info[x]; (x.pos, x.attach_after)))
     perm_idx = Ref(1)
 
@@ -747,10 +739,19 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
     for stmt in stmts
         scan_ssa_use!(push!, used, stmt[:inst])
     end
+    new_nodes = code.new_nodes.stmts
+    warn_unset_entry = true
+    for nn in 1:length(new_nodes)
+        if isassigned(new_nodes.inst, nn)
+            scan_ssa_use!(push!, used, new_nodes[nn][:inst])
+        elseif warn_unset_entry
+            printstyled(io, "ERROR: New node array has unset entry\n", color=:red)
+            warn_unset_entry = false
+        end
+    end
     bb_idx = 1
 
-    # this also populates `used`
-    pop_new_node! = ircode_new_nodes_iter(code, used)
+    pop_new_node! = ircode_new_nodes_iter(code)
 
     if verbose_linetable
         line_info_preprinter = ircode_verbose_linfo_printer(code, used)
