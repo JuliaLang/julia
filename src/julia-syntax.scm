@@ -2383,13 +2383,13 @@
 
    'string
    (lambda (e)
-     `(call (top string)
-            ,@(apply append (map (lambda (s)
-                                   (let ((s (expand-forms s)))
-                                     (if (and (pair? s) (eq? (car s) 'string))
-                                         (cdr s)
-                                         (list s))))
-                                 (cdr e)))))
+     (define (expand-args s)
+       (if (and (pair? s) (eq? (car s) 'string))
+           (apply append (map expand-args (cdr s)))
+           (list s)))
+     (expand-forms
+       `(call (top string)
+              ,@(apply append (map expand-args (cdr e))))))
 
    '|::|
    (lambda (e)
