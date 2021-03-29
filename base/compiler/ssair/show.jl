@@ -534,9 +534,9 @@ end
 #   string that will be printed after the final basic-block annotation.
 # line_info_postprinter(io::IO, typ, used::Bool) prints the type-annotation at the end
 #   of the statement
-# pop_newnode!(idx::Int) -> (node_idx, new_node) may return a new node at the current
-#   index `idx`, which is printed before the statement at index `idx`. This function
-#   is repeatedly called until it returns `nothing`
+# pop_newnode!(idx::Int) -> (node_idx, new_node_inst, new_node_type) may return a new
+#   node at the current index `idx`, which is printed before the statement at index
+#   `idx`. This function is repeatedly called until it returns `nothing`
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info_preprinter, line_info_postprinter,
                       used::BitSet, cfg::CFG, bb_idx::Int, pop_new_node! = _ -> nothing; bb_color=:light_black)
     stmt = _stmt(code, idx)
@@ -597,15 +597,18 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
         end
 
         # print new nodes first in the right position
-        node_idx, new_node = next
-        show_type = should_print_ssa_type(new_node[:inst])
+        node_idx, new_node_inst, new_node_type = next
+
+        @assert new_node_inst !== UNDEF # we filtered these out earlier
+        show_type = should_print_ssa_type(new_node_inst)
         with_output_color(:green, io) do io′
-            print_stmt(io′, node_idx, new_node[:inst], used, maxlength_idx, false, show_type)
+            print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
         end
-        if type === UNDEF # try to be robust against errors
+
+        if new_node_type === UNDEF # try to be robust against errors
             printstyled(io, "::#UNDEF", color=:red)
         elseif show_type
-            line_info_postprinter(io, new_node[:type], node_idx in used)
+            line_info_postprinter(io, new_node_type, node_idx in used)
         end
         println(io)
         i += 1
@@ -651,8 +654,10 @@ function ircode_new_nodes_iter(code::IRCode, used::BitSet)
         end
         perm_idx[] += 1
         new_node = new_nodes[node_idx]
+        new_node_inst = isassigned(new_nodes.inst, node_idx) ? new_node[:inst] : UNDEF
+        new_node_type = isassigned(new_nodes.type, node_idx) ? new_node[:type] : UNDEF
         node_idx += length(stmts)
-        return node_idx, new_node
+        return node_idx, new_node_inst, new_node_type
     end
 end
 
