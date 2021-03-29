@@ -237,9 +237,38 @@ julia> dlpath("libjulia")
 ```
 """
 function dlpath(libname::Union{AbstractString, Symbol})
-    dlopen(libname, RTLD_NOLOAD) do handle
-        return dlpath(handle)
+    libname = string(libname)
+    possible_libnames = [libname]
+
+    # We want to support easily calling `dlpath("libfoo")` but on macOS it can be quite
+    # strict about `@rpath` at the front of a DYLIB_ID, so we will automatically check
+    # `"@rpath/$(libname)"` if the library name is a basename.  This is essentially re-
+    # implementing a part of what `dyld` does, but we don't emulate everything.
+    @static if Sys.isapple()
+        if libname == basename(libname)
+            push!(possible_libnames, string("@rpath/", libname))
+        end
     end
+
+    path = nothing
+    for l in possible_libnames
+        dlopen(l, RTLD_NOLOAD; throw_error=false) do handle
+            if handle !== nothing
+                path = dlpath(handle)
+            end
+        end
+
+        # Sadly, we cannot `break` within the `do` block above
+        if path !== nothing
+            break
+        end
+    end
+
+    if path === nothing
+        throw(ArgumentError("Unable to load library \"$(libname)\""))
+    end
+
+    return path
 end
 
 if Sys.isapple()
