@@ -674,22 +674,23 @@ end
 # from `modulecolorcycler`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
-    if m !== nothing
-        while parentmodule(m) !== m
-            pm = parentmodule(m)
-            pm == Main && break
-            m = pm
-        end
-        if !haskey(modulecolordict, m)
-            modulecolordict[m] = popfirst!(modulecolorcycler)
-        end
-        modulecolor = modulecolordict[m]
+    modulecolor = if m === nothing
+        :default
     else
-        modulecolor = :default
+        top_m = parentmodule_before_main(m)
+        get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
     end
     print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
 end
 
+function parentmodule_before_main(m)
+    while parentmodule(m) !== m
+        pm = parentmodule(m)
+        pm == Main && break
+        m = pm
+    end
+    m
+end
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
@@ -717,6 +718,15 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     end
     println(io)
 
+    # @ Module path / file : line
+    print_module_path_file(io, modul, file, line, modulecolor, digit_align_width)
+
+    # inlined
+    printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+end
+
+# this is also used in methodshow.jl
+function print_module_path_file(io, modul, file, line, modulecolor = :light_black, digit_align_width = 0)
     # @
     printstyled(io, " " ^ (digit_align_width + 2) * "@ ", color = :light_black)
 
@@ -734,14 +744,10 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     end
 
     # filename, separator, line
-    # use escape codes for formatting, printstyled can't do underlined and color
-    # codes are bright black (90) and underlined (4)
-    printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
-
-    # inlined
-    printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+    if line > 0
+        printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
+    end
 end
-
 
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
