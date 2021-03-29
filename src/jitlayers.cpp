@@ -954,8 +954,7 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
             //    continue;
             //}
             else {
-                assert(dG->isDeclaration() || (dG->getInitializer() == sG->getInitializer() &&
-                            dG->isConstant() && sG->isConstant()));
+                assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
                 dG->replaceAllUsesWith(sG);
                 dG->eraseFromParent();
             }
