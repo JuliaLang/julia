@@ -260,12 +260,14 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
         elseif mt === _TYPE_NAME.mt
             print(io, " for type constructor")
         end
+        print(io, " from ")
+        printstyled(io, ms.mt.module, color=:blue)
         print(io, ":")
     end
 end
 
 # const
-METHODLIST_MODULECOLORS = [:cyan, :green, :yellow, :magenta]
+METHODLIST_MODULECOLORS = [:cyan, :green, :yellow]
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
     mt = ms.mt
@@ -283,7 +285,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 
     modulecolordict = Dict{Module, Symbol}()
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(METHODLIST_MODULECOLORS))
-    modulecolordict[parentmodule_before_main(mt.module)] = :light_black
+    modulecolordict[parentmodule_before_main(mt.module)] = :blue
 
     for meth in ms
         if max==-1 || n<max
