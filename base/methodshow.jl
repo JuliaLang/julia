@@ -197,7 +197,7 @@ function sym_to_string(sym)
     end
 end
 
-function show(io::IO, m::Method)
+function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width = 0)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
@@ -206,12 +206,22 @@ function show(io::IO, m::Method)
         return
     end
     print(io, decls[1][2], "(")
-    join(
-        io,
-        String[isempty(d[2]) ? d[1] : string(d[1], "::", d[2]) for d in decls[2:end]],
-        ", ",
-        ", ",
-    )
+    # join(
+    #     io,
+    #     String[isempty(d[2]) ? d[1] : string(d[1], "::", d[2]) for d in decls[2:end]],
+    #     ", ",
+    #     ", ",
+    # )
+    for (i,d) in enumerate(decls[2:end])
+        if isempty(d[2])
+            printstyled(io, d[1], color=:normal)
+        else
+            printstyled(io, d[1], color=:light_black)  # not really sure we should do this
+            print(io, "::")
+            print_type_stacktrace(io, d[2])
+        end
+        i < length(decls)-1 && printstyled(io, ", ", color=:light_black)
+    end
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
         print(io, "; ")
@@ -219,11 +229,13 @@ function show(io::IO, m::Method)
     end
     print(io, ")")
     show_method_params(io, tv)
-    print(io, " in ", m.module)
-    if line > 0
-        file, line = updated_methodloc(m)
-        print(io, " at ", file, ":", line)
-    end
+    # print(io, " in ", m.module)
+    # if line > 0
+    #     file, line = updated_methodloc(m)
+    #     print(io, " at ", file, ":", line)
+    # end
+    println(io)
+    print_module_path_file(io, m.module, string(file), line, modulecolor, digit_align_width)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
