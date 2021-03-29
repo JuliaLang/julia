@@ -267,4 +267,17 @@ mktempdir() do dir
     end
 end
 
+# On macOS, apparently `dlopen(name, RTLD_NOLOAD)` can be stricter than `dlopen(name)`
+@static if Sys.isapple()
+    libjulia = ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "libjulia-debug" : "libjulia"
+    # Ensure we can `dlopen(name)`
+    @test Libdl.dlopen(libjulia; throw_error=false) !== nothing
+    if Libdl.dlopen(libjulia, Libdl.RTLD_NOLOAD; throw_error=false) === nothing
+        # If we can't load `libjulia` with `RTLD_NOLOAD` because, for instance, its
+        # `DYLIB_ID` has been changed to have `@rpath` at the front, test that
+        # `dlpath()` still works, because it is able to prepend `@rpath`.
+        @test isfile(Libdl.dlpath(libjulia))
+    end
+end
+
 end
