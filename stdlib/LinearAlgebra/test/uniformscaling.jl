@@ -464,8 +464,8 @@ end
     A = rand(-10:10, 3, 3)
     λ = rand(-10:10)
     J = UniformScaling(λ)
-    @test dot(A, J) ≈ dot(J, A)
-    @test dot(A, J) ≈ tr(λ * A)
+    @test dot(A, J) == dot(J, A)
+    @test dot(A, J) == tr(λ * A)
 end
 
 @testset "generalized dot" begin
