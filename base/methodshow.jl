@@ -197,7 +197,7 @@ function sym_to_string(sym)
     end
 end
 
-function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width = 0)
+function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width = -1)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
@@ -206,17 +206,13 @@ function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width =
         return
     end
     print(io, decls[1][2], "(")
-    # join(
-    #     io,
-    #     String[isempty(d[2]) ? d[1] : string(d[1], "::", d[2]) for d in decls[2:end]],
-    #     ", ",
-    #     ", ",
-    # )
+
+    # arguments
     for (i,d) in enumerate(decls[2:end])
+        printstyled(io, d[1], color=:light_black)
         if isempty(d[2])
-            printstyled(io, d[1], color=:normal)
+            print(io, "::Any") # ?? gets "xs...::Any" wrong!
         else
-            printstyled(io, d[1], color=:light_black)  # not really sure we should do this
             print(io, "::")
             print_type_stacktrace(io, d[2])
         end
@@ -229,13 +225,13 @@ function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width =
     end
     print(io, ")")
     show_method_params(io, tv)
-    # print(io, " in ", m.module)
-    # if line > 0
-    #     file, line = updated_methodloc(m)
-    #     print(io, " at ", file, ":", line)
-    # end
-    println(io)
-    print_module_path_file(io, m.module, string(file), line, modulecolor, digit_align_width)
+
+    # module & flie
+    if digit_align_width > 0
+        println(io)
+    end
+    showmodule = isnothing(modulecolor) ? nothing : m.module
+    print_module_path_file(io, showmodule, string(file), line, modulecolor, digit_align_width)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -266,8 +262,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     end
 end
 
-# const
-METHODLIST_MODULECOLORS = [:cyan, :green, :yellow]
+const METHODLIST_MODULECOLORS = [:cyan, :green, :yellow]
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
     mt = ms.mt
@@ -286,16 +281,22 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     modulecolordict = Dict{Module, Symbol}()
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(METHODLIST_MODULECOLORS))
     modulecolordict[parentmodule_before_main(mt.module)] = :blue
-
+    
+    digit_align_width = length(string(max>0 ? max : length(ms)))
+    
     for meth in ms
         if max==-1 || n<max
             n += 1
             println(io)
-            print(io, "[$n] ")
+            print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
 
-            m = parentmodule_before_main(meth.module)
-            modulecolor = get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
-            show(io, meth; modulecolor)
+            modulecolor = if meth.module == mt.module
+                nothing
+            else
+                m = parentmodule_before_main(meth.module)
+                get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+            end
+            show(io, meth; modulecolor, digit_align_width)
 
             file, line = updated_methodloc(meth)
             if last_shown_line_infos !== nothing
