@@ -600,6 +600,23 @@ end
         github_regex_test("ssh://git@github.com/$user/$repo", user, repo)
         @test !occursin(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git")
     end
+
+    @testset "UserPasswordCredential/url constructor" begin
+        user_pass_cred = LibGit2.UserPasswordCredential("user", "*******")
+        url = "https://github.com"
+        expected_cred = LibGit2.GitCredential("https", "github.com", nothing, "user", "*******")
+
+        cred = LibGit2.GitCredential(user_pass_cred, url)
+        @test cred == expected_cred
+
+        # Shredding the UserPasswordCredential shouldn't result in information being lost
+        # inside of a GitCredential.
+        Base.shred!(user_pass_cred)
+        @test cred == expected_cred
+
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
+    end
 end
 
 mktempdir() do dir
@@ -2130,6 +2147,50 @@ mktempdir() do dir
                     Base.shred!(filled_b)
                     Base.shred!(filled_without_path_a)
                     Base.shred!(filled_without_path_b)
+                end
+            end
+        end
+
+        @testset "approve/reject with UserPasswordCredential" begin
+            # In order to use the "store" credential helper `git` needs to be installed and
+            # on the path.
+            if GIT_INSTALLED
+                config_path = joinpath(dir, config_file)
+                isfile(config_path) && rm(config_path)
+
+                credential_path = joinpath(dir, ".git-credentials")
+                isfile(credential_path) && rm(credential_path)
+
+                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    query = LibGit2.GitCredential("https", "mygithost")
+                    filled = LibGit2.GitCredential("https", "mygithost", nothing, "alice", "1234")
+                    user_pass_cred = LibGit2.UserPasswordCredential("alice", "1234")
+                    url = "https://mygithost"
+
+                    # Requires `git` to be installed and available on the path.
+                    LibGit2.set!(cfg, "credential.helper", "store --file \"$credential_path\"")
+                    helper = only(LibGit2.credential_helpers(cfg, query))
+
+                    @test !isfile(credential_path)
+
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                        @test result == query
+                    end
+
+                    LibGit2.approve(cfg, user_pass_cred, url)
+                    @test isfile(credential_path)
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                        @test result == filled
+                    end
+
+                    LibGit2.reject(cfg, user_pass_cred, url)
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                        @test result == query
+                    end
+
+                    Base.shred!(query)
+                    Base.shred!(filled)
+                    Base.shred!(user_pass_cred)
                 end
             end
         end
