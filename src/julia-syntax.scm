@@ -2383,11 +2383,12 @@
 
    'string
    (lambda (e)
-     (expand-forms
-      `(call (top string) ,@(map (lambda (s)
-                                   (if (and (pair? s) (eq? (car s) 'string))
-                                       (cadr s)
-                                       s))
+     `(call (top string)
+            ,@(apply append (map (lambda (s)
+                                   (let ((s (expand-forms s)))
+                                     (if (and (pair? s) (eq? (car s) 'string))
+                                         (cdr s)
+                                         (list s))))
                                  (cdr e)))))
 
    '|::|

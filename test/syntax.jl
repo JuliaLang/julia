@@ -2751,3 +2751,6 @@ end
 @test eval(:(x = $(QuoteNode(Core.SlotNumber(1))))) == Core.SlotNumber(1)
 @test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
 @test_throws ErrorException("syntax: Slot objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
+
+# issue 40258
+@test "a $("b $("c")")" == "a b c"
