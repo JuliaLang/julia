@@ -69,9 +69,6 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
 
 /// ----- Definitions for various internal TypeMaps ----- ///
 
-static struct jl_typemap_info method_defs = {1};
-static struct jl_typemap_info lambda_cache = {1};
-
 static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 {
     return mt->offs;
@@ -243,7 +240,7 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
     jl_methtable_t *mt = dt->name->mt;
     newentry = jl_typemap_alloc(jl_anytuple_type, NULL, jl_emptysvec,
             (jl_value_t*)mi, 1, ~(size_t)0);
-    jl_typemap_insert(&mt->cache, (jl_value_t*)mt, newentry, 0, &lambda_cache);
+    jl_typemap_insert(&mt->cache, (jl_value_t*)mt, newentry, 0);
 
     mt->frozen = 1;
     JL_GC_POP();
@@ -1090,7 +1087,7 @@ static jl_method_instance_t *cache_method(
                     guards++;
                     // alternative approach: insert sentinel entry
                     //jl_typemap_insert(cache, parent, (jl_tupletype_t*)matc->spec_types,
-                    //        NULL, jl_emptysvec, /*guard*/NULL, jl_cachearg_offset(mt), &lambda_cache, other->min_world, other->max_world);
+                    //        NULL, jl_emptysvec, /*guard*/NULL, jl_cachearg_offset(mt), other->min_world, other->max_world);
                 }
             }
         }
@@ -1165,7 +1162,7 @@ static jl_method_instance_t *cache_method(
         jl_gc_wb(mt, mt->leafcache);
     }
     else {
-         jl_typemap_insert(cache, parent, newentry, offs, &lambda_cache);
+         jl_typemap_insert(cache, parent, newentry, offs);
     }
 
     JL_GC_POP();
@@ -1641,7 +1638,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     // then add our new entry
     newentry = jl_typemap_alloc((jl_tupletype_t*)type, simpletype, jl_emptysvec,
             (jl_value_t*)method, method->primary_world, method->deleted_world);
-    jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0, &method_defs);
+    jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0);
     if (oldentry) {
         jl_method_t *m = oldentry->func.method;
         method_overwrite(newentry, m);
