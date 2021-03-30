@@ -534,7 +534,7 @@ end
 #   string that will be printed after the final basic-block annotation.
 # line_info_postprinter(io::IO, typ, used::Bool) prints the type-annotation at the end
 #   of the statement
-# pop_newnode!(idx::Int) -> (node_idx, new_node_inst, new_node_type) may return a new
+# pop_new_node!(idx::Int) -> (node_idx, new_node_inst, new_node_type) may return a new
 #   node at the current index `idx`, which is printed before the statement at index
 #   `idx`. This function is repeatedly called until it returns `nothing`
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info_preprinter, line_info_postprinter,
@@ -760,7 +760,7 @@ function show_ir(io::IO, code::IRCode, expr_type_printer=default_expr_type_print
     end
 
     for idx in 1:length(stmts)
-        bb_idx = show_ir_stmt(io, code, idx, line_info_preprinter, default_expr_type_printer,
+        bb_idx = show_ir_stmt(io, code, idx, line_info_preprinter, expr_type_printer,
                               used, cfg, bb_idx, pop_new_node!; bb_color=:normal)
     end
     nothing
