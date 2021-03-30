@@ -1,5 +1,5 @@
 """
-    Slices{N,P,SM,AX,S} <: AbstractArray{S,N}
+    Slices{P,SM,AX,S,N} <: AbstractArray{S,N}
 
 An `AbstractArray` of slices into a parent array.
 
@@ -8,7 +8,7 @@ These should typically be constructed by [`eachslice`](@ref), [`eachcol`](@ref) 
 
 [`parent(S::Slices)`](@ref) will return the parent array.
 """
-struct Slices{N,P,SM,AX,S} <: AbstractArray{S,N}
+struct Slices{P,SM,AX,S,N} <: AbstractArray{S,N}
     """
     Parent array
     """
@@ -27,9 +27,10 @@ end
 
 unitaxis(::AbstractArray) = Base.OneTo(1)
 
-function Slices{N}(A::P, slicemap::SM, ax::AX) where {N,P,SM,AX}
+function Slices(A::P, slicemap::SM, ax::AX) where {P,SM,AX}
+    N = length(ax)
     S = Base._return_type(view, Tuple{P, map((a,l) -> l === (:) ? Colon : eltype(a), axes(A), slicemap)...})
-    Slices{N,P,SM,AX,S}(A, slicemap, ax)
+    Slices{P,SM,AX,S,N}(A, slicemap, ax)
 end
 
 _slice_check_dims(N) = nothing
@@ -47,14 +48,14 @@ end
         # slicemap = (2, :, 1, :)
         ax = map(dim -> axes(A,dim), dims)
         slicemap = ntuple(dim -> something(findfirst(isequal(dim), dims), (:)), N)
-        return Slices{M}(A, slicemap, ax)
+        return Slices(A, slicemap, ax)
     else
         # if N = 4, dims = (3,1) then
         # axes = (axes(A,1), OneTo(1), axes(A,3), OneTo(1))
         # slicemap = (1, :, 3, :)
         ax = ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N)
         slicemap = ntuple(dim -> dim in dims ? dim : (:), N)
-        return Slices{N}(A, slicemap, ax)
+        return Slices(A, slicemap, ax)
     end
 end
 @inline function _eachslice(A::AbstractArray{T,N}, dim::Integer, drop::Bool) where {T,N}
@@ -103,7 +104,7 @@ julia> S[1]
  3
 
 julia> T = eachslice(M,dims=1,drop=false)
-3×1 Slices{2, Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+3×1 Slices{Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}, 2}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
@@ -192,7 +193,7 @@ constructed by [`eachrow`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const Rows{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{1,P,Tuple{Int,Colon},AX,S}
+const Rows{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Int,Colon},AX,S,1}
 
 """
     Columns{M,AX,S}
@@ -202,10 +203,10 @@ constructed by [`eachcol`](@ref).
 
 [`parent(S)`](@ref) can be used to get the underlying matrix.
 """
-const Columns{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{1,P,Tuple{Colon,Int},AX,S}
+const Columns{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Colon,Int},AX,S,1}
 
 
-IteratorSize(::Type{S}) where {S<:Slices{N}} where {N} = HasShape{N}()
+IteratorSize(::Type{Slices{P,SM,AX,S,N}}) where {P,SM,AX,S,N} = HasShape{N}()
 axes(s::Slices) = s.axes
 size(s::Slices) = map(length, s.axes)
 
@@ -213,7 +214,9 @@ size(s::Slices) = map(length, s.axes)
     return map(l -> l === (:) ? (:) : c[l], s.slicemap)
 end
 
-getindex(s::Slices{N}, I::Vararg{Int,N}) where {N} = view(s.parent, _slice_index(s, I...)...)
-setindex!(s::Slices{N}, val, I::Vararg{Int,N}) where {N} = s.parent[_slice_index(s, I...)...] = val
+getindex(s::Slices{P,SM,AX,S,N}, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
+    view(s.parent, _slice_index(s, I...)...)
+setindex!(s::Slices{P,SM,AX,S,N}, val, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
+    s.parent[_slice_index(s, I...)...] = val
 
 parent(s::Slices) = s.parent
