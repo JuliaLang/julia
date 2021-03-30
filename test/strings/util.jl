@@ -102,6 +102,9 @@ end
     @test split(",", ',' ; keepempty=false) == []
     @test split(",,", ','; keepempty=false) == []
 
+    @test split("", "//") == [""]
+    @test split("", "///") == [""]
+
     @test split("a b c") == ["a","b","c"]
     @test split("a  b \t c\n") == ["a","b","c"]
     @test split("α  β \u2009 γ\n") == ["α","β","γ"]
@@ -127,6 +130,9 @@ end
     @test rsplit("", ','  ; keepempty=false) == []
     @test rsplit(",", ',' ; keepempty=false) == []
     @test rsplit(",,", ','; keepempty=false) == []
+
+    @test rsplit("", "//") == [""]
+    @test rsplit("", "///") == [""]
 
     @test rsplit("a b c") == ["a","b","c"]
     @test rsplit("a  b \t c\n") == ["a","b","c"]
