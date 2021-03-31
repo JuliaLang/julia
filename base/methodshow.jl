@@ -35,11 +35,11 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
     end
     if isvarargtype(t)
         if !isdefined(t, :N)
-            if unwrapva(t) === Any
-                return string(s, "..."), ""
-            else
+            # if unwrapva(t) === Any # ???
+            #     return string(s, "..."), ""
+            # else
                 return s, string_with_env(env, unwrapva(t)) * "..."
-            end
+            # end
         end
         return s, string_with_env(env, "Vararg{", t.T, ", ", t.N, "}")
     end
@@ -211,12 +211,16 @@ function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width =
     for (i,d) in enumerate(decls[2:end])
         printstyled(io, d[1], color=:light_black)
         if isempty(d[2])
-            print(io, "::Any") # ?? gets "xs...::Any" wrong!
+            print(io, "::Any") # ?? 
+            # printstyled(io, "::Any", color=:bold) # ?? 
+        elseif d[2] == "Any..."
+            print(io, "::Any")
+            printstyled(io, "...", color=:bold)
         else
             print(io, "::")
-            print_type_stacktrace(io, d[2])
+            print_type_bicolor(io, d[2], color=:bold, inner_color=:normal)
         end
-        i < length(decls)-1 && printstyled(io, ", ", color=:light_black)
+        i < length(decls)-1 && print(io, ", ") # printstyled(io, ", ", color=:light_black)
     end
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
