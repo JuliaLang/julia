@@ -2692,3 +2692,11 @@ macro m_nospecialize_unnamed_hygiene()
 end
 
 @test @m_nospecialize_unnamed_hygiene()(1) === Any
+
+# issue 40258
+@test "a $("b $("c")")" == "a b c"
+
+@test "$(([[:a, :b], [:c, :d]]...)...)" == "abcd"
+
+@test eval(Expr(:string, "a", Expr(:string, "b", "c"))) == "abc"
+@test eval(Expr(:string, "a", Expr(:string, "b", Expr(:string, "c")))) == "abc"
