@@ -17,5 +17,5 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
     return A + B
 end
 
-# CHECK: attributes #{{[0-9]+}} = {{{([a-z]+ )*}} noinline {{([a-z]+ )*}}}
+# CHECK: attributes #{{[0-9]+}} = {{{[^}]*}} noinline {{[^}]*}}}
 emit(simple_noinline, Float64, Float64)
