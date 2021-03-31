@@ -2752,6 +2752,18 @@ end
 @test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
 @test_throws ErrorException("syntax: Slot objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
 
+macro m_underscore_hygiene()
+    return :(_ = 1)
+end
+
+@test @macroexpand(@m_underscore_hygiene()) == :(_ = 1)
+
+macro m_begin_hygiene(a)
+    return :($(esc(a))[begin])
+end
+
+@test @m_begin_hygiene([1, 2, 3]) == 1
+
 # issue 40258
 @test "a $("b $("c")")" == "a b c"
 
