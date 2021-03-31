@@ -219,8 +219,8 @@ function instance(f, types)
     if isa(specs, Nothing)
     elseif isa(specs, Core.SimpleVector)
         for i = 1:length(specs)
-            if isassigned(specs, i)
-                mi = specs[i]::Core.MethodInstance
+            mi = specs[i]
+            if mi isa Core.MethodInstance
                 if mi.specTypes <: tt && tt <: mi.specTypes
                     inst = mi
                     break
