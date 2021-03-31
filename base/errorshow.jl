@@ -552,13 +552,6 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
-function replaceuserpath(str)
-    str = replace(str, homedir() => "~")
-    # seems to be necessary for some paths with small letter drive c:// etc
-    str = replace(str, lowercasefirst(homedir()) => "~")
-    return str
-end
-
 const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
@@ -698,7 +691,7 @@ end
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
-    stacktrace_contract_userdir() && (file = replaceuserpath(file))
+    stacktrace_contract_userdir() && (file = contractuser(file))
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
