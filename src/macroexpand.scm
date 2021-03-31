@@ -324,7 +324,7 @@
    m parent-scope inarg))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
-  (cond ((or (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
+  (cond ((or (eq? e 'begin) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal) (underscore-symbol? e))
          e)
         ((symbol? e)
          (let ((a (assq e env)))
