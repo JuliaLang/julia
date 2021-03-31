@@ -2763,3 +2763,11 @@ macro m_begin_hygiene(a)
 end
 
 @test @m_begin_hygiene([1, 2, 3]) == 1
+
+# issue 40258
+@test "a $("b $("c")")" == "a b c"
+
+@test "$(([[:a, :b], [:c, :d]]...)...)" == "abcd"
+
+@test eval(Expr(:string, "a", Expr(:string, "b", "c"))) == "abc"
+@test eval(Expr(:string, "a", Expr(:string, "b", Expr(:string, "c")))) == "abc"
