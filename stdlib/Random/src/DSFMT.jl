@@ -196,14 +196,14 @@ function dsfmt_jump(s::DSFMT_state, jp::GF2X)
     dsfmt = Vector{UInt64}(undef, nval >> 1)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
           dsfmt, val, (nval - 1) * sizeof(Int32))
-    dsfmt[end] = UInt64(N*2)
+    last!(dsfmt, UInt64(N*2))
 
     for i in 0:degree(jp)
         coeff(jp, i) && dsfmt_jump_add!(rwork, dsfmt)
         dsfmt_jump_next_state!(dsfmt)
     end
 
-    rwork[end] = index
+    last!(rwork, index)
     return DSFMT_state(work)
 end
 

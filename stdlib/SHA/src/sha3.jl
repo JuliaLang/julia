@@ -65,14 +65,14 @@ function digest!(context::T) where {T<:SHA3_CTX}
         # Fill with zeros up until the last byte
         context.buffer[usedspace+2:end-1] .= 0x00
         # Finish it off with a 0x80
-        context.buffer[end] = 0x80
+        last!(context.buffer, 0x80)
     else
         # Otherwise, we have to add on a whole new buffer just for the zeros and 0x80
-        context.buffer[end] = 0x06
+        last!(context.buffer, 0x06)
         transform!(context)
 
         context.buffer[1:end-1] = 0x0
-        context.buffer[end] = 0x80
+        last!(context.buffer, 0x80)
     end
 
     # Final transform:

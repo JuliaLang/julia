@@ -521,7 +521,7 @@ function SparseMatrixCSC{Tv,Ti}(T::Tridiagonal) where {Tv,Ti}
     @inbounds for i=1:m-1
         colptr[i+1] = 3i
     end
-    colptr[end] = 3m-1
+    last!(colptr, 3m-1)
 
     rowval = Vector{Ti}(undef, 3m-2)
     rowval[1] = 1
@@ -530,7 +530,7 @@ function SparseMatrixCSC{Tv,Ti}(T::Tridiagonal) where {Tv,Ti}
         rowval[3i+j-2] = i+j
     end
     rowval[end-1] = m - 1
-    rowval[end] = m
+    last!(rowval, m)
 
     nzval = Vector{Tv}(undef, 3m-2)
     @inbounds for i=1:(m-1)
@@ -551,7 +551,7 @@ function SparseMatrixCSC{Tv,Ti}(T::SymTridiagonal) where {Tv,Ti}
     @inbounds for i=1:m-1
         colptr[i+1] = 3i
     end
-    colptr[end] = 3m-1
+    last!(colptr, 3m-1)
 
     rowval = Vector{Ti}(undef, 3m-2)
     rowval[1] = 1
@@ -560,7 +560,7 @@ function SparseMatrixCSC{Tv,Ti}(T::SymTridiagonal) where {Tv,Ti}
         rowval[3i+j-2] = i+j
     end
     rowval[end-1] = m - 1
-    rowval[end] = m
+    last!(rowval, m)
 
     nzval = Vector{Tv}(undef, 3m-2)
     @inbounds for i=1:(m-1)
@@ -582,14 +582,14 @@ function SparseMatrixCSC{Tv,Ti}(B::Bidiagonal) where {Tv,Ti}
     @inbounds for i=1:m-1
         colptr[i+1] = B.uplo == 'U' ? 2i : 2i+1
     end
-    colptr[end] = 2m
+    last!(colptr, 2m)
 
     rowval = Vector{Ti}(undef, 2m-1)
     @inbounds for i=1:m-1
         rowval[2i-1] = i
         rowval[2i]   = B.uplo == 'U' ? i : i+1
     end
-    rowval[end] = m
+    last!(rowval, m)
 
     nzval = Vector{Tv}(undef, 2m-1)
     nzval[1] = B.dv[1]

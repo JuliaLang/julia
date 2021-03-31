@@ -940,7 +940,7 @@ function Base._sum(A::Bidiagonal, dims::Integer)
             for i = 1:length(A.dv)-1
                 res[i] = A.ev[i] + A.dv[i]
             end
-            res[end] = A.dv[end]
+            last!(res, A.dv[end])
         elseif dims >= 3
             if A.uplo == 'U'
                 for i = 1:length(A.dv)-1

@@ -2505,7 +2505,7 @@ empty_undo(s) = nothing
 
 function push_undo(s::PromptState, advance::Bool=true)
     resize!(s.undo_buffers, s.undo_idx)
-    s.undo_buffers[end] = copy(s.input_buffer)
+    last!(s.undo_buffers, copy(s.input_buffer))
     advance && (s.undo_idx += 1)
     nothing
 end
