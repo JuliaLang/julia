@@ -302,7 +302,8 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == boundscheck_sym) {
         return jl_true;
     }
-    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym) {
+    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym ||
+             head == aliasscope_sym || head == popaliasscope_sym) {
         return jl_nothing;
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {
