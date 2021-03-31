@@ -1233,6 +1233,13 @@ end
     @test_throws ArgumentError last(itr, -6)
 end
 
+@testset "mutation of first/last element of $(typeof(itr))" for itr in ([1, 2, 3],
+                                                                        [1 4 7; 2 5 8; 3 6 9])
+
+    @test first(first!(itr, 0)) == 0
+    @test last(last!(itr, 0)) == 0
+end
+
 @testset "Base.rest" begin
     a = reshape(1:4, 2, 2)'
     @test Base.rest(a) == a[:]

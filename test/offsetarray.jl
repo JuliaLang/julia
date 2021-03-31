@@ -651,6 +651,13 @@ end
     @test last(v, 1) == [v[end]]
 end
 
+@testset "mutation of first/last element of offset vector"  begin
+    v0 = rand(6)
+    v = OffsetArray(v0, (-3,))
+    @test first(first!(v, 0)) == 0
+    @test last(last!(v, 0)) == 0
+end
+
 @testset "Resizing OffsetVectors" begin
     local a = OffsetVector(rand(5),-3)
     axes(a,1) == -2:2

@@ -419,6 +419,29 @@ function first(v::AbstractVector, n::Integer)
 end
 
 """
+    first!(coll, val)
+
+Set the first element of a mutable iterable collection.
+
+!!! compat "Julia 1.7"
+    This method requires at least Julia 1.7.
+
+# Examples
+```jldoctest
+julia> first!([1, 2], 0)
+2-element Vector{Int64}:
+ 0
+ 2
+
+julia> first!([1 2; 3 4], 0)
+2×2 Matrix{Int64}:
+ 0  2
+ 3  4
+```
+"""
+first!(itr, val) = itr[begin] = val
+
+"""
     last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
@@ -465,6 +488,29 @@ function last(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
     @inbounds v[max(begin, end - n + 1):end]
 end
+
+"""
+    last!(destination, collection)
+
+Set the last element of a mutable iterable collection.
+
+!!! compat "Julia 1.7"
+    This method requires at least Julia 1.7.
+
+# Examples
+```jldoctest
+julia> last!([1, 2], 0)
+2-element Vector{Int64}:
+ 1
+ 0
+
+julia> last!([1 2; 3 4], 0)
+2×2 Matrix{Int64}:
+ 1  2
+ 3  0
+```
+"""
+last!(itr, val) = itr[end] = val
 
 """
     strides(A)
