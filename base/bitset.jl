@@ -140,7 +140,7 @@ function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
         _growend!(s.bits, diffb - len + 1)
         # we set only some values to CHK0, those which will not be
         # fully overwritten (i.e. only or'ed with `|`)
-        s.bits[end] = CHK0 # end == diffb + 1
+        last!(s.bits, CHK0) # end == diffb + 1
         if diffa >= len
             s.bits[diffa + 1] = CHK0
         end

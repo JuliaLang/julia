@@ -48,7 +48,7 @@ function summarysize(obj;
             end
         end
         if nf > i
-            ss.frontier_i[end] = i + 1
+            last!(ss.frontier_i, i + 1)
         else
             pop!(ss.frontier_x)
             pop!(ss.frontier_i)

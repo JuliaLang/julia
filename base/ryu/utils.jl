@@ -324,8 +324,8 @@ function generateinversetables()
             i += 1
         end
     end
-    POW10_OFFSET_2[end] = length(POW10_SPLIT_2)
-    MIN_BLOCK_2[end] = 0x00
+    last!(POW10_OFFSET_2, length(POW10_SPLIT_2))
+    last!(MIN_BLOCK_2, 0x00)
 
     return POW10_OFFSET_2, MIN_BLOCK_2, POW10_SPLIT_2
 end

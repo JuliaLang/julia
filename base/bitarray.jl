@@ -35,7 +35,7 @@ mutable struct BitArray{N} <: AbstractArray{Bool, N}
         end
         nc = num_bit_chunks(n)
         chunks = Vector{UInt64}(undef, nc)
-        nc > 0 && (chunks[end] = UInt64(0))
+        nc > 0 && last!(chunks, UInt64(0))
         b = new(chunks, n)
         N != 1 && (b.dims = dims)
         return b
@@ -521,7 +521,7 @@ function BitArray{N}(A::AbstractArray{T,N}) where N where T
             c |= (UInt64(convert(Bool, A[ind])::Bool) << j)
             ind += 1
         end
-        Bc[end] = c
+        last!(Bc, c)
     end
     return B
 end
@@ -754,11 +754,11 @@ function push!(B::BitVector, item)
     l = _mod64(length(B))
     if l == 0
         _growend!(Bc, 1)
-        Bc[end] = UInt64(0)
+        last!(Bc, UInt64(0))
     end
     B.len += 1
     if item
-        B[end] = true
+        last!(B, true)
     end
     return B
 end
@@ -772,7 +772,7 @@ function append!(B::BitVector, items::BitVector)
     k1 = num_bit_chunks(n0 + n1)
     if k1 > k0
         _growend!(Bc, k1 - k0)
-        Bc[end] = UInt64(0)
+        last!(Bc, UInt64(0))
     end
     B.len += n1
     copy_chunks!(Bc, n0+1, items.chunks, 1, n1)
@@ -791,7 +791,7 @@ function prepend!(B::BitVector, items::BitVector)
     k1 = num_bit_chunks(n0 + n1)
     if k1 > k0
         _growend!(Bc, k1 - k0)
-        Bc[end] = UInt64(0)
+        last!(Bc, UInt64(0))
     end
     B.len += n1
     copy_chunks!(Bc, 1 + n1, Bc, 1, n0)
@@ -821,7 +821,7 @@ function _resize_int!(B::BitVector, n::Int)
     k1 = num_bit_chunks(n)
     if k1 > k0
         _growend!(Bc, k1 - k0)
-        Bc[end] = UInt64(0)
+        last!(Bc, UInt64(0))
     end
     B.len = n
     return B
@@ -830,7 +830,7 @@ end
 function pop!(B::BitVector)
     isempty(B) && throw(ArgumentError("argument must not be empty"))
     item = B[end]
-    B[end] = false
+    last!(B, false)
 
     l = _mod64(length(B))
     l == 1 && _deleteend!(B.chunks, 1)
@@ -847,7 +847,7 @@ function pushfirst!(B::BitVector, item)
     l = _mod64(length(B))
     if l == 0
         _growend!(Bc, 1)
-        Bc[end] = UInt64(0)
+        last!(Bc, UInt64(0))
     end
     B.len += 1
     if B.len == 1
@@ -898,7 +898,7 @@ function _insert_int!(B::BitVector, i::Int, item)
     l = _mod64(length(B))
     if l == 0
         _growend!(Bc, 1)
-        Bc[end] = UInt64(0)
+        last!(Bc, UInt64(0))
     end
     B.len += 1
 
