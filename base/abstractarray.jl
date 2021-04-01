@@ -391,7 +391,7 @@ end
 """
     first(itr, n::Integer)
 
-Get the first `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
+Get the first `n` elements of the iterable collection `itr`, or fewer elements if `itr` is not
 long enough.
 
 !!! compat "Julia 1.6"
@@ -439,7 +439,7 @@ last(a) = a[end]
 """
     last(itr, n::Integer)
 
-Get the last `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
+Get the last `n` elements of the iterable collection `itr`, or fewer elements if `itr` is not
 long enough.
 
 !!! compat "Julia 1.6"
