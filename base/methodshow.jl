@@ -202,7 +202,8 @@ function show(io::IO, m::Method)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
-        print(io, m.name, "(...) in ", m.module)
+        print(io, m.name, "(...) in ")
+        show(io, m.module)
         return
     end
     print(io, decls[1][2], "(")
@@ -219,7 +220,8 @@ function show(io::IO, m::Method)
     end
     print(io, ")")
     show_method_params(io, tv)
-    print(io, " in ", m.module)
+    print(io, " in ")
+    show(io, m.module)
     if line > 0
         file, line = updated_methodloc(m)
         print(io, " at ", file, ":", line)
@@ -352,7 +354,8 @@ function show(io::IO, ::MIME"text/html", m::Method)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
-        print(io, m.name, "(...) in ", m.module)
+        print(io, m.name, "(...) in ")
+        show(io, m.module)
         return
     end
     print(io, decls[1][2], "(")
@@ -376,7 +379,8 @@ function show(io::IO, ::MIME"text/html", m::Method)
         show_method_params(io, tv)
         print(io,"</i>")
     end
-    print(io, " in ", m.module)
+    print(io, " in ")
+    show(io, m.module)
     if line > 0
         file, line = updated_methodloc(m)
         u = url(m)

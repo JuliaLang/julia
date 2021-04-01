@@ -11,9 +11,6 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
-# For curmod_*
-include("testenv.jl")
-
 @test length(methods(ambig)) == 5
 @test length(Base.methods_including_ambiguous(ambig, Tuple)) == 5
 
@@ -40,9 +37,9 @@ let err = try
     io = IOBuffer()
     Base.showerror(io, err)
     lines = split(String(take!(io)), '\n')
-    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Number, y) in $curmod_str at")
+    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in ") ||
+                           startswith(str, "  ambig(x::Integer, y) in ") ||
+                           startswith(str, "  ambig(x::Number, y) in ")
     @test ambig_checkline(lines[2])
     @test ambig_checkline(lines[3])
     @test ambig_checkline(lines[4])

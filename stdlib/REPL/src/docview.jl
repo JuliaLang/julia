@@ -314,7 +314,9 @@ function summarize(io::IO, TT::Type, binding::Binding)
 end
 
 function summarize(io::IO, m::Module, binding::Binding)
-    println(io, "No docstring found for module `", m, "`.\n")
+    print(io, "No docstring found for module `")
+    show(io, m)
+    println(io, "`.\n")
     exports = filter!(!=(nameof(m)), names(m))
     if isempty(exports)
         println(io, "Module does not export any names.")
