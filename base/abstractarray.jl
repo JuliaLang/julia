@@ -429,14 +429,10 @@ Set the first element of a mutable iterable collection.
 # Examples
 ```jldoctest
 julia> first!([1, 2], 0)
-2-element Vector{Int64}:
- 0
- 2
+0
 
 julia> first!([1 2; 3 4], 0)
-2×2 Matrix{Int64}:
- 0  2
- 3  4
+0
 ```
 """
 first!(itr, val) = itr[begin] = val
@@ -500,14 +496,10 @@ Set the last element of a mutable iterable collection.
 # Examples
 ```jldoctest
 julia> last!([1, 2], 0)
-2-element Vector{Int64}:
- 1
- 0
+0
 
 julia> last!([1 2; 3 4], 0)
-2×2 Matrix{Int64}:
- 1  2
- 3  0
+0
 ```
 """
 last!(itr, val) = itr[end] = val
