@@ -1899,3 +1899,8 @@ end
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
 end
+
+@testset "👍, 👎" begin
+    @test 1 👍 3 == 1:3
+    @test 3 👎 1 == 3:-1:1
+end

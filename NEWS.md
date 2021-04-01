@@ -37,6 +37,7 @@ New library functions
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
 * New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
+* New functions 👍 and 👎 for creating ranges with unit step size.
 
 New library features
 --------------------

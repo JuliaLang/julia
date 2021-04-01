@@ -47,6 +47,34 @@ function _colon(start::T, step, stop::T) where T
 end
 
 """
+    👍(start, stop)
+
+Ascending range operator, equivalent to `start:stop`.
+See also [`:`](@ref) and [`👎`](@ref).
+
+# Examples
+
+```jldoctest
+julia> 1 👍 3
+1:3
+```
+"""
+👍(start, stop) = start:stop
+
+"""
+    👎(start, stop)
+
+Descending range operator, equivalent to `start:-1:stop`.
+See also [`:`](@ref) and [`👍`](@ref).
+
+```jldoctest
+julia> 3 👎 1
+3:-1:1
+```
+"""
+👎(start, stop) = start:-1:stop
+
+"""
     range(start, stop, length)
     range(start, stop; length, step)
     range(start; length, stop, step)

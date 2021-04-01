@@ -197,6 +197,8 @@ export
     :,
     =>,
     ∘,
+    👍,
+    👎,
 
 # scalar math
     @evalpoly,
