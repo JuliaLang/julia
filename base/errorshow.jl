@@ -892,3 +892,16 @@ function show(io::IO, ip::InterpreterIP)
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
     end
 end
+
+# handler for displaying a hint in case the user tries to call
+# the instance of a number(misses out hte operator)
+# eg: (1 + 2)(3 + 4)
+function sym_hint_handler(io, ex, arg_types, kwargs)
+    if ex.f isa Number
+        print(io, "\nMaybe you forgot to use an operator such as ")
+        printstyled(io, "*, ^, %, / etc. ", color=:cyan)
+        print(io, "?")
+    end
+end
+
+Base.Experimental.register_error_hint(sym_hint_handler, MethodError)
