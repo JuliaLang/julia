@@ -1280,3 +1280,8 @@ end
     @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
     @test_throws ArgumentError Int[t...; 3 4 5]
 end
+
+@testset "reduce(vcat, ...) inferrence #40277" begin
+    x_vecs = ([5, ], [1.0, 2.0, 3.0])
+    @test @inferred(reduce(vcat, x_vecs)) == [5.0, 1.0, 2.0, 3.0]
+end
