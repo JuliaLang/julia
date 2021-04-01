@@ -465,7 +465,7 @@ sum(A::AbstractArray; dims)
     sum(f, A::AbstractArray; dims)
 
 Sum the results of calling function `f` on each element of an array over the given
-dimensions.
+dimensions. In the below examples, `f` is the [`abs2`](@ref) function.
 
 # Examples
 ```jldoctest
@@ -538,7 +538,7 @@ prod(A::AbstractArray; dims)
     prod(f, A::AbstractArray; dims)
 
 Multiply the results of calling the function `f` on each element of an array over the given
-dimensions.
+dimensions. In the below examples, `f` is the [`abs2`](@ref) function.
 
 # Examples
 ```jldoctest
@@ -688,7 +688,7 @@ minimum(A::AbstractArray; dims)
     minimum(f, A::AbstractArray; dims)
 
 Compute the minimum value from of calling the function `f` on each element of an array over the given
-dimensions.
+dimensions. In the below examples, `f` is the [`abs2`](@ref) function.
 
 # Examples
 ```jldoctest
