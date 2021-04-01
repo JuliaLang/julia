@@ -10,11 +10,14 @@ module Broadcast
 using .Base.Cartesian
 using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, @pure,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
-import .Base: copy, copyto!, axes
+import .Base: copy, copyto!, axes, getindex
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, broadcast_preserving_zero_d, BroadcastFunction
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
+
+### Orthoganol broadcast f[X,Y,Z]
+getindex(f::Function, args...) = broadcast(Base.splat(f), Iterators.product(args...))
 
 ### Objects with customized broadcasting behavior should declare a BroadcastStyle
 

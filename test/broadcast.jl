@@ -1015,3 +1015,11 @@ end
         @test a_ == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
     end
 end
+
+@testset "indexing is orthoganol broadcasted function evaluation" begin
+    @test (+)[1:10, 1:10] == (1:10) .+ transpose(1:10)
+    @test (*)[.1:.1:1, 1:10] == (.1:.1:1) .* transpose(1:10)
+    @test sin[[pi,-pi,0]] == sin.([pi, -pi, 0])
+    A = rand(3, 4)
+    @test tuple[1:2, A] == tuple.(1:2, reshape(A, 1, 3, 4))
+end

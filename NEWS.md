@@ -6,6 +6,8 @@ New language features
 
 * `(; a, b) = x` can now be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
   and similarly for `b`. ([#39285])
+* `f[A, B, Cs...]` can now be used to evaluate the function `f` over the cartesian product of the arguments `A, B, Cs...` akin
+  to how indexing behaves. ([#])
 
 Language changes
 ----------------

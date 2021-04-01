@@ -922,6 +922,15 @@ julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
  true
 ```
 
+## [Function calls with orthogonal indexing](@id man-orthogonal-functions)
+
+Just as indexing into an array computes the orthogonal (cartesian) product of the indices to
+evaluate for [non scalar indexing](@ref man-indexing), the indexing syntax `f[A, B, C...]` may
+be used to evaluate the function `f` over the orthogonal product the arguments `A, B, C...`.
+
+This is the beautiful combination of indexing and broadcast in one succinct syntax.
+
+
 ## Further Reading
 
 We should mention here that this is far from a complete picture of defining functions. Julia has
