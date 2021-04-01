@@ -663,4 +663,6 @@ $(eval $(call bb-install,llvm,LLVM,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 
+install-clang install-llvm-tools: install-llvm
+
 endif # USE_BINARYBUILDER_LLVM
