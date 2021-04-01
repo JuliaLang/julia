@@ -2274,7 +2274,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
         first || print(io, ", ")
         first = false
         if show_argnames
-            print_within_stacktrace(io, argnames[i]; color=:light_black)
+            print_within_stacktrace(io, argnames[i]; color=stacktrace_line_color())
         end
         print(io, "::")
         print_type_stacktrace(env_io, sig[i])
@@ -2285,7 +2285,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
         for (k, t) in kwargs
             first || print(io, ", ")
             first = false
-            print_within_stacktrace(io, k; color=:light_black)
+            print_within_stacktrace(io, k; color=stacktrace_line_color())
             print(io, "::")
             print_type_stacktrace(io, t)
         end
@@ -2302,7 +2302,7 @@ function print_type_stacktrace(io, type; color=:normal)
         printstyled(io, str; color=color)
     else
         printstyled(io, str[1:prevind(str,i)]; color=color)
-        printstyled(io, str[i:end]; color=:light_black)
+        printstyled(io, str[i:end]; color=stacktrace_line_color())
     end
 end
 
