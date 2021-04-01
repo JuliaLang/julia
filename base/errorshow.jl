@@ -319,6 +319,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
+    Experimental.register_error_hint(sym_hint_handler, MethodError)
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
