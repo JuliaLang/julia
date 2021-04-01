@@ -210,7 +210,8 @@
         ((atom? v) '())
         (else
          (case (car v)
-           ((... kw |::| =) (try-arg-name (cadr v)))
+           ((|::|) (if (length= v 2) '() (try-arg-name (cadr v))))
+           ((... kw =) (try-arg-name (cadr v)))
            ((escape) (list v))
            ((hygienic-scope) (try-arg-name (cadr v)))
            ((meta)  ;; allow certain per-argument annotations
