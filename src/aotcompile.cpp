@@ -54,7 +54,6 @@
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
-
 using namespace llvm;
 
 // our passes
@@ -181,10 +180,12 @@ static void emit_offset_table(Module &mod, const std::vector<GlobalValue*> &vars
         addrs[i] = ConstantExpr::getBitCast(var, T_psize);
     }
     ArrayType *vars_type = ArrayType::get(T_psize, nvars);
-    new GlobalVariable(mod, vars_type, true,
+    GlobalVariable *GV =
+        new GlobalVariable(mod, vars_type, true,
                        GlobalVariable::ExternalLinkage,
                        ConstantArray::get(vars_type, addrs),
                        name);
+    GV->setSection(JL_SYSIMG_LINK_SECTION);
 }
 
 static bool is_safe_char(unsigned char c)
@@ -276,6 +277,34 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     *ci_out = codeinst;
 }
 
+extern FunctionType *jl_func_sig;
+
+StringRef lookup_sysimage_fname(void *ptr, jl_code_instance_t *codeinst)
+{
+    if (ptr == (void*)&jl_fptr_args) {
+        return "jl_fptr_args";
+    } else if (ptr == (void*)&jl_fptr_sparam) {
+        return "jl_fptr_sparam";
+    } else if (ptr == (void*)&jl_fptr_const_return) {
+        return "jl_fptr_const_return";
+    }
+    return jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)ptr, codeinst);
+}
+
+extern Type *T_pjlvalue;
+static void add_gv(void *ctx, void *mod, jl_value_t **gv_slot)
+{
+    jl_codegen_params_t *params = (jl_codegen_params_t*)ctx;
+    Module *M = (Module *)mod;
+
+    GlobalVariable* &lgv = params->globals[*gv_slot];
+    assert(!lgv);
+    lgv = new GlobalVariable(*M, T_pjlvalue,
+                            false, GlobalVariable::PrivateLinkage,
+                            NULL, jl_ExecutionEngine->getGlobalAtAddress((uintptr_t)gv_slot));
+    lgv->setExternallyInitialized(true);
+}
+
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
@@ -301,6 +330,10 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     if (policy == CompilationPolicy::ImagingMode)
         imaging_mode = 1;
     std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
+
+    if (jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED) {
+        jl_foreach_sysimg_gvar_slot(add_gv, (void*)&params, (void*)clone.get());
+    }
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_world_counter };
@@ -330,6 +363,22 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = NULL;
                 jl_ci_cache_lookup(cgparams, mi, params.world, &codeinst, &src);
+                if (codeinst) {
+                    jl_llvm_functions_t fnames = {
+                        lookup_sysimage_fname((void*)codeinst->invoke, codeinst).str(),
+                        codeinst->specptr.fptr ?
+                            lookup_sysimage_fname(codeinst->specptr.fptr, codeinst).str() :
+                            "",
+                    };
+                    if (fnames.functionObject.rfind("jsys", 0) != 0 &&
+                        fnames.specFunctionObject.rfind("jsys", 0) != 0) {
+                        // Skip things already in the sysimage, we'll pick it up
+                        // from there.
+                        std::unique_ptr<Module> no_module(nullptr);
+                        emitted[codeinst] = std::make_tuple(std::move(no_module), fnames);
+                        continue;
+                    }
+                }
                 if (src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
@@ -356,11 +405,28 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
     for (auto &def : emitted) {
-        jl_merge_module(clone.get(), std::move(std::get<0>(def.second)));
         jl_code_instance_t *this_code = def.first;
         jl_llvm_functions_t decls = std::get<1>(def.second);
         StringRef func = decls.functionObject;
         StringRef cfunc = decls.specFunctionObject;
+        if (std::get<0>(def.second))
+            jl_merge_module(clone.get(), std::move(std::get<0>(def.second)));
+        else {
+            // TODO: Probably wait until all other modules were merged
+            // TODO: These signatures aren't actually right, but it's not worth
+            // trying to compute signatures for these. Maybe declare them as
+            // void* global variables instead and have jl_merge_module know
+            // how to merge them if it comes to it?
+            assert(!func.empty());
+            Function::Create(jl_func_sig,
+                GlobalVariable::ExternalLinkage,
+                func, clone.get());
+            if (!cfunc.empty()) {
+                Function::Create(jl_func_sig,
+                    GlobalVariable::ExternalLinkage,
+                    cfunc, clone.get());
+            }
+        }
         uint32_t func_id = 0;
         uint32_t cfunc_id = 0;
         if (func == "jl_fptr_args") {
@@ -368,6 +434,9 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
         }
         else if (func == "jl_fptr_sparam") {
             func_id = -2;
+        }
+        else if (func == "jl_fptr_const_return") {
+            func_id = -3;
         }
         else {
             data->jl_sysimg_fvars.push_back(cast<Function>(clone->getNamedValue(func)));
@@ -389,8 +458,10 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     // and set them to be internalized and initialized at startup
     for (auto &global : gvars) {
         GlobalVariable *G = cast<GlobalVariable>(clone->getNamedValue(global));
-        G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
-        G->setLinkage(GlobalVariable::InternalLinkage);
+        if (!G->isExternallyInitialized())
+            G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
+        G->setLinkage(GlobalVariable::ExternalLinkage);
+        G->setVisibility(GlobalVariable::HiddenVisibility);
         data->jl_sysimg_gvars.push_back(G);
     }
 
@@ -409,7 +480,10 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     if (policy == CompilationPolicy::Default) {
         for (GlobalObject &G : clone->global_objects()) {
             if (!G.isDeclaration()) {
-                G.setLinkage(Function::InternalLinkage);
+                if (G.getLinkage() != GlobalVariable::PrivateLinkage) {
+                    G.setLinkage(Function::ExternalLinkage);
+                    G.setVisibility(GlobalVariable::HiddenVisibility);
+                }
                 makeSafeName(G);
                 addComdat(&G);
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -515,10 +589,13 @@ void jl_dump_native(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
+    bool sysimg_chained = jl_options.use_sysimage_native_code ==
+        JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED;
+
     if (unopt_bc_fname)
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname || asm_fname) {
-        addOptimizationPasses(&PM, jl_options.opt_level, true, true);
+        addOptimizationPasses(&PM, jl_options.opt_level, true, true, sysimg_chained);
         addMachinePasses(&PM, TM.get());
     }
     if (bc_fname)
@@ -550,12 +627,15 @@ void jl_dump_native(void *native_code,
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
         GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(data->M.get());
-        addComdat(new GlobalVariable(*data->M,
+        GlobalVariable *jlRTLD_DEFAULT_var_pointer =
+            new GlobalVariable(*data->M,
                                      jlRTLD_DEFAULT_var->getType(),
                                      true,
                                      GlobalVariable::ExternalLinkage,
                                      jlRTLD_DEFAULT_var,
-                                     "jl_RTLD_DEFAULT_handle_pointer"));
+                                     "jl_RTLD_DEFAULT_handle_pointer");
+        jlRTLD_DEFAULT_var_pointer->setSection(JL_SYSIMG_LINK_SECTION);
+        addComdat(jlRTLD_DEFAULT_var_pointer);
     }
 
     // do the actual work
@@ -627,7 +707,7 @@ void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
-                           bool lower_intrinsics, bool dump_native)
+                           bool lower_intrinsics, bool dump_native, bool chained)
 {
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
@@ -660,7 +740,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createRemoveNIPass());
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-        if (dump_native)
+        if (dump_native && !chained)
             PM->add(createMultiVersioningPass());
 #if defined(JL_ASAN_ENABLED)
         PM->add(createAddressSanitizerFunctionPass());
@@ -695,7 +775,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass());
-    if (dump_native)
+    if (dump_native && !chained)
         PM->add(createMultiVersioningPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());

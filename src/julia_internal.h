@@ -674,6 +674,9 @@ void jl_init_debuginfo(void);
 void jl_init_thread_heap(jl_ptls_t ptls);
 void jl_init_int32_int64_cache(void);
 
+void jl_init_sysimage_chaining(void *sysimg_base, char *fname);
+void jl_foreach_sysimg_gvar_slot(void (*fptr)(void *, void *, jl_value_t **), void *ctx1, void *ctx2);
+
 void jl_teardown_codegen(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
@@ -1371,6 +1374,12 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 
 float __gnu_h2f_ieee(uint16_t param) JL_NOTSAFEPOINT;
 uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
+
+#ifdef _OS_DARWIN_
+#define JL_SYSIMG_LINK_SECTION "__DATA,__jl_sysimg_link"
+#else
+#define JL_SYSIMG_LINK_SECTION ".data.jl.sysimg_link"
+#endif
 
 #ifdef __cplusplus
 }

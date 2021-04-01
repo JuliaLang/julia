@@ -140,14 +140,23 @@ Instruction *LowerPTLS::emit_ptls_tp(Value *offset, Instruction *insertBefore) c
 
 GlobalVariable *LowerPTLS::create_aliased_global(Type *T, StringRef name) const
 {
-    // Create a static global variable and points a global alias to it so that
-    // the address is visible externally but LLVM can still assume that the
-    // address of this variable doesn't need dynamic relocation
-    // (can be accessed with a single PC-rel load).
-    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::InternalLinkage,
+#ifndef _OS_DARWIN_
+    // ELF linkers are picky about DSO-local references. Trick them by adding
+    // an extra global with the same address, but different linkage. This
+    // allows LLVM to use a PIC-rel reference, while still making the symbol
+    // available for dlsym.
+    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::WeakODRLinkage,
                                  Constant::getNullValue(T), name + ".real");
-    add_comdat(GlobalAlias::create(T, 0, GlobalVariable::ExternalLinkage,
+    GV->setVisibility(GlobalVariable::HiddenVisibility);
+    GV->setDSOLocal(true);
+    add_comdat(GlobalAlias::create(T, 0, GlobalVariable::WeakODRLinkage,
                                    name, GV, M));
+#else
+    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::CommonLinkage,
+                                 Constant::getNullValue(T), name);
+    GV->setVisibility(GlobalVariable::DefaultVisibility);
+    GV->setDSOLocal(true);
+#endif
     return GV;
 }
 
@@ -254,7 +263,7 @@ bool LowerPTLS::runOnModule(Module &_M)
     T_pint8 = T_int8->getPointerTo();
     if (imaging_mode) {
         ptls_slot = create_aliased_global(T_ptls_getter, "jl_get_ptls_states_slot");
-        ptls_offset = create_aliased_global(T_size, "jl_tls_offset");
+        ptls_offset = create_aliased_global(T_size, "jl_sysimg_tls_offset");
     }
 
     for (auto it = ptls_getter->user_begin(); it != ptls_getter->user_end();) {

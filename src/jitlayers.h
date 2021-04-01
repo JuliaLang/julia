@@ -10,6 +10,7 @@
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
+#include <llvm/Object/ObjectFile.h>
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
@@ -20,7 +21,7 @@ extern TargetMachine *jl_TargetMachine;
 extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool chained=false);
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
@@ -196,6 +197,8 @@ public:
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
+    StringRef getGlobalAtAddress(uint64_t Addr);
+    void addSysimgSymbolsByName(void *sysimg_base, llvm::object::ObjectFile *ofile);
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;

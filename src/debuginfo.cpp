@@ -734,7 +734,7 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
             std::move(SplitFile.get()));
 }
 
-static uint64_t jl_sysimage_base;
+uint64_t jl_sysimage_base;
 static jl_sysimg_fptrs_t sysimg_fptrs;
 static jl_method_instance_t **sysimg_fvars_linfo;
 static size_t sysimg_fvars_n;

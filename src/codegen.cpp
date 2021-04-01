@@ -165,13 +165,13 @@ static DataLayout &jl_data_layout = *(new DataLayout(""));
 
 // types
 static Type *T_jlvalue;
-static Type *T_pjlvalue;
+Type *T_pjlvalue;
 static Type *T_prjlvalue;
 static Type *T_ppjlvalue;
 static Type *T_pprjlvalue;
 static Type *jl_array_llvmt;
 static Type *jl_parray_llvmt;
-static FunctionType *jl_func_sig;
+FunctionType *jl_func_sig;
 static FunctionType *jl_func_sig_sparams;
 static Type *T_pvoidfunc;
 
@@ -1294,7 +1294,9 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
 {
     Value *loc;
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
-        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), "_j_const", *jl_Module);
+        GlobalVariable *gv = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), "_j_const", *jl_Module);
+        gv->setLinkage(GlobalVariable::PrivateLinkage);
+        loc = gv;
     }
     else {
         loc = emit_static_alloca(ctx, v->getType());

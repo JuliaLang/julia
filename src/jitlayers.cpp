@@ -33,6 +33,18 @@ RTDyldMemoryManager* createRTDyldMemoryManager(void);
 
 void jl_init_jit(void) { }
 
+extern "C"
+void jl_init_sysimage_chaining(void *sysimg_base, char *fname)
+{
+    auto errorobj = llvm::object::ObjectFile::createObjectFile(fname);
+    if (!errorobj) {
+        jl_error("Failed to load sysimg symbol table");
+    }
+
+    auto *theobj = errorobj->getBinary();
+    jl_ExecutionEngine->addSysimgSymbolsByName(sysimg_base, theobj);
+}
+
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
 extern "C" JL_DLLEXPORT
@@ -760,9 +772,9 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                        SectionMemoryManager::getSymbolAddressInProcess(
                            getMangledName(F->getName())))) {
                 llvm::errs() << "FATAL ERROR: "
-                             << "Symbol \"" << F->getName().str() << "\""
+                             << "Symbol \"" << F->getName().str() << "\" "
                              << "not found";
-                abort();
+            abort();
             }
         }
     }
@@ -850,6 +862,35 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
         addGlobalMapping(fname, Addr);
     }
     return fname;
+}
+
+StringRef JuliaOJIT::getGlobalAtAddress(uint64_t Addr)
+{
+    auto fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
+    assert(!fname.empty());
+    return fname;
+}
+
+void JuliaOJIT::addSysimgSymbolsByName(void *sysimg_base, llvm::object::ObjectFile *ofile)
+{
+    for (auto symbol : ofile->symbols()) {
+        if (symbol.getType().get() != llvm::object::SymbolRef::ST_Function &&
+            symbol.getType().get() != llvm::object::SymbolRef::ST_Data) {
+            continue;
+        }
+        if (symbol.getFlags().get() & llvm::object::SymbolRef::SF_Undefined) {
+            continue;
+        }
+        void *Addr = (void*)((char*)sysimg_base + symbol.getAddress().get());
+        auto &fname = ReverseLocalSymbolTable[Addr];
+        if (fname.empty()) {
+            StringRef symname = symbol.getName().get();
+            jl_sym_t *symsym = jl_symbol_n(symname.data(), symname.size());
+            fname = StringRef(jl_symbol_name(symsym), symname.size());
+            assert(!fname.empty());
+            addGlobalMapping(fname, (uintptr_t)Addr);
+        }
+    }
 }
 
 
