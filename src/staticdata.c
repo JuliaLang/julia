@@ -321,6 +321,8 @@ static jl_sysimg_fptrs_t sysimg_fptrs;
 
 static inline uintptr_t *sysimg_gvars(uintptr_t *base, size_t idx)
 {
+    if (!sysimg_gvars_offsets)
+        return ((uintptr_t **)base)[idx];
     return base + sysimg_gvars_offsets[idx] / sizeof(base[0]);
 }
 
@@ -334,10 +336,15 @@ static void jl_load_sysimg_so(void)
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
-        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base", (void **)&sysimg_gvars_base, 1);
-        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 1);
-        sysimg_gvars_offsets += 1;
-        assert(sysimg_fptrs.base);
+        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base", (void **)&sysimg_gvars_base, 0);
+        if (sysimg_gvars_base) {
+            jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 1);
+            sysimg_gvars_offsets += 1;
+            assert(sysimg_fptrs.base);
+        } else {
+            jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars", (void **)&sysimg_gvars_base, 1);
+            assert(sysimg_fptrs.values);
+        }
         uintptr_t *tls_getter_slot;
         jl_dlsym(jl_sysimg_handle, "jl_get_ptls_states_slot", (void **)&tls_getter_slot, 1);
         *tls_getter_slot = (uintptr_t)jl_get_ptls_states_getter();
@@ -1172,11 +1179,11 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
     case FunctionRef:
         switch ((jl_callingconv_t)offset) {
         case JL_API_BOXED:
-            if (sysimg_fptrs.base)
+            if (sysimg_fptrs.base || sysimg_fptrs.values)
                 return (uintptr_t)jl_fptr_args;
             JL_FALLTHROUGH;
         case JL_API_WITH_PARAMETERS:
-            if (sysimg_fptrs.base)
+            if (sysimg_fptrs.base || sysimg_fptrs.values)
                 return (uintptr_t)jl_fptr_sparam;
             return (uintptr_t)NULL;
         case JL_API_CONST:
@@ -1288,7 +1295,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
     // make these NULL now so we skip trying to restore GlobalVariable pointers later
     sysimg_gvars_base = NULL;
     sysimg_fptrs.base = NULL;
-    if (fvars.base == NULL)
+    if (fvars.base == NULL && fvars.values == NULL)
         return;
     int sysimg_fvars_max = s->fptr_record->size / sizeof(void*);
     size_t i;
@@ -1311,16 +1318,21 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             assert(jl_is_method(codeinst->def->def.method) && codeinst->invoke != jl_fptr_const_return);
             assert(specfunc ? codeinst->invoke != NULL : codeinst->invoke == NULL);
             linfos[i] = codeinst->def;
-            int32_t offset = fvars.offsets[i];
-            for (; clone_idx < fvars.nclones; clone_idx++) {
-                uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
-                if (idx < i)
-                    continue;
-                if (idx == i)
-                    offset = fvars.clone_offsets[clone_idx];
-                break;
+            void *fptr = NULL;
+            if (fvars.offsets) {
+                int32_t offset = fvars.offsets[i];
+                for (; clone_idx < fvars.nclones; clone_idx++) {
+                    uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
+                    if (idx < i)
+                        continue;
+                    if (idx == i)
+                        offset = fvars.clone_offsets[clone_idx];
+                    break;
+                }
+                fptr = (void*)(base + offset);
+            } else {
+                fptr = (void*)fvars.values[i];
             }
-            void *fptr = (void*)(base + offset);
             if (specfunc) {
                 codeinst->specptr.fptr = fptr;
                 codeinst->isspecsig = 1; // TODO: set only if confirmed to be true
