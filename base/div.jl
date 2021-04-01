@@ -5,8 +5,8 @@
 """
     div(x, y, r::RoundingMode=RoundToZero)
 
-The quotient from Euclidean division. Computes x/y, rounded to an integer according
-to the rounding mode `r`. In other words, the quantity
+The quotient from Euclidean (integer) division. Computes x/y, rounded to
+an integer according to the rounding mode `r`. In other words, the quantity
 
     round(x/y,r)
 

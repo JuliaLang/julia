@@ -803,7 +803,8 @@ const % = rem
     div(x, y)
     ÷(x, y)
 
-The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
+The quotient from Euclidean (integer) division. Generally equivalent
+to a mathematical operation x/y without a fractional part.
 
 # Examples
 ```jldoctest
