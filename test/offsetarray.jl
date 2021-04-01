@@ -235,7 +235,7 @@ targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
             "([1.0], [1.0])"]
 @testset "printing of OffsetArray with n=$n" for n = 0:4
-    a = OffsetArray(fill(1.,ntuple(d->1,n)), ntuple(identity,n))
+    a = OffsetArray(fill(1.,ntuple(Returns(1),n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
     show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))

@@ -70,6 +70,7 @@ export
     Rational,
     Regex,
     RegexMatch,
+    Returns,
     RoundFromZero,
     RoundDown,
     RoundingMode,
