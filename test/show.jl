@@ -1148,7 +1148,7 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
         """
     dz = sprint(dump, z)
     @test 10 < countlines(IOBuffer(dz)) < 40
-    @test sum(x -> 1, eachmatch(r"circular reference", dz)) == 4
+    @test sum(Returns(1), eachmatch(r"circular reference", dz)) == 4
 end
 
 # PR 16221
