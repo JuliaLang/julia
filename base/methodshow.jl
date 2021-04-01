@@ -35,11 +35,7 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
     end
     if isvarargtype(t)
         if !isdefined(t, :N)
-            # if unwrapva(t) === Any # ???
-            #     return string(s, "..."), ""
-            # else
-                return s, string_with_env(env, unwrapva(t)) * "..."
-            # end
+            return s, string_with_env(env, unwrapva(t)) * "..."
         end
         return s, string_with_env(env, "Vararg{", t.T, ", ", t.N, "}")
     end
@@ -210,17 +206,13 @@ function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width =
     # arguments
     for (i,d) in enumerate(decls[2:end])
         printstyled(io, d[1], color=:light_black)
+        print(io, "::")
         if isempty(d[2])
-            print(io, "::Any") # ?? 
-            # printstyled(io, "::Any", color=:bold) # ?? 
-        elseif d[2] == "Any..."
-            print(io, "::Any")
-            printstyled(io, "...", color=:bold)
+            printstyled(io, "Any", color=:bold)
         else
-            print(io, "::")
             print_type_bicolor(io, d[2], color=:bold, inner_color=:normal)
         end
-        i < length(decls)-1 && print(io, ", ") # printstyled(io, ", ", color=:light_black)
+        i < length(decls)-1 && print(io, ", ")
     end
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
@@ -230,12 +222,11 @@ function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width =
     print(io, ")")
     show_method_params(io, tv)
 
-    # module & flie
+    # module & flie, re-using function from errorshow.jl
     if digit_align_width > 0
         println(io)
     end
-    showmodule = isnothing(modulecolor) ? nothing : m.module
-    print_module_path_file(io, showmodule, string(file), line, modulecolor, digit_align_width)
+    print_module_path_file(io, m.module, string(file), line, modulecolor, digit_align_width)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)

@@ -731,7 +731,7 @@ function print_module_path_file(io, modul, file, line, modulecolor = :light_blac
     printstyled(io, " " ^ (digit_align_width + 2) * "@ ", color = :light_black)
 
     # module
-    if modul !== nothing
+    if modul !== nothing && modulecolor !== nothing
         printstyled(io, modul, color = modulecolor)
         print(io, " ")
     end
