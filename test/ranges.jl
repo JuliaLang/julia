@@ -1565,16 +1565,21 @@ end
 
 @testset "constant-valued ranges (issues #10391 and #29052)" begin
     for r in ((1:4), (1:1:4), (1.0:4.0))
-        is_int = eltype(r) === Int
-        @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
-        @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
-        @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
-        @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
+        @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r .* 0) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        @test @inferred(r - r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r .- r) == [0.0, 0.0, 0.0, 0.0]
+
         @test @inferred(r .+ (4.0:-1:1)) == [5.0, 5.0, 5.0, 5.0]
         @test @inferred(0.0 * r) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(0.0 .* r) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(r / Inf) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(r ./ Inf) == [0.0, 0.0, 0.0, 0.0]
+
+        @test eval(Meta.parse(repr(0 * r))) == [0.0, 0.0, 0.0, 0.0]
     end
 
     @test_broken @inferred(range(0, step=0, length=4)) == [0, 0, 0, 0]
@@ -1587,7 +1592,9 @@ end
     @test @inferred(range(0.0, stop=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
 
     z4 = 0.0 * (1:4)
-    @test @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
+    # @test @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
+    @test_broken @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
+    @test @inferred(z4 .+ (1:4)) == 1.0:1.0:4.0
     @test @inferred(z4 .+ z4) === z4
 end
 
