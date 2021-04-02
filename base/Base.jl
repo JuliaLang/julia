@@ -363,6 +363,9 @@ include("asyncmap.jl")
 # experimental API's
 include("experimental.jl")
 
+# various loop pragmas
+include("pragma.jl")
+
 # deprecated functions
 include("deprecated.jl")
 
