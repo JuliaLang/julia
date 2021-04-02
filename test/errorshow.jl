@@ -636,9 +636,10 @@ pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't
 
 let err_str
     err_str = @except_str (1 + 2)(3 + 4) MethodError
-    @test occursin(r"objects of type Int64 are not callable", err_str)
+    @test occursin("objects of type $(typeof(3)) are not callable", err_str)
     @test occursin("Maybe you forgot to use an operator such as *, ^, %, / etc. ?", err_str)
 end
+pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
 
 # Execute backtrace once before checking formatting, see #38858
 backtrace()

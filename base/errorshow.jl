@@ -326,8 +326,6 @@ function showerror(io::IO, ex::MethodError)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
-    handler = Experimental._hint_handlers[MethodError]
-    !isempty(handler) && pop!(handler)
 end
 
 striptype(::Type{T}) where {T} = T
