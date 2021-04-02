@@ -19,6 +19,9 @@ using Test, Printf
         @test (@sprintf "%-20p" C_NULL) == "0x00000000          "
     end
 
+    #40318
+    @test @sprintf("%p", 0xfffffffffffe0000) == "0xfffffffffffe0000"
+
 end
 
 @testset "%a" begin
