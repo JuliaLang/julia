@@ -547,7 +547,7 @@ const __BIG_FLOAT_MAX__ = 8192
 end
 
 # pointers
-fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt(arg), ptrfmt(spec, arg))
+fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
 
 # old Printf compat
 function fix_dec end
