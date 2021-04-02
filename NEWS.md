@@ -42,6 +42,7 @@ New library features
 --------------------
 
 * The optional keyword argument `context` of `sprint` can now be set to a tuple of `:key => value` pairs to specify multiple attributes. ([#39381])
+* `bytes2hex` and `hex2bytes` are no longer limited to arguments of type `Union{String,AbstractVector{UInt8}}` and now only require that they're iterable and have a length. ([#39710])
 
 Standard library changes
 ------------------------
