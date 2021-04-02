@@ -328,10 +328,20 @@ Random.seed!(1)
     # factorize
     @test factorize(D) == D
 
+    #Block Diagonal
+    blockD = Diagonal([2.0*Matrix(I, 2,2), 3.0*Matrix(I, 3,3)])
+    eigenvalues = [2.0, 2.0, 3.0, 3.0, 3.0]
+    eigenvectors = [[[1.0, 0.0], [0.0, 0.0, 0.0]], [[0.0, 1.0], [0.0, 0.0, 0.0]], [[0.0, 0.0], [1.0, 0.0, 0.0]], [[0.0, 0.0], [0.0, 1.0, 0.0]], [[0.0, 0.0], [0.0, 0.0, 1.0]]]
+
     @testset "Eigensystem" begin
         eigD = eigen(D)
         @test Diagonal(eigD.values) ≈ D
         @test eigD.vectors == Matrix(I, size(D))
+
+        # eigBlockD = eigen(blockD)
+        @test eigvals(blockD) == eigenvalues
+        @test eigvecs(blockD) == eigenvectors
+
     end
 
     @testset "ldiv" begin
