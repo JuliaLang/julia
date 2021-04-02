@@ -580,7 +580,7 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> @async make_jobs(n); # feed the jobs channel with "n" jobs
+julia> errormonitor(@async make_jobs(n)); # feed the jobs channel with "n" jobs
 
 julia> for p in workers() # start tasks on the workers to process requests in parallel
            remote_do(do_work, p, jobs, results)
