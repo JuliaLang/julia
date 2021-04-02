@@ -245,15 +245,14 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
         namedisplay = namefmt(sname)
         if hasname
             what = startswith(sname, '@') ? "macro" : "generic function"
-            print(io, " for ", what, " ", namedisplay)
+            print(io, " for ", what, " ", namedisplay, " from ")
+            printstyled(io, ms.mt.module, color=:blue)
+            print(io, ":")
         elseif '#' in sname
-            print(io, " for anonymous function ", namedisplay)
+            print(io, " for anonymous function ", namedisplay, ":")
         elseif mt === _TYPE_NAME.mt
-            print(io, " for type constructor")
+            print(io, " for type constructor:")
         end
-        print(io, " from ")
-        printstyled(io, ms.mt.module, color=:blue)
-        print(io, ":")
     end
 end
 
@@ -273,9 +272,14 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
+    modul = if mt === _TYPE_NAME.mt  # type constructor
+            which(ms.ms[1].module, ms.ms[1].name)
+        else
+            mt.module
+        end
     modulecolordict = Dict{Module, Symbol}()
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(METHODLIST_MODULECOLORS))
-    modulecolordict[parentmodule_before_main(mt.module)] = :blue
+    modulecolordict[parentmodule_before_main(modul)] = :blue
     
     digit_align_width = length(string(max>0 ? max : length(ms)))
     
@@ -285,7 +289,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             println(io)
             print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
 
-            modulecolor = if meth.module == mt.module
+            modulecolor = if meth.module == modul
                 nothing
             else
                 m = parentmodule_before_main(meth.module)
