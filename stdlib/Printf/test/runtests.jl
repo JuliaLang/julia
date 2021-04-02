@@ -141,6 +141,10 @@ end
     @test Printf.@sprintf("%+ 09.1f", 1.234) == "+000001.2"
     @test Printf.@sprintf("%+ 09.0f", 1.234) == "+00000001"
     @test Printf.@sprintf("%+ #09.0f", 1.234) == "+0000001."
+
+    #40303
+    @test Printf.@sprintf("%+7.1f", 9.96) == "  +10.0"
+    @test Printf.@sprintf("% 7.1f", 9.96) == "   10.0"
 end
 
 @testset "%e" begin
@@ -202,6 +206,10 @@ end
     @test Printf.@sprintf("%+ 09.1e", 1.234) == "+01.2e+00"
     @test Printf.@sprintf("%+ 09.0e", 1.234) == "+0001e+00"
     @test Printf.@sprintf("%+ #09.0e", 1.234) == "+001.e+00"
+
+    #40303
+    @test Printf.@sprintf("%+9.1e", 9.96) == " +1.0e+01"
+    @test Printf.@sprintf("% 9.1e", 9.96) == "  1.0e+01"
 end
 
 @testset "strings" begin
