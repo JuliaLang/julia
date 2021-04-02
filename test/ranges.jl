@@ -1288,8 +1288,8 @@ end
         @test_throws BoundsError r[4]
         @test_throws BoundsError r[0]
         @test broadcast(+, r, 1) === 2:4
-        @test 2*r === 2:2:6
-        @test r + r === 2:2:6
+        @test 2*r == 2:2:6
+        @test r + r == 2:2:6
         k = 0
         for i in r
             @test i == (k += 1)
@@ -1432,14 +1432,14 @@ end
     @test @inferred(r .+ x) === 3:7
     @test @inferred(r .- x) === -1:3
     @test @inferred(x .- r) === 1:-1:-3
-    @test @inferred(x .* r) === 2:2:10
-    @test @inferred(r .* x) === 2:2:10
+    @test @inferred(x .* r) == 2:2:10
+    @test @inferred(r .* x) == 2:2:10
     @test @inferred(r ./ x) === 0.5:0.5:2.5
     @test @inferred(x ./ r) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
     @test @inferred(r .\ x) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
     @test @inferred(x .\ r) === 0.5:0.5:2.5
 
-    @test @inferred(2 .* (r .+ 1) .+ 2) === 6:2:14
+    @test @inferred(2 .* (r .+ 1) .+ 2) == 6:2:14
 end
 
 @testset "Bad range calls" begin
@@ -1592,8 +1592,6 @@ end
     @test @inferred(range(0.0, stop=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
 
     z4 = 0.0 * (1:4)
-    # @test @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
-    @test_broken @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
     @test @inferred(z4 .+ (1:4)) == 1.0:1.0:4.0
     @test @inferred(z4 .+ z4) === z4
 end
