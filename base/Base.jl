@@ -231,7 +231,9 @@ include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 
-include("env.jl")
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 # Concurrency
 include("linked_list.jl")
@@ -243,9 +245,7 @@ include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
 
-# Logging
-include("logging.jl")
-using .CoreLogging
+include("env.jl")
 
 # BinaryPlatforms, used by Artifacts
 include("binaryplatforms.jl")
