@@ -797,3 +797,5 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
         end
     end
 end  # Sys.isapple()
+
+@test contains(sprint(Base.showerror, UndefVarError(:UTF16String)), "LegacyStrings")
