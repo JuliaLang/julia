@@ -198,7 +198,7 @@ function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
 end
 
 # Find index for columns with largest two norm
-function indmaxcolumn(A::StridedMatrix)
+function indmaxcolumn(A::AbstractMatrix)
     mm = norm(view(A, :, 1))
     ii = 1
     for i = 2:size(A, 2)
@@ -211,7 +211,7 @@ function indmaxcolumn(A::StridedMatrix)
     return ii
 end
 
-function qrfactPivotedUnblocked!(A::StridedMatrix)
+function qrfactPivotedUnblocked!(A::AbstractMatrix)
     m, n = size(A)
     piv = Vector(UnitRange{BlasInt}(1,n))
     τ = Vector{eltype(A)}(undef, min(m,n))
@@ -287,14 +287,14 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> qr!(a)
-ERROR: InexactError: Int64(-3.1622776601683795)
+ERROR: InexactError: Int64(3.1622776601683795)
 Stacktrace:
 [...]
 ```
 """
-qr!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
-qr!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
-qr!(A::StridedMatrix) = qr!(A, Val(false))
+qr!(A::AbstractMatrix, ::Val{false}) = qrfactUnblocked!(A)
+qr!(A::AbstractMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
+qr!(A::AbstractMatrix) = qr!(A, Val(false))
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
