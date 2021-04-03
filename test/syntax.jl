@@ -2686,3 +2686,9 @@ macro m_begin_hygiene(a)
 end
 
 @test @m_begin_hygiene([1, 2, 3]) == 1
+
+macro m_nospecialize_unnamed_hygiene()
+    return :(f(@nospecialize(::Any)) = Any)
+end
+
+@test @m_nospecialize_unnamed_hygiene()(1) === Any
