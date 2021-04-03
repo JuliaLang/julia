@@ -1015,3 +1015,7 @@ end
         @test a_ == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
     end
 end
+
+# issue 40309
+@test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
+@test Broadcast.BroadcastFunction(+)(2:3, 2:3) === 4:2:6
