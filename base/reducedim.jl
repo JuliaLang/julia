@@ -295,7 +295,7 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
 """
     mapreduce(f, op, A::AbstractArray...; dims=:, [init])
 
-Evaluates to the same as `reduce(op, map(f, A); dims=dims, init=init)`, but is generally
+Evaluates to the same as `reduce(op, map(f, A...); dims=dims, init=init)`, but is generally
 faster because the intermediate array is avoided.
 
 !!! compat "Julia 1.2"
