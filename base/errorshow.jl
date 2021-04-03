@@ -552,13 +552,6 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
-function replaceuserpath(str)
-    str = replace(str, homedir() => "~")
-    # seems to be necessary for some paths with small letter drive c:// etc
-    str = replace(str, lowercasefirst(homedir()) => "~")
-    return str
-end
-
 const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
@@ -570,17 +563,17 @@ stacktrace_linebreaks()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
-    n = length(trace)
-    ndigits_max = ndigits(n)
+    num_frames = length(trace)
+    ndigits_max = ndigits(num_frames)
 
     modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     println(io, "\nStacktrace:")
 
-    for (i, frame) in enumerate(trace)
-        print_stackframe(io, i, frame, 1, ndigits_max, modulecolordict, modulecolorcycler)
-        if i < n
+    for (i, (frame, n)) in enumerate(trace)
+        print_stackframe(io, i, frame, n, ndigits_max, modulecolordict, modulecolorcycler)
+        if i < num_frames
             println(io)
             print_linebreaks && println(io)
         end
@@ -698,7 +691,7 @@ end
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
-    stacktrace_contract_userdir() && (file = replaceuserpath(file))
+    stacktrace_contract_userdir() && (file = contractuser(file))
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
@@ -738,13 +731,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     # filename, separator, line
     # use escape codes for formatting, printstyled can't do underlined and color
     # codes are bright black (90) and underlined (4)
-    function print_underlined(io::IO, s...)
-        colored = get(io, :color, false)::Bool
-        start_s = colored ? "\033[90;4m" : ""
-        end_s   = colored ? "\033[0m"    : ""
-        print(io, start_s, s..., end_s)
-    end
-    print_underlined(io, pathparts[end], ":", line)
+    printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
@@ -779,8 +766,7 @@ function show_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    frames = map(x->first(x)::StackFrame, filtered)
-    show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
+    show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     return
 end
 

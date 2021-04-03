@@ -555,6 +555,11 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
         llvm_unreachable("Target does not support MC emission.");
 }
 
+static auto countBasicBlocks(const Function &F)
+{
+    return std::distance(F.begin(), F.end());
+}
+
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
     uint64_t start_time = 0;
@@ -569,17 +574,10 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
             if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
                 continue;
             }
-            // Count number of Basic Blocks
-            int bbs = 0;
-            for (auto &B : F.getBasicBlockList()) {
-                std::ignore = B;
-                ++bbs;
-            }
-
             // Each function is printed as a YAML object with several attributes
             jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
             jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
         }
 
         start_time = jl_hrtime();
@@ -640,17 +638,9 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
             if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
                 continue;
             }
-
-            // Count number of Basic Blocks
-            int bbs = 0;
-            for (auto &B : F.getBasicBlockList()) {
-                std::ignore = B;
-                ++bbs;
-            }
-
             jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
             jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
         }
     }
 
@@ -954,8 +944,7 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
             //    continue;
             //}
             else {
-                assert(dG->isDeclaration() || (dG->getInitializer() == sG->getInitializer() &&
-                            dG->isConstant() && sG->isConstant()));
+                assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
                 dG->replaceAllUsesWith(sG);
                 dG->eraseFromParent();
             }

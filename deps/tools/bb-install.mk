@@ -47,7 +47,12 @@ UNINSTALL_$(strip $1) := $$($(2)_JLL_BASENAME:.tar.gz=) bb-uninstaller
 $$(build_prefix)/manifest/$(strip $1): $$(SRCCACHE)/$$($(2)_JLL_BASENAME) | $(build_prefix)/manifest
 	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
 	$$(JLCHECKSUM) $$<
-	mkdir -p $$(build_prefix)
+ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
+	@# work-around a gtar bug: they do some complicated work to avoid the mkdir
+	@# syscall, which is buggy when working with Tar.jl files so we manually do
+	@# the mkdir calls first in a pre-pass
+	$(TAR) -tzf $$< | xargs -L 1 dirname | sort -u | (cd $$(build_prefix) && xargs -t mkdir -p)
+endif
 	$(UNTAR) $$< -C $$(build_prefix)
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
 
@@ -73,6 +78,6 @@ endef
 
 define bb-uninstaller
 uninstall-$(strip $1):
-	-cd $$(build_prefix) && rm -fdv -- $$$$($$(TAR) -tzf $$(SRCCACHE)/$2.tar.gz --exclude './$$$$')
+	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tzf $$(SRCCACHE)/$2.tar.gz | grep -v '/$$$$')
 	-rm $$(build_prefix)/manifest/$(strip $1)
 endef

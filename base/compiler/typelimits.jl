@@ -21,7 +21,7 @@ function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize
     type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
     r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
     #@assert t <: r # this may fail if t contains a typevar in invariant and multiple times
-        # in covariant position and r looses the occurence in invariant position (see #36407)
+        # in covariant position and r looses the occurrence in invariant position (see #36407)
     if !(t <: r) # ideally, this should never happen
         # widen to minimum complexity to obtain a valid result
         r = _limit_type_size(t, Any, source, 1, allowed_tuplelen)
@@ -334,7 +334,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
-        if typea.var === typeb.var
+        if is_same_conditionals(typea, typeb)
             vtype = tmerge(typea.vtype, typeb.vtype)
             elsetype = tmerge(typea.elsetype, typeb.elsetype)
             if vtype != elsetype
@@ -347,6 +347,36 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
         return Bool
     end
+    # type-lattice for InterConditional wrapper, InterConditional will never be merged with Conditional
+    if isa(typea, InterConditional) && isa(typeb, Const)
+        if typeb.val === true
+            typeb = InterConditional(typea.slot, Any, Union{})
+        elseif typeb.val === false
+            typeb = InterConditional(typea.slot, Union{}, Any)
+        end
+    end
+    if isa(typeb, InterConditional) && isa(typea, Const)
+        if typea.val === true
+            typea = InterConditional(typeb.slot, Any, Union{})
+        elseif typea.val === false
+            typea = InterConditional(typeb.slot, Union{}, Any)
+        end
+    end
+    if isa(typea, InterConditional) && isa(typeb, InterConditional)
+        if is_same_conditionals(typea, typeb)
+            vtype = tmerge(typea.vtype, typeb.vtype)
+            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            if vtype != elsetype
+                return InterConditional(typea.slot, vtype, elsetype)
+            end
+        end
+        val = maybe_extract_const_bool(typea)
+        if val isa Bool && val === maybe_extract_const_bool(typeb)
+            return Const(val)
+        end
+        return Bool
+    end
+    # type-lattice for Const and PartialStruct wrappers
     if (isa(typea, PartialStruct) || isa(typea, Const)) &&
        (isa(typeb, PartialStruct) || isa(typeb, Const)) &&
         widenconst(typea) === widenconst(typeb)
@@ -401,6 +431,10 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         uw = unwrap_unionall(ti)
         (uw isa DataType && ti <: uw.name.wrapper) || return Any
         typenames[i] = uw.name
+    end
+    u = Union{types...}
+    if issimpleenoughtype(u)
+        return u
     end
     # see if any of the union elements have the same TypeName
     # in which case, simplify this tmerge by replacing it with

@@ -5299,6 +5299,16 @@ if Sys.WORD_SIZE == 64
     @test_nowarn tester20360()
 end
 
+# issue #39717
+let a = Base.StringVector(2^17)
+    b = String(a)
+    c = String(a)
+    GC.gc()
+    @test sizeof(a) == 0
+    @test sizeof(b) == 2^17
+    @test sizeof(c) == 0
+end
+
 @test_throws ArgumentError eltype(Bottom)
 
 # issue #16424, re-evaluating type definitions
@@ -5962,11 +5972,11 @@ end
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(undef, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        A = Array{U}(undef, ntuple(x->10, N)...)
+        A = Array{U}(undef, ntuple(Returns(10), N)...)
         @test length(A) == 10^N
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
@@ -6047,11 +6057,11 @@ using Serialization
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(undef, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        len = ntuple(x->10, N)
+        len = ntuple(Returns(10), N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
         A = Array{U}(undef, len)
         @test length(A) == prod(len)
@@ -7217,6 +7227,11 @@ end
 @test_broken isbitstype(Tuple{B33954})
 @test_broken isbitstype(B33954)
 
+struct B40050 <: Ref{Tuple{B40050}}
+end
+@test string((B40050(),)) == "($B40050(),)"
+@test_broken isbitstype(Tuple{B40050})
+
 # Issue #34206/34207
 function mre34206(a, n)
     va = view(a, :)
@@ -7279,11 +7294,27 @@ end
 
 # issue #36104
 module M36104
+using Test
 struct T36104
     v::Vector{M36104.T36104}
 end
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
+end
+# with a gensymmed unionall
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+@test_throws ErrorException begin
+    struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data::S
+        uplo::Char
+    end
 end
 end
 @test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)

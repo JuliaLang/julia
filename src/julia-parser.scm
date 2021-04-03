@@ -101,6 +101,8 @@
 
 (define unary-op? (Set unary-ops))
 
+(define radical-op? (Set '(√ ∛ ∜)))
+
 ; operators that are both unary and binary
 (define unary-and-binary-ops (append! '($ & ~)
                                       (add-dots '(+ - ⋆ ± ∓))))
@@ -973,7 +975,7 @@
                 (not (memv t '(#\( #\[ #\{))))
            )
        (not (ts:space? s))
-       (not (operator? t))
+       (or (not (operator? t)) (radical-op? t))
        (not (closing-token? t))
        (not (newline? t))
        (or (and (not (string? expr)) (not (eqv? t #\")))
@@ -996,7 +998,7 @@
             (begin
               #;(if (and (number? ex) (= ex 0))
                     (error "juxtaposition with literal \"0\""))
-              (let ((next (parse-factor s)))
+              (let ((next (if (radical-op? next) (parse-unary s) (parse-factor s))))
                 (loop `(call * ,ex ,next)
                       (cons next args))))
             (if (length= args 1)

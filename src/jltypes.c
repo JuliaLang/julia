@@ -397,7 +397,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
         int has_free = temp[i]!=NULL && jl_has_free_typevars(temp[i]);
         for(j=0; j < nt; j++) {
             if (j != i && temp[i] && temp[j]) {
-                if (temp[i] == temp[j] || temp[i] == jl_bottom_type ||
+                if (temp[i] == jl_bottom_type ||
                     temp[j] == (jl_value_t*)jl_any_type ||
                     jl_egal(temp[i], temp[j]) ||
                     (!has_free && !jl_has_free_typevars(temp[j]) &&
@@ -1654,9 +1654,14 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
     if (n) {
         if (jl_is_typevar(n)) {
+            // TODO: this is disabled due to #39698; it is also inconsistent
+            // with other similar checks, where we usually only check substituted
+            // values and not the bounds of variables.
+            /*
             jl_tvar_t *N = (jl_tvar_t*)n;
             if (!(N->lb == jl_bottom_type && N->ub == (jl_value_t*)jl_any_type))
                 jl_error("TypeVar in Vararg length must have bounds Union{} and Any");
+            */
         }
         else if (!jl_is_long(n)) {
             jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, n);
@@ -2195,7 +2200,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(24,
+                        jl_perm_symsvec(25,
                             "name",
                             "module",
                             "file",
@@ -2212,6 +2217,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "roots",
                             "ccallable",
                             "invokes",
+                            "recursion_relation",
                             "nargs",
                             "called",
                             "nospecialize",
@@ -2220,7 +2226,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "pure",
                             "is_for_opaque_closure",
                             "aggressive_constprop"),
-                        jl_svec(24,
+                        jl_svec(25,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -2236,6 +2242,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_array_any_type,
                             jl_simplevector_type,
+                            jl_any_type,
                             jl_any_type,
                             jl_int32_type,
                             jl_int32_type,
@@ -2307,6 +2314,10 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_partial_struct_type = jl_new_datatype(jl_symbol("PartialStruct"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(2, "typ", "fields"),
                                        jl_svec2(jl_any_type, jl_array_any_type), 0, 0, 2);
+
+    jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
+                                          jl_perm_symsvec(3, "slot", "vtype", "elsetype"),
+                                          jl_svec(3, jl_long_type, jl_any_type, jl_any_type), 0, 0, 3);
 
     jl_method_match_type = jl_new_datatype(jl_symbol("MethodMatch"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(4, "spec_types", "sparams", "method", "fully_covers"),

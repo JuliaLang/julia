@@ -220,7 +220,7 @@ function lookup_doc(ex)
     if isa(ex, Symbol) && Base.isoperator(ex)
         str = string(ex)
         isdotted = startswith(str, ".")
-        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment
+        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment && ex !== :(:=)
             op = str[1:end-1]
             eq = isdotted ? ".=" : "="
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
@@ -291,7 +291,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
             println(io, "# Subtypes")
             println(io, "```")
             for t in subt
-                println(io, t)
+                println(io, Base.unwrap_unionall(t))
             end
             println(io, "```")
         end
@@ -550,8 +550,10 @@ function matchinds(needle, haystack; acronym::Bool = false)
     is = Int[]
     lastc = '\0'
     for (i, char) in enumerate(haystack)
+        while !isempty(chars) && isspace(first(chars))
+            popfirst!(chars) # skip spaces
+        end
         isempty(chars) && break
-        while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if lowercase(char) == lowercase(chars[1]) &&
            (!acronym || !isletter(lastc))
             push!(is, i)

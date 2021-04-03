@@ -15,11 +15,17 @@ end
 """
     struct MethodResultPure
 
-This singleton represents a method result constant was proven to be
+This struct represents a method result constant was proven to be
 effect-free, including being no-throw (typically because the value was computed
 by calling an `@pure` function).
 """
-struct MethodResultPure end
+struct MethodResultPure
+    info::Any
+end
+let instance = MethodResultPure(false)
+    global MethodResultPure
+    MethodResultPure() = instance
+end
 
 """
     struct UnionSplitInfo
@@ -80,4 +86,44 @@ This info is illegal on any statement that is not an `_apply_iterate` call.
 """
 struct UnionSplitApplyCallInfo
     infos::Vector{ApplyCallInfo}
+end
+
+"""
+    struct ConstCallInfo
+
+Precision for this call was improved using constant information. This info
+keeps a reference to the result that was used (or created for these)
+constant information.
+"""
+struct ConstCallInfo
+    call::Any
+    results::Vector{Union{Nothing,InferenceResult}}
+end
+
+"""
+    struct InvokeCallInfo
+
+Represents a resolved call to `invoke`, carrying the Method match of the
+method being processed.
+"""
+struct InvokeCallInfo
+    match::MethodMatch
+end
+
+struct OpaqueClosureCallInfo
+    match::MethodMatch
+end
+
+struct OpaqueClosureCreateInfo
+    unspec::CallMeta
+end
+
+# Stmt infos that are used by external consumers, but not by optimization.
+# These are not produced by default and must be explicitly opted into by
+# the AbstractInterpreter.
+
+struct ReturnTypeCallInfo
+    # The info corresponding to the call that return_type was supposed to
+    # analyze.
+    info::Any
 end

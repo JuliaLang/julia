@@ -1033,8 +1033,8 @@ The `where` keyword itself can be nested inside a more complex declaration. For 
 consider the two types created by the following declarations:
 
 ```jldoctest
-julia> const T1 = Array{Array{T,1} where T, 1}
-Vector{Vector{T} where T} (alias for Array{Array{T, 1} where T, 1})
+julia> const T1 = Array{Array{T, 1} where T, 1}
+Vector{Vector} (alias for Array{Array{T, 1} where T, 1})
 
 julia> const T2 = Array{Array{T, 1}, 1} where T
 Array{Vector{T}, 1} where T

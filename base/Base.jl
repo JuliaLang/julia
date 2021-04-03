@@ -31,6 +31,7 @@ getproperty(x::Tuple, f::Int) = getfield(x, f)
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
 getproperty(x, f::Symbol) = getfield(x, f)
+dotgetproperty(x, f) = getproperty(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
 
 include("coreio.jl")
@@ -230,7 +231,9 @@ include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 
-include("env.jl")
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 # Concurrency
 include("linked_list.jl")
@@ -242,9 +245,7 @@ include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
 
-# Logging
-include("logging.jl")
-using .CoreLogging
+include("env.jl")
 
 # BinaryPlatforms, used by Artifacts
 include("binaryplatforms.jl")

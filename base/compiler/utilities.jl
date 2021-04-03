@@ -104,14 +104,6 @@ function invoke_api(li::CodeInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)
 end
 
-function has_opaque_closure(c::CodeInfo)
-    for i = 1:length(c.code)
-        stmt = c.code[i]
-        (isa(stmt, Expr) && stmt.head === :new_opaque_closure) && return true
-    end
-    return false
-end
-
 function get_staged(mi::MethodInstance)
     may_invoke_generator(mi) || return nothing
     try

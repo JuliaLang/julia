@@ -104,9 +104,9 @@ module IteratorsMD
 
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
-    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 0, Val(N)))
+    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(Returns(0), Val(N)))
     oneunit(::CartesianIndex{N}) where {N} = oneunit(CartesianIndex{N})
-    oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
+    oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(Returns(1), Val(N)))
 
     # arithmetic, min/max
     @inline (-)(index::CartesianIndex{N}) where {N} =
@@ -278,6 +278,7 @@ module IteratorsMD
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
+    _convert2ind(sz::Bool) = Base.OneTo(Int(sz))
     _convert2ind(sz::Integer) = Base.OneTo(sz)
     _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
     _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
@@ -457,7 +458,7 @@ module IteratorsMD
 
     # Split out the first N elements of a tuple
     @inline function split(t, V::Val)
-        ref = ntuple(d->true, V)  # create a reference tuple of length N
+        ref = ntuple(Returns(true), V)  # create a reference tuple of length N
         _split1(t, ref), _splitrest(t, ref)
     end
     @inline _split1(t, ref) = (t[1], _split1(tail(t), tail(ref))...)
@@ -684,10 +685,10 @@ checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) = all(checkindex.(Boo
 # rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
 @inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
 @inline function index_ndims(i1::CartesianIndex, I...)
-    (map(x->true, i1.I)..., index_ndims(I...)...)
+    (map(Returns(true), i1.I)..., index_ndims(I...)...)
 end
 @inline function index_ndims(i1::AbstractArray{CartesianIndex{N}}, I...) where N
-    (ntuple(x->true, Val(N))..., index_ndims(I...)...)
+    (ntuple(Returns(true), Val(N))..., index_ndims(I...)...)
 end
 index_ndims() = ()
 
@@ -697,7 +698,7 @@ index_ndims() = ()
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
 @inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N
-    (ntuple(x->true, Val(N))..., index_dimsum(I...)...)
+    (ntuple(Returns(true), Val(N))..., index_dimsum(I...)...)
 end
 index_dimsum() = ()
 

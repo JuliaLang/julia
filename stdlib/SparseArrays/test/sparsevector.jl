@@ -1050,6 +1050,10 @@ end
             @test y == Af'x2f
         end
     end
+    @testset "ldiv with different element types (#40171)" begin
+        sA = sparse(Int16.(1:4), Int16.(1:4), ones(4))
+        @test all(ldiv!(LowerTriangular(sA), ones(4)) .≈ 1.)
+    end
     @testset "ldiv ops with triangular matrices and sparse vecs (#14005)" begin
         m = 10
         sparsefloatvecs = SparseVector[sprand(m, 0.4) for k in 1:3]

@@ -174,6 +174,7 @@ end
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
+(\)(x::Number, D::Diagonal) = Diagonal(x \ D.diag)
 
 function (*)(Da::Diagonal, Db::Diagonal)
     nDa, mDb = size(Da, 2), size(Db, 1)
@@ -601,7 +602,7 @@ function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
 end
 
 # Matrix functions
-for f in (:exp, :log, :sqrt,
+for f in (:exp, :cis, :log, :sqrt,
           :cos, :sin, :tan, :csc, :sec, :cot,
           :cosh, :sinh, :tanh, :csch, :sech, :coth,
           :acos, :asin, :atan, :acsc, :asec, :acot,
@@ -695,6 +696,14 @@ end
 *(x::Adjoint{<:Any,<:AbstractVector},   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
+
+dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
+function dot(D::Diagonal, B::AbstractMatrix)
+    size(D) == size(B) || throw(DimensionMismatch("Matrix sizes $(size(D)) and $(size(B)) differ"))
+    return dot(D.diag, view(B, diagind(B)))
+end
+
+dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
     if isempty(x) && isempty(D) && isempty(y)
