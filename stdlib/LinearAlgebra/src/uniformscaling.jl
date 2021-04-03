@@ -215,8 +215,8 @@ end
 function (+)(A::AbstractMatrix, J::UniformScaling)
     checksquare(A)
     B = copy_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
-    @inbounds for i in axes(A, 1)
-        B[i,i] += J
+    for i in intersect(axes(A,1), axes(A,2))
+        @inbounds B[i,i] += J
     end
     return B
 end
@@ -224,8 +224,8 @@ end
 function (-)(J::UniformScaling, A::AbstractMatrix)
     checksquare(A)
     B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, -A)
-    @inbounds for i in axes(A, 1)
-        B[i,i] += J
+    for i in intersect(axes(A,1), axes(A,2))
+        @inbounds B[i,i] += J
     end
     return B
 end
