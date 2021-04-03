@@ -664,7 +664,7 @@ mktempdir() do dir
         cd(dir) do
             p = Sys.which(joinpath("bin1", "bar"))
             @test p == joinpath(abspath("bin1"), "bar")
-            @test realpath(p) == realpath(bar_path)
+            @test Base.samefile(p, bar_path)
         end
     end
 end
