@@ -1211,6 +1211,12 @@ julia> collect(a)
 2-element Vector{Char}:
  'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
  'f': ASCII/Unicode U+0066 (category Ll: Letter, lowercase)
+
+julia> Iterators.reset!(a); popfirst!(a)
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+
+julia> Iterators.reset!(a, "hello"); popfirst!(a)
+'h': ASCII/Unicode U+0068 (category Ll: Letter, lowercase)
 ```
 
 ```jldoctest
@@ -1239,7 +1245,7 @@ mutable struct Stateful{T, VS}
     end
 end
 
-function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
+function reset!(s::Stateful{T,VS}, itr::T=s.itr) where {T,VS}
     s.itr = itr
     setfield!(s, :nextvalstate, iterate(itr))
     s.taken = 0
