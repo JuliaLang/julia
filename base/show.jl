@@ -2769,6 +2769,9 @@ function array_summary(io::IO, a, inds)
     print(io, " with indices ", inds2string(inds))
 end
 
+## `summary` for Function
+summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
+
 """
     showarg(io::IO, x, toplevel)
 
