@@ -73,7 +73,9 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL,    // output-code_coverage
                             0, // incremental
                             0, // image_file_specified
-                            JL_OPTIONS_WARN_SCOPE_ON  // ambiguous scope warning
+                            JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
+                            0, // image-codegen
+                            0, // rr-detach
 };
 
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
@@ -101,7 +103,6 @@ static const char opts[]  =
     // parallel options
     " -t, --threads {N|auto}    Enable N threads; \"auto\" currently sets N to the number of local\n"
     "                           CPU threads but this might change in the future\n"
-    " -t, --threads {N|auto}    Enable N threads. \"auto\" sets N to the number of local CPU threads.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
@@ -128,7 +129,7 @@ static const char opts[]  =
         " (default level is 1 if unspecified or 2 if used without a level)\n"
 #endif
     " --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
-    " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
+    " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring @inbounds declarations)\n"
 #ifdef USE_POLLY
     " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
@@ -141,12 +142,16 @@ static const char opts[]  =
     "                           Append coverage information to the LCOV tracefile (filename supports format tokens).\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation={none|user|all}, --track-allocation\n"
-    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n\n"
+    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n"
+    " --bug-report=KIND         Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
+    "                           expressions. It first tries to use BugReporting.jl installed in current environment and\n"
+    "                           fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
+    "                           --bug-report=help.\n\n"
 ;
 
 static const char opts_hidden[]  =
     // code generation options
-    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation\n"
+    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive or minimal compilation\n"
 
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
@@ -158,8 +163,9 @@ static const char opts_hidden[]  =
     " --output-bc name          Generate LLVM bitcode (.bc)\n"
     " --output-asm name         Generate an assembly file (.s)\n"
     " --output-incremental=no   Generate an incremental output file (rather than complete)\n"
-    " --trace-compile={stdout,stderr}\n"
-    "                           Print precompile statements for methods compiled during execution.\n\n"
+    " --trace-compile={stderr,name}\n"
+    "                           Print precompile statements for methods compiled during execution or save to a path\n\n"
+    " --image-codegen           Force generate code in imaging mode\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -196,6 +202,9 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compiled_modules,
            opt_machine_file,
            opt_project,
+           opt_bug_report,
+           opt_image_codegen,
+           opt_rr_detach,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -211,6 +220,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "eval",            required_argument, 0, 'e' },
         { "print",           required_argument, 0, 'E' },
         { "load",            required_argument, 0, 'L' },
+        { "bug-report",      required_argument, 0, opt_bug_report },
         { "sysimage",        required_argument, 0, 'J' },
         { "sysimage-native-code", required_argument, 0, opt_sysimage_native_code },
         { "compiled-modules",    required_argument, 0, opt_compiled_modules },
@@ -245,6 +255,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "worker",          optional_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       0, 1 },
+        { "image-codegen",   no_argument,       0, opt_image_codegen },
+        { "rr-detach",       no_argument,       0, opt_rr_detach },
         { 0, 0, 0, 0 }
     };
 
@@ -341,11 +353,12 @@ restart_switch:
         case 'e': // eval
         case 'E': // print
         case 'L': // load
+        case opt_bug_report: // bug
         {
             size_t sz = strlen(optarg) + 1;
             char *arg = (char*)malloc_s(sz + 1);
             const char **newcmds;
-            arg[0] = c;
+            arg[0] = c == opt_bug_report ? 'B' : c;
             memcpy(arg + 1, optarg, sz);
             newcmds = (const char**)realloc_s(cmds, (ncmds + 2) * sizeof(char*));
             cmds = newcmds;
@@ -641,6 +654,12 @@ restart_switch:
                 jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_OFF;
             else
                 jl_errorf("julia: invalid argument to --handle-signals (%s)", optarg);
+            break;
+        case opt_image_codegen:
+            jl_options.image_codegen = 1;
+            break;
+        case opt_rr_detach:
+            jl_options.rr_detach = 1;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

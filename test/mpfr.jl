@@ -457,7 +457,7 @@ end
         @test BigFloat(nextfloat(12.12)) == nextfloat(x)
         @test BigFloat(prevfloat(12.12)) == prevfloat(x)
     end
-    x = BigFloat(12.12, 100)
+    x = BigFloat(12.12, precision = 100)
     @test nextfloat(x, 0) === x
     @test prevfloat(x, 0) === x
     @test nextfloat(x).prec == x.prec
@@ -571,9 +571,8 @@ end
     @test modf(x+y) == (y, x)
     x = BigFloat(NaN)
     @test map(isnan, modf(x)) == (true, true)
-    x = BigFloat(Inf)
-    y = modf(x)
-    @test (isnan(y[1]), isinf(y[2])) == (true, true)
+    @test isequal(modf(BigFloat(-Inf)), (BigFloat(-0.0), BigFloat(-Inf)))
+    @test isequal(modf(BigFloat(Inf)), (BigFloat(0.0), BigFloat(Inf)))
 end
 @testset "rem" begin
     setprecision(53) do
@@ -858,6 +857,45 @@ end
     # Issue #33676
     @test trunc(UInt8, parse(BigFloat,"255.1")) == UInt8(255)
     @test_throws InexactError trunc(UInt8, parse(BigFloat,"256.1"))
+
+    @testset "inexact limits ($T)" for T in Base.BitInteger_types
+        typemin_and_half = BigFloat(typemin(T)) - 0.5
+        typemax_and_half = BigFloat(typemax(T)) + 0.5
+        typemin_and_one = BigFloat(typemin(T)) - 1
+        typemax_and_one = BigFloat(typemax(T)) + 1
+
+        @test trunc(T, typemin_and_half) == typemin(T)
+        @test trunc(T, typemax_and_half) == typemax(T)
+        @test_throws InexactError trunc(T, typemin_and_one)
+        @test_throws InexactError trunc(T, typemax_and_one)
+
+        @test_throws InexactError floor(T, typemin_and_half)
+        @test floor(T, typemax_and_half) == typemax(T)
+        @test_throws InexactError floor(T, typemin_and_one)
+        @test_throws InexactError floor(T, typemax_and_one)
+
+        @test ceil(T, typemin_and_half) == typemin(T)
+        @test_throws InexactError ceil(T, typemax_and_half)
+        @test_throws InexactError ceil(T, typemin_and_one)
+        @test_throws InexactError ceil(T, typemax_and_one)
+
+        if iseven(typemin(T))
+            @test round(T, typemin_and_half) == typemin(T)
+        else
+            @test_throws InexactError round(T, typemin_and_half)
+        end
+
+        if iseven(typemax(T))
+            @test round(T, typemax_and_half) == typemax(T)
+        else
+            @test_throws InexactError round(T, typemax_and_half)
+        end
+
+        @test round(T, BigFloat(typemin(T)) - 0.4) == typemin(T)
+        @test round(T, BigFloat(typemax(T)) + 0.4) == typemax(T)
+        @test_throws InexactError round(T, typemin_and_one)
+        @test_throws InexactError round(T, typemax_and_one)
+    end
 end
 @testset "div" begin
     @test div(big"1.0",big"0.1") == 9
@@ -908,9 +946,9 @@ end
         serialize(b, x)
         @test deserialize(b) == x
     end
-    let x = BigFloat(Inf, 46)
+    let x = BigFloat(Inf, precision = 46)
         serialize(b, x)
-        @test deserialize(b) == x == BigFloat(Inf, 2)
+        @test deserialize(b) == x == BigFloat(Inf, precision = 2)
     end
 end
 @test isnan(sqrt(BigFloat(NaN)))
@@ -921,10 +959,10 @@ end
     for prec in (10, 100, 1000)
         for val in ("3.1", pi, "-1.3", 3.1, 1//10)
             let a = BigFloat(val),
-                b = BigFloat(val, prec),
+                b = BigFloat(val, precision = prec),
                 c = BigFloat(val, RoundUp),
-                d = BigFloat(val, prec, RoundDown),
-                e = BigFloat(val, prec, RoundUp)
+                d = BigFloat(val, RoundDown, precision = prec),
+                e = BigFloat(val, RoundUp, precision = prec)
 
                 @test precision(a) == precision(BigFloat)
                 @test precision(b) == prec

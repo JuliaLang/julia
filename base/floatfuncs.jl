@@ -128,7 +128,6 @@ end
 # NOTE: this relies on the current keyword dispatch behaviour (#9498).
 function round(x::Real, r::RoundingMode=RoundNearest;
                digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
-    isfinite(x) || return x
     if digits === nothing
         if sigdigits === nothing
             if base === nothing
@@ -139,10 +138,12 @@ function round(x::Real, r::RoundingMode=RoundNearest;
                 # or throw(ArgumentError("`round` cannot use `base` argument without `digits` or `sigdigits` arguments."))
             end
         else
+            isfinite(x) || return float(x)
             _round_sigdigits(x, r, sigdigits, base === nothing ? 10 : base)
         end
     else
         if sigdigits === nothing
+            isfinite(x) || return float(x)
             _round_digits(x, r, digits, base === nothing ? 10 : base)
         else
             throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
@@ -222,21 +223,22 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=atol>0 ? 0 : √eps, atol::Real=0, nans::Bool=false, norm::Function)
+    isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
 
-Inexact equality comparison: `true` if `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The
-default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
-argument `nans` determines whether or not NaN values are considered equal (defaults to false).
+Inexact equality comparison. Two numbers compare equal if their relative distance *or* their
+absolute distance is within tolerance bounds: `isapprox` returns `true` if
+`norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The default `atol` is zero and the
+default `rtol` depends on the types of `x` and `y`. The keyword argument `nans` determines
+whether or not NaN values are considered equal (defaults to false).
 
 For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to
 the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
-`x` and `y` may also be arrays of numbers, in which case `norm` defaults to the usual
-`norm` function in LinearAlgebra, but
-may be changed by passing a `norm::Function` keyword argument. (For numbers, `norm` is the
-same thing as `abs`.) When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
+The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for
+arrays (where an alternative `norm` choice is sometimes useful).
+When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
 or `NaN`), the comparison falls back to checking whether all elements of `x` and `y` are
 approximately equal component-wise.
 
@@ -253,16 +255,22 @@ for example, in `x - y ≈ 0`, `atol=1e-9` is an absurdly small tolerance if `x`
 but an absurdly large tolerance if `x` is the
 [radius of a Hydrogen atom](https://en.wikipedia.org/wiki/Bohr_radius) in meters.
 
+!!! compat "Julia 1.6"
+    Passing the `norm` keyword argument when comparing numeric (non-array) arguments
+    requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
-julia> 0.1 ≈ (0.1 - 1e-10)
+julia> isapprox(0.1, 0.15; atol=0.05)
 true
 
-julia> isapprox(10, 11; atol = 2)
+julia> isapprox(0.1, 0.15; rtol=0.34)
 true
 
-julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])
+julia> isapprox(0.1, 0.15; rtol=0.33)
+false
+
+julia> 0.1 + 1e-10 ≈ 0.1
 true
 
 julia> 1e-10 ≈ 0
@@ -270,10 +278,15 @@ false
 
 julia> isapprox(1e-10, 0, atol=1e-8)
 true
+
+julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0]) # using `norm`
+true
 ```
 """
-function isapprox(x::Number, y::Number; atol::Real=0, rtol::Real=rtoldefault(x,y,atol), nans::Bool=false)
-    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= max(atol, rtol*max(abs(x), abs(y)))) || (nans && isnan(x) && isnan(y))
+function isapprox(x::Number, y::Number;
+                  atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
+                  nans::Bool=false, norm::Function=abs)
+    x == y || (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
 end
 
 """

@@ -4,20 +4,26 @@ module TestSymmetric
 
 using Test, LinearAlgebra, SparseArrays, Random
 
-Random.seed!(101)
+Random.seed!(1010)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
         Any[ [1 0; 0 1], [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
     @test ishermitian(σ)
 end
 
+@testset "Two-dimensional Euler formula for Hermitian" begin
+    @test cis(Hermitian([π 0; 0 π])) ≈ -I
+end
+
 @testset "Hermitian matrix exponential/log" begin
     A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
     @test exp(A2) ≈ exp(Hermitian(A2))
+    @test cis(A2) ≈ cis(Hermitian(A2))
     @test log(A2) ≈ log(Hermitian(A2))
     A3 = A1 * A1' # posdef
     @test exp(A3) ≈ exp(Hermitian(A3))
+    @test cis(A3) ≈ cis(Hermitian(A3))
     @test log(A3) ≈ log(Hermitian(A3))
 
     A1 = randn(4,4)
@@ -63,6 +69,11 @@ end
                     @test_throws ArgumentError Symmetric(Hermitian(aherm, :U), :L)
                     @test_throws ArgumentError Hermitian(Symmetric(aherm, :U), :L)
                 end
+            end
+            @testset "diag" begin
+                D = Diagonal(x)
+                @test diag(Symmetric(D, :U))::Vector == x
+                @test diag(Hermitian(D, :U))::Vector == real(x)
             end
             @testset "similar" begin
                 @test isa(similar(Symmetric(asym)), Symmetric{eltya})
@@ -661,6 +672,90 @@ end
     @test LinearAlgebra.symmetric_type(Int) == Int
     @test LinearAlgebra.hermitian(1, :U) == 1
     @test LinearAlgebra.hermitian_type(Int) == Int
+end
+
+@testset "sqrt(nearly semidefinite)" begin
+    let A = [0.9999999999999998 4.649058915617843e-16 -1.3149405273715513e-16 9.9959579317056e-17; -8.326672684688674e-16 1.0000000000000004 2.9280733590254494e-16 -2.9993900031619594e-16; 9.43689570931383e-16 -1.339206523454095e-15 1.0000000000000007 -8.550505126287743e-16; -6.245004513516506e-16 -2.0122792321330962e-16 1.183061278035052e-16 1.0000000000000002],
+        B = [0.09648289218436859 0.023497875751503007 0.0 0.0; 0.023497875751503007 0.045787575150300804 0.0 0.0; 0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0],
+        C = Symmetric(A*B*A'), # semidefinite up to roundoff
+        Csqrt = sqrt(C)
+        @test Csqrt isa Symmetric{Float64}
+        @test Csqrt*Csqrt ≈ C rtol=1e-14
+    end
+    let D = Symmetric(Matrix(Diagonal([1 0; 0 -1e-14])))
+        @test sqrt(D) ≈ [1 0; 0 1e-7im] rtol=1e-14
+        @test sqrt(D, rtol=1e-13) ≈ [1 0; 0 0] rtol=1e-14
+        @test sqrt(D, rtol=1e-13)^2 ≈ D rtol=1e-13
+    end
+end
+
+@testset "Multiplications symmetric/hermitian for $T and $S" for T in
+        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
+    let A = Transpose(Symmetric(rand(S, 3, 3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ parent(A) * Bv
+        @test A * Bm ≈ parent(A) * Bm
+        @test Bm * A ≈ Bm * parent(A)
+    end
+    let A = Adjoint(Hermitian(rand(S, 3,3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ parent(A) * Bv
+        @test A * Bm ≈ parent(A) * Bm
+        @test Bm * A ≈ Bm * parent(A)
+    end
+end
+
+@testset "Dsiambiguation multiplication with transposed AbstractMatrix methods in linalg/matmul.jl for $T and $S" for T in
+        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
+    let Ahrs = Transpose(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = Transpose(Symmetric(rand(S, 3, 3))),
+        Ahcs = Transpose(Hermitian(Symmetric(rand(S, 3, 3))))
+
+        @test Ahrs * Ahrs ≈ Ahrs * parent(Ahrs)
+        @test Ahrs * Acs ≈ Ahrs * parent(Acs)
+        @test Acs * Acs ≈ parent(Acs) * parent(Acs)
+        @test Acs * Ahrs ≈ parent(Acs) * Ahrs
+        @test Ahrs * Ahcs ≈ parent(Ahrs) * Ahcs
+        @test Ahcs * Ahrs ≈ Ahcs * parent(Ahrs)
+    end
+end
+
+@testset "Dsiambiguation multiplication with adjointed AbstractMatrix methods in linalg/matmul.jl for $T and $S" for T in
+        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
+    let Ahrs = Adjoint(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = Adjoint(Symmetric(rand(S, 3, 3))),
+        Ahcs = Adjoint(Hermitian(Symmetric(rand(S, 3, 3))))
+
+        @test Ahrs * Ahrs ≈ Ahrs * parent(Ahrs)
+        @test Ahcs * Ahcs ≈ parent(Ahcs) * parent(Ahcs)
+        @test Ahrs * Ahcs ≈ Ahrs * parent(Ahcs)
+        @test Acs * Ahcs ≈ Acs * parent(Ahcs)
+        @test Ahcs * Ahrs ≈ parent(Ahcs) * Ahrs
+        @test Ahcs * Acs ≈ parent(Ahcs) * Acs
+    end
+end
+
+@testset "Addition/subtraction with SymTridiagonal" begin
+    TR = SymTridiagonal(randn(Float64,5), randn(Float64,4))
+    TC = SymTridiagonal(randn(ComplexF64,5), randn(ComplexF64,4))
+    SR = Symmetric(randn(Float64,5,5))
+    SC = Symmetric(randn(ComplexF64,5,5))
+    HR = Hermitian(randn(Float64,5,5))
+    HC = Hermitian(randn(ComplexF64,5,5))
+    for op = (+,-)
+        for T = (TR, TC), S = (SR, SC)
+            @test op(T, S) == op(Array(T), S)
+            @test op(S, T) == op(S, Array(T))
+            @test op(T, S) isa Symmetric
+            @test op(S, T) isa Symmetric
+        end
+        for H = (HR, HC)
+            for T = (TR, TC)
+                @test op(T, H) == op(Array(T), H)
+                @test op(H, T) == op(H, Array(T))
+            end
+            @test op(TR, H) isa Hermitian
+            @test op(H, TR) isa Hermitian
+        end
+    end
 end
 
 end # module TestSymmetric

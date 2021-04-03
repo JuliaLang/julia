@@ -46,7 +46,7 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
 @test !endswith(@__DIR__, Base.Filesystem.path_separator)
-let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
+let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no --color=no`,
     wd = sprint(show, pwd())
     s_dir = sprint(show, realpath(tempdir()))
     @test wd != s_dir
@@ -56,6 +56,9 @@ let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
     @test !endswith(wd, Base.Filesystem.path_separator)
     @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
+
+@test Base.in_sysimage(Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"))
+@test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
 
 # Issue #5789 and PR #13542:
 mktempdir() do dir
@@ -104,6 +107,11 @@ let shastr1 = "ab"^20, shastr2 = "ac"^20
     @test !isless(hash1, hash1)
 end
 
+# Test bad SHA1 values
+@test_throws ArgumentError SHA1("this is not a valid SHA1")
+@test_throws ArgumentError parse(SHA1, "either is this")
+@test tryparse(SHA1, "nor this") === nothing
+
 let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid = UUID(uuidstr)
     @test uuid == eval(Meta.parse(repr(uuid))) # check show method
@@ -117,8 +125,12 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     uuid2 = UUID(uuidstr2)
     uuids = [uuid, uuid2]
     @test (uuids .== uuid) == [true, false]
+
+    @test parse(UUID, uuidstr2) == uuid2
 end
 @test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
+@test_throws ArgumentError parse(UUID, "not a UUID")
+@test tryparse(UUID, "either is this") === nothing
 
 function subset(v::Vector{T}, m::Int) where T
     T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
@@ -181,15 +193,29 @@ end
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
-saved_home_project = Base.HOME_PROJECT[]
 saved_active_project = Base.ACTIVE_PROJECT[]
 
-push!(empty!(LOAD_PATH), "project")
-push!(empty!(DEPOT_PATH), "depot")
-Base.HOME_PROJECT[] = nothing
+push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
+append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
 Base.ACTIVE_PROJECT[] = nothing
 
-@test load_path() == [abspath("project","Project.toml")]
+@test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
+
+# locate `tail(names)` package by following the search path graph through `names` starting from `where`
+function recurse_package(where::PkgId, name::String, names::String...)
+    pkg = identify_package(where, name)
+    pkg === nothing && return nothing
+    return recurse_package(pkg, names...)
+end
+
+recurse_package(pkg::String) = identify_package(pkg)
+recurse_package(where::PkgId, pkg::String) = identify_package(where, pkg)
+
+function recurse_package(name::String, names::String...)
+    pkg = identify_package(name)
+    pkg === nothing && return nothing
+    return recurse_package(pkg, names...)
+end
 
 @testset "project & manifest identify_package & locate_package" begin
     local path
@@ -201,14 +227,15 @@ Base.ACTIVE_PROJECT[] = nothing
         ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"                ),
     ]
         n = map(String, split(names, '.'))
-        pkg = identify_package(n...)
+        pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
+        @test Base.compilecache_path(pkg, UInt64(0)) == Base.compilecache_path(pkg, UInt64(0))
     end
     @test identify_package("Baz") == nothing
     @test identify_package("Qux") == nothing
     @testset "equivalent package names" begin
-        local classes = [
+         classes = [
             ["Foo"],
             ["Bar", "Foo.Bar"],
             ["Foo.Baz", "Bar.Baz", "Foo.Bar.Baz"],
@@ -221,15 +248,15 @@ Base.ACTIVE_PROJECT[] = nothing
         for i = 1:length(classes)
             A = classes[i]
             for x in A
-                X = identify_package(map(String, split(x, '.'))...)
+                X = recurse_package(map(String, split(x, '.'))...)
                 for y in A
-                    Y = identify_package(map(String, split(y, '.'))...)
+                    Y = recurse_package(map(String, split(y, '.'))...)
                     @test X == Y
                 end
                 for j = i+1:length(classes)
                     B = classes[j]
                     for z in B
-                        Z = identify_package(map(String, split(z, '.'))...)
+                        Z = recurse_package(map(String, split(z, '.'))...)
                         @test X != Z
                     end
                 end
@@ -384,8 +411,6 @@ const envs = Dict{String,Any}()
 append!(empty!(DEPOT_PATH), depots)
 
 @testset "load code uniqueness" begin
-    @show UUIDS
-    @show depots
     @test allunique(UUIDS)
     @test allunique(depots)
     @test allunique(DEPOT_PATH)
@@ -570,7 +595,11 @@ end
 end
 
 # normalization of paths by include (#26424)
-@test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
+@test begin
+    exc = try; include("./notarealfile.jl"); "unexpectedly reached!"; catch exc; exc; end
+    @test exc isa SystemError
+    exc.prefix
+end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
 
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
@@ -661,7 +690,6 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-Base.HOME_PROJECT[] = saved_home_project
 Base.ACTIVE_PROJECT[] = saved_active_project
 
 # issue #28190

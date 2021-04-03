@@ -8,7 +8,7 @@
 #abstract type Vararg{T} end
 
 #mutable struct Symbol
-#    #opaque
+## opaque
 #end
 
 #mutable struct TypeName
@@ -53,28 +53,43 @@
 #abstract type DenseArray{T,N} <: AbstractArray{T,N} end
 
 #mutable struct Array{T,N} <: DenseArray{T,N}
+## opaque
 #end
 
 #mutable struct Module
-#    name::Symbol
+## opaque
+#end
+
+#mutable struct SimpleVector
+## opaque
+#end
+
+#mutable struct String
+## opaque
 #end
 
 #mutable struct Method
+#...
 #end
 
 #mutable struct MethodInstance
+#...
 #end
 
 #mutable struct CodeInstance
+#...
 #end
 
 #mutable struct CodeInfo
+#...
 #end
 
 #mutable struct TypeMapLevel
+#...
 #end
 
 #mutable struct TypeMapEntry
+#...
 #end
 
 #abstract type Ref{T} end
@@ -93,7 +108,8 @@
 #end
 
 #struct LineInfoNode
-#    method::Any
+#    module::Module
+#    method::Symbol
 #    file::Symbol
 #    line::Int
 #    inlined_at::Int
@@ -103,13 +119,22 @@
 #    label::Int
 #end
 
+#struct GotoIfNot
+#    cond::Any
+#    dest::Int
+#end
+
+#struct ReturnNode
+#    val::Any
+#end
+
 #struct PiNode
 #    val
 #    typ
 #end
 
 #struct PhiNode
-#    edges::Vector{Any}
+#    edges::Vector{Int32}
 #    values::Vector{Any}
 #end
 
@@ -217,9 +242,22 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
+
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
+
+TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
+TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
+TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
+
+UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
+
+const Vararg = ccall(:jl_toplevel_eval_in, Any, (Any, Any), Core, _expr(:new, TypeofVararg))
+
+# let the compiler assume that calling Union{} as a constructor does not need
+# to be considered ever (which comes up often as Type{<:T})
+Union{}(a...) = throw(MethodError(Union{}, a))
 
 Expr(@nospecialize args...) = _expr(args...)
 
@@ -349,13 +387,7 @@ mutable struct WeakRef
                                       (Ptr{Cvoid}, Any), getptls(), v)
 end
 
-TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
-TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
-TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
-
-UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
-
-(::Type{Tuple{}})() = () # Tuple{}()
+Tuple{}() = ()
 
 struct VecElement{T}
     value::T
@@ -368,18 +400,34 @@ _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :Any)
 _new(:SSAValue, :Int)
+_new(:Argument, :Int)
+_new(:ReturnNode, :Any)
+eval(Core, :(ReturnNode() = $(Expr(:new, :ReturnNode)))) # unassigned val indicates unreachable
+eval(Core, :(GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))))
 eval(Core, :(LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
 eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
+LineNumberNode(l::Int, f::String) = LineNumberNode(l, Symbol(f))
 eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
-eval(Core, :(PhiNode(edges::Array{Any, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
+eval(Core, :(PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
 eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
 eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
-eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
-             $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
+eval(Core, :(LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
+             $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
+eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+                          @nospecialize(inferred), const_flags::Int32,
+                          min_world::UInt, max_world::UInt) =
+                ccall(:jl_new_codeinst, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
+                    mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
+eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))))
+eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
+eval(Core, :(PartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :isva, :parent, :source))))
+eval(Core, :(InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :vtype, :elsetype))))
+eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
+    $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
@@ -424,7 +472,7 @@ Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d
 Array{T,1}() where {T} = Array{T,1}(undef, 0)
 
 
-(::Type{Array{T,N} where T})(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
+(Array{T,N} where T)(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
 
 Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
 Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
@@ -447,13 +495,15 @@ Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
-export CodeInfo, MethodInstance, CodeInstance, GotoNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
+export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    Const, PartialStruct
 
-import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
+import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    Const, PartialStruct
 
 end
 
@@ -534,10 +584,11 @@ function (g::GeneratedFunctionStub)(@nospecialize args...)
                          Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
                          Expr(:return, body),
                          Expr(:meta, :pop_loc))))
-    if g.spnames === nothing
+    spnames = g.spnames
+    if spnames === nothing
         return lam
     else
-        return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+        return Expr(Symbol("with-static-parameters"), lam, spnames...)
     end
 end
 
@@ -734,10 +785,28 @@ Unsigned(x::Int64)  = UInt64(x)
 Signed(x::UInt128)  = Int128(x)
 Unsigned(x::Int128) = UInt128(x)
 
-Signed(x::Union{Float32, Float64, Bool})   = Int(x)
-Unsigned(x::Union{Float32, Float64, Bool}) = UInt(x)
+Signed(x::Union{Float16, Float32, Float64, Bool})   = Int(x)
+Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
-Integer(x::Union{Float32, Float64}) = Int(x)
+Integer(x::Union{Float16, Float32, Float64}) = Int(x)
+
+# Binding for the julia parser, called as
+#
+#    Core._parse(text, filename, offset, options)
+#
+# Parse Julia code from the buffer `text`, starting at `offset` and attributing
+# it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
+# len::Int)` for a raw unmanaged buffer. `options` should be one of `:atom`,
+# `:statement` or `:all`, indicating how much the parser will consume.
+#
+# `_parse` must return an `svec` containing an `Expr` and the new offset as an
+# `Int`.
+#
+# The internal jl_parse which will call into Core._parse if not `nothing`.
+_parse = nothing
+
+# support for deprecated uses of internal _apply function
+_apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

@@ -1,0 +1,116 @@
+From b7f604447cbd76c803ccff5c0ff1b699b9c1504e Mon Sep 17 00:00:00 2001
+From: Fangrui Song <i@maskray.me>
+Date: Fri, 17 Jul 2020 23:29:50 -0700
+Subject: [PATCH 1/2] [RelocationResolver] Support R_PPC_REL32 &
+ R_PPC64_REL{32,64}
+
+This suppresses `failed to compute relocation: R_PPC_REL32, Invalid data was encountered while parsing the file`
+and its 64-bit variants when running llvm-dwarfdump on a PowerPC object file with .eh_frame
+
+Unfortunately it is difficult to test the computation:
+DWARFDataExtractor::getEncodedPointer does not use the relocated value
+and even if it does, we need to teach llvm-dwarfdump --eh-frame to do
+some linker job to report a reasonable address.
+---
+ llvm/lib/Object/RelocationResolver.cpp  | 20 +++++++++++--
+ llvm/test/DebugInfo/PowerPC/eh-frame.ll | 39 +++++++++++++++++++++++++
+ 2 files changed, 57 insertions(+), 2 deletions(-)
+ create mode 100644 llvm/test/DebugInfo/PowerPC/eh-frame.ll
+
+diff --git llvm/lib/Object/RelocationResolver.cpp llvm/lib/Object/RelocationResolver.cpp
+index 31478be7899..eedb236f83d 100644
+--- llvm/lib/Object/RelocationResolver.cpp
++++ llvm/lib/Object/RelocationResolver.cpp
+@@ -131,6 +131,8 @@ static bool supportsPPC64(uint64_t Type) {
+   switch (Type) {
+   case ELF::R_PPC64_ADDR32:
+   case ELF::R_PPC64_ADDR64:
++  case ELF::R_PPC64_REL32:
++  case ELF::R_PPC64_REL64:
+     return true;
+   default:
+     return false;
+@@ -143,6 +145,10 @@ static uint64_t resolvePPC64(RelocationRef R, uint64_t S, uint64_t A) {
+     return (S + getELFAddend(R)) & 0xFFFFFFFF;
+   case ELF::R_PPC64_ADDR64:
+     return S + getELFAddend(R);
++  case ELF::R_PPC64_REL32:
++    return (S + getELFAddend(R) - R.getOffset()) & 0xFFFFFFFF;
++  case ELF::R_PPC64_REL64:
++    return S + getELFAddend(R) - R.getOffset();
+   default:
+     llvm_unreachable("Invalid relocation type");
+   }
+@@ -238,12 +244,22 @@ static uint64_t resolveX86(RelocationRef R, uint64_t S, uint64_t A) {
+ }
+ 
+ static bool supportsPPC32(uint64_t Type) {
+-  return Type == ELF::R_PPC_ADDR32;
++  switch (Type) {
++  case ELF::R_PPC_ADDR32:
++  case ELF::R_PPC_REL32:
++    return true;
++  default:
++    return false;
++  }
+ }
+ 
+ static uint64_t resolvePPC32(RelocationRef R, uint64_t S, uint64_t A) {
+-  if (R.getType() == ELF::R_PPC_ADDR32)
++  switch (R.getType()) {
++  case ELF::R_PPC_ADDR32:
+     return (S + getELFAddend(R)) & 0xFFFFFFFF;
++  case ELF::R_PPC_REL32:
++    return (S + getELFAddend(R) - R.getOffset()) & 0xFFFFFFFF;
++  }
+   llvm_unreachable("Invalid relocation type");
+ }
+ 
+diff --git llvm/test/DebugInfo/PowerPC/eh-frame.ll llvm/test/DebugInfo/PowerPC/eh-frame.ll
+new file mode 100644
+index 00000000000..3a8f7df6b61
+--- /dev/null
++++ llvm/test/DebugInfo/PowerPC/eh-frame.ll
+@@ -0,0 +1,39 @@
++; RUN: llc -filetype=obj -mtriple=powerpc %s -o %t32.o
++; RUN: llvm-readobj -r %t32.o | FileCheck %s --check-prefix=PPC_REL
++; RUN: llvm-dwarfdump --eh-frame %t32.o 2>&1 | FileCheck %s --check-prefix=PPC
++
++; PPC_REL:      R_PPC_REL32 .text 0x0
++; PPC_REL-NEXT: R_PPC_REL32 .text 0x4
++
++; PPC-NOT: warning:
++; PPC: FDE cie=00000000 pc=00000000...00000004
++;; TODO Take relocation into consideration
++; PPC: FDE cie=00000000 pc=00000000...00000004
++
++; RUN: llc -filetype=obj -mtriple=ppc64 %s -o %t64.o
++; RUN: llvm-readobj -r %t64.o | FileCheck %s --check-prefix=PPC64_REL
++; RUN: llvm-dwarfdump --eh-frame %t64.o 2>&1 | FileCheck %s --check-prefix=PPC64
++
++; PPC64_REL:      R_PPC64_REL32 .text 0x0
++; PPC64_REL-NEXT: R_PPC64_REL32 .text 0x10
++
++; PPC64-NOT: warning:
++; PPC64: FDE cie=00000000 pc=00000000...00000010
++; PPC64: FDE cie=00000000 pc=00000000...00000010
++
++; RUN: llc -filetype=obj -mtriple=ppc64le -code-model=large %s -o %t64l.o
++; RUN: llvm-readobj -r %t64l.o | FileCheck %s --check-prefix=PPC64L_REL
++; RUN: llvm-dwarfdump --eh-frame %t64l.o 2>&1 | FileCheck %s --check-prefix=PPC64
++
++; PPC64L_REL:      R_PPC64_REL64 .text 0x0
++; PPC64L_REL-NEXT: R_PPC64_REL64 .text 0x10
++
++define void @foo() {
++entry:
++  ret void
++}
++
++define void @bar() {
++entry:
++  ret void
++}
+-- 
+2.28.0
+

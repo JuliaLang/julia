@@ -1,0 +1,9 @@
+name = "MozillaCACerts_jll"
+uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2020.7.22"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

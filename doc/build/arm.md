@@ -50,7 +50,7 @@ CPU target by adding the following to `Make.user`:
 ```JULIA_CPU_TARGET=cortex-a7```
 
 Depending on the exact compiler and distribution, there might be a build failure
-due to unsupported inline assembly. In that case, add `MARCH=armv7-a` to
+due to unsupported inline assembly. In that case, add `MCPU=armv7-a` to
 `Make.user`.
 
 ## AArch64 (ARMv8)
@@ -65,7 +65,7 @@ Julia has been successfully built on the following ARMv8 devices:
 Compilation on `ARMv8-A` requires that `Make.user` is configured as follows:
 
 ```
-MARCH=armv8-a
+MCPU=armv8-a
 ```
 
 ### nVidia Jetson TX2

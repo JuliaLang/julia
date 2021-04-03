@@ -39,7 +39,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    Random.seed!(1234321)
+    Random.seed!(12343)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -266,6 +266,8 @@ end
         @test_throws RankDeficientException cholesky!(copy(M), Val(true))
         @test_throws RankDeficientException cholesky(M, Val(true); check = true)
         @test_throws RankDeficientException cholesky!(copy(M), Val(true); check = true)
+        @test !LinearAlgebra.issuccess(cholesky(M, Val(true); check = false))
+        @test !LinearAlgebra.issuccess(cholesky!(copy(M), Val(true); check = false))
         C = cholesky(M, Val(true); check = false)
         @test_throws RankDeficientException chkfullrank(C)
         C = cholesky!(copy(M), Val(true); check = false)
@@ -285,20 +287,30 @@ end
     @test sum(sum(norm, U'*U - XX)) < eps()
 end
 
+struct WrappedVector{T} <: AbstractVector{T}
+    data::Vector{T}
+end
+Base.copy(v::WrappedVector) = WrappedVector(copy(v.data))
+Base.size(v::WrappedVector) = size(v.data)
+Base.getindex(v::WrappedVector, i::Integer) = getindex(v.data, i)
+Base.setindex!(v::WrappedVector, val, i::Integer) = setindex!(v.data, val, i)
 
 @testset "cholesky up- and downdates" begin
     A = complex.(randn(10,5), randn(10, 5))
     v = complex.(randn(5), randn(5))
+    w = WrappedVector(v)
     for uplo in (:U, :L)
         AcA = A'*A
         BcB = AcA + v*v'
         BcB = (BcB + BcB')/2
         F = cholesky(Hermitian(AcA, uplo))
         G = cholesky(Hermitian(BcB, uplo))
-        @test Base.getproperty(LinearAlgebra.lowrankupdate(F, v), uplo) ≈ Base.getproperty(G, uplo)
-        @test_throws DimensionMismatch LinearAlgebra.lowrankupdate(F, Vector{eltype(v)}(undef,length(v)+1))
-        @test Base.getproperty(LinearAlgebra.lowrankdowndate(G, v), uplo) ≈ Base.getproperty(F, uplo)
-        @test_throws DimensionMismatch LinearAlgebra.lowrankdowndate(G, Vector{eltype(v)}(undef,length(v)+1))
+        @test getproperty(lowrankupdate(F, v), uplo) ≈ getproperty(G, uplo)
+        @test getproperty(lowrankupdate(F, w), uplo) ≈ getproperty(G, uplo)
+        @test_throws DimensionMismatch lowrankupdate(F, Vector{eltype(v)}(undef,length(v)+1))
+        @test getproperty(lowrankdowndate(G, v), uplo) ≈ getproperty(F, uplo)
+        @test getproperty(lowrankdowndate(G, w), uplo) ≈ getproperty(F, uplo)
+        @test_throws DimensionMismatch lowrankdowndate(G, Vector{eltype(v)}(undef,length(v)+1))
     end
 end
 
@@ -357,7 +369,7 @@ end
     D = complex(D)
     CD = cholesky(D)
     CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{Complex{Float64}}
+    @test CD isa Cholesky{ComplexF64}
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
@@ -425,6 +437,42 @@ end
     factorstring = sprint((t, s) -> show(t, "text/plain", s), C.uplo == 'U' ? C.U : C.L)
     permstring   = sprint((t, s) -> show(t, "text/plain", s), C.p)
     @test cholstring == "$(summary(C))\n$rankstring\n$factorstring\npermutation:\n$permstring"
+end
+
+@testset "destructuring for Cholesky[Pivoted]" begin
+    for val in (true, false)
+        A = rand(8, 8)
+        B = A'A
+        C = cholesky(B, Val(val), check=false)
+        l, u = C
+        @test l == C.L
+        @test u == C.U
+    end
+end
+
+@testset "issue #37356, diagonal elements of hermitian generic matrix" begin
+    B = Hermitian(hcat([one(BigFloat) + im]))
+    @test Matrix(cholesky(B)) ≈ B
+    C = Hermitian(hcat([one(BigFloat) + im]), :L)
+    @test Matrix(cholesky(C)) ≈ C
+end
+
+@testset "constructing a Cholesky factor from a triangular matrix" begin
+    A = [1.0 2.0; 3.0 4.0]
+    let
+        U = UpperTriangular(A)
+        C = Cholesky(U)
+        @test C isa Cholesky{Float64}
+        @test C.U == U
+        @test C.L == U'
+    end
+    let
+        L = LowerTriangular(A)
+        C = Cholesky(L)
+        @test C isa Cholesky{Float64}
+        @test C.L == L
+        @test C.U == L'
+    end
 end
 
 end # module TestCholesky

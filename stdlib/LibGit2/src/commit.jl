@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+repository(c::GitCommit) = c.owner
+
 """
     message(c::GitCommit, raw::Bool=false)
 

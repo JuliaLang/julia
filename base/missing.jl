@@ -34,9 +34,9 @@ Any
 ```
 
 !!! compat "Julia 1.3"
-  This function is exported as of Julia 1.3.
+    This function is exported as of Julia 1.3.
 """
-nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
+nonmissingtype(::Type{T}) where {T} = typesplit(T, Missing)
 
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
@@ -91,10 +91,11 @@ isapprox(::Missing, ::Any; kwargs...) = missing
 isapprox(::Any, ::Missing; kwargs...) = missing
 
 # Unary operators/functions
-for f in (:(!), :(~), :(+), :(-), :(zero), :(one), :(oneunit),
+for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
+          :(zero), :(one), :(oneunit),
           :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan),
-          :(iszero), :(transpose), :(adjoint), :(float), :(conj),
+          :(iszero), :(transpose), :(adjoint), :(float), :(complex), :(conj),
           :(abs), :(abs2), :(iseven), :(ispow2),
           :(real), :(imag), :(sign), :(inv))
     @eval ($f)(::Missing) = missing
@@ -104,6 +105,13 @@ for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
     @eval function $(f)(::Type{Union{T, Missing}}) where T
         T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
         $f(T)
+    end
+end
+for f in (:(Base.float), :(Base.complex))
+    @eval $f(::Type{Missing}) = Missing
+    @eval function $f(::Type{Union{T, Missing}}) where T
+        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+        Union{$f(T), Missing}
     end
 end
 
@@ -135,7 +143,7 @@ round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
     throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
 round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 # to fix ambiguities
-round(::Type{T}, x::Rational, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
+round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T>:Missing,Tr} = round(nonmissingtype_checked(T), x, r)
 round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 
 # Handle ceil, floor, and trunc separately as they have no RoundingMode argument
@@ -212,17 +220,17 @@ julia> argmax(x)
 3
 
 julia> collect(keys(x))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  3
 
 julia> collect(skipmissing([1, missing, 2]))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
 julia> collect(skipmissing([1 missing; 2 missing]))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 ```
@@ -283,7 +291,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
         i += 1
     end
     i > ilast && return mapreduce_empty(f, op, eltype(itr))
-    a1 = ai
+    a1::eltype(itr) = ai
     i += 1
     while i <= ilast
         @inbounds ai = A[i]
@@ -368,12 +376,12 @@ but with all missing elements and those for which `f` returns `false` removed.
 # Examples
 ```jldoctest
 julia> x = [1 2; missing 4]
-2×2 Array{Union{Missing, Int64},2}:
+2×2 Matrix{Union{Missing, Int64}}:
  1         2
   missing  4
 
 julia> filter(isodd, skipmissing(x))
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 ```
 """

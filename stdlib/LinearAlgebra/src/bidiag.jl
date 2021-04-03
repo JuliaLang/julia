@@ -7,7 +7,7 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     uplo::Char # upper bidiagonal ('U') or lower ('L')
     function Bidiagonal{T,V}(dv, ev, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
-        if length(ev) != length(dv)-1
+        if length(ev) != max(length(dv)-1, 0)
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
         new{T,V}(dv, ev, uplo)
@@ -34,27 +34,27 @@ must be one less than the length of `dv`.
 # Examples
 ```jldoctest
 julia> dv = [1, 2, 3, 4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
  4
 
 julia> ev = [7, 8, 9]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  7
  8
  9
 
 julia> Bu = Bidiagonal(dv, ev, :U) # ev is on the first superdiagonal
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  7  ⋅  ⋅
  ⋅  2  8  ⋅
  ⋅  ⋅  3  9
  ⋅  ⋅  ⋅  4
 
 julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  7  2  ⋅  ⋅
  ⋅  8  3  ⋅
@@ -68,6 +68,13 @@ function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector
     Bidiagonal{T,V}(dv, ev, uplo)
 end
 
+#To allow Bidiagonal's where the "dv" is Vector{T} and "ev" Vector{S},
+#where T and S can be promoted
+function LinearAlgebra.Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Symbol) where {T,S}
+    TS = promote_type(T,S)
+    return Bidiagonal{TS,Vector{TS}}(dv, ev, uplo)
+end
+
 """
     Bidiagonal(A, uplo::Symbol)
 
@@ -77,21 +84,21 @@ its first super- (if `uplo=:U`) or sub-diagonal (if `uplo=:L`).
 # Examples
 ```jldoctest
 julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  1  1  1
  2  2  2  2
  3  3  3  3
  4  4  4  4
 
 julia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  1  ⋅  ⋅
  ⋅  2  2  ⋅
  ⋅  ⋅  3  3
  ⋅  ⋅  ⋅  4
 
 julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  2  2  ⋅  ⋅
  ⋅  3  3  ⋅
@@ -345,7 +352,7 @@ function diag(M::Bidiagonal, n::Integer=0)
 end
 
 function +(A::Bidiagonal, B::Bidiagonal)
-    if A.uplo == B.uplo
+    if A.uplo == B.uplo || length(A.dv) == 0
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.uplo)
     else
         newdv = A.dv+B.dv
@@ -354,7 +361,7 @@ function +(A::Bidiagonal, B::Bidiagonal)
 end
 
 function -(A::Bidiagonal, B::Bidiagonal)
-    if A.uplo == B.uplo
+    if A.uplo == B.uplo || length(A.dv) == 0
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.uplo)
     else
         newdv = A.dv-B.dv
@@ -364,8 +371,9 @@ end
 
 -(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev,A.uplo)
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.uplo)
-*(B::Number, A::Bidiagonal) = A*B
+*(B::Number, A::Bidiagonal) = Bidiagonal(B*A.dv, B*A.ev, A.uplo)
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
+\(B::Number, A::Bidiagonal) = Bidiagonal(B\A.dv, B\A.ev, A.uplo)
 
 function ==(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
@@ -879,7 +887,7 @@ eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
     Q = Matrix{T}(undef, n,n)
-    blks = [0; findall(x -> x == 0, M.ev); n]
+    blks = [0; findall(iszero, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector

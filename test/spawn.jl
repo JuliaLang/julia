@@ -5,6 +5,7 @@
 ###################################
 
 using Random, Sockets
+using Downloads: download
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
@@ -214,13 +215,13 @@ let r, t, sock
 end
 
 # issue #4535
-exename = Base.julia_cmd()
+exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, we will get a
     # valgrind banner here, not "Hello World\n".
-    @test read(pipeline(`$exename --startup-file=no -e 'println(stderr,"Hello World")'`, stderr=catcmd), String) == "Hello World\n"
+    @test read(pipeline(`$exename -e 'println(stderr,"Hello World")'`, stderr=catcmd), String) == "Hello World\n"
     out = Pipe()
-    proc = run(pipeline(`$exename --startup-file=no -e 'println(stderr,"Hello World")'`, stderr = out), wait=false)
+    proc = run(pipeline(`$exename -e 'println(stderr,"Hello World")'`, stderr = out), wait=false)
     close(out.in)
     @test read(out, String) == "Hello World\n"
     @test success(proc)
@@ -228,7 +229,7 @@ end
 
 # setup_stdio for AbstractPipe
 let out = Pipe(),
-    proc = run(pipeline(`$exename --startup-file=no -e 'println(getpid())'`, stdout=IOContext(out, :foo => :bar)), wait=false)
+    proc = run(pipeline(`$exename -e 'println(getpid())'`, stdout=IOContext(out, :foo => :bar)), wait=false)
     # < don't block here before getpid call >
     pid = getpid(proc)
     close(out.in)
@@ -252,7 +253,25 @@ end
         @test "Hello World\n" == read(fname, String)
         @test OLD_STDOUT === stdout
         rm(fname)
+
+        col = get(stdout, :color, false)
+        redirect_stdout(IOContext(stdout, :color=>!col))
+        @test get(stdout, :color, col) == !col
+        redirect_stdout(OLD_STDOUT)
     end
+end
+
+# issue #36136
+@testset "redirect to devnull" begin
+    @test redirect_stdout(devnull) do; println("Hello") end === nothing
+    @test redirect_stderr(devnull) do; println(stderr, "Hello") end === nothing
+    # stdin is unavailable on the workers. Run test on master.
+    ret = Core.eval(Main, quote
+                remotecall_fetch(1) do
+                    redirect_stdin(devnull) do; read(stdin, String) end
+                end
+            end)
+    @test ret == ""
 end
 
 # Test that redirecting an IOStream does not crash the process
@@ -279,7 +298,7 @@ let fname = tempname(), p
     import Base.zzzInvalidIdentifier
     """
     try
-        io = open(pipeline(`$exename --startup-file=no`, stderr=stderr), "w")
+        io = open(pipeline(exename, stderr=stderr), "w")
         write(io, cmd)
         close(io)
         wait(io)
@@ -299,7 +318,7 @@ let bad = "bad\0name"
 end
 
 # issue #12829
-let out = Pipe(), echo = `$exename --startup-file=no -e 'print(stdout, " 1\t", read(stdin, String))'`, ready = Condition(), t, infd, outfd
+let out = Pipe(), echo = `$exename -e 'print(stdout, " 1\t", read(stdin, String))'`, ready = Condition(), t, infd, outfd
     @test_throws ArgumentError write(out, "not open error")
     inread = false
     t = @async begin # spawn writer task
@@ -380,7 +399,7 @@ let fname = tempname()
         run(cmd)
     end
     """
-    @test success(pipeline(`$catcmd $fname`, `$exename --startup-file=no -e $code`))
+    @test success(pipeline(`$catcmd $fname`, `$exename -e $code`))
     rm(fname)
 end
 
@@ -456,6 +475,13 @@ end
 @test Set([``, echocmd]) != Set([``, ``])
 @test Set([echocmd, ``, ``, echocmd]) == Set([echocmd, ``])
 
+# env handling (#32454)
+@test Cmd(`foo`, env=Dict("A"=>true)).env == ["A=true"]
+@test Cmd(`foo`, env=["A=true"]).env      == ["A=true"]
+@test Cmd(`foo`, env=("A"=>true,)).env    == ["A=true"]
+@test Cmd(`foo`, env=["A"=>true]).env     == ["A=true"]
+@test Cmd(`foo`, env=nothing).env         == nothing
+
 # test for interpolation of Cmd
 let c = setenv(`x`, "A"=>true)
     @test (`$c a`).env == String["A=true"]
@@ -494,7 +520,7 @@ end
 
 # issue #19864 (PR #20497)
 let c19864 = readchomp(pipeline(ignorestatus(
-        `$exename --startup-file=no -e '
+        `$exename -e '
             struct Error19864 <: Exception; end
             Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
             throw(Error19864())'`),
@@ -547,7 +573,7 @@ end
 
 # Logging macros should not output to finalized streams (#26687)
 let
-    cmd = `$exename --startup-file=no -e 'finalizer(x->@info(x), "Hello")'`
+    cmd = `$exename -e 'finalizer(x->@info(x), "Hello")'`
     output = readchomp(pipeline(cmd, stderr=catcmd))
     @test occursin("Info: Hello", output)
 end
@@ -660,7 +686,7 @@ end
 
 let text = "input-test-text"
     b = PipeBuffer()
-    proc = open(Base.CmdRedirect(Base.CmdRedirect(```$exename --startup-file=no -E '
+    proc = open(Base.CmdRedirect(Base.CmdRedirect(```$exename -E '
                     in14 = Base.open(RawFD(14))
                     out15 = Base.open(RawFD(15))
                     write(out15, in14)'```,
@@ -675,14 +701,48 @@ end
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
 
 
+# Issue #37070
+@testset "addenv()" begin
+    cmd = Cmd(`$shcmd -c "echo \$FOO \$BAR"`, env=Dict("FOO" => "foo"))
+    @test strip(String(read(cmd))) == "foo"
+    cmd = addenv(cmd, "BAR" => "bar")
+    @test strip(String(read(cmd))) == "foo bar"
+    cmd = addenv(cmd, Dict("FOO" => "bar"))
+    @test strip(String(read(cmd))) == "bar bar"
+    cmd = addenv(cmd, ["FOO=baz"])
+    @test strip(String(read(cmd))) == "baz bar"
+
+    # Test that `addenv()` works properly with `inherit`
+    withenv("FOO" => "foo", "BAR" => nothing) do
+        cmd = Cmd(`$shcmd -c "echo \$FOO \$BAR"`)
+        @test strip(String(read(cmd))) == "foo"
+
+        cmd2 = addenv(cmd, "BAR" => "bar"; inherit=false)
+        @test strip(String(read(cmd2))) == "bar"
+
+        cmd2 = addenv(cmd, "BAR" => "bar"; inherit=true)
+        @test strip(String(read(cmd2))) == "foo bar"
+
+        # Changing the environment doesn't effect the command,
+        # because it was baked in at `addenv()` time
+        withenv("FOO" => "baz") do
+            @test strip(String(read(cmd2))) == "foo bar"
+        end
+
+        # Even with inheritance, `addenv()` dominates:
+        cmd2 = addenv(cmd, "FOO" => "foo2", "BAR" => "bar"; inherit=true)
+        @test strip(String(read(cmd2))) == "foo2 bar"
+    end
+end
+
+
 # clean up busybox download
 if Sys.iswindows()
     rm(busybox, force=true)
 end
 
 
-# shell escaping on Windows
-@testset "shell_escape_winsomely" begin
+@testset "shell escaping on Windows" begin
     # Note  argument A can be parsed both as A or "A".
     # We do not test that the parsing satisfies either of these conditions.
     # In other words, tests may fail even for valid parsing.
@@ -690,77 +750,101 @@ end
 
     # input :
     # output: ""
-    @test Base.shell_escape_winsomely("") == "\"\""
+    @test Base.escape_microsoft_c_args("") == "\"\""
 
-    @test Base.shell_escape_winsomely("A") == "A"
+    @test Base.escape_microsoft_c_args("A") == "A"
 
-    @test Base.shell_escape_winsomely(`A`) == "A"
+    @test Base.escape_microsoft_c_args(`A`) == "A"
 
     # input : hello world
     # output: "hello world"
-    @test Base.shell_escape_winsomely("hello world") == "\"hello world\""
+    @test Base.escape_microsoft_c_args("hello world") == "\"hello world\""
 
     # input : hello  world
     # output: "hello  world"
-    @test Base.shell_escape_winsomely("hello\tworld") == "\"hello\tworld\""
+    @test Base.escape_microsoft_c_args("hello\tworld") == "\"hello\tworld\""
 
     # input : hello"world
     # output: "hello\"world" (also valid) hello\"world
-    @test Base.shell_escape_winsomely("hello\"world") == "\"hello\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\"world") == "\"hello\\\"world\""
 
     # input : hello""world
     # output: "hello\"\"world" (also valid) hello\"\"world
-    @test Base.shell_escape_winsomely("hello\"\"world") == "\"hello\\\"\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\"\"world") == "\"hello\\\"\\\"world\""
 
     # input : hello\world
     # output: hello\world
-    @test Base.shell_escape_winsomely("hello\\world") == "hello\\world"
+    @test Base.escape_microsoft_c_args("hello\\world") == "hello\\world"
 
     # input : hello\\world
     # output: hello\\world
-    @test Base.shell_escape_winsomely("hello\\\\world") == "hello\\\\world"
+    @test Base.escape_microsoft_c_args("hello\\\\world") == "hello\\\\world"
 
     # input : hello\"world
     # output: "hello\"world" (also valid) hello\"world
-    @test Base.shell_escape_winsomely("hello\\\"world") == "\"hello\\\\\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\\\"world") == "\"hello\\\\\\\"world\""
 
     # input : hello\\"world
     # output: "hello\\\\\"world" (also valid) hello\\\\\"world
-    @test Base.shell_escape_winsomely("hello\\\\\"world")  == "\"hello\\\\\\\\\\\"world\""
+    @test Base.escape_microsoft_c_args("hello\\\\\"world")  == "\"hello\\\\\\\\\\\"world\""
 
     # input : hello world\
     # output: "hello world\\"
-    @test Base.shell_escape_winsomely("hello world\\") == "\"hello world\\\\\""
+    @test Base.escape_microsoft_c_args("hello world\\") == "\"hello world\\\\\""
 
     # input : A\B
     # output: A\B"
-    @test Base.shell_escape_winsomely("A\\B") == "A\\B"
+    @test Base.escape_microsoft_c_args("A\\B") == "A\\B"
 
     # input : [A\, B]
     # output: "A\ B"
-    @test Base.shell_escape_winsomely("A\\", "B") == "A\\ B"
+    @test Base.escape_microsoft_c_args("A\\", "B") == "A\\ B"
 
     # input : A"B
     # output: "A\"B"
-    @test Base.shell_escape_winsomely("A\"B") ==  "\"A\\\"B\""
+    @test Base.escape_microsoft_c_args("A\"B") ==  "\"A\\\"B\""
 
     # input : [A B\, C]
     # output: "A B\\" C
-    @test Base.shell_escape_winsomely("A B\\", "C") == "\"A B\\\\\" C"
+    @test Base.escape_microsoft_c_args("A B\\", "C") == "\"A B\\\\\" C"
 
     # input : [A "B, C]
     # output: "A \"B" C
-    @test Base.shell_escape_winsomely("A \"B", "C") == "\"A \\\"B\" C"
+    @test Base.escape_microsoft_c_args("A \"B", "C") == "\"A \\\"B\" C"
 
     # input : [A B\, C]
     # output: "A B\\" C
-    @test Base.shell_escape_winsomely("A B\\", "C") == "\"A B\\\\\" C"
+    @test Base.escape_microsoft_c_args("A B\\", "C") == "\"A B\\\\\" C"
 
     # input :[A\ B\, C]
     # output: "A\ B\\" C
-    @test Base.shell_escape_winsomely("A\\ B\\", "C") == "\"A\\ B\\\\\" C"
+    @test Base.escape_microsoft_c_args("A\\ B\\", "C") == "\"A\\ B\\\\\" C"
 
     # input : [A\ B\, C, D K]
     # output: "A\ B\\" C "D K"
-    @test Base.shell_escape_winsomely("A\\ B\\", "C", "D K") == "\"A\\ B\\\\\" C \"D K\""
+    @test Base.escape_microsoft_c_args("A\\ B\\", "C", "D K") == "\"A\\ B\\\\\" C \"D K\""
+
+    # shell_escape_wincmd
+    @test Base.shell_escape_wincmd("") == ""
+    @test Base.shell_escape_wincmd("\"") == "^\""
+    @test Base.shell_escape_wincmd("\"\"") == "\"\""
+    @test Base.shell_escape_wincmd("\"\"\"") == "\"\"^\""
+    @test Base.shell_escape_wincmd("\"\"\"\"") == "\"\"\"\""
+    @test Base.shell_escape_wincmd("a^\"^o\"^u\"") == "a^^\"^o\"^^u^\""
+    @test Base.shell_escape_wincmd("ä^\"^ö\"^ü\"") == "ä^^\"^ö\"^^ü^\""
+    @test Base.shell_escape_wincmd("@@()!^<>&|\"") == "^@@^(^)^!^^^<^>^&^|^\""
+    @test_throws ArgumentError Base.shell_escape_wincmd("\0")
+    @test_throws ArgumentError Base.shell_escape_wincmd("\r")
+    @test_throws ArgumentError Base.shell_escape_wincmd("\n")
+
+    # combined tests of shell_escape_wincmd and escape_microsoft_c_args
+    @test Base.shell_escape_wincmd(Base.escape_microsoft_c_args(
+        "julia", "-e", "println(ARGS)", raw"He said \"a^2+b^2=c^2\"!" )) ==
+            "julia -e println^(ARGS^) \"He said \\\"a^^2+b^^2=c^^2\\\"!\""
+
+    ascii95 = String(range(' ',stop='~')); # all printable ASCII characters
+    args = ["ab ^` c", " \" ", "\"", ascii95, ascii95,
+            "\"\\\"\\", "", "|", "&&", ";"];
+    @test Base.shell_escape_wincmd(Base.escape_microsoft_c_args(args...)) == "\"ab ^` c\" \" \\\" \" \"\\\"\" \" !\\\"#\$%^&'^(^)*+,-./0123456789:;^<=^>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^^_`abcdefghijklmnopqrstuvwxyz{^|}~\" \" ^!\\\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\" \"\\\"\\\\\\\"\\\\\" \"\" ^| ^&^& ;"
+
 end

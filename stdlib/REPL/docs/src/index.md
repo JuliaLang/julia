@@ -22,7 +22,7 @@ and a `julia>` prompt.
 
 ### The Julian mode
 
-The REPL has four main modes of operation. The first and most common is the Julian prompt. It
+The REPL has five main modes of operation. The first and most common is the Julian prompt. It
 is the default mode of operation; each new line initially starts with `julia>`. It is here that
 you can enter Julia expressions. Hitting return or enter after a complete expression has been
 entered will evaluate the entry and show the result of the last expression.
@@ -45,7 +45,7 @@ julia> ans
 
 In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting
 text that starts with `julia> ` into the REPL. In that case, only expressions starting with
-`julia> ` are parsed, others are removed. This makes it is possible to paste a chunk of code
+`julia> ` are parsed, others are removed. This makes it possible to paste a chunk of code
 that has been copied from a REPL session without having to scrub away prompts and outputs. This
 feature is enabled by default but can be disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`.
 If it is enabled, you can try it out by pasting the code block above this paragraph straight into
@@ -120,6 +120,21 @@ search: Int32 UInt32
   32-bit signed integer type.
 ```
 
+A string or regex literal searches all docstrings using [`apropos`](@ref):
+
+```
+help?> "aprop"
+REPL.stripmd
+Base.Docs.apropos
+
+help?> r"ap..p"
+Base.:∘
+Base.shell_escape_posixly
+Distributed.CachingPool
+REPL.stripmd
+Base.Docs.apropos
+```
+
 Help mode can be exited by pressing backspace at the beginning of the line.
 
 ### [Shell mode](@id man-shell-mode)
@@ -135,6 +150,51 @@ julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
 hello
 ```
+!!! note
+    For Windows users, Julia's shell mode does not expose windows shell commands.
+    Hence, this will fail:
+
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
+shell> dir
+ERROR: IOError: could not spawn `dir`: no such file or directory (ENOENT)
+Stacktrace!
+.......
+```
+However, you can get access to `PowerShell` like this:
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
+shell> powershell
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+PS C:\Users\elm>
+```
+... and to `cmd.exe` like that (see the `dir` command):
+```julia-repl
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
+shell> cmd
+Microsoft Windows [version 10.0.17763.973]
+(c) 2018 Microsoft Corporation. All rights reserved.
+C:\Users\elm>dir
+ Volume in drive C has no label
+ Volume Serial Number is 1643-0CD7
+  Directory of C:\Users\elm
+
+29/01/2020  22:15    <DIR>          .
+29/01/2020  22:15    <DIR>          ..
+02/02/2020  08:06    <DIR>          .atom
+```
+
+### Pkg mode
+
+The Package manager mode accepts specialized commands for loading and updating packages. It is entered
+by pressing the `]` key at the Julian REPL prompt and exited by pressing CTRL-C or pressing the backspace key
+at the beginning of the line. The prompt for this mode is `pkg>`. It supports its own help-mode, which is
+entered by pressing `?` at the beginning  of the line of the `pkg>` prompt. The Package manager mode is
+documented in the Pkg manual, available at [https://julialang.github.io/Pkg.jl/v1/](https://julialang.github.io/Pkg.jl/v1/).
 
 ### Search modes
 
@@ -230,7 +290,7 @@ const mykeys = Dict{Any,Any}(
     # Up Arrow
     "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
     # Down Arrow
-    "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
+    "\e[B" => (s,o...)->(LineEdit.edit_move_down(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
 )
 
 function customize_keys(repl)
@@ -413,11 +473,11 @@ ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
 
-# TerminalMenus
+## TerminalMenus
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
 
-## Examples
+### Examples
 
 ```julia
 import REPL
@@ -428,7 +488,7 @@ options = ["apple", "orange", "grape", "strawberry",
 
 ```
 
-### RadioMenu
+#### RadioMenu
 
 The RadioMenu allows the user to select one option from the list. The `request`
 function displays the interactive menu and returns the index of the selected
@@ -464,7 +524,7 @@ v  peach
 Your favorite fruit is blueberry!
 ```
 
-### MultiSelectMenu
+#### MultiSelectMenu
 
 The MultiSelectMenu allows users to select many choices from a list.
 
@@ -505,26 +565,14 @@ You like the following fruits:
   - peach
 ```
 
-## Customization / Configuration
+### Customization / Configuration
 
-All interface customization is done through the keyword only
-`TerminalMenus.config()` function.
+#### ConfiguredMenu subtypes
 
-### Arguments
+Starting with Julia 1.6, the recommended way to configure menus is via the constructor.
+For instance, the default multiple-selection menu
 
- - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
- - `cursor::Char='>'|'→'`: character to use for cursor
- - `up_arrow::Char='^'|'↑'`: character to use for up arrow
- - `down_arrow::Char='v'|'↓'`: character to use for down arrow
- - `checked::String="[X]"|"✓"`: string to use for checked
- - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
- - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
- - `supress_output::Bool=false`: For testing. If true, menu will not be printed to console.
- - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
-
-### Examples
-
-```julia
+```
 julia> menu = MultiSelectMenu(options, pagesize=5);
 
 julia> request(menu) # ASCII is used by default
@@ -534,9 +582,12 @@ julia> request(menu) # ASCII is used by default
    [ ] grape
  > [X] strawberry
 v  [ ] blueberry
-Set([4, 2])
+```
 
-julia> TerminalMenus.config(charset=:unicode)
+can instead be rendered with Unicode selection and navigation characters with
+
+```julia
+julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
 [press: d=done, a=all, n=none]
@@ -545,10 +596,14 @@ julia> request(menu)
    ⬚ grape
  → ✓ strawberry
 ↓  ⬚ blueberry
-Set([4, 2])
+```
 
-julia> TerminalMenus.config(checked="YEP!", unchecked="NOPE", cursor='⧐')
+More fine-grained configuration is also possible:
 
+```julia
+julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YEP!", unchecked="NOPE", cursor='⧐');
+
+julia> request(menu)
 julia> request(menu)
 [press: d=done, a=all, n=none]
    NOPE apple
@@ -556,12 +611,82 @@ julia> request(menu)
    NOPE grape
  ⧐ YEP! strawberry
 ↓  NOPE blueberry
-Set([4, 2])
-
 ```
 
-# References
+Aside from the overall `charset` option, for `RadioMenu` the configurable options are:
+
+ - `cursor::Char='>'|'→'`: character to use for cursor
+ - `up_arrow::Char='^'|'↑'`: character to use for up arrow
+ - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `updown_arrow::Char='I'|'↕'`: character to use for up/down arrow in one-line page
+ - `scroll_wrap::Bool=false`: optionally wrap-around at the beginning/end of a menu
+ - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
+
+`MultiSelectMenu` adds:
+
+ - `checked::String="[X]"|"✓"`: string to use for checked
+ - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+
+You can create new menu types of your own.
+Types that are derived from `TerminalMenus.ConfiguredMenu` configure the menu options at construction time.
+
+#### Legacy interface
+
+Prior to Julia 1.6, and still supported throughout Julia 1.x, one can also configure menus by calling
+`TerminalMenus.config()`.
+
+## References
+
+### REPL
 
 ```@docs
 Base.atreplinit
+```
+
+### TerminalMenus
+
+#### Configuration
+
+```@docs
+REPL.TerminalMenus.Config
+REPL.TerminalMenus.MultiSelectConfig
+REPL.TerminalMenus.config
+```
+
+#### User interaction
+
+```@docs
+REPL.TerminalMenus.request
+```
+
+#### AbstractMenu extension interface
+
+Any subtype of `AbstractMenu` must be mutable, and must contain the fields `pagesize::Int` and
+`pageoffset::Int`.
+Any subtype must also implement the following functions:
+
+```@docs
+REPL.TerminalMenus.pick
+REPL.TerminalMenus.cancel
+REPL.TerminalMenus.writeline
+```
+
+It must also implement either `options` or `numoptions`:
+
+```@docs
+REPL.TerminalMenus.options
+REPL.TerminalMenus.numoptions
+```
+
+If the subtype does not have a field named `selected`, it must also implement
+
+```@docs
+REPL.TerminalMenus.selected
+```
+
+The following are optional but can allow additional customization:
+
+```@docs
+REPL.TerminalMenus.header
+REPL.TerminalMenus.keypress
 ```

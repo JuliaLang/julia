@@ -15,6 +15,7 @@ Base.Iterators.repeated
 Base.Iterators.product
 Base.Iterators.flatten
 Base.Iterators.partition
+Base.Iterators.map
 Base.Iterators.filter
 Base.Iterators.accumulate
 Base.Iterators.reverse

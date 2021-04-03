@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -14,14 +16,15 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/InstVisitor.h>
+#if JL_LLVM_VERSION < 110000
 #include <llvm/IR/CallSite.h>
+#endif
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
 

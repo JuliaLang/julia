@@ -159,7 +159,7 @@ end
 @testset "+ and - among structured matrices with different container types" begin
     diag = 1:5
     offdiag = 1:4
-    uniformscalingmats = [UniformScaling(3), UniformScaling(1.0), UniformScaling(3//5), UniformScaling(Complex{Float64}(1.3, 3.5))]
+    uniformscalingmats = [UniformScaling(3), UniformScaling(1.0), UniformScaling(3//5), UniformScaling(ComplexF64(1.3, 3.5))]
     mats = [Diagonal(diag), Bidiagonal(diag, offdiag, 'U'), Bidiagonal(diag, offdiag, 'L'), Tridiagonal(offdiag, diag, offdiag), SymTridiagonal(diag, offdiag)]
     for T in [ComplexF64, Int64, Rational{Int64}, Float64]
         push!(mats, Diagonal(Vector{T}(diag)))

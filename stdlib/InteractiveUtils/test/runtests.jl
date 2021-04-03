@@ -2,6 +2,10 @@
 
 using Test, InteractiveUtils
 
+@testset "highlighting" begin
+    include("highlighting.jl")
+end
+
 # test methodswith
 # `methodswith` relies on exported symbols
 export func4union, Base
@@ -56,7 +60,7 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = "ARRAY{FLOAT64,N}"
+tag = "ARRAY"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
@@ -75,11 +79,6 @@ has_unused() = (a = rand(5))
 # some of this info with debug info.
 #@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
 
-# Make sure that "expected" unions are highlighted with warning color instead of error color
-iob = IOBuffer()
-code_warntype(IOContext(iob, :color => true), x -> (x > 1 ? "foo" : nothing), Tuple{Int64})
-str = String(take!(iob))
-@test occursin(Base.text_colors[Base.warn_color()], str)
 
 # Make sure getproperty and setproperty! works with @code_... macros
 struct T1234321
@@ -107,6 +106,7 @@ end # module ImportIntrinsics15819
 foo11122(x) = @fastmath x - 1.0
 
 # issue #11122, #13568 and #15819
+tag = "ANY"
 @test !warntype_hastag(+, Tuple{Int,Int}, tag)
 @test !warntype_hastag(-, Tuple{Int,Int}, tag)
 @test !warntype_hastag(*, Tuple{Int,Int}, tag)
@@ -154,15 +154,50 @@ mktemp() do f, io
 end
 
 module _test_varinfo_
-export x
-x = 1.0
+module inner_mod
+inner_x = 1
 end
+import Test: @test
+export x_exported
+x_exported = 1.0
+y_not_exp = 1.0
+z_larger = Vector{Float64}(undef, 3)
+a_smaller = Vector{Float64}(undef, 2)
+end
+
+using Test
+
 @test repr(varinfo(Main, r"^$")) == """
 | name | size | summary |
 |:---- | ----:|:------- |
 """
 let v = repr(varinfo(_test_varinfo_))
-    @test occursin("| x              |   8 bytes | Float64 |", v)
+    @test occursin("| x_exported     |   8 bytes | Float64 |", v)
+    @test !occursin("y_not_exp", v)
+    @test !occursin("@test", v)
+    @test !occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, all = true))
+    @test occursin("x_exported", v)
+    @test occursin("y_not_exp", v)
+    @test !occursin("@test", v)
+    @test findfirst("a_smaller", v)[1] < findfirst("z_larger", v)[1] # check for alphabetical
+    @test !occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, imported = true))
+    @test occursin("x_exported", v)
+    @test !occursin("y_not_exp", v)
+    @test occursin("@test", v)
+    @test !occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, all = true, sortby = :size))
+    @test findfirst("z_larger", v)[1] < findfirst("a_smaller", v)[1] # check for size order
+end
+let v = repr(varinfo(_test_varinfo_, sortby = :summary))
+    @test findfirst("Float64", v)[1] < findfirst("Module", v)[1] # check for summary order
+end
+let v = repr(varinfo(_test_varinfo_, all = true, recursive = true))
+    @test occursin("inner_x", v)
 end
 
 # Issue 14173
@@ -173,7 +208,7 @@ module Tmp14173
 end
 varinfo(Tmp14173) # warm up
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 60000 : 20000)
+@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 100000)
 
 # PR #24997: test that `varinfo` doesn't fail when encountering `missing`
 module A
@@ -218,6 +253,10 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 @test (@which Int[1; 2]).name === :typed_vcat
 @test (@which [1 2;3 4]).name === :hvcat
 @test (@which Int[1 2;3 4]).name === :typed_hvcat
+# issue #39426
+let x..y = 0
+    @test (@which 1..2).name === :..
+end
 
 # issue #13464
 try
@@ -276,7 +315,7 @@ let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
        src.code = Any[
            Expr(:meta, :noinline)
-           Expr(:return, Expr(:invalid))
+           Core.ReturnNode(Expr(:invalid))
        ]
        m.source = src
    end
@@ -317,6 +356,36 @@ B33163(x) = x
 @test (@code_typed A33163(1, y=2))[1].inferred
 @test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
 @test !(@code_typed optimize=false B33163(1))[1].inferred
+
+@test_throws MethodError (@code_lowered wrongkeyword=true 3 + 4)
+
+# Issue #14637
+@test (@which Base.Base.Base.nothing) == Core
+@test_throws ErrorException (@functionloc Base.nothing)
+@test (@code_typed (3//4).num)[2] == Int
+
+struct A14637
+    x
+end
+a14637 = A14637(0)
+@test (@which a14637.x).name == :getproperty
+@test (@functionloc a14637.x)[2] isa Integer
+
+# Issue #28615
+@test_throws ErrorException (@which [1, 2] .+ [3, 4])
+@test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
+@test (@code_typed Ref.([1,2])[1].x)[2] == Int
+@test (@code_typed max.(Ref(true).x))[2] == Bool
+@test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
+
+# Issue #36261
+@test (@code_typed max.(1 .+ 3, 5 - 7))[2] == Int
+f36261(x,y) = 3x + 4y
+A36261 = Float64[1.0, 2.0, 3.0]
+@test (@code_typed f36261.(A36261, pi))[1].inferred
+@test (@code_typed f36261.(A36261, 1 .+ pi))[1].inferred
+@test (@code_typed f36261.(A36261, 1 + pi))[1].inferred
+
 
 module ReflectionTest
 using Test, Random, InteractiveUtils
@@ -478,6 +547,8 @@ end
 # buildbot path updating
 file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(file)
+@test isfile(pathof(InteractiveUtils))
+@test isdir(pkgdir(InteractiveUtils))
 
 @testset "Issue #34434" begin
     io = IOBuffer()

@@ -27,7 +27,7 @@ contending threads. If you have more contention than that, different
 synchronization approaches should be considered.
 """
 mutable struct SpinLock <: AbstractLock
-    handle::Int
+    owned::Int
     SpinLock() = new(0)
 end
 
@@ -43,7 +43,7 @@ import Base.Sys.WORD_SIZE
 @eval _get(x::SpinLock) =
     llvmcall($"""
              %ptr = inttoptr i$WORD_SIZE %0 to i$WORD_SIZE*
-             %rv = load atomic i$WORD_SIZE, i$WORD_SIZE* %ptr acquire, align $(gc_alignment(Int))
+             %rv = load atomic i$WORD_SIZE, i$WORD_SIZE* %ptr monotonic, align $(gc_alignment(Int))
              ret i$WORD_SIZE %rv
              """, Int, Tuple{Ptr{Int}}, unsafe_convert(Ptr{Int}, pointer_from_objref(x)))
 
@@ -61,10 +61,12 @@ Base.assert_havelock(l::SpinLock) = islocked(l) ? nothing : Base.concurrency_vio
 function lock(l::SpinLock)
     while true
         if _get(l) == 0
+            GC.disable_finalizers()
             p = _xchg!(l, 1)
             if p == 0
                 return
             end
+            GC.enable_finalizers()
         end
         ccall(:jl_cpu_pause, Cvoid, ())
         # Temporary solution before we have gc transition support in codegen.
@@ -74,13 +76,20 @@ end
 
 function trylock(l::SpinLock)
     if _get(l) == 0
-        return _xchg!(l, 1) == 0
+        GC.disable_finalizers()
+        p = _xchg!(l, 1)
+        if p == 0
+            return true
+        end
+        GC.enable_finalizers()
     end
     return false
 end
 
 function unlock(l::SpinLock)
+    _get(l) == 0 && error("unlock count must match lock count")
     _set!(l, 0)
+    GC.enable_finalizers()
     ccall(:jl_cpu_wake, Cvoid, ())
     return
 end
