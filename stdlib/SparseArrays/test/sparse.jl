@@ -165,7 +165,7 @@ end
     sz34 = spzeros(3, 4)
     se77 = sparse(1.0I, 7, 7)
     @testset "h+v concatenation" begin
-        @test @inferred(hvcat((3, 2), se44, sz42, sz41, sz34, se33)) == se77 # [se44 sz42 sz41; sz34 se33]
+        @test [se44 sz42 sz41; sz34 se33] == se77
         @test length(nonzeros([sp33 0I; 1I 0I])) == 6
     end
 
@@ -1338,10 +1338,10 @@ end
 @testset "argmax, argmin, findmax, findmin" begin
     S = sprand(100,80, 0.5)
     A = Array(S)
-    @test @inferred(argmax(S)) == argmax(A)
-    @test @inferred(argmin(S)) == argmin(A)
-    @test @inferred(findmin(S)) == findmin(A)
-    @test @inferred(findmax(S)) == findmax(A)
+    @test argmax(S) == argmax(A)
+    @test argmin(S) == argmin(A)
+    @test findmin(S) == findmin(A)
+    @test findmax(S) == findmax(A)
     for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
         @test m(S, dims=region) == m(A, dims=region)
     end
@@ -2201,7 +2201,7 @@ end
     # Test that concatenations of pairs of sparse matrices yield sparse arrays
     @test issparse(vcat(spmat, spmat))
     @test issparse(hcat(spmat, spmat))
-    @test issparse(@inferred(hvcat((2,), spmat, spmat)))
+    @test issparse(hvcat((2,), spmat, spmat))
     @test issparse(cat(spmat, spmat; dims=(1,2)))
     # Test that concatenations of a sparse matrice with a dense matrix/vector yield sparse arrays
     @test issparse(vcat(spmat, densemat))
