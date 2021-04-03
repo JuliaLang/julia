@@ -1091,17 +1091,16 @@ function vcat(Xin::_SparseConcatGroup...)
     X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
     vcat(X...)
 end
-function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
-    nbr = length(rows)  # number of block rows
-
-    tmp_rows = Vector{SparseMatrixCSC}(undef, nbr)
-    k = 0
-    @inbounds for i = 1 : nbr
-        tmp_rows[i] = hcat(X[(1 : rows[i]) .+ k]...)
-        k += rows[i]
+hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...) =
+    vcat(_hvcat_rows(rows, X...)...)
+function _hvcat_rows((row1, rows...)::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
+    if row1 ≤ 0
+        throw(ArgumentError("length of block row must be positive, got $row1"))
     end
-    vcat(tmp_rows...)
+    # provide X[1] separately to convince inference that we don't call hcat() without arguments
+    return (hcat(X[1], X[2 : row1]...), _hvcat_rows(rows, X[row1+1:end]...)...)
 end
+_hvcat_rows(::Tuple{}, X::_SparseConcatGroup...) = ()
 
 # make sure UniformScaling objects are converted to sparse matrices for concatenation
 promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = SparseMatrixCSC
