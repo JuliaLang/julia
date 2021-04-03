@@ -510,7 +510,7 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return 1;
     if (y == (jl_value_t*)jl_any_type && jl_is_type(x))
         return 1;
-    if (jl_is_uniontype(x) && jl_is_uniontype(y) && jl_egal(x,y))
+    if (jl_is_uniontype(x) && jl_egal(x, y))
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
@@ -539,7 +539,7 @@ static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int par
         return 1;
     if (y == (jl_value_t*)jl_any_type && jl_is_type(x))
         return 1;
-    if (jl_is_uniontype(x) && jl_is_uniontype(y) && jl_egal(x,y))
+    if (jl_is_uniontype(x) && jl_egal(x, y))
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
@@ -1276,7 +1276,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     }
     if (jl_is_type(y))
         return x == jl_bottom_type;
-    return x == y || jl_egal(x, y);
+    return jl_egal(x, y);
 }
 
 static int is_indefinite_length_tuple_type(jl_value_t *x)

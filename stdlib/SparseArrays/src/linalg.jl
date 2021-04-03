@@ -376,6 +376,42 @@ function dot(x::SparseVector, A::AbstractSparseMatrixCSC, y::SparseVector)
     r
 end
 
+const WrapperMatrixTypes{T,MT} = Union{
+    SubArray{T,2,MT},
+    Adjoint{T,MT},
+    Transpose{T,MT},
+    AbstractTriangular{T,MT},
+    UpperHessenberg{T,MT},
+    Symmetric{T,MT},
+    Hermitian{T,MT},
+}
+
+function dot(A::MA, B::AbstractSparseMatrixCSC{TB}) where {MA<:Union{DenseMatrixUnion,WrapperMatrixTypes{<:Any,Union{DenseMatrixUnion,AbstractSparseMatrix}}},TB}
+    T = promote_type(eltype(A), TB)
+    (m, n) = size(A)
+    if (m, n) != size(B)
+        throw(DimensionMismatch())
+    end
+    s = zero(T)
+    if m * n == 0
+        return s
+    end
+    rows = rowvals(B)
+    vals = nonzeros(B)
+    @inbounds for j in 1:n
+        for ridx in nzrange(B, j)
+            i = rows[ridx]
+            v = vals[ridx]
+            s += dot(A[i,j], v)
+        end
+    end
+    return s
+end
+
+function dot(A::AbstractSparseMatrixCSC{TA}, B::MB) where {TA,MB<:Union{DenseMatrixUnion,WrapperMatrixTypes{<:Any,Union{DenseMatrixUnion,AbstractSparseMatrix}}}}
+    return conj(dot(B, A))
+end
+
 ## triangular sparse handling
 
 possible_adjoint(adj::Bool, a::Real) = a
@@ -610,7 +646,7 @@ function _ldiv!(L::LowerTriangularPlain, B::StridedVecOrMat)
     for k = 1:ncolB
         for j = 1:nrowB
             i1 = ia[j]
-            i2 = ia[j + 1] - 1
+            i2 = ia[j + 1] - one(eltype(ia))
 
             # find diagonal element
             ii = searchsortedfirst(ja, j, i1, i2, Base.Order.Forward)
@@ -652,7 +688,7 @@ function _ldiv!(U::UpperTriangularPlain, B::StridedVecOrMat)
     for k = 1:ncolB
         for j = nrowB:-1:1
             i1 = ia[j]
-            i2 = ia[j + 1] - 1
+            i2 = ia[j + 1] - one(eltype(ia))
 
             # find diagonal element
             ii = searchsortedlast(ja, j, i1, i2, Base.Order.Forward)

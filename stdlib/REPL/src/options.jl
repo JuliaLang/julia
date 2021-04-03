@@ -25,6 +25,8 @@ mutable struct Options
     auto_indent_bracketed_paste::Bool # set to true if terminal knows paste mode
     # cancel auto-indent when next character is entered within this time frame :
     auto_indent_time_threshold::Float64
+    # refresh after time delay
+    auto_refresh_time_delay::Float64
     # default IOContext settings at the REPL
     iocontext::Dict{Symbol,Any}
 end
@@ -44,6 +46,7 @@ Options(;
         auto_indent_tmp_off = false,
         auto_indent_bracketed_paste = false,
         auto_indent_time_threshold = 0.005,
+        auto_refresh_time_delay = 0.05,
         iocontext = Dict{Symbol,Any}()) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
@@ -51,7 +54,7 @@ Options(;
                     beep_colors, beep_use_current,
                     backspace_align, backspace_adjust, confirm_exit,
                     auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste,
-                    auto_indent_time_threshold,
+                    auto_indent_time_threshold, auto_refresh_time_delay,
                     iocontext)
 
 # for use by REPLs not having an options field

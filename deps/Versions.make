@@ -15,7 +15,7 @@ CSL_JLL_NAME := CompilerSupportLibraries
 
 # Clang (paired with LLVM, only here as a JLL download)
 CLANG_JLL_NAME := Clang
-CLANG_JLL_VER  := 11.0.1+2
+CLANG_JLL_VER  := 11.0.1+3
 
 # DSFMT
 DSFMT_VER := 2.2.4
@@ -45,12 +45,12 @@ LIBUV_JLL_NAME := LibUV
 
 # LLVM
 LLVM_VER := 11.0.1
-LLVM_ASSERT_JLL_VER := 11.0.1+2
+LLVM_ASSERT_JLL_VER := 11.0.1+3
 LLVM_JLL_NAME := libLLVM
 
 # LLVM_tools (downloads LLVM_jll to get things like `lit` and `opt`)
 LLVM_TOOLS_JLL_NAME := LLVM
-LLVM_TOOLS_JLL_VER := 11.0.1+2
+LLVM_TOOLS_JLL_VER := 11.0.1+3
 
 # LLVM libunwind
 LLVMUNWIND_VER := 11.0.1
@@ -74,7 +74,7 @@ OBJCONV_JLL_NAME := Objconv
 OBJCONV_JLL_VER  := 2.49.1+0
 
 # blastrampoline
-BLASTRAMPOLINE_VER := 3.0.0
+BLASTRAMPOLINE_VER := 3.0.2
 BLASTRAMPOLINE_JLL_NAME := libblastrampoline
 
 # OpenBLAS

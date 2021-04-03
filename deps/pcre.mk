@@ -12,7 +12,7 @@ $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).ta
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
 	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/pcre2-$(PCRE_VER)/config.sub
-	echo $1 > $@
+	echo 1 > $@
 
 checksum-pcre2: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<

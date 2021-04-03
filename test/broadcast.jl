@@ -955,18 +955,18 @@ p0 = copy(p)
     @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test isequal([1, 2] + [3.0, missing], [4.0, missing])
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test isequal(tuple.([1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Tuple{Int, Any}}
+        Union{Vector{Tuple{Int, Missing}}, Vector{Tuple{Int, Any}}, Vector{Tuple{Int, Float64}}}
     # Check that corner cases do not throw an error
     @test isequal(broadcast(x -> x === 1 ? nothing : x, [1, 2, missing]),
                   [nothing, 2, missing])
@@ -992,4 +992,26 @@ end
     Base.:*(x::Cyclotomic, c::T) where {T<:Real} = [1, 2]
 
     @test Cyclotomic() .* [2, 3] == [[1, 2], [1, 2]]
+end
+
+@testset "inplace broadcast with trailing singleton dims" begin
+    for (a, b, c) in (([1, 2], reshape([3 4], :, 1), reshape([5, 6], :, 1, 1)),
+            ([1 2; 3 4], reshape([5 6; 7 8], 2, 2, 1), reshape([9 10; 11 12], 2, 2, 1, 1)))
+
+        a_ = copy(a)
+        a_ .= b
+        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
+
+        a_ = copy(a)
+        a_ .= b
+        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
+
+        a_ = copy(a)
+        a_ .= b .+ c
+        @test a_ == dropdims(b .+ c, dims=(findall(==(1), size(c))...,))
+
+        a_ = copy(a)
+        a_ .*= c
+        @test a_ == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
+    end
 end

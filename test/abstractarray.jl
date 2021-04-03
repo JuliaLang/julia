@@ -299,10 +299,10 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
     B = T(A)
     @test A == B
     # Test indexing up to 5 dimensions
-    trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
-    trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
-    trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
-    trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
+    trailing5 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-5, 0)))
+    trailing4 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-4, 0)))
+    trailing3 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-3, 0)))
+    trailing2 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-2, 0)))
     i=0
     for i5 = 1:size(B, 5)
         for i4 = 1:size(B, 4)
@@ -419,10 +419,10 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         N = prod(shape)
         A = reshape(Vector(1:N), shape)
         B = T(A)
-        trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
-        trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
-        trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
-        trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
+        trailing5 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-5, 0)))
+        trailing4 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-4, 0)))
+        trailing3 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-3, 0)))
+        trailing2 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-2, 0)))
         idxs = rand(1:N, 3, 3, 3)
         @test B[idxs] == A[idxs] == idxs
         @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
@@ -1279,4 +1279,10 @@ end
     @test Int[t...; 3 4] == [1 2; 3 4]
     @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
     @test_throws ArgumentError Int[t...; 3 4 5]
+end
+
+@testset "reduce(vcat, ...) inferrence #40277" begin
+    x_vecs = ([5, ], [1.0, 2.0, 3.0])
+    @test @inferred(reduce(vcat, x_vecs)) == [5.0, 1.0, 2.0, 3.0]
+    @test @inferred(reduce(vcat, ([10.0], [20.0], Bool[]))) == [10.0, 20.0]
 end

@@ -4,13 +4,13 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX | PCRE.UCP
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.MATCH_INVALID_UTF | PCRE.ALT_BSUX | PCRE.UCP
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 """
-    An abstract type representing any sort of pattern matching expression (typically a regular
-    expression).
-    `AbstractPattern` objects can be used to match strings with [`match`](@ref).
+An abstract type representing any sort of pattern matching expression
+(typically a regular expression). `AbstractPattern` objects can be used to
+match strings with [`match`](@ref).
 """
 abstract type AbstractPattern end
 
@@ -140,8 +140,8 @@ function show(io::IO, re::Regex)
 end
 
 """
-   `AbstractMatch` objects are used to represent information about matches found in a string
-   using an `AbstractPattern`.
+`AbstractMatch` objects are used to represent information about matches found
+in a string using an `AbstractPattern`.
 """
 abstract type AbstractMatch end
 

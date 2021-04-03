@@ -206,7 +206,7 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
     # Create the file if it doesn't exist, map it if it does
     refs = Vector{Future}(undef, length(pids))
     func_mmap = mode -> open(filename, mode) do io
-        Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
+        mmap(io, Array{T,N}, dims, offset; shared=true)
     end
     s = Array{T}(undef, ntuple(d->0,N))
     if onlocalhost
@@ -668,7 +668,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT
     s = Mmap.Anonymous(shm_seg_name, readonly, create)
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64))
+    mmap(s, Array{T,length(dims)}, dims, zero(Int64))
 end
 
 # no-op in windows
@@ -688,7 +688,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
         systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
     end
 
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64); grow=false)
+    mmap(s, Array{T,length(dims)}, dims, zero(Int64); grow=false)
 end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)

@@ -344,6 +344,50 @@ for (fname, elty) in ((:cblas_zdotu_sub,:ComplexF64),
     end
 end
 
+@inline function _dot_length_check(x,y)
+    n = length(x)
+    if n != length(y)
+        throw(DimensionMismatch("dot product arguments have lengths $(length(x)) and $(length(y))"))
+    end
+    n
+end
+
+for (elty, f) in ((Float32, :dot), (Float64, :dot),
+                  (ComplexF32, :dotc), (ComplexF64, :dotc),
+                  (ComplexF32, :dotu), (ComplexF64, :dotu))
+    @eval begin
+        function $f(x::DenseArray{$elty}, y::DenseArray{$elty})
+            n = _dot_length_check(x,y)
+            $f(n, x, 1, y, 1)
+        end
+
+        function $f(x::StridedVector{$elty}, y::DenseArray{$elty})
+            n = _dot_length_check(x,y)
+            xstride = stride(x,1)
+            ystride = stride(y,1)
+            x_delta = xstride < 0 ? n : 1
+            GC.@preserve x $f(n,pointer(x,x_delta),xstride,y,ystride)
+        end
+
+        function $f(x::DenseArray{$elty}, y::StridedVector{$elty})
+            n = _dot_length_check(x,y)
+            xstride = stride(x,1)
+            ystride = stride(y,1)
+            y_delta = ystride < 0 ? n : 1
+            GC.@preserve y $f(n,x,xstride,pointer(y,y_delta),ystride)
+        end
+
+        function $f(x::StridedVector{$elty}, y::StridedVector{$elty})
+            n = _dot_length_check(x,y)
+            xstride = stride(x,1)
+            ystride = stride(y,1)
+            x_delta = xstride < 0 ? n : 1
+            y_delta = ystride < 0 ? n : 1
+            GC.@preserve x y $f(n,pointer(x,x_delta),xstride,pointer(y,y_delta),ystride)
+        end
+    end
+end
+
 function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasReal
     require_one_based_indexing(DX, DY)
     n = length(DX)
