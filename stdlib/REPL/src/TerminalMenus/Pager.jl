@@ -1,5 +1,5 @@
 mutable struct Pager{C} <: _ConfiguredMenu{C}
-    lines::Array{String,1}
+    lines::Vector{String}
     pagesize::Int
     pageoffset::Int
     selected::Nothing
@@ -28,13 +28,8 @@ function writeline(buf::IOBuffer, pager::Pager{Config}, idx::Int, iscursor::Bool
     print(buf, pager.lines[idx])
 end
 
-function writeLine(buf::IOBuffer, pager::Pager{<:Dict}, idx::Int, cursor::Bool)
-    cursor ? print(buf, pager.config[:cursor] ," ") : print(buf, "  ")
-    print(buf, pager.lines[idx])
-end
-
 function pager(terminal, object)
-    lines, columns = displaysize(terminal)
+    lines, columns = displaysize(terminal)::Tuple{Int,Int}
     columns -= 3
     buffer = IOBuffer()
     ctx = IOContext(buffer, :color => REPL.Terminals.hascolor(terminal), :displaysize => (lines, columns))
