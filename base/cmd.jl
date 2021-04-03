@@ -269,7 +269,7 @@ function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
             merge!(new_env, ENV)
         end
     else
-        for (k, v) in split.(cmd.env, "=")
+        for (k, v) in eachsplit.(cmd.env, "=")
             new_env[string(k)::String] = string(v)::String
         end
     end
@@ -284,7 +284,7 @@ function addenv(cmd::Cmd, pairs::Pair{<:AbstractString}...; inherit::Bool = true
 end
 
 function addenv(cmd::Cmd, env::Vector{<:AbstractString}; inherit::Bool = true)
-    return addenv(cmd, Dict(k => v for (k, v) in split.(env, "=")); inherit)
+    return addenv(cmd, Dict(k => v for (k, v) in eachsplit.(env, "=")); inherit)
 end
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
