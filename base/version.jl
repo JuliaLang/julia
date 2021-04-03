@@ -100,7 +100,7 @@ const VERSION_REGEX = r"^
 $"ix
 
 function split_idents(s::AbstractString)
-    idents = split(s, '.')
+    idents = eachsplit(s, '.')
     pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
     return tuple(pidents...)::VerTuple
 end
