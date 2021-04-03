@@ -521,13 +521,9 @@ function relpath(path::String, startpath::String = ".")
         path_drive, path_without_drive = splitdrive(path)
         startpath_drive, startpath_without_drive = splitdrive(startpath)
         isempty(startpath_drive) && (startpath_drive = path_drive) # by default assume same as path drive
-
-        path_drive = uppercase(path_drive) # canonicalize drive letters to uppercasing for comparison
-        startpath_drive = uppercase(startpath_drive)
-
-        path_drive != startpath_drive && return abspath(path) # if drives differ return first path
+        uppercase(path_drive) == uppercase(startpath_drive) || return abspath(path) # if drives differ return first path
         path_arr  = split(abspath(path_drive * path_without_drive),      path_separator_re)
-        start_arr = split(abspath(startpath_drive * startpath_without_drive), path_separator_re)
+        start_arr = split(abspath(path_drive * startpath_without_drive), path_separator_re)
     else
         path_arr  = split(abspath(path),      path_separator_re)
         start_arr = split(abspath(startpath), path_separator_re)
