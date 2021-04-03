@@ -159,14 +159,18 @@ showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
 
 function showerror(io::IO, ex::UndefVarError)
-    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
-        return showerror(io, ErrorException("""
-        `$(ex.var)` has been moved to the package LegacyStrings.jl:
-        Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;
-        Then do `using LegacyStrings` to get `$(ex.var)`.
-        """))
-    end
     print(io, "UndefVarError: $(ex.var) not defined")
+    Experimental.show_error_hints(io, ex)
+end
+
+Experimental.register_error_hint(UndefVarError) do io::IO, ex::UndefVarError
+    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
+        println(io)
+        print(io, """
+            `$(ex.var)` has been moved to the package LegacyStrings.jl:
+            Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;
+            Then do `using LegacyStrings` to get `$(ex.var)`.""")
+    end
 end
 
 function showerror(io::IO, ex::InexactError)
