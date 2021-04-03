@@ -98,7 +98,7 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     #               return cosh(x) = = (exp(x) + exp(-x))/2
     #      e)   H_LARGE_X  <= x
     #               return cosh(x) = exp(x/2)/2 * exp(x/2)
-    #      	        Note that this branch automatically deals with Infs and NaNs
+    #               Note that this branch automatically deals with Infs and NaNs
 
     absx = abs(x)
     if absx <= COSH_SMALL_X(T)
