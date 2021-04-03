@@ -662,7 +662,9 @@ mktempdir() do dir
         touch(bar_path)
         chmod(bar_path, 0o777)
         cd(dir) do
-            @test Sys.which(joinpath("bin1", "bar")) == abspath(bar_path)
+            p = Sys.which(joinpath("bin1", "bar"))
+            @test p == joinpath(abspath("bin1"), "bar")
+            @test realpath(p) == realpath(bar_path)
         end
     end
 end
