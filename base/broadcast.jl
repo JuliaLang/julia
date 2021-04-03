@@ -179,13 +179,17 @@ function Broadcasted{Style}(f::F, args::Args, axes=nothing) where {Style, F, Arg
     Broadcasted{Style, typeof(axes), Core.Typeof(f), Args}(f, args, axes)
 end
 
-andand(a, b) = a && b
-function broadcasted(::typeof(andand), a, bc::Broadcasted)
+struct AndAnd end
+andand = AndAnd()
+broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
+function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
     broadcasted((a, args...) -> a && bcf.f(args...), a, bcf.args...)
 end
-oror(a, b) = a || b
-function broadcasted(::typeof(oror), a, bc::Broadcasted)
+struct OrOr end
+const oror = OrOr()
+broadcasted(::OrOr, a, b) = broadcasted((a, b) -> a || b, a, b)
+function broadcasted(::OrOr, a, bc::Broadcasted)
     bcf = flatten(bc)
     broadcasted((a, args...) -> a || bcf.f(args...), a, bcf.args...)
 end
