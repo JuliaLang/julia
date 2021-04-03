@@ -249,7 +249,7 @@ merge!(combine::Callable, args...) = mergewith!(combine, args...)
 """
     keytype(type)
 
-Get the key type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the key type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -263,7 +263,7 @@ keytype(a::AbstractDict) = keytype(typeof(a))
 """
     valtype(type)
 
-Get the value type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the value type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
