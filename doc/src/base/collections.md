@@ -200,10 +200,8 @@ Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
 Base.haskey
-Base.get(::Any, ::Any, ::Any)
 Base.get
-Base.get!(::Any, ::Any, ::Any)
-Base.get!(::Function, ::Any, ::Any)
+Base.get!
 Base.getkey
 Base.delete!
 Base.pop!(::Any, ::Any, ::Any)
