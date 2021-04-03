@@ -2755,3 +2755,29 @@ end
 @test Meta.parse("2√3") == Expr(:call, :*, 2, Expr(:call, :√, 3))
 @test Meta.parse("2∛3") == Expr(:call, :*, 2, Expr(:call, :∛, 3))
 @test Meta.parse("2∜3") == Expr(:call, :*, 2, Expr(:call, :∜, 3))
+
+macro m_underscore_hygiene()
+    return :(_ = 1)
+end
+
+@test @macroexpand(@m_underscore_hygiene()) == :(_ = 1)
+
+macro m_begin_hygiene(a)
+    return :($(esc(a))[begin])
+end
+
+@test @m_begin_hygiene([1, 2, 3]) == 1
+
+# issue 40258
+@test "a $("b $("c")")" == "a b c"
+
+@test "$(([[:a, :b], [:c, :d]]...)...)" == "abcd"
+
+@test eval(Expr(:string, "a", Expr(:string, "b", "c"))) == "abc"
+@test eval(Expr(:string, "a", Expr(:string, "b", Expr(:string, "c")))) == "abc"
+
+macro m_nospecialize_unnamed_hygiene()
+    return :(f(@nospecialize(::Any)) = Any)
+end
+
+@test @m_nospecialize_unnamed_hygiene()(1) === Any

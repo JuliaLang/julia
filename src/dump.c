@@ -910,7 +910,7 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
             jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-            if (callee != NULL)
+            if ((jl_value_t*)callee != jl_nothing)
                 collect_backedges(callee);
         }
     }

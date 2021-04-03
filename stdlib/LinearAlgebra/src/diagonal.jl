@@ -602,7 +602,7 @@ function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
 end
 
 # Matrix functions
-for f in (:exp, :log, :sqrt,
+for f in (:exp, :cis, :log, :sqrt,
           :cos, :sin, :tan, :csc, :sec, :cot,
           :cosh, :sinh, :tanh, :csch, :sech, :coth,
           :acos, :asin, :atan, :acsc, :asec, :acot,
