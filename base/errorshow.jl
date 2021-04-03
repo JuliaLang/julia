@@ -731,13 +731,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     # filename, separator, line
     # use escape codes for formatting, printstyled can't do underlined and color
     # codes are bright black (90) and underlined (4)
-    function print_underlined(io::IO, s...)
-        colored = get(io, :color, false)::Bool
-        start_s = colored ? "\033[90;4m" : ""
-        end_s   = colored ? "\033[0m"    : ""
-        print(io, start_s, s..., end_s)
-    end
-    print_underlined(io, pathparts[end], ":", line)
+    printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)

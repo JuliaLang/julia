@@ -621,6 +621,26 @@ let buf = IOBuffer()
     # Check that boldness is turned off
     printstyled(buf_color, "foo"; bold=true, color=:red)
     @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
+
+    # Check that underline is turned off
+    printstyled(buf_color, "foo"; color = :red, underline = true)
+    @test String(take!(buf)) == "\e[31m\e[4mfoo\e[24m\e[39m"
+
+    # Check that blink is turned off
+    printstyled(buf_color, "foo"; color = :red, blink = true)
+    @test String(take!(buf)) == "\e[31m\e[5mfoo\e[25m\e[39m"
+
+    # Check that reverse is turned off
+    printstyled(buf_color, "foo"; color = :red, reverse = true)
+    @test String(take!(buf)) == "\e[31m\e[7mfoo\e[27m\e[39m"
+
+    # Check that hidden is turned off
+    printstyled(buf_color, "foo"; color = :red, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[8mfoo\e[28m\e[39m"
+
+    # Check that all options can be turned on simultaneously
+    printstyled(buf_color, "foo"; color = :red, bold = true, underline = true, blink = true, reverse = true, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[1m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
