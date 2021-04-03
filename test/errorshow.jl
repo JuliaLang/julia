@@ -639,7 +639,6 @@ let err_str
     @test occursin("objects of type $(typeof(3)) are not callable", err_str)
     @test occursin("Maybe you forgot to use an operator such as *, ^, %, / etc. ?", err_str)
 end
-pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
 
 # Execute backtrace once before checking formatting, see #38858
 backtrace()
