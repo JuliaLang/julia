@@ -2201,7 +2201,7 @@ end
     # Test that concatenations of pairs of sparse matrices yield sparse arrays
     @test issparse(vcat(spmat, spmat))
     @test issparse(hcat(spmat, spmat))
-    @test issparse(@inferred(hvcat((2,), spmat, spmat)))
+    @test issparse(hvcat((2,), spmat, spmat))
     @test issparse(cat(spmat, spmat; dims=(1,2)))
     # Test that concatenations of a sparse matrice with a dense matrix/vector yield sparse arrays
     @test issparse(vcat(spmat, densemat))
