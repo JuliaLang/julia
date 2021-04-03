@@ -676,13 +676,16 @@ cases where `v` contains non-ASCII characters.)
 
 # Examples
 ```jldoctest
-julia> r = reverse("Julia")
-"ailuJ"
+julia> s = "Julia🚀"
+"Julia🚀"
 
-julia> for i in 1:length(r)
-           print(r[reverseind("Julia", i)])
+julia> r = reverse(s)
+"🚀ailuJ"
+
+julia> for i in eachindex(s)
+           print(r[reverseind(r, i)])
        end
-Julia
+Julia🚀
 ```
 """
 reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
