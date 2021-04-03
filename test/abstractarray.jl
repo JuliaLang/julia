@@ -857,6 +857,18 @@ end
 @testset "to_shape" begin
     @test Base.to_shape(()) === ()
     @test Base.to_shape(1) === 1
+    @test Base.to_shape(big(1)) === Base.to_shape(1)
+    @test Base.to_shape(Int8(1)) === Base.to_shape(1)
+end
+
+@testset "issue #39923: similar" begin
+    for ax in [(big(2), big(3)), (big(2), 3), (UInt64(2), 3), (2, UInt32(3)),
+        (big(2), Base.OneTo(3)), (Base.OneTo(2), Base.OneTo(big(3)))]
+
+        A = similar(ones(), Int, ax)
+        @test axes(A) === (Base.OneTo(2), Base.OneTo(3))
+        @test eltype(A) === Int
+    end
 end
 
 @testset "issue #19267" begin
