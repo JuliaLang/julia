@@ -319,6 +319,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
+    Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
@@ -877,5 +878,16 @@ function show(io::IO, ip::InterpreterIP)
         print(io, " in top-level CodeInfo for $(ip.mod) at statement $(Int(ip.stmt))")
     else
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
+    end
+end
+
+# handler for displaying a hint in case the user tries to call
+# the instance of a number(misses out hte operator)
+# eg: (1 + 2)(3 + 4)
+function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
+    if ex.f isa Number
+        print(io, "\nMaybe you forgot to use an operator such as ")
+        printstyled(io, "*, ^, %, / etc. ", color=:cyan)
+        print(io, "?")
     end
 end
