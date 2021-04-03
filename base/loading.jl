@@ -290,6 +290,10 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
             path = manifest_uuid_path(env, pkg)
             path === nothing || return entry_path(path, pkg.name)
         end
+        # Allow loading of stdlibs if the name/uuid are given
+        # e.g. if they have been explicitly added to the project/manifest
+        path = manifest_uuid_path(Sys.STDLIB::String, pkg)
+        path === nothing || return entry_path(path, pkg.name)
     end
     return nothing
 end
@@ -1068,6 +1072,9 @@ Like [`include`](@ref), except reads code from the given string rather than from
 The optional first argument `mapexpr` can be used to transform the included code before
 it is evaluated: for each parsed expression `expr` in `code`, the `include_string` function
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
 """
 function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString="string")
@@ -1127,6 +1134,9 @@ interactively, or to combine files in packages that are broken into multiple sou
 The optional first argument `mapexpr` can be used to transform the included code before
 it is evaluated: for each parsed expression `expr` in `path`, the `include` function
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
 """
 Base.include # defined in Base.jl
 
@@ -1214,11 +1224,9 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     end
 end
 
-@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),Nothing))
-@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),String))
-
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+    @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
@@ -1257,9 +1265,6 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     return io
 end
 
-@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), typeof(stderr), typeof(stdout)))
-@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), typeof(stderr), typeof(stdout)))
-
 function compilecache_dir(pkg::PkgId)
     entrypath, entryfile = cache_file_entry(pkg)
     return joinpath(DEPOT_PATH[1], entrypath)
@@ -1290,6 +1295,7 @@ This can be used to reduce package load times. Cache files are stored in
 for important notes.
 """
 function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+    @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
     return compilecache(pkg, path, internal_stderr, internal_stdout)
@@ -1298,6 +1304,7 @@ end
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+    @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
     cachepath = compilecache_dir(pkg)
 
@@ -1806,3 +1813,23 @@ macro __DIR__()
     _dirname = dirname(String(__source__.file::Symbol))
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end
+
+"""
+    precompile(f, args::Tuple{Vararg{Any}})
+
+Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
+"""
+function precompile(@nospecialize(f), args::Tuple)
+    precompile(Tuple{Core.Typeof(f), args...})
+end
+
+function precompile(argt::Type)
+    if ccall(:jl_compile_hint, Int32, (Any,), argt) == 0
+        @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
+    end
+    true
+end
+
+precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
+precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String))
+precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), IO, IO))

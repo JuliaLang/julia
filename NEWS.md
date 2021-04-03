@@ -4,6 +4,10 @@ Julia v1.7 Release Notes
 New language features
 ---------------------
 
+* `(; a, b) = x` can now be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
+  and similarly for `b`. ([#39285])
+* Implicit multiplication by juxtaposition is now allowed for radical symbols (e.g., `x√y` and `x∛y`). ([#40173])
+
 Language changes
 ----------------
 
@@ -14,6 +18,8 @@ Compiler/Runtime improvements
 
 Command-line option changes
 ---------------------------
+
+* The Julia `--project` option and the `JULIA_PROJECT` environment variable now support selecting shared environments like `.julia/environments/myenv` the same way the package management console does: use `julia --project=@myenv` resp. `export JULIA_PROJECT="@myenv"` ([#40025]).
 
 
 Multi-threading changes
@@ -32,27 +38,42 @@ New library functions
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}; kwargs...)` ([#38438])
 * Two arguments method `lock(f, lck)` now accepts a `Channel` as the second argument. ([#39312])
+* New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
+* New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
 
 New library features
 --------------------
 
+* The optional keyword argument `context` of `sprint` can now be set to a tuple of `:key => value` pairs to specify multiple attributes. ([#39381])
 
 Standard library changes
 ------------------------
 
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
+* `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).
 * `range` now supports `start` as an optional keyword argument ([#38041]).
 * `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
 * `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
 * `escape_string` can now receive a collection of characters in the keyword
   `keep` that are to be kept as they are. ([#38597]).
 * `getindex` can now be used on `NamedTuple`s with multiple values ([#38878])
+* Subtypes of `AbstractRange` now correctly follow the general array indexing
+  behavior when indexed by `Bool`s, erroring for scalar `Bool`s and treating
+  arrays (including ranges) of `Bool` as an logical index ([#31829])
+* `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
+* `keys(::Generator)` is now defined to return the iterator's keys ([#34678])
+* `RegexMatch` now iterate to give their captures. ([#34355]).
 
 #### Package Manager
 
 
 #### LinearAlgebra
 
+* Use [Libblastrampoline](https://github.com/staticfloat/libblastrampoline/) to pick a BLAS and LAPACK at runtime. By default it forwards to OpenBLAS in the Julia distribution. The forwarding mechanism can be used by packages to replace the BLAS and LAPACK with user preferences. ([#39455])
+* On aarch64, OpenBLAS now uses an ILP64 BLAS like all other 64-bit platforms. ([#39436])
+* OpenBLAS is updated to 0.3.13. ([#39216])
+* SuiteSparse is updated to 5.8.1. ([#39455])
+* `cis(A)` now supports matrix arguments ([#40194]).
 
 #### Markdown
 
@@ -87,9 +108,12 @@ Standard library changes
 
 #### Mmap
 
+* `mmap` is now exported ([#39816]).
+
 
 Deprecated or removed
 ---------------------
+- Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in a future release.
 
 
 External dependencies

@@ -60,7 +60,7 @@ function scrub_backtrace(bt)
 end
 
 function scrub_exc_stack(stack)
-    return Any[ (x[1], scrub_backtrace(x[2])) for x in stack ]
+    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}})) for x in stack ]
 end
 
 # define most of the test infrastructure without type specialization
@@ -259,7 +259,7 @@ end
 
 struct Threw <: ExecutionResult
     exception
-    backtrace
+    backtrace::Union{Nothing,Vector{Any}}
     source::LineNumberNode
 end
 
@@ -551,8 +551,9 @@ function do_test(result::ExecutionResult, orig_expr)
         # The predicate couldn't be evaluated without throwing an
         # exception, so that is an Error and not a Fail
         @assert isa(result, Threw)
-        testres = Error(:test_error, orig_expr, result.exception, result.backtrace, result.source)
+        testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source)
     end
+    isa(testres, Pass) || ccall(:jl_breakpoint, Cvoid, (Any,), result)
     record(get_testset(), testres)
 end
 
@@ -1358,10 +1359,11 @@ julia> typeof(f(2))
 Int64
 
 julia> @code_warntype f(2)
-Variables
+MethodInstance for f(::Int64)
+  from f(a) in Main at none:1
+Arguments
   #self#::Core.Const(f)
   a::Int64
-
 Body::UNION{FLOAT64, INT64}
 1 ─ %1 = (a > 1)::Bool
 └──      goto #3 if not %1
@@ -1405,7 +1407,7 @@ function _inferred(ex, mod, allow = :(Union{}))
     end
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
     farg = ex.args[1]
-    if isa(farg, Symbol) && first(string(farg)) == '.'
+    if isa(farg, Symbol) && farg !== :.. && first(string(farg)) == '.'
         farg = Symbol(string(farg)[2:end])
         ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
             farg, ex.args[2:end]...)
@@ -1478,7 +1480,9 @@ function detect_ambiguities(mods::Module...;
             ambig = Int32[0]
             ms = Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
             ambig[1] == 0 && continue
+            isa(ms, Bool) && continue
             for match2 in ms
+                match2 = match2::Core.MethodMatch
                 m2 = match2.method
                  if !(m === m2 || Base.morespecific(m2.sig, m.sig))
                     if Base.isambiguous(m, m2; ambiguous_bottom)

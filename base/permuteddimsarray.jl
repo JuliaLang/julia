@@ -258,6 +258,7 @@ function Base.showarg(io::IO, A::PermutedDimsArray{T,N,perm}, toplevel) where {T
     Base.showarg(io, parent(A), false)
     print(io, ", ", perm, ')')
     toplevel && print(io, " with eltype ", eltype(A))
+    return nothing
 end
 
 end

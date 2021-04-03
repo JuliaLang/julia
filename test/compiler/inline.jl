@@ -221,8 +221,8 @@ end
 
 # check that div can be fully eliminated
 function f_div(x)
-	div(x, 1)
-	return x
+    div(x, 1)
+    return x
 end
 @test fully_eliminated(f_div, (Int,)) == 1
 # ...unless we div by an unknown amount
@@ -362,3 +362,21 @@ function pure_elim_full()
 end
 
 @test fully_eliminated(pure_elim_full, Tuple{})
+
+# Union splitting of convert
+f_convert_missing(x) = convert(Int64, x)
+let ci = code_typed(f_convert_missing, Tuple{Union{Int64, Missing}})[1][1],
+    ci_unopt = code_typed(f_convert_missing, Tuple{Union{Int64, Missing}}; optimize=false)[1][1]
+    # We want to check that inlining was able to union split this, but we don't
+    # want to make the test too specific to the exact structure that inlining
+    # generates, so instead, we just check that the compiler made it bigger.
+    # There are performance tests that are also sensitive to union splitting
+    # here, so a non-obvious regression
+    @test length(ci.code) >
+        length(ci_unopt.code)
+end
+
+# OC getfield elim
+using Base.Experimental: @opaque
+f_oc_getfield(x) = (@opaque ()->x)()
+@test fully_eliminated(f_oc_getfield, Tuple{Int})

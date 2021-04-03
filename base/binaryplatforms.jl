@@ -71,7 +71,7 @@ struct Platform <: AbstractPlatform
                 if isa(value, VersionNumber)
                     value = string(value)
                 elseif isa(value, AbstractString)
-                    v = tryparse(VersionNumber, value)
+                    v = tryparse(VersionNumber, String(value))
                     if isa(v, VersionNumber)
                         value = string(v)
                     end

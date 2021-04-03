@@ -4,16 +4,23 @@
 
 const empty_sym = Symbol("")
 function strip_gensym(sym)
-    if sym === Symbol("#self#") || sym === Symbol("#unused#")
+    if sym === :var"#self#" || sym === :var"#unused#"
         return empty_sym
     end
     return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[i]
-    if i == nargs && isva && !isvarargtype(t)
-        t = Vararg{t,length(sig.parameters)-nargs+1}
+    t = sig.parameters[unwrapva(min(i, end))]
+    if i == nargs && isva
+        va = sig.parameters[end]
+        if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
+            t = va
+        else
+            ntotal = length(sig.parameters)
+            isvarargtype(va) && (ntotal += va.N - 1)
+            t = Vararg{t,ntotal-nargs+1}
+        end
     end
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
@@ -62,7 +69,7 @@ function arg_decl_parts(m::Method, html=false)
         end
         decls = Tuple{String,String}[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
-        decls[1] = ("", sprint(show_signature_function, sig.parameters[1], false, decls[1][1], html,
+        decls[1] = ("", sprint(show_signature_function, unwrapva(sig.parameters[1]), false, decls[1][1], html,
                                context = show_env))
     else
         decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]

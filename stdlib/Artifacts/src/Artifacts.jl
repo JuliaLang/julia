@@ -551,7 +551,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     error("Artifact $(repr(name)) was not installed correctly. Try `using Pkg; Pkg.instantiate()` to re-install all missing resources.")
 end
 
-"""
+raw"""
     split_artifact_slash(name::String)
 
 Splits an artifact indexing string by path deliminters, isolates the first path element,
@@ -559,7 +559,7 @@ returning that and the `joinpath()` of the remaining arguments.  This normalizes
 separators to the native path separator for the current platform.  Examples:
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using Artifacts: split_artifact_slash)
 julia> split_artifact_slash("Foo")
 ("Foo", "")
 

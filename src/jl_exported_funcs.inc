@@ -146,6 +146,8 @@
     XX(jl_dump_llvm_asm) \
     XX(jl_dump_method_asm) \
     XX(jl_egal) \
+    XX(jl_egal__bits) \
+    XX(jl_egal__special) \
     XX(jl_eh_restore_state) \
     XX(jl_enqueue_task) \
     XX(jl_enter_handler) \

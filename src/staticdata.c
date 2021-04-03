@@ -30,7 +30,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    144
+#define NUM_TAGS    147
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -68,6 +68,8 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_returnnode_type);
         INSERT_TAG(jl_const_type);
         INSERT_TAG(jl_partial_struct_type);
+        INSERT_TAG(jl_partial_opaque_type);
+        INSERT_TAG(jl_interconditional_type);
         INSERT_TAG(jl_method_match_type);
         INSERT_TAG(jl_pinode_type);
         INSERT_TAG(jl_phinode_type);
@@ -88,6 +90,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_typename_type);
         INSERT_TAG(jl_builtin_type);
         INSERT_TAG(jl_code_info_type);
+        INSERT_TAG(jl_opaque_closure_type);
         INSERT_TAG(jl_task_type);
         INSERT_TAG(jl_uniontype_type);
         INSERT_TAG(jl_abstractstring_type);
@@ -133,6 +136,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_type_typename);
         INSERT_TAG(jl_namedtuple_typename);
         INSERT_TAG(jl_vecelement_typename);
+        INSERT_TAG(jl_opaque_closure_typename);
 
         // special exceptions
         INSERT_TAG(jl_errorexception_type);
@@ -241,7 +245,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
-    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_opaque_closure_call,
     NULL };
 
 typedef struct {
@@ -385,9 +389,10 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     jl_serialize_value(s, m->parent);
     size_t i;
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_serialize_value(s, (jl_value_t*)table[i]);
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
             jl_serialize_value(s, b->name);
             jl_serialize_value(s, b->value);
             jl_serialize_value(s, b->globalref);
@@ -627,9 +632,11 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     size_t count = 0;
     size_t i;
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
+            write_pointerfield(s, (jl_value_t*)table[i]);
+            tot += sizeof(void*);
             write_gctaggedfield(s, (uintptr_t)BindingRef << RELOC_TAG_OFFSET);
             tot += sizeof(void*);
             size_t binding_reloc_offset = ios_pos(s->s);
@@ -1381,12 +1388,13 @@ static void jl_reinit_item(jl_value_t *v, int how) JL_GC_DISABLED
             size_t nbindings = mod->bindings.size;
             htable_new(&mod->bindings, nbindings);
             struct binding {
+                jl_sym_t *asname;
                 uintptr_t tag;
                 jl_binding_t b;
             } *b;
             b = (struct binding*)&mod[1];
             while (nbindings > 0) {
-                ptrhash_put(&mod->bindings, (char*)b->b.name, &b->b);
+                ptrhash_put(&mod->bindings, b->asname, &b->b);
                 b += 1;
                 nbindings -= 1;
             }

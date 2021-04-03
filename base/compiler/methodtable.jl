@@ -86,9 +86,9 @@ function findsup(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable)
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
     result = ccall(:jl_gf_invoke_lookup_worlds, Any, (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
-                   sig, table.world, min_valid, max_valid)::Union{Method, Nothing}
+                   sig, table.world, min_valid, max_valid)::Union{MethodMatch, Nothing}
     result === nothing && return nothing
-    (result, WorldRange(min_valid[], max_valid[]))
+    (result.method, WorldRange(min_valid[], max_valid[]))
 end
 
 # This query is not cached

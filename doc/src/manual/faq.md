@@ -207,12 +207,12 @@ have two options:
 
 ### What does the `...` operator do?
 
-### The two uses of the `...` operator: slurping and splatting
+#### The two uses of the `...` operator: slurping and splatting
 
 Many newcomers to Julia find the use of `...` operator confusing. Part of what makes the `...`
 operator confusing is that it means two different things depending on context.
 
-### `...` combines many arguments into one argument in function definitions
+#### `...` combines many arguments into one argument in function definitions
 
 In the context of function definitions, the `...` operator is used to combine many different arguments
 into a single argument. This use of `...` for combining many different arguments into a single
@@ -237,7 +237,7 @@ Arg #3 = 3
 If Julia were a language that made more liberal use of ASCII characters, the slurping operator
 might have been written as `<-...` instead of `...`.
 
-### `...` splits one argument into many different arguments in function calls
+#### `...` splits one argument into many different arguments in function calls
 
 In contrast to the use of the `...` operator to denote slurping many different arguments into
 one argument when defining a function, the `...` operator is also used to cause a single function
@@ -959,15 +959,15 @@ The Stable version of Julia is the latest released version of Julia, this is the
 It has the latest features, including improved performance.
 The Stable version of Julia is versioned according to [SemVer](https://semver.org/) as v1.x.y.
 A new minor release of Julia corresponding to a new Stable version is made approximately every 4-5 months after a few weeks of testing as a release candidate.
-Unlike the LTS version the a Stable version will not normally recieve bugfixes after another Stable version of Julia has been released.
+Unlike the LTS version the a Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.
 The current LTS version of Julia is versioned according to SemVer as v1.0.x;
-this branch will continue to recieve bugfixes until a new LTS branch is chosen, at which point the v1.0.x series will no longer recieved regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
+this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.0.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
 As a package developer, you may prefer to develop for the LTS version, to maximize the number of users who can use your package.
 As per SemVer, code written for v1.0 will continue to work for all future LTS and Stable versions.
-In general, even if targetting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).
+In general, even if targeting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).
 
 You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don't mind if the version available today occasionally doesn't actually work.
 As the name implies, releases to the nightly version are made roughly every night (depending on build infrastructure stability).

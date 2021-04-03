@@ -516,7 +516,7 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
     @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
     @test isequal(a .+ [missing; 1:9], fadd3(aa))
-    @test_broken Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
+    @test Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
@@ -953,29 +953,20 @@ p0 = copy(p)
 
 @testset "Issue #28382: inferrability of broadcast with Union eltype" begin
     @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
-    @test_broken Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
-                                                            Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        AbstractVector{<:Union{Float64, Missing}}
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test isequal([1, 2] + [3.0, missing], [4.0, missing])
-    @test_broken Core.Compiler.return_type(+, Tuple{Vector{Int},
-                                                    Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
-        AbstractVector{<:Union{Float64, Missing}}
-    @test_broken Core.Compiler.return_type(+, Tuple{Vector{Int},
-                                                    Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
+    @test Core.Compiler.return_type(+, Tuple{Vector{Int},
+                                             Vector{Union{Float64, Missing}}}) ==
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test isequal(tuple.([1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
-    @test_broken Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
-                                                            Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Tuple{Int, Any}}
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        AbstractVector{<:Tuple{Int, Any}}
+        Union{Vector{Tuple{Int, Missing}}, Vector{Tuple{Int, Any}}, Vector{Tuple{Int, Float64}}}
     # Check that corner cases do not throw an error
     @test isequal(broadcast(x -> x === 1 ? nothing : x, [1, 2, missing]),
                   [nothing, 2, missing])
@@ -989,4 +980,38 @@ p0 = copy(p)
     @test typeof.([iszero, iszero]) == [typeof(iszero), typeof(iszero)]
     @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
                   [[1, 2],[missing, 1]])
+end
+
+@testset "Issue #28382: eltype inconsistent with getindex" begin
+    struct Cyclotomic <: Number
+    end
+
+    Base.eltype(::Type{<:Cyclotomic}) = Tuple{Int,Int}
+
+    Base.:*(c::T, x::Cyclotomic) where {T<:Real} = [1, 2]
+    Base.:*(x::Cyclotomic, c::T) where {T<:Real} = [1, 2]
+
+    @test Cyclotomic() .* [2, 3] == [[1, 2], [1, 2]]
+end
+
+@testset "inplace broadcast with trailing singleton dims" begin
+    for (a, b, c) in (([1, 2], reshape([3 4], :, 1), reshape([5, 6], :, 1, 1)),
+            ([1 2; 3 4], reshape([5 6; 7 8], 2, 2, 1), reshape([9 10; 11 12], 2, 2, 1, 1)))
+
+        a_ = copy(a)
+        a_ .= b
+        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
+
+        a_ = copy(a)
+        a_ .= b
+        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
+
+        a_ = copy(a)
+        a_ .= b .+ c
+        @test a_ == dropdims(b .+ c, dims=(findall(==(1), size(c))...,))
+
+        a_ = copy(a)
+        a_ .*= c
+        @test a_ == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
+    end
 end
