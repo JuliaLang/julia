@@ -660,6 +660,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
         jl_serialize_value(s, (jl_value_t*)m->generator);
         jl_serialize_value(s, (jl_value_t*)m->invokes);
+        jl_serialize_value(s, (jl_value_t*)m->recursion_relation);
     }
     else if (jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
@@ -909,7 +910,7 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
             jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-            if (callee != NULL)
+            if ((jl_value_t*)callee != jl_nothing)
                 collect_backedges(callee);
         }
     }
@@ -1503,6 +1504,9 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         jl_gc_wb(m, m->generator);
     m->invokes = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
     jl_gc_wb(m, m->invokes);
+    m->recursion_relation = jl_deserialize_value(s, (jl_value_t**)&m->recursion_relation);
+    if (m->recursion_relation)
+        jl_gc_wb(m, m->recursion_relation);
     JL_MUTEX_INIT(&m->writelock);
     return (jl_value_t*)m;
 }

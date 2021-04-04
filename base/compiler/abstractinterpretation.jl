@@ -310,6 +310,7 @@ function add_call_backedges!(interp::AbstractInterpreter,
 end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
+const RECURSION_MSG = "Bounded recursion detected. Call was widened to force convergence."
 
 function abstract_call_method(interp::AbstractInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
@@ -321,18 +322,57 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     # look through the parents list to see if there's a call to the same method
     # and from the same method.
     # Returns the topmost occurrence of that repeated edge.
-    cyclei = 0
-    infstate = sv
     edgecycle = false
     # The `method_for_inference_heuristics` will expand the given method's generator if
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
-    method2 = method_for_inference_heuristics(method, sig, sparams) # Union{Method, Nothing}
+    callee_method2 = method_for_inference_heuristics(method, sig, sparams) # Union{Method, Nothing}
     sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
     sv_method2 isa Method || (sv_method2 = nothing) # Union{Method, Nothing}
-    while !(infstate === nothing)
-        infstate = infstate::InferenceState
+
+    function matches_sv(parent::InferenceState)
+        parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
+        parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
+        return parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+    end
+
+    function edge_matches_sv(frame::InferenceState)
+        inf_method2 = frame.src.method_for_inference_limit_heuristics # limit only if user token match
+        inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
+        if callee_method2 !== inf_method2
+            return false
+        end
+        if !hardlimit
+            # if this is a soft limit,
+            # also inspect the parent of this edge,
+            # to see if they are the same Method as sv
+            # in which case we'll need to ensure it is convergent
+            # otherwise, we don't
+
+            # check in the cycle list first
+            # all items in here are mutual parents of all others
+            if !_any(matches_sv, frame.callers_in_cycle)
+                let parent = frame.parent
+                    parent !== nothing || return false
+                    parent = parent::InferenceState
+                    (parent.cached || parent.parent !== nothing) || return false
+                    matches_sv(parent) || return false
+                end
+            end
+
+            # If the method defines a recursion relation, give it a chance
+            # to tell us that this recursion is actually ok.
+            if isdefined(method, :recursion_relation)
+                if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, frame.linfo.specTypes])
+                    return false
+                end
+            end
+        end
+        return true
+    end
+
+    for infstate in InfStackUnwind(sv)
         if method === infstate.linfo.def
             if infstate.linfo.specTypes == sig
                 # avoid widening when detecting self-recursion
@@ -349,60 +389,20 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 edgecycle = true
                 break
             end
-            inf_method2 = infstate.src.method_for_inference_limit_heuristics # limit only if user token match
-            inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
-            if topmost === nothing && method2 === inf_method2
-                if hardlimit
-                    topmost = infstate
-                    edgecycle = true
-                else
-                    # if this is a soft limit,
-                    # also inspect the parent of this edge,
-                    # to see if they are the same Method as sv
-                    # in which case we'll need to ensure it is convergent
-                    # otherwise, we don't
-                    for parent in infstate.callers_in_cycle
-                        # check in the cycle list first
-                        # all items in here are mutual parents of all others
-                        parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
-                        parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                        if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
-                            topmost = infstate
-                            edgecycle = true
-                            break
-                        end
-                    end
-                    let parent = infstate.parent
-                        # then check the parent link
-                        if topmost === nothing && parent !== nothing
-                            parent = parent::InferenceState
-                            parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
-                            parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                            if (parent.cached || parent.parent !== nothing) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
-                                topmost = infstate
-                                edgecycle = true
-                            end
-                        end
-                    end
-                end
+            topmost === nothing || continue
+            if edge_matches_sv(infstate)
+                topmost = infstate
+                edgecycle = true
             end
-        end
-        # iterate through the cycle before walking to the parent
-        if cyclei < length(infstate.callers_in_cycle)
-            cyclei += 1
-            infstate = infstate.callers_in_cycle[cyclei]
-        else
-            cyclei = 0
-            infstate = infstate.parent
         end
     end
 
-    if !(topmost === nothing)
-        topmost = topmost::InferenceState
+    if topmost !== nothing
         sigtuple = unwrap_unionall(sig)::DataType
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
         ls = length(sigtuple.parameters)
+
         if method === sv.linfo.def
             # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
@@ -412,6 +412,13 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         else
             comparison = method.sig
         end
+
+        if isdefined(method, :recursion_relation)
+            # We don't recquire the recursion_relation to be transitive, so
+            # apply a hard limit
+            hardlimit = true
+        end
+
         # see if the type is actually too big (relative to the caller), and limit it if required
         newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
@@ -427,6 +434,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return Any, true, nothing
             end
+            add_remark!(interp, sv, RECURSION_MSG)
             topmost = topmost::InferenceState
             parentframe = topmost.parent
             poison_callstack(sv, parentframe === nothing ? topmost : parentframe)
@@ -478,24 +486,13 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nosp
     inf_cache = get_inference_cache(interp)
     inf_result = cache_lookup(mi, argtypes, inf_cache)
     if inf_result === nothing
-        if edgecycle
-            # if there might be a cycle, check to make sure we don't end up
-            # calling ourselves here.
-            infstate = sv
-            cyclei = 0
-            while !(infstate === nothing)
-                if match.method === infstate.linfo.def && any(infstate.result.overridden_by_const)
-                    add_remark!(interp, sv, "[constprop] Edge cycle encountered")
-                    return Any, nothing
-                end
-                if cyclei < length(infstate.callers_in_cycle)
-                    cyclei += 1
-                    infstate = infstate.callers_in_cycle[cyclei]
-                else
-                    cyclei = 0
-                    infstate = infstate.parent
-                end
+        # if there might be a cycle, check to make sure we don't end up
+        # calling ourselves here.
+        if edgecycle && _any(InfStackUnwind(sv)) do infstate
+                return match.method === infstate.linfo.def && any(infstate.result.overridden_by_const)
             end
+            add_remark!(interp, sv, "[constprop] Edge cycle encountered")
+            return Any, nothing
         end
         inf_result = InferenceResult(mi, argtypes, va_override)
         frame = InferenceState(inf_result, #=cache=#false, interp)
@@ -1453,9 +1450,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         if length(e.args) == 2 && isconcretetype(t) && !t.mutable
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
-            if isa(at, Const) && (val = at.val; isa(val, Tuple)) && n == length(val) &&
-                let t = t, val = val; _all(i->val[i] isa fieldtype(t, i), 1:n); end
-                t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, val))
+            if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val) &&
+                let t = t; _all(i->getfield(at.val, i) isa fieldtype(t, i), 1:n); end
+                t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
             elseif isa(at, PartialStruct) && at ⊑ Tuple && n == length(at.fields) &&
                 let t = t, at = at; _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n); end
                 t = PartialStruct(t, at.fields)

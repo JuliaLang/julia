@@ -159,14 +159,8 @@ showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
 
 function showerror(io::IO, ex::UndefVarError)
-    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
-        return showerror(io, ErrorException("""
-        `$(ex.var)` has been moved to the package LegacyStrings.jl:
-        Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;
-        Then do `using LegacyStrings` to get `$(ex.var)`.
-        """))
-    end
     print(io, "UndefVarError: $(ex.var) not defined")
+    Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::InexactError)
@@ -319,6 +313,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
+    Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
@@ -552,13 +547,6 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
-function replaceuserpath(str)
-    str = replace(str, homedir() => "~")
-    # seems to be necessary for some paths with small letter drive c:// etc
-    str = replace(str, lowercasefirst(homedir()) => "~")
-    return str
-end
-
 const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
@@ -698,7 +686,7 @@ end
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
-    stacktrace_contract_userdir() && (file = replaceuserpath(file))
+    stacktrace_contract_userdir() && (file = contractuser(file))
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
@@ -738,13 +726,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     # filename, separator, line
     # use escape codes for formatting, printstyled can't do underlined and color
     # codes are bright black (90) and underlined (4)
-    function print_underlined(io::IO, s...)
-        colored = get(io, :color, false)::Bool
-        start_s = colored ? "\033[90;4m" : ""
-        end_s   = colored ? "\033[0m"    : ""
-        print(io, start_s, s..., end_s)
-    end
-    print_underlined(io, pathparts[end], ":", line)
+    printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
@@ -890,5 +872,16 @@ function show(io::IO, ip::InterpreterIP)
         print(io, " in top-level CodeInfo for $(ip.mod) at statement $(Int(ip.stmt))")
     else
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
+    end
+end
+
+# handler for displaying a hint in case the user tries to call
+# the instance of a number(misses out hte operator)
+# eg: (1 + 2)(3 + 4)
+function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
+    if ex.f isa Number
+        print(io, "\nMaybe you forgot to use an operator such as ")
+        printstyled(io, "*, ^, %, / etc. ", color=:cyan)
+        print(io, "?")
     end
 end

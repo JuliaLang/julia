@@ -1070,6 +1070,8 @@ function valid_tparam_type(T::DataType)
     end
     return false
 end
+valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
+valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 
 function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     rt === Type && return false
