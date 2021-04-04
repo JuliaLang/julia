@@ -124,7 +124,7 @@ julia> nor(true, true)
 false
 
 julia> nor(true, missing)
-missing
+false
 
 julia> false ⊽ false
 true
