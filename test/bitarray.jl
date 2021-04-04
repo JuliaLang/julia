@@ -1425,7 +1425,7 @@ timesofar("reductions")
         @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == broadcast(|, b1, b2)
         @test map(⊻, b1, b2) == map((x,y)->x⊻y, b1, b2) == broadcast(⊻, b1, b2) == broadcast(xor, b1, b2)
         @test map(⊼, b1, b2) == map((x,y)->x⊼y, b1, b2) == broadcast(⊼, b1, b2) == broadcast(nand, b1, b2)
-        @test map(⊽, b1, b2) == map((x,y)->x⊽y, b1, b2) == broadcast(⊽, b1, b2) == broadcast(nand, b1, b2)
+        @test map(⊽, b1, b2) == map((x,y)->x⊽y, b1, b2) == broadcast(⊽, b1, b2) == broadcast(nor, b1, b2)
 
         @test map(^, b1, b2) == map((x,y)->x^y, b1, b2) == b1 .^ b2
         @test map(*, b1, b2) == map((x,y)->x*y, b1, b2) == b1 .* b2
