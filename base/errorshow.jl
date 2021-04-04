@@ -85,10 +85,10 @@ function showerror(io::IO, ex::TypeError)
         if type_param_error
             print(io, """
                       values of type $(typeof(ex.got)) are not valid as type parameters. Valid type parameters are
-                          - Types
-                          - Bits values
-                          - Symbols
-                          - Tuples of symbols or bits values
+                          - types
+                          - bits values
+                          - symbols
+                          - tuples of symbols
                       """)
         else
             print(io, ctx, ", expected ", expected, ", got ", targs...)
