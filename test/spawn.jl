@@ -663,7 +663,7 @@ mktempdir() do dir
         chmod(bar_path, 0o777)
         cd(dir) do
             p = Sys.which(joinpath("bin1", "bar"))
-            @test p == joinpath(abspath("bin1"), basename(bar_path))
+            @test p == abspath("bin1", basename(bar_path))
             @test Base.samefile(p, bar_path)
         end
     end
