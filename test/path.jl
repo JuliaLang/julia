@@ -290,6 +290,10 @@
             # Additional cases
             @test_throws ArgumentError relpath(S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"), "")
             @test_throws ArgumentError relpath(S(""), S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"))
+
+            # issue 40237
+            path = "..$(sep)a$(sep)b$(sep)c"
+            @test relpath(abspath(path)) == path
         end
         test_relpath()
     end

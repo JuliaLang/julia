@@ -517,12 +517,16 @@ function relpath(path::String, startpath::String = ".")
     curdir = "."
     pardir = ".."
     path == startpath && return curdir
-    path_drive, path_without_drive = splitdrive(path)
-    startpath_drive, startpath_without_drive = splitdrive(startpath)
-    path_arr  = split(abspath(path_without_drive),      path_separator_re)
-    start_arr = split(abspath(startpath_without_drive), path_separator_re)
     if Sys.iswindows()
-        lowercase(path_drive) != lowercase(startpath_drive) && return abspath(path)
+        path_drive, path_without_drive = splitdrive(path)
+        startpath_drive, startpath_without_drive = splitdrive(startpath)
+        isempty(startpath_drive) && (startpath_drive = path_drive) # by default assume same as path drive
+        uppercase(path_drive) == uppercase(startpath_drive) || return abspath(path) # if drives differ return first path
+        path_arr  = split(abspath(path_drive * path_without_drive),      path_separator_re)
+        start_arr = split(abspath(path_drive * startpath_without_drive), path_separator_re)
+    else
+        path_arr  = split(abspath(path),      path_separator_re)
+        start_arr = split(abspath(startpath), path_separator_re)
     end
     i = 0
     while i < min(length(path_arr), length(start_arr))
