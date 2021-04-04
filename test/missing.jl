@@ -130,18 +130,18 @@ end
     @test ismissing(xor(false, missing))
     @test ismissing(nand(missing, true))
     @test ismissing(nand(true, missing))
-    @test ismissing(nand(missing, false))
-    @test ismissing(nand(false, missing))
+    @test nand(missing, false) == true
+    @test nand(false, missing) == true
     @test ismissing(⊼(missing, true))
     @test ismissing(⊼(true, missing))
-    @test ismissing(⊼(missing, false))
-    @test ismissing(⊼(false, missing))
-    @test ismissing(nor(missing, true))
-    @test ismissing(nor(true, missing))
+    @test ⊼(missing, false) == true
+    @test ⊼(false, missing) == true
+    @test nor(missing, true) == false
+    @test nor(true, missing) == false
     @test ismissing(nor(missing, false))
     @test ismissing(nor(false, missing))
-    @test ismissing(⊽(missing, true))
-    @test ismissing(⊽(true, missing))
+    @test ⊽(missing, true) == false
+    @test ⊽(true, missing) == false
     @test ismissing(⊽(missing, false))
     @test ismissing(⊽(false, missing))
 
