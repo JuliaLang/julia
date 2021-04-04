@@ -147,6 +147,14 @@ module TestOffsetArray
 end
 
 @testset "CartesianIndices getindex" begin
+    @testset "0D array" begin
+        a = zeros()
+        c = CartesianIndices(a)
+        @test a[c] == a
+        @test c[c] === c
+        @test c[] == CartesianIndex()
+    end
+
     @testset "AbstractUnitRange" begin
         for oinds in [(2, ), (2, 3), (2, 3, 4)]
             A = rand(1:10, oinds)
@@ -159,6 +167,25 @@ end
             @test all(i->A[i]==A[R[i]], R)
             @test all(i->A[i]==A[R[i]], collect(R))
             @test all(i->i in R, collect(R))
+
+            # Indexing a CartesianIndices with another CartesianIndices having the same ndims
+            # forwards the indexing to the component ranges and retains the wrapper
+            @test R[R] === R
+
+            R2 = R[(1:1 for _ in 1:length(oinds))...]
+            @test R2 isa CartesianIndices{ndims(R)}
+            @test R2[(1 for _ in 1:length(oinds))...] == R[(1 for _ in 1:length(oinds))...]
+
+            R3 = R[(Colon() for _ in 1:length(oinds))...]
+            @test R3 isa CartesianIndices{ndims(R)}
+            @test R3 == R
+
+            indstrailing = (1:1 for _ in min(ndims(A), 2)+1:length(oinds))
+            R4 = R[(Colon() for _ in 1:min(ndims(A), 2))..., indstrailing...]
+            @test R4 isa CartesianIndices{ndims(R)}
+            for I in CartesianIndices(axes(A)[1:min(ndims(A), 2)])
+                @test R4[I, indstrailing...] == R4[I, indstrailing...]
+            end
         end
     end
 
@@ -173,6 +200,58 @@ end
 
             # TODO: A[SR] == A[Linearindices(SR)] should hold for StepRange CartesianIndices
             @test_broken A[SR] == A[LinearIndices(SR)]
+
+            # Indexing a CartesianIndices with another CartesianIndices having the same ndims
+            # forwards the indexing to the component ranges and retains the wrapper
+            @test R[R] === R
+
+            R2 = R[(1:1 for _ in 1:length(oinds))...]
+            @test R2 isa CartesianIndices{ndims(R)}
+            @test R2[(1 for _ in 1:length(oinds))...] == R[(1 for _ in 1:length(oinds))...]
+
+            R3 = R[(Colon() for _ in 1:length(oinds))...]
+            @test R3 isa CartesianIndices{ndims(R)}
+            @test R3 == R
+
+            indstrailing = (1:1 for _ in min(ndims(A), 2)+1:length(oinds))
+            R4 = R[(Colon() for _ in 1:min(ndims(A), 2))..., indstrailing...]
+            @test R4 isa CartesianIndices{ndims(R)}
+            for I in CartesianIndices(axes(A)[1:min(ndims(A), 2)])
+                @test R4[I, indstrailing...] == R4[I, indstrailing...]
+            end
+        end
+    end
+
+    @testset "logical indexing of CartesianIndices with ranges" begin
+        c = CartesianIndices((1:0, 1:2))
+        c2 = c[true:false, 1:2]
+        @test c2 == c
+
+        for (inds, r) in Any[(1:2, false:true), (1:2, false:true:true),
+            (1:2:3, false:true), (1:2:3, false:true:true)]
+
+            c = CartesianIndices((inds, 1:2))
+            c2 = c[r, 1:2]
+            @test c2 isa CartesianIndices{ndims(c)}
+            @test c2[1, :] == c[2, :]
+        end
+
+        for (inds, r) in Any[(1:1, true:true), (1:1, true:true:true),
+            (1:1:1, true:true), (1:1:1, true:true:true)]
+
+            c = CartesianIndices((inds, 1:2))
+            c2 = c[r, 1:2]
+            @test c2 isa CartesianIndices{ndims(c)}
+            @test c2[1, :] == c[1, :]
+        end
+
+        for (inds, r) in Any[(1:1, false:false), (1:1, false:true:false),
+            (1:1:1, false:false), (1:1:1, false:true:false)]
+
+            c = CartesianIndices((inds, 1:2))
+            c2 = c[r, 1:2]
+            @test c2 isa CartesianIndices{ndims(c)}
+            @test size(c2, 1) == 0
         end
     end
 end
