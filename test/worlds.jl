@@ -89,8 +89,8 @@ B265(x::Any, dummy::Nothing) = B265{UInt8}(x, dummy)
 @test (B265_(2)::B265{Float64}).field1 === 2.0e0
 @test (B265_(3)::B265{UInt8}).field1 === 0x03
 
-@test Base.return_types(B265_, (Int,)) == Any[B265]
-@test Core.Compiler.return_type(B265_, (Int,)) == B265
+@test B265{UInt8} <: only(Base.return_types(B265_, (Int,))) <: B265
+@test B265{UInt8} <: Core.Compiler.return_type(B265_, (Int,)) <: B265
 
 
 # test oldworld call / inference
@@ -200,6 +200,14 @@ notify(c26506_1)
 wait(c26506_2)
 @test result26506[1] == 3
 
+# issue #38435
+f38435(::Int, ::Any) = 1
+f38435(::Any, ::Int) = 2
+g38435(x) = f38435(x, x)
+@test_throws MethodError(f38435, (1, 1), Base.get_world_counter()) g38435(1)
+f38435(::Int, ::Int) = 3.0
+@test g38435(1) === 3.0
+
 
 ## Invalidation tests
 
@@ -211,8 +219,8 @@ function instance(f, types)
     if isa(specs, Nothing)
     elseif isa(specs, Core.SimpleVector)
         for i = 1:length(specs)
-            if isassigned(specs, i)
-                mi = specs[i]::Core.MethodInstance
+            mi = specs[i]
+            if mi isa Core.MethodInstance
                 if mi.specTypes <: tt && tt <: mi.specTypes
                     inst = mi
                     break
@@ -305,7 +313,8 @@ src4 = code_typed(applyf35855_2, (Vector{Any},))[1]
 @test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
 
 ## ambiguities do not trigger invalidation
-mi = instance(+, (AbstractChar, UInt8))
+m = which(+, (Char, UInt8))
+mi = Core.Compiler.specialize_method(m, Tuple{typeof(+), AbstractChar, UInt8}, Core.svec())
 w = worlds(mi)
 
 abstract type FixedPoint35855{T <: Integer} <: Real end

@@ -263,13 +263,14 @@ typedef struct _jl_line_info_node_t {
 typedef struct _jl_code_info_t {
     // ssavalue-indexed arrays of properties:
     jl_array_t *code;  // Any array of statements
-    jl_value_t *codelocs; // Int32 array of indicies into the line table
+    jl_value_t *codelocs; // Int32 array of indices into the line table
     jl_value_t *ssavaluetypes; // types of ssa values (or count of them)
     jl_array_t *ssaflags; // flags associated with each statement:
         // 0 = inbounds
         // 1,2 = <reserved> inlinehint,always-inline,noinline
         // 3 = <reserved> strict-ieee (strictfp)
-        // 4-6 = <unused>
+        // 4 = effect-free (may be deleted if unused)
+        // 5-6 = <unused>
         // 7 = has out-of-band info
     // miscellaneous data:
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
@@ -288,6 +289,7 @@ typedef struct _jl_code_info_t {
     uint8_t inlineable;
     uint8_t propagate_inbounds;
     uint8_t pure;
+    uint8_t aggressive_constprop;
 } jl_code_info_t;
 
 // This type describes a single method definition, and stores data
@@ -320,6 +322,12 @@ typedef struct _jl_method_t {
     // the most specific for the argument types.
     jl_typemap_t *invokes;
 
+    // A function that compares two specializations of this method, returning
+    // `true` if the first signature is to be considered "smaller" than the
+    // second for purposes of recursion analysis. Set to NULL to use
+    // the default recusion relation.
+    jl_value_t *recursion_relation;
+
     int32_t nargs;
     int32_t called;        // bit flags: whether each of the first 8 arguments is called
     int32_t nospecialize;  // bit flags: which arguments should not be specialized
@@ -327,6 +335,8 @@ typedef struct _jl_method_t {
                            // of another method.
     uint8_t isva;
     uint8_t pure;
+    uint8_t is_for_opaque_closure;
+    uint8_t aggressive_constprop;
 
 // hidden fields:
     // lock for modifications to the method
@@ -351,6 +361,17 @@ struct _jl_method_instance_t {
     struct _jl_code_instance_t *cache;
     uint8_t inInference; // flags to tell if inference is running on this object
 };
+
+// OpaqueClosure
+typedef struct jl_opaque_closure_t {
+    JL_DATA_TYPE
+    jl_value_t *captures;
+    uint8_t isva;
+    size_t world;
+    jl_method_t *source;
+    jl_fptr_args_t invoke;
+    void *specptr;
+} jl_opaque_closure_t;
 
 // This type represents an executable operation
 typedef struct _jl_code_instance_t {
@@ -619,6 +640,8 @@ extern JL_DLLIMPORT jl_datatype_t *jl_typedslot_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_argument_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_const_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_partial_struct_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_partial_opaque_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_interconditional_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;
@@ -630,6 +653,8 @@ extern JL_DLLIMPORT jl_unionall_t *jl_anytuple_type_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_vararg_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_function_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_builtin_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_unionall_t *jl_opaque_closure_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_typename_t *jl_opaque_closure_typename JL_GLOBALLY_ROOTED;
 
 extern JL_DLLIMPORT jl_value_t *jl_bottom_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_instance_type JL_GLOBALLY_ROOTED;
@@ -1213,6 +1238,19 @@ STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
     return jl_is_array_type(t);
 }
 
+
+STATIC_INLINE int jl_is_opaque_closure_type(void *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_opaque_closure_typename);
+}
+
+STATIC_INLINE int jl_is_opaque_closure(void *v) JL_NOTSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(v);
+    return jl_is_opaque_closure_type(t);
+}
+
 STATIC_INLINE int jl_is_cpointer_type(jl_value_t *t) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(t) &&
@@ -1265,7 +1303,25 @@ STATIC_INLINE int jl_is_array_zeroinit(jl_array_t *a) JL_NOTSAFEPOINT
 
 // object identity
 JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__bits(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__special(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
+
+STATIC_INLINE int jl_egal_(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
+{
+    if (a == b)
+        return 1;
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
+    if (dt != (jl_datatype_t*)jl_typeof(b))
+        return 0;
+    if (dt->mutabl) {
+        if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
+            return jl_egal__special(a, b, dt);
+        return 0;
+    }
+    return jl_egal__bits(a, b, dt);
+}
+#define jl_egal(a, b) jl_egal_((a), (b))
 
 // type predicates and basic operations
 JL_DLLEXPORT int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
@@ -1343,7 +1399,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
                                                  jl_value_t **bp, jl_value_t *bp_owner,
                                                  jl_binding_t *bnd);
-JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_code_info_t *f, jl_module_t *module);
+JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT;
@@ -1568,9 +1624,9 @@ JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 #define JL_NARGSV(fname, min)                           \
     if (nargs < min) jl_too_few_args(#fname, min);
 
-#define JL_TYPECHK(fname, type, v)                                      \
-    if (!jl_is_##type(v)) {                                             \
-        jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (v));      \
+#define JL_TYPECHK(fname, type, v)                                 \
+    if (!jl_is_##type(v)) {                                        \
+        jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (v)); \
     }
 #define JL_TYPECHKS(fname, type, v)                                     \
     if (!jl_is_##type(v)) {                                             \
@@ -1708,12 +1764,12 @@ STATIC_INLINE jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
     return jl_apply_generic(args[0], &args[1], nargs - 1);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
-JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f);
-JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a);
-JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b);
-JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
-                                  jl_value_t *b, jl_value_t *c);
+JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t **args, int32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
+                                  jl_value_t *b JL_MAYBE_UNROOTED, jl_value_t *c JL_MAYBE_UNROOTED);
 
 // interfacing with Task runtime
 JL_DLLEXPORT void jl_yield(void);

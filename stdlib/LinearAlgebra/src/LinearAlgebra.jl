@@ -18,6 +18,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
 using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
 using Base.Broadcast: Broadcasted, broadcasted
+import Libdl
 
 export
 # Modules
@@ -282,14 +283,14 @@ julia> ldiv!(Y, qr(A), X);
 julia> Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
+ -0.051652892561983806
+  0.10020661157024781
 
 julia> A\\X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+ -0.05165289256198342
+  0.1002066115702479
 ```
 """
 ldiv!(Y, A, B)
@@ -319,14 +320,14 @@ julia> ldiv!(qr(A), X);
 julia> X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
+ -0.051652892561983806
+  0.10020661157024781
 
 julia> A\\Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+ -0.05165289256198342
+  0.1002066115702479
 ```
 """
 ldiv!(A, B)
@@ -373,6 +374,7 @@ include("cholesky.jl")
 include("lu.jl")
 include("bunchkaufman.jl")
 include("diagonal.jl")
+include("symmetriceigen.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
 include("hessenberg.jl")
@@ -424,27 +426,51 @@ end
 
 
 function versioninfo(io::IO=stdout)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() === :openblas || BLAS.vendor() === :openblas64
-        openblas_config = BLAS.openblas_get_config()
-        println(io, "BLAS: libopenblas (", openblas_config, ")")
-    else
-        println(io, "BLAS: ",Base.libblas_name)
+    config = BLAS.get_config()
+    println(io, "BLAS: $(BLAS.libblastrampoline) ($(join(string.(config.build_flags), ", ")))")
+    for lib in config.loaded_libs
+        println(io, " --> $(lib.libname) ($(uppercase(string(lib.interface))))")
     end
-    println(io, "LAPACK: ",Base.liblapack_name)
+    return nothing
+end
+
+function find_library_path(name)
+    shlib_ext = string(".", Libdl.dlext)
+    if !endswith(name, shlib_ext)
+        name_ext = string(name, shlib_ext)
+    end
+
+    # On windows, we look in `bin` and never in `lib`
+    @static if Sys.iswindows()
+        path = joinpath(Sys.BINDIR, name_ext)
+        isfile(path) && return path
+    else
+        # On other platforms, we check `lib/julia` first, and if that doesn't exist, `lib`.
+        path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", name_ext)
+        isfile(path) && return path
+
+        path = joinpath(Sys.BINDIR, Base.LIBDIR, name_ext)
+        isfile(path) && return path
+    end
+
+    # If we can't find it by absolute path, we'll try just passing this straight through to `dlopen()`
+    return name
 end
 
 function __init__()
     try
-        BLAS.check()
-        if BLAS.vendor() === :mkl
-            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
+        libblas_path = find_library_path(Base.libblas_name)
+        liblapack_path = find_library_path(Base.liblapack_name)
+        BLAS.lbt_forward(libblas_path; clear=true)
+        if liblapack_path != libblas_path
+            BLAS.lbt_forward(liblapack_path)
         end
+        BLAS.check()
         Threads.resize_nthreads!(Abuf)
         Threads.resize_nthreads!(Bbuf)
         Threads.resize_nthreads!(Cbuf)
     catch ex
-        Base.showerror_nostdio(ex,
-            "WARNING: Error during initialization of module LinearAlgebra")
+        Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
     end
     # register a hook to disable BLAS threading
     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))

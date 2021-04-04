@@ -79,14 +79,19 @@ println(io::IO, xs...) = print(io, xs..., "\n")
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
-`context` can be either an [`IOContext`](@ref) whose properties will be used,
-or a `Pair` specifying a property and its value. `sizehint` suggests the capacity
-of the buffer (in bytes).
+`context` can be an [`IOContext`](@ref) whose properties will be used, a `Pair`
+specifying a property and its value, or a tuple of `Pair` specifying multiple
+properties and their values. `sizehint` suggests the capacity of the buffer (in
+bytes).
 
-The optional keyword argument `context` can be set to `:key=>value` pair
-or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
-stream passed to `f`.  The optional `sizehint` is a suggested size (in bytes)
-to allocate for the buffer used to write the string.
+The optional keyword argument `context` can be set to a `:key=>value` pair, a
+tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
+attributes are used for the I/O stream passed to `f`.  The optional `sizehint`
+is a suggested size (in bytes) to allocate for the buffer used to write the
+string.
+
+!!! compat "Julia 1.7"
+    Passing a tuple to keyword `context` requires Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -99,7 +104,9 @@ julia> sprint(showerror, BoundsError([1], 100))
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     s = IOBuffer(sizehint=sizehint)
-    if context !== nothing
+    if context isa Tuple
+        f(IOContext(s, context...), args...)
+    elseif context !== nothing
         f(IOContext(s, context), args...)
     else
         f(s, args...)
@@ -185,16 +192,6 @@ show(io::IO, s::AbstractString) = print_quoted(io, s)
 write(io::IO, s::Union{String,SubString{String}}) =
     GC.@preserve s Int(unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))))::Int
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
-
-## printing literal quoted string data ##
-
-# this is the inverse of print_unescaped_chars(io, s, "\\\")
-
-function print_quoted_literal(io, s::AbstractString)
-    print(io, '"')
-    for c = s; c == '"' ? print(io, "\\\"") : print(io, c); end
-    print(io, '"')
-end
 
 """
     repr(x; context=nothing)

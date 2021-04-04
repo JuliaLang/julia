@@ -19,5 +19,5 @@ index 8833246..2ed55ed 100644
 +cmake_policy(SET CMP0012 NEW)
 +
  if(TEST_CPP)
-  project("mbed TLS" C CXX)
+     project("mbed TLS" C CXX)
  else()

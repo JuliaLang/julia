@@ -628,6 +628,9 @@ Create a function that checks whether its argument occurs in `haystack`, i.e.
 a function equivalent to `needle -> occursin(needle, haystack)`.
 
 The returned function is of type `Base.Fix2{typeof(occursin)}`.
+
+!!! compat "Julia 1.6"
+    This method requires Julia 1.6 or later.
 """
 occursin(haystack) = Base.Fix2(occursin, haystack)
 

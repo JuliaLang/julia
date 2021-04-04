@@ -35,10 +35,12 @@ typedef win32_ucontext_t jl_ucontext_t;
      defined(_CPU_ARM_) || defined(_CPU_PPC64_))
 #define JL_HAVE_ASM
 #endif
-#if defined(_OS_DARWIN_)
-#define JL_HAVE_UNW_CONTEXT
+#if 0
+// very slow, but more debugging
+//#elif defined(_OS_DARWIN_)
+//#define JL_HAVE_UNW_CONTEXT
 //#elif defined(_OS_LINUX_)
-//#define JL_HAVE_UNW_CONTEXT // very slow, but more debugging
+//#define JL_HAVE_UNW_CONTEXT
 #elif defined(_OS_EMSCRIPTEN_)
 #define JL_HAVE_ASYNCIFY
 #elif !defined(JL_HAVE_ASM)
@@ -341,6 +343,10 @@ int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
 JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
+JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
+JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
+JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_ptls_t ptls);
+extern JL_DLLEXPORT int jl_gc_have_pending_finalizers;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
 

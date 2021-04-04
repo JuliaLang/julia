@@ -21,7 +21,7 @@ function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize
     type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
     r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
     #@assert t <: r # this may fail if t contains a typevar in invariant and multiple times
-        # in covariant position and r looses the occurence in invariant position (see #36407)
+        # in covariant position and r looses the occurrence in invariant position (see #36407)
     if !(t <: r) # ideally, this should never happen
         # widen to minimum complexity to obtain a valid result
         r = _limit_type_size(t, Any, source, 1, allowed_tuplelen)
@@ -276,7 +276,9 @@ union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstrac
 union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
-    return unionlen(t)+union_count_abstract(t) <= MAX_TYPEUNION_LENGTH && unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
+    t = ignorelimited(t)
+    return unionlen(t) + union_count_abstract(t) <= MAX_TYPEUNION_LENGTH &&
+           unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
 
 # pick a wider type that contains both typea and typeb,
@@ -292,6 +294,24 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     suba && subb && return typea
     subb && issimpleenoughtype(typea) && return typea
 
+    # type-lattice for LimitedAccuracy wrapper
+    # the merge create a slightly narrower type than needed, but we can't
+    # represent the precise intersection of causes and don't attempt to
+    # enumerate some of these cases where we could
+    if isa(typea, LimitedAccuracy) && isa(typeb, LimitedAccuracy)
+        if typea.causes ⊆ typeb.causes
+            causes = typeb.causes
+        elseif typeb.causes ⊆ typea.causes
+            causes = typea.causes
+        else
+            causes = union!(copy(typea.causes), typeb.causes)
+        end
+        return LimitedAccuracy(tmerge(typea.typ, typeb.typ), causes)
+    elseif isa(typea, LimitedAccuracy)
+        return LimitedAccuracy(tmerge(typea.typ, typeb), typea.causes)
+    elseif isa(typeb, LimitedAccuracy)
+        return LimitedAccuracy(tmerge(typea, typeb.typ), typeb.causes)
+    end
     # type-lattice for MaybeUndef wrapper
     if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
         return MaybeUndef(tmerge(
@@ -314,7 +334,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
-        if typea.var === typeb.var
+        if is_same_conditionals(typea, typeb)
             vtype = tmerge(typea.vtype, typeb.vtype)
             elsetype = tmerge(typea.elsetype, typeb.elsetype)
             if vtype != elsetype
@@ -327,6 +347,36 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
         return Bool
     end
+    # type-lattice for InterConditional wrapper, InterConditional will never be merged with Conditional
+    if isa(typea, InterConditional) && isa(typeb, Const)
+        if typeb.val === true
+            typeb = InterConditional(typea.slot, Any, Union{})
+        elseif typeb.val === false
+            typeb = InterConditional(typea.slot, Union{}, Any)
+        end
+    end
+    if isa(typeb, InterConditional) && isa(typea, Const)
+        if typea.val === true
+            typea = InterConditional(typeb.slot, Any, Union{})
+        elseif typea.val === false
+            typea = InterConditional(typeb.slot, Union{}, Any)
+        end
+    end
+    if isa(typea, InterConditional) && isa(typeb, InterConditional)
+        if is_same_conditionals(typea, typeb)
+            vtype = tmerge(typea.vtype, typeb.vtype)
+            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            if vtype != elsetype
+                return InterConditional(typea.slot, vtype, elsetype)
+            end
+        end
+        val = maybe_extract_const_bool(typea)
+        if val isa Bool && val === maybe_extract_const_bool(typeb)
+            return Const(val)
+        end
+        return Bool
+    end
+    # type-lattice for Const and PartialStruct wrappers
     if (isa(typea, PartialStruct) || isa(typea, Const)) &&
        (isa(typeb, PartialStruct) || isa(typeb, Const)) &&
         widenconst(typea) === widenconst(typeb)
@@ -348,6 +398,15 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
        return anyconst ? PartialStruct(widenconst(typea), fields) :
             widenconst(typea)
     end
+    if isa(typea, PartialOpaque) && isa(typeb, PartialOpaque) && widenconst(typea) == widenconst(typeb)
+        if !(typea.source === typeb.source &&
+             typea.isva === typeb.isva &&
+             typea.parent === typeb.parent)
+            return widenconst(typea)
+        end
+        return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
+            typea.isva, typea.parent, typea.source)
+    end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
     if !isa(typea, Type) || !isa(typeb, Type)
@@ -355,10 +414,9 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         return Any
     end
     typea == typeb && return typea
-    # it's always ok to form a Union of two Union-free types
-    u = Union{typea, typeb}
-    if unioncomplexity(u) <= 1
-        return u
+    # it's always ok to form a Union of two concrete types
+    if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
+        return Union{typea, typeb}
     end
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list
@@ -373,6 +431,10 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         uw = unwrap_unionall(ti)
         (uw isa DataType && ti <: uw.name.wrapper) || return Any
         typenames[i] = uw.name
+    end
+    u = Union{types...}
+    if issimpleenoughtype(u)
+        return u
     end
     # see if any of the union elements have the same TypeName
     # in which case, simplify this tmerge by replacing it with

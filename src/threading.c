@@ -398,8 +398,8 @@ void jl_init_threading(void)
     }
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
-    jl_measure_compile_time = (uint8_t*)realloc(jl_measure_compile_time, jl_n_threads * sizeof(*jl_measure_compile_time));
-    jl_cumulative_compile_time = (uint64_t*)realloc(jl_cumulative_compile_time, jl_n_threads * sizeof(*jl_cumulative_compile_time));
+    jl_measure_compile_time = (uint8_t*)calloc(jl_n_threads, sizeof(*jl_measure_compile_time));
+    jl_cumulative_compile_time = (uint64_t*)calloc(jl_n_threads, sizeof(*jl_cumulative_compile_time));
 #ifndef __clang_analyzer__
     jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
 #endif
@@ -425,8 +425,8 @@ void jl_start_threads(void)
     // do we have exclusive use of the machine? default is no
     exclusive = DEFAULT_MACHINE_EXCLUSIVE;
     cp = getenv(MACHINE_EXCLUSIVE_NAME);
-    if (cp)
-        exclusive = strtol(cp, NULL, 10);
+    if (cp && strcmp(cp, "0") != 0)
+        exclusive = 1;
 
     // exclusive use: affinitize threads, master thread on proc 0, rest
     // according to a 'compact' policy

@@ -235,7 +235,7 @@ function init_active_project()
     ACTIVE_PROJECT[] =
         project === nothing ? nothing :
         project == "" ? nothing :
-        project == "@." ? current_project() : abspath(expanduser(project))
+        startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##

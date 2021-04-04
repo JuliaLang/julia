@@ -101,6 +101,8 @@
 
 (define unary-op? (Set unary-ops))
 
+(define radical-op? (Set '(√ ∛ ∜)))
+
 ; operators that are both unary and binary
 (define unary-and-binary-ops (append! '($ & ~)
                                       (add-dots '(+ - ⋆ ± ∓))))
@@ -973,7 +975,7 @@
                 (not (memv t '(#\( #\[ #\{))))
            )
        (not (ts:space? s))
-       (not (operator? t))
+       (or (not (operator? t)) (radical-op? t))
        (not (closing-token? t))
        (not (newline? t))
        (or (and (not (string? expr)) (not (eqv? t #\")))
@@ -996,7 +998,7 @@
             (begin
               #;(if (and (number? ex) (= ex 0))
                     (error "juxtaposition with literal \"0\""))
-              (let ((next (parse-factor s)))
+              (let ((next (if (radical-op? next) (parse-unary s) (parse-factor s))))
                 (loop `(call * ,ex ,next)
                       (cons next args))))
             (if (length= args 1)
@@ -1869,7 +1871,15 @@
                          (fix 'vect vec)     ; [x]   => (vect x)
                          (fix 'hcat vec))))  ; [x y] => (hcat x y)
           (case t
-            ((#\; #\newline)
+            ((#\;)
+             (take-token s)
+             (if (eqv? (peek-token s) #\;)
+               (parser-depwarn s (string "Multiple semicolons in an array concatenation expression currently have no effect, "
+                                  "but may have a new meaning in a future version of Julia.")
+                                 "Please remove extra semicolons to preserve forward compatibility e.g. [1;;3] => [1;3]."))
+             (set! gotnewline #f)
+             (loop '() (update-outer vec outer)))
+            ((#\newline)
              (or gotnewline (take-token s))
              (set! gotnewline #f)
              (loop '() (update-outer vec outer)))

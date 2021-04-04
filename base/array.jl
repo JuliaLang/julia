@@ -530,6 +530,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 ## Conversions ##
 
 convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
+convert(::Type{Union{}}, a::AbstractArray) = throw(MethodError(convert, (Union{}, a)))
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -1733,7 +1734,7 @@ function vcat(arrays::Vector{T}...) where T
     return arr
 end
 
-_cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
+_cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
 ## find ##
 

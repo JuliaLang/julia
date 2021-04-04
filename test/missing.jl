@@ -158,7 +158,7 @@ Base.one(::Type{Unit}) = 1
                             identity, zero, one, oneunit,
                             iseven, isodd, ispow2,
                             isfinite, isinf, isnan, iszero,
-                            isinteger, isreal, transpose, adjoint, float, inv]
+                            isinteger, isreal, transpose, adjoint, float, complex, inv]
 
     # All elementary functions return missing when evaluating missing
     for f in elementary_functions
@@ -171,11 +171,15 @@ Base.one(::Type{Unit}) = 1
         @test zero(Union{T, Missing}) === T(0)
         @test one(Union{T, Missing}) === T(1)
         @test oneunit(Union{T, Missing}) === T(1)
+        @test float(Union{T, Missing}) === Union{float(T), Missing}
+        @test complex(Union{T, Missing}) === Union{complex(T), Missing}
     end
 
     @test_throws MethodError zero(Union{Symbol, Missing})
     @test_throws MethodError one(Union{Symbol, Missing})
     @test_throws MethodError oneunit(Union{Symbol, Missing})
+    @test_throws MethodError float(Union{Symbol, Missing})
+    @test_throws MethodError complex(Union{Symbol, Missing})
 
     for T in (Unit,)
         @test zero(Union{T, Missing}) === T(0)
@@ -186,10 +190,14 @@ Base.one(::Type{Unit}) = 1
     @test zero(Missing) === missing
     @test one(Missing) === missing
     @test oneunit(Missing) === missing
+    @test float(Missing) === Missing
+    @test complex(Missing) === Missing
 
     @test_throws MethodError zero(Any)
     @test_throws MethodError one(Any)
     @test_throws MethodError oneunit(Any)
+    @test_throws MethodError float(Any)
+    @test_throws MethodError complex(Any)
 
     @test_throws MethodError zero(String)
     @test_throws MethodError zero(Union{String, Missing})
@@ -544,3 +552,29 @@ end
     me = try missing(1) catch e e end
     @test sprint(showerror, me) == "MethodError: objects of type Missing are not callable"
 end
+
+@testset "sort and sortperm with $(eltype(X))" for (X, P, RP) in
+    (([2, missing, -2, 5, missing], [3, 1, 4, 2, 5], [2, 5, 4, 1, 3]),
+     ([NaN, missing, 5, -0.0, NaN, missing, Inf, 0.0, -Inf],
+      [9, 4, 8, 3, 7, 1, 5, 2, 6], [2, 6, 1, 5, 7, 3, 8, 4, 9]),
+     ([missing, "a", "c", missing, "b"], [2, 5, 3, 1, 4], [1, 4, 3, 5, 2]))
+    @test sortperm(X) == P
+    @test sortperm(X, alg=QuickSort) == P
+    @test sortperm(X, alg=MergeSort) == P
+
+    XP = X[P]
+    @test isequal(sort(X), XP)
+    @test isequal(sort(X, alg=QuickSort), XP)
+    @test isequal(sort(X, alg=MergeSort), XP)
+
+    @test sortperm(X, rev=true) == RP
+    @test sortperm(X, alg=QuickSort, rev=true) == RP
+    @test sortperm(X, alg=MergeSort, rev=true) == RP
+
+    XRP = X[RP]
+    @test isequal(sort(X, rev=true), XRP)
+    @test isequal(sort(X, alg=QuickSort, rev=true), XRP)
+    @test isequal(sort(X, alg=MergeSort, rev=true), XRP)
+end
+
+sortperm(reverse([NaN, missing, NaN, missing]))

@@ -31,7 +31,6 @@ julia> cbrt(big(-27))
 -3.0
 ```
 """
-cbrt(x::Real) = cbrt(float(x))
 cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
 
 """

@@ -269,6 +269,17 @@ function is_pending(compact::IncrementalCompact, old::OldSSAValue)
     return old.id > length(compact.ir.stmts) + length(compact.ir.new_nodes)
 end
 
+function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
+    isa(def, Expr) || return false
+    length(def.args) >= 3 || return false
+    is_known_call(def, getfield, compact) || return false
+    which = compact_exprtype(compact, def.args[3])
+    isa(which, Const) || return false
+    which.val === :captures || return false
+    oc = compact_exprtype(compact, def.args[2])
+    return oc ⊑ Core.OpaqueClosure
+end
+
 function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
         @nospecialize(result_t), field::Int, leaves::Vector{Any})
     # For every leaf, the lifted value
@@ -277,30 +288,40 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
     for leaf in leaves
         leaf_key = leaf
         if isa(leaf, AnySSAValue)
-            if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
-                leaf = compact.ssa_rename[leaf.id]
-                if isa(leaf, AnySSAValue)
-                    leaf = simple_walk(compact, leaf)
-                end
-                if isa(leaf, AnySSAValue)
-                    def = compact[leaf]
-                else
-                    def = leaf
-                end
-            else
-                def = compact[leaf]
-            end
-            if is_tuple_call(compact, def) && 1 <= field < length(def.args)
-                lifted = def.args[1+field]
+            function lift_arg(ref::Core.Compiler.UseRef)
+                lifted = ref[]
                 if is_old(compact, leaf) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
-                    def.args[1+field] = lifted
+                    lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
+                    ref[] = lifted
                     (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
                 end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
+                nothing
+            end
+            function walk_leaf(@nospecialize(leaf))
+                if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
+                    leaf = compact.ssa_rename[leaf.id]
+                    if isa(leaf, AnySSAValue)
+                        leaf = simple_walk(compact, leaf)
+                    end
+                    if isa(leaf, AnySSAValue)
+                        def = compact[leaf]
+                    else
+                        def = leaf
+                    end
+                elseif isa(leaf, AnySSAValue)
+                    def = compact[leaf]
+                else
+                    def = leaf
+                end
+                return Pair{Any, Any}(def, leaf)
+            end
+            (def, leaf) = walk_leaf(leaf)
+            if is_tuple_call(compact, def) && 1 <= field < length(def.args)
+                lift_arg(UseRef(def, 1 + field))
                 continue
             elseif isexpr(def, :new)
                 typ = widenconst(types(compact)[leaf])
@@ -310,6 +331,9 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 (isa(typ, DataType) && (!typ.abstract)) || return nothing
                 @assert !typ.mutable
                 if length(def.args) < 1 + field
+                    if field > fieldcount(typ)
+                        return nothing
+                    end
                     ftyp = fieldtype(typ, field)
                     if !isbitstype(ftyp)
                         # On this branch, this will be a guaranteed UndefRefError.
@@ -324,7 +348,8 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     for i = (length(def.args) + 1):(1+field)
                         ftyp = fieldtype(typ, i - 1)
                         isbitstype(ftyp) || return nothing
-                        push!(def.args, insert_node!(compact, leaf, result_t, Expr(:new, ftyp)))
+                        ninst = effect_free(NewInstruction(Expr(:new, ftyp), result_t))
+                        push!(def.args, insert_node!(compact, leaf, ninst))
                     end
                     compact[leaf] = def
                 end
@@ -333,35 +358,34 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
+                    lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
                     def.args[1+field] = lifted
                     (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
                 end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
+            elseif is_getfield_captures(def, compact)
+                # Walk to new_opaque_closure
+                ocleaf = def.args[2]
+                if isa(ocleaf, AnySSAValue)
+                    ocleaf = simple_walk(compact, ocleaf)
+                end
+                ocdef, _ = walk_leaf(ocleaf)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 <= field <= length(ocdef.args)-5
+                    lift_arg(UseRef(ocdef, 5 + field))
+                    continue
+                end
+                return nothing
             else
                 typ = compact_exprtype(compact, leaf)
                 if !isa(typ, Const)
-                    # Disabled since #27126
-                    return nothing
+                    # TODO: (disabled since #27126)
                     # If the leaf is an old ssa value, insert a getfield here
                     # We will revisit this getfield later when compaction gets
                     # to the appropriate point.
                     # N.B.: This can be a bit dangerous because it can lead to
                     # infinite loops if we accidentally insert a node just ahead
                     # of where we are
-                    if is_old(compact, leaf)
-                        (isa(typ, DataType) && (!typ.abstract)) || return nothing
-                        @assert !typ.mutable
-                        # If there's the potential for an undefref error on access, we cannot insert a getfield
-                        if field > typ.ninitialized && !isbitstype(fieldtype(typ, field))
-                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, make_MaybeUndef(result_t), Expr(:call, :unchecked_getfield, SSAValue(leaf.id), field), true))
-                            maybe_undef = true
-                        else
-                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, result_t, Expr(:call, getfield, SSAValue(leaf.id), field), true))
-                        end
-                        continue
-                    end
                     return nothing
                 end
                 leaf = typ.val
@@ -462,7 +486,7 @@ function perform_lifting!(compact::IncrementalCompact,
             continue
         end
         n = PhiNode()
-        ssa = insert_node!(compact, item, result_t, n)
+        ssa = insert_node!(compact, item, effect_free(NewInstruction(n, result_t)))
         lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)] = ssa
         push!(lifted_phis, LiftedPhi(ssa, n, true))
     end
@@ -537,7 +561,6 @@ function getfield_elim_pass!(ir::IRCode)
         result_t = compact_exprtype(compact, SSAValue(idx))
         is_getfield = is_setfield = false
         is_ccall = false
-        is_unchecked = false
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
         if is_known_call(stmt, setfield!, compact)
             is_setfield = true
@@ -563,9 +586,10 @@ function getfield_elim_pass!(ir::IRCode)
             # that's defined not to return its value to make life easier
             # for the backend.
             pi = insert_node_here!(compact,
-                PiNode(stmt.args[2], compact.result[idx][:type]),
-                compact.result[idx][:type],
-                compact.result[idx][:line], true)
+                NewInstruction(
+                    PiNode(stmt.args[2], compact.result[idx][:type]),
+                    compact.result[idx][:type],
+                    compact.result[idx][:line]), true)
             compact.ssa_rename[compact.idx-1] = pi
             continue
         elseif is_known_call(stmt, (===), compact)
@@ -577,9 +601,6 @@ function getfield_elim_pass!(ir::IRCode)
             (isa(c1, Const) && isa(c2, Const)) && continue
             lift_comparison!(compact, idx, c1, c2, stmt, lifting_cache)
             continue
-        elseif isexpr(stmt, :call) && stmt.args[1] === :unchecked_getfield
-            is_getfield = true
-            is_unchecked = true
         elseif isexpr(stmt, :foreigncall)
             nccallargs = length(stmt.args[3]::SimpleVector)
             new_preserves = Any[]
@@ -698,11 +719,12 @@ function getfield_elim_pass!(ir::IRCode)
         val = perform_lifting!(compact, visited_phinodes, field, lifting_cache, result_t, lifted_leaves, stmt.args[2])
 
         # Insert the undef check if necessary
-        if any_undef && !is_unchecked
+        if any_undef
             if val === nothing
-                insert_node!(compact, SSAValue(idx), Nothing, Expr(:throw_undef_if_not, Symbol("##getfield##"), false))
+                insert_node!(compact, SSAValue(idx),
+                    non_effect_free(NewInstruction(Expr(:throw_undef_if_not, Symbol("##getfield##"), false), Nothing)))
             else
-                insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, Symbol("##getfield##"), val.x))
+                # val must be defined
             end
         else
             @assert val !== nothing
@@ -801,7 +823,8 @@ function getfield_elim_pass!(ir::IRCode)
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks
                     n = PhiNode()
-                    phinodes[b] = insert_node!(ir, first(ir.cfg.blocks[b].stmts), ftyp, n)
+                    phinodes[b] = insert_node!(ir, first(ir.cfg.blocks[b].stmts),
+                        NewInstruction(n, ftyp))
                 end
                 # Now go through all uses and rewrite them
                 allblocks = sort(vcat(phiblocks, ldu.def_bbs))
@@ -936,16 +959,30 @@ function type_lift_pass!(ir::IRCode)
         stmt = insts[idx][:inst]
         stmt isa Expr || continue
         if (stmt.head === :isdefined || stmt.head === :undefcheck)
-            val = (stmt.head === :isdefined) ? stmt.args[1] : stmt.args[2]
-            # undef can only show up by being introduced in a phi
-            # node (or an UpsilonNode() argument to a PhiC node),
-            # so lift all these nodes that have maybe undef values
-            processed = IdDict{Int, Union{SSAValue, Bool}}()
-            while isa(val, SSAValue) && isa(insts[val.id][:inst], PiNode)
-                val = (insts[val.id][:inst]::PiNode).val
+            # after optimization, undef can only show up by being introduced in
+            # a phi node (or an UpsilonNode() argument to a PhiC node), so lift
+            # all these nodes that have maybe undef values
+            val = stmt.args[(stmt.head === :isdefined) ? 1 : 2]
+            if stmt.head === :isdefined && (val isa Slot || val isa GlobalRef ||
+                    isexpr(val, :static_parameter) || val isa Argument || val isa Symbol)
+                # this is a legal node, so assume it was not introduced by
+                # slot2ssa (at worst, we might leave in a runtime check that
+                # shouldn't have been there)
+                continue
             end
-            if !isa(val, SSAValue) || (!isa(insts[val.id][:inst], PhiNode) && !isa(insts[val.id][:inst], PhiCNode))
-                (isa(val, GlobalRef) || isexpr(val, :static_parameter)) && continue
+            # otherwise, we definitely have a corrupt node from slot2ssa, and
+            # must fix or delete that now
+            processed = IdDict{Int, Union{SSAValue, Bool}}()
+            def = val
+            while true
+                # peek through PiNodes
+                isa(val, SSAValue) || break
+                def = insts[val.id][:inst]
+                isa(def, PiNode) || break
+                val = def.val
+            end
+            if !isa(val, SSAValue) || (!isa(def, PhiNode) && !isa(def, PhiCNode))
+                # in most cases, reaching this statement implies we had a value
                 if stmt.head === :undefcheck
                     insts[idx][:inst] = nothing
                 else
@@ -955,7 +992,6 @@ function type_lift_pass!(ir::IRCode)
             end
             stmt_id = val.id
             worklist = Tuple{Int, Int, SSAValue, Int}[(stmt_id, 0, SSAValue(0), 0)]
-            def = insts[stmt_id][:inst]
             if !haskey(lifted_undef, stmt_id)
                 first = true
                 while !isempty(worklist)
@@ -964,10 +1000,18 @@ function type_lift_pass!(ir::IRCode)
                     if isa(def, PhiNode)
                         edges = copy(def.edges)
                         values = Vector{Any}(undef, length(edges))
-                        new_phi = length(values) == 0 ? false : insert_node!(ir, item, Bool, PhiNode(edges, values))
+                        new_phi = if length(values) == 0
+                            false
+                        else
+                            insert_node!(ir, item, NewInstruction(PhiNode(edges, values), Bool))
+                        end
                     else
                         values = Vector{Any}(undef, length(def.values))
-                        new_phi = length(values) == 0 ? false : insert_node!(ir, item, Bool, PhiCNode(values))
+                        new_phi = if length(values) == 0
+                            false
+                        else
+                            insert_node!(ir, item, NewInstruction(PhiCNode(values), Bool))
+                        end
                     end
                     processed[item] = new_phi
                     if first
@@ -1017,7 +1061,7 @@ function type_lift_pass!(ir::IRCode)
                         if isa(def, PhiNode)
                             values[i] = val
                         else
-                            values[i] = insert_node!(ir, up_id, Bool, UpsilonNode(val))
+                            values[i] = insert_node!(ir, up_id, NewInstruction(UpsilonNode(val), Bool))
                         end
                     end
                     if which !== SSAValue(0)
@@ -1026,16 +1070,16 @@ function type_lift_pass!(ir::IRCode)
                             phi.values[use] = new_phi
                         else
                             phi = phi::PhiCNode
-                            phi.values[use] = insert_node!(ir, w_up_id, Bool, UpsilonNode(new_phi))
+                            phi.values[use] = insert_node!(ir, w_up_id, NewInstruction(UpsilonNode(new_phi), Bool))
                         end
                     end
                 end
             end
-            if stmt.head === :isdefined
-                insts[idx][:inst] = lifted_undef[stmt_id]
-            else
-                insts[idx][:inst] = Expr(:throw_undef_if_not, stmt.args[1], lifted_undef[stmt_id])
+            inst = lifted_undef[stmt_id]
+            if stmt.head === :undefcheck
+                inst = Expr(:throw_undef_if_not, stmt.args[1], inst)
             end
+            insts[idx][:inst] = inst
         end
     end
     ir

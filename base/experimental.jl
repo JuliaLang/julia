@@ -252,4 +252,7 @@ function show_error_hints(io, ex, args...)
     end
 end
 
+# OpaqueClosure
+include("opaque_closure.jl")
+
 end
