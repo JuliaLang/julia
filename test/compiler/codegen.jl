@@ -73,11 +73,13 @@ function test_jl_dump_compiles_toplevel_thunks()
     # Make sure to cause compilation of the eval function
     # before calling it below.
     Core.eval(Main, Any[:(nothing)][1])
+    GC.enable(false)  # avoid finalizers to be compiled
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
     close(io)
+    GC.enable(true)
     tstats = stat(tfile)
     tempty = tstats.size == 0
     rm(tfile)

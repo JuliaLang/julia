@@ -26,7 +26,7 @@ abstract type AbstractDict{K,V} end
 """
     Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
 
-Transforms an indexable container into an Dictionary-view of the same data.
+Transforms an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
 """
 struct Pairs{K, V, I, A} <: AbstractDict{K, V}
@@ -482,19 +482,6 @@ sizeof(x) = Core.sizeof(x)
 
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
-
-"""
-    precompile(f, args::Tuple{Vararg{Any}})
-
-Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
-"""
-function precompile(@nospecialize(f), args::Tuple)
-    ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
-end
-
-function precompile(argt::Type)
-    ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
-end
 
 """
     esc(e)

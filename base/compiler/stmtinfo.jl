@@ -97,7 +97,7 @@ constant information.
 """
 struct ConstCallInfo
     call::Any
-    result::InferenceResult
+    results::Vector{Union{Nothing,InferenceResult}}
 end
 
 """
@@ -108,6 +108,14 @@ method being processed.
 """
 struct InvokeCallInfo
     match::MethodMatch
+end
+
+struct OpaqueClosureCallInfo
+    match::MethodMatch
+end
+
+struct OpaqueClosureCreateInfo
+    unspec::CallMeta
 end
 
 # Stmt infos that are used by external consumers, but not by optimization.

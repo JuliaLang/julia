@@ -236,7 +236,7 @@ function readdlm_auto(input::AbstractString, dlm::AbstractChar, T::Type, eol::Ab
     fsz = filesize(input)
     if use_mmap && fsz > 0 && fsz < typemax(Int)
         a = open(input, "r") do f
-            Mmap.mmap(f, Vector{UInt8}, (Int(fsz),))
+            mmap(f, Vector{UInt8}, (Int(fsz),))
         end
         # TODO: It would be nicer to use String(a) without making a copy,
         # but because the mmap'ed array is not NUL-terminated this causes
