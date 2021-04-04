@@ -342,15 +342,15 @@ function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     if isempty(exports)
         println(io, "Module does not export any names.")
     else
-        println(io, "# Exported names:")
+        println(io, "# Exported names")
         print(io, "  `")
         join(io, exports, "`, `")
-        println(io, "`")
+        println(io, "`\n")
     end
     if !isnothing(readme_path)
         readme_lines = readlines(readme_path)
         isempty(readme_lines) && return  # don't say we are going to print empty file
-        println(io, " Displaying the contents of `$(readme_path)`:\n\n")
+        println(io, "# Displaying contents of readme found at `$(readme_path)`")
         for line in first(readme_lines, nlines)
             println(io, line)
         end
