@@ -91,12 +91,10 @@ prepend!(tests, linalg_tests)
 
 import LinearAlgebra
 cd(@__DIR__) do
-    n = 1
-    if net_on
-        n = min(Sys.CPU_THREADS, length(tests))
-        n > 1 && addprocs_with_testenv(n)
-        LinearAlgebra.BLAS.set_num_threads(1)
-    end
+    n = min(Sys.CPU_THREADS, length(tests))
+    n > 1 && addprocs_with_testenv(n)
+    LinearAlgebra.BLAS.set_num_threads(1)
+
     skipped = 0
 
     @everywhere include("testdefs.jl")
