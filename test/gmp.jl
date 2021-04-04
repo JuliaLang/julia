@@ -241,6 +241,30 @@ end
     @test xor(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
     @test xor(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
 
+    @test nand(a, b) == parse(BigInt,"-125")
+    @test nand(a, b, c) == parse(BigInt,"-3426495623485904783478276")
+    @test nand(a, b, c, d) == parse(BigInt,"3426495623485906180362179")
+    @test nand(a, b, c, d, f) == parse(BigInt,"-989383129791109278172161")
+    @test nand(a, b, c, d, f, g) == parse(BigInt,"989383129791109278172160")
+
+    @test ⊼(a, b) == parse(BigInt,"-125")
+    @test ⊼(a, b, c) == parse(BigInt,"-3426495623485904783478276")
+    @test ⊼(a, b, c, d) == parse(BigInt,"3426495623485906180362179")
+    @test ⊼(a, b, c, d, f) == parse(BigInt,"-989383129791109278172161")
+    @test ⊼(a, b, c, d, f, g) == parse(BigInt,"989383129791109278172160")
+
+    @test nor(a, b) == parse(BigInt,"-327424")
+    @test nor(a, b, c) == parse(BigInt,"323764")
+    @test nor(a, b, c, d) == parse(BigInt,"1398934849")
+    @test nor(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437315263635345357388346801482")
+    @test nor(a, b, c, d, f, g) == parse(BigInt,"0")
+
+    @test ⊽(a, b) == parse(BigInt,"-327424")
+    @test ⊽(a, b, c) == parse(BigInt,"323764")
+    @test ⊽(a, b, c, d) == parse(BigInt,"1398934849")
+    @test ⊽(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437315263635345357388346801482")
+    @test ⊽(a, b, c, d, f, g) == parse(BigInt,"0")
+
     @test (&)(a, b) == parse(BigInt,"124")
     @test (&)(a, b, c) == parse(BigInt,"72")
     @test (&)(a, b, c, d) == parse(BigInt,"8")

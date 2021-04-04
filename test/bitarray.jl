@@ -832,6 +832,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b1, b2)  BitMatrix
         @check_bit_operation broadcast(|, b1, b2)  BitMatrix
         @check_bit_operation broadcast(xor, b1, b2)  BitMatrix
+        @check_bit_operation broadcast(nand, b1, b2)  BitMatrix
+        @check_bit_operation broadcast(nor, b1, b2)  BitMatrix
         @check_bit_operation (+)(b1, b2)  Matrix{Int}
         @check_bit_operation (-)(b1, b2)  Matrix{Int}
         @check_bit_operation broadcast(*, b1, b2) BitMatrix
@@ -861,6 +863,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b0, b0)  BitVector
         @check_bit_operation broadcast(|, b0, b0)  BitVector
         @check_bit_operation broadcast(xor, b0, b0)  BitVector
+        @check_bit_operation broadcast(nand, b0, b0)  BitVector
+        @check_bit_operation broadcast(nor, b0, b0)  BitVector
         @check_bit_operation broadcast(*, b0, b0) BitVector
         @check_bit_operation (*)(b0, b0') BitMatrix
     end
@@ -871,6 +875,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(|, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(xor, b1, i2)  Matrix{Int}
+        @check_bit_operation broadcast(nand, b1, i2)  Matrix{Int}
+        @check_bit_operation broadcast(nor, b1, i2)  Matrix{Int}
         @check_bit_operation (+)(b1, i2)  Matrix{Int}
         @check_bit_operation (-)(b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(*, b1, i2) Matrix{Int}
@@ -902,6 +908,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(|, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(xor, i1, b2)  Matrix{Int}
+        @check_bit_operation broadcast(nand, i1, b2)  Matrix{Int}
+        @check_bit_operation broadcast(nor, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(+, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(-, i1, b2)  Matrix{Int}
         @check_bit_operation broadcast(*, i1, b2) Matrix{Int}
@@ -909,6 +917,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(|, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(xor, u1, b2)  Matrix{UInt8}
+        @check_bit_operation broadcast(nand, u1, b2)  Matrix{UInt8}
+        @check_bit_operation broadcast(nor, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(+, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(-, u1, b2)  Matrix{UInt8}
         @check_bit_operation broadcast(*, u1, b2) Matrix{UInt8}
@@ -986,6 +996,14 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(xor, b1, false)  BitMatrix
         @check_bit_operation broadcast(xor, true, b1)   BitMatrix
         @check_bit_operation broadcast(xor, false, b1)  BitMatrix
+        @check_bit_operation broadcast(nand, b1, true)   BitMatrix
+        @check_bit_operation broadcast(nand, b1, false)  BitMatrix
+        @check_bit_operation broadcast(nand, true, b1)   BitMatrix
+        @check_bit_operation broadcast(nand, false, b1)  BitMatrix
+        @check_bit_operation broadcast(nor, b1, true)   BitMatrix
+        @check_bit_operation broadcast(nor, b1, false)  BitMatrix
+        @check_bit_operation broadcast(nor, true, b1)   BitMatrix
+        @check_bit_operation broadcast(nor, false, b1)  BitMatrix
         @check_bit_operation broadcast(+, b1, true)   Matrix{Int}
         @check_bit_operation broadcast(+, b1, false)  Matrix{Int}
         @check_bit_operation broadcast(-, b1, true)   Matrix{Int}
@@ -1002,12 +1020,18 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b1, b2)  BitMatrix
         @check_bit_operation broadcast(|, b1, b2)  BitMatrix
         @check_bit_operation broadcast(xor, b1, b2)  BitMatrix
+        @check_bit_operation broadcast(nand, b1, b2)  BitMatrix
+        @check_bit_operation broadcast(nor, b1, b2)  BitMatrix
         @check_bit_operation broadcast(&, b2, b1)  BitMatrix
         @check_bit_operation broadcast(|, b2, b1)  BitMatrix
         @check_bit_operation broadcast(xor, b2, b1)  BitMatrix
+        @check_bit_operation broadcast(nand, b2, b1)  BitMatrix
+        @check_bit_operation broadcast(nor, b2, b1)  BitMatrix
         @check_bit_operation broadcast(&, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(|, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(xor, b1, i2)  Matrix{Int}
+        @check_bit_operation broadcast(nand, b1, i2)  Matrix{Int}
+        @check_bit_operation broadcast(nor, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(+, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(-, b1, i2)  Matrix{Int}
         @check_bit_operation broadcast(*, b1, i2) Matrix{Int}
@@ -1018,6 +1042,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(&, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(|, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(xor, b1, u2)  Matrix{UInt8}
+        @check_bit_operation broadcast(nand, b1, u2)  Matrix{UInt8}
+        @check_bit_operation broadcast(nor, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(+, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(-, b1, u2)  Matrix{UInt8}
         @check_bit_operation broadcast(*, b1, u2) Matrix{UInt8}
@@ -1086,6 +1112,14 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(xor, b1, transpose(b3))  BitMatrix
         @check_bit_operation broadcast(xor, b2, b1)             BitMatrix
         @check_bit_operation broadcast(xor, transpose(b3), b1)  BitMatrix
+        @check_bit_operation broadcast(nand, b1, b2)             BitMatrix
+        @check_bit_operation broadcast(nand, b1, transpose(b3))  BitMatrix
+        @check_bit_operation broadcast(nand, b2, b1)             BitMatrix
+        @check_bit_operation broadcast(nand, transpose(b3), b1)  BitMatrix
+        @check_bit_operation broadcast(nor, b1, b2)             BitMatrix
+        @check_bit_operation broadcast(nor, b1, transpose(b3))  BitMatrix
+        @check_bit_operation broadcast(nor, b2, b1)             BitMatrix
+        @check_bit_operation broadcast(nor, transpose(b3), b1)  BitMatrix
         @check_bit_operation broadcast(+, b1, b2)             Matrix{Int}
         @check_bit_operation broadcast(+, b1, transpose(b3))  Matrix{Int}
         @check_bit_operation broadcast(+, b2, b1)             Matrix{Int}
@@ -1390,6 +1424,8 @@ timesofar("reductions")
         @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == broadcast(&, b1, b2)
         @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == broadcast(|, b1, b2)
         @test map(⊻, b1, b2) == map((x,y)->x⊻y, b1, b2) == broadcast(⊻, b1, b2) == broadcast(xor, b1, b2)
+        @test map(⊼, b1, b2) == map((x,y)->x⊼y, b1, b2) == broadcast(⊼, b1, b2) == broadcast(nand, b1, b2)
+        @test map(⊽, b1, b2) == map((x,y)->x⊽y, b1, b2) == broadcast(⊽, b1, b2) == broadcast(nand, b1, b2)
 
         @test map(^, b1, b2) == map((x,y)->x^y, b1, b2) == b1 .^ b2
         @test map(*, b1, b2) == map((x,y)->x*y, b1, b2) == b1 .* b2

@@ -333,6 +333,8 @@ missing
 """
 (|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
 xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
+nand(x::T, y::T) where {T<:BitInteger} = ~(x & y)
+nor(x::T, y::T) where {T<:BitInteger} = ~(x | y)
 
 """
     bswap(n)
@@ -917,7 +919,7 @@ else
 end
 
 # issue #15489: since integer ops are unchecked, they shouldn't check promotion
-for op in (:+, :-, :*, :&, :|, :xor)
+for op in (:+, :-, :*, :&, :|, :xor, :nand, :nor)
     @eval function $op(a::Integer, b::Integer)
         T = promote_typeof(a, b)
         aT, bT = a % T, b % T

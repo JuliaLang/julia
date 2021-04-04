@@ -4,7 +4,7 @@ module GMP
 
 export BigInt
 
-import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
+import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
@@ -546,6 +546,18 @@ end
 # unary ops
 (-)(x::BigInt) = MPZ.neg(x)
 (~)(x::BigInt) = MPZ.com(x)
+
+# nand and nor
+nand(a::BigInt, b::BigInt) = MPZ.com(MPZ.and(a, b))
+nand(a::BigInt, b::BigInt, c::BigInt) = nand(nand(a, b), c)
+nand(a::BigInt, b::BigInt, c::BigInt, d::BigInt) = nand(nand(nand(a, b), c), d)
+nand(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) = 
+    nand(nand(nand(nand(a, b), c), d), e)
+nor(x::BigInt, y::BigInt) = MPZ.com(MPZ.ior(x, y))
+nor(a::BigInt, b::BigInt, c::BigInt) = nor(nor(a, b), c)
+nor(a::BigInt, b::BigInt, c::BigInt, d::BigInt) = nor(nor(nor(a, b), c), d)
+nor(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) = 
+    nor(nor(nor(nor(a, b), c), d), e)
 
 <<(x::BigInt, c::UInt) = c == 0 ? x : MPZ.mul_2exp(x, c)
 >>(x::BigInt, c::UInt) = c == 0 ? x : MPZ.fdiv_q_2exp(x, c)

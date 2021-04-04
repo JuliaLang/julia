@@ -91,7 +91,7 @@ isapprox(::Missing, ::Any; kwargs...) = missing
 isapprox(::Any, ::Missing; kwargs...) = missing
 
 # Unary operators/functions
-for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
+for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor), :(nand), :(nor),
           :(zero), :(one), :(oneunit),
           :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan),
@@ -178,6 +178,16 @@ xor(a::Missing, b::Bool) = missing
 xor(b::Bool, a::Missing) = missing
 xor(::Missing, ::Integer) = missing
 xor(::Integer, ::Missing) = missing
+nand(::Missing, ::Missing) = missing
+nand(a::Missing, b::Bool) = missing
+nand(b::Bool, a::Missing) = missing
+nand(::Missing, ::Integer) = missing
+nand(::Integer, ::Missing) = missing
+nor(::Missing, ::Missing) = missing
+nor(a::Missing, b::Bool) = missing
+nor(b::Bool, a::Missing) = missing
+nor(::Missing, ::Integer) = missing
+nor(::Integer, ::Missing) = missing
 
 *(d::Missing, x::AbstractString) = missing
 *(d::AbstractString, x::Missing) = missing

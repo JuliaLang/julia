@@ -83,7 +83,7 @@ end
     arithmetic_operators = [+, -, *, /, ^, Base.div, Base.mod, Base.fld, Base.rem]
 
     # All unary operators return missing when evaluating missing
-    for f in [!, ~, +, -, *, &, |, xor]
+    for f in [!, ~, +, -, *, &, |, xor, nand, nor]
         @test ismissing(f(missing))
     end
 
@@ -128,6 +128,22 @@ end
     @test ismissing(xor(true, missing))
     @test ismissing(xor(missing, false))
     @test ismissing(xor(false, missing))
+    @test ismissing(nand(missing, true))
+    @test ismissing(nand(true, missing))
+    @test ismissing(nand(missing, false))
+    @test ismissing(nand(false, missing))
+    @test ismissing(⊼(missing, true))
+    @test ismissing(⊼(true, missing))
+    @test ismissing(⊼(missing, false))
+    @test ismissing(⊼(false, missing))
+    @test ismissing(nor(missing, true))
+    @test ismissing(nor(true, missing))
+    @test ismissing(nor(missing, false))
+    @test ismissing(nor(false, missing))
+    @test ismissing(⊽(missing, true))
+    @test ismissing(⊽(true, missing))
+    @test ismissing(⊽(missing, false))
+    @test ismissing(⊽(false, missing))
 
     @test ismissing(missing & 1)
     @test ismissing(1 & missing)
@@ -135,6 +151,14 @@ end
     @test ismissing(1 | missing)
     @test ismissing(xor(missing, 1))
     @test ismissing(xor(1, missing))
+    @test ismissing(nand(missing, 1))
+    @test ismissing(nand(1, missing))
+    @test ismissing(⊼(missing, 1))
+    @test ismissing(⊼(1, missing))
+    @test ismissing(nor(missing, 1))
+    @test ismissing(nor(1, missing))
+    @test ismissing(⊽(missing, 1))
+    @test ismissing(⊽(1, missing))
 end
 
 @testset "* string concatenation" begin

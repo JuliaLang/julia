@@ -576,8 +576,12 @@ identity(x) = x
 (&)(x::Integer) = x
 (|)(x::Integer) = x
 xor(x::Integer) = x
+nand(x::Integer) = x
+nor(x::Integer) = x
 
 const ⊻ = xor
+const ⊼ = nand
+const ⊽ = nor
 
 # foldl for argument lists. expand fully up to a point, then
 # switch to a loop. this allows small cases like `a+b+c+d` to be managed
@@ -611,7 +615,7 @@ function afoldl(op, a, bs...)
 end
 typeof(afoldl).name.mt.max_args = 18
 
-for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
+for op in (:+, :*, :&, :|, :xor, :nand, :nor, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so

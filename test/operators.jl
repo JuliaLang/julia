@@ -57,6 +57,10 @@ end
 @test (|)(2) == 2
 @test xor(2) == 2
 @test (⊻)(2) == 2
+@test nand(2) == 2
+@test (⊼)(2) == 2
+@test nor(2) == 2
+@test (⊽)(2) == 2
 
 @test_throws MethodError min(Set([1]), Set([2]))
 @test_throws MethodError max(Set([1]), Set([2]))
