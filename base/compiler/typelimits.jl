@@ -263,6 +263,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         end
         if isType(t) # allow taking typeof any source type anywhere as Type{...}, as long as it isn't nesting Type{Type{...}}
             tt = unwrap_unionall(t.parameters[1])
+            tt === c && return true # nesting one level
             if isa(tt, DataType) && !isType(tt)
                 is_derived_type_from_any(tt, sources, depth) || return true
                 return false
