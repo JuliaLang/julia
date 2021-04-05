@@ -121,10 +121,18 @@ end
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
     summary(io, lbt); println(io)
     println(io, "Libraries: ")
-    for l in lbt.loaded_libs[1:end-1]
-        println(io, "├", basename(l.libname))
+    for (i,l) in enumerate(lbt.loaded_libs)
+        char = i == length(lbt.loaded_libs) ? "└" : "├"
+        interface_str = if l.interface == :ilp64
+            "ILP64"
+        elseif l.interface == :lp64
+            " LP64"
+        else
+            "UNKWN"
+        end
+        print(io, char, " [", interface_str,"] ", basename(l.libname))
+        i !== length(lbt.loaded_libs) && println()
     end
-    print(io, "└ ", basename(lbt.loaded_libs[end].libname))
 end
 
 function lbt_get_config()
