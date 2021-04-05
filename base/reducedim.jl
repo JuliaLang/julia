@@ -612,7 +612,7 @@ maximum(A::AbstractArray; dims)
 """
     maximum(f, A::AbstractArray; dims)
 
-Compute the maximum value from of calling the function `f` on each element of an array over the given
+Compute the maximum value by calling the function `f` on each element of an array over the given
 dimensions.
 
 # Examples
