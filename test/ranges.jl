@@ -499,19 +499,28 @@ end
 @test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
 
 @testset "overflow in length" begin
-    Tset = Int === Int64 ? (Int,UInt,Int128,UInt128) :
-                           (Int,UInt,Int64,UInt64,Int128, UInt128)
+    Tset = Int === Int64 ? (Int, UInt, Int128, UInt128) :
+                           (Int, UInt, Int64, UInt64, Int128, UInt128)
     for T in Tset
-        @test_throws OverflowError length(zero(T):typemax(T))
-        @test_throws OverflowError length(typemin(T):typemax(T))
-        @test_throws OverflowError length(zero(T):one(T):typemax(T))
-        @test_throws OverflowError length(typemin(T):one(T):typemax(T))
+        @test length(zero(T):typemax(T)) == typemin(T)
+        @test length(typemin(T):typemax(T)) == T(0)
+        @test length(zero(T):one(T):typemax(T)) == typemin(T)
+        @test length(typemin(T):one(T):typemax(T)) == T(0)
+        @test length(one(T):typemax(T)) == typemax(T)
         if T <: Signed
-            @test_throws OverflowError length(-one(T):typemax(T)-one(T))
-            @test_throws OverflowError length(-one(T):one(T):typemax(T)-one(T))
+            @test length(-one(T):typemax(T)-one(T)) == typemin(T)
+            @test length(-one(T):one(T):typemax(T)-one(T)) == typemin(T)
+            @test length(-one(T):typemax(T)) == typemin(T) + T(1)
+            @test length(zero(T):typemin(T):typemin(T)) == 2
+            @test length(one(T):typemin(T):typemin(T)) == 2
+            @test length(typemax(T):typemin(T):typemin(T)) == 2
+            @test length(-one(T):typemin(T):typemin(T)) == 1
+            @test length(zero(T):typemin(T):zero(T)) == 1
+            @test length(zero(T):typemin(T):one(T)) == 0
         end
     end
 end
+
 @testset "loops involving typemin/typemax" begin
     n = 0
     s = 0
@@ -866,17 +875,18 @@ end
 end
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
-#@test 1.0:(.3-.1)/.1 == 1.0:2.0
+@test_broken 1.0:(.3-.1)/.1 == 1.0:2.0 # (this is just shy of 2.0)
 
 @testset "length with typemin/typemax" begin
-    let r = typemin(Int64):2:typemax(Int64), s = typemax(Int64):-2:typemin(Int64)
+    let r = typemin(Int64):2:typemax(Int64)
         @test first(r) == typemin(Int64)
-        @test last(r) == (typemax(Int64)-1)
-        @test_throws OverflowError length(r)
-
+        @test last(r) == typemax(Int64) - 1
+        @test length(r) == typemin(Int64)
+    end
+    let s = typemax(Int64):-2:typemin(Int64)
         @test first(s) == typemax(Int64)
-        @test last(s) == (typemin(Int64)+1)
-        @test_throws OverflowError length(s)
+        @test last(s) == typemin(Int64) + 1
+        @test length(s) == typemin(Int64)
     end
 
     @test length(typemin(Int64):3:typemax(Int64)) == 6148914691236517206
@@ -892,6 +902,7 @@ end
     @test length(typemax(UInt):UInt(2):(typemax(UInt)-1)) == 0
     @test length((typemin(Int)+3):5:(typemin(Int)+1)) == 0
 end
+
 # issue #6364
 @test length((1:64)*(pi/5)) == 64
 
@@ -1042,13 +1053,9 @@ end
     @test reverse(LinRange{Int}(0,3,4)) === LinRange{Int}(3,0,4)
     @test reverse(LinRange{Float64}(0.,3.,4)) === LinRange{Float64}(3.,0.,4)
 end
-@testset "Issue #11245" begin
-    io = IOBuffer()
-    show(io, range(1, stop=2, length=3))
-    str = String(take!(io))
-#    @test str == "range(1.0, stop=2.0, length=3)"
-    @test str == "1.0:0.5:2.0"
-end
+
+# issue #11245
+@test repr(range(1, stop=2, length=3)) == "1.0:0.5:2.0"
 
 @testset "issue 10950" begin
     r = 1//2:3
@@ -1263,8 +1270,11 @@ end
     end
 
     r = 1f8-10:1f8
-    @test_broken argmin(f) == argmin(collect(r))
-    @test_broken argmax(f) == argmax(collect(r))
+    rv = collect(r)
+    @test argmin(r) == argmin(rv) == 1
+    @test r[argmax(r)] == r[argmax(rv)] == 1f8
+    @test argmax(r) == lastindex(r)
+    @test argmax(rv) != lastindex(r)
 end
 
 @testset "OneTo" begin
@@ -1516,7 +1526,7 @@ Base.Unsigned(x::Displacement) = Unsigned(x.val)
 Base.rem(x::Displacement, y::Displacement) = Displacement(rem(x.val, y.val))
 Base.div(x::Displacement, y::Displacement) = Displacement(div(x.val, y.val))
 
-# required for collect (summing lengths); alternatively, should unsafe_length return Int by default?
+# required for collect (summing lengths); alternatively, should length return Int by default?
 Base.promote_rule(::Type{Displacement}, ::Type{Int}) = Int
 Base.convert(::Type{Int}, x::Displacement) = x.val
 
