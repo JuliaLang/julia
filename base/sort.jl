@@ -324,10 +324,9 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
             $s(v,x,ord(lt,by,rev,order))
     end
 end
-for n in zip([:searchsortedfirst, :searchsortedlast],
-        [:_searchsortedfirst, :_searchsortedlast],
-        [:searchsortedfirst!, :searchsortedlast!],
-        [:_searchsortedfirst!, :_searchsortedlast!])
+for n in (
+    (:searchsortedfirst, :_searchsortedfirst, :searchsortedfirst!, :_searchsortedfirst!),
+    (:searchsortedlast, :_searchsortedlast, :searchsortedlast!, :_searchsortedlast!))
     s = n[1] # The Symbol construction method isn't available at Core.Compile time, so each name is written out manually
     us = n[2]
     mut = n[3]
@@ -339,7 +338,7 @@ for n in zip([:searchsortedfirst, :searchsortedlast],
         end
         $mut(i::AbstractArray, v::AbstractVector, x;
             lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-            $mut(i,v,x,ord(lt,by,rev,order))
+            $mut(i, v, x, ord(lt, by, rev, order))
         function $mut(i::AbstractArray, a::AbstractRange, x::AbstractArray, o::DirectOrdering)
             require_one_based_indexing(a)
             $usmut(i, a, x, o)
@@ -354,7 +353,7 @@ for n in zip([:searchsortedfirst, :searchsortedlast],
         function $usmut(i::AbstractArray, a::AbstractRange, x::AbstractArray, o::DirectOrdering)
             size(i) != size(x) && error("The sizes of arrays i and x must match. Got i: $(size(i)), x: $(size(x))")
             a_len = convert(keytype(a), length(a))
-            @inbounds for ci in CartesianIndices(x)
+            for ci in CartesianIndices(x)
                 i[ci] = $us(a, x[ci], o; a_len = a_len)
             end
             return i
