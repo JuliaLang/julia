@@ -103,6 +103,30 @@ struct LBTConfig
     end
 end
 
+Base.show(io::IO, lbt::LBTLibraryInfo) = print(io, "LBTLibraryInfo($(basename(lbt.libname)))")
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTLibraryInfo)
+    summary(io, lbt); println(io)
+    println(io, "├ Library: ", basename(lbt.libname))
+    println(io, "├ Interface: ", lbt.interface)
+      print(io, "└ F2C: ", lbt.f2c)
+end
+
+function Base.show(io::IO, lbt::LBTConfig)
+    if length(lbt.loaded_libs) <= 3
+        print(io, "LBTConfig(", join(basename.(getfield.(lbt.loaded_libs, :libname)), ", "), ")")
+    else
+        print(io, "LBTConfig")
+    end
+end
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
+    summary(io, lbt); println(io)
+    println(io, "Libraries: ")
+    for l in lbt.loaded_libs[1:end-1]
+        println(io, "├", basename(l.libname))
+    end
+    print(io, "└ ", basename(lbt.loaded_libs[end].libname))
+end
+
 function lbt_get_config()
     config_ptr = ccall((:lbt_get_config, libblastrampoline), Ptr{lbt_config_t}, ())
     return LBTConfig(unsafe_load(config_ptr))
