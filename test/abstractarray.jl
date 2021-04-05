@@ -1293,7 +1293,6 @@ end
     @test_throws ArgumentError Int[t...; 3 4 5]
 end
 
-                    
 @testset "issue #39896, modified getindex " begin
     for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
         for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3))
