@@ -294,7 +294,7 @@ and similarly:
 
 ```jldoctest
 julia> function threetup()
-           x, y = [3, 3]
+           x, y = [2, 3] # assigns 2 to x and 3 to y
            x, y # returns a tuple
        end
 threetup (generic function with 1 method)
