@@ -2384,11 +2384,12 @@
    'string
    (lambda (e)
      (expand-forms
-      `(call (top string) ,@(map (lambda (s)
-                                   (if (and (pair? s) (eq? (car s) 'string))
-                                       (cadr s)
-                                       s))
-                                 (cdr e)))))
+       `(call (top string)
+              ,@(map (lambda (s)
+                       (if (and (length= s 2) (eq? (car s) 'string) (string? (cadr s)))
+                           (cadr s)
+                           s))
+                     (cdr e)))))
 
    '|::|
    (lambda (e)

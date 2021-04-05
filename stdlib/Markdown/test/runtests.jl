@@ -1222,3 +1222,11 @@ end
                """)
 end
 
+@testset "issue #37232: linebreaks" begin
+    s = @md_str """
+       Misc:\\
+       - line\\
+       """
+    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line"
+end
+

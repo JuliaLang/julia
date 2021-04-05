@@ -6,6 +6,7 @@ New language features
 
 * `(; a, b) = x` can now be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
   and similarly for `b`. ([#39285])
+* Implicit multiplication by juxtaposition is now allowed for radical symbols (e.g., `x√y` and `x∛y`). ([#40173])
 
 Language changes
 ----------------
@@ -35,6 +36,7 @@ New library functions
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
 * `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
+* New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
 
 New library features
@@ -69,6 +71,7 @@ Standard library changes
 * On aarch64, OpenBLAS now uses an ILP64 BLAS like all other 64-bit platforms. ([#39436])
 * OpenBLAS is updated to 0.3.13. ([#39216])
 * SuiteSparse is updated to 5.8.1. ([#39455])
+* `cis(A)` now supports matrix arguments ([#40194]).
 
 #### Markdown
 

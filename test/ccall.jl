@@ -842,7 +842,7 @@ function check_code_trampoline(f, t, n::Int)
     @nospecialize(f, t)
     @test Base.return_types(f, t) == Any[Any]
     llvm = sprint(code_llvm, f, t)
-    @test count(x -> true, eachmatch(r"@jl_get_cfunction_trampoline\(", llvm)) == n
+    @test count(Returns(true), eachmatch(r"@jl_get_cfunction_trampoline\(", llvm)) == n
 end
 check_code_trampoline(testclosure, (Any, Any, Bool, Type), 2)
 check_code_trampoline(testclosure, (Any, Int, Bool, Type{Int}), 2)

@@ -803,7 +803,8 @@ const % = rem
     div(x, y)
     ÷(x, y)
 
-The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
+The quotient from Euclidean (integer) division. Generally equivalent
+to a mathematical operation x/y without a fractional part.
 
 # Examples
 ```jldoctest
@@ -916,6 +917,42 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 """
 |>(x, f) = f(x)
 
+"""
+    f = Returns(value)
+
+Create a callable `f` such that `f(args...; kw...) === value` holds.
+
+# Examples
+
+```jldoctest
+julia> f = Returns(42);
+
+julia> f(1)
+42
+
+julia> f("hello", x=32)
+42
+
+julia> f.value
+42
+```
+
+!!! compat "Julia 1.7"
+    Returns requires at least Julia 1.7.
+"""
+struct Returns{V} <: Function
+    value::V
+    Returns{V}(value) where {V} = new{V}(value)
+    Returns(value) = new{Core.Typeof(value)}(value)
+end
+
+(obj::Returns)(args...; kw...) = obj.value
+function show(io::IO, obj::Returns)
+    show(io, typeof(obj))
+    print(io, "(")
+    show(io, obj.value)
+    print(io, ")")
+end
 # function composition
 
 """

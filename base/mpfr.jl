@@ -339,7 +339,7 @@ Float32(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) =
 Float32(x::BigFloat, r::RoundingMode) = Float32(x, convert(MPFRRoundingMode, r))
 
 # TODO: avoid double rounding
-Float16(x::BigFloat) = Float16(Float32(x))
+Float16(x::BigFloat) = Float16(Float64(x))
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
