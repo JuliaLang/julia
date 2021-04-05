@@ -300,16 +300,16 @@ julia> function threetup()
 threetup (generic function with 1 method)
 
 julia> function threearr()
-           x, y = [3, 3] # returns an array
+           x, y = [2, 3] # returns an array
        end
 threearr (generic function with 1 method)
 
 julia> threetup()
-(3, 3)
+(2, 3)
 
 julia> threearr()
 2-element Vector{Int64}:
- 3
+ 2
  3
 ```
 
