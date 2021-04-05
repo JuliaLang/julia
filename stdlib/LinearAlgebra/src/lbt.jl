@@ -103,7 +103,7 @@ struct LBTConfig
     end
 end
 
-Base.show(io::IO, lbt::LBTLibraryInfo) = print(io, "LBTLibraryInfo($(basename(lbt.libname)))")
+Base.show(io::IO, lbt::LBTLibraryInfo) = print(io, "LBTLibraryInfo(", basename(lbt.libname), ", ", lbt.interface, ")")
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTLibraryInfo)
     summary(io, lbt); println(io)
     println(io, "├ Library: ", basename(lbt.libname))
@@ -113,9 +113,13 @@ end
 
 function Base.show(io::IO, lbt::LBTConfig)
     if length(lbt.loaded_libs) <= 3
-        print(io, "LBTConfig(", join(basename.(getfield.(lbt.loaded_libs, :libname)), ", "), ")")
+        print(io, "LBTConfig(")
+        gen = (string("[", uppercase(string(l.interface)), "] ",
+            basename(l.libname)) for l in lbt.loaded_libs)
+        print(io, join(gen, ", "))
+        print(io, ")")
     else
-        print(io, "LBTConfig")
+        print(io, "LBTConfig()")
     end
 end
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
