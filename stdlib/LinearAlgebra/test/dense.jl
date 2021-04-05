@@ -889,6 +889,38 @@ end
     end
 end
 
+@testset "issue #40141" begin
+    x = [-1 -eps() 0 0; eps() -1 0 0; 0 0 -1 -eps(); 0 0 eps() -1]
+    @test sqrt(x)^2 ≈ x
+
+    x2 =  [-1 -eps() 0 0; 3eps() -1 0 0; 0 0 -1 -3eps(); 0 0 eps() -1]
+    @test sqrt(x2)^2 ≈ x2
+
+    x3 = [-1 -eps() 0 0; eps() -1 0 0; 0 0 -1 -eps(); 0 0 eps() Inf]
+    @test all(isnan, sqrt(x3))
+
+    # test overflow/underflow handled
+    x4 = [0 -1e200; 1e200 0]
+    @test sqrt(x4)^2 ≈ x4
+
+    x5 = [0 -1e-200; 1e-200 0]
+    @test sqrt(x5)^2 ≈ x5
+
+    x6 = [1.0 1e200; -1e-200 1.0]
+    @test sqrt(x6)^2 ≈ x6
+end
+
+@testset "matrix logarithm block diagonal underflow/overflow" begin
+    x1 = [0 -1e200; 1e200 0]
+    @test exp(log(x1)) ≈ x1
+
+    x2 = [0 -1e-200; 1e-200 0]
+    @test exp(log(x2)) ≈ x2
+
+    x3 = [1.0 1e200; -1e-200 1.0]
+    @test exp(log(x3)) ≈ x3
+end
+
 @testset "issue #7181" begin
     A = [ 1  5  9
           2  6 10
