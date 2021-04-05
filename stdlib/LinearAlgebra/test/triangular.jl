@@ -514,6 +514,11 @@ Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
         A = schur(rand(T, 100, 100)^2).T
         @test LinearAlgebra.sqrt_quasitriu(A; blockwidth=16)^2 ≈ A
     end
+    n = 256
+    A = rand(ComplexF64, n, n)
+    U = schur(A).T
+    Ubig = Complex{BigFloat}.(U)
+    @test LinearAlgebra.sqrt_quasitriu(U) ≈ LinearAlgebra.sqrt_quasitriu(Ubig)
 end
 
 @testset "sylvester quasi-triangular blockwise" begin
