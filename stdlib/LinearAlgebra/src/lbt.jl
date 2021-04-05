@@ -119,7 +119,7 @@ function Base.show(io::IO, lbt::LBTConfig)
         print(io, join(gen, ", "))
         print(io, ")")
     else
-        print(io, "LBTConfig()")
+        print(io, "LBTConfig(...)")
     end
 end
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
