@@ -863,11 +863,9 @@ undocumented(x,y) = 3
 end # module
 
 doc_str = Markdown.parse("""
-No documentation found.
+No docstring or readme file found for module `$(curmod_prefix)Undocumented`.
 
-No docstring found for module `$(curmod_prefix)Undocumented`.
-
-# Exported names:
+# Exported names
 
 `A`, `B`, `C`, `at0`, `pt2`
 """)
