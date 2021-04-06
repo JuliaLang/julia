@@ -19,48 +19,34 @@ $$(build_shlibdir)/$(1): | $$(build_shlibdir)
 	[ -n "$$$${SRC_LIB}" ] && cp $$$${SRC_LIB} $$(build_shlibdir)
 endef
 
-ifeq ($(OS),WINNT)
-define gen_libname
-$$(if $(2),lib$(1)-$(2).$(SHLIB_EXT),lib$(1).$(SHLIB_EXT))
-endef
-else ifeq ($(OS),Darwin)
-define gen_libname
-$$(if $(2),lib$(1).$(2).$(SHLIB_EXT),lib$(1).$(SHLIB_EXT))
-endef
-else
-define gen_libname
-$$(if $(2),lib$(1).$(SHLIB_EXT).$(2),lib$(1).$(SHLIB_EXT))
-endef
-endif
-
 # libgfortran has multiple names; we're just going to copy any version we can find
 # Since we're only looking in the location given by `$(FC)` this should only succeed for one.
-$(eval $(call copy_csl,$(call gen_libname,gfortran,3)))
-$(eval $(call copy_csl,$(call gen_libname,gfortran,4)))
-$(eval $(call copy_csl,$(call gen_libname,gfortran,5)))
+$(eval $(call copy_csl,$(call versioned_libname,libgfortran,3)))
+$(eval $(call copy_csl,$(call versioned_libname,libgfortran,4)))
+$(eval $(call copy_csl,$(call versioned_libname,libgfortran,5)))
 
 # These are all libraries that we should always have
-$(eval $(call copy_csl,$(call gen_libname,quadmath,0)))
-$(eval $(call copy_csl,$(call gen_libname,stdc++,6)))
-$(eval $(call copy_csl,$(call gen_libname,ssp,0)))
-$(eval $(call copy_csl,$(call gen_libname,atomic,1)))
-$(eval $(call copy_csl,$(call gen_libname,gomp,1)))
+$(eval $(call copy_csl,$(call versioned_libname,libquadmath,0)))
+$(eval $(call copy_csl,$(call versioned_libname,libstdc++,6)))
+$(eval $(call copy_csl,$(call versioned_libname,libssp,0)))
+$(eval $(call copy_csl,$(call versioned_libname,libatomic,1)))
+$(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 
 ifeq ($(OS),WINNT)
 # Windwos has special gcc_s names
 ifeq ($(ARCH),i686)
-$(eval $(call copy_csl,$(call gen_libname,gcc_s_sjlj,1)))
+$(eval $(call copy_csl,$(call versioned_libname,libgcc_s_sjlj,1)))
 else
-$(eval $(call copy_csl,$(call gen_libname,gcc_s_seh,1)))
+$(eval $(call copy_csl,$(call versioned_libname,libgcc_s_seh,1)))
 endif
 else
-$(eval $(call copy_csl,$(call gen_libname,gcc_s,1)))
+$(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1)))
 endif
 # winpthread is only Windows, pthread is only others
 ifeq ($(OS),WINNT)
-$(eval $(call copy_csl,$(call gen_libname,winpthread,1)))
+$(eval $(call copy_csl,$(call versioned_libname,libwinpthread,1)))
 else
-$(eval $(call copy_csl,$(call gen_libname,pthread,0)))
+$(eval $(call copy_csl,$(call versioned_libname,libpthread,0)))
 endif
 
 get-csl:
