@@ -84,6 +84,8 @@ empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
 IteratorSize(::Type{<:WeakKeyDict}) = SizeUnknown()
 
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
+lock(wkh::WeakKeyDict) = lock(wkh.lock)
+unlock(wkh::WeakKeyDict) = unlock(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
 trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 

@@ -76,7 +76,6 @@ trylock(c::GenericCondition) = trylock(c.lock)
 islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
-unlock(f, c::GenericCondition) = unlock(f, c.lock)
 
 # have waiter wait for c
 function _wait2(c::GenericCondition, waiter::Task)
