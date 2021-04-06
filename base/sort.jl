@@ -231,89 +231,59 @@ end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    if step(a) == 0
-        lt(o, x, first(a)) ? 0 : length(a)
+    f, h, l = first(a), step(a), last(a)
+    if lt(o, x, f)
+        0
+    elseif h == 0 || !lt(o, x, l)
+        length(a)
     else
-        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
+        n = round(Integer, (x - f) / h + 1)
         lt(o, x, a[n]) ? n - 1 : n
     end
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    if step(a) == 0
-        lt(o, first(a), x) ? length(a) + 1 : 1
+    f, h, l = first(a), step(a), last(a)
+    if !lt(o, f, x)
+        1
+    elseif h == 0 || lt(o, l, x)
+        length(a) + 1
     else
-        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
+        n = round(Integer, (x - f) / h + 1)
         lt(o, a[n], x) ? n + 1 : n
     end
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    h = step(a)
-    if h == 0
-        lt(o, x, first(a)) ? 0 : length(a)
-    elseif h > 0 && x < first(a)
-        firstindex(a) - 1
-    elseif h > 0 && x >= last(a)
-        lastindex(a)
-    elseif h < 0 && x > first(a)
-        firstindex(a) - 1
-    elseif h < 0 && x <= last(a)
-        lastindex(a)
+    f, h, l = first(a), step(a), last(a)
+    if lt(o, x, f)
+        0
+    elseif h == 0 || !lt(o, x, l)
+        length(a)
     else
         if o isa ForwardOrdering
-            fld(floor(Integer, x) - first(a), h) + 1
+            fld(floor(Integer, x) - f, h) + 1
         else
-            fld(ceil(Integer, x) - first(a), h) + 1
+            fld(ceil(Integer, x) - f, h) + 1
         end
     end
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    h = step(a)
-    if h == 0
-        lt(o, first(a), x) ? length(a)+1 : 1
-    elseif h > 0 && x <= first(a)
-        firstindex(a)
-    elseif h > 0 && x > last(a)
-        lastindex(a) + 1
-    elseif h < 0 && x >= first(a)
-        firstindex(a)
-    elseif h < 0 && x < last(a)
-        lastindex(a) + 1
+    f, h, l = first(a), step(a), last(a)
+    if !lt(o, f, x)
+        1
+    elseif h == 0 || lt(o, l, x)
+        length(a) + 1
     else
         if o isa ForwardOrdering
-            -fld(floor(Integer, -x) + Signed(first(a)), h) + 1
+            cld(ceil(Integer, x) - f, h) + 1
         else
-            -fld(ceil(Integer, -x) + Signed(first(a)), h) + 1
+            cld(floor(Integer, x) - f, h) + 1
         end
-    end
-end
-
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
-    if lt(o, first(a), x)
-        if step(a) == 0
-            length(a) + 1
-        else
-            min(cld(x - first(a), step(a)), length(a)) + 1
-        end
-    else
-        1
-    end
-end
-
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
-    if lt(o, x, first(a))
-        0
-    elseif step(a) == 0
-        length(a)
-    else
-        min(fld(x - first(a), step(a)) + 1, length(a))
     end
 end
 
