@@ -23,10 +23,10 @@ end
 
 # We combine multiple versions as the data changes, and not only by growing.
 result = mapfoldr(emoji_data, merge, [
-    # Newer versions must be added to top of this list as we want the older versions to
-    # overwrite so we keep the old names of things that are renamed
-    "https://raw.githubusercontent.com/iamcal/emoji-data/e512953312c012f6bd00e3f2ef6bf152ca3710f8/emoji_pretty.json",
+    # Newer versions must be added to the bottom list as we want the newer versions to
+    # overwrite the old with names that changed but still keep old ones that were removed
     "https://raw.githubusercontent.com/iamcal/emoji-data/0f0cf4ea8845eb52d26df2a48c3c31c3b8cad14e/emoji_pretty.json",
+    "https://raw.githubusercontent.com/iamcal/emoji-data/e512953312c012f6bd00e3f2ef6bf152ca3710f8/emoji_pretty.json",
     ];
     init=Dict()
 )
@@ -40,8 +40,7 @@ open("emoji_symbols.jl", "w") do fh
     end
     println(fh, ")")
 end
-==#
-
+=#
 
 const emoji_symbols = Dict(
     "\\:+1:" => "👍",
@@ -139,7 +138,7 @@ const emoji_symbols = Dict(
     "\\:bee:" => "🐝",
     "\\:beer:" => "🍺",
     "\\:beers:" => "🍻",
-    "\\:beetle:" => "🐞",
+    "\\:beetle:" => "🪲",
     "\\:beginner:" => "🔰",
     "\\:bell:" => "🔔",
     "\\:bell_pepper:" => "🫑",
@@ -389,7 +388,7 @@ const emoji_symbols = Dict(
     "\\:earth_africa:" => "🌍",
     "\\:earth_americas:" => "🌎",
     "\\:earth_asia:" => "🌏",
-    "\\:egg:" => "🍳",
+    "\\:egg:" => "🥚",
     "\\:eggplant:" => "🍆",
     "\\:eight_pointed_black_star:" => "✴",
     "\\:eight_spoked_asterisk:" => "✳",
