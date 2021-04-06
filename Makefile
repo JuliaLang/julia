@@ -290,8 +290,11 @@ endif
 		done \
 	done
 	for suffix in $(JL_PRIVATE_LIBS-1) ; do \
-		lib=$(build_private_libdir)/$${suffix}.$(SHLIB_EXT); \
-		$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+		for lib in $(build_private_libdir)/$${suffix}.$(SHLIB_EXT)*; do \
+			if [ "$${lib##*.}" != "dSYM" ]; then \
+				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+			fi \
+		done \
 	done
 endif
 	# Install `7z` into libexec/
