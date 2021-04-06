@@ -80,7 +80,7 @@ for (idx, tname) in enumerate(msgtypes)
     end
 end
 
-let msg_cases = :(@assert false)
+let msg_cases = :(@assert false "Message type index ($idx) expected to be between 1:$($(length(msgtypes)))")
     for i = length(msgtypes):-1:1
         mti = msgtypes[i]
         msg_cases = :(if idx == $i
