@@ -2472,6 +2472,27 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, Value *datatype, jl_value_t 
     return tindex;
 }
 
+// Returns typeof(v), or null if v is a null pointer at run time.
+// This is used when the value might have come from an undefined variable,
+// yet we try to read its type to compute a union index when moving the value.
+static Value *emit_typeof_or_null(jl_codectx_t &ctx, Value *v)
+{
+    BasicBlock *nonnull = BasicBlock::Create(jl_LLVMContext, "nonnull", ctx.f);
+    BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "postnull", ctx.f);
+    Value *isnull = ctx.builder.CreateICmpEQ(v, Constant::getNullValue(v->getType()));
+    ctx.builder.CreateCondBr(isnull, postBB, nonnull);
+    BasicBlock *entry = ctx.builder.GetInsertBlock();
+    ctx.builder.SetInsertPoint(nonnull);
+    Value *typof = emit_typeof(ctx, v);
+    ctx.builder.CreateBr(postBB);
+    nonnull = ctx.builder.GetInsertBlock(); // could have changed
+    ctx.builder.SetInsertPoint(postBB);
+    PHINode *ti = ctx.builder.CreatePHI(typof->getType(), 2);
+    ti->addIncoming(Constant::getNullValue(typof->getType()), entry);
+    ti->addIncoming(typof, nonnull);
+    return ti;
+}
+
 // get the runtime tindex value, assuming val is already converted to type typ if it has a TIndex
 static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
 {
@@ -2482,9 +2503,12 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
 
     if (val.TIndex)
         return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
-    if (val.isboxed)
-        return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
-    return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
+    Value *typof;
+    if (val.isboxed && !jl_is_concrete_type(val.typ) && !jl_is_type_type(val.typ))
+        typof = emit_typeof_or_null(ctx, val.V);
+    else
+        typof = emit_typeof_boxed(ctx, val);
+    return compute_box_tindex(ctx, typof, val.typ, typ);
 }
 
 static void union_alloca_type(jl_uniontype_t *ut,
