@@ -1003,7 +1003,10 @@
                       (cons next args))))
             (if (length= args 1)
                 (car args)
-                (list* 'call '* (reverse args))))))))
+                (if (eq? (peek-token s) '=)
+                    ; catch attempt to assign to number-prefixed variable name (e.g. 1x = 5)
+                    (error (string "invalid name \"" (cadr args) (car args) "\""))
+                    (list* 'call '* (reverse args)) " " (peek-token s))))))))
 
 (define (maybe-negate op num)
   (if (eq? op '-)
