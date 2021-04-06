@@ -84,14 +84,14 @@ let msg_cases = :(@assert false "Message type index ($idx) expected to be betwee
     for i = length(msgtypes):-1:1
         mti = msgtypes[i]
         msg_cases = :(if idx == $i
-                          return $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), fieldcount(mti))...))
+                          $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), fieldcount(mti))...))
                       else
                           $msg_cases
                       end)
     end
     @eval function deserialize_msg(s::AbstractSerializer)
         idx = read(s.io, UInt8)
-        $msg_cases
+        return $msg_cases
     end
 end
 
