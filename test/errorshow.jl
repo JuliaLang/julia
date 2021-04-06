@@ -634,9 +634,10 @@ catch ex
 end
 pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
 
+struct ANumber <: Number end
 let err_str
-    err_str = @except_str (1 + 2)(3 + 4) MethodError
-    @test occursin("objects of type $(typeof(3)) are not callable", err_str)
+    err_str = @except_str ANumber()(3 + 4) MethodError
+    @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
     @test occursin("Maybe you forgot to use an operator such as *, ^, %, / etc. ?", err_str)
 end
 
