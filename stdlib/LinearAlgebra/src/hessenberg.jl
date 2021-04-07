@@ -94,13 +94,10 @@ Base.copy(A::Transpose{<:Any,<:UpperHessenberg}) = tril!(transpose!(similar(A.pa
 rmul!(H::UpperHessenberg, x::Number) = (rmul!(H.data, x); H)
 lmul!(x::Number, H::UpperHessenberg) = (lmul!(x, H.data); H)
 
-# (future: we could also have specialized routines for UpperHessenberg * UpperTriangular)
-
 fillstored!(H::UpperHessenberg, x) = (fillband!(H.data, x, -1, size(H,2)-1); H)
 
 +(A::UpperHessenberg, B::UpperHessenberg) = UpperHessenberg(A.data+B.data)
 -(A::UpperHessenberg, B::UpperHessenberg) = UpperHessenberg(A.data-B.data)
-# (future: we could also have specialized routines for UpperHessenberg ± UpperTriangular)
 
 for T = (:UniformScaling, :Diagonal, :Bidiagonal, :Tridiagonal, :SymTridiagonal,
          :UpperTriangular, :UnitUpperTriangular)
