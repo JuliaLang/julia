@@ -23,6 +23,26 @@ An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
 """
 abstract type AbstractDict{K,V} end
 
+"""
+    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+
+Transforms an indexable container into a Dictionary-view of the same data.
+Modifying the key-space of the underlying data may invalidate this object.
+"""
+struct Pairs{K, V, I, A} <: AbstractDict{K, V}
+    data::A
+    itr::I
+end
+Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = Pairs{K, V, I, A}(data, itr)
+Pairs{K}(data::A, itr::I) where {K, I, A} = Pairs{K, eltype(A), I, A}(data, itr)
+Pairs(data::A, itr::I) where  {I, A} = Pairs{eltype(I), eltype(A), I, A}(data, itr)
+pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
+
+## optional pretty printer:
+#const NamedTuplePair{N, V, names, T<:NTuple{N, Any}} = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}}
+#export NamedTuplePair
+
+
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
 macro _inline_meta()
@@ -261,10 +281,14 @@ end
 
 function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
     isdefined(t, :T) || return t
-    if !isdefined(t, :N) || t.N === u.var
-        return Vararg{rewrap_unionall(t.T, u)}
+    if !isa(u, UnionAll)
+        return t
     end
-    Vararg{rewrap_unionall(t.T, u), t.N}
+    T = rewrap_unionall(t.T, u)
+    if !isdefined(t, :N) || t.N === u.var
+        return Vararg{T}
+    end
+    return Vararg{T, t.N}
 end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
@@ -464,19 +488,6 @@ sizeof(x) = Core.sizeof(x)
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
-    precompile(f, args::Tuple{Vararg{Any}})
-
-Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
-"""
-function precompile(@nospecialize(f), args::Tuple)
-    ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
-end
-
-function precompile(argt::Type)
-    ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
-end
-
-"""
     esc(e)
 
 Only valid in the context of an [`Expr`](@ref) returned from a macro. Prevents the macro hygiene
@@ -544,7 +555,7 @@ element `i` of array `A` is skipped to improve performance.
 ```julia
 function sum(A::AbstractArray)
     r = zero(eltype(A))
-    for i = 1:length(A)
+    for i in eachindex(A)
         @inbounds r += A[i]
     end
     return r
@@ -823,8 +834,7 @@ Indicate whether `x` is [`missing`](@ref).
 
 See also: [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
 """
-ismissing(::Any) = false
-ismissing(::Missing) = true
+ismissing(x) = x === missing
 
 function popfirst! end
 

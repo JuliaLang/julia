@@ -45,9 +45,10 @@ represents a valid Unicode character.
 """
 Char
 
-(::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
-AbstractChar(x::Number) = Char(x)
-(::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
+@aggressive_constprop (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x))
+@aggressive_constprop AbstractChar(x::Number) = Char(x)
+@aggressive_constprop (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
+@aggressive_constprop (::Type{T})(x::AbstractChar) where {T<:Union{Int32,Int64}} = codepoint(x) % T
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 
 """
@@ -74,7 +75,7 @@ return a different-sized integer (e.g. `UInt8`).
 """
 function codepoint end
 
-codepoint(c::Char) = UInt32(c)
+@aggressive_constprop codepoint(c::Char) = UInt32(c)
 
 struct InvalidCharError{T<:AbstractChar} <: Exception
     char::T
@@ -82,11 +83,11 @@ end
 struct CodePointError{T<:Integer} <: Exception
     code::T
 end
-@noinline invalid_char(c::AbstractChar) = throw(InvalidCharError(c))
-@noinline code_point_err(u::Integer) = throw(CodePointError(u))
+@noinline throw_invalid_char(c::AbstractChar) = throw(InvalidCharError(c))
+@noinline throw_code_point_err(u::Integer) = throw(CodePointError(u))
 
 function ismalformed(c::Char)
-    u = reinterpret(UInt32, c)
+    u = bitcast(UInt32, c)
     l1 = leading_ones(u) << 3
     t0 = trailing_zeros(u) & 56
     (l1 == 8) | (l1 + t0 > 32) |
@@ -96,7 +97,7 @@ end
 @inline is_overlong_enc(u::UInt32) = (u >> 24 == 0xc0) | (u >> 24 == 0xc1) | (u >> 21 == 0x0704) | (u >> 20 == 0x0f08)
 
 function isoverlong(c::Char)
-    u = reinterpret(UInt32, c)
+    u = bitcast(UInt32, c)
     is_overlong_enc(u)
 end
 
@@ -121,15 +122,15 @@ and [`show_invalid`](@ref).
 """
 isoverlong(c::AbstractChar) = false
 
-function UInt32(c::Char)
+@aggressive_constprop function UInt32(c::Char)
     # TODO: use optimized inline LLVM
-    u = reinterpret(UInt32, c)
+    u = bitcast(UInt32, c)
     u < 0x80000000 && return u >> 24
     l1 = leading_ones(u)
     t0 = trailing_zeros(u) & 56
     (l1 == 1) | (8l1 + t0 > 32) |
     ((((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0) | is_overlong_enc(u)) &&
-        invalid_char(c)::Union{}
+        throw_invalid_char(c)
     u &= 0xffffffff >> l1
     u >>= t0
     ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
@@ -145,8 +146,8 @@ that support overlong encodings should implement `Base.decode_overlong`.
 """
 function decode_overlong end
 
-function decode_overlong(c::Char)
-    u = reinterpret(UInt32, c)
+@aggressive_constprop function decode_overlong(c::Char)
+    u = bitcast(UInt32, c)
     l1 = leading_ones(u)
     t0 = trailing_zeros(u) & 56
     u &= 0xffffffff >> l1
@@ -155,24 +156,26 @@ function decode_overlong(c::Char)
     ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
 end
 
-function Char(u::UInt32)
-    u < 0x80 && return reinterpret(Char, u << 24)
-    u < 0x00200000 || code_point_err(u)::Union{}
+@aggressive_constprop function Char(u::UInt32)
+    u < 0x80 && return bitcast(Char, u << 24)
+    u < 0x00200000 || throw_code_point_err(u)
     c = ((u << 0) & 0x0000003f) | ((u << 2) & 0x00003f00) |
         ((u << 4) & 0x003f0000) | ((u << 6) & 0x3f000000)
     c = u < 0x00000800 ? (c << 16) | 0xc0800000 :
         u < 0x00010000 ? (c << 08) | 0xe0808000 :
                          (c << 00) | 0xf0808080
-    reinterpret(Char, c)
+    bitcast(Char, c)
 end
 
-function (T::Union{Type{Int8},Type{UInt8}})(c::Char)
-    i = reinterpret(Int32, c)
-    i ≥ 0 ? ((i >>> 24) % T) : T(UInt32(c))
+@aggressive_constprop @noinline UInt32_cold(c::Char) = UInt32(c)
+@aggressive_constprop function (T::Union{Type{Int8},Type{UInt8}})(c::Char)
+    i = bitcast(Int32, c)
+    i ≥ 0 ? ((i >>> 24) % T) : T(UInt32_cold(c))
 end
 
-function Char(b::Union{Int8,UInt8})
-    0 ≤ b ≤ 0x7f ? reinterpret(Char, (b % UInt32) << 24) : Char(UInt32(b))
+@aggressive_constprop @noinline Char_cold(b::UInt32) = Char(b)
+@aggressive_constprop function Char(b::Union{Int8,UInt8})
+    0 ≤ b ≤ 0x7f ? bitcast(Char, (b % UInt32) << 24) : Char_cold(UInt32(b))
 end
 
 convert(::Type{AbstractChar}, x::Number) = Char(x) # default to Char
@@ -183,8 +186,8 @@ convert(::Type{T}, c::T) where {T<:AbstractChar} = c
 
 rem(x::AbstractChar, ::Type{T}) where {T<:Number} = rem(codepoint(x), T)
 
-typemax(::Type{Char}) = reinterpret(Char, typemax(UInt32))
-typemin(::Type{Char}) = reinterpret(Char, typemin(UInt32))
+typemax(::Type{Char}) = bitcast(Char, typemax(UInt32))
+typemin(::Type{Char}) = bitcast(Char, typemin(UInt32))
 
 size(c::AbstractChar) = ()
 size(c::AbstractChar, d::Integer) = d < 1 ? throw(BoundsError()) : 1
@@ -205,12 +208,12 @@ iterate(c::AbstractChar, done=false) = done ? nothing : (c, true)
 isempty(c::AbstractChar) = false
 in(x::AbstractChar, y::AbstractChar) = x == y
 
-==(x::Char, y::Char) = reinterpret(UInt32, x) == reinterpret(UInt32, y)
-isless(x::Char, y::Char) = reinterpret(UInt32, x) < reinterpret(UInt32, y)
+==(x::Char, y::Char) = bitcast(UInt32, x) == bitcast(UInt32, y)
+isless(x::Char, y::Char) = bitcast(UInt32, x) < bitcast(UInt32, y)
 hash(x::Char, h::UInt) =
-    hash_uint64(((reinterpret(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
+    hash_uint64(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
 
-first_utf8_byte(c::Char) = (reinterpret(UInt32, c) >> 24) % UInt8
+first_utf8_byte(c::Char) = (bitcast(UInt32, c) >> 24) % UInt8
 
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
@@ -219,8 +222,26 @@ hash(x::AbstractChar, h::UInt) = hash(Char(x), h)
 widen(::Type{T}) where {T<:AbstractChar} = T
 
 @inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
-@inline -(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) - Int32(y))
-@inline +(x::T, y::Integer) where {T<:AbstractChar} = T(Int32(x) + Int32(y))
+@inline function -(x::T, y::Integer) where {T<:AbstractChar}
+    if x isa Char
+        u = Int32((bitcast(UInt32, x) >> 24) % Int8)
+        if u >= 0 # inline the runtime fast path
+            z = u - y
+            return 0 <= z < 0x80 ? bitcast(Char, (z % UInt32) << 24) : Char(UInt32(z))
+        end
+    end
+    return T(Int32(x) - Int32(y))
+end
+@inline function +(x::T, y::Integer) where {T<:AbstractChar}
+    if x isa Char
+        u = Int32((bitcast(UInt32, x) >> 24) % Int8)
+        if u >= 0 # inline the runtime fast path
+            z = u + y
+            return 0 <= z < 0x80 ? bitcast(Char, (z % UInt32) << 24) : Char(UInt32(z))
+        end
+    end
+    return T(Int32(x) + Int32(y))
+end
 @inline +(x::Integer, y::AbstractChar) = y + x
 
 # `print` should output UTF-8 by default for all AbstractChar types.
@@ -236,7 +257,7 @@ const hex_chars = UInt8['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 
 function show_invalid(io::IO, c::Char)
     write(io, 0x27)
-    u = reinterpret(UInt32, c)
+    u = bitcast(UInt32, c)
     while true
         a = hex_chars[((u >> 28) & 0xf) + 1]
         b = hex_chars[((u >> 24) & 0xf) + 1]

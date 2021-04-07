@@ -254,7 +254,7 @@ function ⊇ end
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
 
-See also [`⊈`](@ref), [`∩`](@ref intersect), [`∪`](@ref union), [`contains`](@ref).
+See also [`⊊`](@ref), [`⊈`](@ref), [`∩`](@ref intersect), [`∪`](@ref union), [`contains`](@ref).
 
 # Examples
 ```jldoctest
@@ -316,6 +316,8 @@ function ⊋ end
 
 Determines if `a` is a subset of, but not equal to, `b`.
 
+See also [`issubset`](@ref) (`⊆`), [`⊈`](@ref).
+
 # Examples
 ```jldoctest
 julia> (1, 2) ⊊ (1, 2, 3)
@@ -338,6 +340,8 @@ function ⊉ end
     ⊉(b, a) -> Bool
 
 Negation of `⊆` and `⊇`, i.e. checks that `a` is not a subset of `b`.
+
+See also [`issubset`](@ref) (`⊆`), [`⊊`](@ref).
 
 # Examples
 ```jldoctest

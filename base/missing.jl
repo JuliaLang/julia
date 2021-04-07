@@ -95,7 +95,7 @@ for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
           :(zero), :(one), :(oneunit),
           :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan),
-          :(iszero), :(transpose), :(adjoint), :(float), :(conj),
+          :(iszero), :(transpose), :(adjoint), :(float), :(complex), :(conj),
           :(abs), :(abs2), :(iseven), :(ispow2),
           :(real), :(imag), :(sign), :(inv))
     @eval ($f)(::Missing) = missing
@@ -105,6 +105,13 @@ for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
     @eval function $(f)(::Type{Union{T, Missing}}) where T
         T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
         $f(T)
+    end
+end
+for f in (:(Base.float), :(Base.complex))
+    @eval $f(::Type{Missing}) = Missing
+    @eval function $f(::Type{Union{T, Missing}}) where T
+        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+        Union{$f(T), Missing}
     end
 end
 

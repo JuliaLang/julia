@@ -410,7 +410,7 @@ function foo23996(xs...)
     bar(::AbstractFloat) = push!(rets, 2)
     bar(::Bool) = foobar()
     for x in xs
-	bar(x)
+        bar(x)
     end
     rets
 end
@@ -4124,15 +4124,6 @@ let ex = quote
     @test ex.args[2] == :test
 end
 
-# issue #25652
-x25652 = 1
-x25652_2 = let (x25652, _) = (x25652, nothing)
-    x25652 = x25652 + 1
-    x25652
-end
-@test x25652_2 == 2
-@test x25652 == 1
-
 # issue #15180
 function f15180(x::T) where T
     X = Vector{T}(undef, 1)
@@ -5000,7 +4991,8 @@ gVararg(a::fVararg(Int)) = length(a)
     false
 catch e
     (e::ErrorException).msg
-end == "The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension."
+end == "The function body AST defined by this @generated function is not pure. " *
+       "This likely means it contains a closure, a comprehension or a generator."
 
 let x = 1
     global g18444
@@ -5305,6 +5297,16 @@ if Sys.WORD_SIZE == 64
         return
     end
     @test_nowarn tester20360()
+end
+
+# issue #39717
+let a = Base.StringVector(2^17)
+    b = String(a)
+    c = String(a)
+    GC.gc()
+    @test sizeof(a) == 0
+    @test sizeof(b) == 2^17
+    @test sizeof(c) == 0
 end
 
 @test_throws ArgumentError eltype(Bottom)
@@ -5970,11 +5972,11 @@ end
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(undef, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        A = Array{U}(undef, ntuple(x->10, N)...)
+        A = Array{U}(undef, ntuple(Returns(10), N)...)
         @test length(A) == 10^N
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
@@ -6055,11 +6057,11 @@ using Serialization
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(undef, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        len = ntuple(x->10, N)
+        len = ntuple(Returns(10), N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
         A = Array{U}(undef, len)
         @test length(A) == prod(len)
@@ -7225,6 +7227,11 @@ end
 @test_broken isbitstype(Tuple{B33954})
 @test_broken isbitstype(B33954)
 
+struct B40050 <: Ref{Tuple{B40050}}
+end
+@test string((B40050(),)) == "($B40050(),)"
+@test_broken isbitstype(Tuple{B40050})
+
 # Issue #34206/34207
 function mre34206(a, n)
     va = view(a, :)
@@ -7287,11 +7294,27 @@ end
 
 # issue #36104
 module M36104
+using Test
 struct T36104
     v::Vector{M36104.T36104}
 end
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
+end
+# with a gensymmed unionall
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+@test_throws ErrorException begin
+    struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data::S
+        uplo::Char
+    end
 end
 end
 @test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
@@ -7528,3 +7551,21 @@ const RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
 
 # NTuples with non-types
 @test NTuple{3, 2} == Tuple{2, 2, 2}
+
+# issue #18621
+function f18621()
+   g = (k(i) for i in 1:5)
+   k = identity
+   return collect(g)
+end
+@test f18621() == 1:5
+@test [_ for _ in 1:5] == 1:5
+
+# issue #35130
+const T35130 = Tuple{Vector{Int}, <:Any}
+@eval struct A35130
+    x::Vector{Tuple{Vector{Int}, Any}}
+    A35130(x) = $(Expr(:new, :A35130, :x))
+end
+h35130(x) = A35130(Any[x][1]::Vector{T35130})
+@test h35130(T35130[([1],1)]) isa A35130

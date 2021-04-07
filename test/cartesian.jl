@@ -405,3 +405,14 @@ end
 
     @test @inferred(intersect(I, J)) == CartesianIndices((2:3, 4:5))
 end
+
+# issue #39705
+f39705() = Base.Cartesian.@nany 0 _ -> true
+@test f39705() === false
+
+@testset "CartesianIndices with Bool" begin
+    @test @inferred(CartesianIndices((true,))) == CartesianIndices((1,))
+    @test @inferred(CartesianIndices((false,))) == CartesianIndices((0,))
+    @test @inferred(CartesianIndices((true, false))) == CartesianIndices((1, 0))
+    @test @inferred(CartesianIndices((false, true))) == CartesianIndices((0, 1))
+end

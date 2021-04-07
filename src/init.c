@@ -293,7 +293,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
 static void post_boot_hooks(void);
 
-JL_DLLEXPORT void *jl_dl_handle;
+JL_DLLEXPORT void *jl_libjulia_internal_handle;
+JL_DLLEXPORT void *jl_libjulia_handle;
 void *jl_RTLD_DEFAULT_handle;
 JL_DLLEXPORT void *jl_exe_handle;
 #ifdef _OS_WINDOWS_
@@ -301,6 +302,7 @@ void *jl_ntdll_handle;
 void *jl_kernel32_handle;
 void *jl_crtdll_handle;
 void *jl_winsock_handle;
+extern const char jl_crtdll_name[];
 #endif
 
 uv_loop_t *jl_io_loop;
@@ -657,15 +659,14 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
-    jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+
+    // Load libjulia-internal (which contains this function), and libjulia, explicitly.
+    jl_libjulia_internal_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+    jl_libjulia_handle = jl_load_dynamic_library(JL_LIBJULIA_SONAME, JL_RTLD_DEFAULT, 1);
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
-#if defined(_MSC_VER) && _MSC_VER == 1800
-    jl_crtdll_handle = jl_dlopen("msvcr120.dll", 0);
-#else
-    jl_crtdll_handle = jl_dlopen("msvcrt.dll", 0);
-#endif
+    jl_crtdll_handle = jl_dlopen(jl_crtdll_name, 0);
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
     jl_exe_handle = GetModuleHandleA(NULL);
     JL_MUTEX_INIT(&jl_in_stackwalk);
@@ -686,22 +687,26 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #endif
 #endif
 
-#if defined(JL_USE_INTEL_JITEVENTS)
+#if \
+    defined(JL_USE_INTEL_JITEVENTS) || \
+    defined(JL_USE_OPROFILE_JITEVENTS) || \
+    defined(JL_USE_PERF_JITEVENTS)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
+#endif
+
+#if defined(JL_USE_INTEL_JITEVENTS)
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_intel_jitevents = 1;
     }
 #endif
 
 #if defined(JL_USE_OPROFILE_JITEVENTS)
-    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_oprofile_jitevents = 1;
     }
 #endif
 
 #if defined(JL_USE_PERF_JITEVENTS)
-    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_perf_jitevents= 1;
     }

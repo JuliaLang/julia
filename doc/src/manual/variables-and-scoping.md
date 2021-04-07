@@ -119,7 +119,7 @@ that location:
 1. **Existing local:** If `x` is *already a local variable*, then the existing local `x` is
    assigned;
 2. **Hard scope:** If `x` is *not already a local variable* and assignment occurs inside of any
-   hard scope construct (i.e. within a let block, function or macro body, comprehension, or
+   hard scope construct (i.e. within a `let` block, function or macro body, comprehension, or
    generator), a new local named `x` is created in the scope of the assignment;
 3. **Soft scope:** If `x` is *not already a local variable* and all of the scope constructs
    containing the assignment are soft scopes (loops, `try`/`catch` blocks, or `struct` blocks), the
@@ -458,8 +458,9 @@ file, if it behaves differently than it did in the REPL, then you will get a war
 
 ### Let Blocks
 
-Unlike assignments to local variables, `let` statements allocate new variable bindings each time
-they run. An assignment modifies an existing value location, and `let` creates new locations.
+`let` statements create a new *hard scope* block (see above) and introduce new variable
+bindings each time they run. Whereas assignments might reassign a new value to an existing value location,
+`let` always creates a new location.
 This difference is usually not important, and is only detectable in the case of variables that
 outlive their scope via closures. The `let` syntax accepts a comma-separated series of assignments
 and variable names:
@@ -517,7 +518,7 @@ julia> Fs[2]()
 ```
 
 Since the `begin` construct does not introduce a new scope, it can be useful to use a zero-argument
-`let` to just introduce a new scope block without creating any new bindings:
+`let` to just introduce a new scope block without creating any new bindings immediately:
 
 ```jldoctest
 julia> let
@@ -531,7 +532,16 @@ julia> let
 ```
 
 Since `let` introduces a new scope block, the inner local `x` is a different variable than the
-outer local `x`.
+outer local `x`. This particular example is equivalent to:
+
+```jldoctest
+julia> let x = 1
+           let x = 2
+           end
+           x
+       end
+1
+```
 
 ### Loops and Comprehensions
 

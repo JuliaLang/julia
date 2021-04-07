@@ -663,11 +663,14 @@ let s, c, r
     @test s[r] == "tmp"
 
     # This should match things that are inside the tmp directory
-    if !isdir("/tmp/tmp")
-        s = "/tmp/"
+    s = tempdir()
+    if !endswith(s, "/")
+        s = string(s, "/")
+    end
+    if !isdir(joinpath(s, "tmp"))
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r === 6:5
+        @test r === length(s) + 1:0
         @test s[r] == ""
     end
 
@@ -699,20 +702,22 @@ let s, c, r
     end
 
     # Tests homedir expansion
-    let path, s, c, r
-        path = homedir()
-        dir = joinpath(path, "tmpfoobar")
-        mkdir(dir)
-        s = "\"" * path * "/tmpfoob"
-        c,r = test_complete(s)
-        @test "tmpfoobar/" in c
-        l = 3 + length(path)
-        @test r == l:l+6
-        @test s[r] == "tmpfoob"
-        s = "\"~"
-        @test "tmpfoobar/" in c
-        c,r = test_complete(s)
-        rm(dir)
+    mktempdir() do tmphome
+        withenv("HOME" => tmphome, "USERPROFILE" => tmphome) do
+            path = homedir()
+            dir = joinpath(path, "tmpfoobar")
+            mkdir(dir)
+            s = "\"" * path * "/tmpfoob"
+            c,r = test_complete(s)
+            @test "tmpfoobar/" in c
+            l = 3 + length(path)
+            @test r == l:l+6
+            @test s[r] == "tmpfoob"
+            s = "\"~"
+            @test "tmpfoobar/" in c
+            c,r = test_complete(s)
+            rm(dir)
+        end
     end
 
     # Tests detecting of files in the env path (in shell mode)

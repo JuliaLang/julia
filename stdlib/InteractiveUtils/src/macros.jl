@@ -42,7 +42,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
-        if ex0.head === :. || (ex0.head === :call && string(ex0.args[1])[1] == '.')
+        if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
             codemacro = startswith(string(fcn), "code_")
             if codemacro && ex0.args[2] isa Expr
                 # Manually wrap a dot call in a function
@@ -153,12 +153,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     exret = Expr(:none)
     if ex.head === :call
         if any(e->(isa(e, Expr) && e.head === :(...)), ex0.args) &&
-            (ex.args[1] === GlobalRef(Core,:_apply) ||
-             ex.args[1] === GlobalRef(Base,:_apply))
+            (ex.args[1] === GlobalRef(Core,:_apply_iterate) ||
+             ex.args[1] === GlobalRef(Base,:_apply_iterate))
             # check for splatting
-            exret = Expr(:call, ex.args[1], fcn,
-                        Expr(:tuple, esc(ex.args[2]),
-                            Expr(:call, typesof, map(esc, ex.args[3:end])...)))
+            exret = Expr(:call, ex.args[2], fcn,
+                        Expr(:tuple, esc(ex.args[3]),
+                            Expr(:call, typesof, map(esc, ex.args[4:end])...)))
         else
             exret = Expr(:call, fcn, esc(ex.args[1]),
                          Expr(:call, typesof, map(esc, ex.args[2:end])...), kws...)

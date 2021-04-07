@@ -81,14 +81,19 @@ println(io::IO, xs...) = print(io, xs..., "\n")
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
-`context` can be either an [`IOContext`](@ref) whose properties will be used,
-or a `Pair` specifying a property and its value. `sizehint` suggests the capacity
-of the buffer (in bytes).
+`context` can be an [`IOContext`](@ref) whose properties will be used, a `Pair`
+specifying a property and its value, or a tuple of `Pair` specifying multiple
+properties and their values. `sizehint` suggests the capacity of the buffer (in
+bytes).
 
-The optional keyword argument `context` can be set to `:key=>value` pair
-or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
-stream passed to `f`.  The optional `sizehint` is a suggested size (in bytes)
-to allocate for the buffer used to write the string.
+The optional keyword argument `context` can be set to a `:key=>value` pair, a
+tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
+attributes are used for the I/O stream passed to `f`.  The optional `sizehint`
+is a suggested size (in bytes) to allocate for the buffer used to write the
+string.
+
+!!! compat "Julia 1.7"
+    Passing a tuple to keyword `context` requires Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -101,7 +106,9 @@ julia> sprint(showerror, BoundsError([1], 100))
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     s = IOBuffer(sizehint=sizehint)
-    if context !== nothing
+    if context isa Tuple
+        f(IOContext(s, context...), args...)
+    elseif context !== nothing
         f(IOContext(s, context), args...)
     else
         f(s, args...)
@@ -189,16 +196,6 @@ show(io::IO, s::AbstractString) = print_quoted(io, s)
 write(io::IO, s::Union{String,SubString{String}}) =
     GC.@preserve s Int(unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))))::Int
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
-
-## printing literal quoted string data ##
-
-# this is the inverse of print_unescaped_chars(io, s, "\\\")
-
-function print_quoted_literal(io, s::AbstractString)
-    print(io, '"')
-    for c = s; c == '"' ? print(io, "\\\"") : print(io, c); end
-    print(io, '"')
-end
 
 """
     repr(x; context=nothing)
@@ -314,8 +311,8 @@ escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
-    escape_string(str::AbstractString[, esc])::AbstractString
-    escape_string(io, str::AbstractString[, esc::])::Nothing
+    escape_string(str::AbstractString[, esc]; keep = ())::AbstractString
+    escape_string(io, str::AbstractString[, esc]; keep = ())::Nothing
 
 General escaping of traditional C and Unicode escape sequences. The first form returns the
 escaped string, the second prints the result to `io`.
@@ -327,10 +324,19 @@ unambiguous), unicode code point (`"\\u"` prefix) or hex (`"\\x"` prefix).
 The optional `esc` argument specifies any additional characters that should also be
 escaped by a prepending backslash (`\"` is also escaped by default in the first form).
 
+The argument `keep` specifies a collection of characters which are to be kept as
+they are. Notice that `esc` has precedence here.
+
+!!! compat "Julia 1.7"
+    The `keep` argument is available as of Julia 1.7.
+
 # Examples
 ```jldoctest
 julia> escape_string("aaa\\nbbb")
 "aaa\\\\nbbb"
+
+julia> escape_string("aaa\\nbbb"; keep = '\\n')
+"aaa\\nbbb"
 
 julia> escape_string("\\xfe\\xff") # invalid utf-8
 "\\\\xfe\\\\xff"
@@ -345,11 +351,13 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 ## See also
 [`unescape_string`](@ref) for the reverse operation.
 """
-function escape_string(io::IO, s::AbstractString, esc="")
+function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
     a = Iterators.Stateful(s)
     for c::AbstractChar in a
         if c in esc
             print(io, '\\', c)
+        elseif c in keep
+            print(io, c)
         elseif isascii(c)
             c == '\0'          ? print(io, escape_nul(peek(a)::Union{AbstractChar,Nothing})) :
             c == '\e'          ? print(io, "\\e") :
@@ -372,7 +380,8 @@ function escape_string(io::IO, s::AbstractString, esc="")
     end
 end
 
-escape_string(s::AbstractString, esc=('\"',)) = sprint(escape_string, s, esc, sizehint=lastindex(s))
+escape_string(s::AbstractString, esc=('\"',); keep = ()) =
+    sprint((io)->escape_string(io, s, esc; keep = keep), sizehint=lastindex(s))
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')
@@ -625,6 +634,8 @@ julia> Base.unindent("   a\\n   b", 2)
 julia> Base.unindent("\\ta\\n\\tb", 2, tabwidth=8)
 "      a\\n      b"
 ```
+
+See also `indent` from the [`MultilineStrings` package](https://github.com/invenia/MultilineStrings.jl).
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str

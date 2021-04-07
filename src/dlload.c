@@ -57,6 +57,25 @@ static int endswith_extension(const char *path) JL_NOTSAFEPOINT
     return 0;
 }
 
+#ifdef _OS_WINDOWS_
+#ifdef _MSC_VER
+#if (_MSC_VER >= 1930) || (_MSC_VER < 1800)
+#error This version of MSVC has not been tested.
+#elif _MSC_VER >= 1900 // VC++ 2015 / 2017 / 2019
+#define CRTDLL_BASENAME "vcruntime140"
+#elif _MSC_VER >= 1800 // VC++ 2013
+#define CRTDLL_BASENAME "msvcr120"
+#endif
+#else
+#define CRTDLL_BASENAME "msvcrt"
+#endif
+
+const char jl_crtdll_basename[] = CRTDLL_BASENAME;
+const char jl_crtdll_name[] = CRTDLL_BASENAME ".dll";
+
+#undef CRTDLL_BASENAME
+#endif
+
 #define PATHBUF 4096
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
@@ -149,7 +168,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
 
     /*
-      this branch returns handle of libjulia
+      this branch returns handle of libjulia-internal
     */
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_
@@ -308,22 +327,16 @@ const char *jl_dlfind_win32(const char *f_name)
     void * dummy;
     if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
         return JL_EXE_LIBNAME;
-    if (jl_dlsym(jl_dl_handle, f_name, &dummy, 0))
-        return JL_DL_LIBNAME;
+    if (jl_dlsym(jl_libjulia_internal_handle, f_name, &dummy, 0))
+        return JL_LIBJULIA_INTERNAL_DL_LIBNAME;
+    if (jl_dlsym(jl_libjulia_handle, f_name, &dummy, 0))
+        return JL_LIBJULIA_DL_LIBNAME;
     if (jl_dlsym(jl_kernel32_handle, f_name, &dummy, 0))
         return "kernel32";
+    if (jl_dlsym(jl_crtdll_handle, f_name, &dummy, 0)) // Prefer crtdll over ntdll
+        return jl_crtdll_basename;
     if (jl_dlsym(jl_ntdll_handle, f_name, &dummy, 0))
         return "ntdll";
-    if (jl_dlsym(jl_crtdll_handle, f_name, &dummy, 0))
-#if defined(_MSC_VER)
-#if _MSC_VER == 1800
-        return "msvcr120";
-#else
-#error This version of MSVC has not been tested.
-#endif
-#else
-        return "msvcrt";
-#endif
     if (jl_dlsym(jl_winsock_handle, f_name, &dummy, 0))
         return "ws2_32";
     // additional common libraries (libc?) could be added here, but in general,
@@ -334,8 +347,8 @@ const char *jl_dlfind_win32(const char *f_name)
     // explicit is preferred over implicit
     return NULL;
     // oops, we didn't find it. NULL defaults to searching jl_RTLD_DEFAULT_handle,
-    // which defaults to jl_dl_handle, where we won't find it, and will throw the
-    // appropriate error.
+    // which defaults to jl_libjulia_internal_handle, where we won't find it, and
+    // will throw the appropriate error.
 }
 #endif
 

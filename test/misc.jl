@@ -149,7 +149,10 @@ for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 1
     GC.enable_finalizers(true)
     @test get_finalizers_inhibited() == 0
-    @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
+    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        # Note this warning only exists in debug builds
+        @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
+    end
 
     @test lock(l) === nothing
     @test try unlock(l) finally end === nothing
@@ -227,6 +230,27 @@ v11801, t11801 = @timed sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
 @test names(@__MODULE__, all = true) == names_before_timing
+
+# PR #39133, ensure that @time evaluates in the same scope
+function time_macro_scope()
+    try # try/throw/catch bypasses printing
+        @time (time_macro_local_var = 1; throw("expected"))
+        return time_macro_local_var
+    catch ex
+        ex === "expected" || rethrow()
+    end
+end
+@test time_macro_scope() == 1
+
+function timev_macro_scope()
+    try # try/throw/catch bypasses printing
+        @timev (time_macro_local_var = 1; throw("expected"))
+        return time_macro_local_var
+    catch ex
+        ex === "expected" || rethrow()
+    end
+end
+@test timev_macro_scope() == 1
 
 # interactive utilities
 
@@ -597,6 +621,26 @@ let buf = IOBuffer()
     # Check that boldness is turned off
     printstyled(buf_color, "foo"; bold=true, color=:red)
     @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
+
+    # Check that underline is turned off
+    printstyled(buf_color, "foo"; color = :red, underline = true)
+    @test String(take!(buf)) == "\e[31m\e[4mfoo\e[24m\e[39m"
+
+    # Check that blink is turned off
+    printstyled(buf_color, "foo"; color = :red, blink = true)
+    @test String(take!(buf)) == "\e[31m\e[5mfoo\e[25m\e[39m"
+
+    # Check that reverse is turned off
+    printstyled(buf_color, "foo"; color = :red, reverse = true)
+    @test String(take!(buf)) == "\e[31m\e[7mfoo\e[27m\e[39m"
+
+    # Check that hidden is turned off
+    printstyled(buf_color, "foo"; color = :red, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[8mfoo\e[28m\e[39m"
+
+    # Check that all options can be turned on simultaneously
+    printstyled(buf_color, "foo"; color = :red, bold = true, underline = true, blink = true, reverse = true, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[1m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
@@ -702,6 +746,46 @@ let foo() = begin
         return Base.@invokelatest atinvokelatest.g(2, 3; z=1)
     end
     @test bar() == 1
+end
+
+@testset "@invoke macro" begin
+    # test against `invoke` doc example
+    let
+        f(x::Real) = x^2
+        f(x::Integer) = 1 + Base.@invoke f(x::Real)
+        @test f(2) == 5
+    end
+
+    let
+        f1(::Integer) = Integer
+        f1(::Real) = Real;
+        f2(x::Real) = _f2(x)
+        _f2(::Integer) = Integer
+        _f2(_) = Real
+        @test f1(1) === Integer
+        @test f2(1) === Integer
+        @test Base.@invoke(f1(1::Real)) === Real
+        @test Base.@invoke(f2(1::Real)) === Integer
+    end
+
+    # when argment's type annotation is omitted, it should be specified as `Any`
+    let
+        f(_) = Any
+        f(x::Integer) = Integer
+        @test f(1) === Integer
+        @test Base.@invoke(f(1::Any)) === Any
+        @test Base.@invoke(f(1)) === Any
+    end
+
+    # handle keyword arguments correctly
+    let
+        f(a; kw1 = nothing, kw2 = nothing) = a + max(kw1, kw2)
+        f(::Integer; kwargs...) = error("don't call me")
+
+        @test_throws Exception f(1; kw1 = 1, kw2 = 2)
+        @test 3 == Base.@invoke f(1::Any; kw1 = 1, kw2 = 2)
+        @test 3 == Base.@invoke f(1; kw1 = 1, kw2 = 2)
+    end
 end
 
 # Endian tests
@@ -888,3 +972,15 @@ end
 @testset "issue #28188" begin
     @test `$(@__FILE__)` == let file = @__FILE__; `$file` end
 end
+
+# Test that read fault on a prot-none region does not incorrectly give
+# ReadOnlyMemoryEror, but rather crashes the program
+const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
+let script = :(let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
+    (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
+    C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0)); try
+    unsafe_load(ptr)
+    catch e; println(e) end; end)
+    @test !success(`$(Base.julia_cmd()) -e $script`)
+end
+

@@ -515,7 +515,12 @@ axistype(a, b) = UnitRange{Int}(a)
 check_broadcast_shape(shp) = nothing
 check_broadcast_shape(shp, ::Tuple{}) = nothing
 check_broadcast_shape(::Tuple{}, ::Tuple{}) = nothing
-check_broadcast_shape(::Tuple{}, Ashp::Tuple) = throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
+function check_broadcast_shape(::Tuple{}, Ashp::Tuple)
+    if any(ax -> length(ax) != 1, Ashp)
+        throw(DimensionMismatch("cannot broadcast array to have fewer non-singleton dimensions"))
+    end
+    nothing
+end
 function check_broadcast_shape(shp, Ashp::Tuple)
     _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
     check_broadcast_shape(tail(shp), tail(Ashp))
@@ -553,11 +558,13 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = CartesianIndex(_newindex(I.I, keep, Idefault))
-@inline newindex(i::Integer, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
+@inline newindex(i::Integer, keep::Tuple, idefault) = ifelse(keep[1], i, idefault[1])
 @inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
 @inline _newindex(I, keep, Idefault) =
     (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
 @inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I
+@inline _newindex(I::Tuple{}, keep, Idefault) = ()  # or I is shorter
+@inline _newindex(I::Tuple{}, keep::Tuple{}, Idefault) = () # or both
 
 # newindexer(A) generates `keep` and `Idefault` (for use by `newindex` above)
 # for a particular array `A`; `shapeindexer` does so for its axes.
@@ -924,7 +931,7 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     # Now handle the remaining values
     # The typeassert gives inference a helping hand on the element type and dimensionality
     # (work-around for #28382)
-    ElType′ = ElType <: Type ? Type : ElType
+    ElType′ = ElType === Union{} ? Any : ElType <: Type ? Type : ElType
     RT = dest isa AbstractArray ? AbstractArray{<:ElType′, ndims(dest)} : Any
     return copyto_nonleaf!(dest, bc′, iter, state, 1)::RT
 end
@@ -977,8 +984,10 @@ preprocess_args(dest, args::Tuple{}) = ()
         end
     end
     bc′ = preprocess(dest, bc)
-    @simd for I in eachindex(bc′)
-        @inbounds dest[I] = bc′[I]
+    # Performance may vary depending on whether `@inbounds` is placed outside the
+    # for loop or not. (cf. https://github.com/JuliaLang/julia/issues/38086)
+    @inbounds @simd for I in eachindex(bc′)
+        dest[I] = bc′[I]
     end
     return dest
 end
@@ -1291,7 +1300,13 @@ macro __dot__(x)
     esc(__dot__(x))
 end
 
-@inline broadcasted_kwsyntax(f, args...; kwargs...) = broadcasted((args...)->f(args...; kwargs...), args...)
+@inline function broadcasted_kwsyntax(f, args...; kwargs...)
+    if isempty(kwargs) # some BroadcastStyles dispatch on `f`, so try to preserve its type
+        return broadcasted(f, args...)
+    else
+        return broadcasted((args...) -> f(args...; kwargs...), args...)
+    end
+end
 @inline function broadcasted(f, args...)
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(args′...), f, args′...)
