@@ -1117,8 +1117,8 @@
           ((not (pair? name))  e)
           ((eq? (car name) 'call)
            (if (and (eq? (cadr name) '*) (number? (caddr name)))
-               (error (string "invalid function definition \"" (deparse name) "\"; \""
-                              (deparse (caddr name)) "\" is not a valid function argument name")))
+               (error (string "invalid function definition; \"" (deparse (caddr name))
+                              "\" is not a valid function argument name in \"" (deparse name) "\"")))
            (let* ((raw-typevars (or where '()))
                   (sparams (map analyze-typevar raw-typevars))
                   (argl    (cdr name))
