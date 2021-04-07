@@ -206,11 +206,11 @@ end
 
 end
 
-struct Zero end
-Base.iszero(::Zero) = true
-LinearAlgebra.iszerodefined(::Type{Zero}) = true
+struct Zero36193 end
+Base.iszero(::Zero36193) = true
+LinearAlgebra.iszerodefined(::Type{Zero36193}) = true
 @testset "PR #36193" begin
-    f(::Union{Int, Zero}) = Zero()
+    f(::Union{Int, Zero36193}) = Zero36193()
     function test(el)
         M = [el el
              el el]
@@ -221,16 +221,16 @@ LinearAlgebra.iszerodefined(::Type{Zero}) = true
         for (T, A) in [(UpperTriangular, U), (LowerTriangular, L), (Diagonal, D)]
             @test identity.(A) isa typeof(A)
             @test map(identity, A) isa typeof(A)
-            @test f.(A) isa T{Zero}
-            @test map(f, A) isa T{Zero}
+            @test f.(A) isa T{Zero36193}
+            @test map(f, A) isa T{Zero36193}
         end
     end
-    # This should not need `zero(::Type{Zero})` to be defined
+    # This should not need `zero(::Type{Zero36193})` to be defined
     test(1)
-    Base.zero(::Type{Zero}) = Zero()
-    # This should not need `==(::Zero, ::Int)` to be defined as `iszerodefined`
+    Base.zero(::Type{Zero36193}) = Zero36193()
+    # This should not need `==(::Zero36193, ::Int)` to be defined as `iszerodefined`
     # returns true.
-    test(Zero())
+    test(Zero36193())
 end
 
 # structured broadcast with function returning non-number type
