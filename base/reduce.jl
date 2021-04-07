@@ -256,10 +256,8 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     end
 end
 
-function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer)
-    blksize = pairwise_blocksize(f, op)
-    mapreduce_impl(f, op, A, ifirst, ilast, blksize)
-end
+mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
+    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
     mapreduce(f, op, itrs...; [init])

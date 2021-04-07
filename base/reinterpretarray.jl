@@ -709,7 +709,5 @@ end
     end
 end
 
-function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP}
-    blksize = pairwise_blocksize(f, op)
-    mapreduce_impl(f, op, A, ifirst, ilast, blksize)
-end
+mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP} =
+    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
