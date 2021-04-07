@@ -104,7 +104,9 @@ Note that the interactive prompt (aka REPL) is in the global scope of the module
 ## Local Scope
 
 A new local scope is introduced by most code blocks (see above [table](@ref man-scope-table) for a
-complete list). Some programming languages require explicitly declaring new variables before using
+complete list). If such a block is inside another local scope, this will be a "nested" local scope
+that contains existing locals — even if the code where they are defined is written after the nested block.
+Some programming languages require explicitly declaring new variables before using
 them. Explicit declaration works in Julia too: in any local scope, writing `local x` declares a new
 local variable in that scope, regardless of whether there is already a variable named `x` in an
 outer scope or not. Declaring each new local like this is somewhat verbose and tedious, however, so
