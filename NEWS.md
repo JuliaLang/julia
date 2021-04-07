@@ -67,6 +67,7 @@ Standard library changes
 * On aarch64, OpenBLAS now uses an ILP64 BLAS like all other 64-bit platforms. ([#39436])
 * OpenBLAS is updated to 0.3.13. ([#39216])
 * SuiteSparse is updated to 5.8.1. ([#39455])
+* The shape of an `UpperHessenberg` matrix is preserved under certain arithmetic operations, e.g. when multiplying or dividing by an `UpperTriangular` matrix. ([#40039])
 
 #### Markdown
 
