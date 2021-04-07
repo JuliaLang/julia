@@ -605,7 +605,7 @@ gen_bitarrayN(::Type{BitVector}, itsz, itr)                        = gen_bitarra
 gen_bitarrayN(::Type{BitVector}, itsz::HasShape{1}, itr)           = gen_bitarray(itsz, itr)
 gen_bitarrayN(::Type{BitArray{N}}, itsz::HasShape{N}, itr) where N = gen_bitarray(itsz, itr)
 # The first of these is just for ambiguity resolution
-gen_bitarrayN(::Type{BitVector}, itsz::HasShape{N}, itr) where N      = throw(DimensionMismatch("cannot create a $T from a $N-dimensional iterator"))
+gen_bitarrayN(::Type{BitVector}, itsz::HasShape{N}, itr) where N      = throw(DimensionMismatch("cannot create a BitVector from a $N-dimensional iterator"))
 gen_bitarrayN(@nospecialize(T::Type), itsz::HasShape{N}, itr) where N = throw(DimensionMismatch("cannot create a $T from a $N-dimensional iterator"))
 gen_bitarrayN(@nospecialize(T::Type), itsz, itr) = throw(DimensionMismatch("cannot create a $T from a generic iterator"))
 
@@ -1394,7 +1394,7 @@ function bitcount(Bc::Vector{UInt64}; init::T=0) where {T}
     return n
 end
 
-count(B::BitArray; init=0) = bitcount(B.chunks; init)
+_count(::typeof(identity), B::BitArray, ::Colon, init) = bitcount(B.chunks; init)
 
 function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1

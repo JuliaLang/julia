@@ -598,23 +598,10 @@ end
     @test BLAS.get_num_threads() === 1
     BLAS.set_num_threads(default)
     @test BLAS.get_num_threads() === default
-
-    @test_logs (:warn,) match_mode=:any BLAS._set_num_threads(1, _blas=:unknown)
-    if BLAS.guess_vendor() !== :osxblas
-        # test osxblas which is not covered by CI
-        withenv("VECLIB_MAXIMUM_THREADS" => nothing) do
-            @test @test_logs(
-                (:warn,),
-                (:warn,),
-                match_mode=:any,
-                BLAS._get_num_threads(_blas=:osxblas),
-            ) === nothing
-            @test_logs BLAS._set_num_threads(1, _blas=:osxblas)
-            @test @test_logs(BLAS._get_num_threads(_blas=:osxblas)) === 1
-            @test_logs BLAS._set_num_threads(2, _blas=:osxblas)
-            @test @test_logs(BLAS._get_num_threads(_blas=:osxblas)) === 2
-        end
-    end
 end
+
+# https://github.com/JuliaLang/julia/pull/39845
+@test LinearAlgebra.BLAS.libblas == "libblastrampoline"
+@test LinearAlgebra.BLAS.liblapack == "libblastrampoline"
 
 end # module TestBLAS

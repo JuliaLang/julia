@@ -101,7 +101,7 @@ struct NullLogger <: AbstractLogger; end
 min_enabled_level(::NullLogger) = AboveMaxLevel
 shouldlog(::NullLogger, args...) = false
 handle_message(::NullLogger, args...; kwargs...) =
-    error("Null logger handle_message() should not be called")
+    (@nospecialize; error("Null logger handle_message() should not be called"))
 
 
 #-------------------------------------------------------------------------------
@@ -116,7 +116,7 @@ filtered, before any other work is done to construct the log record data
 structure itself.
 
 # Examples
-```
+```julia-repl
 julia> Logging.LogLevel(0) == Logging.Info
 true
 ```
@@ -202,7 +202,7 @@ There's also some key value pairs which have conventional meaning:
 
 # Examples
 
-```
+```julia
 @debug "Verbose debugging information.  Invisible by default"
 @info  "An informational message"
 @warn  "Something was odd.  You should pay attention"
@@ -505,7 +505,7 @@ a *global* setting, intended to make debug logging extremely cheap when
 disabled.
 
 # Examples
-```
+```julia
 Logging.disable_logging(Logging.Info) # Disable debug and info
 ```
 """
@@ -638,7 +638,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
                         filepath, line; kwargs...)
     @nospecialize
     maxlog = get(kwargs, :maxlog, nothing)
-    if maxlog isa Integer
+    if maxlog isa Core.BuiltinInts
         remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return

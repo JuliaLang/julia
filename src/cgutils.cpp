@@ -608,7 +608,10 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
             size_t fsz = 0, al = 0;
             bool isptr = !jl_islayout_inline(ty, &fsz, &al);
             if (jst->layout) {
-                assert(isptr == jl_field_isptr(jst, i));
+                // NOTE: jl_field_isptr can disagree with jl_islayout_inline here if the
+                // struct decided this field must be a pointer due to a type circularity.
+                // Example from issue #40050: `struct B <: Ref{Tuple{B}}; end`
+                isptr = jl_field_isptr(jst, i);
                 assert((isptr ? sizeof(void*) : fsz + jl_is_uniontype(ty)) == jl_field_size(jst, i));
             }
             Type *lty;
@@ -737,13 +740,13 @@ static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
     if (l > 0) {
         jl_value_t *t0 = jl_svecref(t, 0);
         if (!jl_is_concrete_type(t0)) {
-            if (allow_va && jl_is_vararg_type(t0) &&
+            if (allow_va && jl_is_vararg(t0) &&
                   jl_is_concrete_type(jl_unwrap_vararg(t0)))
                 return true;
             return false;
         }
         for (i = 1; i < l; i++) {
-            if (allow_va && i == l - 1 && jl_is_vararg_type(jl_svecref(t, i))) {
+            if (allow_va && i == l - 1 && jl_is_vararg(jl_svecref(t, i))) {
                 if (t0 != jl_unwrap_vararg(jl_svecref(t, i)))
                     return false;
                 continue;

@@ -209,6 +209,24 @@ Say: hey there friend
 kw"macro"
 
 """
+    __module__
+
+The argument `__module__` is only visible inside the macro, and it provides information
+(in the form of a `Module` object) about the expansion context of the macro invocation.
+See the manual section on [Macro invocation](@ref) for more information.
+"""
+kw"__module__"
+
+"""
+    __source__
+
+The argument `__source__` is only visible inside the macro, and it provides information
+(in the form of a `LineNumberNode` object) about the parser location of the `@` sign from
+the macro invocation. See the manual section on [Macro invocation](@ref) for more information.
+"""
+kw"__source__"
+
+"""
     local
 
 `local` introduces a new local variable.
@@ -396,9 +414,10 @@ kw"."
 """
     let
 
-`let` statements allocate new variable bindings each time they run. Whereas an
-assignment modifies an existing value location, `let` creates new locations. This
-difference is only detectable in the case of variables that outlive their scope via
+`let` statements create a new hard scope block and introduce new variable bindings
+each time they run. Whereas assignments might reassign a new value to an existing value location,
+`let` always creates a new location.
+This difference is only detectable in the case of variables that outlive their scope via
 closures. The `let` syntax accepts a comma-separated series of assignments and variable
 names:
 
@@ -727,8 +746,9 @@ kw"while"
 `end` marks the conclusion of a block of expressions, for example
 [`module`](@ref), [`struct`](@ref), [`mutable struct`](@ref),
 [`begin`](@ref), [`let`](@ref), [`for`](@ref) etc.
-`end` may also be used when indexing into an array to represent
-the last index of a dimension.
+
+`end` may also be used when indexing to represent the last index of a
+collection or the last index of a dimension of an array.
 
 # Examples
 ```jldoctest
@@ -998,6 +1018,22 @@ end
 
 Usually `begin` will not be necessary, since keywords such as [`function`](@ref) and [`let`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
+
+`begin` may also be used when indexing to represent the first index of a
+collection or the first index of a dimension of an array.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> A[begin, :]
+2-element Array{Int64,1}:
+ 1
+ 2
+```
 """
 kw"begin"
 
@@ -1223,7 +1259,7 @@ julia> isa(+, Function)
 true
 
 julia> typeof(sin)
-typeof(sin)
+typeof(sin) (singleton type of function sin, subtype of Function)
 
 julia> ans <: Function
 true
@@ -2338,15 +2374,15 @@ kw"::"
 """
     Vararg{T,N}
 
-The last parameter of a tuple type [`Tuple`](@ref) can be the special type `Vararg`, which denotes any
-number of trailing elements. The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.
+The last parameter of a tuple type [`Tuple`](@ref) can be the special value `Vararg`, which denotes any
+number of trailing elements. `Vararg{T,N}` corresponds to exactly `N` elements of type `T`. Finally
 `Vararg{T}` corresponds to zero or more elements of type `T`. `Vararg` tuple types are used to represent the
 arguments accepted by varargs methods (see the section on [Varargs Functions](@ref) in the manual.)
 
 # Examples
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString, Vararg{Int}}
-Tuple{AbstractString, Vararg{Int64, N} where N}
+Tuple{AbstractString, Vararg{Int64}}
 
 julia> isa(("1",), mytupletype)
 true

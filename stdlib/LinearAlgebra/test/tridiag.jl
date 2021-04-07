@@ -4,6 +4,11 @@ module TestTridiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -574,6 +579,28 @@ end
     dl = rand(Float64, 4)
     T = Tridiagonal(dl, d, du)
     @test_throws ArgumentError SymTridiagonal{Float32}(T)
+end
+
+# Issue #38765
+@testset "Eigendecomposition with different lengths" begin
+    # length(A.ev) can be either length(A.dv) or length(A.dv) - 1
+    A = SymTridiagonal(fill(1.0, 3), fill(-1.0, 3))
+    F = eigen(A)
+    A2 = SymTridiagonal(fill(1.0, 3), fill(-1.0, 2))
+    F2 = eigen(A2)
+    test_approx_eq_modphase(F.vectors, F2.vectors)
+    @test F.values ≈ F2.values
+end
+
+@testset "non-commutative algebra (#39701)" begin
+    for A in (SymTridiagonal(Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4))),
+              Tridiagonal(Quaternion.(randn(4), randn(4), randn(4), randn(4)), Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4))))
+        c = Quaternion(1,2,3,4)
+        @test A * c ≈ Matrix(A) * c
+        @test A / c ≈ Matrix(A) / c
+        @test c * A ≈ c * Matrix(A)
+        @test c \ A ≈ c \ Matrix(A)
+    end
 end
 
 end # module TestTridiagonal

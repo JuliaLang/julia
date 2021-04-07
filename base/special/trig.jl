@@ -166,7 +166,8 @@ end
 """
     sincos(x)
 
-Simultaneously compute the sine and cosine of `x`, where the `x` is in radians.
+Simultaneously compute the sine and cosine of `x`, where `x` is in radians, returning
+a tuple `(sine, cosine)`.
 """
 function sincos(x::T) where T<:Union{Float32, Float64}
     if abs(x) < T(pi)/4
@@ -420,7 +421,7 @@ end
     flipsign(Float32(pi/2 - 2*(s + s*tRt)), x)
 end
 
-@noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x|>1."))
+@noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x| > 1."))
 function asin(x::T) where T<:Union{Float32, Float64}
     # Since  asin(x) = x + x^3/6 + x^5*3/40 + x^7*15/336 + ...
     # we approximate asin(x) on [0,0.5] by
@@ -857,7 +858,8 @@ end
 """
     sincospi(x)
 
-Simultaneously compute `sinpi(x)` and `cospi(x)`, where the `x` is in radians.
+Simultaneously compute [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) (the sine and cosine of `π*x`,
+where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.

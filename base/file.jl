@@ -175,10 +175,10 @@ function mkdir(path::AbstractString; mode::Integer = 0o777)
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
                     C_NULL, req, path, checkmode(mode), C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_fs_req_cleanup(req)
             uv_error("mkdir($(repr(path)); mode=0o$(string(mode,base=8)))", ret)
         end
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
         return path
     finally
         Libc.free(req)
@@ -278,16 +278,25 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         end
     else
         if recursive
-            for p in readdir(path)
-                rm(joinpath(path, p), force=force, recursive=true)
+            try
+                for p in readdir(path)
+                    rm(joinpath(path, p), force=force, recursive=true)
+                end
+            catch err
+                if !(force && isa(err, IOError) && err.code==Base.UV_EACCES)
+                    rethrow(err)
+                end
             end
         end
-        @static if Sys.iswindows()
-            ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
-        else
-            ret = ccall(:rmdir, Int32, (Cstring,), path)
+        req = Libc.malloc(_sizeof_uv_fs)
+        try
+            ret = ccall(:uv_fs_rmdir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), C_NULL, req, path, C_NULL)
+            uv_fs_req_cleanup(req)
+            ret < 0 && uv_error("rm($(repr(path)))", ret)
+            nothing
+        finally
+            Libc.free(req)
         end
-        systemerror(:rmdir, ret != 0, extrainfo=path)
     end
 end
 
@@ -315,8 +324,8 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
     end
 end
 
-function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
-                                                          follow_symlinks::Bool=false)
+function cptree(src::String, dst::String; force::Bool=false,
+                                          follow_symlinks::Bool=false)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
     checkfor_mv_cp_cptree(src, dst, "copying"; force=force)
     mkdir(dst)
@@ -332,6 +341,8 @@ function cptree(src::AbstractString, dst::AbstractString; force::Bool=false,
         end
     end
 end
+cptree(src::AbstractString, dst::AbstractString; kwargs...) =
+    cptree(String(src)::String, String(dst)::String; kwargs...)
 
 """
     cp(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)
@@ -479,7 +490,7 @@ function prepare_for_deletion(path::AbstractString)
 
     try chmod(path, filemode(path) | 0o333)
     catch; end
-    for (root, dirs, files) in walkdir(path)
+    for (root, dirs, files) in walkdir(path; onerror=x->())
         for dir in dirs
             dpath = joinpath(root, dir)
             try chmod(dpath, filemode(dpath) | 0o333)
@@ -638,6 +649,11 @@ tempname()
 Return `(path, io)`, where `path` is the path of a new temporary file in `parent`
 and `io` is an open file object for this path. The `cleanup` option controls whether
 the temporary file is automatically deleted when the process exits.
+
+!!! compat "Julia 1.3"
+    The `cleanup` keyword argument was added in Julia 1.3. Relatedly, starting from 1.3,
+    Julia will remove the temporary paths created by `mktemp` when the Julia process exits,
+    unless `cleanup` is explicitly set to `false`.
 """
 mktemp(parent)
 
@@ -649,6 +665,14 @@ constructed from the given prefix and a random suffix, and return its path.
 Additionally, any trailing `X` characters may be replaced with random characters.
 If `parent` does not exist, throw an error. The `cleanup` option controls whether
 the temporary directory is automatically deleted when the process exits.
+
+!!! compat "Julia 1.2"
+    The `prefix` keyword argument was added in Julia 1.2.
+
+!!! compat "Julia 1.3"
+    The `cleanup` keyword argument was added in Julia 1.3. Relatedly, starting from 1.3,
+    Julia will remove the temporary paths created by `mktempdir` when the Julia process
+    exits, unless `cleanup` is explicitly set to `false`.
 """
 function mktempdir(parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix, cleanup::Bool=true)
@@ -665,11 +689,11 @@ function mktempdir(parent::AbstractString=tempdir();
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
                     C_NULL, req, tpath, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_fs_req_cleanup(req)
             uv_error("mktempdir($(repr(parent)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
         cleanup && temp_cleanup_later(path)
         return path
     finally
@@ -705,6 +729,9 @@ end
 
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
 temporary directory all of its contents upon completion.
+
+!!! compat "Julia 1.2"
+    The `prefix` keyword argument was added in Julia 1.2.
 """
 function mktempdir(fn::Function, parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix)
@@ -806,28 +833,31 @@ julia> readdir(abspath("base"), join=true)
 """
 function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
-    uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
+        err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
+                    C_NULL, req, dir, 0, C_NULL)
+        err < 0 && uv_error("readdir($(repr(dir)))", err)
 
-    # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{UInt8}, Cstring, Cint, Ptr{Cvoid}),
-                C_NULL, uv_readdir_req, dir, 0, C_NULL)
-    err < 0 && uv_error("readdir($(repr(dir)))", err)
+        # iterate the listing into entries
+        entries = String[]
+        ent = Ref{uv_dirent_t}()
+        while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), req, ent)
+            name = unsafe_string(ent[].name)
+            push!(entries, join ? joinpath(dir, name) : name)
+        end
 
-    # iterate the listing into entries
-    entries = String[]
-    ent = Ref{uv_dirent_t}()
-    while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
-        name = unsafe_string(ent[].name)
-        push!(entries, join ? joinpath(dir, name) : name)
+        # Clean up the request string
+        uv_fs_req_cleanup(req)
+
+        # sort entries unless opted out
+        sort && sort!(entries)
+
+        return entries
+    finally
+        Libc.free(req)
     end
-
-    # Clean up the request string
-    ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{UInt8},), uv_readdir_req)
-
-    # sort entries unless opted out
-    sort && sort!(entries)
-
-    return entries
 end
 readdir(; join::Bool=false, sort::Bool=true) =
     readdir(join ? pwd() : ".", join=join, sort=sort)
@@ -953,19 +983,44 @@ function sendfile(src::AbstractString, dst::AbstractString)
 end
 
 if Sys.iswindows()
+    const UV_FS_SYMLINK_DIR      = 0x0001
     const UV_FS_SYMLINK_JUNCTION = 0x0002
+    const UV__EPERM              = -4048
 end
 
 """
-    symlink(target::AbstractString, link::AbstractString)
+    symlink(target::AbstractString, link::AbstractString; dir_target = false)
 
 Creates a symbolic link to `target` with the name `link`.
+
+On Windows, symlinks must be explicitly declared as referring to a directory
+or not.  If `target` already exists, by default the type of `link` will be auto-
+detected, however if `target` does not exist, this function defaults to creating
+a file symlink unless `dir_target` is set to `true`.  Note that if the user
+sets `dir_target` but `target` exists and is a file, a directory symlink will
+still be created, but dereferencing the symlink will fail, just as if the user
+creates a file symlink (by calling `symlink()` with `dir_target` set to `false`
+before the directory is created) and tries to dereference it to a directory.
+
+Additionally, there are two methods of making a link on Windows; symbolic links
+and junction points.  Junction points are slightly more efficient, but do not
+support relative paths, so if a relative directory symlink is requested (as
+denoted by `isabspath(target)` returning `false`) a symlink will be used, else
+a junction point will be used.  Best practice for creating symlinks on Windows
+is to create them only after the files/directories they reference are already
+created.
 
 !!! note
     This function raises an error under operating systems that do not support
     soft symbolic links, such as Windows XP.
+
+!!! compat "Julia 1.6"
+    The `dir_target` keyword argument was added in Julia 1.6.  Prior to this,
+    symlinks to nonexistant paths on windows would always be file symlinks, and
+    relative symlinks to directories were not supported.
 """
-function symlink(p::AbstractString, np::AbstractString)
+function symlink(target::AbstractString, link::AbstractString;
+                 dir_target::Bool = false)
     @static if Sys.iswindows()
         if Sys.windows_version() < Sys.WINDOWS_VISTA_VER
             error("Windows XP does not support soft symlinks")
@@ -973,16 +1028,32 @@ function symlink(p::AbstractString, np::AbstractString)
     end
     flags = 0
     @static if Sys.iswindows()
-        if isdir(p)
-            flags |= UV_FS_SYMLINK_JUNCTION
-            p = abspath(p)
+        # If we're going to create a directory link, we need to know beforehand.
+        # First, if `target` is not an absolute path, let's immediately resolve
+        # it so that we can peek and see if it's a directory.
+        resolved_target = target
+        if !isabspath(target)
+            resolved_target = joinpath(dirname(link), target)
+        end
+
+        # If it is a directory (or `dir_target` is set), we'll need to add one
+        # of `UV_FS_SYMLINK_{DIR,JUNCTION}` to the flags, depending on whether
+        # `target` is an absolute path or not.
+        if (ispath(resolved_target) && isdir(resolved_target)) || dir_target
+            if isabspath(target)
+                flags |= UV_FS_SYMLINK_JUNCTION
+            else
+                flags |= UV_FS_SYMLINK_DIR
+            end
         end
     end
-    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
+    err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), target, link, flags)
     if err < 0
-        msg = "symlink($(repr(p)), $(repr(np)))"
+        msg = "symlink($(repr(target)), $(repr(link)))"
         @static if Sys.iswindows()
-            if !isdir(p)
+            # creating file/directory symlinks requires Administrator privileges
+            # while junction points apparently do not
+            if flags & UV_FS_SYMLINK_JUNCTION == 0 && err == UV__EPERM
                 msg = "On Windows, creating symlinks requires Administrator privileges.\n$msg"
             end
         end
@@ -1003,12 +1074,12 @@ function readlink(path::AbstractString)
             (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
             C_NULL, req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_fs_req_cleanup(req)
             uv_error("readlink($(repr(path)))", ret)
             @assert false
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
         return tgt
     finally
         Libc.free(req)

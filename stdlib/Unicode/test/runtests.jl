@@ -93,7 +93,7 @@ end
 @testset "#5939 uft8proc character predicates" begin
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
-    for c in vcat(alower,ulower)
+    for c in vcat(alower,ulower,['ª'])
         @test islowercase(c) == true
         @test isuppercase(c) == false
         @test isdigit(c) == false
@@ -101,17 +101,20 @@ end
     end
 
     aupper=['A', 'D', 'J', 'Y', 'Z']
-    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
+    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'Ж', 'Д']
 
-    for c in vcat(aupper,uupper)
+    for c in vcat(aupper,uupper,['Ⓐ'])
         @test islowercase(c) == false
         @test isuppercase(c) == true
         @test isdigit(c) == false
         @test isnumeric(c) == false
     end
 
+    @test !isuppercase('ǅ') # titlecase is not uppercase
+    @test Base.Unicode.iscased('ǅ') # but is "cased"
+
     nocase=['א','ﺵ']
-    alphas=vcat(alower,ulower,aupper,uupper,nocase)
+    alphas=vcat(alower,ulower,aupper,uupper,nocase,['ǅ'])
 
     for c in alphas
         @test isletter(c) == true
@@ -260,6 +263,9 @@ end
             end
         end
     end
+
+    @test Base.Unicode.isgraphemebreak('α', 'β')
+    @test !Base.Unicode.isgraphemebreak('α', '\u0302')
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
@@ -385,6 +391,7 @@ end
         @test titlecase("abc-def")                     == "Abc-Def"
         @test titlecase("abc-def", wordsep = !Base.Unicode.iscased) == "Abc-Def"
         @test titlecase("abc-def", wordsep = isspace)  == "Abc-def"
+        @test titlecase("bôrked") == "Bôrked"
     end
 end
 

@@ -9,6 +9,23 @@
         @test isabspath(S(homedir()))
         @test !isabspath(S("foo"))
     end
+    if Sys.iswindows()
+        @testset "issue #38491" begin
+            pwd_drive = uppercase(splitdrive(pwd())[1])
+            drive = (pwd_drive == "X:") ? "Y:" : "X:"
+            @test abspath("$(lowercase(drive))a\\b\\c") == "$(lowercase(drive))\\a\\b\\c"
+            @test abspath("$(uppercase(drive))a\\b\\c") == "$(uppercase(drive))\\a\\b\\c"
+            @test abspath("$(lowercase(drive))a") == "$(lowercase(drive))\\a"
+            @test abspath("$(uppercase(drive))a") == "$(uppercase(drive))\\a"
+            @test abspath(lowercase(drive)) == "$(lowercase(drive))\\"
+            @test abspath(uppercase(drive)) == "$(uppercase(drive))\\"
+
+            @test lowercase(abspath("$(pwd_drive)a\\b\\c")) == lowercase(joinpath(pwd(), "a\\b\\c"))
+            @test lowercase(abspath("$(pwd_drive)a")) == lowercase(joinpath(pwd(), "a"))
+            @test lowercase(abspath(lowercase(pwd_drive))) == lowercase("$(pwd())\\")
+            @test lowercase(abspath(uppercase(pwd_drive))) == lowercase("$(pwd())\\")
+        end
+    end
     @test basename(S("foo$(sep)bar")) == "bar"
     @test dirname(S("foo$(sep)bar")) == "foo"
 
@@ -262,13 +279,37 @@
                     res = relpath(filep, startp)
                     idx += 1
                     @test res == relpath_expected_results[idx]
+                    if Sys.iswindows()
+                        @test relpath("e:$filep", "e:$startp") == relpath_expected_results[idx]
+                        @test relpath("e:$filep", "E:$startp") == relpath_expected_results[idx]
+                        @test relpath("E:$filep", "e:$startp") == relpath_expected_results[idx]
+                        @test relpath("E:$filep", "E:$startp") == relpath_expected_results[idx]
+                    end
                 end
             end
             # Additional cases
             @test_throws ArgumentError relpath(S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"), "")
             @test_throws ArgumentError relpath(S(""), S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"))
+
+            # issue 40237
+            path = "..$(sep)a$(sep)b$(sep)c"
+            @test relpath(abspath(path)) == path
         end
         test_relpath()
+    end
+
+    if Sys.iswindows()
+        @testset "issue #23646" begin
+            @test lowercase(relpath("E:\\a\\b", "C:\\c")) == "e:\\a\\b"
+            @test lowercase(relpath("E:\\a\\b", "c:\\c")) == "e:\\a\\b"
+            @test lowercase(relpath("e:\\a\\b", "C:\\c")) == "e:\\a\\b"
+            @test lowercase(relpath("e:\\a\\b", "c:\\c")) == "e:\\a\\b"
+
+            @test relpath("C:\\a\\b", "c:\\a\\b") == "."
+            @test relpath("c:\\a\\b", "C:\\a\\b") == "."
+            @test lowercase(relpath("C:\\a\\b", "c:\\c\\d")) == "..\\..\\a\\b"
+            @test lowercase(relpath("c:\\a\\b", "C:\\c\\d")) == "..\\..\\a\\b"
+        end
     end
 
     @testset "type stability" begin

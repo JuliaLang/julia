@@ -170,7 +170,7 @@ function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=fa
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
                        (type_close_enough(x, t) ||
-                        (supertypes ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                        (supertypes ? (isa(x, Type) && t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                         x != Any)
                    end
@@ -404,7 +404,7 @@ function report_bug(kind)
     else
         BugReporting = Base.require(BugReportingId)
     end
-    return Base.invokelatest(BugReporting.make_interactive_report, kind)
+    return Base.invokelatest(BugReporting.make_interactive_report, kind, ARGS)
 end
 
 end

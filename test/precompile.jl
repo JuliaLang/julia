@@ -95,6 +95,7 @@ precompile_test_harness(false) do dir
               const t17809s = Any[
                     Tuple{
                         Type{Ptr{MyType{i}}},
+                        Ptr{Type{MyType{i}}},
                         Array{Ptr{MyType{MyType{:sym}()}}(0), 0},
                         Val{Complex{Int}(1, 2)},
                         Val{3},
@@ -165,9 +166,8 @@ precompile_test_harness(false) do dir
 
               let some_method = which(Base.include, (Module, String,))
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
-                  global const some_linfo =
-                      ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                          some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
+                  global const some_linfo = Core.Compiler.specialize_method(some_method,
+                      Tuple{typeof(Base.include), Module, String}, Core.svec())
               end
 
               g() = override(1.0)
@@ -262,9 +262,11 @@ precompile_test_harness(false) do dir
     cachefile = joinpath(cachedir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_logs (:warn, "Replacing module `$Foo_module`") begin
-        ms = Base._require_from_serialized(cachefile)
-        @test isa(ms, Array{Any,1})
+    @test_warn "@ccallable was already defined for this method name" begin
+        @test_logs (:warn, "Replacing module `$Foo_module`") begin
+            ms = Base._require_from_serialized(cachefile)
+            @test isa(ms, Array{Any,1})
+        end
     end
 
     @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
@@ -308,13 +310,15 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles, :Distributed, :FileWatching, :Markdown,
-                 :Future, :LazyArtifacts, :Libdl, :LinearAlgebra, :Logging, :Mmap, :Printf,
-                 :Profile, :Random, :Serialization, :SharedArrays, :SparseArrays, :SuiteSparse, :Test,
-                 :Unicode, :REPL, :InteractiveUtils, :Pkg, :LibGit2, :SHA, :UUIDs, :Sockets,
-                 :Statistics, :TOML, :MozillaCACerts_jll, :LibCURL_jll, :LibCURL, :Downloads,
-                 :ArgTools, :Tar, :NetworkOptions,]),
-           )
+                [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles,
+                 :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils,
+                 :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
+                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :Pkg, :Printf,
+                 :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
+                 :SparseArrays, :Statistics, :SuiteSparse, :TOML, :Tar, :Test, :UUIDs, :Unicode,
+                 :nghttp2_jll]
+            ),
+        )
         @test discard_module.(deps) == deps1
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
         @test map(x -> x.filename, deps) == [Foo_file]
@@ -337,15 +341,14 @@ precompile_test_harness(false) do dir
         @test all(i -> Foo.t17809s[i + 1] ===
             Tuple{
                 Type{Ptr{Foo.MyType{i}}},
+                Ptr{Type{Foo.MyType{i}}},
                 Array{Ptr{Foo.MyType{Foo.MyType{:sym}()}}(0), 0},
                 Val{Complex{Int}(1, 2)},
                 Val{3},
                 Val{nothing}},
             0:25)
         some_method = which(Base.include, (Module, String,))
-        some_linfo =
-                ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                    some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
+        some_linfo = Core.Compiler.specialize_method(some_method, Tuple{typeof(Base.include), Module, String}, Core.svec())
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
         ft = Base.datatype_fieldtypes
@@ -478,7 +481,7 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    @test_warn "LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn r"LoadError: break me\nStacktrace:\n \[1\] [\e01m\[]*error" try
             Base.require(Main, :FooBar2)
             error("the \"break me\" test failed")
         catch exc
@@ -841,4 +844,30 @@ precompile_test_harness("Issue #38312") do load_path
     @test pointer_from_objref((@eval (using Foo38312; Foo38312)).TheType) ===
           pointer_from_objref(eval(Meta.parse(TheType))) ===
           pointer_from_objref((@eval (using Bar38312; Bar38312)).TheType)
+end
+
+precompile_test_harness("Opaque Closure") do load_path
+    write(joinpath(load_path, "OCPrecompile.jl"),
+        """
+        module OCPrecompile
+        using Base.Experimental: @opaque
+        f(x) = @opaque y->x+y
+        end
+        """)
+    Base.compilecache(Base.PkgId("OCPrecompile"))
+    f = (@eval (using OCPrecompile; OCPrecompile)).f
+    @test Base.invokelatest(f, 1)(2) == 3
+end
+
+# issue #39405
+precompile_test_harness("Renamed Imports") do load_path
+    write(joinpath(load_path, "RenameImports.jl"),
+          """
+          module RenameImports
+          import Base.Experimental as ex
+          test() = ex
+          end
+          """)
+    Base.compilecache(Base.PkgId("RenameImports"))
+    @test (@eval (using RenameImports; RenameImports.test())) isa Module
 end

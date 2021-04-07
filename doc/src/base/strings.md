@@ -20,6 +20,7 @@ Base.ncodeunits(::AbstractString)
 Base.codeunit
 Base.codeunits
 Base.ascii
+Base.Regex
 Base.@r_str
 Base.SubstitutionString
 Base.@s_str

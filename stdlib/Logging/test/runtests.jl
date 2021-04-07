@@ -193,6 +193,9 @@ end
     └ SUFFIX
     """
 
+    # Execute backtrace once before checking formatting, see #3885
+    backtrace()
+
     # Attaching backtraces
     bt = func1()
     @test startswith(genmsg("msg", exception=(DivideError(),bt)),

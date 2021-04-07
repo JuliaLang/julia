@@ -355,6 +355,9 @@ end
 # occursin with a String and Char needle
 @test occursin("o", "foo")
 @test occursin('o', "foo")
+# occursin in curried form
+@test occursin("foo")("o")
+@test occursin("foo")('o')
 
 # contains
 @test contains("foo", "o")

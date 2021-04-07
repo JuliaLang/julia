@@ -19,7 +19,7 @@ export # not exported by Base
     lt, ord, ordtype
 
 """
-        Base.Order.Ordering
+    Base.Order.Ordering
 
 Abstract type which represents a total order on some set of elements.
 

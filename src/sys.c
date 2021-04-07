@@ -545,7 +545,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 #elif defined(_OS_WINDOWS_)
 
     wchar_t *pth16 = (wchar_t*)malloc_s(32768 * sizeof(*pth16)); // max long path length
-    DWORD n16 = GetModuleFileNameW((HMODULE)handle,pth16,32768);
+    DWORD n16 = GetModuleFileNameW((HMODULE)handle, pth16, 32768);
     if (n16 <= 0) {
         free(pth16);
         return NULL;
@@ -584,23 +584,33 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 }
 
 #ifdef _OS_WINDOWS_
-static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
-  _In_      PCTSTR ModuleName,
-  _In_      DWORD64 ModuleBase,
-  _In_      ULONG ModuleSize,
-  _In_opt_  PVOID a
-)
-{
-    jl_array_grow_end((jl_array_t*)a, 1);
-    //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
-    jl_value_t *v = jl_cstr_to_string(ModuleName);
-    jl_array_ptr_set(a, jl_array_dim0(a)-1, v);
-    return TRUE;
-}
-// Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
+// Get a list of all the modules in this process.
 JL_DLLEXPORT int jl_dllist(jl_array_t *list)
 {
-    return EnumerateLoadedModules64(GetCurrentProcess(), jl_EnumerateLoadedModulesProc64, list);
+    DWORD cb, cbNeeded;
+    HMODULE *hMods = NULL;
+    unsigned int i;
+    cbNeeded = 1024 * sizeof(*hMods);
+    do {
+        cb = cbNeeded;
+        hMods = (HMODULE*)realloc_s(hMods, cb);
+        if (!EnumProcessModulesEx(GetCurrentProcess(), hMods, cb, &cbNeeded, LIST_MODULES_ALL)) {
+          free(hMods);
+          return FALSE;
+        }
+    } while (cb < cbNeeded);
+    for (i = 0; i < cbNeeded / sizeof(HMODULE); i++) {
+        const char *path = jl_pathname_for_handle(hMods[i]);
+        // XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
+        if (path == NULL)
+            continue;
+        jl_array_grow_end((jl_array_t*)list, 1);
+        jl_value_t *v = jl_cstr_to_string(path);
+        free(path);
+        jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
+    }
+    free(hMods);
+    return TRUE;
 }
 #endif
 

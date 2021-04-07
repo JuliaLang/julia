@@ -137,8 +137,11 @@ _splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
 function _splitdir_nodrive(a::String, b::String)
     m = match(path_dir_splitter,b)
     m === nothing && return (a,b)
-    a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
-    a, String(m.captures[3])
+    cs = m.captures
+    getcapture(cs, i) = cs[i]::AbstractString
+    c1, c2, c3 = getcapture(cs, 1), getcapture(cs, 2), getcapture(cs, 3)
+    a = string(a, isempty(c1) ? c2[1] : c1)
+    a, String(c3)
 end
 
 """
@@ -387,7 +390,19 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
 """
-abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+function abspath(a::String)::String
+    if !isabspath(a)
+        cwd = pwd()
+        a_drive, a_nodrive = splitdrive(a)
+        if a_drive != "" && lowercase(splitdrive(cwd)[1]) != lowercase(a_drive)
+            cwd = a_drive * path_separator
+            a = joinpath(cwd, a_nodrive)
+        else
+            a = joinpath(cwd, a)
+        end
+    end
+    return normpath(a)
+end
 
 """
     abspath(path::AbstractString, paths::AbstractString...) -> String
@@ -432,11 +447,11 @@ function realpath(path::AbstractString)
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
                     C_NULL, req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+            uv_fs_req_cleanup(req)
             uv_error("realpath($(repr(path)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
         return path
     finally
         Libc.free(req)
@@ -492,6 +507,9 @@ contractuser(path::AbstractString)
 Return a relative filepath to `path` either from the current directory or from an optional
 start directory. This is a path computation: the filesystem is not accessed to confirm the
 existence or nature of `path` or `startpath`.
+
+On Windows, case sensitivity is applied to every part of the path except drive letters. If
+`path` and `startpath` refer to different drives, the absolute path of `path` is returned.
 """
 function relpath(path::String, startpath::String = ".")
     isempty(path) && throw(ArgumentError("`path` must be specified"))
@@ -499,8 +517,17 @@ function relpath(path::String, startpath::String = ".")
     curdir = "."
     pardir = ".."
     path == startpath && return curdir
-    path_arr  = split(abspath(path),      path_separator_re)
-    start_arr = split(abspath(startpath), path_separator_re)
+    if Sys.iswindows()
+        path_drive, path_without_drive = splitdrive(path)
+        startpath_drive, startpath_without_drive = splitdrive(startpath)
+        isempty(startpath_drive) && (startpath_drive = path_drive) # by default assume same as path drive
+        uppercase(path_drive) == uppercase(startpath_drive) || return abspath(path) # if drives differ return first path
+        path_arr  = split(abspath(path_drive * path_without_drive),      path_separator_re)
+        start_arr = split(abspath(path_drive * startpath_without_drive), path_separator_re)
+    else
+        path_arr  = split(abspath(path),      path_separator_re)
+        start_arr = split(abspath(startpath), path_separator_re)
+    end
     i = 0
     while i < min(length(path_arr), length(start_arr))
         i += 1

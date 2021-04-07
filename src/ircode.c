@@ -702,7 +702,8 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         jl_get_ptls_states()
     };
 
-    uint8_t flags = (code->inferred << 3)
+    uint8_t flags = (code->aggressive_constprop << 4)
+                  | (code->inferred << 3)
                   | (code->inlineable << 2)
                   | (code->propagate_inbounds << 1)
                   | (code->pure << 0);
@@ -787,6 +788,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
 
     jl_code_info_t *code = jl_new_code_info_uninit();
     uint8_t flags = read_uint8(s.s);
+    code->aggressive_constprop = !!(flags & (1 << 4));
     code->inferred = !!(flags & (1 << 3));
     code->inlineable = !!(flags & (1 << 2));
     code->propagate_inbounds = !!(flags & (1 << 1));

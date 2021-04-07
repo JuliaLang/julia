@@ -128,6 +128,7 @@ Base.reinterpret
 Base.reshape
 Base.dropdims
 Base.vec
+Base.SubArray
 ```
 
 ## Concatenation and permutation

@@ -5,8 +5,8 @@
 """
     div(x, y, r::RoundingMode=RoundToZero)
 
-The quotient from Euclidean division. Computes x/y, rounded to an integer according
-to the rounding mode `r`. In other words, the quantity
+The quotient from Euclidean (integer) division. Computes x/y, rounded to
+an integer according to the rounding mode `r`. In other words, the quantity
 
     round(x/y,r)
 
@@ -60,6 +60,19 @@ without any intermediate rounding.
   `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
 
+# Examples:
+```jldoctest
+julia> x = 9; y = 4;
+
+julia> x % y  # same as rem(x, y)
+1
+
+julia> x ÷ y  # same as div(x, y)
+2
+
+julia> x == div(x, y) * y + rem(x, y)
+true
+```
 """
 rem(x, y, r::RoundingMode)
 
@@ -82,6 +95,21 @@ See also: [`div`](@ref)
 julia> fld(7.3,5.5)
 1.0
 ```
+Because `fld(x, y)` implements strictly correct floored rounding based on the true
+value of floating-point numbers, unintuitive situations can arise. For example:
+```jldoctest
+julia> fld(6.0,0.1)
+59.0
+julia> 6.0/0.1
+60.0
+julia> 6.0/big(0.1)
+59.99999999999999666933092612453056361837965690217069245739573412231113406246995
+```
+What is happening here is that the true value of the floating-point number written
+as `0.1` is slightly larger than the numerical value 1/10 while `6.0` represents
+the number 6 precisely. Therefore the true value of `6.0 / 0.1` is slightly less
+than 60. When doing division, this is rounded to precisely `60.0`, but
+`fld(6.0, 0.1)` always takes the floor or the true value, so the result is `59.0`.
 """
 fld(a, b) = div(a, b, RoundDown)
 

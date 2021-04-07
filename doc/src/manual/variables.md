@@ -54,8 +54,8 @@ julia> 안녕하세요 = "Hello"
 
 In the Julia REPL and several other Julia editing environments, you can type many Unicode math
 symbols by typing the backslashed LaTeX symbol name followed by tab. For example, the variable
-name `δ` can be entered by typing `\delta`-*tab*, or even `α̂₂` by `\alpha`-*tab*-`\hat`-
-*tab*-`\_2`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
+name `δ` can be entered by typing `\delta`-*tab*, or even `α̂⁽²⁾` by `\alpha`-*tab*-`\hat`-
+*tab*-`\^(2)`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
 that you don't know how to type, the REPL help will tell you: just type `?` and
 then paste the symbol.)
 
@@ -109,6 +109,19 @@ primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator wi
 A space is required between an operator that ends with a subscript/superscript letter and a subsequent
 variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
 it from `+ ᵃx` where `ᵃx` is the variable name.
+
+
+A particular class of variable names is one that contains only underscores. These identifiers can only be assigned values but cannot be used to assign values to other variables.
+More technically, they can only be used as an [L-value](https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue), but not as an
+ [R-value](https://en.wikipedia.org/wiki/R-value):
+
+```julia-repl
+julia> x, ___ = size([2 2; 1 1])
+(2, 2)
+
+julia> y = ___
+ERROR: syntax: all-underscore identifier used as rvalue
+```
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
 

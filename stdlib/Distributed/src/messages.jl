@@ -8,7 +8,7 @@ abstract type AbstractMsg end
 # Each message has three parts, which are written in order to the worker's stream.
 #  1) A header of type MsgHeader is serialized to the stream (via `serialize`).
 #  2) A message of type AbstractMsg is then serialized.
-#  3) Finally, a fixed bounday of 10 bytes is written.
+#  3) Finally, a fixed boundary of 10 bytes is written.
 
 # Message header stored separately from body to be able to send back errors if
 # a deserialization error occurs when reading the message body.
@@ -135,6 +135,7 @@ function flush_gc_msgs(w::Worker)
     end
 
     # del_msgs gets populated by finalizers, so be very careful here about ordering of allocations
+    # XXX: threading requires this to be atomic
     new_array = Any[]
     msgs = w.del_msgs
     w.del_msgs = new_array
@@ -166,7 +167,7 @@ function send_msg_(w::Worker, header, msg, now::Bool)
         wait(w.initialized)
     end
     io = w.w_stream
-    lock(io.lock)
+    lock(io)
     try
         reset_state(w.w_serializer)
         serialize_hdr_raw(io, header)
@@ -179,7 +180,7 @@ function send_msg_(w::Worker, header, msg, now::Bool)
             flush(io)
         end
     finally
-        unlock(io.lock)
+        unlock(io)
     end
 end
 

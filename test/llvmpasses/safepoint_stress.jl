@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s | opt -load libjulia%shlibext -LateLowerGCFrame -FinalLowerGC -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -load libjulia-internal%shlibext -LateLowerGCFrame -FinalLowerGC -S - | FileCheck %s
 
 println("""
 declare {} addrspace(10)* @alloc()

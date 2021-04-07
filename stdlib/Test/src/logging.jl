@@ -40,6 +40,7 @@ end
 
 function handle_message(logger::TestLogger, level, msg, _module,
                         group, id, file, line; kwargs...)
+    @nospecialize
     push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
 end
 
@@ -144,6 +145,10 @@ you can set the keyword `match_mode=:any`:
 The macro may be chained with `@test` to also test the returned value:
 
     @test (@test_logs (:info,"Doing foo with n=2") foo(2)) == 42
+
+If you want to test an absence of logger messages, you can pass no log_patterns:
+
+    @test_logs min_level=Logging.Warn f()  # test `f` logs no messages when the logger level is warn.
 
 """
 macro test_logs(exs...)
