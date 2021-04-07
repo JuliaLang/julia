@@ -46,8 +46,8 @@ let ci = @code_lowered OcClos2Int(1, 2)();
 end
 @test @inferred(oc_self_call_clos()) == 3
 let opt = @code_typed oc_self_call_clos()
-    @test_broken length(opt[1].code) == 1
-    @test_broken isa(opt[1].code[1], Core.ReturnNode)
+    @test length(opt[1].code) == 1
+    @test isa(opt[1].code[1], Core.ReturnNode)
 end
 
 struct OcClos1Any
@@ -88,8 +88,8 @@ end
 @test @inferred(complicated_identity(1)) == 1
 @test @inferred(complicated_identity("a")) == "a"
 let ci = (@code_typed complicated_identity(1))[1]
-    @test_broken length(ci.code) == 1
-    @test_broken isa(ci.code[1], Core.ReturnNode)
+    @test length(ci.code) == 1
+    @test isa(ci.code[1], Core.ReturnNode)
 end
 
 struct OcOpt
@@ -188,4 +188,19 @@ function oc_varargs_constprop()
     oc = @opaque (args...)->args[1]+args[2]+args[3]
     return Val{oc(1,2,3)}()
 end
-Base.return_types(oc_varargs_constprop, Tuple{}) == Any[Val{6}]
+@test Base.return_types(oc_varargs_constprop, Tuple{}) == Any[Val{6}]
+
+# OpaqueClosure ABI
+f_oc_noinline(x) = @opaque function (y)
+    @Base._noinline_meta
+    x + y
+end
+
+let oc = Base.inferencebarrier(f_oc_noinline(1))
+    @test oc(2) == 3
+end
+
+function f_oc_noinline_call(x, y)
+    return f_oc_noinline(x)(y)
+end
+@test f_oc_noinline_call(1, 2) == 3

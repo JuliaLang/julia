@@ -955,18 +955,18 @@ p0 = copy(p)
     @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test isequal([1, 2] + [3.0, missing], [4.0, missing])
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test isequal(tuple.([1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Tuple{Int, Any}}
+        Union{Vector{Tuple{Int, Missing}}, Vector{Tuple{Int, Any}}, Vector{Tuple{Int, Float64}}}
     # Check that corner cases do not throw an error
     @test isequal(broadcast(x -> x === 1 ? nothing : x, [1, 2, missing]),
                   [nothing, 2, missing])
@@ -1015,3 +1015,7 @@ end
         @test a_ == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
     end
 end
+
+# issue 40309
+@test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
+@test Broadcast.BroadcastFunction(+)(2:3, 2:3) === 4:2:6

@@ -70,6 +70,7 @@ export
     Rational,
     Regex,
     RegexMatch,
+    Returns,
     RoundFromZero,
     RoundDown,
     RoundingMode,
@@ -467,7 +468,6 @@ export
 # linear algebra
     var"'", # to enable syntax a' for adjoint
     adjoint,
-    var"'ᵀ",
     transpose,
     kron,
     kron!,
@@ -683,6 +683,7 @@ export
     timedwait,
     asyncmap,
     asyncmap!,
+    errormonitor,
 
 # channels
     take!,
@@ -913,7 +914,7 @@ export
     uperm,
     walkdir,
 
-# external processes ## TODO: whittle down these exports.
+# external processes
     detach,
     getpid,
     ignorestatus,

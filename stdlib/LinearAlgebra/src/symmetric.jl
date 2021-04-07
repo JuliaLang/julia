@@ -482,6 +482,10 @@ for f in (:+, :-)
     @eval begin
         $f(A::Hermitian, B::Symmetric{<:Real}) = $f(A, Hermitian(parent(B), sym_uplo(B.uplo)))
         $f(A::Symmetric{<:Real}, B::Hermitian) = $f(Hermitian(parent(A), sym_uplo(A.uplo)), B)
+        $f(A::SymTridiagonal, B::Symmetric) = Symmetric($f(A, B.data), sym_uplo(B.uplo))
+        $f(A::Symmetric, B::SymTridiagonal) = Symmetric($f(A.data, B), sym_uplo(A.uplo))
+        $f(A::SymTridiagonal{<:Real}, B::Hermitian) = Hermitian($f(A, B.data), sym_uplo(B.uplo))
+        $f(A::Hermitian, B::SymTridiagonal{<:Real}) = Hermitian($f(A.data, B), sym_uplo(A.uplo))
     end
 end
 
@@ -672,174 +676,6 @@ end
 inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), sym_uplo(A.uplo))
 inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), sym_uplo(A.uplo))
 
-eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) = Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
-
-function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
-end
-
-eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
-
-"""
-    eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
-
-Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
-which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
-matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
-
-Iterating the decomposition produces the components `F.values` and `F.vectors`.
-
-The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
-
-The [`UnitRange`](@ref) `irange` specifies indices of the sorted eigenvalues to search for.
-
-!!! note
-    If `irange` is not `1:n`, where `n` is the dimension of `A`, then the returned factorization
-    will be a *truncated* factorization.
-"""
-function eigen(A::RealHermSymComplexHerm, irange::UnitRange)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
-end
-
-eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal} =
-    Eigen(LAPACK.syevr!('V', 'V', A.uplo, A.data, convert(T, vl), convert(T, vh), 0, 0, -1.0)...)
-
-"""
-    eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen
-
-Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
-which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
-matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
-
-Iterating the decomposition produces the components `F.values` and `F.vectors`.
-
-The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
-
-`vl` is the lower bound of the window of eigenvalues to search for, and `vu` is the upper bound.
-
-!!! note
-    If [`vl`, `vu`] does not contain all eigenvalues of `A`, then the returned factorization
-    will be a *truncated* factorization.
-"""
-function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
-end
-
-eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) =
-    LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
-
-function eigvals(A::RealHermSymComplexHerm)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
-end
-
-"""
-    eigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
-
-Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
-`irange` is a range of eigenvalue *indices* to search for - for instance, the 2nd to 8th eigenvalues.
-"""
-eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) =
-    LAPACK.syevr!('N', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)[1]
-
-"""
-    eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
-
-Returns the eigenvalues of `A`. It is possible to calculate only a subset of the
-eigenvalues by specifying a [`UnitRange`](@ref) `irange` covering indices of the sorted eigenvalues,
-e.g. the 2nd to 8th eigenvalues.
-
-# Examples
-```jldoctest
-julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64, Vector{Float64}}:
- 1.0  2.0   ⋅
- 2.0  2.0  3.0
-  ⋅   3.0  1.0
-
-julia> eigvals(A, 2:2)
-1-element Vector{Float64}:
- 0.9999999999999996
-
-julia> eigvals(A)
-3-element Vector{Float64}:
- -2.1400549446402604
-  1.0000000000000002
-  5.140054944640259
-```
-"""
-function eigvals(A::RealHermSymComplexHerm, irange::UnitRange)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
-end
-
-"""
-    eigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values
-
-Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
-`vl` is the lower bound of the interval to search for eigenvalues, and `vu` is the upper bound.
-"""
-eigvals!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal} =
-    LAPACK.syevr!('N', 'V', A.uplo, A.data, convert(T, vl), convert(T, vh), 0, 0, -1.0)[1]
-
-"""
-    eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values
-
-Returns the eigenvalues of `A`. It is possible to calculate only a subset of the eigenvalues
-by specifying a pair `vl` and `vu` for the lower and upper boundaries of the eigenvalues.
-
-# Examples
-```jldoctest
-julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64, Vector{Float64}}:
- 1.0  2.0   ⋅
- 2.0  2.0  3.0
-  ⋅   3.0  1.0
-
-julia> eigvals(A, -1, 2)
-1-element Vector{Float64}:
- 1.0000000000000009
-
-julia> eigvals(A)
-3-element Vector{Float64}:
- -2.1400549446402604
-  1.0000000000000002
-  5.140054944640259
-```
-"""
-function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
-end
-
-eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
-eigmin(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, 1:1)[1]
-
-function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
-    vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
-    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
-end
-function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasComplex,S<:StridedMatrix}
-    vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
-    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
-end
-
-eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix} =
-    LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
-eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix} =
-    LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
-
-eigvecs(A::HermOrSym) = eigvecs(eigen(A))
-
 function svd(A::RealHermSymComplexHerm, full::Bool=false)
     vals, vecs = eigen(A)
     I = sortperm(vals; by=abs, rev=true)
@@ -932,6 +768,12 @@ for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh)
             return Hermitian(retmat)
         end
     end
+end
+
+function cis(A::Union{RealHermSymComplexHerm,SymTridiagonal{<:Real}})
+    F = eigen(A)
+    # The returned matrix is unitary, and is complex-symmetric for real A
+    return F.vectors .* cis.(F.values') * F.vectors'
 end
 
 for func in (:acos, :asin)

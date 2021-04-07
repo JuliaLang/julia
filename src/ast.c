@@ -919,24 +919,24 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         jl_gc_wb(new_ci, new_ci->slotnames);
         new_ci->slotflags = jl_array_copy(new_ci->slotflags);
         jl_gc_wb(new_ci, new_ci->slotflags);
-        new_ci->codelocs = jl_array_copy(new_ci->codelocs);
+        new_ci->codelocs = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->codelocs);
         jl_gc_wb(new_ci, new_ci->codelocs);
-        new_ci->linetable = jl_array_copy(new_ci->linetable);
+        new_ci->linetable = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->linetable);
         jl_gc_wb(new_ci, new_ci->linetable);
         new_ci->ssaflags = jl_array_copy(new_ci->ssaflags);
         jl_gc_wb(new_ci, new_ci->ssaflags);
 
         if (new_ci->edges != jl_nothing) {
-            new_ci->edges = jl_array_copy(new_ci->edges);
+            new_ci->edges = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->edges);
             jl_gc_wb(new_ci, new_ci->edges);
         }
 
         if (jl_is_array(new_ci->ssavaluetypes)) {
-            new_ci->ssavaluetypes = jl_array_copy(new_ci->ssavaluetypes);
+            new_ci->ssavaluetypes = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->ssavaluetypes);
             jl_gc_wb(new_ci, new_ci->ssavaluetypes);
         }
         JL_GC_POP();
-        return new_ci;
+        return (jl_value_t*)new_ci;
     }
     if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
