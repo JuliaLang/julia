@@ -711,9 +711,5 @@ end
 
 function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP}
     blksize = pairwise_blocksize(f, op)
-    if blksize <= 0
-        error("pairwise_blocksize($f, $op) must be positive")
-    else
-        mapreduce_impl(f, op, A, ifirst, ilast, blksize)
-    end
+    mapreduce_impl(f, op, A, ifirst, ilast, blksize)
 end

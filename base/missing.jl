@@ -307,11 +307,7 @@ _mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapfoldl(f, op, itr)
 
 function mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer)
     blksize = pairwise_blocksize(f, op)
-    if blksize <= 0
-        error("pairwise_blocksize($f, $op) must be positive")
-    else
-        mapreduce_impl(f, op, A, ifirst, ilast, blksize)
-    end
+    mapreduce_impl(f, op, A, ifirst, ilast, blksize)
 end
 
 # Returns nothing when the input contains only missing values, and Some(x) otherwise
