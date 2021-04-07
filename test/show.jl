@@ -1148,7 +1148,7 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
         """
     dz = sprint(dump, z)
     @test 10 < countlines(IOBuffer(dz)) < 40
-    @test sum(x -> 1, eachmatch(r"circular reference", dz)) == 4
+    @test sum(Returns(1), eachmatch(r"circular reference", dz)) == 4
 end
 
 # PR 16221
@@ -1569,12 +1569,77 @@ end
 end
 
 let x = TypeVar(:_), y = TypeVar(:_)
-    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where {_1, _2}"
-    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1, _1} where _1"
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair"
+    @test repr(UnionAll(y, UnionAll(x, Pair{x,y}))) == "Pair{_2, _1} where {_1, _2}"
+    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref}"
+    @test repr(UnionAll(y, UnionAll(x, Pair{UnionAll(y,Ref{x}),y}))) == "Pair{Ref{_2}, _1} where {_1, _2}"
+end
+
+let x, y, x
     x = TypeVar(:a)
     y = TypeVar(:a)
     z = TypeVar(:a)
     @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1, a2, a} where {a, a1, a2}"
+    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{z,y,x})))) == "Tuple{a, a2, a1} where {a, a1, a2}"
+end
+
+let x = TypeVar(:_, Number), y = TypeVar(:_, Number)
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where {_1<:Number, _2<:Number}"
+    @test repr(UnionAll(y, UnionAll(x, Pair{x,y}))) == "Pair{_2, _1} where {_1<:Number, _2<:Number}"
+    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1<:Number, _1} where _1<:Number"
+    @test repr(UnionAll(y, UnionAll(x, Pair{UnionAll(y,Ref{x}),y}))) == "Pair{Ref{_2}, _1} where {_1<:Number, _2<:Number}"
+end
+
+
+is_juliarepr(x) = eval(Meta.parse(repr(x))) == x
+@testset "unionall types" begin
+    X = TypeVar(gensym())
+    Y = TypeVar(gensym(), Ref, Ref)
+    x, y, z = TypeVar(:a), TypeVar(:a), TypeVar(:a)
+    struct TestTVUpper{A<:Integer} end
+
+    # named typevars
+    @test is_juliarepr(Ref{A} where A)
+    @test is_juliarepr(Ref{A} where A>:Ref)
+    @test is_juliarepr(Ref{A} where A<:Ref)
+    @test is_juliarepr(Ref{A} where Ref<:A<:Ref)
+    @test is_juliarepr(TestTVUpper{<:Real})
+    @test is_juliarepr(TestTVUpper{<:Integer})
+    @test is_juliarepr(TestTVUpper{<:Signed})
+
+    # typearg order
+    @test is_juliarepr(UnionAll(X, Pair{X,<:Any}))
+    @test is_juliarepr(UnionAll(X, Pair{<:Any,X}))
+
+    # duplicates
+    @test is_juliarepr(UnionAll(X, Pair{X,X}))
+
+    # nesting
+    @test is_juliarepr(UnionAll(X, Ref{Ref{X}}))
+    @test is_juliarepr(Union{T, Int} where T)
+    @test is_juliarepr(Pair{A, <:A} where A)
+
+    # renumbered typevars with same names
+    @test is_juliarepr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z}))))
+
+    # shortened typevar printing
+    @test repr(Ref{<:Any}) == "Ref"
+    @test repr(Pair{1, <:Any}) == "Pair{1}"
+    @test repr(Ref{<:Number}) == "Ref{<:Number}"
+    @test repr(Pair{1, <:Number}) == "Pair{1, <:Number}"
+    @test repr(Ref{<:Ref}) == "Ref{<:Ref}"
+    @test repr(Ref{>:Ref}) == "Ref{>:Ref}"
+    @test repr(Pair{<:Any, 1}) == "Pair{<:Any, 1}"
+    yname = sprint(Base.show_unquoted, Y.name)
+    @test repr(UnionAll(Y, Ref{Y})) == "Ref{$yname} where Ref<:$yname<:Ref"
+    @test endswith(repr(TestTVUpper{<:Real}), "TestTVUpper{<:Real}")
+    @test endswith(repr(TestTVUpper), "TestTVUpper")
+    @test endswith(repr(TestTVUpper{<:Signed}), "TestTVUpper{<:Signed}")
+
+    # exception for tuples
+    @test is_juliarepr(Tuple)
+    @test is_juliarepr(Tuple{})
+    @test is_juliarepr(Tuple{<:Any})
 end
 
 @testset "showarg" begin
@@ -1659,7 +1724,7 @@ end
     @test showstr([Float16(1)]) == "Float16[1.0]"
     @test showstr([[Float16(1)]]) == "Vector{Float16}[[1.0]]"
     @test replstr(Real[Float16(1)]) == "1-element Vector{Real}:\n Float16(1.0)"
-    @test replstr(Array{Real}[Real[1]]) == "1-element Vector{Array{Real, N} where N}:\n [1]"
+    @test replstr(Array{Real}[Real[1]]) == "1-element Vector{Array{Real}}:\n [1]"
     # printing tuples (Issue #25042)
     @test replstr(fill((Int64(1), zeros(Float16, 3)), 1)) ==
                  "1-element Vector{Tuple{Int64, Vector{Float16}}}:\n (1, [0.0, 0.0, 0.0])"
@@ -1708,7 +1773,7 @@ end
     # issue #28159
     @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Vector{NamedTuple{names, Tuple{$Int, $Int}} where names}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
 
-    @test replstr(Vector[Any[1]]) == "1-element Vector{Vector{T} where T}:\n Any[1]"
+    @test replstr(Vector[Any[1]]) == "1-element Vector{Vector}:\n Any[1]"
     @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
         "1-element Vector{AbstractDict{Integer, Integer}}:\n Dict(1 => 2)"
 
@@ -1906,7 +1971,7 @@ let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     push!(ir.stmts.inst, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
     @test isempty(pop!(lines))
-    @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
+    @test pop!(lines) == "   !!! ──       unreachable::#UNDEF"
 end
 
 @testset "printing and interpolating nothing" begin
@@ -1935,7 +2000,7 @@ end
 
 @testset """printing "Any" is not skipped with nested arrays""" begin
     @test replstr(Union{X28004,Vector}[X28004(Any[X28004(1)])], :compact => true) ==
-        "1-element Vector{Union{X28004, Vector{T} where T}}:\n X(Any[X(1)])"
+        "1-element Vector{Union{X28004, Vector}}:\n X(Any[X(1)])"
 end
 
 # Issue 25589 - Underlines in cmd printing
@@ -2102,15 +2167,17 @@ end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
-@test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector{T} where T}"
-@test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat{T} where T}"
+@test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector}"
+@test string(Union{Nothing, Number, Vector{<:Integer}}) == "Union{Nothing, Number, Vector{<:Integer}}"
+@test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat}"
+@test string(Union{Nothing, AbstractVecOrMat{<:Integer}}) == "Union{Nothing, AbstractVecOrMat{<:Integer}}"
 @test string(M37012.BStruct{T, T} where T) == "$(curmod_prefix)M37012.B2{T, T} where T"
 @test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Unsigned, S<:Signed}"
 @test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Signed, S<:T}"
 @test string(Union{M37012.SimpleU, Nothing}) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU}"
 @test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
-@test string(Union{AbstractVector, T} where T) == "Union{AbstractVector{T} where T, T} where T"
+@test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

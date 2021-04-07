@@ -965,10 +965,10 @@ abstract type $(curmod_prefix)Undocumented.at0{T<:Number, N}
 # Subtypes
 
 ```
-$(curmod_prefix)Undocumented.at1{T, N} where {Integer<:T<:Number, N}
-$(curmod_prefix)Undocumented.pt2
-$(curmod_prefix)Undocumented.st3
-$(curmod_prefix)Undocumented.st4{T, N} where {T<:Number, N}
+$(curmod_prefix)Undocumented.at1{Integer<:T<:Number, N}
+$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
+$(curmod_prefix)Undocumented.st3{T<:Integer, N}
+$(curmod_prefix)Undocumented.st4{T<:Number, N}
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
@@ -985,7 +985,7 @@ abstract type $(curmod_prefix)Undocumented.at1{T>:Integer, N}
 # Subtypes
 
 ```
-$(curmod_prefix)Undocumented.mt6{Integer, N} where N
+$(curmod_prefix)Undocumented.mt6{Integer, N}
 ```
 
 # Supertype Hierarchy
@@ -1007,9 +1007,9 @@ abstract type $(curmod_prefix)Undocumented.at0{Int64, N}
 # Subtypes
 
 ```
-$(curmod_prefix)Undocumented.pt2{Int64, N, A} where {N, A>:Integer}
-$(curmod_prefix)Undocumented.st3{Int64, N} where N
-$(curmod_prefix)Undocumented.st4{Int64, N} where N
+$(curmod_prefix)Undocumented.pt2{Int64, N, A>:Integer}
+$(curmod_prefix)Undocumented.st3{Int64, N}
+$(curmod_prefix)Undocumented.st4{Int64, N}
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
@@ -1157,9 +1157,9 @@ No documentation found.
 
 # Union Composed of Types
 
- - `$(curmod_prefix)Undocumented.at1{T, N} where {T, N}`
- - `$(curmod_prefix)Undocumented.pt2{T, N, A} where {T, N, A>:Integer}`
- - `$(curmod_prefix)Undocumented.st3{T, N} where {T, N}`
+ - `$(curmod_prefix)Undocumented.at1{T} where T`
+ - `$(curmod_prefix)Undocumented.pt2{T} where T`
+ - `$(curmod_prefix)Undocumented.st3{T} where T`
  - `$(curmod_prefix)Undocumented.st4`
 """)
 @test docstrings_equal(@doc(Undocumented.ut9), doc"$doc_str")

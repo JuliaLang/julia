@@ -2156,12 +2156,17 @@ end
 # 35(4), (2013), C394–C410.
 # Eq. 6.1
 Base.@propagate_inbounds function _log_diag_block_2x2!(A, A0)
-    a, b, c, d = A0[1,1], A0[1,2], A0[2,1], A0[2,2]
-    bc = b * c
-    s = sqrt(-bc)
+    a, b, c = A0[1,1], A0[1,2], A0[2,1]
+    # avoid underflow/overflow for large/small b and c
+    s = sqrt(abs(b)) * sqrt(abs(c))
     θ = atan(s, a)
     t = θ / s
-    a1 = log(a^2 - bc) / 2
+    au = abs(a)
+    if au > s
+        a1 = log1p((s / au)^2) / 2 + log(au)
+    else
+        a1 = log1p((au / s)^2) / 2 + log(s)
+    end
     A[1,1] = a1
     A[2,1] = c*t
     A[1,2] = b*t
@@ -2435,23 +2440,28 @@ function _sqrt_quasitriu_offdiag_block!(R, A)
     return R
 end
 
+# real square root of 2x2 diagonal block of quasi-triangular matrix from real Schur
+# decomposition. Eqs 6.8-6.9 and Algorithm 6.5 of
+# Higham, 2008, "Functions of Matrices: Theory and Computation", SIAM.
 Base.@propagate_inbounds function _sqrt_real_2x2!(R, A)
-    a11, a21, a12, a22 = A[1, 1], A[2, 1], A[1, 2], A[2, 2]
-    θ = (a11 + a22) / 2
-    μ² = -(a11 - a22)^2 / 4 - a21 * a12
-    μ = sqrt(μ²)
-    if θ > 0
-        α = sqrt((sqrt(θ^2 + μ²) + θ) / 2)
-    else
-        α = μ / sqrt(2 * (sqrt(θ^2 + μ²) - θ))
-    end
+    # in the real Schur form, A[1, 1] == A[2, 2], and A[2, 1] * A[1, 2] < 0
+    θ, a21, a12 = A[1, 1], A[2, 1], A[1, 2]
+    # avoid overflow/underflow of μ
+    # for real sqrt, |d| ≤ 2 max(|a12|,|a21|)
+    μ = sqrt(abs(a12)) * sqrt(abs(a21))
+    α = _real_sqrt(θ, μ)
     c = 2α
-    d = α - θ / c
-    R[1, 1] = a11 / c + d
+    R[1, 1] = α
     R[2, 1] = a21 / c
     R[1, 2] = a12 / c
-    R[2, 2] = a22 / c + d
+    R[2, 2] = α
     return R
+end
+
+# real part of square root of θ+im*μ
+@inline function _real_sqrt(θ, μ)
+    t = sqrt((abs(θ) + hypot(θ, μ)) / 2)
+    return θ ≥ 0 ? t : μ / 2t
 end
 
 Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x1!(R, A, i, j)
@@ -2522,7 +2532,9 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x2!(R, A, i, j)
     Rii = @view R[irange, irange]
     Rjj = @view R[jrange, jrange]
     Rij = @view R[irange, jrange]
-    _sylvester_2x2!(Rii, Rjj, Rij)
+    if !iszero(Rij) && !all(isnan, Rij)
+        _sylvester_2x2!(Rii, Rjj, Rij)
+    end
     return R
 end
 

@@ -86,7 +86,7 @@ method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cfile$(c2line+5)\n  ..."
+@test String(take!(buf)) ==  "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cfile$(c2line+5)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  ..."
 
 c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
@@ -633,6 +633,13 @@ catch ex
     @test_logs (:error, "Hint-handler busted_hint for DomainError in $(@__MODULE__) caused an error") showerror(io, ex)
 end
 pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
+
+struct ANumber <: Number end
+let err_str
+    err_str = @except_str ANumber()(3 + 4) MethodError
+    @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
+    @test occursin("Maybe you forgot to use an operator such as *, ^, %, / etc. ?", err_str)
+end
 
 # Execute backtrace once before checking formatting, see #38858
 backtrace()

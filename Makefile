@@ -290,8 +290,11 @@ endif
 		done \
 	done
 	for suffix in $(JL_PRIVATE_LIBS-1) ; do \
-		lib=$(build_private_libdir)/$${suffix}.$(SHLIB_EXT); \
-		$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+		for lib in $(build_private_libdir)/$${suffix}.$(SHLIB_EXT)*; do \
+			if [ "$${lib##*.}" != "dSYM" ]; then \
+				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+			fi \
+		done \
 	done
 endif
 	# Install `7z` into libexec/
@@ -448,7 +451,7 @@ endif
 	echo "base/version_git.jl" > light-source-dist.tmp
 
 	# Download all stdlibs and include the tarball filenames in light-source-dist.tmp
-	@$(MAKE) -C stdlib getall NO_GIT=1
+	@$(MAKE) -C stdlib getall DEPS_GIT=0 USE_BINARYBUILDER=0
 	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
 	-ls stdlib/*/StdlibArtifacts.toml >> light-source-dist.tmp
 
@@ -472,7 +475,7 @@ source-dist:
 # Make tarball with Julia code plus all dependencies
 full-source-dist: light-source-dist.tmp
 	# Get all the dependencies downloaded
-	@$(MAKE) -C deps getall NO_GIT=1
+	@$(MAKE) -C deps getall DEPS_GIT=0 USE_BINARYBUILDER=0
 
 	# Create file full-source-dist.tmp to hold all the filenames that go into the tarball
 	cp light-source-dist.tmp full-source-dist.tmp
