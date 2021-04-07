@@ -1,6 +1,6 @@
 name = "libblastrampoline_jll"
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "3.0.2+0"
+version = "3.0.4+0"
 
 [deps]
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
