@@ -25,6 +25,18 @@ import Logging: Debug, Info, Warn
     @test isapprox(1, 2; atol)
     @test isapprox(1, 3; a.atol)
 end
+@testset "@test with skip/broken kwargs" begin
+    # Make sure the local variables can be used in conditions
+    a = 1
+    @test 2 + 2 == 4 broken=false
+    @test error() broken=true
+    @test !Sys.iswindows() broken=Sys.iswindows()
+    @test 1 ≈ 2 atol=1 broken=a==2
+    @test false skip=true
+    @test true skip=false
+    @test Grogu skip=isone(a)
+    @test 41 ≈ 42 rtol=1 skip=false
+end
 @testset "@test keyword precedence" begin
     atol = 2
     # post-semicolon keyword, suffix keyword, pre-semicolon keyword

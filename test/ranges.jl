@@ -618,14 +618,10 @@ end
     @test broadcast(+, T(1):2:6, 0.3) === T(1)+0.3:2:5+0.3
     @test broadcast(-, T(1):2:6, 1) === T(0):2:4
     @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
-    if T <: Unsigned
-        @test_broken broadcast(-, T(1):3) == -T(1):-1:-T(3)
-        @test_broken broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
-    else
-        @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
-        @test broadcast(-, T(1):3) == -T(1):-1:-T(3)
-        @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
-    end
+    is_unsigned = T <: Unsigned
+    is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
+    @test broadcast(-, T(1):3) == -T(1):-1:-T(3) broken=is_unsigned
+    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1) broken=is_unsigned
 end
 @testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
     @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
@@ -1569,17 +1565,11 @@ end
 
 @testset "constant-valued ranges (issues #10391 and #29052)" begin
     for r in ((1:4), (1:1:4), (1.0:4.0))
-        if eltype(r) === Int
-            @test_broken @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
-            @test_broken @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
-            @test_broken @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
-            @test_broken @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
-        else
-            @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
-            @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
-            @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
-            @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
-        end
+        is_int = eltype(r) === Int
+        @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
+        @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
+        @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
+        @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
         @test @inferred(r .+ (4.0:-1:1)) == [5.0, 5.0, 5.0, 5.0]
         @test @inferred(0.0 * r) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(0.0 .* r) == [0.0, 0.0, 0.0, 0.0]
