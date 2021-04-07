@@ -74,6 +74,7 @@ Standard library changes
 * OpenBLAS is updated to 0.3.13. ([#39216])
 * SuiteSparse is updated to 5.8.1. ([#39455])
 * `cis(A)` now supports matrix arguments ([#40194]).
+* `dot` now supports `UniformScaling` with `AbstractMatrix` ([#40250]).
 
 #### Markdown
 
