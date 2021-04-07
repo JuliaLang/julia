@@ -322,7 +322,7 @@ julia> mapreduce(isodd, |, a, dims=1)
 mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
     _mapreduce_dim(f, op, init, A, dims)
 function mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...)
-    dims==(:) && return mapreduce(A->f(A...), op, zip(A...), kw...)
+    dims==(:) && return mapreduce(A->f(A...), op, zip(A...); dims=:, kw...)
     return reduce(op, map(f, A...); kw...)
 end
 
