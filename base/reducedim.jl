@@ -321,9 +321,10 @@ julia> mapreduce(isodd, |, a, dims=1)
 """
 mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
     _mapreduce_dim(f, op, init, A, dims)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
-    reduce(op, map(f, A...); kw...)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted...) = mapreduce(A->f(A...),op,zip(A...))
+function mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...)
+    isempty(kw) && return mapreduce(A->f(A...), op, zip(A...))
+    return reduce(op, map(f, A...); kw...)
+end
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
     mapfoldl_impl(f, op, nt, A)
