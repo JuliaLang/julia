@@ -471,7 +471,7 @@ static void jl_dump_asm_internal(
         raw_ostream &rstream,
         const char* asm_variant,
         const char* debuginfo,
-        bool raw_code);
+        bool binary);
 
 // This isn't particularly fast, but neither is printing assembly, and they're only used for interactive mode
 static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
@@ -507,7 +507,7 @@ static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
 
 // print a native disassembly for the function starting at fptr
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo, char raw_code)
+jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo, char binary)
 {
     assert(fptr != 0);
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -545,7 +545,7 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
             stream,
             asm_variant,
             debuginfo,
-            raw_code);
+            binary);
     jl_gc_safe_leave(ptls, gc_state);
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
@@ -776,7 +776,7 @@ static void jl_dump_asm_internal(
         raw_ostream &rstream,
         const char* asm_variant,
         const char* debuginfo,
-        bool raw_code)
+        bool binary)
 {
     // GC safe
     // Get the host information
@@ -872,7 +872,7 @@ static void jl_dump_asm_internal(
         }
     }
 
-    if (raw_code) {
+    if (binary) {
         // Print the complete address and the size at the top (instruction addresses are abbreviated)
         std::string Buffer{"; code origin: "};
         llvm::raw_string_ostream Stream{Buffer};
@@ -1024,7 +1024,7 @@ static void jl_dump_asm_internal(
                             }
                         }
                     }
-                    if (raw_code)
+                    if (binary)
                         Streamer->emitRawText(rawCodeComment(memoryObject.slice(Index, insSize), TheTriple));
                     Streamer->emitInstruction(Inst, *STI);
                 }
