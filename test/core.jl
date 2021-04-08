@@ -2389,19 +2389,14 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
 end
 
 # call overloading (#2403)
-(x::Int)(y::Int) = x + 3y
 issue2403func(f) = f(7)
-let x = 10
-    @test x(3) == 19
-    @test x((3,)...) == 19
-    @test issue2403func(x) == 31
-end
 mutable struct Issue2403
     x
 end
 (i::Issue2403)(y) = i.x + 2y
 let x = Issue2403(20)
     @test x(3) == 26
+    @test x((3,)...) == 26
     @test issue2403func(x) == 34
 end
 
