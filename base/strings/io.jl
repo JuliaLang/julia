@@ -370,6 +370,8 @@ escaped by a prepending backslash (`\"` is also escaped by default in the first 
 The argument `keep` specifies a collection of characters which are to be kept as
 they are. Notice that `esc` has precedence here.
 
+See also [`unescape_string`](@ref) for the reverse operation.
+
 !!! compat "Julia 1.7"
     The `keep` argument is available as of Julia 1.7.
 
@@ -390,9 +392,6 @@ julia> escape_string(string('\\u2135','\\0')) # unambiguous
 julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 "ℵ\\\\x000"
 ```
-
-## See also
-[`unescape_string`](@ref) for the reverse operation.
 """
 function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
     a = Iterators.Stateful(s)
@@ -453,6 +452,8 @@ The following escape sequences are recognised:
  - Hex bytes (`\\x` with 1-2 trailing hex digits)
  - Octal bytes (`\\` with 1-3 trailing octal digits)
 
+See also [`escape_string`](@ref).
+
 # Examples
 ```jldoctest
 julia> unescape_string("aaa\\\\nbbb") # C escape sequence
@@ -467,9 +468,6 @@ julia> unescape_string("\\\\101") # octal
 julia> unescape_string("aaa \\\\g \\\\n", ['g']) # using `keep` argument
 "aaa \\\\g \\n"
 ```
-
-## See also
-[`escape_string`](@ref).
 """
 function unescape_string(io::IO, s::AbstractString, keep = ())
     a = Iterators.Stateful(s)
@@ -597,7 +595,7 @@ string literals. (It also happens to be the escaping convention
 expected by the Microsoft C/C++ compiler runtime when it parses a
 command-line string into the argv[] array.)
 
-See also: [`escape_string`](@ref)
+See also [`escape_string`](@ref).
 """
 function escape_raw_string(io, str::AbstractString)
     escapes = 0
@@ -669,6 +667,8 @@ end
 
 Remove leading indentation from string.
 
+See also `indent` from the [`MultilineStrings` package](https://github.com/invenia/MultilineStrings.jl).
+
 # Examples
 ```jldoctest
 julia> Base.unindent("   a\\n   b", 2)
@@ -677,8 +677,6 @@ julia> Base.unindent("   a\\n   b", 2)
 julia> Base.unindent("\\ta\\n\\tb", 2, tabwidth=8)
 "      a\\n      b"
 ```
-
-See also `indent` from the [`MultilineStrings` package](https://github.com/invenia/MultilineStrings.jl).
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str

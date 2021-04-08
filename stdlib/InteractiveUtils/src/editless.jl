@@ -192,7 +192,7 @@ Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
-See also: [`define_editor`](@ref)
+See also [`define_editor`](@ref).
 """
 function edit(path::AbstractString, line::Integer=0)
     path isa String || (path = convert(String, path))

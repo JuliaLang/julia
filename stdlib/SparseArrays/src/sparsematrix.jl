@@ -1103,7 +1103,7 @@ avoids an unnecessary length-`nnz(A)` array-sweep and associated recomputation o
 pointers. See [`halfperm!`](:func:SparseArrays.halfperm!) for additional algorithmic
 information.
 
-See also: `unchecked_aliasing_permute!`
+See also `unchecked_aliasing_permute!`.
 """
 function unchecked_noalias_permute!(X::AbstractSparseMatrixCSC{Tv,Ti},
         A::AbstractSparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
@@ -1280,7 +1280,7 @@ For additional (algorithmic) information, and for versions of these methods that
 argument checking, see (unexported) parent methods `unchecked_noalias_permute!`
 and `unchecked_aliasing_permute!`.
 
-See also: [`permute`](@ref).
+See also [`permute`](@ref).
 """
 function permute!(X::AbstractSparseMatrixCSC{Tv,Ti}, A::AbstractSparseMatrixCSC{Tv,Ti},
         p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer}) where {Tv,Ti}
