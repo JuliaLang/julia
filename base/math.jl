@@ -241,6 +241,20 @@ macro evalpoly(z, p...)
     :(evalpoly($zesc, ($(pesc...),)))
 end
 
+# polynomial evaluation using compensated summation.
+# much more accurate, especially when lo can be combined with other rounding errors
+@inline function exthorner(x, p::Tuple)
+    hi, lo = p[end], zero(x)
+    for i in length(p)-1:-1:1
+        pi = p[i]
+        prod = hi*x
+        err = fma(hi, x, -prod)
+        hi = pi+prod
+        lo = fma(lo, x, prod - (hi - pi) + err)
+    end
+    return hi, lo
+end
+
 """
     rad2deg(x)
 
@@ -365,23 +379,6 @@ Compute the inverse hyperbolic sine of `x`.
 """
 asinh(x::Number)
 
-"""
-    expm1(x)
-
-Accurately compute ``e^x-1``. It avoids the loss of precision involved in the direct
-evaluation of exp(x)-1 for small values of x.
-# Examples
-```jldoctest
-julia> expm1(1e-16)
-1.0e-16
-
-julia> exp(1e-16) - 1
-0.0
-```
-"""
-expm1(x)
-expm1(x::Float64) = ccall((:expm1,libm), Float64, (Float64,), x)
-expm1(x::Float32) = ccall((:expm1f,libm), Float32, (Float32,), x)
 
 # utility for converting NaN return to DomainError
 # the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
