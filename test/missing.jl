@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "MissingException" begin
     @test sprint(showerror, MissingException("test")) == "MissingException: test"
 end
@@ -504,6 +507,19 @@ end
         nt = NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
             (missing, missing))
         @test sum(skipmissing(nt)) === 0
+
+        # issues #38627 and #124
+        @testset for len in [1, 2, 15, 16, 1024, 1025]
+            v = repeat(Union{Int,Missing}[1], len)
+            oa = OffsetArray(v, typemax(Int)-length(v))
+            sm = skipmissing(oa)
+            @test sum(sm) == len
+
+            v = repeat(Union{Int,Missing}[missing], len)
+            oa = OffsetArray(v, typemax(Int)-length(v))
+            sm = skipmissing(oa)
+            @test sum(sm) == 0
+        end
     end
 
     @testset "filter" begin
