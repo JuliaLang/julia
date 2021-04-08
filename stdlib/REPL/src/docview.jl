@@ -243,10 +243,12 @@ end
 
 function summarize(binding::Binding, sig)
     io = IOBuffer()
-    println(io, "No documentation found.\n")
     if defined(binding)
-        summarize(io, resolve(binding), binding)
+        binding_res = resolve(binding)
+        !isa(binding_res, Module) && println(io, "No documentation found.\n")
+        summarize(io, binding_res, binding)
     else
+        println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
         println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
     end
@@ -313,16 +315,46 @@ function summarize(io::IO, TT::Type, binding::Binding)
     end
 end
 
-function summarize(io::IO, m::Module, binding::Binding)
-    println(io, "No docstring found for module `", m, "`.\n")
+function find_readme(m::Module)::Union{String, Nothing}
+    mpath = pathof(m)
+    isnothing(mpath) && return nothing
+    !isfile(mpath) && return nothing # modules in sysimage, where src files are omitted
+    path = dirname(mpath)
+    top_path = pkgdir(m)
+    while true
+        for file in readdir(path; join=true, sort=true)
+            isfile(file) && (basename(lowercase(file)) in ["readme.md", "readme"]) || continue
+            return file
+        end
+        path == top_path && break # go no further than pkgdir
+        path = dirname(path) # work up through nested modules
+    end
+    return nothing
+end
+function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
+    readme_path = find_readme(m)
+    if isnothing(readme_path)
+        println(io, "No docstring or readme file found for module `$m`.\n")
+    else
+        println(io, "No docstring found for module `$m`.")
+    end
     exports = filter!(!=(nameof(m)), names(m))
     if isempty(exports)
         println(io, "Module does not export any names.")
     else
-        println(io, "# Exported names:")
+        println(io, "# Exported names")
         print(io, "  `")
         join(io, exports, "`, `")
-        println(io, "`")
+        println(io, "`\n")
+    end
+    if !isnothing(readme_path)
+        readme_lines = readlines(readme_path)
+        isempty(readme_lines) && return  # don't say we are going to print empty file
+        println(io, "# Displaying contents of readme found at `$(readme_path)`")
+        for line in first(readme_lines, nlines)
+            println(io, line)
+        end
+        length(readme_lines) > nlines && println(io, "\n[output truncated to first $nlines lines]")
     end
 end
 
