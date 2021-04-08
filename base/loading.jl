@@ -1301,15 +1301,18 @@ end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
-function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
+                      ignore_loaded_modules::Bool = true)
     # decide where to put the resulting cache file
     cachepath = compilecache_dir(pkg)
 
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
-    for (key, mod) in loaded_modules
-        if !(mod === Main || mod === Core || mod === Base)
-            push!(concrete_deps, key => module_build_id(mod))
+    if ignore_loaded_modules
+        for (key, mod) in loaded_modules
+            if !(mod === Main || mod === Core || mod === Base)
+                push!(concrete_deps, key => module_build_id(mod))
+            end
         end
     end
     # run the expression and cache the result
