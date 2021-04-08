@@ -396,9 +396,12 @@ function report_bug(kind)
             mktempdir() do tmp
                 old_load_path = copy(LOAD_PATH)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
+                old_active_project = Base.ACTIVE_PROJECT[]
+                Base.ACTIVE_PROJECT[] = nothing
                 Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
                 BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
+                Base.ACTIVE_PROJECT[] = old_active_project
             end
         end
     else
