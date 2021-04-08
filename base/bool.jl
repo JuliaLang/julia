@@ -102,7 +102,7 @@ julia> [true; true; false] .⊼ [true; false; false]
  1
 ```
 """
-nand(x, y) = ~(x & y)
+nand(x...) = ~(&)(x...)
 
 """
     nor(x, y)
@@ -136,7 +136,7 @@ julia> [true; true; false] .⊽ [true; false; false]
  1
 ```
 """
-nor(x, y) = ~(x | y)
+nor(x...) = ~(|)(x...)
 
 >>(x::Bool, c::UInt) = Int(x) >> c
 <<(x::Bool, c::UInt) = Int(x) << c

@@ -547,10 +547,6 @@ end
 (-)(x::BigInt) = MPZ.neg(x)
 (~)(x::BigInt) = MPZ.com(x)
 
-# nand and nor
-nand(a::BigInt, b::BigInt) = MPZ.com(MPZ.and(a, b))
-nor(x::BigInt, y::BigInt) = MPZ.com(MPZ.ior(x, y))
-
 <<(x::BigInt, c::UInt) = c == 0 ? x : MPZ.mul_2exp(x, c)
 >>(x::BigInt, c::UInt) = c == 0 ? x : MPZ.fdiv_q_2exp(x, c)
 >>>(x::BigInt, c::UInt) = x >> c

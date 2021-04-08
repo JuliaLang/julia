@@ -576,8 +576,6 @@ identity(x) = x
 (&)(x::Integer) = x
 (|)(x::Integer) = x
 xor(x::Integer) = x
-nand(x::Integer) = x
-nor(x::Integer) = x
 
 const ⊻ = xor
 const ⊼ = nand
