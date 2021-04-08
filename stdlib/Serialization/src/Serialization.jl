@@ -444,11 +444,19 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    state = [t.code, t.storage, t.state, t.result, t._isexception]
     writetag(s.io, TASK_TAG)
-    for fld in state
-        serialize(s, fld)
+    serialize(s, t.code)
+    serialize(s, t.storage)
+    serialize(s, t.state)
+    if t._isexception && (stk = Base.catch_stack(t); !isempty(stk))
+        # the exception stack field is hidden inside the task, so if there
+        # is any information there make a CapturedException from it instead.
+        # TODO: Handle full exception chain, not just the first one.
+        serialize(s, CapturedException(stk[1][1], stk[1][2]))
+    else
+        serialize(s, t.result)
     end
+    serialize(s, t._isexception)
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
