@@ -293,23 +293,23 @@ julia> threefloat()
 and similarly:
 
 ```jldoctest
-julia> function threetup()
-           x, y = [3, 3]
+julia> function twothreetup()
+           x, y = [2, 3] # assigns 2 to x and 3 to y
            x, y # returns a tuple
        end
-threetup (generic function with 1 method)
+twothreetup (generic function with 1 method)
 
-julia> function threearr()
-           x, y = [3, 3] # returns an array
+julia> function twothreearr()
+           x, y = [2, 3] # returns an array
        end
-threearr (generic function with 1 method)
+twothreearr (generic function with 1 method)
 
-julia> threetup()
-(3, 3)
+julia> twothreetup()
+(2, 3)
 
-julia> threearr()
+julia> twothreearr()
 2-element Vector{Int64}:
- 3
+ 2
  3
 ```
 
