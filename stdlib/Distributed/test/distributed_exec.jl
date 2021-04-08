@@ -1675,7 +1675,7 @@ let e = @test_throws RemoteException pmap(1) do _
     es = sprint(showerror, e.value)
     @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
     @test contains(es, "\n\n    nested task error:")
-    @test_broken contains(es, "\n\n    nested task error: 42\n")
+    @test contains(es, "\n\n    nested task error: 42\n")
 end
 
 # issue #27429, propagate relative `include` path to workers
