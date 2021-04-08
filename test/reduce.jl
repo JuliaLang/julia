@@ -646,3 +646,13 @@ end
 
 # issue #39281
 @test @inferred(extrema(rand(2), dims=1)) isa Vector{Tuple{Float64,Float64}}
+
+# issue #38627
+@testset "overflow in mapreduce" begin
+    # at len = 16 and len = 1025 there is a change in codepath
+    for len in [0, 1, 15, 16, 1024, 1025, 2048, 2049]
+        oa = OffsetArray(repeat([1], len), typemax(Int)-len)
+        @test sum(oa) == reduce(+, oa) == len
+        @test mapreduce(+, +, oa, oa) == 2len
+    end
+end
