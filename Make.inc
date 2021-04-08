@@ -472,13 +472,13 @@ USEGCC := 0
 USECLANG := 1
 endif
 
-# Note: Supporting only macOS Mavericks and above
+# Note: Supporting only macOS Yosemite and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 USEGCC := 0
 USECLANG := 1
 ifneq ($(APPLE_ARCH),arm64)
-MACOSX_VERSION_MIN := 10.9
+MACOSX_VERSION_MIN := 10.10
 else
 MACOSX_VERSION_MIN := 11.0
 endif
