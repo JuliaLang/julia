@@ -79,7 +79,12 @@ end
 function show_task_exception(io::IO, t::Task; indent = true)
     stack = catch_stack(t)
     b = IOBuffer()
-    show_exception_stack(IOContext(b, io), stack)
+    if isempty(stack)
+        # exception stack buffer not available; probably a serialized task
+        showerror(IOContext(b, io), t.result)
+    else
+        show_exception_stack(IOContext(b, io), stack)
+    end
     str = String(take!(b))
     if indent
         str = replace(str, "\n" => "\n    ")
