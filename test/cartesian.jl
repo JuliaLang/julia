@@ -172,19 +172,28 @@ end
             # forwards the indexing to the component ranges and retains the wrapper
             @test R[R] === R
 
-            R2 = R[(1:1 for _ in 1:length(oinds))...]
+            R_array = collect(R)
+
+            all_onetoone = ntuple(x -> 1:1, Val(ndims(R)))
+            R2 = R[all_onetoone...]
             @test R2 isa CartesianIndices{ndims(R)}
-            @test R2[(1 for _ in 1:length(oinds))...] == R[(1 for _ in 1:length(oinds))...]
 
-            R3 = R[(Colon() for _ in 1:length(oinds))...]
-            @test R3 isa CartesianIndices{ndims(R)}
-            @test R3 == R
+            all_one = ntuple(x -> 1, Val(ndims(R)))
+            @test R2[all_one...] == R_array[all_one...]
 
-            indstrailing = (1:1 for _ in min(ndims(A), 2)+1:length(oinds))
-            R4 = R[(Colon() for _ in 1:min(ndims(A), 2))..., indstrailing...]
+            @test R2 == R_array[all_onetoone...]
+
+            R3 = R[ntuple(x -> Colon(), Val(ndims(R)))...]
+            @test R3 === R
+
+            # test a mix of Colons and ranges
+            # up to two leading axes are colons, while the rest are UnitRanges
+            indstrailing = (1:1 for _ in min(ndims(R), 2)+1:ndims(R))
+            R4 = R[(Colon() for _ in 1:min(ndims(R), 2))..., indstrailing...]
             @test R4 isa CartesianIndices{ndims(R)}
-            for I in CartesianIndices(axes(A)[1:min(ndims(A), 2)])
-                @test R4[I, indstrailing...] == R4[I, indstrailing...]
+            indsleading = CartesianIndices(axes(A)[1:min(ndims(A), 2)])
+            for I in indsleading
+                @test R4[I, indstrailing...] == R_array[I, indstrailing...]
             end
         end
     end
@@ -201,24 +210,41 @@ end
             # TODO: A[SR] == A[Linearindices(SR)] should hold for StepRange CartesianIndices
             @test_broken A[SR] == A[LinearIndices(SR)]
 
-            # Indexing a CartesianIndices with another CartesianIndices having the same ndims
-            # forwards the indexing to the component ranges and retains the wrapper
-            @test R[R] === R
+            # Create a CartesianIndices with StepRange indices to test indexing into it
+            R = CartesianIndices(oinds)
+            R_array = collect(R)
 
-            R2 = R[(1:1 for _ in 1:length(oinds))...]
+            all_onetoone = ntuple(x -> 1:1, Val(ndims(R)))
+            R2 = R[all_onetoone...]
             @test R2 isa CartesianIndices{ndims(R)}
-            @test R2[(1 for _ in 1:length(oinds))...] == R[(1 for _ in 1:length(oinds))...]
 
-            R3 = R[(Colon() for _ in 1:length(oinds))...]
-            @test R3 isa CartesianIndices{ndims(R)}
-            @test R3 == R
+            all_one = ntuple(x -> 1, Val(ndims(R)))
+            @test R2[all_one...] == R_array[all_one...]
+            @test R2 == R_array[all_onetoone...]
 
-            indstrailing = (1:1 for _ in min(ndims(A), 2)+1:length(oinds))
-            R4 = R[(Colon() for _ in 1:min(ndims(A), 2))..., indstrailing...]
+            R3 = R[ntuple(x -> Colon(), Val(ndims(R)))...]
+            @test R3 === R
+
+            # test a mix of Colons and ranges
+            # up to two leading axes are colons, while the rest are UnitRanges
+            indstrailing = (1:1 for _ in min(ndims(R), 2)+1:ndims(R))
+            R4 = R[(Colon() for _ in 1:min(ndims(R), 2))..., indstrailing...]
             @test R4 isa CartesianIndices{ndims(R)}
-            for I in CartesianIndices(axes(A)[1:min(ndims(A), 2)])
-                @test R4[I, indstrailing...] == R4[I, indstrailing...]
+            indsleading = CartesianIndices(axes(R)[1:min(ndims(R), 2)])
+            for I in indsleading
+                @test R4[I, indstrailing...] == R_array[I, indstrailing...]
             end
+        end
+
+        # CartesianIndices whole indices have a unit step may be their own axes
+        for oinds in [(1:1:4, ), (1:1:4, 1:1:5), (1:1:4, 1:1:5, 1:1:3)]
+            R = CartesianIndices(oinds)
+            @test R[R] === R
+            # test a mix of UnitRanges and StepRanges
+            R = CartesianIndices((oinds..., 1:3))
+            @test R[R] === R
+            R = CartesianIndices((1:3, oinds...))
+            @test R[R] === R
         end
     end
 
