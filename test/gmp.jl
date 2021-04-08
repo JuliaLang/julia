@@ -78,6 +78,16 @@ end
         @test rem(BigInt(i), BigInt(j)) == rem(i,j)
     end
 end
+@testset "copysign / sign" begin
+    x = BigInt(1)
+    y = BigInt(-1)
+    @test copysign(x, y) == y
+    @test copysign(y, x) == x
+
+    @test sign(BigInt(-3)) == -1
+    @test sign(BigInt( 0)) == 0
+    @test sign(BigInt( 3)) == 1
+end
 
 @testset "Signed addition" begin
     @test a+Int8(1) == b
@@ -283,6 +293,16 @@ let s, n = bigfib(1000001)
     @test startswith(s, "316047687386689")
 end
 
+@testset "digits" begin
+    n = Int64(2080310129088201558)
+    N = big(n)
+    for base in (2,7,10,11,16,30,50,62,64,100), pad in (0,1,10,100)
+        @test digits(n; base, pad) == digits(N; base, pad)
+        @test digits(-n; base, pad) == digits(-N; base, pad)
+        @test digits!(Vector{Int}(undef, pad), n; base) == digits!(Vector{Int}(undef, pad), N; base)
+    end
+end
+
 # serialization (#5133)
 let n = parse(BigInt, "359334085968622831041960188598043661065388726959079837"),
     b = IOBuffer()
@@ -402,6 +422,9 @@ end
 # Issue #24298
 @test mod(BigInt(6), UInt(5)) == mod(6, 5)
 
+@test iseven(zero(BigInt))
+@test isodd(BigInt(typemax(UInt)))
+
 @testset "cmp has values in [-1, 0, 1], issue #28780" begin
     # _rand produces values whose log2 is better distributed than rand
     _rand(::Type{BigInt}, n=1000) = let x = big(2)^rand(1:rand(1:n))
@@ -439,6 +462,15 @@ end
     @test big(Int32(-2147483648)) == big"-2147483648"
     @test big(Int64(-9223372036854775808)) == big"-9223372036854775808"
     @test big(Int128(-170141183460469231731687303715884105728)) == big"-170141183460469231731687303715884105728"
+end
+
+@testset "type conversion with Signed, Unsigned" begin
+    x = BigInt(typemin(Int128)) - 1
+    @test x % Signed === x
+    @test_throws MethodError x % Unsigned
+    y = BigInt(1)
+    @test y % Signed === y
+    @test_throws MethodError y % Unsigned
 end
 
 @testset "conversion to Float" begin

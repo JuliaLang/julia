@@ -61,6 +61,8 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     @test sprint(show,MIME"text/plain"(),lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
                     @test LinearAlgebra.Factorization{eltya}(lqa) === lqa
                     @test Matrix{eltya}(q) isa Matrix{eltya}
+                    # test Array{T}(LQPackedQ{T})
+                    @test Array{eltya}(q) ≈ Matrix(q)
                 end
                 @testset "Binary ops" begin
                     @test a*x ≈ b rtol=3000ε

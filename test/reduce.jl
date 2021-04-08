@@ -4,6 +4,9 @@ using Random
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+==ₜ(::Any, ::Any) = false
+==ₜ(a::T, b::T) where {T} = isequal(a, b)
+
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
 @test foldl(+, Int16[]) === Int16(0) # In reference to issues #21536
@@ -46,6 +49,8 @@ end
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1:5; init=1000) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+, 1) == 1
+@test_throws ArgumentError reduce(*, ())
+@test_throws ArgumentError reduce(*, Union{}[])
 
 # mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
@@ -133,6 +138,7 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
+@test_throws ArgumentError sum(Union{}[])
 @test_throws ArgumentError sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
@@ -169,6 +175,20 @@ for f in (sum3, sum4, sum7, sum8)
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
+@testset "`sum` of empty collections with `init`" begin
+    function noncallable end  # should not be called
+    @testset for init in [0, 0.0]
+        @test sum([]; init = init) === init
+        @test sum((x for x in [123] if false); init = init) === init
+        @test sum(noncallable, []; init = init) === init
+        @test sum(noncallable, (x for x in [123] if false); init = init) === init
+        @test sum(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              zeros(typeof(init), 1, 2, 0)
+        @test sum(noncallable, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              zeros(typeof(init), 1, 2, 0)
+    end
+end
+
 # check sum(abs, ...) for support of empty collections
 @testset "sum(abs, [])" begin
     @test @inferred(sum(abs, Float64[])) === 0.0
@@ -196,6 +216,20 @@ end
 
 @test typeof(prod(Array(trues(10)))) == Bool
 
+@testset "`prod` of empty collections with `init`" begin
+    function noncallable end  # should not be called
+    @testset for init in [1, 1.0, ""]
+        @test prod([]; init = init) === init
+        @test prod((x for x in [123] if false); init = init) === init
+        @test prod(noncallable, []; init = init) === init
+        @test prod(noncallable, (x for x in [123] if false); init = init) === init
+        @test prod(Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              ones(typeof(init), 1, 2, 0)
+        @test prod(noncallable, Array{Any,3}(undef, 3, 2, 0); dims = 1, init = init) ==ₜ
+              ones(typeof(init), 1, 2, 0)
+    end
+end
+
 # check type-stability
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test prod(Int[]) === prod2(Int[]) === 1
@@ -207,6 +241,9 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 @test_throws ArgumentError maximum(Int[])
 @test_throws ArgumentError minimum(Int[])
+
+@test maximum(Int[]; init=-1) == -1
+@test minimum(Int[]; init=-1) == -1
 
 @test maximum(5) == 5
 @test minimum(5) == 5
@@ -338,6 +375,50 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test size(extrema(A,dims=(1,2,3))) == size(maximum(A,dims=(1,2,3)))
 @test extrema(x->div(x, 2), A, dims=(2,3)) == reshape([(0,11),(1,12)],2,1,1)
 
+@testset "maximum/minimum/extrema with missing values" begin
+    for x in (Vector{Union{Int,Missing}}(missing, 10),
+              Vector{Union{Int,Missing}}(missing, 257))
+        @test maximum(x) === minimum(x) === missing
+        @test extrema(x) === (missing, missing)
+        fill!(x, 1)
+        x[1] = missing
+        @test maximum(x) === minimum(x) === missing
+        @test extrema(x) === (missing, missing)
+    end
+end
+
+# findmin, findmax, argmin, argmax
+
+@testset "findmin(f, domain)" begin
+    @test findmin(-, 1:10) == (-10, 10)
+    @test findmin(identity, [1, 2, 3, missing]) === (missing, missing)
+    @test findmin(identity, [1, NaN, 3, missing]) === (missing, missing)
+    @test findmin(identity, [1, missing, NaN, 3]) === (missing, missing)
+    @test findmin(identity, [1, NaN, 3]) === (NaN, NaN)
+    @test findmin(identity, [1, 3, NaN]) === (NaN, NaN)
+    @test all(findmin(cos, 0:π/2:2π) .≈ (-1.0, π))
+end
+
+@testset "findmax(f, domain)" begin
+    @test findmax(-, 1:10) == (-1, 1)
+    @test findmax(identity, [1, 2, 3, missing]) === (missing, missing)
+    @test findmax(identity, [1, NaN, 3, missing]) === (missing, missing)
+    @test findmax(identity, [1, missing, NaN, 3]) === (missing, missing)
+    @test findmax(identity, [1, NaN, 3]) === (NaN, NaN)
+    @test findmax(identity, [1, 3, NaN]) === (NaN, NaN)
+    @test findmax(cos, 0:π/2:2π) == (1.0, 0.0)
+end
+
+@testset "argmin(f, domain)" begin
+    @test argmin(-, 1:10) == 10
+    @test argmin(sum, Iterators.product(1:5, 1:5)) == (1, 1)
+end
+
+@testset "argmax(f, domain)" begin
+    @test argmax(-, 1:10) == 1
+    @test argmax(sum, Iterators.product(1:5, 1:5)) == (5, 5)
+end
+
 # any & all
 
 @test @inferred any([]) == false
@@ -379,8 +460,8 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
 @test reduce((a, b) -> a .& b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .& b, fill(falses(5), 24)) == falses(5)
 
-@test_throws TypeError any(x->0, [false])
-@test_throws TypeError all(x->0, [false])
+@test_throws TypeError any(Returns(0), [false])
+@test_throws TypeError all(Returns(0), [false])
 
 # short-circuiting any and all
 
@@ -465,6 +546,17 @@ end
 @test count(!iszero, Int[1]) == 1
 @test count(!iszero, [1, 0, 2, 0, 3, 0, 4]) == 4
 
+struct NonFunctionIsZero end
+(::NonFunctionIsZero)(x) = iszero(x)
+@test count(NonFunctionIsZero(), []) == 0
+@test count(NonFunctionIsZero(), [0]) == 1
+@test count(NonFunctionIsZero(), [1]) == 0
+
+@test count(Iterators.repeated(true, 3), init=0x04) === 0x07
+@test count(!=(2), Iterators.take(1:7, 3), init=Int32(0)) === Int32(2)
+@test count(identity, [true, false], init=Int8(5)) === Int8(6)
+@test count(!, [true false; false true], dims=:, init=Int16(0)) === Int16(2)
+@test isequal(count(identity, [true false; false true], dims=2, init=UInt(4)), reshape(UInt[5, 5], 2, 1))
 
 ## cumsum, cummin, cummax
 
@@ -547,4 +639,20 @@ x = [j+7 for j in i]
         ((a, b), (c, d)) -> (min(a, c), max(b, d)),
         Iterators.flatten((1:2, 3:4)),
     ) == (1, 4)
+end
+
+# make sure we specialize on mapfoldl(::Type, ...)
+@test @inferred(mapfoldl(Int, +, [1, 2, 3]; init=0)) === 6
+
+# issue #39281
+@test @inferred(extrema(rand(2), dims=1)) isa Vector{Tuple{Float64,Float64}}
+
+# issue #38627
+@testset "overflow in mapreduce" begin
+    # at len = 16 and len = 1025 there is a change in codepath
+    for len in [0, 1, 15, 16, 1024, 1025, 2048, 2049]
+        oa = OffsetArray(repeat([1], len), typemax(Int)-len)
+        @test sum(oa) == reduce(+, oa) == len
+        @test mapreduce(+, +, oa, oa) == 2len
+    end
 end

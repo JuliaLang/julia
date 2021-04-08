@@ -1,0 +1,119 @@
+From 19992a8c7f2df2000ea7fd4a284ec7b407400fb0 Mon Sep 17 00:00:00 2001
+From: Wei Mi <wmi@google.com>
+Date: Sun, 29 Mar 2020 17:14:12 -0400
+Subject: [PATCH] [DAGCombine] Limit the number of times for the same store and
+ root nodes to bail out in store merging dependence check.
+
+We run into a case where dependence check in store merging bail out many times
+for the same store and root nodes in a huge basicblock. That increases compile
+time by almost 100x. The patch add a map to track how many times the bailing
+out happen for the same store and root, and if it is over a limit, stop
+considering the store with the same root as a merging candidate.
+
+Differential Revision: https://reviews.llvm.org/D65174
+---
+ llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | 45 +++++++++++++++++--
+ 1 file changed, 42 insertions(+), 3 deletions(-)
+
+diff --git llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
+index 6af01423ca1..9c7e37d6945 100644
+--- llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
++++ llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
+@@ -112,6 +112,11 @@ static cl::opt<bool>
+   MaySplitLoadIndex("combiner-split-load-index", cl::Hidden, cl::init(true),
+                     cl::desc("DAG combiner may split indexing from loads"));
+ 
++static cl::opt<unsigned> StoreMergeDependenceLimit(
++    "combiner-store-merge-dependence-limit", cl::Hidden, cl::init(10),
++    cl::desc("Limit the number of times for the same StoreNode and RootNode "
++             "to bail out in store merging dependence check"));
++
+ namespace {
+ 
+   class DAGCombiner {
+@@ -145,6 +150,14 @@ namespace {
+     /// which have not yet been combined to the worklist.
+     SmallPtrSet<SDNode *, 32> CombinedNodes;
+ 
++    /// Map from candidate StoreNode to the pair of RootNode and count.
++    /// The count is used to track how many times we have seen the StoreNode
++    /// with the same RootNode bail out in dependence check. If we have seen
++    /// the bail out for the same pair many times over a limit, we won't
++    /// consider the StoreNode with the same RootNode as store merging
++    /// candidate again.
++    DenseMap<SDNode *, std::pair<SDNode *, unsigned>> StoreRootCountMap;
++
+     // AA - Used for DAG load/store alias analysis.
+     AliasAnalysis *AA;
+ 
+@@ -190,6 +203,7 @@ namespace {
+     /// Remove all instances of N from the worklist.
+     void removeFromWorklist(SDNode *N) {
+       CombinedNodes.erase(N);
++      StoreRootCountMap.erase(N);
+ 
+       auto It = WorklistMap.find(N);
+       if (It == WorklistMap.end())
+@@ -14423,6 +14437,18 @@ void DAGCombiner::getStoreMergeCandidates(
+     return (BasePtr.equalBaseIndex(Ptr, DAG, Offset));
+   };
+ 
++  // Check if the pair of StoreNode and the RootNode already bail out many
++  // times which is over the limit in dependence check.
++  auto OverLimitInDependenceCheck = [&](SDNode *StoreNode,
++                                        SDNode *RootNode) -> bool {
++    auto RootCount = StoreRootCountMap.find(StoreNode);
++    if (RootCount != StoreRootCountMap.end() &&
++        RootCount->second.first == RootNode &&
++        RootCount->second.second > StoreMergeDependenceLimit)
++      return true;
++    return false;
++  };
++
+   // We looking for a root node which is an ancestor to all mergable
+   // stores. We search up through a load, to our root and then down
+   // through all children. For instance we will find Store{1,2,3} if
+@@ -14450,7 +14476,8 @@ void DAGCombiner::getStoreMergeCandidates(
+             if (StoreSDNode *OtherST = dyn_cast<StoreSDNode>(*I2)) {
+               BaseIndexOffset Ptr;
+               int64_t PtrDiff;
+-              if (CandidateMatch(OtherST, Ptr, PtrDiff))
++              if (CandidateMatch(OtherST, Ptr, PtrDiff) &&
++                  !OverLimitInDependenceCheck(OtherST, RootNode))
+                 StoreNodes.push_back(MemOpLink(OtherST, PtrDiff));
+             }
+   } else
+@@ -14459,7 +14486,8 @@ void DAGCombiner::getStoreMergeCandidates(
+         if (StoreSDNode *OtherST = dyn_cast<StoreSDNode>(*I)) {
+           BaseIndexOffset Ptr;
+           int64_t PtrDiff;
+-          if (CandidateMatch(OtherST, Ptr, PtrDiff))
++          if (CandidateMatch(OtherST, Ptr, PtrDiff) &&
++              !OverLimitInDependenceCheck(OtherST, RootNode))
+             StoreNodes.push_back(MemOpLink(OtherST, PtrDiff));
+         }
+ }
+@@ -14517,8 +14545,19 @@ bool DAGCombiner::checkMergeStoreCandidatesForDependencies(
+   // Search through DAG. We can stop early if we find a store node.
+   for (unsigned i = 0; i < NumStores; ++i)
+     if (SDNode::hasPredecessorHelper(StoreNodes[i].MemNode, Visited, Worklist,
+-                                     Max))
++                                     Max)) {
++      // If the searching bail out, record the StoreNode and RootNode in the
++      // StoreRootCountMap. If we have seen the pair many times over a limit,
++      // we won't add the StoreNode into StoreNodes set again.
++      if (Visited.size() >= Max) {
++        auto &RootCount = StoreRootCountMap[StoreNodes[i].MemNode];
++        if (RootCount.first == RootNode)
++          RootCount.second++;
++        else
++          RootCount = {RootNode, 1};
++      }
+       return false;
++    }
+   return true;
+ }
+ 
+-- 
+2.25.2
+

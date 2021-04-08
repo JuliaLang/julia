@@ -7,7 +7,7 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     uplo::Char # upper bidiagonal ('U') or lower ('L')
     function Bidiagonal{T,V}(dv, ev, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
-        if length(ev) != length(dv)-1
+        if length(ev) != max(length(dv)-1, 0)
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
         new{T,V}(dv, ev, uplo)
@@ -34,27 +34,27 @@ must be one less than the length of `dv`.
 # Examples
 ```jldoctest
 julia> dv = [1, 2, 3, 4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
  4
 
 julia> ev = [7, 8, 9]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  7
  8
  9
 
 julia> Bu = Bidiagonal(dv, ev, :U) # ev is on the first superdiagonal
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  7  ⋅  ⋅
  ⋅  2  8  ⋅
  ⋅  ⋅  3  9
  ⋅  ⋅  ⋅  4
 
 julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  7  2  ⋅  ⋅
  ⋅  8  3  ⋅
@@ -68,6 +68,13 @@ function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector
     Bidiagonal{T,V}(dv, ev, uplo)
 end
 
+#To allow Bidiagonal's where the "dv" is Vector{T} and "ev" Vector{S},
+#where T and S can be promoted
+function LinearAlgebra.Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Symbol) where {T,S}
+    TS = promote_type(T,S)
+    return Bidiagonal{TS,Vector{TS}}(dv, ev, uplo)
+end
+
 """
     Bidiagonal(A, uplo::Symbol)
 
@@ -77,21 +84,21 @@ its first super- (if `uplo=:U`) or sub-diagonal (if `uplo=:L`).
 # Examples
 ```jldoctest
 julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  1  1  1
  2  2  2  2
  3  3  3  3
  4  4  4  4
 
 julia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  1  ⋅  ⋅
  ⋅  2  2  ⋅
  ⋅  ⋅  3  3
  ⋅  ⋅  ⋅  4
 
 julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
+4×4 Bidiagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅  ⋅
  2  2  ⋅  ⋅
  ⋅  3  3  ⋅
@@ -149,6 +156,9 @@ end
 function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
     B = zeros(T, n, n)
+    if n == 0
+        return B
+    end
     for i = 1:n - 1
         B[i,i] = A.dv[i]
         if A.uplo == 'U'
@@ -248,8 +258,44 @@ end
 
 iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
 isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
-istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
-istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
+function istriu(M::Bidiagonal, k::Integer=0)
+    if M.uplo == 'U'
+        if k <= 0
+            return true
+        elseif k == 1
+            return iszero(M.dv)
+        else # k >= 2
+            return iszero(M.dv) && iszero(M.ev)
+        end
+    else # M.uplo == 'L'
+        if k <= -1
+            return true
+        elseif k == 0
+            return iszero(M.ev)
+        else # k >= 1
+            return iszero(M.ev) && iszero(M.dv)
+        end
+    end
+end
+function istril(M::Bidiagonal, k::Integer=0)
+    if M.uplo == 'U'
+        if k >= 1
+            return true
+        elseif k == 0
+            return iszero(M.ev)
+        else # k <= -1
+            return iszero(M.ev) && iszero(M.dv)
+        end
+    else # M.uplo == 'L'
+        if k >= 0
+            return true
+        elseif k == -1
+            return iszero(M.dv)
+        else # k <= -2
+            return iszero(M.dv) && iszero(M.ev)
+        end
+    end
+end
 isdiag(M::Bidiagonal) = iszero(M.ev)
 
 function tril!(M::Bidiagonal, k::Integer=0)
@@ -306,7 +352,7 @@ function diag(M::Bidiagonal, n::Integer=0)
 end
 
 function +(A::Bidiagonal, B::Bidiagonal)
-    if A.uplo == B.uplo
+    if A.uplo == B.uplo || length(A.dv) == 0
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.uplo)
     else
         newdv = A.dv+B.dv
@@ -315,7 +361,7 @@ function +(A::Bidiagonal, B::Bidiagonal)
 end
 
 function -(A::Bidiagonal, B::Bidiagonal)
-    if A.uplo == B.uplo
+    if A.uplo == B.uplo || length(A.dv) == 0
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.uplo)
     else
         newdv = A.dv-B.dv
@@ -325,8 +371,9 @@ end
 
 -(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev,A.uplo)
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.uplo)
-*(B::Number, A::Bidiagonal) = A*B
+*(B::Number, A::Bidiagonal) = Bidiagonal(B*A.dv, B*A.ev, A.uplo)
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
+\(B::Number, A::Bidiagonal) = Bidiagonal(B\A.dv, B\A.ev, A.uplo)
 
 function ==(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
@@ -840,7 +887,7 @@ eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
     Q = Matrix{T}(undef, n,n)
-    blks = [0; findall(x -> x == 0, M.ev); n]
+    blks = [0; findall(iszero, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector
@@ -872,3 +919,42 @@ end
 eigen(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
 
 Base._sum(A::Bidiagonal, ::Colon) = sum(A.dv) + sum(A.ev)
+function Base._sum(A::Bidiagonal, dims::Integer)
+    res = Base.reducedim_initarray(A, dims, zero(eltype(A)))
+    n = length(A.dv)
+    if n == 0
+        # Just to be sure. This shouldn't happen since there is a check whether
+        # length(A.dv) == length(A.ev) + 1 in the constructor.
+        return res
+    elseif n == 1
+        res[1] = A.dv[1]
+        return res
+    end
+    @inbounds begin
+        if (dims == 1 && A.uplo == 'U') || (dims == 2 && A.uplo == 'L')
+            res[1] = A.dv[1]
+            for i = 2:length(A.dv)
+                res[i] = A.ev[i-1] + A.dv[i]
+            end
+        elseif (dims == 1 && A.uplo == 'L') || (dims == 2 && A.uplo == 'U')
+            for i = 1:length(A.dv)-1
+                res[i] = A.ev[i] + A.dv[i]
+            end
+            res[end] = A.dv[end]
+        elseif dims >= 3
+            if A.uplo == 'U'
+                for i = 1:length(A.dv)-1
+                    res[i,i]   = A.dv[i]
+                    res[i,i+1] = A.ev[i]
+                end
+            else
+                for i = 1:length(A.dv)-1
+                    res[i,i]   = A.dv[i]
+                    res[i+1,i] = A.ev[i]
+                end
+            end
+            res[end,end] = A.dv[end]
+        end
+    end
+    res
+end

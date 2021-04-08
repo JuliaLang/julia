@@ -56,28 +56,6 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ## Submitting contributions
 
-### Contributing a Julia package
-
-Julia has a built-in [package manager](https://julialang.github.io/Pkg.jl/v1/) based on `git`. A number of [packages](https://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The manual provides instructions on [creating Julia packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/).
-
-For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
-
-### Package Compatibility Across Releases
-
-Sometimes, you might find that while your package works
-on the current release, it might not work on the upcoming release or nightly.
-This is due to the fact that some Julia functions (after some discussion)
-could be deprecated or removed altogether. This may cause your package to break or
-throw a number of deprecation warnings on usage. Therefore it is highly recommended
-to port your package to latest Julia release.
-
-However, porting a package to the latest release may cause the package to break on
-earlier Julia releases. To maintain compatibility across releases, use
-[`Compat.jl`](https://github.com/JuliaLang/Compat.jl). Find the fix for your package
-from the README, and specify the minimum version of Compat that provides the fix
-in your REQUIRE file. To find the correct minimum version, refer to
-[this guide](https://github.com/JuliaLang/Compat.jl/#tagging-the-correct-minimum-version-of-compat).
-
 ### Writing tests
 
 There are never enough tests. Track [code coverage at Coveralls](https://coveralls.io/r/JuliaLang/julia), and help improve it.
@@ -112,7 +90,7 @@ from Julia's root directory. This will rebuild the Julia system image, then inst
 
 > **Note**
 >
-> When making changes to any of Julia's documentation it is recommended that you run `make docs` to check the your changes are valid and do not produce any errors before opening a pull request.
+> When making changes to any of Julia's documentation it is recommended that you run `make docs` to check that your changes are valid and do not produce any errors before opening a pull request.
 
 Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable) if you encounter anything that is not covered by the sections below.
 
@@ -211,7 +189,7 @@ Note: These instructions are for adding to or improving functionality in the bas
 
 Add new code to Julia's base libraries as follows (this is the "basic" approach; see a more efficient approach in the next section):
 
- 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `ui/`.
+ 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `cli/`.
 
  2. Add any new files to `sysimg.jl` in order to build them into the Julia system image.
 
@@ -228,8 +206,6 @@ Note: You can run specific test files with `make`:
 or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.jl`:
 
     ./usr/bin/julia test/runtests.jl bitarray math
-
-Make sure that [Travis](https://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](https://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
 
 #### Modifying base more efficiently with Revise.jl
 
@@ -288,11 +264,11 @@ runtest harness).
 #### General Formatting Guidelines For C code contributions
 
  - 4 spaces per indentation level, no tabs
- - space between if and ( (if (x) ...)
- - newline before opening { in function definitions
- - f(void) for 0-argument function declarations
- - newline between } and else instead of } else {
- - if one part of an if..else chain uses { } then all should
+ - space between `if` and `(` (`if (x) ...`)
+ - newline before opening `{` in function definitions
+ - `f(void)` for 0-argument function declarations
+ - newline between `}` and `else` instead of `} else {`
+ - if one part of an `if..else` chain uses `{ }` then all should
  - no whitespace at the end of a line
 
 ### Git Recommendations For Pull Requests
@@ -317,7 +293,7 @@ runtest harness).
   - **Homepage:** <https://julialang.org>
   - **Community:** <https://julialang.org/community/>
   - **Source code:** <https://github.com/JuliaLang/julia>
-  - **Documentation:** <https://docs.julialang.org/>
+  - **Documentation:** <https://docs.julialang.org>
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia

@@ -11,10 +11,26 @@ An easy solution is to have an dedicated build folder for providing a matching t
 with `BUILD_LLVM_CLANG=1`. You can then refer to this toolchain from another build
 folder by specifying `USECLANG=1` while overriding the `CC` and `CXX` variables.
 
+To use one of of the sanitizers set `SANITIZE=1` and then the appropriate flag for the sanitizer you
+want to use.
+
+On macOS, this might need some extra flags also to work. Altogether, it might
+look like this, plus one or more of the `SANITIZE_*` flags listed below:
+
+    make -C deps USE_BINARYBUILDER_LLVM=0 LLVM_VER=svn stage-llvm
+
+    make -C src SANITIZE=1 USECLANG=1 \
+        CC=~+/deps/scratch/llvm-svn/build_Release/bin/clang \
+        CXX=~+/deps/scratch/llvm-svn/build_Release/bin/clang++ \
+        CPPFLAGS="-isysroot $(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" \
+        CXXFLAGS="-isystem $(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"
+
+(or put these into your `Make.user`, so you don't need to remember them every time).
+
 ## Address Sanitizer (ASAN)
 
 For detecting or debugging memory bugs, you can use Clang's [address sanitizer (ASAN)](http://clang.llvm.org/docs/AddressSanitizer.html).
-By compiling with `SANITIZE=1` you enable ASAN for the Julia compiler and its generated code.
+By compiling with `SANITIZE_ADDRESS=1` you enable ASAN for the Julia compiler and its generated code.
 In addition, you can specify `LLVM_SANITIZE=1` to sanitize the LLVM library as well. Note that
 these options incur a high performance and memory cost. For example, using ASAN for Julia and
 LLVM makes `testall1` takes 8-10 times as long while using 20 times as much memory (this can be
@@ -31,3 +47,8 @@ the future.
 
 For detecting use of uninitialized memory, you can use Clang's [memory sanitizer (MSAN)](http://clang.llvm.org/docs/MemorySanitizer.html)
 by compiling with `SANITIZE_MEMORY=1`.
+
+## Thread Sanitizer (TSAN)
+
+For debugging data-races and other threading related issues you can use Clang's [thread sanitizer (TSAN)](https://clang.llvm.org/docs/ThreadSanitizer.html)
+by compiling with `SANITIZE_THREAD=1`.

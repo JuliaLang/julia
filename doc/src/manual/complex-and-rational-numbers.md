@@ -124,7 +124,7 @@ julia> sqrt(1 + 2im)
 1.272019649514069 + 0.7861513777574233im
 
 julia> cos(1 + 2im)
-2.0327230070196656 - 3.0518977991518im
+2.0327230070196656 - 3.0518977991517997im
 
 julia> exp(1 + 2im)
 -1.1312043837568135 + 2.4717266720048188im
@@ -269,10 +269,10 @@ Constructing infinite rational values is acceptable:
 julia> 5//0
 1//0
 
-julia> -3//0
+julia> x = -3//0
 -1//0
 
-julia> typeof(ans)
+julia> typeof(x)
 Rational{Int64}
 ```
 

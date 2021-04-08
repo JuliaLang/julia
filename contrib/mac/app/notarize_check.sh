@@ -1,4 +1,5 @@
 #!/bin/bash
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Note that you need to have exported `APPLEID` and `APPLEID_PASSWORD` for this to work.
 
@@ -33,6 +34,10 @@ function wait_until_completed()
             echo -n "."
             sleep 10
             continue
+        elif [[ ${STATUS} == "invalid" ]]; then
+            echo "invalid!  Looks like something got borked:"
+            /usr/libexec/PlistBuddy -c "print notarization-info:LogFileURL" "${PLIST_FILE}" 2>/dev/null
+            exit 1
         else
             echo "Notarization failed with status ${STATUS}"
             exit 1

@@ -32,12 +32,20 @@ OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
 LLT_release := $(LLT_BUILDDIR)/libsupport.a
 LLT_debug := $(LLT_BUILDDIR)/libsupport-debug.a
-LIBFILES_release := $(LLT_release) $(LIBUV) $(LIBUTF8PROC)
-LIBFILES_debug := $(LLT_debug) $(LIBUV) $(LIBUTF8PROC)
+LIBFILES_release := $(LLT_release) $(LIBUV)
+LIBFILES_debug := $(LLT_debug) $(LIBUV)
 LIBS :=
 ifneq ($(OS),WINNT)
 LIBS += -lpthread
 endif
+
+ifeq ($(USE_SYSTEM_UTF8PROC),0)
+LIBFILES_release += $(LIBUTF8PROC)
+LIBFILES_debug += $(LIBUTF8PROC)
+else
+LIBS += $(LIBUTF8PROC)
+endif
+
 
 FLAGS := -I$(LLTSRCDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
@@ -107,8 +115,12 @@ $(BUILDDIR)/host/Makefile:
 	@echo 'BUILDING_HOST_TOOLS=1' >> $@
 	@echo 'include $(SRCDIR)/Makefile' >> $@
 
-$(BUILDDIR)/host/$(EXENAME): $(BUILDDIR)/host/Makefile
+$(BUILDDIR)/host/$(EXENAME): $(BUILDDIR)/host/Makefile | ${BUILDDIR}/host/flisp.boot
 	make -C $(BUILDDIR)/host $(EXENAME)
+
+
+$(BUILDDIR)/host/flisp.boot: $(SRCDIR)/flisp.boot | $(BUILDDIR)/host/Makefile
+	cp $< $@
 
 ifneq ($(BUILDDIR),.)
 ifneq ($(BUILDDIR),$(SRCDIR))

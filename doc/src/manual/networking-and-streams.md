@@ -193,13 +193,13 @@ Let's first create a simple server:
 ```julia-repl
 julia> using Sockets
 
-julia> @async begin
+julia> errormonitor(@async begin
            server = listen(2000)
            while true
                sock = accept(server)
                println("Hello World\n")
            end
-       end
+       end)
 Task (runnable) @0x00007fd31dc11ae0
 ```
 
@@ -265,7 +265,7 @@ printed the message and waited for the next client. Reading and writing works in
 To see this, consider the following simple echo server:
 
 ```julia-repl
-julia> @async begin
+julia> errormonitor(@async begin
            server = listen(2001)
            while true
                sock = accept(server)
@@ -273,15 +273,15 @@ julia> @async begin
                    write(sock, readline(sock, keep=true))
                end
            end
-       end
+       end)
 Task (runnable) @0x00007fd31dc12e60
 
 julia> clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
-julia> @async while isopen(clientside)
+julia> errormonitor(@async while isopen(clientside)
            write(stdout, readline(clientside, keep=true))
-       end
+       end)
 Task (runnable) @0x00007fd31dc11870
 
 julia> println(clientside,"Hello World from the Echo Server")
@@ -311,4 +311,43 @@ resolution:
 ```julia-repl
 julia> getaddrinfo("google.com")
 ip"74.125.226.225"
+```
+
+## Asynchronous I/O
+
+
+All I/O operations exposed by [`Base.read`](@ref) and [`Base.write`](@ref) can be performed
+asynchronously through the use of [coroutines](@ref man-tasks). You can create a new coroutine to
+read from or write to a stream using the [`@async`](@ref) macro:
+
+```julia-repl
+julia> task = @async open("foo.txt", "w") do io
+           write(io, "Hello, World!")
+       end;
+
+julia> wait(task)
+
+julia> readlines("foo.txt")
+1-element Array{String,1}:
+ "Hello, World!"
+```
+
+It's common to run into situations where you want to perform multiple asynchronous operations
+concurrently and wait until they've all completed. You can use the [`@sync`](@ref) macro to cause
+your program to block until all of the coroutines it wraps around have exited:
+
+```julia-repl
+julia> using Sockets
+
+julia> @sync for hostname in ("google.com", "github.com", "julialang.org")
+           @async begin
+               conn = connect(hostname, 80)
+               write(conn, "GET / HTTP/1.1\r\nHost:$(hostname)\r\n\r\n")
+               readline(conn, keep=true)
+               println("Finished connection to $(hostname)")
+           end
+       end
+Finished connection to google.com
+Finished connection to julialang.org
+Finished connection to github.com
 ```

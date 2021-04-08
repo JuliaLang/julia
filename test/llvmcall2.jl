@@ -36,3 +36,11 @@ function ceilfloor(x::Float64)
     return b
 end
 @test ceilfloor(7.4) == 8.0
+
+# support for calling external functions
+begin
+    f() = ccall("time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    @test_throws ErrorException f()
+    g() = ccall("extern time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    g()
+end

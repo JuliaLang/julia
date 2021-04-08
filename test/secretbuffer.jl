@@ -11,6 +11,8 @@ using Test
         @test read(secret, String) == str
         seekstart(secret)
 
+        @test peek(secret) == 0x66
+
         @test shred!(secret) === secret
         @test read(secret, String) == ""
         @test str == "foobar"
@@ -80,6 +82,30 @@ using Test
         @test read(sb, String) == "\xff\xff\xff"
         shred!(sb)
     end
+    @testset "bytes available" begin
+        sb = SecretBuffer("secret")
+        @test bytesavailable(sb) == sb.size
+        seek(sb, 3)
+        @test bytesavailable(sb) == sb.size - 3
+        seekend(sb)
+        @test bytesavailable(sb) == 0
+        shred!(sb)
+    end
+    @testset "testing the skip function" begin
+        sb = SecretBuffer("computer")
+        skip(sb, 2)
+        @test position(sb) == 2
+        seek(sb, 0)
+        @test position(sb) == 0
+        skip(sb, sb.size)
+        @test position(sb) == sb.size
+    end
+    @testset "seekend" begin
+        sb = SecretBuffer("hello")
+        seekend(sb)
+        @test read(sb, String) == ""
+        shred!(sb)
+    end
     @testset "position" begin
         sb = SecretBuffer("Julia")
         println("testing position")
@@ -89,5 +115,10 @@ using Test
         seekend(sb)
         @test initial_pos == 0 && mid_pos == 2 && position(sb)==sb.size
         shred!(sb)
+    end
+    @testset "hashing secret buffers" begin
+        sb1 = SecretBuffer("hello")
+        sb2 = SecretBuffer("juliaisawesome")
+        @test hash(sb1, UInt(5)) === hash(sb2, UInt(5))
     end
 end

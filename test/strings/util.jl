@@ -297,6 +297,9 @@ end
     @test replace("a", in("a") => typeof) == "Char"
     @test replace("a", ['a'] => typeof) == "Char"
 
+    # Issue 36953
+    @test replace("abc", "" => "_", count=1) == "_abc"
+
 end
 
 @testset "chomp/chop" begin
@@ -373,6 +376,11 @@ end
         #non-hex characters
         @test_throws ArgumentError hex2bytes(b"0123456789abcdefABCDEFGH")
     end
+
+    @testset "Issue 39284" begin
+        @test "efcdabefcdab8967452301" == bytes2hex(Iterators.reverse(hex2bytes("0123456789abcdefABCDEF")))
+        @test hex2bytes(Iterators.reverse(b"CE1A85EECc")) == UInt8[0xcc, 0xee, 0x58, 0xa1, 0xec]
+    end
 end
 
 # b"" should be immutable
@@ -382,4 +390,28 @@ let testb() = b"0123"
     @test b isa AbstractVector
     @test_throws ErrorException b[4] = '4'
     @test testb() == UInt8['0','1','2','3']
+end
+
+@testset "Base.rest" begin
+    s = "aβcd"
+    @test Base.rest(s) === SubString(s)
+    a, b, c... = s
+    @test c === SubString(s, 4)
+
+    s = SubString("aβcd", 2)
+    @test Base.rest(s) === SubString(s)
+    b, c... = s
+    @test c === SubString(s, 3)
+
+    s = GenericString("aβcd")
+    @test Base.rest(s) === "aβcd"
+    a, b, c... = s
+    @test c === "cd"
+end
+
+@testset "endswith" begin
+    A = "Fun times with Julialang"
+    B = "A language called Julialang"
+    @test endswith(A, split(B, ' ')[end])
+    @test endswith(A, 'g')
 end
