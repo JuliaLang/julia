@@ -28,6 +28,7 @@ The following is a complete list of command-line switches available when launchi
 |`--warn-overwrite={yes\|no}`           |Enable or disable method overwrite warnings|
 |`-C`, `--cpu-target <target>`          |Limit usage of CPU features up to `<target>`; set to `help` to see the available options|
 |`-O`, `--optimize={0,1,2,3}`           |Set the optimization level (default level is 2 if unspecified or 3 if used without a level)|
+|`--min-optlevel={0,1,2,3}`             |Set the lower bound on per-module optimization (default is 0)|
 |`-g`, `-g <level>`                     |Enable / Set the level of debug info generation (default level is 1 if unspecified or 2 if used without a level)|
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
 |`--check-bounds={yes\|no}`             |Emit bounds checks always or never (ignoring declarations)|
