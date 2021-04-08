@@ -92,8 +92,8 @@ prepend!(tests, linalg_tests)
 import LinearAlgebra
 cd(@__DIR__) do
     # `net_on` implies that we have access to the loopback interface which is
-    # necessary for multithreading. There are some build environments that do
-    # not allow access to loopback, so we must disable multithreading when
+    # necessary for Distributed multi-processing. There are some test environments that do
+    # not allow access to loopback, so we must disable addprocs when
     # `net_on` is false. Note that there exist build environments, including
     # Nix, where `net_on` is false but we still have access to the loopback
     # interface. It would be great to make this check more specific to identify
