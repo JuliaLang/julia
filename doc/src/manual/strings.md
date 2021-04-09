@@ -739,13 +739,16 @@ Some other useful functions include:
 
 There are situations when you want to construct a string or use string semantics, but the behavior
 of the standard string construct is not quite what is needed. For these kinds of situations, Julia
-provides [non-standard string literals](@ref). A non-standard string literal looks like a regular
-double-quoted string literal, but is immediately prefixed by an identifier, and doesn't behave
-quite like a normal string literal.  Regular expressions, byte array literals and version number
-literals, as described below, are some examples of non-standard string literals. Other examples
-are given in the [Metaprogramming](@ref) section.
+provides non-standard string literals. A non-standard string literal looks like a regular
+double-quoted string literal,
+but is immediately prefixed by an identifier, and may behave differently from a normal string literal.
 
-## Regular Expressions
+[Regular expressions](@ref man-regex-literals), [byte array literals](@ref man-byte-array-literals),
+and [version number literals](@ref man-version-number-literals), as described below,
+are some examples of non-standard string literals. Users and packages may also define new non-standard string literals.
+Further documentation is given in the [Metaprogramming](@ref meta-non-standard-string-literals) section.
+
+## [Regular Expressions](@id man-regex-literals)
 
 Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](http://www.pcre.org/)
 library (a description of the syntax can be found [here](http://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
