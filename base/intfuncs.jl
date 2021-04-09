@@ -303,8 +303,7 @@ end
 const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
 const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
-# Core.Compiler has complicated logic to inline x^2 and x^3 for
-# numeric types.  In terms of Val we can do it much more simply.
+# Inline x^2 and x^3 for Val
 # (The first argument prevents unexpected behavior if a function ^
 # is defined that is not equal to Base.^)
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{0}) = one(x)
@@ -318,11 +317,11 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # for other types, define x^-n as inv(x)^n so that negative literal powers can
 # be computed in a type-stable way even for e.g. integers.
-@inline @generated function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
+@inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
-        :(literal_pow(^, inv(x), $(Val{-p}())))
+        literal_pow(^, inv(x), Val(-p))
     else
-        :(f(x,$p))
+        f(x, p)
     end
 end
 
