@@ -110,6 +110,8 @@ const latex_symbols = Dict(
     "\\backpprime" => "‶",
     "\\backppprime" => "‷",
     "\\xor" => "⊻",
+    "\\nand" => "⊼",
+    "\\nor" => "⊽",
     "\\iff" => "⟺",
     "\\implies" => "⟹",
     "\\impliedby" => "⟸",
@@ -2651,4 +2653,6 @@ const symbols_latex_canonical = Dict(
     "→" => "\\to",
     "ε" => "\\varepsilon",
     "⊻" => "\\xor",
+    "⊼" => "\\nand",
+    "⊽" => "\\nor",
 )

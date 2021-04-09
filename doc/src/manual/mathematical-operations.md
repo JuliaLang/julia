@@ -84,6 +84,8 @@ are supported on all primitive integer types:
 | `x & y`    | bitwise and                                                              |
 | `x \| y`   | bitwise or                                                               |
 | `x ⊻ y`    | bitwise xor (exclusive or)                                               |
+| `x ⊼ y`    | bitwise nand (not and)                                                   |
+| `x ⊽ y`    | bitwise nor (not or)                                                     |
 | `x >>> y`  | [logical shift](https://en.wikipedia.org/wiki/Logical_shift) right       |
 | `x >> y`   | [arithmetic shift](https://en.wikipedia.org/wiki/Arithmetic_shift) right |
 | `x << y`   | logical/arithmetic shift left                                            |
@@ -105,6 +107,18 @@ julia> 123 ⊻ 234
 
 julia> xor(123, 234)
 145
+
+julia> nand(123, 123)
+-124
+
+julia> 123 ⊼ 123
+-124
+
+julia> nor(123, 124)
+-128
+
+julia> 123 ⊽ 124
+-128
 
 julia> ~UInt32(123)
 0xffffff84

@@ -38,6 +38,24 @@ const ≣ = isequal # convenient for comparing NaNs
     @test xor(true,  false) == true
     @test xor(false, true)  == true
     @test xor(true,  true)  == false
+
+    @test false ⊼ false == true
+    @test true ⊼ false == true
+    @test false ⊼ true == true
+    @test true ⊼ true == false
+    @test nand(false, false) == true
+    @test nand(true, false) == true
+    @test nand(false, true) == true
+    @test nand(true, true) == false
+
+    @test false ⊽ false == true
+    @test true ⊽ false == false
+    @test false ⊽ true == false
+    @test true ⊽ true == false
+    @test nor(false, false) == true
+    @test nor(true, false) == false
+    @test nor(false, true) == false
+    @test nor(true, true) == false
 end
 @testset "bool operator" begin
     @test Bool(false) == false

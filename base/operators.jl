@@ -578,6 +578,8 @@ identity(x) = x
 xor(x::Integer) = x
 
 const ⊻ = xor
+const ⊼ = nand
+const ⊽ = nor
 
 # foldl for argument lists. expand fully up to a point, then
 # switch to a loop. this allows small cases like `a+b+c+d` to be managed

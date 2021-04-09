@@ -1707,6 +1707,8 @@ map!(::typeof(identity), dest::BitArray, A::BitArray) = copyto!(dest, A)
 for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(Union{typeof(|), typeof(max)}),            :(|)),
                (:(Union{typeof(xor), typeof(!=)}),           :xor),
+               (:(typeof(nand)),                             :nand),
+               (:(typeof(nor)),                              :nor),
                (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> p | ~q)),
                (:(typeof(<=)),                               :((p, q) -> ~p | q)),
                (:(typeof(==)),                               :((p, q) -> ~xor(p, q))),
