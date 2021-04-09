@@ -7,6 +7,8 @@ New language features
 * `(; a, b) = x` can now be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
   and similarly for `b`. ([#39285])
 * Implicit multiplication by juxtaposition is now allowed for radical symbols (e.g., `x√y` and `x∛y`). ([#40173])
+* The short-circuiting operators `&&` and `||` can now be dotted to participate in broadcast fusion
+  as `.&&` and `.||`. ([#39594])
 
 Language changes
 ----------------

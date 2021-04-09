@@ -1804,6 +1804,10 @@
                      e))))
           ((and (pair? e) (eq? (car e) 'comparison))
            (dot-to-fuse (expand-compare-chain (cdr e)) top))
+          ((and (pair? e) (eq? (car e) '.&&))
+           (make-fuse '(top andand) (cdr e)))
+          ((and (pair? e) (eq? (car e) '|.\|\||))
+           (make-fuse '(top oror) (cdr e)))
           (else e)))
   (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
@@ -2124,6 +2128,11 @@
          `(call (top BroadcastFunction) ,(cadr e))
          ;; e = (|.| f x)
          (expand-fuse-broadcast '() e)))
+
+   '.&&
+   (lambda (e) (expand-fuse-broadcast '() e))
+   '|.\|\||
+   (lambda (e) (expand-fuse-broadcast '() e))
 
    '.=
    (lambda (e)
