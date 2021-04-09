@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random, LinearAlgebra, SparseArrays
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
 
 types = Any[
     Bool,
@@ -30,28 +32,29 @@ function coerce(T::Type, x)
     end
 end
 
-for T = types[2:end],
-    x = vals,
+for T = types[2:end], x = vals
     a = coerce(T, x)
-    @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
-    @test hash(a,one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
+    @test hash(a, zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
+    @test hash(a, one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
 end
 
-for T = types,
-    S = types,
-    x = vals,
-    a = coerce(T, x),
-    b = coerce(S, x)
-    #println("$(typeof(a)) $a")
-    #println("$(typeof(b)) $b")
-    @test isequal(a,b) == (hash(a)==hash(b))
-    # for y=vals
-    #     println("T=$T; S=$S; x=$x; y=$y")
-    #     c = convert(T,x//y)
-    #     d = convert(S,x//y)
-    #     @test !isequal(a,b) || hash(a)==hash(b)
-    # end
+let collides = 0
+    for T = types, S = types, x = vals
+        a = coerce(T, x)
+        b = coerce(S, x)
+        eq = hash(a) == hash(b)
+        #println("$(typeof(a)) $a")
+        #println("$(typeof(b)) $b")
+        if isequal(a, b)
+            @test eq
+        else
+            collides += eq
+        end
+    end
+    # each pair of types has one collision for these values
+    @test collides <= (length(types) - 1)^2
 end
+@test hash(0.0) != hash(-0.0)
 
 # issue #8619
 @test hash(nextfloat(2.0^63)) == hash(UInt64(nextfloat(2.0^63)))
@@ -72,7 +75,8 @@ vals = Any[
     # Overflow with Int8
     Any[Int8(127), Int8(-128), -383], 127:-255:-383,
     # Loss of precision with Float64
-    Any[-2^53-1, 0.0, 2^53+1], [-2^53-1, 0, 2^53+1], (-2^53-1):2^53+1:(2^53+1),
+    Any[-Int64(2)^53-1, 0.0, Int64(2)^53+1], [-Int64(2)^53-1, 0, Int64(2)^53+1],
+        (-Int64(2)^53-1):Int64(2)^53+1:(Int64(2)^53+1),
     # Some combinations of elements support -, others do not
     [1, 2, "a"], [1, "a", 2], [1, 2, "a", 2], [1, 'a', 2],
     Set([1,2,3,4]),
@@ -90,6 +94,12 @@ vals = Any[
     [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.]),
     # issue #16364
     1:4, 1:1:4, 1:-1:0, 1.0:4.0, 1.0:1.0:4.0, range(1, stop=4, length=4),
+    # issue #35597, when `LinearIndices` does not begin at 1
+    Base.IdentityUnitRange(2:4),
+    OffsetArray(1:4, -2),
+    OffsetArray([1 3; 2 4], -2, 2),
+    OffsetArray(1:4, 0),
+    OffsetArray([1 3; 2 4], 0, 0),
     'a':'e', ['a', 'b', 'c', 'd', 'e'],
     # check that hash is still consistent with heterogeneous arrays for which - is defined
     # for some pairs and not others
@@ -101,8 +111,13 @@ for a in vals, b in vals
 end
 
 for a in vals
-    if a isa AbstractArray
-        @test hash(a) == hash(Array(a)) == hash(Array{Any}(a))
+    a isa AbstractArray || continue
+    aa  = copyto!(Array{eltype(a)}(undef, size(a)), a)
+    aaa = copyto!(Array{Any}(undef, size(a)), a)
+    if keys(a) == keys(aa)
+        @test hash(a) == hash(aa) == hash(aaa)
+    else
+        @test hash(a) == hash(OffsetArray(aa, (first.(axes(a)).-1)...)) == hash(OffsetArray(aaa, (first.(axes(a)).-1)...))
     end
 end
 
@@ -159,6 +174,7 @@ Base.hash(x::CustomHashReal, h::UInt) = hash(x.x, h)
 Base.:(==)(x::CustomHashReal, y::Number) = x.x == y
 Base.:(==)(x::Number, y::CustomHashReal) = x == y.x
 Base.zero(::Type{CustomHashReal}) = CustomHashReal(0.0)
+Base.zero(x::CustomHashReal) = zero(CustomHashReal)
 
 let a = sparse([CustomHashReal(0), CustomHashReal(3), CustomHashReal(3)])
     @test hash(a) == hash(Array(a))
@@ -240,4 +256,31 @@ let p1 = Ptr{Int8}(1), p2 = Ptr{Int32}(1), p3 = Ptr{Int8}(2)
     @test !(p1 < p2)
     @test isless(p1, p3)
     @test_throws MethodError isless(p1, p2)
+end
+
+# PR #40083
+@test hash(1:1000) == hash(collect(1:1000))
+
+@testset "test the other core data hashing functions" begin
+    @testset "hash_64_32" begin
+        vals = vcat(
+            typemin(UInt64) .+ UInt64[1:4;],
+            typemax(UInt64) .- UInt64[4:-1:0;]
+        )
+
+        for a in vals, b in vals
+            @test isequal(a, b) == (Base.hash_64_32(a) == Base.hash_64_32(b))
+        end
+    end
+
+    @testset "hash_32_32" begin
+        vals = vcat(
+            typemin(UInt32) .+ UInt32[1:4;],
+            typemax(UInt32) .- UInt32[4:-1:0;]
+        )
+
+        for a in vals, b in vals
+            @test isequal(a, b) == (Base.hash_32_32(a) == Base.hash_32_32(b))
+        end
+    end
 end

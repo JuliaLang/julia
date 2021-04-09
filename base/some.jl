@@ -12,15 +12,32 @@ struct Some{T}
     value::T
 end
 
+Some(::Type{T}) where {T} = Some{Type{T}}(T)
+
 promote_rule(::Type{Some{T}}, ::Type{Some{S}}) where {T, S<:T} = Some{T}
-promote_rule(::Type{Some{T}}, ::Type{Nothing}) where {T} = Union{Some{T}, Nothing}
 
+nonnothingtype(::Type{T}) where {T} = typesplit(T, Nothing)
+promote_rule(T::Type{Nothing}, S::Type) = Union{S, Nothing}
+function promote_rule(T::Type{>:Nothing}, S::Type)
+    R = nonnothingtype(T)
+    R >: T && return Any
+    T = R
+    R = promote_type(T, S)
+    return Union{R, Nothing}
+end
+
+function nonnothingtype_checked(T::Type)
+    R = nonnothingtype(T)
+    R >: T && error("could not compute non-nothing type")
+    return R
+end
+
+convert(::Type{T}, x::T) where {T>:Nothing} = x
+convert(::Type{T}, x) where {T>:Nothing} = convert(nonnothingtype_checked(T), x)
+convert(::Type{Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
+convert(::Type{Nothing}, ::Nothing) = nothing
+convert(::Type{Some{T}}, x::Some{T}) where {T} = x
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
-convert(::Type{Union{Some{T}, Nothing}}, x::Some) where {T} = convert(Some{T}, x)
-
-convert(::Type{Union{T, Nothing}}, x::Any) where {T} = convert(T, x)
-convert(::Type{Nothing}, x::Any) = throw(MethodError(convert, (Nothing, x)))
-convert(::Type{Nothing}, x::Nothing) = nothing
 
 function show(io::IO, x::Some)
     if get(io, :typeinfo, Any) == typeof(x)
@@ -44,9 +61,11 @@ notnothing(::Nothing) = throw(ArgumentError("nothing passed to notnothing"))
     isnothing(x)
 
 Return `true` if `x === nothing`, and return `false` if not.
+
+!!! compat "Julia 1.1"
+    This function requires at least Julia 1.1.
 """
-isnothing(::Any) = false
-isnothing(::Nothing) = true
+isnothing(x) = x === nothing
 
 
 """
@@ -55,6 +74,8 @@ isnothing(::Nothing) = true
 Return the first value in the arguments which is not equal to [`nothing`](@ref),
 if any. Otherwise throw an error.
 Arguments of type [`Some`](@ref) are unwrapped.
+
+See also [`coalesce`](@ref).
 
 # Examples
 ```jldoctest

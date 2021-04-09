@@ -15,7 +15,10 @@ using Random
     Future.copy!(dst, src) -> dst
 
 Copy `src` into `dst`.
-This function has now been moved into `Base`, consider using `copy!(dst, src)` instead.
+
+!!! compat "Julia 1.1"
+    This function has moved to `Base` with Julia 1.1, consider using `copy!(dst, src)` instead.
+    `Future.copy!` will be deprecated in the future.
 """
 copy!(dst::AbstractSet, src::AbstractSet) = Base.copy!(dst, src)
 copy!(dst::AbstractDict, src::AbstractDict) = Base.copy!(dst, src)
@@ -33,7 +36,10 @@ One such step corresponds to the generation of two `Float64` numbers.
 For each different value of `steps`, a large polynomial has to be generated internally.
 One is already pre-computed for `steps=big(10)^20`.
 """
-randjump(r::MersenneTwister, steps::Integer) =
-    Random._randjump(r, Random.DSFMT.calc_jump(steps))
+function randjump(r::MersenneTwister, steps::Integer)
+    j = Random._randjump(r, Random.DSFMT.calc_jump(steps))
+    j.adv_jump += 2*big(steps) # convert to BigInt to prevent overflow
+    j
+end
 
 end # module Future

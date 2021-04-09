@@ -14,6 +14,5 @@ index e9515fe7862..af082581627 100644
 @@ -1 +1 @@
 -LLVM_@LLVM_VERSION_MAJOR@.@LLVM_VERSION_MINOR@ { global: *; };
 +JL_LLVM_@LLVM_VERSION_MAJOR@.@LLVM_VERSION_MINOR@ { global: *; };
--- 
+--
 2.15.1
-

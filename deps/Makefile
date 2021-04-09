@@ -12,6 +12,9 @@ include $(SRCDIR)/Versions.make
 include $(JULIAHOME)/Make.inc
 include $(SRCDIR)/tools/common.mk
 include $(SRCDIR)/tools/git-external.mk
+include $(SRCDIR)/tools/bb-install.mk
+
+BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 
 # Special comments:
 #
@@ -20,19 +23,14 @@ include $(SRCDIR)/tools/git-external.mk
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: llvm pcre unwind gmp mpfr patchelf libuv curl
-# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind libwhich
-# CMake libs: libgit2 libssh2 mbedtls
+# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
+# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack blastrampoline openblas utf8proc objconv libwhich
+# CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls
 #
-# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
-#
-# there are rules in this file with the . replaced by a %
-# this is some magic Makefile trick that tells make
-# that all targets with a % in them on that line will
-# be rebuilt in a single invocation
+# downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
 #
 # to debug 'define' rules, replace eval at the usage site with info or error
-#
+
 
 ## Overall configuration of which rules exist and should be run by default ##
 
@@ -40,6 +38,13 @@ include $(SRCDIR)/tools/git-external.mk
 unexport CONFIG_SITE
 
 DEP_LIBS :=
+
+# Always use libblastrampoline
+DEP_LIBS += blastrampoline
+
+ifeq ($(USE_SYSTEM_CSL), 0)
+DEP_LIBS += csl
+endif
 
 ifeq ($(USE_GPL_LIBS), 1)
 DEP_LIBS += suitesparse-wrapper
@@ -56,7 +61,7 @@ DEP_LIBS += unwind
 else ifeq ($(OS), FreeBSD)
 DEP_LIBS += unwind
 else ifeq ($(OS), Darwin)
-DEP_LIBS += osxunwind
+DEP_LIBS += llvmunwind
 endif
 endif
 endif
@@ -113,10 +118,12 @@ ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 DEP_LIBS += libssh2
 endif
 
-ifneq ($(OS), WINNT)
+ifeq ($(USE_SYSTEM_NGHTTP2), 0)
+DEP_LIBS += nghttp2
+endif
+
 ifeq ($(USE_SYSTEM_CURL), 0)
 DEP_LIBS += curl
-endif
 endif
 
 DEP_LIBS += libgit2
@@ -136,6 +143,15 @@ ifeq ($(USE_SYSTEM_UTF8PROC), 0)
 DEP_LIBS += utf8proc
 endif
 
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+DEP_LIBS += zlib
+endif
+
+ifeq ($(USE_SYSTEM_P7ZIP), 0)
+DEP_LIBS += p7zip
+endif
+
+
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
 # This is useful where one wants to use the vendor BLAS, but
@@ -150,8 +166,26 @@ ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
 endif
 
-DEP_LIBS_STAGED := $(filter-out suitesparse suitesparse-wrapper osxunwind,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
+DEP_LIBS_STAGED := $(filter-out suitesparse-wrapper,$(DEP_LIBS))
 
+# list all targets
+DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
+	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
+	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
+	suitesparse suitesparse-wrapper
+DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
+
+ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
+DEP_LIBS_ALL := $(filter-out lapack,$(DEP_LIBS_ALL))
+endif
+
+ifeq ($(USE_BINARYBUILDER_LLVM),0)
+DEP_LIBS_ALL := $(filter-out clang llvm-tools,$(DEP_LIBS_ALL))
+endif
+
+ifeq ($(USE_BINARYBUILDER_SUITESPARSE),0)
+DEP_LIBS_STAGED := $(filter-out suitesparse,$(DEP_LIBS_STAGED))
+endif
 
 ## Common build target prefixes
 
@@ -163,20 +197,24 @@ compile: $(addprefix compile-, $(DEP_LIBS))
 check: $(addprefix check-, $(DEP_LIBS))
 fastcheck: $(addprefix fastcheck-, $(DEP_LIBS))
 stage: $(addprefix stage-, $(DEP_LIBS_STAGED))
-install: $(addprefix install-, $(DEP_LIBS))
-uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
-cleanall: $(addprefix clean-, $(DEP_LIBS))
-distcleanall: $(addprefix distclean-, $(DEP_LIBS))
-	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-dsfmt get-openblas get-lapack get-suitesparse get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2 get-libwhich
+install: version-check $(addprefix install-, $(DEP_LIBS))
+version-check: $(addprefix version-check-, $(DEP_LIBS_STAGED))
 
+uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED_ALL))
+cleanall: $(addprefix clean-, $(DEP_LIBS_ALL))
+distcleanall: $(addprefix distclean-, $(DEP_LIBS_ALL))
+	rm -rf $(build_prefix)
+getall: $(addprefix get-, $(DEP_LIBS_ALL))
+
+include $(SRCDIR)/csl.mk
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk
 include $(SRCDIR)/openlibm.mk
 include $(SRCDIR)/dsfmt.mk
 include $(SRCDIR)/objconv.mk
-include $(SRCDIR)/blas.mk
+include $(SRCDIR)/blastrampoline.mk
+include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/suitesparse.mk
 include $(SRCDIR)/unwind.mk
@@ -185,6 +223,11 @@ include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
 include $(SRCDIR)/mbedtls.mk
 include $(SRCDIR)/libssh2.mk
+include $(SRCDIR)/nghttp2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
+include $(SRCDIR)/zlib.mk
+include $(SRCDIR)/p7zip.mk
+
+include $(SRCDIR)/tools/uninstallers.mk

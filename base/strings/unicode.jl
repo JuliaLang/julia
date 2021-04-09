@@ -12,11 +12,14 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype,
     isvalid(value) -> Bool
 
 Returns `true` if the given value is valid for its type, which currently can be either
-`AbstractChar` or `String`.
+`AbstractChar` or `String` or `SubString{String}`.
 
 # Examples
 ```jldoctest
 julia> isvalid(Char(0xd800))
+false
+
+julia> isvalid(SubString(String(UInt8[0xfe,0x80,0x80,0x80,0x80,0x80]),1,2))
 false
 
 julia> isvalid(Char(0xd799))
@@ -30,16 +33,23 @@ isvalid(value)
 
 Returns `true` if the given value is valid for that type. Types currently can
 be either `AbstractChar` or `String`. Values for `AbstractChar` can be of type `AbstractChar` or [`UInt32`](@ref).
-Values for `String` can be of that type, or `Vector{UInt8}`.
+Values for `String` can be of that type, `SubString{String}`, `Vector{UInt8}`,
+or a contiguous subarray thereof.
 
 # Examples
 ```jldoctest
 julia> isvalid(Char, 0xd800)
 false
 
+julia> isvalid(String, SubString("thisisvalid",1,5))
+true
+
 julia> isvalid(Char, 0xd799)
 true
 ```
+
+!!! compat "Julia 1.6"
+    Support for subarray values was added in Julia 1.6.
 """
 isvalid(T,value)
 
@@ -135,7 +145,7 @@ const UTF8PROC_STRIPMARK = (1<<13)
 
 utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (Cssize_t,), result)))
 
-function utf8proc_map(str::String, options::Integer)
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer)
     nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
                    str, sizeof(str), C_NULL, 0, options)
     nwords < 0 && utf8proc_error(nwords)
@@ -192,11 +202,11 @@ function normalize(
 end
 
 function normalize(s::AbstractString, nf::Symbol)
-    utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
-                    nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
-                    nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
+    utf8proc_map(s, nf === :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
+                    nf === :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
+                    nf === :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
                                    | UTF8PROC_COMPAT) :
-                    nf == :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
+                    nf === :NFKD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE
                                    | UTF8PROC_COMPAT) :
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
@@ -214,7 +224,7 @@ Give the number of columns needed to print a character.
 julia> textwidth('α')
 1
 
-julia> textwidth('❤')
+julia> textwidth('⛵')
 2
 ```
 """
@@ -270,9 +280,10 @@ isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 """
     islowercase(c::AbstractChar) -> Bool
 
-Tests whether a character is a lowercase letter.
-A character is classified as lowercase if it belongs to Unicode category Ll,
-Letter: Lowercase.
+Tests whether a character is a lowercase letter (according to the Unicode
+standard's `Lowercase` derived property).
+
+See also: [`isuppercase`](@ref).
 
 # Examples
 ```jldoctest
@@ -286,16 +297,17 @@ julia> islowercase('❤')
 false
 ```
 """
-islowercase(c::AbstractChar) = category_code(c) == UTF8PROC_CATEGORY_LL
+islowercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_islower, Cint, (UInt32,), UInt32(c)))
 
 # true for Unicode upper and mixed case
 
 """
     isuppercase(c::AbstractChar) -> Bool
 
-Tests whether a character is an uppercase letter.
-A character is classified as uppercase if it belongs to Unicode category Lu,
-Letter: Uppercase, or Lt, Letter: Titlecase.
+Tests whether a character is an uppercase letter (according to the Unicode
+standard's `Uppercase` derived property).
+
+See also: [`islowercase`](@ref).
 
 # Examples
 ```jldoctest
@@ -309,15 +321,14 @@ julia> isuppercase('❤')
 false
 ```
 """
-function isuppercase(c::AbstractChar)
-    cat = category_code(c)
-    cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT
-end
+isuppercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_isupper, Cint, (UInt32,), UInt32(c)))
 
 """
     iscased(c::AbstractChar) -> Bool
 
 Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
+
+See also: [`islowercase`](@ref), [`isuppercase`](@ref).
 """
 function iscased(c::AbstractChar)
     cat = category_code(c)
@@ -344,7 +355,7 @@ julia> isdigit('α')
 false
 ```
 """
-isdigit(c::AbstractChar) = '0' <= c <= '9'
+isdigit(c::AbstractChar) = (c >= '0') & (c <= '9')
 
 """
     isletter(c::AbstractChar) -> Bool
@@ -503,6 +514,8 @@ isxdigit(c::AbstractChar) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 
 Return `s` with all characters converted to uppercase.
 
+See also: [`lowercase`](@ref), [`titlecase`](@ref), [`uppercasefirst`](@ref).
+
 # Examples
 ```jldoctest
 julia> uppercase("Julia")
@@ -515,6 +528,8 @@ uppercase(s::AbstractString) = map(uppercase, s)
     lowercase(s::AbstractString)
 
 Return `s` with all characters converted to lowercase.
+
+See also: [`uppercase`](@ref), [`titlecase`](@ref), [`lowercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -530,11 +545,13 @@ lowercase(s::AbstractString) = map(lowercase, s)
 Capitalize the first character of each word in `s`;
 if `strict` is true, every other character is
 converted to lowercase, otherwise they are left unchanged.
-By default, all non-letters are considered as word separators;
+By default, all non-letters beginning a new grapheme are considered as word separators;
 a predicate can be passed as the `wordsep` keyword to determine
 which characters should be considered as word separators.
 See also [`uppercasefirst`](@ref) to capitalize only the first
 character in `s`.
+
+See also: [`uppercase`](@ref), [`lowercase`](@ref), [`uppercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -548,17 +565,23 @@ julia> titlecase("a-a b-b", wordsep = c->c==' ')
 "A-a B-b"
 ```
 """
-function titlecase(s::AbstractString; wordsep::Function = !iscased, strict::Bool=true)
+function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Bool=true)
     startword = true
+    state = Ref{Int32}(0)
+    c0 = eltype(s)(0x00000000)
     b = IOBuffer()
     for c in s
-        if wordsep(c)
+        # Note: It would be better to have a word iterator following UAX#29,
+        # similar to our grapheme iterator, but utf8proc does not yet have
+        # this information.  At the very least we shouldn't break inside graphemes.
+        if isgraphemebreak!(state, c0, c) && wordsep(c)
             print(b, c)
             startword = true
         else
             print(b, startword ? titlecase(c) : strict ? lowercase(c) : c)
             startword = false
         end
+        c0 = c
     end
     return String(take!(b))
 end

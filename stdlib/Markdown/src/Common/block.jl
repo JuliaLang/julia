@@ -16,10 +16,9 @@ function paragraph(stream::IO, md::MD)
     push!(md, p)
     skipwhitespace(stream)
     prev_char = '\n'
-    while !eof(stream)
-        char = read(stream, Char)
+    for char in readeach(stream, Char)
         if char == '\n' || char == '\r'
-            char == '\r' && !eof(stream) && Char(peek(stream)) == '\n' && read(stream, Char)
+            char == '\r' && !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             if prev_char == '\\'
                 write(buffer, '\n')
             elseif blankline(stream) || parse(stream, md, breaking = true)
@@ -141,7 +140,7 @@ function footnote(stream::IO, block::MD)
             buffer = IOBuffer()
             write(buffer, readline(stream, keep=true))
             while !eof(stream)
-                if startswith(stream, "    ")
+                if startswith(stream, "    ") || startswith(stream, "\t")
                     write(buffer, readline(stream, keep=true))
                 elseif blankline(stream)
                     write(buffer, '\n')
@@ -225,10 +224,10 @@ function admonition(stream::IO, block::MD)
                     return false
                 end
             end
-        # Consume the following indented (4 spaces) block.
+        # Consume the following indented (4 spaces or tab) block.
         buffer = IOBuffer()
         while !eof(stream)
-            if startswith(stream, "    ")
+            if startswith(stream, "    ") || startswith(stream, "\t")
                 write(buffer, readline(stream, keep=true))
             elseif blankline(stream)
                 write(buffer, '\n')
@@ -339,8 +338,7 @@ end
 function horizontalrule(stream::IO, block::MD)
    withstream(stream) do
        n, rule = 0, ' '
-       while !eof(stream)
-           char = read(stream, Char)
+       for char in readeach(stream, Char)
            char == '\n' && break
            isspace(char) && continue
            if n==0 || char==rule

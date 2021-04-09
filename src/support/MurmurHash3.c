@@ -49,20 +49,6 @@ static inline uint64_t rotl64 ( uint64_t x, int8_t r )
 #endif // !defined(_MSC_VER)
 
 //-----------------------------------------------------------------------------
-// Block read - if your platform needs to do endian-swapping or can only
-// handle aligned reads, do the conversion here
-
-FORCE_INLINE uint32_t getblock32 ( const uint32_t * p, int i )
-{
-  return p[i];
-}
-
-FORCE_INLINE uint64_t getblock64 ( const uint64_t * p, int i )
-{
-  return p[i];
-}
-
-//-----------------------------------------------------------------------------
 // Finalization mix - force all bits of a hash block to avalanche
 
 FORCE_INLINE uint32_t fmix32 ( uint32_t h )
@@ -105,11 +91,11 @@ void MurmurHash3_x86_32 ( const void * key, int len,
   //----------
   // body
 
-  const uint32_t * blocks = (const uint32_t *)(data + nblocks*4);
+  const uint8_t * tail = data + nblocks*4;
 
   for(int i = -nblocks; i; i++)
   {
-    uint32_t k1 = getblock32(blocks,i);
+    uint32_t k1 = jl_load_unaligned_i32(tail + sizeof(uint32_t)*i);
 
     k1 *= c1;
     k1 = ROTL32(k1,15);
@@ -122,8 +108,6 @@ void MurmurHash3_x86_32 ( const void * key, int len,
 
   //----------
   // tail
-
-  const uint8_t * tail = (const uint8_t*)(data + nblocks*4);
 
   uint32_t k1 = 0;
 
@@ -166,14 +150,14 @@ void MurmurHash3_x86_128 ( const void * key, const int len,
   //----------
   // body
 
-  const uint32_t * blocks = (const uint32_t *)(data + nblocks*16);
+  const uint8_t *tail = data + nblocks*16;
 
   for(int i = -nblocks; i; i++)
   {
-    uint32_t k1 = getblock32(blocks,i*4+0);
-    uint32_t k2 = getblock32(blocks,i*4+1);
-    uint32_t k3 = getblock32(blocks,i*4+2);
-    uint32_t k4 = getblock32(blocks,i*4+3);
+    uint32_t k1 = jl_load_unaligned_i32(tail + sizeof(uint32_t)*(i*4 + 0));
+    uint32_t k2 = jl_load_unaligned_i32(tail + sizeof(uint32_t)*(i*4 + 1));
+    uint32_t k3 = jl_load_unaligned_i32(tail + sizeof(uint32_t)*(i*4 + 2));
+    uint32_t k4 = jl_load_unaligned_i32(tail + sizeof(uint32_t)*(i*4 + 3));
 
     k1 *= c1; k1  = ROTL32(k1,15); k1 *= c2; h1 ^= k1;
 
@@ -194,8 +178,6 @@ void MurmurHash3_x86_128 ( const void * key, const int len,
 
   //----------
   // tail
-
-  const uint8_t * tail = (const uint8_t*)(data + nblocks*16);
 
   uint32_t k1 = 0;
   uint32_t k2 = 0;
@@ -270,12 +252,10 @@ void MurmurHash3_x64_128 ( const void * key, const int len,
   //----------
   // body
 
-  const uint64_t * blocks = (const uint64_t *)(data);
-
   for(int i = 0; i < nblocks; i++)
   {
-    uint64_t k1 = getblock64(blocks,i*2+0);
-    uint64_t k2 = getblock64(blocks,i*2+1);
+    uint64_t k1 = jl_load_unaligned_i64(data + sizeof(uint64_t)*(i*2 + 0));
+    uint64_t k2 = jl_load_unaligned_i64(data + sizeof(uint64_t)*(i*2 + 1));
 
     k1 *= c1; k1  = ROTL64(k1,31); k1 *= c2; h1 ^= k1;
 

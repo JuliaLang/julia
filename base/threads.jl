@@ -1,13 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Experimental multithreading support.
+Multithreading support.
 """
 module Threads
 
+global Condition # we'll define this later, make sure we don't import Base.Condition
+
 include("threadingconstructs.jl")
 include("atomics.jl")
-include("locks.jl")
+include("locks-mt.jl")
+
 
 """
     resize_nthreads!(A, copyvalue=A[1])

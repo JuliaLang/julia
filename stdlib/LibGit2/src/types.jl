@@ -40,7 +40,7 @@ end
     LibGit2.TimeStruct
 
 Time in a signature.
-Matches the [`git_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_time) struct.
+Matches the [`git_time`](https://libgit2.org/libgit2/#HEAD/type/git_time) struct.
 """
 struct TimeStruct
     time::Int64     # time in seconds from epoch
@@ -54,7 +54,7 @@ end
     LibGit2.SignatureStruct
 
 An action signature (e.g. for committers, taggers, etc).
-Matches the [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) struct.
+Matches the [`git_signature`](https://libgit2.org/libgit2/#HEAD/type/git_signature) struct.
 
 The fields represent:
   * `name`: The full name of the committer or author of the commit.
@@ -72,7 +72,7 @@ end
     LibGit2.StrArrayStruct
 
 A LibGit2 representation of an array of strings.
-Matches the [`git_strarray`](https://libgit2.github.com/libgit2/#HEAD/type/git_strarray) struct.
+Matches the [`git_strarray`](https://libgit2.org/libgit2/#HEAD/type/git_strarray) struct.
 
 When fetching data from LibGit2, a typical usage would look like:
 ```julia
@@ -106,7 +106,7 @@ end
     LibGit2.Buffer
 
 A data buffer for exporting data from libgit2.
-Matches the [`git_buf`](https://libgit2.github.com/libgit2/#HEAD/type/git_buf) struct.
+Matches the [`git_buf`](https://libgit2.org/libgit2/#HEAD/type/git_buf) struct.
 
 When fetching data from LibGit2, a typical usage would look like:
 ```julia
@@ -132,7 +132,7 @@ end
 """
     LibGit2.CheckoutOptions
 
-Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_checkout_options) struct.
+Matches the [`git_checkout_options`](https://libgit2.org/libgit2/#HEAD/type/git_checkout_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -174,10 +174,10 @@ The fields represent:
 
     notify_flags::Cuint          = Consts.CHECKOUT_NOTIFY_NONE
     notify_cb::Ptr{Cvoid}        = C_NULL
-    notify_payload::Ptr{Cvoid}   = C_NULL
+    notify_payload::Any          = nothing
 
     progress_cb::Ptr{Cvoid}      = C_NULL
-    progress_payload::Ptr{Cvoid} = C_NULL
+    progress_payload::Any        = nothing
 
     paths::StrArrayStruct        = StrArrayStruct()
 
@@ -190,14 +190,15 @@ The fields represent:
     their_label::Cstring         = Cstring(C_NULL)
 
     perfdata_cb::Ptr{Cvoid}      = C_NULL
-    perfdata_payload::Ptr{Cvoid} = C_NULL
+    perfdata_payload::Any        = Nothing
 end
+@assert CheckoutOptions.isinlinealloc
 
 """
     LibGit2.TransferProgress
 
 Transfer progress information used by the `transfer_progress` remote callback.
-Matches the [`git_transfer_progress`](https://libgit2.github.com/libgit2/#HEAD/type/git_transfer_progress) struct.
+Matches the [`git_indexer_progress`](https://libgit2.org/libgit2/#HEAD/type/git_indexer_progress) struct.
 """
 @kwdef struct TransferProgress
     total_objects::Cuint    = Cuint(0)
@@ -208,13 +209,20 @@ Matches the [`git_transfer_progress`](https://libgit2.github.com/libgit2/#HEAD/t
     indexed_deltas::Cuint   = Cuint(0)
     received_bytes::Csize_t = Csize_t(0)
 end
+@assert TransferProgress.isinlinealloc
 
-@kwdef struct RemoteCallbacksStruct
+"""
+    LibGit2.RemoteCallbacks
+
+Callback settings.
+Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_remote_callbacks) struct.
+"""
+@kwdef struct RemoteCallbacks
     version::Cuint                     = Cuint(1)
     sideband_progress::Ptr{Cvoid}      = C_NULL
     completion::Ptr{Cvoid}             = C_NULL
     credentials::Ptr{Cvoid}            = C_NULL
-    certificate_check::Ptr{Cvoid}      = C_NULL
+    certificate_check::Ptr{Cvoid}      = certificate_cb()
     transfer_progress::Ptr{Cvoid}      = C_NULL
     update_tips::Ptr{Cvoid}            = C_NULL
     pack_progress::Ptr{Cvoid}          = C_NULL
@@ -222,8 +230,12 @@ end
     push_update_reference::Ptr{Cvoid}  = C_NULL
     push_negotiation::Ptr{Cvoid}       = C_NULL
     transport::Ptr{Cvoid}              = C_NULL
-    payload::Ptr{Cvoid}                = C_NULL
+    payload::Any                       = nothing
+    @static if LibGit2.VERSION >= v"0.99.0"
+        resolve_url::Ptr{Cvoid}        = C_NULL
+    end
 end
+@assert RemoteCallbacks.isinlinealloc
 
 """
     LibGit2.Callbacks
@@ -242,27 +254,10 @@ julia> c = LibGit2.Callbacks(:credentials => (LibGit2.credentials_cb(), LibGit2.
 julia> LibGit2.clone(url, callbacks=c);
 ```
 
-See [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks)
+See [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_remote_callbacks)
 for details on supported callbacks.
 """
 const Callbacks = Dict{Symbol, Tuple{Ptr{Cvoid}, Any}}
-
-"""
-    LibGit2.RemoteCallbacks
-
-Callback settings.
-Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
-"""
-struct RemoteCallbacks
-    cb::RemoteCallbacksStruct
-    gcroot::Ref{Any}
-
-    function RemoteCallbacks(; version::Cuint=Cuint(1), payload=C_NULL, callbacks...)
-        p = Ref{Any}(payload)
-        pp = unsafe_load(Ptr{Ptr{Cvoid}}(Base.unsafe_convert(Ptr{Any}, p)))
-        return new(RemoteCallbacksStruct(; version=version, payload=pp, callbacks...), p)
-    end
-end
 
 function RemoteCallbacks(c::Callbacks)
     callbacks = Dict{Symbol, Ptr{Cvoid}}()
@@ -282,12 +277,12 @@ end
 
 Options for connecting through a proxy.
 
-Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
+Matches the [`git_proxy_options`](https://libgit2.org/libgit2/#HEAD/type/git_proxy_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
   * `proxytype`: an `enum` for the type of proxy to use.
-     Defined in [`git_proxy_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_t).
+     Defined in [`git_proxy_t`](https://libgit2.org/libgit2/#HEAD/type/git_proxy_t).
      The corresponding Julia enum is `GIT_PROXY` and has values:
      - `PROXY_NONE`: do not attempt the connection through a proxy.
      - `PROXY_AUTO`: attempt to figure out the proxy configuration from the git configuration.
@@ -315,28 +310,15 @@ julia> fetch(remote, "master", options=fo)
     proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
     url::Cstring                 = Cstring(C_NULL)
     credential_cb::Ptr{Cvoid}    = C_NULL
-    certificate_cb::Ptr{Cvoid}   = C_NULL
-    payload::Ptr{Cvoid}          = C_NULL
+    certificate_cb::Ptr{Cvoid}   = certificate_cb()
+    payload::Any                 = nothing
 end
-
-@kwdef struct FetchOptionsStruct
-    version::Cuint                     = Cuint(1)
-    callbacks::RemoteCallbacksStruct   = RemoteCallbacksStruct()
-    prune::Cint                        = Consts.FETCH_PRUNE_UNSPECIFIED
-    update_fetchhead::Cint             = Cint(1)
-    download_tags::Cint                = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions       = ProxyOptions()
-    end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct = StrArrayStruct()
-    end
-end
+@assert ProxyOptions.isinlinealloc
 
 """
     LibGit2.FetchOptions
 
-Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
+Matches the [`git_fetch_options`](https://libgit2.org/libgit2/#HEAD/type/git_fetch_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -352,32 +334,26 @@ The fields represent:
   * `custom_headers`: any extra headers needed for the fetch. Only present on libgit2 versions
      newer than or equal to 0.24.0.
 """
-struct FetchOptions
-    opts::FetchOptionsStruct
-    cb_gcroot::Ref{Any}
-    function FetchOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
-        return new(FetchOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
+@kwdef struct FetchOptions
+    version::Cuint                     = Cuint(1)
+    callbacks::RemoteCallbacks         = RemoteCallbacks()
+    prune::Cint                        = Consts.FETCH_PRUNE_UNSPECIFIED
+    update_fetchhead::Cint             = Cint(1)
+    download_tags::Cint                = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions       = ProxyOptions()
+    end
+    @static if LibGit2.VERSION >= v"0.24.0"
+        custom_headers::StrArrayStruct = StrArrayStruct()
     end
 end
+@assert FetchOptions.isinlinealloc
 
-
-@kwdef struct CloneOptionsStruct
-    version::Cuint                      = Cuint(1)
-    checkout_opts::CheckoutOptions      = CheckoutOptions()
-    fetch_opts::FetchOptionsStruct      = FetchOptionsStruct()
-    bare::Cint                          = Cint(0)
-    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
-    checkout_branch::Cstring            = Cstring(C_NULL)
-    repository_cb::Ptr{Cvoid}           = C_NULL
-    repository_cb_payload::Ptr{Cvoid}   = C_NULL
-    remote_cb::Ptr{Cvoid}               = C_NULL
-    remote_cb_payload::Ptr{Cvoid}       = C_NULL
-end
 
 """
     LibGit2.CloneOptions
 
-Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
+Matches the [`git_clone_options`](https://libgit2.org/libgit2/#HEAD/type/git_clone_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -396,18 +372,24 @@ The fields represent:
   * `remote_cb`: An optional callback used to create the [`GitRemote`](@ref) before making the clone from it.
   * `remote_cb_payload`: The payload for the remote callback.
 """
-struct CloneOptions
-    opts::CloneOptionsStruct
-    cb_gcroot::Ref{Any}
-    function CloneOptions(; fetch_opts::FetchOptions=FetchOptions(), kwargs...)
-        return new(CloneOptionsStruct(; kwargs..., fetch_opts=fetch_opts.opts), fetch_opts.cb_gcroot)
-    end
+@kwdef struct CloneOptions
+    version::Cuint                      = Cuint(1)
+    checkout_opts::CheckoutOptions      = CheckoutOptions()
+    fetch_opts::FetchOptions            = FetchOptions()
+    bare::Cint                          = Cint(0)
+    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
+    checkout_branch::Cstring            = Cstring(C_NULL)
+    repository_cb::Ptr{Cvoid}           = C_NULL
+    repository_cb_payload::Any          = nothing
+    remote_cb::Ptr{Cvoid}               = C_NULL
+    remote_cb_payload::Any              = nothing
 end
+@assert CloneOptions.isinlinealloc
 
 """
     LibGit2.DiffOptionsStruct
 
-Matches the [`git_diff_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_options) struct.
+Matches the [`git_diff_options`](https://libgit2.org/libgit2/#HEAD/type/git_diff_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -446,7 +428,7 @@ The fields represent:
     @static if LibGit2.VERSION >= v"0.24.0"
         progress_cb::Ptr{Cvoid}              = C_NULL
     end
-    payload::Ptr{Cvoid}                      = C_NULL
+    payload::Any                             = nothing
 
     # options controlling how the diff text is generated
     context_lines::UInt32                    = UInt32(3)
@@ -456,11 +438,12 @@ The fields represent:
     old_prefix::Cstring                      = Cstring(C_NULL)
     new_prefix::Cstring                      = Cstring(C_NULL)
 end
+@assert DiffOptionsStruct.isinlinealloc
 
 """
     LibGit2.DescribeOptions
 
-Matches the [`git_describe_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_options) struct.
+Matches the [`git_describe_options`](https://libgit2.org/libgit2/#HEAD/type/git_describe_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -485,11 +468,12 @@ The fields represent:
     only_follow_first_parent::Cint    = Cint(0)
     show_commit_oid_as_fallback::Cint = Cint(0)
 end
+@assert DescribeOptions.isinlinealloc
 
 """
     LibGit2.DescribeFormatOptions
 
-Matches the [`git_describe_format_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_format_options) struct.
+Matches the [`git_describe_format_options`](https://libgit2.org/libgit2/#HEAD/type/git_describe_format_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -503,12 +487,13 @@ The fields represent:
     always_use_long_format::Cint = Cint(0)
     dirty_suffix::Cstring        = Cstring(C_NULL)
 end
+@assert DescribeFormatOptions.isinlinealloc
 
 """
     LibGit2.DiffFile
 
 Description of one side of a delta.
-Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+Matches the [`git_diff_file`](https://libgit2.org/libgit2/#HEAD/type/git_diff_file) struct.
 
 The fields represent:
   * `id`: the [`GitHash`](@ref) of the item in the diff. If the item is empty on this
@@ -516,7 +501,7 @@ The fields represent:
      be `GitHash(0)`.
   * `path`: a `NULL` terminated path to the item relative to the working directory of the repository.
   * `size`: the size of the item in bytes.
-  * `flags`: a combination of the [`git_diff_flag_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_flag_t)
+  * `flags`: a combination of the [`git_diff_flag_t`](https://libgit2.org/libgit2/#HEAD/type/git_diff_flag_t)
      flags. The `i`th bit of this integer sets the `i`th flag.
   * `mode`: the [`stat`](@ref) mode for the item.
   * `id_abbrev`: only present in LibGit2 versions newer than or equal to `0.25.0`.
@@ -535,7 +520,7 @@ end
 
 function Base.show(io::IO, df::DiffFile)
     println(io, "DiffFile:")
-    println(io, "Oid: $(df.id))")
+    println(io, "Oid: $(df.id)")
     println(io, "Path: $(df.path)")
     println(io, "Size: $(df.size)")
 end
@@ -544,7 +529,7 @@ end
     LibGit2.DiffDelta
 
 Description of changes to one entry.
-Matches the [`git_diff_delta`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_delta) struct.
+Matches the [`git_diff_delta`](https://libgit2.org/libgit2/#HEAD/type/git_diff_delta) struct.
 
 The fields represent:
   * `status`: One of `Consts.DELTA_STATUS`, indicating whether the file has been added/modified/deleted.
@@ -577,7 +562,7 @@ end
 """
     LibGit2.MergeOptions
 
-Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_merge_options) struct.
+Matches the [`git_merge_options`](https://libgit2.org/libgit2/#HEAD/type/git_merge_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -632,11 +617,12 @@ The fields represent:
     file_favor::GIT_MERGE_FILE_FAVOR  = Consts.MERGE_FILE_FAVOR_NORMAL
     file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
 end
+@assert MergeOptions.isinlinealloc
 
 """
     LibGit2.BlameOptions
 
-Matches the [`git_blame_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_options) struct.
+Matches the [`git_blame_options`](https://libgit2.org/libgit2/#HEAD/type/git_blame_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -661,23 +647,13 @@ The fields represent:
     min_line::Csize_t                 = Csize_t(1)
     max_line::Csize_t                 = Csize_t(0)
 end
+@assert BlameOptions.isinlinealloc
 
-@kwdef struct PushOptionsStruct
-    version::Cuint                     = Cuint(1)
-    parallelism::Cint                  = Cint(1)
-    callbacks::RemoteCallbacksStruct   = RemoteCallbacksStruct()
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions       = ProxyOptions()
-    end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct = StrArrayStruct()
-    end
-end
 
 """
     LibGit2.PushOptions
 
-Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
+Matches the [`git_push_options`](https://libgit2.org/libgit2/#HEAD/type/git_push_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -691,18 +667,24 @@ The fields represent:
   * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
      Extra headers needed for the push operation.
 """
-struct PushOptions
-    opts::PushOptionsStruct
-    cb_gcroot::Ref{Any}
-    function PushOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
-        return new(PushOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
+@kwdef struct PushOptions
+    version::Cuint                     = Cuint(1)
+    parallelism::Cint                  = Cint(1)
+    callbacks::RemoteCallbacks         = RemoteCallbacks()
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions       = ProxyOptions()
+    end
+    @static if LibGit2.VERSION >= v"0.24.0"
+        custom_headers::StrArrayStruct = StrArrayStruct()
     end
 end
+@assert PushOptions.isinlinealloc
+
 
 """
     LibGit2.CherrypickOptions
 
-Matches the [`git_cherrypick_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_cherrypick_options) struct.
+Matches the [`git_cherrypick_options`](https://libgit2.org/libgit2/#HEAD/type/git_cherrypick_options) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -719,12 +701,13 @@ The fields represent:
     merge_opts::MergeOptions = MergeOptions()
     checkout_opts::CheckoutOptions = CheckoutOptions()
 end
+@assert CherrypickOptions.isinlinealloc
 
 
 """
     LibGit2.IndexTime
 
-Matches the [`git_index_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_time) struct.
+Matches the [`git_index_time`](https://libgit2.org/libgit2/#HEAD/type/git_index_time) struct.
 """
 struct IndexTime
     seconds::Int64
@@ -735,7 +718,7 @@ end
     LibGit2.IndexEntry
 
 In-memory representation of a file entry in the index.
-Matches the [`git_index_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_entry) struct.
+Matches the [`git_index_entry`](https://libgit2.org/libgit2/#HEAD/type/git_index_entry) struct.
 """
 struct IndexEntry
     ctime::IndexTime
@@ -788,12 +771,13 @@ The fields represent:
     end
     checkout_opts::CheckoutOptions = CheckoutOptions()
 end
+@assert RebaseOptions.isinlinealloc
 
 """
     LibGit2.RebaseOperation
 
 Describes a single instruction/operation to be performed during the rebase.
-Matches the [`git_rebase_operation`](https://libgit2.github.com/libgit2/#HEAD/type/git_rebase_operation_t) struct.
+Matches the [`git_rebase_operation`](https://libgit2.org/libgit2/#HEAD/type/git_rebase_operation_t) struct.
 
 The fields represent:
   * `optype`: the type of rebase operation currently being performed. The options are:
@@ -826,7 +810,7 @@ end
     LibGit2.StatusOptions
 
 Options to control how `git_status_foreach_ext()` will issue callbacks.
-Matches the [`git_status_opt_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_status_opt_t) struct.
+Matches the [`git_status_opt_t`](https://libgit2.org/libgit2/#HEAD/type/git_status_opt_t) struct.
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
@@ -850,6 +834,7 @@ The fields represent:
         baseline::Ptr{Cvoid} = C_NULL
     end
 end
+@assert StatusOptions.isinlinealloc
 
 """
     LibGit2.StatusEntry
@@ -908,15 +893,16 @@ end
 """
     LibGit2.ConfigEntry
 
-Matches the [`git_config_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_config_entry) struct.
+Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_config_entry) struct.
 """
 @kwdef struct ConfigEntry
     name::Cstring       = Cstring(C_NULL)
     value::Cstring      = Cstring(C_NULL)
     level::GIT_CONFIG   = Consts.CONFIG_LEVEL_DEFAULT
     free::Ptr{Cvoid}    = C_NULL
-    payload::Ptr{Cvoid} = C_NULL
+    payload::Any        = nothing
 end
+@assert ConfigEntry.isinlinealloc
 
 function Base.show(io::IO, ce::ConfigEntry)
     print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
@@ -963,12 +949,48 @@ function split_cfg_entry(ce::ConfigEntry)
 end
 
 # Abstract object types
+
+"""
+    AbstractGitObject
+
+`AbstractGitObject`s must obey the following interface:
+- `obj.owner`, if present, must be a `Union{Nothing,GitRepo,GitTree}`
+- `obj.ptr`, if present, must be a `Union{Ptr{Cvoid},Ptr{SignatureStruct}}`
+"""
 abstract type AbstractGitObject end
+
+function Base.getproperty(obj::AbstractGitObject, name::Symbol)
+    # These type-assertions enforce the interface requirements above.
+    # They assist type-inference in cases where the compiler only knows that it
+    # has an `AbstractGitObject` without being certain about the concrete type.
+    # See detailed explanation in https://github.com/JuliaLang/julia/pull/36452.
+    if name === :owner
+        return getfield(obj, :owner)::Union{Nothing,GitRepo,GitTree}
+    elseif name === :ptr
+        return getfield(obj, :ptr)::Union{Ptr{Cvoid},Ptr{SignatureStruct}}
+    else
+        return getfield(obj, name)
+    end
+end
+
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 
+# `GitObject`s must obey the following interface:
+# - `obj.owner` must be a `GitRepo`
+# - `obj.ptr` must be a Ptr{Cvoid}
 abstract type GitObject <: AbstractGitObject end
 
-for (typ, owntyp, sup, cname) in [
+function Base.getproperty(obj::GitObject, name::Symbol)
+    if name === :owner
+        return getfield(obj, :owner)::GitRepo
+    elseif name === :ptr
+        return getfield(obj, :ptr)::Ptr{Cvoid}
+    else
+        return getfield(obj, name)
+    end
+end
+
+for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
     (:GitRepo,           nothing,                 :AbstractGitObject, :git_repository),
     (:GitConfig,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_config),
     (:GitIndex,          :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_index),
@@ -1007,6 +1029,7 @@ for (typ, owntyp, sup, cname) in [
                 return obj
             end
         end
+        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
     else
         @eval mutable struct $typ <: $sup
             owner::$owntyp
@@ -1021,7 +1044,8 @@ for (typ, owntyp, sup, cname) in [
                 return obj
             end
         end
-        if isa(owntyp, Expr) && owntyp.args[1] == :Union && owntyp.args[3] == :Nothing
+        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
+        if isa(owntyp, Expr) && owntyp.args[1] === :Union && owntyp.args[3] === :Nothing
             @eval begin
                 $typ(ptr::Ptr{Cvoid}, fin::Bool=true) = $typ(nothing, ptr, fin)
             end
@@ -1050,7 +1074,7 @@ end
     LibGit2.GitSignature
 
 This is a Julia wrapper around a pointer to a
-[`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
+[`git_signature`](https://libgit2.org/libgit2/#HEAD/type/git_signature) object.
 """
 mutable struct GitSignature <: AbstractGitObject
     ptr::Ptr{SignatureStruct}
@@ -1080,7 +1104,7 @@ end
 """
     LibGit2.BlameHunk
 
-Matches the [`git_blame_hunk`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_hunk) struct.
+Matches the [`git_blame_hunk`](https://libgit2.org/libgit2/#HEAD/type/git_blame_hunk) struct.
 The fields represent:
     * `lines_in_hunk`: the number of lines in this hunk of the blame.
     * `final_commit_id`: the [`GitHash`](@ref) of the commit where this section was last changed.
@@ -1112,6 +1136,7 @@ The fields represent:
 
     boundary::Char                        = '\0'
 end
+@assert BlameHunk.isinlinealloc
 
 """
     with(f::Function, obj)
@@ -1205,7 +1230,7 @@ mutable struct UserPasswordCredential <: AbstractCredential
 end
 
 function Base.setproperty!(cred::UserPasswordCredential, name::Symbol, value)
-    if name == :pass
+    if name === :pass
         field = getfield(cred, name)
         Base.shred!(field)
     end
@@ -1240,7 +1265,7 @@ mutable struct SSHCredential <: AbstractCredential
 end
 
 function Base.setproperty!(cred::SSHCredential, name::Symbol, value)
-    if name == :pass
+    if name === :pass
         field = getfield(cred, name)
         Base.shred!(field)
     end

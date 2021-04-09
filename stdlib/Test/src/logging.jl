@@ -40,6 +40,7 @@ end
 
 function handle_message(logger::TestLogger, level, msg, _module,
                         group, id, file, line; kwargs...)
+    @nospecialize
     push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
 end
 
@@ -83,7 +84,7 @@ function record(::FallbackTestSet, t::LogTestFailure)
 end
 
 function record(ts::DefaultTestSet, t::LogTestFailure)
-    if myid() == 1
+    if TESTSET_PRINT_ENABLE[]
         printstyled(ts.description, ": ", color=:white)
         print(t)
         Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
@@ -136,9 +137,18 @@ If we also wanted to test the debug messages, these need to be enabled with the
 
     @test_logs (:info,"Doing foo with n=2") (:debug,"Iteration 1") (:debug,"Iteration 2") min_level=Debug foo(2)
 
+If you want to test that some particular messages are generated while ignoring the rest,
+you can set the keyword `match_mode=:any`:
+
+    @test_logs (:info,) (:debug,"Iteration 42") min_level=Debug match_mode=:any foo(100)
+
 The macro may be chained with `@test` to also test the returned value:
 
     @test (@test_logs (:info,"Doing foo with n=2") foo(2)) == 42
+
+If you want to test an absence of logger messages, you can pass no log_patterns:
+
+    @test_logs min_level=Logging.Warn f()  # test `f` logs no messages when the logger level is warn.
 
 """
 macro test_logs(exs...)
@@ -147,7 +157,7 @@ macro test_logs(exs...)
     patterns = Any[]
     kwargs = Any[]
     for e in exs[1:end-1]
-        if e isa Expr && e.head == :(=)
+        if e isa Expr && e.head === :(=)
             push!(kwargs, esc(Expr(:kw, e.args...)))
         else
             push!(patterns, esc(e))
@@ -169,7 +179,7 @@ macro test_logs(exs...)
                                              $(QuoteNode(exs[1:end-1])), logs)
                 end
             catch e
-                testres = Error(:test_error, $orig_expr, e, catch_backtrace(), $sourceloc)
+                testres = Error(:test_error, $orig_expr, e, Base.catch_stack(), $sourceloc)
             end
             Test.record(Test.get_testset(), testres)
             value
@@ -179,10 +189,10 @@ end
 
 function match_logs(f, patterns...; match_mode::Symbol=:all, kwargs...)
     logs,value = collect_test_logs(f; kwargs...)
-    if match_mode == :all
+    if match_mode === :all
         didmatch = length(logs) == length(patterns) &&
             all(occursin(p, l) for (p,l) in zip(patterns, logs))
-    elseif match_mode == :any
+    elseif match_mode === :any
         didmatch = all(any(occursin(p, l) for l in logs) for p in patterns)
     end
     didmatch,logs,value
@@ -190,12 +200,12 @@ end
 
 # TODO: Use a version of parse_level from stdlib/Logging, when it exists.
 function parse_level(level::Symbol)
-    if      level == :belowminlevel  return  Logging.BelowMinLevel
-    elseif  level == :debug          return  Logging.Debug
-    elseif  level == :info           return  Logging.Info
-    elseif  level == :warn           return  Logging.Warn
-    elseif  level == :error          return  Logging.Error
-    elseif  level == :abovemaxlevel  return  Logging.AboveMaxLevel
+    if      level === :belowminlevel  return  Logging.BelowMinLevel
+    elseif  level === :debug          return  Logging.Debug
+    elseif  level === :info           return  Logging.Info
+    elseif  level === :warn           return  Logging.Warn
+    elseif  level === :error          return  Logging.Error
+    elseif  level === :abovemaxlevel  return  Logging.AboveMaxLevel
     else
         throw(ArgumentError("Unknown log level $level"))
     end

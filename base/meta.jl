@@ -9,18 +9,115 @@ using ..CoreLogging
 
 export quot,
        isexpr,
+       isidentifier,
+       isoperator,
+       isunaryoperator,
+       isbinaryoperator,
+       ispostfixoperator,
+       replace_sourceloc!,
        show_sexpr,
        @dump
 
+using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
+
+"""
+    Meta.quot(ex)::Expr
+
+Quote expression `ex` to produce an expression with head `quote`. This can for
+instance be used to represent objects of type `Expr` in the AST. See also the
+manual section about [QuoteNode](@ref man-quote-node).
+
+# Examples
+```jldoctest
+julia> eval(Meta.quot(:x))
+:x
+
+julia> dump(Meta.quot(:x))
+Expr
+  head: Symbol quote
+  args: Array{Any}((1,))
+    1: Symbol x
+
+julia> eval(Meta.quot(:(1+2)))
+:(1 + 2)
+```
+"""
 quot(ex) = Expr(:quote, ex)
 
+"""
+    Meta.isexpr(ex, head[, n])::Bool
+
+Return true if `ex` is an `Expr` with the given type `head` and optionally that
+the argument list is of length `n`. `head` may be a `Symbol` or collection of
+`Symbol`s. For example, to check that a macro was passed a function call
+expression, you might use `isexpr(ex, :call)`.
+
+# Examples
+```jldoctest
+julia> ex = :(f(x))
+:(f(x))
+
+julia> Meta.isexpr(ex, :block)
+false
+
+julia> Meta.isexpr(ex, :call)
+true
+
+julia> Meta.isexpr(ex, [:block, :call]) # multiple possible heads
+true
+
+julia> Meta.isexpr(ex, :call, 1)
+false
+
+julia> Meta.isexpr(ex, :call, 2)
+true
+```
+"""
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
-isexpr(@nospecialize(ex), heads::Union{Set,Vector,Tuple}) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) == n
+isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
+isexpr(@nospecialize(ex), head::Symbol, n::Int) = isa(ex, Expr) && ex.head === head && length(ex.args) == n
+isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
+
+"""
+    replace_sourceloc!(location, expr)
+
+Overwrite the caller source location for each macro call in `expr`, returning
+the resulting AST.  This is useful when you need to wrap a macro inside a
+macro, and want the inner macro to see the `__source__` location of the outer
+macro.  For example:
+
+```
+macro test_is_one(ex)
+    replace_sourceloc!(__source__, :(@test \$(esc(ex)) == 1))
+end
+@test_is_one 2
+```
+
+`@test` now reports the location of the call `@test_is_one 2` to the user,
+rather than line 2 where `@test` is used as an implementation detail.
+"""
+function replace_sourceloc!(sourceloc, @nospecialize(ex))
+    if ex isa Expr
+        if ex.head == :macrocall
+            ex.args[2] = sourceloc
+        end
+        map!(e -> replace_sourceloc!(sourceloc, e), ex.args, ex.args)
+    end
+    return ex
+end
 
 
-# ---- show_sexpr: print an AST as an S-expression ----
+"""
+    Meta.show_sexpr([io::IO,], ex)
 
+Show expression `ex` as a lisp style S-expression.
+
+# Examples
+```jldoctest
+julia> Meta.show_sexpr(:(f(x, g(y,z))))
+(:call, :f, :x, (:call, :g, :y, :z))
+```
+"""
 show_sexpr(ex) = show_sexpr(stdout, ex)
 show_sexpr(io::IO, ex) = show_sexpr(io, ex, 0)
 show_sexpr(io::IO, ex, indent::Int) = show(io, ex)
@@ -94,6 +191,15 @@ struct ParseError <: Exception
     msg::AbstractString
 end
 
+function _parse_string(text::AbstractString, filename::AbstractString,
+                       index::Integer, options)
+    if index < 1 || index > ncodeunits(text) + 1
+        throw(BoundsError(text, index))
+    end
+    ex, offset::Int = Core._parse(text, filename, index-1, options)
+    ex, offset+1
+end
+
 """
     parse(str, start; greedy=true, raise=true, depwarn=true)
 
@@ -116,23 +222,11 @@ julia> Meta.parse("x = 3, y = 5", 5)
 """
 function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
                depwarn::Bool=true)
-    # pos is one based byte offset.
-    # returns (expr, end_pos). expr is () in case of parse error.
-    bstr = String(str)
-    # For now, assume all parser warnings are depwarns
-    ex, pos = with_logger(depwarn ? current_logger() : NullLogger()) do
-        ccall(:jl_parse_string, Any,
-              (Ptr{UInt8}, Csize_t, Int32, Int32),
-              bstr, sizeof(bstr), pos-1, greedy ? 1 : 0)
-    end
+    ex, pos = _parse_string(str, "none", pos, greedy ? :statement : :atom)
     if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
     end
-    if ex === ()
-        raise && throw(ParseError("end of input"))
-        ex = Expr(:error, "end of input")
-    end
-    return ex, pos+1 # C is zero-based, Julia is 1-based
+    return ex, pos
 end
 
 """
@@ -169,6 +263,15 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
         raise && throw(ParseError("extra token after end of expression"))
         return Expr(:error, "extra token after end of expression")
     end
+    return ex
+end
+
+function parseatom(text::AbstractString, pos::Integer; filename="none")
+    return _parse_string(text, String(filename), pos, :atom)
+end
+
+function parseall(text::AbstractString; filename="none")
+    ex,_ = _parse_string(text, String(filename), 1, :all)
     return ex
 end
 
@@ -241,6 +344,19 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         x.edges .+= slot_offset
         return x
     end
+    if isa(x, Core.ReturnNode)
+        return Core.ReturnNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+        )
+    end
+    if isa(x, Core.GotoIfNot)
+        return Core.GotoIfNot(
+            _partially_inline!(x.cond, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+            x.dest + statement_offset,
+        )
+    end
     if isa(x, Expr)
         head = x.head
         if head === :static_parameter
@@ -262,9 +378,9 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 3
                     x.args[3] = Core.svec(Any[_instantiate_type_in_env(argt, type_signature, static_param_values) for argt in x.args[3]]...)
                 elseif i == 4
-                    @assert isa((x.args[4]::QuoteNode).value, Symbol)
+                    @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa(x.args[5], Int)
+                    @assert isa((x.args[5]::QuoteNode).value, Symbol)
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,
@@ -297,6 +413,6 @@ end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
 
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :simdloop)
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 end # module

@@ -113,34 +113,34 @@ Unsigned integers are input and output using the `0x` prefix and hexadecimal (ba
 determined by the number of hex digits used:
 
 ```jldoctest
-julia> 0x1
+julia> x = 0x1
 0x01
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt8
 
-julia> 0x123
+julia> x = 0x123
 0x0123
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt16
 
-julia> 0x1234567
+julia> x = 0x1234567
 0x01234567
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt32
 
-julia> 0x123456789abcdef
+julia> x = 0x123456789abcdef
 0x0123456789abcdef
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt64
 
-julia> 0x11112222333344445555666677778888
+julia> x = 0x11112222333344445555666677778888
 0x11112222333344445555666677778888
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt128
 ```
 
@@ -148,28 +148,25 @@ This behavior is based on the observation that when one uses unsigned hex litera
 values, one typically is using them to represent a fixed numeric byte sequence, rather than just
 an integer value.
 
-Recall that the variable [`ans`](@ref) is set to the value of the last expression evaluated in
-an interactive session. This does not occur when Julia code is run in other ways.
-
 Binary and octal literals are also supported:
 
 ```jldoctest
-julia> 0b10
+julia> x = 0b10
 0x02
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt8
 
-julia> 0o010
+julia> x = 0o010
 0x08
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt8
 
-julia> 0x00000000000000001111222233334444
+julia> x = 0x00000000000000001111222233334444
 0x00000000000000001111222233334444
 
-julia> typeof(ans)
+julia> typeof(x)
 UInt128
 ```
 
@@ -216,7 +213,7 @@ UInt128: [0,340282366920938463463374607431768211455]
 
 The values returned by [`typemin`](@ref) and [`typemax`](@ref) are always of the given argument
 type. (The above expression uses several features that have yet to be introduced, including [for loops](@ref man-loops),
-[Strings](@ref man-strings), and [Interpolation](@ref), but should be easy enough to understand for users
+[Strings](@ref man-strings), and [Interpolation](@ref string-interpolation), but should be easy enough to understand for users
 with some existing programming experience.)
 
 ### Overflow behavior
@@ -240,6 +237,16 @@ computers. In applications where overflow is possible, explicit checking for wra
 by overflow is essential; otherwise, the [`BigInt`](@ref) type in [Arbitrary Precision Arithmetic](@ref)
 is recommended instead.
 
+An example of overflow behavior and how to potentially resolve it is as follows:
+
+```jldoctest
+julia> 10^19
+-8446744073709551616
+
+julia> big(10)^19
+10000000000000000000
+```
+
 ### Division errors
 
 Integer division (the `div` function) has two exceptional cases: dividing by zero, and dividing
@@ -250,7 +257,7 @@ second argument is zero.
 ## Floating-Point Numbers
 
 Literal floating-point numbers are represented in the standard formats, using
-[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E-notation) when necessary:
+[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E_notation) when necessary:
 
 ```jldoctest
 julia> 1.0
@@ -279,10 +286,10 @@ The above results are all [`Float64`](@ref) values. Literal [`Float32`](@ref) va
 entered by writing an `f` in place of `e`:
 
 ```jldoctest
-julia> 0.5f0
+julia> x = 0.5f0
 0.5f0
 
-julia> typeof(ans)
+julia> typeof(x)
 Float32
 
 julia> 2.5f-4
@@ -292,10 +299,10 @@ julia> 2.5f-4
 Values can be converted to [`Float32`](@ref) easily:
 
 ```jldoctest
-julia> Float32(-1.5)
+julia> x = Float32(-1.5)
 -1.5f0
 
-julia> typeof(ans)
+julia> typeof(x)
 Float32
 ```
 
@@ -309,10 +316,10 @@ julia> 0x1p0
 julia> 0x1.8p3
 12.0
 
-julia> 0x.4p-1
+julia> x = 0x.4p-1
 0.125
 
-julia> typeof(ans)
+julia> typeof(x)
 Float64
 ```
 
@@ -362,6 +369,7 @@ the real number line:
 | `-Inf16`  | `-Inf32`  | `-Inf`    | negative infinity | a value less than all finite floating-point values              |
 | `NaN16`   | `NaN32`   | `NaN`     | not a number      | a value not `==` to any floating-point value (including itself) |
 
+
 For further discussion of how these non-finite floating-point values are ordered with respect
 to each other and other floats, see [Numeric Comparisons](@ref). By the [IEEE 754 standard](https://en.wikipedia.org/wiki/IEEE_754-2008),
 these floating-point values are the results of certain arithmetic operations:
@@ -402,6 +410,18 @@ NaN
 
 julia> 0 * Inf
 NaN
+
+julia> NaN == NaN
+false
+
+julia> NaN != NaN
+true
+
+julia> NaN < NaN
+false
+
+julia> NaN > NaN
+false
 ```
 
 The [`typemin`](@ref) and [`typemax`](@ref) functions also apply to floating-point types:
@@ -505,7 +525,7 @@ Floating-point arithmetic entails many subtleties which can be surprising to use
 with the low-level implementation details. However, these subtleties are described in detail in
 most books on scientific computation, and also in the following references:
 
-  * The definitive guide to floating point arithmetic is the [IEEE 754-2008 Standard](http://standards.ieee.org/findstds/standard/754-2008.html);
+  * The definitive guide to floating point arithmetic is the [IEEE 754-2008 Standard](https://standards.ieee.org/standard/754-2008.html);
     however, it is not available for free online.
   * For a brief but lucid presentation of how floating-point numbers are represented, see John D.
     Cook's [article](https://www.johndcook.com/blog/2009/04/06/anatomy-of-a-floating-point-number/)
@@ -523,20 +543,47 @@ most books on scientific computation, and also in the following references:
 ## Arbitrary Precision Arithmetic
 
 To allow computations with arbitrary-precision integers and floating point numbers, Julia wraps
-the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and the [GNU MPFR Library](http://www.mpfr.org),
+the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and the [GNU MPFR Library](https://www.mpfr.org),
 respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in Julia for arbitrary
 precision integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, and [`parse`](@ref)
-can be used to construct them from `AbstractString`s.  Once created, they participate in arithmetic
-with all other numeric types thanks to Julia's [type promotion and conversion mechanism](@ref conversion-and-promotion):
+Constructors exist to create these types from primitive numerical types, and the
+[string literal](@ref non-standard-string-literals) [`@big_str`](@ref) or [`parse`](@ref)
+can be used to construct them from `AbstractString`s.
+`BigInt`s can also be input as integer literals when
+they are too big for other built-in integer types. Note that as there
+is no unsigned arbitrary-precision integer type in `Base` (`BigInt` is
+sufficient in most cases), hexadecimal, octal and binary literals can
+be used (in addition to decimal literals).
+
+Once created, they participate in arithmetic
+with all other numeric types thanks to Julia's
+[type promotion and conversion mechanism](@ref conversion-and-promotion):
 
 ```jldoctest
 julia> BigInt(typemax(Int64)) + 1
 9223372036854775808
 
+julia> big"123456789012345678901234567890" + 1
+123456789012345678901234567891
+
 julia> parse(BigInt, "123456789012345678901234567890") + 1
 123456789012345678901234567891
+
+julia> string(big"2"^200, base=16)
+"100000000000000000000000000000000000000000000000000"
+
+julia> 0x100000000000000000000000000000000-1 == typemax(UInt128)
+true
+
+julia> 0x000000000000000000000000000000000
+0
+
+julia> typeof(ans)
+BigInt
+
+julia> big"1.23456789012345678901"
+1.234567890123456789010000000000000000000000000000000000000000000000000000000004
 
 julia> parse(BigFloat, "1.23456789012345678901")
 1.234567890123456789010000000000000000000000000000000000000000000000000000000004
@@ -667,12 +714,13 @@ and the identifier or parenthesized expression which it multiplies.
 
 ### Syntax Conflicts
 
-Juxtaposed literal coefficient syntax may conflict with two numeric literal syntaxes: hexadecimal
-integer literals and engineering notation for floating-point literals. Here are some situations
+Juxtaposed literal coefficient syntax may conflict with some numeric literal syntaxes: hexadecimal,
+octal and binary integer literals and engineering notation for floating-point literals. Here are some situations
 where syntactic conflicts arise:
 
   * The hexadecimal integer literal expression `0xff` could be interpreted as the numeric literal
-    `0` multiplied by the variable `xff`.
+    `0` multiplied by the variable `xff`. Similar ambiguities arise with octal and binary literals like
+    `0o777` or `0b01001010`.
   * The floating-point literal expression `1e10` could be interpreted as the numeric literal `1` multiplied
     by the variable `e10`, and similarly with the equivalent `E` form.
   * The 32-bit floating-point literal expression `1.5f22` could be interpreted as the numeric literal
@@ -680,7 +728,7 @@ where syntactic conflicts arise:
 
 In all cases the ambiguity is resolved in favor of interpretation as numeric literals:
 
-  * Expressions starting with `0x` are always hexadecimal literals.
+  * Expressions starting with `0x`/`0o`/`0b` are always hexadecimal/octal/binary literals.
   * Expressions starting with a numeric literal followed by `e` or `E` are always floating-point literals.
   * Expressions starting with a numeric literal followed by `f` are always 32-bit floating-point literals.
 

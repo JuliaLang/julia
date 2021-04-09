@@ -3,7 +3,7 @@
 """
     Base.SecretBuffer()
 
-An IOBuffer-like object where the contents will be securely wiped when garbage collected.
+An [`IOBuffer`](@ref)-like object where the contents will be securely wiped when garbage collected.
 
 It is considered best practice to wipe the buffer using `Base.shred!(::SecretBuffer)` as
 soon as the secure data are no longer required. When initializing with existing data, the
@@ -48,7 +48,7 @@ A convenience constructor to initialize a `SecretBuffer` from a non-secret strin
 Strings are bad at keeping secrets because they are unable to be securely
 zeroed or destroyed. Therefore, avoid using this constructor with secret data.
 Instead of starting with a string, either construct the `SecretBuffer`
-incrementally with `SecretBuffer()` and `write`, or use a `Vector{UInt8}` with
+incrementally with `SecretBuffer()` and [`write`](@ref), or use a `Vector{UInt8}` with
 the `Base.SecretBuffer!(::Vector{UInt8})` constructor.
 """
 SecretBuffer(str::AbstractString) = SecretBuffer(String(str))
@@ -79,7 +79,7 @@ function SecretBuffer!(d::Vector{UInt8})
     s
 end
 
-unsafe_SecretBuffer!(s::Cstring) = unsafe_SecretBuffer!(convert(Ptr{UInt8}, s), ccall(:strlen, Cint, (Cstring,), s))
+unsafe_SecretBuffer!(s::Cstring) = unsafe_SecretBuffer!(convert(Ptr{UInt8}, s), Int(ccall(:strlen, Csize_t, (Cstring,), s)))
 function unsafe_SecretBuffer!(p::Ptr{UInt8}, len=1)
     s = SecretBuffer(sizehint=len)
     for i in 1:len
@@ -154,7 +154,7 @@ bytesavailable(io::SecretBuffer) = io.size - io.ptr + 1
 position(io::SecretBuffer) = io.ptr-1
 eof(io::SecretBuffer) = io.ptr > io.size
 isempty(io::SecretBuffer) = io.size == 0
-function peek(io::SecretBuffer)
+function peek(io::SecretBuffer, ::Type{UInt8})
     eof(io) && throw(EOFError())
     return io.data[io.ptr]
 end
@@ -166,7 +166,7 @@ function read(io::SecretBuffer, ::Type{UInt8})
 end
 
 function final_shred!(s::SecretBuffer)
-    !isshredded(s) && @warn("a SecretBuffer was `shred!`ed by the GC; use `shred!` manually after use to minimize exposure.")
+    !isshredded(s) && @async @warn("a SecretBuffer was `shred!`ed by the GC; use `shred!` manually after use to minimize exposure.")
     shred!(s)
 end
 

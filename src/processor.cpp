@@ -2,6 +2,11 @@
 
 // Processor feature detection
 
+#include "llvm-version.h"
+#include <llvm/ADT/StringRef.h>
+#include <llvm/Support/MathExtras.h>
+#include <llvm/Support/raw_ostream.h>
+
 #include "processor.h"
 
 #include "julia.h"
@@ -9,10 +14,6 @@
 
 #include <map>
 #include <algorithm>
-
-#include "llvm-version.h"
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/MathExtras.h>
 
 #include "julia_assert.h"
 

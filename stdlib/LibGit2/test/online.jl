@@ -68,7 +68,8 @@ mktempdir() do dir
                 error("unexpected")
             catch ex
                 @test isa(ex, LibGit2.Error.GitError)
-                @test ex.code == LibGit2.Error.EAUTH
+                # Return code seems to vary, see #32186, #32219
+                @test ex.code ∈ (LibGit2.Error.EAUTH, LibGit2.Error.ERROR)
             end
             Base.shred!(cred)
         end
@@ -87,6 +88,14 @@ mktempdir() do dir
             end
         end
     end
+end
+
+# needs to be run in separate process so it can re-initialize libgit2
+# with a useless self-signed certificate authority root certificate
+file = joinpath(@__DIR__, "bad_ca_roots.jl")
+cmd = `$(Base.julia_cmd()) --depwarn=no --startup-file=no $file`
+if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
+    error("bad CA roots tests failed, cmd : $cmd")
 end
 
 end # module

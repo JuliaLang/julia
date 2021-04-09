@@ -18,7 +18,7 @@ For example, you might write the method `sum` as:
 ```julia
 function sum(A::AbstractArray)
     r = zero(eltype(A))
-    for i = 1:length(A)
+    for i in eachindex(A)
         @inbounds r += A[i]
     end
     return r
@@ -43,8 +43,9 @@ between the `@inbounds` and `@boundscheck` declarations. For instance, the defau
 methods have the chain `getindex(A::AbstractArray, i::Real)` calls `getindex(IndexStyle(A), A, i)`
 calls `_getindex(::IndexLinear, A, i)`.
 
-To override the "one layer of inlining" rule, a function may be marked with `@propagate_inbounds`
-to propagate an inbounds context (or out of bounds context) through one additional layer of inlining.
+To override the "one layer of inlining" rule, a function may be marked with
+[`Base.@propagate_inbounds`](@ref) to propagate an inbounds context (or out of bounds
+context) through one additional layer of inlining.
 
 ## The bounds checking call hierarchy
 
@@ -88,3 +89,7 @@ Note this hierarchy has been designed to reduce the likelihood of method ambigui
 to make `checkbounds` the place to specialize on array type, and try to avoid specializations
 on index types; conversely, `checkindex` is intended to be specialized only on index type (especially,
 the last argument).
+
+## Emit bounds checks
+
+Julia can be launched with `--check-bounds={yes|no}` to emit bounds checks always or never (ignoring declarations).

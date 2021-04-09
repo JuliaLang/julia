@@ -3,21 +3,24 @@
 const LineNum = Int
 
 mutable struct InferenceState
-    params::Params # describes how to compute the result
+    params::InferenceParams
     result::InferenceResult # remember where to put the result
-    linfo::MethodInstance # used here for the tuple (specTypes, env, Method) and world-age validity
-    sp::SimpleVector     # static parameters
+    linfo::MethodInstance
+    sptypes::Vector{Any}    # types of static parameter
     slottypes::Vector{Any}
     mod::Module
     currpc::LineNum
+    pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
+    limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
 
     # info on the state of inference and the linfo
     src::CodeInfo
-    min_valid::UInt
-    max_valid::UInt
+    world::UInt
+    valid_worlds::WorldRange
     nargs::Int
-    stmt_types::Vector{Any}
-    stmt_edges::Vector{Any}
+    stmt_types::Vector{Union{Nothing, Vector{Any}}} # ::Vector{Union{Nothing, VarTable}}
+    stmt_edges::Vector{Union{Nothing, Vector{Any}}}
+    stmt_info::Vector{Any}
     # return type
     bestguess #::Type
     # current active instruction pointers
@@ -25,11 +28,12 @@ mutable struct InferenceState
     pc´´::LineNum
     nstmts::Int
     # current exception handler info
-    cur_hand #::Tuple{LineNum, Tuple{LineNum, ...}}
+    cur_hand #::Union{Nothing, Pair{LineNum, prev_handler}}
     handler_at::Vector{Any}
     n_handlers::Int
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
+    throw_blocks::BitSet
 
     cycle_backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
@@ -37,28 +41,37 @@ mutable struct InferenceState
 
     # TODO: move these to InferenceResult / Params?
     cached::Bool
-    limited::Bool
     inferred::Bool
     dont_work_on_me::Bool
 
+    # The place to look up methods while working on this function.
+    # In particular, we cache method lookup results for the same function to
+    # fast path repeated queries.
+    method_table::CachedMethodTable{InternalMethodTable}
+
+    # The interpreter that created this inference state. Not looked at by
+    # NativeInterpreter. But other interpreters may use this to detect cycles
+    interp::AbstractInterpreter
+
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
-                            cached::Bool, params::Params)
+                            cached::Bool, interp::AbstractInterpreter)
         linfo = result.linfo
         code = src.code::Array{Any,1}
         toplevel = !isa(linfo.def, Method)
 
-        sp = spvals_from_meth_instance(linfo::MethodInstance)
+        sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
         nssavalues = src.ssavaluetypes::Int
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+        stmt_info = Any[ nothing for i = 1:length(code) ]
 
         n = length(code)
-        s_edges = Any[ () for i = 1:n ]
-        s_types = Any[ () for i = 1:n ]
+        s_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
+        s_types = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
 
         # initial types
-        nslots = length(src.slotnames)
+        nslots = length(src.slotflags)
         argtypes = result.argtypes
         nargs = length(argtypes)
         s_argtypes = VarTable(undef, nslots)
@@ -71,10 +84,11 @@ mutable struct InferenceState
         s_types[1] = s_argtypes
 
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
+        throw_blocks = find_throw_blocks(code)
 
         # exception handlers
-        cur_hand = ()
-        handler_at = Any[ () for i=1:n ]
+        cur_hand = nothing
+        handler_at = Any[ nothing for i=1:n ]
         n_handlers = 0
 
         W = BitSet()
@@ -87,42 +101,65 @@ mutable struct InferenceState
             inmodule = linfo.def::Module
         end
 
-        if cached && !toplevel
-            min_valid = min_world(linfo.def)
-            max_valid = max_world(linfo.def)
-        else
-            min_valid = typemax(UInt)
-            max_valid = typemin(UInt)
-        end
+        valid_worlds = WorldRange(src.min_world,
+            src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         frame = new(
-            params, result, linfo,
+            InferenceParams(interp), result, linfo,
             sp, slottypes, inmodule, 0,
-            src, min_valid, max_valid,
-            nargs, s_types, s_edges,
+            IdSet{InferenceState}(), IdSet{InferenceState}(),
+            src, get_world_counter(interp), valid_worlds,
+            nargs, s_types, s_edges, stmt_info,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
-            ssavalue_uses,
+            ssavalue_uses, throw_blocks,
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
-            cached, false, false, false)
+            cached, false, false,
+            CachedMethodTable(method_table(interp)),
+            interp)
         result.result = frame
-        cached && push!(params.cache, result)
+        cached && push!(get_inference_cache(interp), result)
         return frame
     end
 end
 
-function InferenceState(result::InferenceResult, cached::Bool, params::Params)
+"""
+    Iterate through all callers of the given InferenceState in the abstract
+    interpretation stack (including the given InferenceState itself), vising
+    children before their parents (i.e. ascending the tree from the given
+    InferenceState). Note that cycles may be visited in any order.
+"""
+struct InfStackUnwind
+    inf::InferenceState
+end
+iterate(unw::InfStackUnwind) = (unw.inf, (unw.inf, 0))
+function iterate(unw::InfStackUnwind, (infstate, cyclei)::Tuple{InferenceState, Int})
+    # iterate through the cycle before walking to the parent
+    if cyclei < length(infstate.callers_in_cycle)
+        cyclei += 1
+        infstate = infstate.callers_in_cycle[cyclei]
+    else
+        cyclei = 0
+        infstate = infstate.parent
+    end
+    infstate === nothing && return nothing
+    (infstate::InferenceState, (infstate, cyclei))
+end
+
+method_table(interp::AbstractInterpreter, sv::InferenceState) = sv.method_table
+
+function InferenceState(result::InferenceResult, cached::Bool, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     src = retrieve_code_info(result.linfo)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
-    return InferenceState(result, src, cached, params)
+    return InferenceState(result, src, cached, interp)
 end
 
-function spvals_from_meth_instance(linfo::MethodInstance)
+function sptypes_from_meth_instance(linfo::MethodInstance)
     toplevel = !isa(linfo.def, Method)
-    if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
+    if !toplevel && isempty(linfo.sparam_vals) && isa(linfo.def.sig, UnionAll)
         # linfo is unspecialized
         sp = Any[]
         sig = linfo.def.sig
@@ -130,17 +167,35 @@ function spvals_from_meth_instance(linfo::MethodInstance)
             push!(sp, sig.var)
             sig = sig.body
         end
-        sp = svec(sp...)
     else
-        sp = linfo.sparam_vals
-        if _any(t->isa(t,TypeVar), sp)
-            sp = collect(Any, sp)
-        end
+        sp = collect(Any, linfo.sparam_vals)
     end
-    if !isa(sp, SimpleVector)
-        for i = 1:length(sp)
-            v = sp[i]
-            if v isa TypeVar
+    for i = 1:length(sp)
+        v = sp[i]
+        if v isa TypeVar
+            fromArg = 0
+            # if this parameter came from arg::Type{T}, then `arg` is more precise than
+            # Type{T} where lb<:T<:ub
+            sig = linfo.def.sig
+            temp = sig
+            for j = 1:i-1
+                temp = temp.body
+            end
+            Pi = temp.var
+            while temp isa UnionAll
+                temp = temp.body
+            end
+            sigtypes = temp.parameters
+            for j = 1:length(sigtypes)
+                tj = sigtypes[j]
+                if isType(tj) && tj.parameters[1] === Pi
+                    fromArg = j
+                    break
+                end
+            end
+            if fromArg > 0
+                ty = fieldtype(linfo.specTypes, fromArg)
+            else
                 ub = v.ub
                 while ub isa TypeVar
                     ub = ub.ub
@@ -155,10 +210,19 @@ function spvals_from_meth_instance(linfo::MethodInstance)
                 if has_free_typevars(lb)
                     lb = Bottom
                 end
-                sp[i] = TypeVar(v.name, lb, ub)
+                if Any <: ub && lb <: Bottom
+                    ty = Any
+                else
+                    tv = TypeVar(v.name, lb, ub)
+                    ty = UnionAll(tv, Type{tv})
+                end
             end
+        elseif isa(v, Core.TypeofVararg)
+            ty = Int
+        else
+            ty = Const(v)
         end
-        sp = svec(sp...)
+        sp[i] = ty
     end
     return sp
 end
@@ -166,27 +230,25 @@ end
 _topmod(sv::InferenceState) = _topmod(sv.mod)
 
 # work towards converging the valid age range for sv
-function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::InferenceState)
-    sv.min_valid = max(sv.min_valid, min_valid)
-    sv.max_valid = min(sv.max_valid, max_valid)
-    @assert(!isa(sv.linfo.def, Method) ||
-            !sv.cached ||
-            sv.min_valid <= sv.params.world <= sv.max_valid,
-            "invalid age range update")
+function update_valid_age!(sv::InferenceState, worlds::WorldRange)
+    sv.valid_worlds = intersect(worlds, sv.valid_worlds)
+    @assert(sv.world in sv.valid_worlds, "invalid age range update")
     nothing
 end
 
-update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(edge.min_valid, edge.max_valid, sv)
-update_valid_age!(li::MethodInstance, sv::InferenceState) = update_valid_age!(min_world(li), max_world(li), sv)
+update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
 function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
     old = frame.src.ssavaluetypes[ssa_id]
     if old === NOT_FOUND || !(new ⊑ old)
-        frame.src.ssavaluetypes[ssa_id] = tmerge(old, new)
+        # typically, we expect that old ⊑ new (that output information only
+        # gets less precise with worse input information), but to actually
+        # guarantee convergence we need to use tmerge here to ensure that is true
+        frame.src.ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
         W = frame.ip
         s = frame.stmt_types
         for r in frame.ssavalue_uses[ssa_id]
-            if s[r] !== () # s[r] === () => unreached statement
+            if s[r] !== nothing # s[r] === nothing => unreached statement
                 if r < frame.pc´´
                     frame.pc´´ = r
                 end
@@ -201,44 +263,40 @@ function add_cycle_backedge!(frame::InferenceState, caller::InferenceState, curr
     update_valid_age!(frame, caller)
     backedge = (caller, currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
+    add_backedge!(frame.linfo, caller)
     return frame
 end
 
 # temporarily accumulate our edges to later add as backedges in the callee
 function add_backedge!(li::MethodInstance, caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    if caller.stmt_edges[caller.currpc] === ()
-        caller.stmt_edges[caller.currpc] = []
+    edges = caller.stmt_edges[caller.currpc]
+    if edges === nothing
+        edges = caller.stmt_edges[caller.currpc] = []
     end
-    push!(caller.stmt_edges[caller.currpc], li)
-    update_valid_age!(li, caller)
+    push!(edges, li)
     nothing
 end
 
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
 function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::InferenceState)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    if caller.stmt_edges[caller.currpc] === ()
-        caller.stmt_edges[caller.currpc] = []
+    edges = caller.stmt_edges[caller.currpc]
+    if edges === nothing
+        edges = caller.stmt_edges[caller.currpc] = []
     end
-    push!(caller.stmt_edges[caller.currpc], mt)
-    push!(caller.stmt_edges[caller.currpc], typ)
+    push!(edges, mt)
+    push!(edges, typ)
     nothing
-end
-
-function is_specializable_vararg_slot(@nospecialize(arg), nargs::Int, vargs::Vector{Any})
-    return (isa(arg, Slot) && slot_id(arg) == nargs && !isempty(vargs))
 end
 
 function print_callstack(sv::InferenceState)
     while sv !== nothing
         print(sv.linfo)
-        sv.limited && print("  [limited]")
         !sv.cached && print("  [uncached]")
         println()
         for cycle in sv.callers_in_cycle
             print(' ', cycle.linfo)
-            cycle.limited && print("  [limited]")
             println()
         end
         sv = sv.parent

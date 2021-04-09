@@ -7,10 +7,13 @@
 // LLVM pass to clone function for different archs
 
 #include "llvm-version.h"
-#include "support/dtypes.h"
+
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
@@ -18,7 +21,6 @@
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/IR/LegacyPassManager.h>
-#include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -26,6 +28,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "processor.h"
+#include "support/dtypes.h"
 
 #include <map>
 #include <memory>
@@ -622,7 +625,7 @@ void CloneCtx::add_features(Function *F, StringRef name, StringRef features, uin
 {
     auto attr = F->getFnAttribute("target-features");
     if (attr.isStringAttribute()) {
-        std::string new_features = attr.getValueAsString();
+        std::string new_features(attr.getValueAsString());
         new_features += ",";
         new_features += features;
         F->addFnAttr("target-features", new_features);
@@ -1077,4 +1080,9 @@ static RegisterPass<MultiVersioning> X("JuliaMultiVersioning", "JuliaMultiVersio
 Pass *createMultiVersioningPass()
 {
     return new MultiVersioning();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createMultiVersioningPass());
 }

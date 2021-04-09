@@ -7,7 +7,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
-JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
+JL_DLLEXPORT jl_svec_t *(jl_svec)(size_t n, ...)
 {
     va_list args;
     if (n == 0) return jl_emptysvec;
@@ -19,7 +19,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
     return jv;
 }
 
-jl_svec_t *jl_perm_symsvec(size_t n, ...)
+jl_svec_t *(jl_perm_symsvec)(size_t n, ...)
 {
     if (n == 0) return jl_emptysvec;
     jl_svec_t *jv = (jl_svec_t*)jl_gc_permobj((n + 1) * sizeof(void*), jl_simplevector_type);
@@ -87,5 +87,23 @@ JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
     jl_svec_t *v = jl_alloc_svec_uninit(n);
     for(size_t i=0; i < n; i++)
         jl_svecset(v, i, x);
+    return v;
+}
+
+JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT
+{
+    return jl_svec_len(t);
+}
+
+JL_DLLEXPORT int8_t jl_svec_isassigned(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i) JL_NOTSAFEPOINT
+{
+    return jl_svecref(t, (size_t)i) != NULL;
+}
+
+JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i)
+{
+    jl_value_t *v = jl_svecref(t, (size_t)i);
+    if (__unlikely(v == NULL))
+        jl_throw(jl_undefref_exception);
     return v;
 }

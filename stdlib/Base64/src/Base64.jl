@@ -1,8 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Base64
+
+Functionality for base-64 encoded strings and IO.
+"""
 module Base64
 
-using Base: has_offset_axes
+using Base: require_one_based_indexing
 
 export
     Base64EncodePipe,
@@ -33,7 +38,7 @@ that binary data is base64-encoded as an ASCII string.
 
 The optional keyword argument `context` can be set to `:key=>value` pair
 or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
-stream passed to `show`.
+stream passed to [`show`](@ref).
 """
 stringmime(m::MIME, x; context=nothing) = istextmime(m) ? Base.Multimedia._textrepr(m, x, context) : _binstringmime(m, x, context)
 stringmime(m::AbstractString, x; context=nothing) = stringmime(MIME(m), x; context=context)

@@ -1,7 +1,9 @@
 ## objconv ##
 
+ifneq ($(USE_BINARYBUILDER_OBJCONV),1)
+
 $(SRCCACHE)/objconv.zip: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
+	$(JLDOWNLOAD) $@ https://www.agner.org/optimize/objconv.zip
 
 $(BUILDDIR)/objconv/source-extracted: $(SRCCACHE)/objconv.zip
 	-rm -r $(dir $@)
@@ -31,3 +33,9 @@ configure-objconv: extract-objconv
 compile-objconv: $(BUILDDIR)/objconv/build-compiled
 fastcheck-objconv: check-objconv
 check-objconv: compile-objconv
+
+else
+
+$(eval $(call bb-install,objconv,OBJCONV,false))
+
+endif

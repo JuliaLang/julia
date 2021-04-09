@@ -26,7 +26,7 @@ import .Base.Math.@horner
   #   print("(",l_hi,",",l_lo,"),")
   # end
 
-const t_log_Float64 = [(0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
+const t_log_Float64 = ((0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
     (0.015504186536418274,-4.530198941364935e-13),(0.0231670592820592,-5.248209479295644e-13),
     (0.03077165866670839,4.529814257790929e-14),(0.0383188643027097,-5.730994833076631e-13),
     (0.04580953603181115,-5.16945692881222e-13),(0.053244514518155484,6.567993368985218e-13),
@@ -90,7 +90,7 @@ const t_log_Float64 = [(0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
     (0.6694306539429817,-3.5246757297904794e-13),(0.6734226752123504,-1.8372084495629058e-13),
     (0.6773988235909201,8.860668981349492e-13),(0.6813592248072382,6.64862680714687e-13),
     (0.6853040030982811,6.383161517064652e-13),(0.6892332812385575,2.5144230728376075e-13),
-    (0.6931471805601177,-1.7239444525614835e-13)]
+    (0.6931471805601177,-1.7239444525614835e-13))
 
 
 # Float32 lookup table
@@ -105,7 +105,7 @@ const t_log_Float64 = [(0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
   #   print(float64(Base.log(big(1.0+j*is7))),",")
   # end
 
-const t_log_Float32 = [0.0,0.007782140442054949,0.015504186535965254,0.02316705928153438,
+const t_log_Float32 = (0.0,0.007782140442054949,0.015504186535965254,0.02316705928153438,
     0.030771658666753687,0.0383188643021366,0.0458095360312942,0.053244514518812285,
     0.06062462181643484,0.06795066190850775,0.07522342123758753,0.08244366921107459,
     0.08961215868968714,0.09672962645855111,0.10379679368164356,0.11081436634029011,
@@ -137,11 +137,11 @@ const t_log_Float32 = [0.0,0.007782140442054949,0.015504186535965254,0.023167059
     0.6451379613735847,0.6492279466251099,0.6533012720127457,0.65735807270836,
     0.661398482245365,0.6654226325450905,0.6694306539426292,0.6734226752121667,
     0.6773988235918061,0.6813592248079031,0.6853040030989194,0.689233281238809,
-    0.6931471805599453]
+    0.6931471805599453)
 
 # determine if hardware FMA is available
 # should probably check with LLVM, see #9855.
-const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) == -4.930380657631324e-32
+const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) != 0
 
 # truncate lower order bits (up to 26)
 # ideally, this should be able to use ANDPD instructions, see #9868.
@@ -149,9 +149,18 @@ const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) == -4
     reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
 end
 
+logb(::Type{Float32},::Val{2})  = 1.4426950408889634
+logb(::Type{Float32},::Val{:ℯ}) = 1.0
+logb(::Type{Float32},::Val{10}) = 0.4342944819032518
+logbU(::Type{Float64},::Val{2})  = 1.4426950408889634
+logbL(::Type{Float64},::Val{2})  = 2.0355273740931033e-17
+logbU(::Type{Float64},::Val{:ℯ}) = 1.0
+logbL(::Type{Float64},::Val{:ℯ}) = 0.0
+logbU(::Type{Float64},::Val{10}) = 0.4342944819032518
+logbL(::Type{Float64},::Val{10}) = 1.098319650216765e-17
 
 # Procedure 1
-@inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,jp::Int)
+@inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,jp::Int,base=Val(:ℯ))
     ## Steps 1 and 2
     @inbounds hi,lo = t_log_Float64[jp]
     l_hi = mf* 0.6931471805601177 + hi
@@ -175,11 +184,13 @@ end
                     0.012500053168098584)
 
     ## Step 4
-    l_hi + (u + (q + l_lo))
+    m_hi = logbU(Float64, base)
+    m_lo = logbL(Float64, base)
+    return fma(m_hi, l_hi, fma(m_hi, (u + (q + l_lo)), m_lo*l_hi))
 end
 
 # Procedure 2
-@inline function log_proc2(f::Float64)
+@inline function log_proc2(f::Float64,base=Val(:ℯ))
     ## Step 1
     g = 1.0/(2.0+f)
     u = 2.0*f*g
@@ -206,12 +217,14 @@ end
         f2 = f-f1
         u2 = ((2.0*(f-u1)-u1*f1)-u1*f2)*g
         ## Step 4
-        return u1 + (u2 + q)
+        m_hi = logbU(Float64, base)
+        m_lo = logbL(Float64, base)
+        return fma(m_hi, u1, fma(m_hi, (u2 + q), m_lo*u1))
     end
 end
 
 
-@inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,jp::Int)
+@inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,jp::Int,base=Val(:ℯ))
     ## Steps 1 and 2
     @inbounds hi = t_log_Float32[jp]
     l = mf*0.6931471805599453 + hi
@@ -228,10 +241,10 @@ end
     q = u*v*0.08333351f0
 
     ## Step 4
-    Float32(l + (u + q))
+    Float32(logb(Float32, base)*(l + (u + q)))
 end
 
-@inline function log_proc2(f::Float32)
+@inline function log_proc2(f::Float32,base=Val(:ℯ))
     ## Step 1
     # compute in higher precision
     u64 = Float64(2f0*f)/(2.0+f)
@@ -246,18 +259,24 @@ end
     ## Step 3: not required
 
     ## Step 4
-    Float32(u64 + q)
+    Float32(logb(Float32, base)*(u64 + q))
 end
 
+log2(x::Float32)  = _log(x, Val(2),  :log2)
+log(x::Float32)   = _log(x, Val(:ℯ), :log)
+log10(x::Float32) = _log(x, Val(10), :log10)
+log2(x::Float64)  = _log(x, Val(2),  :log2)
+log(x::Float64)   = _log(x, Val(:ℯ), :log)
+log10(x::Float64) = _log(x, Val(10), :log10)
 
-function log(x::Float64)
+function _log(x::Float64, base, func)
     if x > 0.0
         x == Inf && return x
 
         # Step 2
         if 0.9394130628134757 < x < 1.0644944589178595
             f = x-1.0
-            return log_proc2(f)
+            return log_proc2(f, base)
         end
 
         # Step 3
@@ -276,24 +295,24 @@ function log(x::Float64)
         f = y-F
         jp = unsafe_trunc(Int,128.0*F)-127
 
-        return log_proc1(y,mf,F,f,jp)
+        return log_proc1(y,mf,F,f,jp,base)
     elseif x == 0.0
         -Inf
     elseif isnan(x)
         NaN
     else
-        throw_complex_domainerror(:log, x)
+        throw_complex_domainerror(func, x)
     end
 end
 
-function log(x::Float32)
+function _log(x::Float32, base, func)
     if x > 0f0
         x == Inf32 && return x
 
         # Step 2
         if 0.939413f0 < x < 1.0644945f0
             f = x-1f0
-            return log_proc2(f)
+            return log_proc2(f, base)
         end
 
         # Step 3
@@ -312,13 +331,13 @@ function log(x::Float32)
         f = y-F
         jp = unsafe_trunc(Int,128.0f0*F)-127
 
-        log_proc1(y,mf,F,f,jp)
+        log_proc1(y,mf,F,f,jp,base)
     elseif x == 0f0
         -Inf32
     elseif isnan(x)
         NaN32
     else
-        throw_complex_domainerror(:log, x)
+        throw_complex_domainerror(func, x)
     end
 end
 
@@ -390,8 +409,3 @@ function log1p(x::Float32)
     end
 end
 
-for f in (:log,:log1p)
-    @eval begin
-        ($f)(x::Real) = ($f)(float(x))
-    end
-end

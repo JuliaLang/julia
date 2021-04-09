@@ -1,7 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using SuiteSparse.UMFPACK
+using SuiteSparse
 using SuiteSparse: increment!
-using LinearAlgebra: Adjoint, Transpose, SingularException
+using Serialization
+using LinearAlgebra:
+    I, det, issuccess, ldiv!, lu, lu!, Adjoint, Transpose, SingularException, Diagonal
+using SparseArrays: nnz, sparse, sprand, sprandn, SparseMatrixCSC
 
 @testset "UMFPACK wrappers" begin
     se33 = sparse(1.0I, 3, 3)
@@ -32,11 +37,11 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
 
             @test A*x ≈ b
             z = complex.(b)
-            x = LinearAlgebra.ldiv!(lua, z)
+            x = ldiv!(lua, z)
             @test x ≈ float([1:5;])
             @test z === x
             y = similar(z)
-            LinearAlgebra.ldiv!(y, lua, complex.(b))
+            ldiv!(y, lua, complex.(b))
             @test y ≈ x
 
             @test A*x ≈ b
@@ -47,11 +52,11 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
 
             @test A'*x ≈ b
             z = complex.(b)
-            x = LinearAlgebra.ldiv!(adjoint(lua), z)
+            x = ldiv!(adjoint(lua), z)
             @test x ≈ float([1:5;])
             @test x === z
             y = similar(x)
-            LinearAlgebra.ldiv!(y, adjoint(lua), complex.(b))
+            ldiv!(y, adjoint(lua), complex.(b))
             @test y ≈ x
 
             @test A'*x ≈ b
@@ -59,10 +64,10 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
             @test x ≈ float([1:5;])
 
             @test transpose(A) * x ≈ b
-            x = LinearAlgebra.ldiv!(transpose(lua), complex.(b))
+            x = ldiv!(transpose(lua), complex.(b))
             @test x ≈ float([1:5;])
             y = similar(x)
-            LinearAlgebra.ldiv!(y, transpose(lua), complex.(b))
+            ldiv!(y, transpose(lua), complex.(b))
             @test y ≈ x
 
             @test transpose(A) * x ≈ b
@@ -161,12 +166,12 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         N = 10
         p = 0.5
         A = N*I + sprand(N, N, p)
-        X = zeros(Complex{Float64}, N, N)
+        X = zeros(ComplexF64, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lu(A), lu(Array(A))
-        @test LinearAlgebra.ldiv!(copy(X), luA, B) ≈ LinearAlgebra.ldiv!(copy(X), lufA, B)
-        @test LinearAlgebra.ldiv!(copy(X), adjoint(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), adjoint(lufA), B)
-        @test LinearAlgebra.ldiv!(copy(X), transpose(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), transpose(lufA), B)
+        @test ldiv!(copy(X), luA, B) ≈ ldiv!(copy(X), lufA, B)
+        @test ldiv!(copy(X), adjoint(luA), B) ≈ ldiv!(copy(X), adjoint(lufA), B)
+        @test ldiv!(copy(X), transpose(luA), B) ≈ ldiv!(copy(X), transpose(lufA), B)
     end
 
     @testset "singular matrix" begin
@@ -176,4 +181,60 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         end
     end
 
+    @testset "deserialization" begin
+        A  = 10*I + sprandn(10, 10, 0.4)
+        F1 = lu(A)
+        b  = IOBuffer()
+        serialize(b, F1)
+        seekstart(b)
+        F2 = deserialize(b)
+        for nm in (:colptr, :m, :n, :nzval, :rowval, :status)
+            @test getfield(F1, nm) == getfield(F2, nm)
+        end
+    end
+
+    @testset "Reuse symbolic LU factorization" begin
+        A1 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
+                    increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
+                    [2.,1.,3.,4.,-1.,-3.,3.,9.,2.,1.,4.,2.], 5, 5)
+        for Tv in (Float64, ComplexF64, Float16, Float32, ComplexF16, ComplexF32)
+            for Ti in Base.uniontypes(SuiteSparse.UMFPACK.UMFITypes)
+                A = convert(SparseMatrixCSC{Tv,Ti}, A0)
+                B = convert(SparseMatrixCSC{Tv,Ti}, A1)
+                b = Tv[8., 45., -3., 3., 19.]
+                F = lu(A)
+                lu!(F, B)
+                @test F\b ≈ B\b ≈ Matrix(B)\b
+
+                # singular matrix
+                C = copy(B)
+                C[4, 3] = Tv(0)
+                F = lu(A)
+                @test_throws SingularException lu!(F, C)
+
+                # change of nonzero pattern
+                D = copy(B)
+                D[5, 1] = Tv(1.0)
+                F = lu(A)
+                @test_throws ArgumentError lu!(F, D)
+            end
+        end
+    end
+
+end
+
+@testset "REPL printing of UmfpackLU" begin
+    # regular matrix
+    A = sparse([1, 2], [1, 2], Float64[1.0, 1.0])
+    F = lu(A)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    lstring = sprint((t, s) -> show(t, "text/plain", s), F.L)
+    ustring = sprint((t, s) -> show(t, "text/plain", s), F.U)
+    @test facstring == "$(summary(F))\nL factor:\n$lstring\nU factor:\n$ustring"
+
+    # singular matrix
+    B = sparse(zeros(Float64, 2, 2))
+    F = lu(B; check=false)
+    facstring = sprint((t, s) -> show(t, "text/plain", s), F)
+    @test facstring == "Failed factorization of type $(summary(F))"
 end

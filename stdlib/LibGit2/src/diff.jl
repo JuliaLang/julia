@@ -16,10 +16,10 @@ end
 
 Generate a [`GitDiff`](@ref) between `tree` (which will be used for the "old"
 side of the [`DiffDelta`](@ref)) and `repo` (which will be used for the "new" side).
-If `repo` is `cached`, calls [`git_diff_tree_to_index`](https://libgit2.github.com/libgit2/#HEAD/group/diff/git_diff_tree_to_index).
+If `repo` is `cached`, calls [`git_diff_tree_to_index`](https://libgit2.org/libgit2/#HEAD/group/diff/git_diff_tree_to_index).
 The `cached` version is generally used to examine the diff for staged changes from one
 commit to the next. If `cached` is `false`, calls
-[`git_diff_tree_to_workdir_with_index`](https://libgit2.github.com/libgit2/#HEAD/group/diff/git_diff_tree_to_workdir_with_index).
+[`git_diff_tree_to_workdir_with_index`](https://libgit2.org/libgit2/#HEAD/group/diff/git_diff_tree_to_workdir_with_index).
 This compares the current working directory against the [`GitIndex`](@ref) and can,
 for example, be used to examine the changes in staged files before a commit.
 """
@@ -43,7 +43,7 @@ end
 
 Generate a [`GitDiff`](@ref) between `oldtree` (which will be used for the "old"
 side of the [`DiffDelta`](@ref)) and `newtree` (which will be used for the "new"
-side of the `DiffDelta`). Equivalent to [`git_diff_tree_to_tree`](https://libgit2.github.com/libgit2/#HEAD/group/diff/git_diff_tree_to_tree).
+side of the `DiffDelta`). Equivalent to [`git_diff_tree_to_tree`](https://libgit2.org/libgit2/#HEAD/group/diff/git_diff_tree_to_tree).
 This can be used to generate a diff between two commits. For instance, it could
 be used to compare a commit made 2 months ago with the current latest commit, or
 to compare a commit on another branch with the current latest commit on `master`.

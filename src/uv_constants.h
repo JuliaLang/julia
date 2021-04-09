@@ -1,8 +1,14 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "uv.h"
+#if EDOM > 0
+# define UV__ERR(x) (-(x))
+#else
+# define UV__ERR(x) (x)
+#endif
 #define XX(uc,lc) :UV_##uc,
-#define YY(uc,lc) (:UV_##uc,UV__##uc),
+#define YY(uc,mc) (:UV_##uc,UV__##uc),
+
 const uv_handle_types = [UV_HANDLE_TYPE_MAP(XX) :UV_FILE]
 const uv_req_types = [UV_REQ_TYPE_MAP(XX)]
 const uv_err_vals = [UV_ERRNO_MAP(YY)]

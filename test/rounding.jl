@@ -91,8 +91,49 @@ end
     @test_throws DivideError round(Int64,badness,RoundNearestTiesUp)
 end
 
+@testset "rounding properties" for Tf in [Float16,Float32,Float64]
+    # these should hold for all u, but we just test the smallest and largest
+    # of each binade
+
+    for i in exponent(floatmin(Tf)):exponent(floatmax(Tf))
+        for u in [ldexp(Tf(1.0), i), -ldexp(Tf(1.0), i),
+                  ldexp(prevfloat(Tf(2.0)), i), -ldexp(prevfloat(Tf(2.0)), i)]
+
+            r = round(u, RoundNearest)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test abs(r-u) < 0.5 || abs(r-u) == 0.5 && isinteger(r/2)
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+
+            r = round(u, RoundNearestTiesAway)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test abs(r-u) < 0.5 || (r-u) == copysign(0.5,u)
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+
+            r = round(u, RoundNearestTiesUp)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test -0.5 < r-u <= 0.5
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+        end
+    end
+end
+
 @testset "rounding difficult values" begin
-    for x = 2^53-10:2^53+10
+    for x = Int64(2)^53-10:Int64(2)^53+10
         y = Float64(x)
         i = trunc(Int64,y)
         @test Int64(trunc(y)) == i
