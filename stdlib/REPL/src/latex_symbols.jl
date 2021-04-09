@@ -671,8 +671,13 @@ const latex_symbols = Dict(
     "\\dashv" => "⊣",
     "\\top" => "⊤",
     "\\bot" => "⊥",
+    "\\Top" => "⫪",
+    "\\Bot" => "⫫",
+    "\\indep" => "⫫",
     "\\models" => "⊧",
     "\\vDash" => "⊨",
+    "\\downvDash" => "⫪",
+    "\\upvDash" => "⫫",
     "\\Vdash" => "⊩",
     "\\Vvdash" => "⊪",
     "\\VDash" => "⊫",
@@ -2624,13 +2629,14 @@ const latex_symbols = Dict(
 
 # Canonical reverse mapping for symbols that have several completions (#39148).
 #
-# These duplicate mappings can be investigated with the folllowing commands:
+# These duplicate mappings can be investigated with the following commands:
 #=
 ls = REPL.REPLCompletions.latex_symbols; symbols = values(ls)
 duplicates = [v for v in unique(symbols) if count(==(v), symbols) > 1]
 [(v, REPL.symbol_latex(v)) => findall(==(v), ls) for v in duplicates]
 =#
 const symbols_latex_canonical = Dict(
+    "⫫" => "\\Bot",
     "ð" => "\\dh",
     "…" => "\\ldots",
     "∅" => "\\emptyset",
@@ -2651,6 +2657,7 @@ const symbols_latex_canonical = Dict(
     "√" => "\\sqrt",
     "̶" => "\\sout",
     "→" => "\\to",
+    "⫪" => "\\Top",
     "ε" => "\\varepsilon",
     "⊻" => "\\xor",
     "⊼" => "\\nand",
