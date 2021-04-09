@@ -1066,8 +1066,8 @@ but they are just functions, written entirely in Julia. You can read their sourc
 what they do -- and all they do is construct expression objects to be inserted into your program's
 syntax tree.
 
-Like non-standard string literals, command literals can also be prefixed by an identifier,
-to form what is called non-standard command literals. These command literals are parsed
+Like string literals, command literals can also be prefixed by an identifier
+to form what are called non-standard command literals. These command literals are parsed
 as calls to specially-named macros. For example, the syntax ```custom`literal` ``` is parsed
 as `@custom_cmd "literal"`.
 Julia itself does not contain any non-standard command literals, but packages can make use of

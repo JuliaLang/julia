@@ -737,10 +737,11 @@ Some other useful functions include:
 
 ## [Non-Standard String Literals](@id non-standard-string-literals)
 
-A non-standard string literal looks like a regular double-quoted string literal,
+There are situations when you want to construct a string or use string semantics, but the behavior
+of the standard string construct is not quite what is needed. For these kinds of situations, Julia
+provides non-standard string literals. A non-standard string literal looks like a regular
+double-quoted string literal,
 but is immediately prefixed by an identifier, and may behave differently from a normal string literal.
-These are useful in situations when you want to construct a string or use string semantics,
-but the behavior of the standard string construct is not quite what is needed.
 
 [Regular expressions](@ref man-regex-literals), [byte array literals](@ref man-byte-array-literals),
 and [version number literals](@ref man-version-number-literals), as described below,
