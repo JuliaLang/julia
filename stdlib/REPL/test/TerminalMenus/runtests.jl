@@ -25,6 +25,7 @@ include("radio_menu.jl")
 include("multiselect_menu.jl")
 include("dynamic_menu.jl")
 include("multiselect_with_skip_menu.jl")
+include("pager.jl")
 
 # Legacy tests
 include("legacytests/old_radio_menu.jl")
