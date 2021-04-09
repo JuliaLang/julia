@@ -285,8 +285,8 @@ for (func, fast_func, base) in ((:exp2,  :exp2_fast,  Val(2)),
                                 (:exp,   :exp_fast,   Val(:ℯ)),
                                 (:exp10, :exp10_fast, Val(10)))
     @eval begin
-        $func(x::Union{Float16,Float32,Float64}) = exp_impl(x,$base)
-        $fast_func(x::Union{Float32,Float64}) = exp_impl_fast(x,$base)
+        $func(x::Union{Float16,Float32,Float64}) = exp_impl(x, $base)
+        $fast_func(x::Union{Float32,Float64}) = exp_impl_fast(x, $base)
     end
 end
 
