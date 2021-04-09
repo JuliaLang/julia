@@ -528,6 +528,8 @@ replace_err(repl) = error("Bad replacement string: $repl")
 
 function _write_capture(io, re::RegexAndMatchData, group)
     len = PCRE.substring_length_bynumber(re.match_data, group)
+    # in the case of an optional group that doesn't match, len == 0
+    len == 0 && return
     ensureroom(io, len+1)
     PCRE.substring_copy_bynumber(re.match_data, group,
         pointer(io.data, io.ptr), len+1)
