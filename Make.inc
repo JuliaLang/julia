@@ -472,13 +472,13 @@ USEGCC := 0
 USECLANG := 1
 endif
 
-# Note: Supporting only macOS Mavericks and above
+# Note: Supporting only macOS Yosemite and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 USEGCC := 0
 USECLANG := 1
 ifneq ($(APPLE_ARCH),arm64)
-MACOSX_VERSION_MIN := 10.9
+MACOSX_VERSION_MIN := 10.10
 else
 MACOSX_VERSION_MIN := 11.0
 endif
@@ -595,6 +595,21 @@ else ifeq ($(OS), Darwin)
 else
   SHLIB_EXT := so
 endif
+
+ifeq ($(OS),WINNT)
+define versioned_libname
+$$(if $(2),$(1)-$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+endef
+else ifeq ($(OS),Darwin)
+define versioned_libname
+$$(if $(2),$(1).$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+endef
+else
+define versioned_libname
+$$(if $(2),$(1).$(SHLIB_EXT).$(2),$(1).$(SHLIB_EXT))
+endef
+endif
+
 
 ifeq ($(SHLIB_EXT), so)
 define SONAME_FLAGS
@@ -1148,6 +1163,8 @@ BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI)))))
 
+LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
+
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
 BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
 define SET_BB_DEFAULT
@@ -1480,8 +1497,12 @@ ifneq ($(findstring $(OS),Linux FreeBSD),)
 LIBGCC_NAME := libgcc_s.$(SHLIB_EXT).1
 endif
 
-
+# USE_SYSTEM_CSL causes it to get symlinked into build_private_shlibdir
+ifeq ($(USE_SYSTEM_CSL),1)
+LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBGCC_NAME))
+else
 LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBGCC_NAME))
+endif
 LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBGCC_NAME))
 
 # USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir

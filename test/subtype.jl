@@ -140,7 +140,7 @@ function test_diagonal()
     @test !issub(Type{Tuple{T,Any} where T},   Type{Tuple{T,T}} where T)
     @test !issub(Type{Tuple{T,Any,T} where T}, Type{Tuple{T,T,T}} where T)
     @test_broken issub(Type{Tuple{T} where T},       Type{Tuple{T}} where T)
-    @test_broken issub(Ref{Tuple{T} where T},        Ref{Tuple{T}} where T)
+    @test  issub(Ref{Tuple{T} where T},        Ref{Tuple{T}} where T)
     @test !issub(Type{Tuple{T,T} where T},     Type{Tuple{T,T}} where T)
     @test !issub(Type{Tuple{T,T,T} where T},   Type{Tuple{T,T,T}} where T)
     @test  isequal_type(Ref{Tuple{T, T} where Int<:T<:Int},

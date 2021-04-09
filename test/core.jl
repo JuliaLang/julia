@@ -2389,19 +2389,14 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
 end
 
 # call overloading (#2403)
-(x::Int)(y::Int) = x + 3y
 issue2403func(f) = f(7)
-let x = 10
-    @test x(3) == 19
-    @test x((3,)...) == 19
-    @test issue2403func(x) == 31
-end
 mutable struct Issue2403
     x
 end
 (i::Issue2403)(y) = i.x + 2y
 let x = Issue2403(20)
     @test x(3) == 26
+    @test x((3,)...) == 26
     @test issue2403func(x) == 34
 end
 
@@ -7560,3 +7555,12 @@ function f18621()
 end
 @test f18621() == 1:5
 @test [_ for _ in 1:5] == 1:5
+
+# issue #35130
+const T35130 = Tuple{Vector{Int}, <:Any}
+@eval struct A35130
+    x::Vector{Tuple{Vector{Int}, Any}}
+    A35130(x) = $(Expr(:new, :A35130, :x))
+end
+h35130(x) = A35130(Any[x][1]::Vector{T35130})
+@test h35130(T35130[([1],1)]) isa A35130

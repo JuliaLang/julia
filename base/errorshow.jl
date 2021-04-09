@@ -92,7 +92,7 @@ function showerror(io::IO, ex, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
-    print(io, "LoadError: ")
+    !isa(ex.error, LoadError) && print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
     print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
@@ -876,7 +876,7 @@ function show(io::IO, ip::InterpreterIP)
 end
 
 # handler for displaying a hint in case the user tries to call
-# the instance of a number(misses out hte operator)
+# the instance of a number (probably missing the operator)
 # eg: (1 + 2)(3 + 4)
 function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
     if ex.f isa Number
