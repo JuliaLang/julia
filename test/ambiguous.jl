@@ -369,4 +369,21 @@ let ambig = Int32[0]
     @test ambig[1] == 1
 end
 
+# issue #11407
+f11407(::Dict{K,V}, ::Dict{Any,V}) where {K,V} = 1
+f11407(::Dict{K,V}, ::Dict{K,Any}) where {K,V} = 2
+@test_throws MethodError f11407(Dict{Any,Any}(), Dict{Any,Any}()) # ambiguous
+@test f11407(Dict{Any,Int}(), Dict{Any,Int}()) == 1
+f11407(::Dict{Any,Any}, ::Dict{Any,Any}) where {K,V} = 3
+@test f11407(Dict{Any,Any}(), Dict{Any,Any}()) == 3
+
+# issue #12814
+abstract type A12814{N, T} end
+struct B12814{N, T} <: A12814{N, T}
+    x::NTuple{N, T}
+end
+(::Type{T})(x::X) where {T <: A12814, X <: Array} = 1
+@test_throws MethodError B12814{3, Float64}([1, 2, 3]) # ambiguous
+@test B12814{3,Float64}((1, 2, 3)).x === (1.0, 2.0, 3.0)
+
 nothing

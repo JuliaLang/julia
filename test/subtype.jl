@@ -1901,3 +1901,16 @@ let A = Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1} where T, Vector},
     @test_broken I <: A
     @test_broken !Base.has_free_typevars(I)
 end
+
+# issue #8915
+struct D8915{T<:Union{Float32,Float64}}
+    D8915{T}(a) where {T} = 1
+    D8915{T}(a::Int) where {T} = 2
+end
+@test D8915{Float64}(1) == 2
+@test D8915{Float64}(1.0) == 1
+
+# issue #18985
+f18985(x::T, y...) where {T<:Union{Int32,Int64}} = (length(y), f18985(y[1], y[2:end]...)...)
+f18985(x::T) where {T<:Union{Int32,Int64}} = 100
+@test f18985(1, 2, 3) == (2, 1, 100)
