@@ -246,7 +246,7 @@ end
     if !(abs(x) <= SUBNORM_EXP(base, T))
         x > MAX_EXP(base, T) && return Inf32
         x < MIN_EXP(base, T) && return 0.0f0
-        if N<=Int32(-24)
+        if N <= Int32(-24)
             twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
             return (twopk*small_part)*(2f0^(-24))
         end
