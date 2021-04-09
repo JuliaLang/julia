@@ -9,6 +9,8 @@ New language features
 * Implicit multiplication by juxtaposition is now allowed for radical symbols (e.g., `x√y` and `x∛y`). ([#40173])
 * The short-circuiting operators `&&` and `||` can now be dotted to participate in broadcast fusion
   as `.&&` and `.||`. ([#39594])
+* `⫪` (U+2AEA, `\Top`, `\downvDash`) and `⫫` (U+2AEB, `\Bot`, `\upvDash`, `\indep`)
+  may now be used as binary operators with comparison precedence. ([#39403])
 
 Language changes
 ----------------
