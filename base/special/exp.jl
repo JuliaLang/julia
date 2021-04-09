@@ -201,7 +201,8 @@ end
 # For both, a little extra care needs to be taken if b^r is subnormal.
 # The solution is to do the scaling back in 2 steps as just messing with the exponent wouldn't work.
 
-@inline function exp_impl(x::T, base) where T<:Float64
+@inline function exp_impl(x::Float64, base)
+    T = Float64
     N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
     N = reinterpret(UInt64, N_float) % Int32
     N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
@@ -224,7 +225,8 @@ end
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
 end
-@inline function exp_impl_fast(x::T,base) where T<:Float64
+@inline function exp_impl_fast(x::Float64, base)
+    T = Float64
     N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
     N = reinterpret(UInt64, N_float) % Int32
     N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
@@ -237,7 +239,8 @@ end
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
 end
 
-@inline function exp_impl(x::T, base) where T<:Float32
+@inline function exp_impl(x::Float32, base)
+    T = Float32
     N_float = round(x*LogBINV(base, T))
     N = unsafe_trunc(Int32, N_float)
     r = muladd(N_float, LogBU(base, T), x)
@@ -256,7 +259,8 @@ end
     return twopk*small_part
 end
 
-@inline function exp_impl_fast(x::T, base) where T<:Float32
+@inline function exp_impl_fast(x::Float32, base)
+    T = Float32
     N_float = round(x*LogBINV(base, T))
     N = unsafe_trunc(Int32, N_float)
     r = muladd(N_float, LogBU(base, T), x)
@@ -368,7 +372,7 @@ end
 end
 
 @inline function expm1(x::Float64)
-    T=Float64
+    T = Float64
     if -0.2876820724517809 <= x <= 0.22314355131420976
         return expm1_small(x)
     elseif !(abs(x)<=MIN_EXP(Float64))
