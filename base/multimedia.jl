@@ -69,7 +69,7 @@ methods; for example, if the available MIME formats depend on the *value* of `x`
 julia> showable(MIME("text/plain"), rand(5))
 true
 
-julia> showable("img/png", rand(5))
+julia> showable("image/png", rand(5))
 false
 ```
 """
@@ -176,7 +176,7 @@ data except for a set of types known to be text data (possibly Unicode).
 julia> istextmime(MIME("text/plain"))
 true
 
-julia> istextmime(MIME("img/png"))
+julia> istextmime(MIME("image/png"))
 false
 ```
 """
