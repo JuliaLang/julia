@@ -132,7 +132,14 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     #@Base.show ("before_sroa", ir)
     @timeit "SROA" ir = getfield_elim_pass!(ir)
     #@Base.show ir.new_nodes
+    ir = compact!(ir)
     #@Base.show ("after_sroa", ir)
+    @timeit "loopinfo" loopinfo = construct_loopinfo(ir, domtree)
+    if loopinfo !== nothing
+        @timeit "licm" ir = licm_pass!(ir, loopinfo)
+    end
+    #@timeit "verify 3" verify_ir(ir)
+    #@Base.show ("after_licm", ir)
     ir = adce_pass!(ir)
     #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)

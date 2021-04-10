@@ -1238,3 +1238,218 @@ function cfg_simplify!(ir::IRCode)
     compact.active_result_bb = length(bb_starts)
     return finish(compact)
 end
+
+struct LoopInfo
+    header::Int
+    latches::Vector{Int}
+    blocks::Vector{Int}
+end
+
+function construct_loopinfo(ir, domtree)
+    cfg = ir.cfg
+
+    # 1. find backedges
+    # Edge n -> h, where h dominates n
+    backedges = Pair{Int, Int}[]
+    for (n, bb) in enumerate(cfg.blocks)
+        for succ in bb.succs
+            if dominates(domtree, succ, n)
+                push!(backedges, n => succ)
+            end
+        end
+    end
+    isempty(backedges) && return nothing
+
+    loops = IdDict{Int, LoopInfo}()
+    for (n, h) in backedges
+        # merge loops that have the same header
+        if haskey(loops, h)
+            visited = BitSet(loops[h].blocks)
+            latches = loops[h].latches
+        else
+            visited = BitSet((h,))
+            latches = Int[]
+        end
+        push!(visited, n)
+        push!(latches, n)
+
+        # Create {n′ | n is reachable from n′ in CFG \ {h}} ∪ {h}
+        worklist = copy(cfg.blocks[n].preds)
+        while !isempty(worklist)
+            idx = pop!(worklist)
+            idx ∈ visited && continue
+
+            push!(visited, idx)
+            append!(worklist, cfg.blocks[idx].preds)
+        end
+
+        blocks = collect(visited)
+        # Assume sorted in CFG order
+        loops[h] = LoopInfo(h, latches, blocks)
+    end
+
+    # Find exiting and exit blocks 
+    # LLVM calculates this on the fly
+    # for loop in values(loops)
+    #     for bb in loop.blocks
+    #         for succ in cfg.blocks[bb].succs
+    #             succ ∈ loop.blocks && continue
+    #             push!(loop.exiting, bb)
+    #             push!(loop.exits, succ)
+    #         end
+    #     end
+    # end
+    
+    # TODO: Loop nesting/Control tree
+    return loops 
+end
+
+
+function licm_pass!(ir::IRCode, loops)
+    cfg = ir.cfg
+
+    # TODO: Processing order, we should proceess innermost to outermost loops,
+    staged_blocks = IdDict{Int, Vector{Int}}()
+    for (h, loop) in loops
+        # Find stmts that are invariant w.r.t this loop
+        invariant_stmts = Int[]
+
+        # TODO: Order to visit loops in: Innermost to outermost
+        for idx in loop.blocks
+            bb = cfg.blocks[idx]
+            for id in bb.stmts
+                stmt = ir.stmts[id][:inst]
+                if invariant_stmt(ir, loop, invariant_stmts, stmt)
+                    # XXX: Need to account for, we either need
+                    #      to move the entire block or check ?reverse-dominance?
+                    # if (x > 0)
+                    #   sqrt(x)
+                    push!(invariant_stmts, id)
+                end
+            end
+
+            # Move stmts as far as possible
+            if haskey(staged_blocks, idx)
+                staged_stmts = staged_blocks[idx]
+                new_staged_stmts = Int[]
+                for (i, id) in enumerate(staged_stmts)
+                    stmt = ir.stmts[id]
+                    if invariant_stmt(ir, loop, invariant_stmts, stmt)
+                        # XXX: Need to account for, we either need
+                        #      to move the entire block or check ?reverse-dominance?
+                        # if (x > 0)
+                        #   sqrt(x)
+                        push!(invariant_stmts, id)
+                    else
+                        push!(new_staged_stmts, id)
+                    end
+                end
+                staged_blocks[idx] = new_staged_stmts
+            end
+        end
+
+        # isempty(invariant_stmts) && continue
+        staged_blocks[h] = invariant_stmts
+    end
+
+    # Now we no longer need a correct loop info / domtree and we can take the sledgehammer to the CFG/IR
+    irstream = ir.stmts
+    valmap   = IdDict{Int, Int}()
+    for (h, loop) in loops
+        # Non-loop predecessors
+        header = cfg.blocks[loop.header]
+        predecessors = filter(bb -> bb ∉ loop.latches, header.preds)
+
+        @assert length(predecessors) == 1
+        # XXX: If predecessors are more than one we might need to move PhiNodes
+        entry_bb = first(predecessors)
+
+        insertion_point = last(cfg.blocks[entry_bb].stmts)
+        # Copy invariant stmts to new BB 
+        # start = length(irstream) + 1
+        for id in staged_blocks[h]
+            inst = irstream[id]
+            ssaval = copy_inst!(ir, insertion_point, inst, true)
+            inst[:inst] = ssaval
+
+            # Fixup SSAValue's
+            ir[ssaval] = Core.Compiler.ssamap(ir[ssaval]) do val
+                if haskey(valmap, val.id)
+                    return valmap[val.id]
+                else
+                    return val
+                end
+            end
+
+            valmap[id] = ssaval.id # record new SSAValue id
+        end
+        insert_node!(ir, insertion_point, Nothing, GotoNode(h), true)
+
+        # Insert pre-header into CFG
+        # push!(cfg.blocks, BasicBlock(StmtRange(start, length(irstream)), predecessors, Int[loop.header]))
+        push!(cfg.blocks, BasicBlock(StmtRange(-1, 0), predecessors, Int[loop.header]))
+        pre_header = length(cfg.blocks)
+        cfg.blocks[loop.header] = BasicBlock(header.stmts, [pre_header, loop.latches...], header.succs)
+
+        for pred in predecessors
+            bb = cfg.blocks[loop.header]
+            succs = map(bb->bb == loop.header ? pre_header : bb, bb.succs)
+            cfg.blocks[loop.header] = BasicBlock(bb.stmts, bb.preds, succs)
+        end
+
+        # CFG now looks right, time to fixup the terminators and phi nodes
+        for id in header.stmts
+            node = irstream[id]
+            stmt = node[:inst]
+            if stmt isa PhiNode 
+                edges = Any[bb == entry_bb ? pre_header : bb for bb in stmt.edges]
+                node[:inst] = PhiNode(edges, stmt.values)
+            else
+                break
+            end
+        end
+        
+        # XXX: How do we deal with implicit fallthrough?
+        #      Need to fixup the terminators. Maybe domsort will cure all things
+    end
+
+    # XXX: The cfg stmt ranges are all wrong
+    # Now domsort the IR so that everything is neat and tidy.
+    domtree = construct_domtree(cfg)
+    return domsort_ssa!(ir, domtree)
+end
+
+function invariant_stmt(ir, loop, invariant_stmts, stmt)
+    if stmt isa Expr
+        return invariant_expr(ir, loop, invariant_stmts, stmt)
+    end
+    return invariant(ir, loop, invariant_stmts, stmt)
+end
+
+function invariant(ir, loop, invariant_stmts, stmt)
+    if stmt isa Argument || stmt isa GlobalRef || stmt isa QuoteNode || stmt isa Bool
+        return true
+    elseif stmt isa SSAValue
+        id = stmt.id
+        bb = block_for_inst(ir.cfg, id)
+        if bb ∉ loop.blocks
+            return true
+        end
+        return id ∈ invariant_stmts 
+    end
+
+    # Check for pure / not side-effecting, 
+    # since we hoist into pre-header throwing is okay. 
+    if stmt isa Core.MethodInstance
+        return stmt.def.pure
+    end
+    return false
+end
+
+function invariant_expr(ir, loop, invariant_stmts, stmt)
+    invar = true
+    for useref in userefs(stmt)
+        invar &= invariant(ir, loop, invariant_stmts, useref[])
+    end
+    return invar
+end
