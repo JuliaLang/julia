@@ -1804,6 +1804,10 @@
                      e))))
           ((and (pair? e) (eq? (car e) 'comparison))
            (dot-to-fuse (expand-compare-chain (cdr e)) top))
+          ((and (pair? e) (eq? (car e) '.&&))
+           (make-fuse '(top andand) (cdr e)))
+          ((and (pair? e) (eq? (car e) '|.\|\||))
+           (make-fuse '(top oror) (cdr e)))
           (else e)))
   (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
@@ -2124,6 +2128,11 @@
          `(call (top BroadcastFunction) ,(cadr e))
          ;; e = (|.| f x)
          (expand-fuse-broadcast '() e)))
+
+   '.&&
+   (lambda (e) (expand-fuse-broadcast '() e))
+   '|.\|\||
+   (lambda (e) (expand-fuse-broadcast '() e))
 
    '.=
    (lambda (e)
@@ -4068,13 +4077,14 @@ f(x) = yt(x)
                   (else #f)))
           (case (car e)
             ((call new splatnew foreigncall cfunction new_opaque_closure)
+             (define (atom-or-not-tuple-call? fptr)
+               (or (atom? fptr)
+                   (not (tuple-call? fptr))))
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
-                            (append (if (let ((fptr (cadr e)))
-                                          (or (atom? fptr)
-                                              (not (tuple-call? fptr))))
+                            (append (if (atom-or-not-tuple-call? (cadr e))
                                         (compile-args (list (cadr e)) break-labels)
                                         (list (cadr e)))
                                     (list-head (cddr e) 4)
@@ -4093,12 +4103,15 @@ f(x) = yt(x)
                                   (compile-args (list-head (cdr e) 4) break-labels)
                                   (list (append (butlast oc_method) (list lambda)))
                                   (compile-args (list-tail (cdr e) 5) break-labels))))
-                           ;; TODO: evaluate first argument to cglobal some other way
+                           ;; NOTE: 1st argument to cglobal treated same as for ccall
                            ((and (length> e 2)
                                  (or (eq? (cadr e) 'cglobal)
                                      (equal? (cadr e) '(outerref cglobal))))
-                            (list* (cadr e) (caddr e)
-                                   (compile-args (cdddr e) break-labels)))
+                            (append (list (cadr e))
+                                    (if (atom-or-not-tuple-call? (caddr e))
+                                        (compile-args (list (caddr e)) break-labels)
+                                        (list (caddr e)))
+                                    (compile-args (cdddr e) break-labels)))
                            (else
                             (compile-args (cdr e) break-labels))))
                     (callex (cons (car e) args)))
