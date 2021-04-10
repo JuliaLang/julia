@@ -285,6 +285,7 @@ end
     (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
 end
 
+
 @inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
     spec, argp = rmdynamic(spec, args, argp)
     (fmt(buf, pos, args[argp], spec), argp+1)
