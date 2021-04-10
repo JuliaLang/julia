@@ -1026,7 +1026,8 @@ endif # SYSTEM_LLVM
 # Windows builds need a little help finding the LLVM libraries for llvm-config
 LLVM_CONFIG_PATH_FIX :=
 ifeq ($(OS),WINNT)
-LLVM_CONFIG_PATH_FIX := PATH="$(build_bindir):$(PATH)"
+# WINEPATH is only needed for a wine-based cross compile, but doesn't hurt on windows
+LLVM_CONFIG_PATH_FIX := PATH="$(build_bindir):$(PATH)" WINEPATH="$(build_bindir)"
 endif
 
 ifeq ($(BUILD_OS),$(OS))

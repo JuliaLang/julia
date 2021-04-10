@@ -106,7 +106,7 @@ ABI_UNDERSCORE := _\#\#
 else
 ABI_UNDERSCORE :=
 endif
-EXPORTED_FUNCS := $(shell echo -e "#include \"jl_exported_funcs.inc\"\n#define XX(x) $(ABI_UNDERSCORE)x\nJL_EXPORTED_FUNCS(XX)" | $(CPP) -I$(JULIAHOME)/src - | tail -n 1)
+EXPORTED_FUNCS := $(shell $(CPP) -DABI_UNDERSCORE=$(ABI_UNDERSCORE) -I$(JULIAHOME)/src - < exported_symbols.inc | tail -n 1)
 STRIP_EXPORTED_FUNCS := $(patsubst %,--strip-symbol=%,$(EXPORTED_FUNCS))
 endif
 
