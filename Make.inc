@@ -1031,16 +1031,14 @@ endif # SYSTEM_LLVM
 
 # Windows builds need a little help finding the LLVM libraries for llvm-config
 # use delayed expansion (= not :=) because spawn isn't defined until later
-# WINEPATH is only needed for a wine-based cross compile, but doesn't hurt on windows
+# WINEPATH is only needed for a wine-based cross compile
 LLVM_CONFIG_PATH_FIX =
-ifeq ($(BUILD_OS),WINNT)
-LLVM_CONFIG_PATH_FIX = PATH="$(build_bindir):$(PATH)"
-else ifeq ($(OS),WINNT)
-LLVM_CONFIG_PATH_FIX = WINEPATH="$(call cygpath_w,$(build_bindir));$(WINEPATH)"
+ifeq ($(OS),WINNT)
+LLVM_CONFIG_PATH_FIX = PATH="$(build_bindir):$(PATH)" WINEPATH="$(call cygpath_w,$(build_bindir));$(WINEPATH)"
 endif
 
 ifeq ($(BUILD_OS),$(OS))
-LLVM_CONFIG_HOST := $(LLVM_CONFIG)
+LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_FIX) $(LLVM_CONFIG)
 else
 LLVM_CONFIG_HOST := $(basename $(LLVM_CONFIG))-host$(BUILD_EXE)
 ifneq (exists, $(shell [ -f '$(LLVM_CONFIG_HOST)' ] && echo exists ))
