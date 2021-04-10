@@ -4,6 +4,10 @@ module TestHessenberg
 
 using Test, LinearAlgebra, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
 # for tuple tests below
 ≅(x,y) = all(p -> p[1] ≈ p[2], zip(x,y))
 
@@ -56,37 +60,39 @@ let n = 10
         @test Array(Hc + H) == Array(Hc) + Array(H)
         @test Array(Hc - H) == Array(Hc) - Array(H)
         @testset "Preserve UpperHessenberg shape (issue #39388)" begin
-            A = rand(n,n)
-            d = rand(n)
-            dl = rand(n-1)
-            du = rand(n-1)
-            @testset "$op" for op = (+,-)
-                for x = (I, Diagonal(d), Bidiagonal(d,dl,:U), Bidiagonal(d,dl,:L),
-                         Tridiagonal(dl,d,du), SymTridiagonal(d,dl),
-                         UpperTriangular(A), UnitUpperTriangular(A))
-                    @test op(H,x) == op(Array(H),x)
-                    @test op(x,H) == op(x,Array(H))
-                    @test op(H,x) isa UpperHessenberg
-                    @test op(x,H) isa UpperHessenberg
+            for H = (UpperHessenberg(Areal), UpperHessenberg(Furlong.(Areal)))
+                A = rand(n,n)
+                d = rand(n)
+                dl = rand(n-1)
+                du = rand(n-1)
+                @testset "$op" for op = (+,-)
+                    for x = (I, Diagonal(d), Bidiagonal(d,dl,:U), Bidiagonal(d,dl,:L),
+                             Tridiagonal(dl,d,du), SymTridiagonal(d,dl),
+                             UpperTriangular(A), UnitUpperTriangular(A))
+                        @test op(H,x) == op(Array(H),x)
+                        @test op(x,H) == op(x,Array(H))
+                        @test op(H,x) isa UpperHessenberg
+                        @test op(x,H) isa UpperHessenberg
+                    end
                 end
-            end
-            @testset "Multiplication/division" begin
-                for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
-                         UpperTriangular(A), UnitUpperTriangular(A))
+                @testset "Multiplication/division" begin
+                    for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
+                             UpperTriangular(A), UnitUpperTriangular(A))
+                        @test H*x == Array(H)*x
+                        @test x*H == x*Array(H)
+                        @test H/x == Array(H)/x
+                        @test x\H == x\Array(H)
+                        @test H*x isa UpperHessenberg
+                        @test x*H isa UpperHessenberg
+                        @test H/x isa UpperHessenberg
+                        @test x\H isa UpperHessenberg
+                    end
+                    x = Bidiagonal(d, dl, :L)
                     @test H*x == Array(H)*x
                     @test x*H == x*Array(H)
                     @test H/x == Array(H)/x
-                    @test x\H == x\Array(H)
-                    @test H*x isa UpperHessenberg
-                    @test x*H isa UpperHessenberg
-                    @test H/x isa UpperHessenberg
-                    @test x\H isa UpperHessenberg
+                    @test_broken x\H == x\Array(H) # issue 40037
                 end
-                x = Bidiagonal(d, dl, :L)
-                @test H*x == Array(H)*x
-                @test x*H == x*Array(H)
-                @test H/x == Array(H)/x
-                @test_broken x\H == x\Array(H) # issue 40037
             end
         end
     end
