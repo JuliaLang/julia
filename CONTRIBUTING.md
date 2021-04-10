@@ -6,7 +6,7 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 ## Learning Julia
 
-[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This video tutorial by Dr Jane Herriman](https://youtu.be/8h8rQyEpiZA) is one recommended starting point and there are others which can be found on the [Julia Language's YouTube](https://www.youtube.com/channel/UC9IuUwwE2xdjQUT_LMLONoA). The [Julia documentation](https://docs.julialang.org) covers the language itself in addition to the core library features. The documentation is also searchable for your convenience.
+[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike.
 
 ## Before filing an issue
 
