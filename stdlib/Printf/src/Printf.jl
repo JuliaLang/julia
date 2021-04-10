@@ -267,9 +267,7 @@ end
 end
 
 @inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
-    if spec.dynamic_width || spec.dynamic_precision
-        spec, argp = rmdynamic(spec, args, argp)
-    end
+    spec, argp = rmdynamic(spec, args, argp)
     (fmt(buf, pos, args[argp], spec), argp+1)
 end
 
@@ -784,9 +782,7 @@ const UNROLL_UPTO = 16
 end
 
 @inline function plength(f::Spec{T}, args, argp) where {T}
-    if f.dynamic_width || f.dynamic_precision
-        f, argp = rmdynamic(f, args, argp)
-    end
+    f, argp = rmdynamic(f, args, argp)
     (plength(f, args[argp]), argp+1)
 end
 
