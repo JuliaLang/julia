@@ -789,6 +789,19 @@ end
     @test sum(x) == 4.0
     @test sum(abs, x) == 5.5
     @test sum(abs2, x) == 14.375
+    @test @inferred(sum(t -> true, x)) === 8
+    @test @inferred(sum(t -> abs(t) + one(t), x)) == 13.5
+
+    @test @inferred(sum(t -> true, spzeros(Float64, 8))) === 8
+    @test @inferred(sum(t -> abs(t) + one(t), spzeros(Float64, 8))) === 8.0
+
+    # reducing over an empty collection
+    # FIXME sum(f, []) throws, should be fixed both for generic and sparse vectors
+    @test_broken sum(t -> true, zeros(Float64, 0)) === 0
+    @test_broken sum(t -> true, spzeros(Float64, 0)) === 0
+    @test @inferred(sum(abs2, spzeros(Float64, 0))) === 0.0
+    @test_broken sum(t -> abs(t) + one(t), zeros(Float64, 0)) === 0.0
+    @test_broken sum(t -> abs(t) + one(t), spzeros(Float64, 0)) === 0.0
 
     @test norm(x) == sqrt(14.375)
     @test norm(x, 1) == 5.5
@@ -802,6 +815,12 @@ end
         @test minimum(x) == -0.75
         @test maximum(abs, x) == 3.5
         @test minimum(abs, x) == 0.0
+        @test @inferred(minimum(t -> true, x)) === true
+        @test @inferred(maximum(t -> true, x)) === true
+        @test @inferred(minimum(t -> abs(t) + one(t), x)) == 1.0
+        @test @inferred(maximum(t -> abs(t) + one(t), x)) == 4.5
+        @test @inferred(minimum(t -> t + one(t), x)) == 0.25
+        @test @inferred(maximum(t -> -abs(t) + one(t), x)) == 1.0
     end
 
     let x = abs.(spv_x1)
@@ -826,6 +845,15 @@ end
         @test minimum(x) == 0.0
         @test maximum(abs, x) == 0.0
         @test minimum(abs, x) == 0.0
+        @test @inferred(minimum(t -> true, x)) === true
+        @test @inferred(maximum(t -> true, x)) === true
+        @test @inferred(minimum(t -> abs(t) + one(t), x)) === 1.0
+        @test @inferred(maximum(t -> abs(t) + one(t), x)) === 1.0
+    end
+
+    let x = spzeros(Float64, 0)
+        @test_throws ArgumentError minimum(t -> true, x)
+        @test_throws ArgumentError maximum(t -> true, x)
     end
 end
 
