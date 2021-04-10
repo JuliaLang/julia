@@ -618,14 +618,10 @@ end
     @test broadcast(+, T(1):2:6, 0.3) === T(1)+0.3:2:5+0.3
     @test broadcast(-, T(1):2:6, 1) === T(0):2:4
     @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
-    if T <: Unsigned
-        @test_broken broadcast(-, T(1):3) == -T(1):-1:-T(3)
-        @test_broken broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
-    else
-        @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
-        @test broadcast(-, T(1):3) == -T(1):-1:-T(3)
-        @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
-    end
+    is_unsigned = T <: Unsigned
+    is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
+    @test broadcast(-, T(1):3) == -T(1):-1:-T(3) broken=is_unsigned
+    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1) broken=is_unsigned
 end
 @testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
     @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
@@ -1569,17 +1565,11 @@ end
 
 @testset "constant-valued ranges (issues #10391 and #29052)" begin
     for r in ((1:4), (1:1:4), (1.0:4.0))
-        if eltype(r) === Int
-            @test_broken @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
-            @test_broken @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
-            @test_broken @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
-            @test_broken @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
-        else
-            @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
-            @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
-            @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
-            @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
-        end
+        is_int = eltype(r) === Int
+        @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
+        @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
+        @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
+        @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
         @test @inferred(r .+ (4.0:-1:1)) == [5.0, 5.0, 5.0, 5.0]
         @test @inferred(0.0 * r) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(0.0 .* r) == [0.0, 0.0, 0.0, 0.0]
@@ -1751,4 +1741,151 @@ end
     @test StepRangeLen(Int8(1), Int8(2), 3, 2) == Int8[-1, 1, 3]
     @test eltype(StepRangeLen(Int8(1), Int8(2), 3, 2)) === Int8
     @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3, 2))) === Int8
+end
+
+@testset "Bool indexing of ranges" begin
+    @test_throws ArgumentError Base.OneTo(true)
+    @test_throws ArgumentError Base.OneTo(true:true:true)
+
+    @test_throws ArgumentError (1:2)[true]
+    @test_throws ArgumentError (big(1):big(2))[true]
+    @test_throws ArgumentError Base.OneTo(10)[true]
+    @test_throws ArgumentError (1:2:5)[true]
+    @test_throws ArgumentError LinRange(1,2,2)[true]
+    @test_throws ArgumentError (1.0:2.0:5.0)[true]
+    r = 3:2
+    r2 = r[true:false]
+    @test r2 == collect(r)[true:false]
+    @test r.start == r2.start && r.stop == r2.stop
+    @test_throws BoundsError r[true:true]
+    @test_throws BoundsError r[false:true]
+    r = 3:3
+    r2 = r[true:true]
+    @test r2 == collect(r)[true:true]
+    @test r.start == r2.start && r.stop == r2.stop
+    r2 = r[false:false]
+    @test r2.start == 3 && r2.stop == 2
+    @test_throws BoundsError r[true:false]
+    @test_throws BoundsError r[false:true]
+    r = 2:3
+    r2 = r[false:true]
+    @test r2 == collect(r)[false:true]
+    @test r2.start == r2.stop == 3
+    @test_throws BoundsError r[true:false]
+    @test_throws BoundsError r[true:true]
+
+    r = 2:1
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    @test_throws BoundsError r[false:true:false]
+
+    r = 2:2
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = 1:2
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = 2:1:1
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    @test_throws BoundsError r[false:true:false]
+
+    r = 2:1:2
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = 1:1:2
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = 2.0:1.0:1.0
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    @test_throws BoundsError r[false:true:false]
+
+    r = 2.0:1.0:2.0
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = 1.0:1.0:2.0
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = StepRangeLen(2, 1, 0)
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    @test_throws BoundsError r[false:true:false]
+
+    r = StepRangeLen(2, 1, 1)
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = StepRangeLen(1, 1, 2)
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = LinRange(2, 1, 0)
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa LinRange && r2 == 2:1
+    @test_throws BoundsError r[false:true:false]
+
+    r = LinRange(2, 2, 1)
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa LinRange && r2 == 2:1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa LinRange && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = LinRange(1, 2, 2)
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa LinRange && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
 end

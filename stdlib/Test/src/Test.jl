@@ -60,7 +60,7 @@ function scrub_backtrace(bt)
 end
 
 function scrub_exc_stack(stack)
-    return Any[ (x[1], scrub_backtrace(x[2])) for x in stack ]
+    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}})) for x in stack ]
 end
 
 # define most of the test infrastructure without type specialization
@@ -259,7 +259,7 @@ end
 
 struct Threw <: ExecutionResult
     exception
-    backtrace
+    backtrace::Union{Nothing,Vector{Any}}
     source::LineNumberNode
 end
 
@@ -342,6 +342,8 @@ end
 """
     @test ex
     @test f(args...) key=val ...
+    @test ex broken=true
+    @test ex skip=true
 
 Tests that the expression `ex` evaluates to `true`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
@@ -368,12 +370,71 @@ Test Passed
 This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
 It is an error to supply more than one expression unless the first
 is a call expression and the rest are assignments (`k=v`).
+
+You can use any key for the `key=val` arguments, except for `broken` and `skip`,
+which have special meanings in the context of `@test`:
+
+* `broken=cond` indicates a test that should pass but currently consistently
+  fails when `cond==true`.  Tests that the expression `ex` evaluates to `false`
+  or causes an exception.  Returns a `Broken` `Result` if it does, or an `Error`
+  `Result` if the expression evaluates to `true`.  Regular `@test ex` is
+  evaluated when `cond==false`.
+* `skip=cond` marks a test that should not be executed but should be included in
+  test summary reporting as `Broken`, when `cond==true`.  This can be useful for
+  tests that intermittently fail, or tests of not-yet-implemented functionality.
+  Regular `@test ex` is evaluated when `cond==false`.
+
+# Examples
+
+```jldoctest
+julia> @test 2 + 2 ≈ 6 atol=1 broken=true
+Test Broken
+  Expression: ≈(2 + 2, 6, atol = 1)
+
+julia> @test 2 + 2 ≈ 5 atol=1 broken=false
+Test Passed
+
+julia> @test 2 + 2 == 5 skip=true
+Test Broken
+  Skipped: 2 + 2 == 5
+
+julia> @test 2 + 2 == 4 skip=false
+Test Passed
+```
+
+!!! compat "Julia 1.7"
+     The `broken` and `skip` keyword arguments require at least Julia 1.7.
 """
 macro test(ex, kws...)
+    # Collect the broken/skip keywords and remove them from the rest of keywords
+    broken = [kw.args[2] for kw in kws if kw.args[1] === :broken]
+    skip = [kw.args[2] for kw in kws if kw.args[1] === :skip]
+    kws = filter(kw -> kw.args[1] ∉ (:skip, :broken), kws)
+    # Validation of broken/skip keywords
+    for (kw, name) in ((broken, :broken), (skip, :skip))
+        if length(kw) > 1
+            error("invalid test macro call: cannot set $(name) keyword multiple times")
+        end
+    end
+    if length(skip) > 0 && length(broken) > 0
+        error("invalid test macro call: cannot set both skip and broken keywords")
+    end
+
+    # Build the test expression
     test_expr!("@test", ex, kws...)
     orig_ex = Expr(:inert, ex)
+
     result = get_test_result(ex, __source__)
-    :(do_test($result, $orig_ex))
+
+    return quote
+        if $(length(skip) > 0 && esc(skip[1]))
+            record(get_testset(), Broken(:skipped, $orig_ex))
+        else
+            let _do = $(length(broken) > 0 && esc(broken[1])) ? do_broken_test : do_test
+                _do($result, $orig_ex)
+            end
+        end
+    end
 end
 
 """
@@ -383,7 +444,8 @@ end
 Indicates a test that should pass but currently consistently fails.
 Tests that the expression `ex` evaluates to `false` or causes an
 exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
-if the expression evaluates to `true`.
+if the expression evaluates to `true`.  This is equivalent to
+[`@test ex broken=true`](@ref @test).
 
 The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
 
@@ -412,7 +474,8 @@ end
 
 Marks a test that should not be executed but should be included in test
 summary reporting as `Broken`. This can be useful for tests that intermittently
-fail, or tests of not-yet-implemented functionality.
+fail, or tests of not-yet-implemented functionality.  This is equivalent to
+[`@test ex skip=true`](@ref @test).
 
 The `@test_skip f(args...) key=val...` form works as for the `@test` macro.
 
@@ -551,7 +614,7 @@ function do_test(result::ExecutionResult, orig_expr)
         # The predicate couldn't be evaluated without throwing an
         # exception, so that is an Error and not a Fail
         @assert isa(result, Threw)
-        testres = Error(:test_error, orig_expr, result.exception, result.backtrace, result.source)
+        testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source)
     end
     isa(testres, Pass) || ccall(:jl_breakpoint, Cvoid, (Any,), result)
     record(get_testset(), testres)
@@ -1480,7 +1543,9 @@ function detect_ambiguities(mods::Module...;
             ambig = Int32[0]
             ms = Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
             ambig[1] == 0 && continue
+            isa(ms, Bool) && continue
             for match2 in ms
+                match2 = match2::Core.MethodMatch
                 m2 = match2.method
                  if !(m === m2 || Base.morespecific(m2.sig, m.sig))
                     if Base.isambiguous(m, m2; ambiguous_bottom)

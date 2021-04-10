@@ -392,12 +392,19 @@ be 1.
 """
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
-    OneTo{T}(stop) where {T<:Integer} = new(max(zero(T), stop))
+    function OneTo{T}(stop) where {T<:Integer}
+        throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
+        T === Bool && throwbool(stop)
+        return new(max(zero(T), stop))
+    end
+
     function OneTo{T}(r::AbstractRange) where {T<:Integer}
         throwstart(r) = (@_noinline_meta; throw(ArgumentError("first element must be 1, got $(first(r))")))
         throwstep(r)  = (@_noinline_meta; throw(ArgumentError("step must be 1, got $(step(r))")))
+        throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
         first(r) == 1 || throwstart(r)
         step(r)  == 1 || throwstep(r)
+        T === Bool && throwbool(r)
         return new(max(zero(T), last(r)))
     end
 end
@@ -698,7 +705,7 @@ function argmin(r::AbstractRange)
     elseif step(r) > 0
         firstindex(r)
     else
-        first(searchsorted(r, last(r)))
+        lastindex(r)
     end
 end
 
@@ -713,7 +720,7 @@ function argmax(r::AbstractRange)
     if isempty(r)
         throw(ArgumentError("range must be non-empty"))
     elseif step(r) > 0
-        first(searchsorted(r, last(r)))
+        lastindex(r)
     else
         firstindex(r)
     end
@@ -748,6 +755,7 @@ _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >=
 
 function getindex(v::UnitRange{T}, i::Integer) where T
     @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     val = convert(T, v.start + (i - 1))
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
     val
@@ -758,6 +766,7 @@ const OverflowSafe = Union{Bool,Int8,Int16,Int32,Int64,Int128,
 
 function getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
     @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     val = v.start + (i - 1)
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
     val % T
@@ -765,12 +774,14 @@ end
 
 function getindex(v::OneTo{T}, i::Integer) where T
     @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck ((i > 0) & (i <= v.stop)) || throw_boundserror(v, i)
     convert(T, i)
 end
 
 function getindex(v::AbstractRange{T}, i::Integer) where T
     @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     ret = convert(T, first(v) + (i - 1)*step_hp(v))
     ok = ifelse(step(v) > zero(step(v)),
                 (ret <= last(v)) & (ret >= first(v)),
@@ -781,22 +792,26 @@ end
 
 function getindex(r::Union{StepRangeLen,LinRange}, i::Integer)
     @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck checkbounds(r, i)
     unsafe_getindex(r, i)
 end
 
 # This is separate to make it useful even when running with --check-bounds=yes
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     u = i - r.offset
     T(r.ref + u*r.step)
 end
 
 function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     u = i - r.offset
     r.ref + u*r.step
 end
 
 function unsafe_getindex(r::LinRange, i::Integer)
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     lerpi(i-1, r.lendiv, r.start, r.stop)
 end
 
@@ -808,12 +823,17 @@ end
 
 getindex(r::AbstractRange, ::Colon) = copy(r)
 
-function getindex(r::AbstractUnitRange, s::AbstractUnitRange{<:Integer})
+function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integer}
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    f = first(r)
-    st = oftype(f, f + first(s)-1)
-    range(st, length=length(s))
+
+    if T === Bool
+        range(first(s) ? first(r) : last(r), length = Int(last(s)))
+    else
+        f = first(r)
+        st = oftype(f, f + first(s)-1)
+        return range(st, length=length(s))
+    end
 end
 
 function getindex(r::OneTo{T}, s::OneTo) where T
@@ -822,36 +842,86 @@ function getindex(r::OneTo{T}, s::OneTo) where T
     OneTo(T(s.stop))
 end
 
-function getindex(r::AbstractUnitRange, s::StepRange{<:Integer})
+function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    st = oftype(first(r), first(r) + s.start-1)
-    range(st, step=step(s), length=length(s))
+
+    if T === Bool
+        range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length = Int(last(s)))
+    else
+        st = oftype(first(r), first(r) + s.start-1)
+        return range(st, step=step(s), length=length(s))
+    end
 end
 
-function getindex(r::StepRange, s::AbstractRange{<:Integer})
+function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    st = oftype(r.start, r.start + (first(s)-1)*step(r))
-    range(st, step=step(r)*step(s), length=length(s))
+
+    if T === Bool
+        if length(s) == 0
+            return range(first(r), step=step(r), length=0)
+        elseif length(s) == 1
+            if first(s)
+                return range(first(r), step=step(r), length=1)
+            else
+                return range(first(r), step=step(r), length=0)
+            end
+        else # length(s) == 2
+            return range(last(r), step=step(r), length=1)
+        end
+    else
+        st = oftype(r.start, r.start + (first(s)-1)*step(r))
+        return range(st, step=step(r)*step(s), length=length(s))
+    end
 end
 
-function getindex(r::StepRangeLen{T}, s::OrdinalRange{<:Integer}) where {T}
+function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    # Find closest approach to offset by s
-    ind = LinearIndices(s)
-    offset = max(min(1 + round(Int, (r.offset - first(s))/step(s)), last(ind)), first(ind))
-    ref = _getindex_hiprec(r, first(s) + (offset-1)*step(s))
-    return StepRangeLen{T}(ref, r.step*step(s), length(s), offset)
+
+    if S === Bool
+        if length(s) == 0
+            return StepRangeLen{T}(first(r), step(r), 0, 1)
+        elseif length(s) == 1
+            if first(s)
+                return StepRangeLen{T}(first(r), step(r), 1, 1)
+            else
+                return StepRangeLen{T}(first(r), step(r), 0, 1)
+            end
+        else # length(s) == 2
+            return StepRangeLen{T}(last(r), step(r), 1, 1)
+        end
+    else
+        # Find closest approach to offset by s
+        ind = LinearIndices(s)
+        offset = max(min(1 + round(Int, (r.offset - first(s))/step(s)), last(ind)), first(ind))
+        ref = _getindex_hiprec(r, first(s) + (offset-1)*step(s))
+        return StepRangeLen{T}(ref, r.step*step(s), length(s), offset)
+    end
 end
 
-function getindex(r::LinRange{T}, s::OrdinalRange{<:Integer}) where {T}
+function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    vfirst = unsafe_getindex(r, first(s))
-    vlast  = unsafe_getindex(r, last(s))
-    return LinRange{T}(vfirst, vlast, length(s))
+
+    if S === Bool
+        if length(s) == 0
+            return LinRange(first(r), first(r), 0)
+        elseif length(s) == 1
+            if first(s)
+                return LinRange(first(r), first(r), 1)
+            else
+                return LinRange(first(r), first(r), 0)
+            end
+        else # length(s) == 2
+            return LinRange(last(r), last(r), 1)
+        end
+    else
+        vfirst = unsafe_getindex(r, first(s))
+        vlast  = unsafe_getindex(r, last(s))
+        return LinRange{T}(vfirst, vlast, length(s))
+    end
 end
 
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))

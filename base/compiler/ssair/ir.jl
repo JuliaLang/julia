@@ -151,6 +151,36 @@ function first_insert_for_bb(code, cfg::CFG, block::Int)
 end
 
 # SSA-indexed nodes
+
+struct NewInstruction
+    stmt::Any
+    type::Any
+    info::Any
+    # If nothing, copy the line from previous statement
+    # in the insertion location
+    line::Union{Int32, Nothing}
+    flag::UInt8
+
+    ## Insertion options
+
+    # The IR_FLAG_EFFECT_FREE flag has already been computed (or forced).
+    # Don't bother redoing so on insertion.
+    effect_free_computed::Bool
+    NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info),
+            line::Union{Int32, Nothing}, flag::UInt8, effect_free_computed::Bool) =
+        new(stmt, type, info, line, flag, effect_free_computed)
+end
+NewInstruction(@nospecialize(stmt), @nospecialize(type)) =
+    NewInstruction(stmt, type, nothing)
+NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Nothing, Int32}) =
+    NewInstruction(stmt, type, nothing, line, 0x00, false)
+
+effect_free(inst::NewInstruction) =
+    NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | IR_FLAG_EFFECT_FREE, true)
+non_effect_free(inst::NewInstruction) =
+    NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag & ~IR_FLAG_EFFECT_FREE, true)
+
+
 struct InstructionStream
     inst::Vector{Any}
     type::Vector{Any}
@@ -307,6 +337,7 @@ mutable struct UseRef
     stmt::Any
     op::Int
     UseRef(@nospecialize(a)) = new(a, 0)
+    UseRef(@nospecialize(a), op::Int) = new(a, op)
 end
 struct UseRefIterator
     use::Tuple{UseRef, Nothing}
@@ -489,10 +520,16 @@ function foreachssa(f, @nospecialize(stmt))
     end
 end
 
-function insert_node!(ir::IRCode, pos::Int, @nospecialize(typ), @nospecialize(val), attach_after::Bool=false)
-    line = ir.stmts[pos][:line]
+function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::Bool=false)
     node = add!(ir.new_nodes, pos, attach_after)
-    node[:inst], node[:type], node[:line], node[:flag] = val, typ, line, 0x00
+    node[:line] = something(inst.line, ir.stmts[pos][:line])
+    flag = inst.flag
+    if !inst.effect_free_computed
+        if stmt_effect_free(inst.stmt, inst.type, ir, ir.sptypes)
+            flag |= IR_FLAG_EFFECT_FREE
+        end
+    end
+    node[:inst], node[:type], node[:flag] = inst.stmt, inst.type, flag
     return SSAValue(length(ir.stmts) + node.idx)
 end
 
@@ -666,18 +703,19 @@ function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
     return node
 end
 
-function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @nospecialize(val), attach_after::Bool=false)
+function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction, attach_after::Bool=false)
+    @assert inst.effect_free_computed
     if isa(before, SSAValue)
         if before.id < compact.result_idx
-            count_added_node!(compact, val)
-            line = compact.result[before.id][:line]
+            count_added_node!(compact, inst.stmt)
+            line = something(inst.line, compact.result[before.id][:line])
             node = add!(compact.new_new_nodes, before.id, attach_after)
-            node[:inst], node[:type], node[:line] = val, typ, line
+            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
             return NewSSAValue(node.idx)
         else
-            line = compact.ir.stmts[before.id][:line]
+            line = something(inst.line, compact.ir.stmts[before.id][:line])
             node = add_pending!(compact, before.id, attach_after)
-            node[:inst], node[:type], node[:line] = val, typ, line
+            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
             os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
@@ -690,25 +728,26 @@ function insert_node!(compact::IncrementalCompact, before, @nospecialize(typ), @
             info = compact.pending_nodes.info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
             pos, attach_after = info.pos, info.attach_after
         end
-        line = compact.ir.stmts[pos][:line]
+        line = something(inst.line, compact.ir.stmts[pos][:line])
         node = add_pending!(compact, pos, attach_after)
-        node[:inst], node[:type], node[:line] = val, typ, line
+        node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
         os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
         push!(compact.ssa_rename, os)
         push!(compact.used_ssas, 0)
         return os
     elseif isa(before, NewSSAValue)
         before_entry = compact.new_new_nodes.info[before.id]
-        line = compact.new_new_nodes.stmts[before.id][:line]
+        line = something(inst.line, compact.new_new_nodes.stmts[before.id][:line])
         new_entry = add!(compact.new_new_nodes, before_entry.pos, attach_after)
-        new_entry[:inst], new_entry[:type], new_entry[:line] = val, typ, line
+        new_entry[:inst], new_entry[:type], new_entry[:line], new_entry[:flag] = inst.stmt, inst.type, line, inst.flag
         return NewSSAValue(new_entry.idx)
     else
         error("Unsupported")
     end
 end
 
-function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typ), ltable_idx::Int32, reverse_affinity::Bool=false)
+function insert_node_here!(compact::IncrementalCompact, inst::NewInstruction, reverse_affinity::Bool=false)
+    @assert inst.line !== nothing
     refinish = false
     result_idx = compact.result_idx
     if reverse_affinity &&
@@ -721,9 +760,13 @@ function insert_node_here!(compact::IncrementalCompact, @nospecialize(val), @nos
         @assert result_idx == length(compact.result) + 1
         resize!(compact, result_idx)
     end
+    flag = inst.flag
+    if !inst.effect_free_computed && stmt_effect_free(inst.stmt, inst.type, compact, compact.ir.sptypes)
+        flag |= IR_FLAG_EFFECT_FREE
+    end
     node = compact.result[result_idx]
-    node[:inst], node[:type], node[:line], node[:flag] = val, typ, ltable_idx, 0x00
-    if count_added_node!(compact, val)
+    node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, inst.line, flag
+    if count_added_node!(compact, inst.stmt)
         push!(compact.late_fixup, result_idx)
     end
     compact.result_idx = result_idx + 1
@@ -1270,10 +1313,8 @@ function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing
     stmt === nothing && return false
     if compact_exprtype(compact, SSAValue(idx)) === Bottom
         effect_free = false
-    elseif isa(compact.result[idx][:info], MethodResultPure)
-        effect_free = true
     else
-        effect_free = stmt_effect_free(stmt, compact.result[idx][:type], compact, compact.ir.sptypes)
+        effect_free = compact.result[idx][:flag] & IR_FLAG_EFFECT_FREE != 0
     end
     if effect_free
         for ops in userefs(stmt)

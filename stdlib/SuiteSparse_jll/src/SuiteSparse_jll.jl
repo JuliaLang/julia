@@ -2,7 +2,7 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl
 baremodule SuiteSparse_jll
-using Base, Libdl, OpenBLAS_jll
+using Base, Libdl, libblastrampoline_jll
 Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]

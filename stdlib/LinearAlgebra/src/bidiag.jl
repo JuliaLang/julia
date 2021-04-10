@@ -371,8 +371,9 @@ end
 
 -(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev,A.uplo)
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.uplo)
-*(B::Number, A::Bidiagonal) = A*B
+*(B::Number, A::Bidiagonal) = Bidiagonal(B*A.dv, B*A.ev, A.uplo)
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
+\(B::Number, A::Bidiagonal) = Bidiagonal(B\A.dv, B\A.ev, A.uplo)
 
 function ==(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo

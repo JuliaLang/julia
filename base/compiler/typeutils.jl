@@ -184,10 +184,16 @@ function switchtupleunion(@nospecialize(ty))
     return _switchtupleunion(Any[tparams...], length(tparams), [], ty)
 end
 
+switchtupleunion(argtypes::Vector{Any}) = _switchtupleunion(argtypes, length(argtypes), [], nothing)
+
 function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospecialize(origt))
     if i == 0
-        tpl = rewrap_unionall(Tuple{t...}, origt)
-        push!(tunion, tpl)
+        if origt === nothing
+            push!(tunion, copy(t))
+        else
+            tpl = rewrap_unionall(Tuple{t...}, origt)
+            push!(tunion, tpl)
+        end
     else
         ti = t[i]
         if isa(ti, Union)
@@ -234,7 +240,7 @@ function unswitchtupleunion(u::Union)
     ts = uniontypes(u)
     n = -1
     for t in ts
-        if t isa DataType && t.name === Tuple.name && !isvarargtype(t.parameters[end])
+        if t isa DataType && t.name === Tuple.name && length(t.parameters) != 0 && !isvarargtype(t.parameters[end])
             if n == -1
                 n = length(t.parameters)
             elseif n != length(t.parameters)

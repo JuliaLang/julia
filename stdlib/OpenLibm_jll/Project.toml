@@ -1,6 +1,6 @@
 name = "OpenLibm_jll"
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.7.4+0"
+version = "0.7.5+0"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"

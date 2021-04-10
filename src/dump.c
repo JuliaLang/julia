@@ -196,7 +196,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     if (!internal && jl_unwrap_unionall(dt->name->wrapper) == (jl_value_t*)dt) {
         tag = 6; // external primary type
     }
-    else if (!dt->isconcretetype) {
+    else if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars) {
         tag = 0; // normal struct
     }
     else if (internal) {
@@ -212,8 +212,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         tag = 11; // external, but definitely new (still needs caching, but not full unique-ing)
     }
     else {
-        // this'll need unique-ing later
-        // flag this in the backref table as special
+        // this is eligible for (and possibly requires) unique-ing later,
+        // so flag this in the backref table as special
         uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, dt);
         assert(*bp != (uintptr_t)HT_NOTFOUND);
         *bp |= 1;
@@ -660,6 +660,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
         jl_serialize_value(s, (jl_value_t*)m->generator);
         jl_serialize_value(s, (jl_value_t*)m->invokes);
+        jl_serialize_value(s, (jl_value_t*)m->recursion_relation);
     }
     else if (jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
@@ -909,7 +910,7 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
             jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-            if (callee != NULL)
+            if ((jl_value_t*)callee != jl_nothing)
                 collect_backedges(callee);
         }
     }
@@ -1503,6 +1504,9 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         jl_gc_wb(m, m->generator);
     m->invokes = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
     jl_gc_wb(m, m->invokes);
+    m->recursion_relation = jl_deserialize_value(s, (jl_value_t**)&m->recursion_relation);
+    if (m->recursion_relation)
+        jl_gc_wb(m, m->recursion_relation);
     JL_MUTEX_INIT(&m->writelock);
     return (jl_value_t*)m;
 }

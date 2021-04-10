@@ -35,7 +35,10 @@ positive definite matrix `A`. This is the return type of [`cholesky`](@ref),
 the corresponding matrix factorization function.
 
 The triangular Cholesky factor can be obtained from the factorization `F::Cholesky`
-via `F.L` and `F.U`.
+via `F.L` and `F.U`, where `A ≈ F.U' * F.U ≈ F.L * F.L'`.
+
+The following functions are available for `Cholesky` objects: [`size`](@ref), [`\\`](@ref),
+[`inv`](@ref), [`det`](@ref), [`logdet`](@ref) and [`isposdef`](@ref).
 
 Iterating the decomposition produces the components `L` and `U`.
 
@@ -107,7 +110,11 @@ positive semi-definite matrix `A`. This is the return type of [`cholesky(_, Val(
 the corresponding matrix factorization function.
 
 The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`
-via `F.L` and `F.U`.
+via `F.L` and `F.U`, and the permutation via `F.p`, where `A[F.p, F.p] ≈ F.U' * F.U ≈ F.L * F.L'`,
+or alternatively `A ≈ F.U[:, F.p]' * F.U[:, F.p] ≈ F.L[F.p, :] * F.L[F.p, :]'`.
+
+The following functions are available for `CholeskyPivoted` objects:
+[`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 
 Iterating the decomposition produces the components `L` and `U`.
 
@@ -332,7 +339,10 @@ end
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
 and return a [`Cholesky`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
 [`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
-The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
+
+The triangular Cholesky factor can be obtained from the factorization `F` via `F.L` and `F.U`,
+where `A ≈ F.U' * F.U ≈ F.L * F.L'`.
+
 The following functions are available for `Cholesky` objects: [`size`](@ref), [`\\`](@ref),
 [`inv`](@ref), [`det`](@ref), [`logdet`](@ref) and [`isposdef`](@ref).
 
@@ -386,9 +396,14 @@ cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
 and return a [`CholeskyPivoted`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref)
 or [`Hermitian`](@ref) [`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
-The triangular Cholesky factor can be obtained from the factorization `F` with: `F.L` and `F.U`.
+
+The triangular Cholesky factor can be obtained from the factorization `F` via `F.L` and `F.U`,
+and the permutation via `F.p`, where `A[F.p, F.p] ≈ F.U' * F.U ≈ F.L * F.L'`, or alternatively
+`A ≈ F.U[:, F.p]' * F.U[:, F.p] ≈ F.L[F.p, :] * F.L[F.p, :]'`.
+
 The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
+
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
 
@@ -398,6 +413,36 @@ wrap it in `Hermitian(A)` before passing it to `cholesky` in order to treat it a
 When `check = true`, an error is thrown if the decomposition fails.
 When `check = false`, responsibility for checking the decomposition's
 validity (via [`issuccess`](@ref)) lies with the user.
+
+# Examples
+```jldoctest
+julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+3×3 Matrix{Float64}:
+   4.0   12.0  -16.0
+  12.0   37.0  -43.0
+ -16.0  -43.0   98.0
+
+julia> C = cholesky(A, Val(true))
+CholeskyPivoted{Float64, Matrix{Float64}}
+U factor with rank 3:
+3×3 UpperTriangular{Float64, Matrix{Float64}}:
+ 9.89949  -4.34366  -1.61624
+  ⋅        4.25825   1.1694
+  ⋅         ⋅        0.142334
+permutation:
+3-element Vector{Int64}:
+ 3
+ 2
+ 1
+
+julia> C.U[:, C.p]' * C.U[:, C.p] ≈ A
+true
+
+julia> l, u = C; # destructuring via iteration
+
+julia> l == C.L && u == C.U
+true
+```
 """
 cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
     ::Val{true}; tol = 0.0, check::Bool = true) =

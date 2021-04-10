@@ -60,24 +60,8 @@ USE_SYSTEM_P7ZIP:=0
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
 
-## Settings for various Intel tools
-# Set to 1 to use MKL
-USE_INTEL_MKL ?= 0
-# Set to 1 to use Intel LIBM
-USE_INTEL_LIBM ?= 0
-# Set to 1 to enable profiling with Intel VTune Amplifier
-USE_INTEL_JITEVENTS ?= 0
-# Set to 1 to use Intel C, C++, and FORTRAN compilers
-USEICC  ?= 0
-USEIFC  ?= 0
-
 # Enable threading with one thread
 JULIA_THREADS := 1
-
-ifeq ($(USE_MKL), 1)
-$(warning "The julia make variable USE_MKL has been renamed to USE_INTEL_MKL")
-USE_INTEL_MKL := 1
-endif
 
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
@@ -488,13 +472,13 @@ USEGCC := 0
 USECLANG := 1
 endif
 
-# Note: Supporting only macOS Mavericks and above
+# Note: Supporting only macOS Yosemite and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 USEGCC := 0
 USECLANG := 1
 ifneq ($(APPLE_ARCH),arm64)
-MACOSX_VERSION_MIN := 10.9
+MACOSX_VERSION_MIN := 10.10
 else
 MACOSX_VERSION_MIN := 11.0
 endif
@@ -611,6 +595,21 @@ else ifeq ($(OS), Darwin)
 else
   SHLIB_EXT := so
 endif
+
+ifeq ($(OS),WINNT)
+define versioned_libname
+$$(if $(2),$(1)-$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+endef
+else ifeq ($(OS),Darwin)
+define versioned_libname
+$$(if $(2),$(1).$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+endef
+else
+define versioned_libname
+$$(if $(2),$(1).$(SHLIB_EXT).$(2),$(1).$(SHLIB_EXT))
+endef
+endif
+
 
 ifeq ($(SHLIB_EXT), so)
 define SONAME_FLAGS
@@ -913,6 +912,8 @@ endif
 ifneq (,$(findstring aarch64,$(ARCH)))
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
+USE_BLAS64:=1
+BINARY:=64
 ifeq ($(OS),Darwin)
 # Apple Chips are all at least A12Z
 MCPU:=apple-a12
@@ -1002,8 +1003,8 @@ JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
 ifeq ($(OS),Darwin)
-LIBUNWIND:=-losxunwind
-JCPPFLAGS+=-DLIBOSXUNWIND
+LIBUNWIND:=-lunwind
+JCPPFLAGS+=-DLLVMLIBUNWIND
 else
 LIBUNWIND:=-lunwind
 endif
@@ -1067,11 +1068,7 @@ endif
 # Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
 ifeq ($(BINARY), 64)
 ifeq ($(USE_SYSTEM_BLAS), 1)
-ifeq ($(USE_INTEL_MKL), 1)
-USE_BLAS64 ?= 1
-else # non MKL system blas is most likely LP64
 USE_BLAS64 ?= 0
-endif
 else
 USE_BLAS64 ?= 1
 endif
@@ -1166,8 +1163,10 @@ BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI)))))
 
+LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
+
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1331,61 +1330,11 @@ ifeq ($(USE_PERF_JITEVENTS), 1)
 JCPPFLAGS += -DJL_USE_PERF_JITEVENTS
 endif
 
-
-# Intel libraries
-
-ifeq ($(USE_INTEL_LIBM), 1)
-USE_SYSTEM_LIBM := 1
-LIBM := -L$(MKLROOT)/../compiler/lib/intel64 -limf
-LIBMNAME := libimf
-endif
-
-ifeq ($(USE_INTEL_MKL), 1)
-ifeq ($(USE_BLAS64), 1)
-export MKL_INTERFACE_LAYER := ILP64
-MKLLIB := $(MKLROOT)/lib/intel64
-else
-MKLLIB := $(MKLROOT)/lib/ia32
-endif
-USE_SYSTEM_BLAS:=1
-USE_SYSTEM_LAPACK:=1
-LIBBLASNAME := libmkl_rt
-LIBLAPACKNAME := libmkl_rt
-MKL_LDFLAGS := -L$(MKLLIB) -lmkl_rt
-ifneq ($(strip $(MKLLIB)),)
-  ifeq ($(OS), Linux)
-    RPATH_MKL := -Wl,-rpath,$(MKLLIB)
-    RPATH     += $(RPATH_MKL)
-    MKL_LDFLAGS += $(RPATH_MKL)
-  endif
-endif
-LIBBLAS   := $(MKL_LDFLAGS)
-LIBLAPACK := $(MKL_LDFLAGS)
-endif
-
 ifeq ($(HAVE_SSP),1)
 JCPPFLAGS += -DHAVE_SSP=1
 ifeq ($(USEGCC),1)
 OSLIBS += -lssp
 endif
-endif
-
-# ATLAS
-
-# ATLAS must have been previously  installed to usr/lib/libatlas
-# (built as a shared library, for your platform, single threaded)
-USE_ATLAS := 0
-ATLAS_LIBDIR := $(build_libdir)
-#or ATLAS_LIBDIR := /path/to/system/atlas/lib
-
-ifeq ($(USE_ATLAS), 1)
-USE_BLAS64 := 0
-USE_SYSTEM_BLAS := 1
-USE_SYSTEM_LAPACK := 1
-LIBBLAS := -L$(ATLAS_LIBDIR) -lsatlas
-LIBLAPACK := $(LIBBLAS)
-LIBBLASNAME := libsatlas
-LIBLAPACKNAME := $(LIBBLASNAME)
 endif
 
 # Renaming OpenBLAS symbols, see #4923 and #8734
@@ -1548,8 +1497,12 @@ ifneq ($(findstring $(OS),Linux FreeBSD),)
 LIBGCC_NAME := libgcc_s.$(SHLIB_EXT).1
 endif
 
-
+# USE_SYSTEM_CSL causes it to get symlinked into build_private_shlibdir
+ifeq ($(USE_SYSTEM_CSL),1)
+LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBGCC_NAME))
+else
 LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBGCC_NAME))
+endif
 LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBGCC_NAME))
 
 # USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir

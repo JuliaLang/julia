@@ -7,6 +7,8 @@ module Mmap
 
 import Base: OS_HANDLE, INVALID_OS_HANDLE
 
+export mmap
+
 const PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
@@ -20,7 +22,7 @@ end
     Mmap.Anonymous(name::AbstractString="", readonly::Bool=false, create::Bool=true)
 
 Create an `IO`-like object for creating zeroed-out mmapped-memory that is not tied to a file
-for use in [`Mmap.mmap`](@ref Mmap.mmap). Used by `SharedArray` for creating shared memory arrays.
+for use in [`mmap`](@ref mmap). Used by `SharedArray` for creating shared memory arrays.
 
 # Examples
 ```jldoctest
@@ -123,8 +125,8 @@ end # os-test
 # core implementation of mmap
 
 """
-    Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-    Mmap.mmap(type::Type{Array{T,N}}, dims)
+    mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+    mmap(type::Type{Array{T,N}}, dims)
 
 Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
 convenient way of working with data too large to fit in the computer's memory.
@@ -172,7 +174,7 @@ close(s)
 s = open("/tmp/mmap.bin")   # default is read-only
 m = read(s, Int)
 n = read(s, Int)
-A2 = Mmap.mmap(s, Matrix{Int}, (m,n))
+A2 = mmap(s, Matrix{Int}, (m,n))
 ```
 
 creates a `m`-by-`n` `Matrix{Int}`, linked to the file associated with stream `s`.
@@ -254,10 +256,10 @@ mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:Array,N} =
 mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:Array} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
 
 """
-    Mmap.mmap(io, BitArray, [dims, offset])
+    mmap(io, BitArray, [dims, offset])
 
 Create a [`BitArray`](@ref) whose values are linked to a file, using memory-mapping; it has the same
-purpose, works in the same way, and has the same arguments, as [`mmap`](@ref Mmap.mmap), but
+purpose, works in the same way, and has the same arguments, as [`mmap`](@ref mmap), but
 the byte representation is different.
 
 # Examples
@@ -266,7 +268,7 @@ julia> using Mmap
 
 julia> io = open("mmap.bin", "w+");
 
-julia> B = Mmap.mmap(io, BitArray, (25,30000));
+julia> B = mmap(io, BitArray, (25,30000));
 
 julia> B[3, 4000] = true;
 
@@ -276,7 +278,7 @@ julia> close(io);
 
 julia> io = open("mmap.bin", "r+");
 
-julia> C = Mmap.mmap(io, BitArray, (25,30000));
+julia> C = mmap(io, BitArray, (25,30000));
 
 julia> C[3, 4000]
 true

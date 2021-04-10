@@ -1791,7 +1791,90 @@ powm(A::LowerTriangular, p::Real) = copy(transpose(powm!(copy(transpose(A)), p::
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
-function log(A0::UpperTriangular{T}) where T<:BlasFloat
+log(A::UpperTriangular{T}) where {T<:BlasFloat} = log_quasitriu(A)
+log(A::UnitUpperTriangular{T}) where {T<:BlasFloat} = log_quasitriu(A)
+log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
+log(A::UnitLowerTriangular) = copy(transpose(log(copy(transpose(A)))))
+
+function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
+    # allocate real A if log(A) will be real and complex A otherwise
+    n = checksquare(A0)
+    if isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
+        A = T <: Complex ? real(A0) : copy(A0)
+    else
+        A = T <: Complex ? copy(A0) : complex(A0)
+    end
+    if A0 isa UnitUpperTriangular
+        A = UpperTriangular(parent(A))
+        @inbounds for i in 1:n
+            A[i,i] = 1
+        end
+    end
+    Y0 = _log_quasitriu!(A0, A)
+    # return complex result for complex input
+    Y = T <: Complex ? complex(Y0) : Y0
+
+    if A0 isa UpperTriangular || A0 isa UnitUpperTriangular
+        return UpperTriangular(Y)
+    else
+        return Y
+    end
+end
+# type-stable implementation of log_quasitriu
+# A is a copy of A0 that is overwritten while computing the result. It has the same eltype
+# as the result.
+function _log_quasitriu!(A0, A)
+    # Find Padé degree m and s while replacing A with A^(1/2^s)
+    m, s = _find_params_log_quasitriu!(A)
+
+    # Compute accurate superdiagonal of A
+    _pow_superdiag_quasitriu!(A, A0, 0.5^s)
+
+    # Compute accurate block diagonal of A
+    _sqrt_pow_diag_quasitriu!(A, A0, s)
+
+    # Get the Gauss-Legendre quadrature points and weights
+    R = zeros(Float64, m, m)
+    for i = 1:m - 1
+        R[i,i+1] = i / sqrt((2 * i)^2 - 1)
+        R[i+1,i] = R[i,i+1]
+    end
+    x,V = eigen(R)
+    w = Vector{Float64}(undef, m)
+    for i = 1:m
+        x[i] = (x[i] + 1) / 2
+        w[i] = V[1,i]^2
+    end
+
+    # Compute the Padé approximation
+    t = eltype(A)
+    n = size(A, 1)
+    Y = zeros(t, n, n)
+    B = similar(A)
+    for k = 1:m
+        B .= t(x[k]) .* A
+        @inbounds for i in 1:n
+            B[i,i] += 1
+        end
+        Y .+= t(w[k]) .* rdiv_quasitriu!(A, B)
+    end
+
+    # Scale back
+    lmul!(2.0^s, Y)
+
+    # Compute accurate diagonal and superdiagonal of log(A)
+    _log_diag_quasitriu!(Y, A0)
+
+    return Y
+end
+
+# Auxiliary functions for matrix logarithm and matrix power
+
+# Find Padé degree m and s while replacing A with A^(1/2^s)
+#   Al-Mohy and Higham, "Improved inverse scaling and squaring algorithms for
+#     the matrix logarithm", SIAM J. Sci. Comput., 34(4), (2012), pp. C153–C169.
+#   from Algorithm 4.1
+function _find_params_log_quasitriu!(A)
     maxsqrt = 100
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,
@@ -1801,13 +1884,13 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
          2.060962623452836e-001,
          2.879093714241194e-001]
     tmax = size(theta, 1)
-    n = size(A0, 1)
-    A = copy(A0)
+    n = size(A, 1)
     p = 0
     m = 0
 
-    # Compute repeated roots
-    d = complex(diag(A))
+    # Find s0, the smallest s such that the ρ(triu(A)^(1/2^s) - I) ≤ theta[tmax], where ρ(X)
+    # is the spectral radius of X
+    d = complex.(@view(A[diagind(A)]))
     dm1 = d .- 1
     s = 0
     while norm(dm1, Inf) > theta[tmax] && s < maxsqrt
@@ -1816,13 +1899,18 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
         s = s + 1
     end
     s0 = s
+
+    # Compute repeated roots
     for k = 1:min(s, maxsqrt)
-        A = sqrt(A)
+        _sqrt_quasitriu!(A isa UpperTriangular ? parent(A) : A, A)
     end
 
-    AmI = A - I
-    d2 = sqrt(opnorm(AmI^2, 1))
-    d3 = cbrt(opnorm(AmI^3, 1))
+    # these three never needed at the same time, so reuse the same temporary
+    AmI = AmI4 = AmI5 = A - I
+    AmI2 = AmI * AmI
+    AmI3 = AmI2 * AmI
+    d2 = sqrt(opnorm(AmI2, 1))
+    d3 = cbrt(opnorm(AmI3, 1))
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
@@ -1831,11 +1919,9 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
     end
 
     while !foundm
-        more = false
-        if s > s0
-            d3 = cbrt(opnorm(AmI^3, 1))
-        end
-        d4 = opnorm(AmI^4, 1)^(1/4)
+        more_sqrt = false
+        mul!(AmI4, AmI2, AmI2)
+        d4 = opnorm(AmI4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
             local j
@@ -1848,13 +1934,14 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
                 m = j
                 break
             elseif alpha3 / 2 <= theta[5] && p < 2
-                more = true
+                more_sqrt = true
                 p = p + 1
            end
         end
 
-        if !more
-            d5 = opnorm(AmI^5, 1)^(1/5)
+        if !more_sqrt
+            mul!(AmI5, AmI3, AmI2)
+            d5 = opnorm(AmI5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
@@ -1873,112 +1960,218 @@ function log(A0::UpperTriangular{T}) where T<:BlasFloat
             m = tmax
             break
         end
-        A = sqrt(A)
-        AmI = A - I
+        _sqrt_quasitriu!(A isa UpperTriangular ? parent(A) : A, A)
+        copyto!(AmI, A)
+        for i in 1:n
+            @inbounds AmI[i,i] -= 1
+        end
+        mul!(AmI2, AmI, AmI)
+        mul!(AmI3, AmI2, AmI)
+        d3 = cbrt(opnorm(AmI3, 1))
         s = s + 1
     end
-
-    # Compute accurate superdiagonal of T
-    blockpower!(A, A0, 0.5^s)
-
-    # Compute accurate diagonal of T
-    for i = 1:n
-        a = A0[i,i]
-        if s == 0
-            A[i,i] = a - 1
-            continue
-        end
-        s0 = s
-        if angle(a) >= pi / 2
-            a = sqrt(a)
-            s0 = s - 1
-        end
-        z0 = a - 1
-        a = sqrt(a)
-        r = 1 + a
-        for j = 1:s0-1
-            a = sqrt(a)
-            r = r * (1 + a)
-        end
-        A[i,i] = z0 / r
-    end
-
-    # Get the Gauss-Legendre quadrature points and weights
-    R = zeros(Float64, m, m)
-    for i = 1:m - 1
-        R[i,i+1] = i / sqrt((2 * i)^2 - 1)
-        R[i+1,i] = R[i,i+1]
-    end
-    x,V = eigen(R)
-    w = Vector{Float64}(undef, m)
-    for i = 1:m
-        x[i] = (x[i] + 1) / 2
-        w[i] = V[1,i]^2
-    end
-
-    # Compute the Padé approximation
-    Y = zeros(T, n, n)
-    for k = 1:m
-        Y = Y + w[k] * (A / (x[k] * A + I))
-    end
-
-    # Scale back
-    lmul!(2.0^s, Y)
-
-    # Compute accurate diagonal and superdiagonal of log(T)
-    for k = 1:n-1
-        Ak = A0[k,k]
-        Akp1 = A0[k+1,k+1]
-        logAk = log(Ak)
-        logAkp1 = log(Akp1)
-        Y[k,k] = logAk
-        Y[k+1,k+1] = logAkp1
-        if Ak == Akp1
-            Y[k,k+1] = A0[k,k+1] / Ak
-        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak) || iszero(Akp1 + Ak)
-            Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
-        else
-            z = (Akp1 - Ak)/(Akp1 + Ak)
-            if abs(z) > 1
-                Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
-            else
-                w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
-                Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
-            end
-        end
-    end
-
-    return UpperTriangular(Y)
+    return m, s
 end
-log(A::LowerTriangular) = copy(transpose(log(copy(transpose(A)))))
-
-# Auxiliary functions for matrix logarithm and matrix power
 
 # Compute accurate diagonal of A = A0^s - I
-#   Al-Mohy, "A more accurate Briggs method for the logarithm",
-#      Numer. Algorithms, 59, (2012), 393–402.
 function sqrt_diag!(A0::UpperTriangular, A::UpperTriangular, s)
     n = checksquare(A0)
+    T = eltype(A)
     @inbounds for i = 1:n
         a = complex(A0[i,i])
-        if s == 0
-            A[i,i] = a - 1
-        else
-            s0 = s
-            if imag(a) >= 0 && real(a) <= 0 && a != 0
-                a = sqrt(a)
-                s0 = s - 1
-            end
-            z0 = a - 1
-            a = sqrt(a)
-            r = 1 + a
-            for j = 1:s0-1
-                a = sqrt(a)
-                r = r * (1 + a)
-            end
-            A[i,i] = z0 / r
+        A[i,i] = _sqrt_pow(a, s)
+    end
+end
+# Compute accurate block diagonal of A = A0^s - I for upper quasi-triangular A0 produced
+# by the Schur decomposition. Diagonal is made of 1x1 and 2x2 blocks.
+# 2x2 blocks are real with non-negative conjugate pair eigenvalues
+function _sqrt_pow_diag_quasitriu!(A, A0, s)
+    n = checksquare(A0)
+    t = typeof(sqrt(zero(eltype(A))))
+    i = 1
+    @inbounds while i < n
+        if iszero(A0[i+1,i])  # 1x1 block
+            A[i,i] = _sqrt_pow(t(A0[i,i]), s)
+            i += 1
+        else  # real 2x2 block
+            @views _sqrt_pow_diag_block_2x2!(A[i:i+1,i:i+1], A0[i:i+1,i:i+1], s)
+            i += 2
         end
     end
+    if i == n  # last block is 1x1
+        @inbounds A[n,n] = _sqrt_pow(t(A0[n,n]), s)
+    end
+    return A
+end
+# compute a^(1/2^s)-1
+#   Al-Mohy, "A more accurate Briggs method for the logarithm",
+#      Numer. Algorithms, 59, (2012), 393–402.
+#   Algorithm 2
+function _sqrt_pow(a::Number, s)
+    T = typeof(sqrt(zero(a)))
+    s == 0 && return T(a) - 1
+    s0 = s
+    if imag(a) >= 0 && real(a) <= 0 && !iszero(a)  # angle(a) ≥ π / 2
+        a = sqrt(a)
+        s0 = s - 1
+    end
+    z0 = a - 1
+    a = sqrt(a)
+    r = 1 + a
+    for j = 1:s0-1
+        a = sqrt(a)
+        r = r * (1 + a)
+    end
+    return z0 / r
+end
+# compute A0 = A^(1/2^s)-I for 2x2 real matrices A and A0
+# A has non-negative conjugate pair eigenvalues
+# "Improved Inverse Scaling and Squaring Algorithms for the Matrix Logarithm"
+# SIAM J. Sci. Comput., 34(4), (2012) C153–C169. doi: 10.1137/110852553
+# Algorithm 5.1
+Base.@propagate_inbounds function _sqrt_pow_diag_block_2x2!(A, A0, s)
+    _sqrt_real_2x2!(A, A0)
+    if isone(s)
+        A[1,1] -= 1
+        A[2,2] -= 1
+    else
+        # Z = A - I
+        z11, z21, z12, z22 = A[1,1] - 1, A[2,1], A[1,2], A[2,2] - 1
+        # A = sqrt(A)
+        _sqrt_real_2x2!(A, A)
+        # P = A + I
+        p11, p21, p12, p22 = A[1,1] + 1, A[2,1], A[1,2], A[2,2] + 1
+        for i in 1:(s - 2)
+            # A = sqrt(A)
+            _sqrt_real_2x2!(A, A)
+            a11, a21, a12, a22 = A[1,1], A[2,1], A[1,2], A[2,2]
+            # P += P * A
+            r11 = p11*(1 + a11) + p12*a21
+            r22 = p21*a12 + p22*(1 + a22)
+            p21 = p21*(1 + a11) + p22*a21
+            p12 = p11*a12 + p12*(1 + a22)
+            p11 = r11
+            p22 = r22
+        end
+        # A = Z / P
+        c = inv(p11*p22 - p21*p12)
+        A[1,1] = (p22*z11 - p21*z12) * c
+        A[2,1] = (p22*z21 - p21*z22) * c
+        A[1,2] = (p11*z12 - p12*z11) * c
+        A[2,2] = (p11*z22 - p12*z21) * c
+    end
+    return A
+end
+# Compute accurate superdiagonal of A = A0^s - I for upper quasi-triangular A0 produced
+# by a Schur decomposition.
+# Higham and Lin, "A Schur–Padé Algorithm for Fractional Powers of a Matrix"
+# SIAM J. Matrix Anal. Appl., 32(3), (2011), 1056–1078.
+# Equation 5.6
+# see also blockpower for when A0 is upper triangular
+function _pow_superdiag_quasitriu!(A, A0, p)
+    n = checksquare(A0)
+    t = eltype(A)
+    k = 1
+    @inbounds while k < n
+        if !iszero(A[k+1,k])
+            k += 2
+            continue
+        end
+        if !(k == n - 1 || iszero(A[k+2,k+1]))
+            k += 3
+            continue
+        end
+        Ak = t(A0[k,k])
+        Akp1 = t(A0[k+1,k+1])
+
+        Akp = Ak^p
+        Akp1p = Akp1^p
+
+        if Ak == Akp1
+            A[k,k+1] = p * A0[k,k+1] * Ak^(p-1)
+        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak) || iszero(Akp1 + Ak)
+            A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
+        else
+            logAk = log(Ak)
+            logAkp1 = log(Akp1)
+            z = (Akp1 - Ak)/(Akp1 + Ak)
+            if abs(z) > 1
+                A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
+            else
+                w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
+                dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
+                A[k,k+1] = A0[k,k+1] * dd
+            end
+        end
+        k += 1
+    end
+end
+
+# Compute accurate block diagonal and superdiagonal of A = log(A0) for upper
+# quasi-triangular A0 produced by the Schur decomposition.
+function _log_diag_quasitriu!(A, A0)
+    n = checksquare(A0)
+    t = eltype(A)
+    k = 1
+    @inbounds while k < n
+        if iszero(A0[k+1,k])  # 1x1 block
+            Ak = t(A0[k,k])
+            logAk = log(Ak)
+            A[k,k] = logAk
+            if k < n - 2 && iszero(A0[k+2,k+1])
+                Akp1 = t(A0[k+1,k+1])
+                logAkp1 = log(Akp1)
+                A[k+1,k+1] = logAkp1
+                if Ak == Akp1
+                    A[k,k+1] = A0[k,k+1] / Ak
+                elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak) || iszero(Akp1 + Ak)
+                    A[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
+                else
+                    z = (Akp1 - Ak)/(Akp1 + Ak)
+                    if abs(z) > 1
+                        A[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
+                    else
+                        w = atanh(z) + im * pi * (unw(logAkp1-logAk) - unw(log1p(z)-log1p(-z)))
+                        A[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
+                    end
+                end
+                k += 2
+            else
+                k += 1
+            end
+        else  # real 2x2 block
+            @views _log_diag_block_2x2!(A[k:k+1,k:k+1], A0[k:k+1,k:k+1])
+            k += 2
+        end
+    end
+    if k == n  # last 1x1 block
+        @inbounds A[n,n] = log(t(A0[n,n]))
+    end
+    return A
+end
+# compute A0 = log(A) for 2x2 real matrices A and A0, where A0 is a diagonal 2x2 block
+# produced by real Schur decomposition.
+# Al-Mohy, Higham and Relton, "Computing the Frechet derivative of the matrix
+# logarithm and estimating the condition number", SIAM J. Sci. Comput.,
+# 35(4), (2013), C394–C410.
+# Eq. 6.1
+Base.@propagate_inbounds function _log_diag_block_2x2!(A, A0)
+    a, b, c = A0[1,1], A0[1,2], A0[2,1]
+    # avoid underflow/overflow for large/small b and c
+    s = sqrt(abs(b)) * sqrt(abs(c))
+    θ = atan(s, a)
+    t = θ / s
+    au = abs(a)
+    if au > s
+        a1 = log1p((s / au)^2) / 2 + log(au)
+    else
+        a1 = log1p((au / s)^2) / 2 + log(s)
+    end
+    A[1,1] = a1
+    A[2,1] = c*t
+    A[1,2] = b*t
+    A[2,2] = a1
+    return A
 end
 
 # Used only by powm at the moment
@@ -2112,48 +2305,24 @@ end
 unw(x::Real) = 0
 unw(x::Number) = ceil((imag(x) - pi) / (2 * pi))
 
+# compute A / B for upper quasi-triangular B, possibly overwriting B
+function rdiv_quasitriu!(A, B)
+    n = checksquare(A)
+    AG = copy(A)
+    # use Givens rotations to annihilate 2x2 blocks
+    @inbounds for k in 1:(n-1)
+        s = B[k+1,k]
+        iszero(s) && continue  # 1x1 block
+        G = first(givens(B[k+1,k+1], s, k, k+1))
+        rmul!(B, G)
+        rmul!(AG, G)
+    end
+    return rdiv!(AG, UpperTriangular(B))
+end
+
 # End of auxiliary functions for matrix logarithm and matrix power
 
-function sqrt(A::UpperTriangular)
-    realmatrix = false
-    if isreal(A)
-        realmatrix = true
-        for i = 1:checksquare(A)
-            x = real(A[i,i])
-            if x < zero(x)
-                realmatrix = false
-                break
-            end
-        end
-    end
-    # Writing an explicit if instead of using Val(realmatrix) below
-    # makes the calls to sqrt(::UpperTriangular,::Val) type stable.
-    if realmatrix
-        return sqrt(A,Val(true))
-    else
-        return sqrt(A,Val(false))
-    end
-end
-function sqrt(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
-    B = A.data
-    n = checksquare(B)
-    t = realmatrix ? typeof(sqrt(zero(T))) : typeof(sqrt(complex(zero(T))))
-    R = zeros(t, n, n)
-    tt = typeof(zero(t)*zero(t))
-    @inbounds for j = 1:n
-        R[j,j] = realmatrix ? sqrt(B[j,j]) : sqrt(complex(B[j,j]))
-        for i = j-1:-1:1
-            r::tt = B[i,j]
-            @simd for k = i+1:j-1
-                r -= R[i,k]*R[k,j]
-            end
-            if !(iszero(r) || (iszero(R[i,i]) && iszero(R[j,j])))
-                R[i,j] = sylvester(R[i,i],R[j,j],-r)
-            end
-        end
-    end
-    return UpperTriangular(R)
-end
+sqrt(A::UpperTriangular) = sqrt_quasitriu(A)
 function sqrt(A::UnitUpperTriangular{T}) where T
     B = A.data
     n = checksquare(B)
@@ -2174,6 +2343,202 @@ function sqrt(A::UnitUpperTriangular{T}) where T
 end
 sqrt(A::LowerTriangular) = copy(transpose(sqrt(copy(transpose(A)))))
 sqrt(A::UnitLowerTriangular) = copy(transpose(sqrt(copy(transpose(A)))))
+
+# Auxiliary functions for matrix square root
+
+# square root of upper triangular or real upper quasitriangular matrix
+function sqrt_quasitriu(A0)
+    n = checksquare(A0)
+    T = eltype(A0)
+    Tr = typeof(sqrt(real(zero(T))))
+    Tc = typeof(sqrt(complex(zero(T))))
+    if isreal(A0)
+        is_sqrt_real = true
+        if istriu(A0)
+            for i in 1:n
+                Aii = real(A0[i,i])
+                if Aii < zero(Aii)
+                    is_sqrt_real = false
+                    break
+                end
+            end
+        end
+        if is_sqrt_real
+            R = zeros(Tr, n, n)
+            A = real(A0)
+        else
+            R = zeros(Tc, n, n)
+            A = A0
+        end
+    else
+        A = A0
+        R = zeros(Tc, n, n)
+    end
+    _sqrt_quasitriu!(R, A)
+    Rc = eltype(A0) <: Real ? R : complex(R)
+    if A0 isa UpperTriangular
+        return UpperTriangular(Rc)
+    elseif A0 isa UnitUpperTriangular
+        return UnitUpperTriangular(Rc)
+    else
+        return Rc
+    end
+end
+
+function _sqrt_quasitriu!(R, A)
+    _sqrt_quasitriu_diag_block!(R, A)
+    _sqrt_quasitriu_offdiag_block!(R, A)
+    return R
+end
+
+function _sqrt_quasitriu_diag_block!(R, A)
+    n = size(R, 1)
+    ta = eltype(R) <: Complex ? complex(eltype(A)) : eltype(A)
+    i = 1
+    @inbounds while i < n
+        if iszero(A[i + 1, i])
+            R[i, i] = sqrt(ta(A[i, i]))
+            i += 1
+        else
+            # this branch is never reached when A is complex triangular
+            @views _sqrt_real_2x2!(R[i:(i + 1), i:(i + 1)], A[i:(i + 1), i:(i + 1)])
+            i += 2
+        end
+    end
+    if i == n
+        R[n, n] = sqrt(ta(A[n, n]))
+    end
+    return R
+end
+
+function _sqrt_quasitriu_offdiag_block!(R, A)
+    n = size(R, 1)
+    j = 1
+    @inbounds while j ≤ n
+        jsize_is_2 = j < n && !iszero(A[j + 1, j])
+        i = j - 1
+        while i > 0
+            isize_is_2 = i > 1 && !iszero(A[i, i - 1])
+            if isize_is_2
+                if jsize_is_2
+                    _sqrt_quasitriu_offdiag_block_2x2!(R, A, i - 1, j)
+                else
+                    _sqrt_quasitriu_offdiag_block_2x1!(R, A, i - 1, j)
+                end
+                i -= 2
+            else
+                if jsize_is_2
+                    _sqrt_quasitriu_offdiag_block_1x2!(R, A, i, j)
+                else
+                    _sqrt_quasitriu_offdiag_block_1x1!(R, A, i, j)
+                end
+                i -= 1
+            end
+        end
+        j += 2 - !jsize_is_2
+    end
+    return R
+end
+
+# real square root of 2x2 diagonal block of quasi-triangular matrix from real Schur
+# decomposition. Eqs 6.8-6.9 and Algorithm 6.5 of
+# Higham, 2008, "Functions of Matrices: Theory and Computation", SIAM.
+Base.@propagate_inbounds function _sqrt_real_2x2!(R, A)
+    # in the real Schur form, A[1, 1] == A[2, 2], and A[2, 1] * A[1, 2] < 0
+    θ, a21, a12 = A[1, 1], A[2, 1], A[1, 2]
+    # avoid overflow/underflow of μ
+    # for real sqrt, |d| ≤ 2 max(|a12|,|a21|)
+    μ = sqrt(abs(a12)) * sqrt(abs(a21))
+    α = _real_sqrt(θ, μ)
+    c = 2α
+    R[1, 1] = α
+    R[2, 1] = a21 / c
+    R[1, 2] = a12 / c
+    R[2, 2] = α
+    return R
+end
+
+# real part of square root of θ+im*μ
+@inline function _real_sqrt(θ, μ)
+    t = sqrt((abs(θ) + hypot(θ, μ)) / 2)
+    return θ ≥ 0 ? t : μ / 2t
+end
+
+Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x1!(R, A, i, j)
+    Rii = R[i, i]
+    Rjj = R[j, j]
+    iszero(Rii) && iszero(Rjj) && return R
+    t = eltype(R)
+    tt = typeof(zero(t)*zero(t))
+    r = tt(-A[i, j])
+    @simd for k in (i + 1):(j - 1)
+        r += R[i, k] * R[k, j]
+    end
+    iszero(r) && return R
+    R[i, j] = sylvester(Rii, Rjj, r)
+    return R
+end
+
+Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_1x2!(R, A, i, j)
+    jrange = j:(j + 1)
+    t = eltype(R)
+    tt = typeof(zero(t)*zero(t))
+    r1 = tt(-A[i, j])
+    r2 = tt(-A[i, j + 1])
+    @simd for k in (i + 1):(j - 1)
+        rik = R[i, k]
+        r1 += rik * R[k, j]
+        r2 += rik * R[k, j + 1]
+    end
+    Rjj = @view R[jrange, jrange]
+    Rij = @view R[i, jrange]
+    Rij[1] = r1
+    Rij[2] = r2
+    _sylvester_1x2!(R[i, i], Rjj, Rij)
+    return R
+end
+
+Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x1!(R, A, i, j)
+    irange = i:(i + 1)
+    t = eltype(R)
+    tt = typeof(zero(t)*zero(t))
+    r1 = tt(-A[i, j])
+    r2 = tt(-A[i + 1, j])
+    @simd for k in (i + 2):(j - 1)
+        rkj = R[k, j]
+        r1 += R[i, k] * rkj
+        r2 += R[i + 1, k] * rkj
+    end
+    Rii = @view R[irange, irange]
+    Rij = @view R[irange, j]
+    Rij[1] = r1
+    Rij[2] = r2
+    @views _sylvester_2x1!(Rii, R[j, j], Rij)
+    return R
+end
+
+Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x2!(R, A, i, j)
+    irange = i:(i + 1)
+    jrange = j:(j + 1)
+    t = eltype(R)
+    tt = typeof(zero(t)*zero(t))
+    for i′ in irange, j′ in jrange
+        Cij = tt(-A[i′, j′])
+        @simd for k in (i + 2):(j - 1)
+            Cij += R[i′, k] * R[k, j′]
+        end
+        R[i′, j′] = Cij
+    end
+    Rii = @view R[irange, irange]
+    Rjj = @view R[jrange, jrange]
+    Rij = @view R[irange, jrange]
+    if !iszero(Rij) && !all(isnan, Rij)
+        _sylvester_2x2!(Rii, Rjj, Rij)
+    end
+    return R
+end
+
+# End of auxiliary functions for matrix square root
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)
