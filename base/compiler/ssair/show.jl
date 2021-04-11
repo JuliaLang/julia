@@ -192,7 +192,7 @@ example (taken from `@code_typed sin(1.0)`):
 ```
 
 The three annotations are indicated with `*`. The first one is the line number of the
-active function (printed once whenver the outer most line number changes). The second
+active function (printed once whenever the outer most line number changes). The second
 is the inlining indicator. The number of lines indicate the level of nesting, with a
 half-size line (╷) indicating the start of a scope and a full size line (│) indicating
 a continuing scope. The last annotation is the most complicated one. It is a heuristic
@@ -201,7 +201,7 @@ scope that hasn't been printed before. Let's work a number of examples to see th
 and tradeoffs involved.
 
 ```
-f() = leaf_function() # Delibarately not defined to end up in the IR verbatim
+f() = leaf_function() # Deliberately not defined to end up in the IR verbatim
 g() = f()
 h() = g()
 top_function() = h()
