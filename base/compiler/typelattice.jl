@@ -19,7 +19,7 @@
 import Core: Const, PartialStruct
 
 # The type of this value might be Bool.
-# However, to enable a limited amount of back-propagagation,
+# However, to enable a limited amount of back-propagation,
 # we also keep some information about how this Bool value was created.
 # In particular, if you branch on this value, then may assume that in
 # the true branch, the type of `var` will be limited by `vtype` and in
