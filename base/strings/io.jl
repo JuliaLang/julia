@@ -540,7 +540,7 @@ macro raw_str(s); s; end
 
 Escape a string in the manner used for parsing raw string literals.
 For each double-quote (`"`) character in input string `s`, this
-function counts the number _n_ of preceeding backslash (`\\`) characters,
+function counts the number _n_ of preceding backslash (`\\`) characters,
 and then increases there the number of backslashes from _n_ to 2_n_+1
 (even for _n_ = 0). It also doubles a sequence of backslashes at the end
 of the string.
