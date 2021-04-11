@@ -47,7 +47,7 @@ CachedMethodTable(table::T) where T =
 
 Find all methods in the given method table `view` that are applicable to the
 given signature `sig`. If no applicable methods are found, an empty result is
-returned. If the number of applicable methods exeeded the specified limit,
+returned. If the number of applicable methods exceeded the specified limit,
 `missing` is returned.
 """
 function findall(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable; limit::Int=typemax(Int))
