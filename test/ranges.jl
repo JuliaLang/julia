@@ -1564,7 +1564,7 @@ end # module NonStandardIntegerRangeTest
 end
 
 @testset "constant-valued ranges (issues #10391 and #29052)" begin
-    for r in ((1:4), (1:1:4), (1.0:4.0))
+    @testset "with $(nameof(typeof(r))) of $(eltype(r))" for r in ((1:4), (1:1:4), StepRangeLen(1,1,4), (1.0:4.0))
         @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(r .* 0) == [0.0, 0.0, 0.0, 0.0]

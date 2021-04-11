@@ -1244,7 +1244,6 @@ function _define_range_op(@nospecialize f)
             r1l = length(r1)
             (r1l == length(r2) ||
              throw(DimensionMismatch("argument dimensions must match: length of r1 is $r1l, length of r2 is $(length(r2))")))
-            # range($f(first(r1), first(r2)), step=$f(step(r1), step(r2)), length=r1l)
             StepRangeLen($f(first(r1), first(r2)), $f(step(r1), step(r2)), r1l)
         end
 
