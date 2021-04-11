@@ -4,6 +4,10 @@ module TestHessenberg
 
 using Test, LinearAlgebra, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
 # for tuple tests below
 ≅(x,y) = all(p -> p[1] ≈ p[2], zip(x,y))
 
@@ -55,6 +59,54 @@ let n = 10
         H = UpperHessenberg(Areal)
         @test Array(Hc + H) == Array(Hc) + Array(H)
         @test Array(Hc - H) == Array(Hc) - Array(H)
+        @testset "Preserve UpperHessenberg shape (issue #39388)" begin
+            for H = (UpperHessenberg(Areal), UpperHessenberg(Furlong.(Areal)))
+                if eltype(H) <: Furlong
+                    A = Furlong.(rand(n,n))
+                    d = Furlong.(rand(n))
+                    dl = Furlong.(rand(n-1))
+                    du = Furlong.(rand(n-1))
+                    us = Furlong(1)*I
+                else
+                    A = rand(n,n)
+                    d = rand(n)
+                    dl = rand(n-1)
+                    du = rand(n-1)
+                    us = 1*I
+                end
+                @testset "$op" for op = (+,-)
+                    for x = (us, Diagonal(d), Bidiagonal(d,dl,:U), Bidiagonal(d,dl,:L),
+                             Tridiagonal(dl,d,du), SymTridiagonal(d,dl),
+                             UpperTriangular(A), UnitUpperTriangular(A))
+                        @test op(H,x) == op(Array(H),x)
+                        @test op(x,H) == op(x,Array(H))
+                        @test op(H,x) isa UpperHessenberg
+                        @test op(x,H) isa UpperHessenberg
+                    end
+                end
+                A = randn(n,n)
+                d = randn(n)
+                dl = randn(n-1)
+                @testset "Multiplication/division" begin
+                    for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
+                             UpperTriangular(A), UnitUpperTriangular(A))
+                        @test H*x == Array(H)*x broken = eltype(H) <: Furlong && x isa Bidiagonal
+                        @test x*H == x*Array(H) broken = eltype(H) <: Furlong && x isa Bidiagonal
+                        @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, Diagonal, UpperTriangular}
+                        @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, Diagonal, UpperTriangular}
+                        @test H*x isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Bidiagonal
+                        @test x*H isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Bidiagonal
+                        @test H/x isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, Diagonal}
+                        @test x\H isa UpperHessenberg broken = eltype(H) <: Furlong && x isa Union{Bidiagonal, Diagonal}
+                    end
+                    x = Bidiagonal(d, dl, :L)
+                    @test H*x == Array(H)*x
+                    @test x*H == x*Array(H)
+                    @test H/x == Array(H)/x broken = eltype(H) <: Furlong
+                    @test_broken x\H == x\Array(H) # issue 40037
+                end
+            end
+        end
     end
 
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int), herm in (false, true)

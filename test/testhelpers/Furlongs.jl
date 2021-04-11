@@ -36,6 +36,7 @@ Base.floatmin(::Type{Furlong{p,T}}) where {p,T<:AbstractFloat} = Furlong{p}(floa
 Base.floatmin(::Furlong{p,T}) where {p,T<:AbstractFloat} = floatmin(Furlong{p,T})
 Base.floatmax(::Type{Furlong{p,T}}) where {p,T<:AbstractFloat} = Furlong{p}(floatmax(T))
 Base.floatmax(::Furlong{p,T}) where {p,T<:AbstractFloat} = floatmax(Furlong{p,T})
+Base.conj(x::Furlong{p,T}) where {p,T} = Furlong{p,T}(conj(x.val))
 
 # convert Furlong exponent p to a canonical form.  This
 # is not type stable, but it doesn't matter since it is used
