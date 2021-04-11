@@ -3775,8 +3775,8 @@ for (stev, stebz, stegr, stein, elty) in
             require_one_based_indexing(dv, ev)
             chkstride1(dv, ev)
             n = length(dv)
-            if length(ev) != n - 1
-                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
+            if length(ev) != n - 1 && length(ev) != n
+                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than or equal to dv's length, $n)"))
             end
             Zmat = similar(dv, $elty, (n, job != 'N' ? n : 0))
             work = Vector{$elty}(undef, max(1, 2n-2))
