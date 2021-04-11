@@ -141,7 +141,7 @@ function Base.setindex!(p::AbstractPlatform, v::String, k::String)
     return p
 end
 
-# Hash definitino to ensure that it's stable
+# Hash definition to ensure that it's stable
 function Base.hash(p::Platform, h::UInt)
     h += 0x506c6174666f726d % UInt
     h = hash(p.tags, h)
