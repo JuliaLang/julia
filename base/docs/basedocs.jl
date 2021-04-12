@@ -2088,7 +2088,7 @@ containing elements of type `T`. `N` can either be supplied explicitly,
 as in `Array{T,N}(undef, dims)`, or be determined by the length or number of `dims`.
 `dims` may be a tuple or a series of integer arguments corresponding to the lengths
 in each dimension. If the rank `N` is supplied explicitly, then it must
-match the length or number of `dims`. Here [`undef`](@ref) is 
+match the length or number of `dims`. Here [`undef`](@ref) is
 the [`UndefInitializer`](@ref).
 
 # Examples
