@@ -47,17 +47,17 @@ end
 Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
 are promoted to a common type.
 
-See also [`clamp!`](@ref), [`trunc`](@ref).
+See also [`clamp!`](@ref), [min](@ref), [max](@ref).
 
 # Examples
 ```jldoctest
-julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
+julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
 3-element Vector{BigFloat}:
  3.141592653589793238462643383279502884197169399375105820974944592307816406286198
  2.0
  9.0
 
-julia> clamp.([11,8,5],10,6) # an example where lo > hi
+julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
 3-element Vector{Int64}:
   6
   6
@@ -75,12 +75,18 @@ clamp(x::X, lo::L, hi::H) where {X,L,H} =
 
 Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
 
+See also [`trunc`](@ref).
+
 # Examples
 ```jldoctest
 julia> clamp(200, Int8)
 127
+
 julia> clamp(-200, Int8)
 -128
+
+julia> trunc(Int, 4pi^2)
+39
 ```
 """
 clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
@@ -91,6 +97,19 @@ clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
+
+# Examples
+```jldoctest
+julia> row = collect(-4:4)';
+
+julia> clamp!(row, 0, Inf)
+1×9 adjoint(::Vector{Int64}) with eltype Int64:
+ 0  0  0  0  0  1  2  3  4
+
+julia> clamp.((-4:4)', 0, Inf)
+1×9 Matrix{Float64}:
+ 0.0  0.0  0.0  0.0  0.0  1.0  2.0  3.0  4.0
+```
 """
 function clamp!(x::AbstractArray, lo, hi)
     @inbounds for i in eachindex(x)
