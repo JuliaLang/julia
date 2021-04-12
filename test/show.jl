@@ -1904,7 +1904,7 @@ h_line() = f_line()
 @test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
 
 
-eval(Meta.parse("""function my_fun28173(x)
+eval(Meta._parse_string("""function my_fun28173(x)
     y = if x == 1
             "HI"
         elseif x == 2
@@ -1921,7 +1921,7 @@ eval(Meta.parse("""function my_fun28173(x)
             "three"
         end
     return y
-end""")) # use parse to control the line numbers
+end""", "a"^80, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
@@ -1960,7 +1960,7 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     io = IOBuffer()
     Base.IRShow.show_ir(io, ir; verbose_linetable=true)
     seekstart(io)
-    @test count(contains(r"my_fun28173 at none:\d+"), eachline(io)) == 9
+    @test count(contains(r"my_fun28173 at a{80}:\d+"), eachline(io)) == 9
 end
 
 # Verify that extra instructions at the end of the IR
