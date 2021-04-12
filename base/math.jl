@@ -47,7 +47,7 @@ end
 Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
 are promoted to a common type.
 
-See also [`clamp!`](@ref), [min](@ref), [max](@ref).
+See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
 
 # Examples
 ```jldoctest
