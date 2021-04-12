@@ -790,10 +790,12 @@ function edit_insert(s::PromptState, c::StringLike)
         offset = s.ias.curs_row == 1 || s.indent < 0 ?
             sizeof(prompt_string(s.p.prompt)::String) : s.indent
         offset += position(buf) - beginofline(buf) # size of current line
+        spinner = true
         if offset + textwidth(str) <= w
             # Avoid full update when appending characters to the end
             # and an update of curs_row isn't necessary (conservatively estimated)
             write(termbuf, str)
+            spinner = false
         elseif after == 0
             refresh_line(s)
             delayup = false
@@ -801,8 +803,10 @@ function edit_insert(s::PromptState, c::StringLike)
             delayup = true
         end
         if delayup
-            write(termbuf, spin_seq[mod1(position(buf) - w, length(spin_seq))])
-            cmove_left(termbuf)
+            if spinner
+                write(termbuf, spin_seq[mod1(position(buf) - w, length(spin_seq))])
+                cmove_left(termbuf)
+            end
             s.refresh_wait = Timer(after) do t
                 s.refresh_wait === t || return
                 s.refresh_wait = nothing
