@@ -1006,7 +1006,7 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 ```
-See also [`ComposedFunction`](@ref), [`!`](@ref).
+See also [`ComposedFunction`](@ref), [`!f::Function`](@ref).
 """
 function ∘ end
 
