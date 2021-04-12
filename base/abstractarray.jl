@@ -1629,8 +1629,8 @@ reduce(::typeof(hcat), A::AbstractVector{<:AbstractVecOrMat}) =
 # helper functions
 cat_size(A) = (1,)
 cat_size(A::AbstractArray) = size(A)
-cat_size(A, d::Int) = 1
-cat_size(A::AbstractArray, d::Int) = size(A, d)
+cat_size(A, d) = 1
+cat_size(A::AbstractArray, d) = size(A, d)
 
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
@@ -2038,7 +2038,9 @@ end
     hvncat(dims::Tuple{Vararg{Int}}, row_first, values...)
     hvncat(shape::Tuple{Vararg{Tuple}}, row_first, values...)
 
-Horizontal, vertical, and n-dimensional concatenation in one call. This function is called
+Horizontal, vertical, and n-dimensional concatenation of many `values` in one call.
+
+This function is called
 for block matrix syntax. The first argument either specifies the shape of the concatenation,
 similar to `hvcat`, as a tuple of tuples, or the dimensions that specify the key number of
 elements along each axis, and is used to determine the output dimensions. The `dims` form
@@ -2184,12 +2186,6 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     return A
 end
 
-# I don't understand why this function performs better when the first vararg is a number vs. an array
-# const y = fill(2)
-# _typed_hvncat(Int, Val(3), 2, y, y, y): 1 allocations and 56 ns
-# _typed_hvncat(Int, Val(3), y, y, y, 2): 2 allocations and 1.2 μs
-# both are still better than the (1, 1, 1, 2) argument variant
-# Apparently an issue with triggering specialization? #36307
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
     # into the destination

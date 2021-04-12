@@ -176,7 +176,7 @@ julia> [1;; 2;; 3;; 4]
 1×4 Matrix{Int64}:
  1  2  3  4
 
-julia> [1 2 ;; # double semicolons may be used to add a line break within a horizontal concatenation using spaces or tabs
+julia> [1 2 ;; # double semicolons may only be mixed with spaces or tabs within a horizontal concatenation if used for a line break
         3 4]
 1×4 Matrix{Int64}:
  1  2  3  4
