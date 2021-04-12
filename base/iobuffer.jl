@@ -405,12 +405,12 @@ function take!(io::IOBuffer)
     return data
 end
 
-function write(to::GenericIOBuffer, from::GenericIOBuffer)
+function write(to::IO, from::GenericIOBuffer)
     if to === from
         from.ptr = from.size + 1
         return 0
     end
-    written::Int = write_sub(to, from.data, from.ptr, bytesavailable(from))
+    written::Int = GC.@preserve from unsafe_write(to, pointer(from.data, from.ptr), UInt(bytesavailable(from)))
     from.ptr += written
     return written
 end
@@ -432,14 +432,6 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
         to.ptr += written
     end
     return written
-end
-
-function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
-    require_one_based_indexing(a)
-    if offs+nel-1 > length(a) || offs < 1 || nel < 0
-        throw(BoundsError())
-    end
-    GC.@preserve a unsafe_write(to, pointer(a, offs), UInt(nel))
 end
 
 @inline function write(to::GenericIOBuffer, a::UInt8)

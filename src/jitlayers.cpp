@@ -555,6 +555,11 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
         llvm_unreachable("Target does not support MC emission.");
 }
 
+static auto countBasicBlocks(const Function &F)
+{
+    return std::distance(F.begin(), F.end());
+}
+
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
     uint64_t start_time = 0;
@@ -569,17 +574,10 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
             if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
                 continue;
             }
-            // Count number of Basic Blocks
-            int bbs = 0;
-            for (auto &B : F.getBasicBlockList()) {
-                std::ignore = B;
-                ++bbs;
-            }
-
             // Each function is printed as a YAML object with several attributes
             jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
             jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
         }
 
         start_time = jl_hrtime();
@@ -588,11 +586,13 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
     JL_TIMING(LLVM_OPT);
 
     int optlevel;
+    int optlevel_min;
     if (jl_generating_output()) {
         optlevel = 0;
     }
     else {
         optlevel = jl_options.opt_level;
+        optlevel_min = jl_options.opt_level_min;
         for (auto &F : M.functions()) {
             if (!F.getBasicBlockList().empty()) {
                 Attribute attr = F.getFnAttribute("julia-optimization-level");
@@ -604,6 +604,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
                 }
             }
         }
+        optlevel = std::max(optlevel, optlevel_min);
     }
     if (optlevel == 0)
         jit.PM0.run(M);
@@ -640,17 +641,9 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
             if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
                 continue;
             }
-
-            // Count number of Basic Blocks
-            int bbs = 0;
-            for (auto &B : F.getBasicBlockList()) {
-                std::ignore = B;
-                ++bbs;
-            }
-
             jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
             jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
         }
     }
 
@@ -726,7 +719,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
         static void *atomic_hdl = jl_load_dynamic_library(libatomic, JL_RTLD_LOCAL, 0);
         if (atomic_hdl != NULL) {
             GlobalJD.addGenerator(
-              std::move(*orc::DynamicLibrarySearchGenerator::Load(
+              cantFail(orc::DynamicLibrarySearchGenerator::Load(
                   libatomic,
                   DL.getGlobalPrefix(),
                   [&](const orc::SymbolStringPtr &S) {
@@ -814,13 +807,21 @@ JL_JITSymbol JuliaOJIT::findUnmangledSymbol(StringRef Name)
 uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 {
     auto addr = findSymbol(getMangledName(Name), false);
-    return addr ? cantFail(addr.getAddress()) : 0;
+    if (!addr) {
+        consumeError(addr.takeError());
+        return 0;
+    }
+    return cantFail(addr.getAddress());
 }
 
 uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 {
     auto addr = findSymbol(getMangledName(Name), false);
-    return addr ? cantFail(addr.getAddress()) : 0;
+    if (!addr) {
+        consumeError(addr.takeError());
+        return 0;
+    }
+    return cantFail(addr.getAddress());
 }
 
 static int globalUniqueGeneratedNames;
@@ -946,8 +947,7 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
             //    continue;
             //}
             else {
-                assert(dG->isDeclaration() || (dG->getInitializer() == sG->getInitializer() &&
-                            dG->isConstant() && sG->isConstant()));
+                assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
                 dG->replaceAllUsesWith(sG);
                 dG->eraseFromParent();
             }

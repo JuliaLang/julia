@@ -49,6 +49,21 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src, sptypes::
                 eT ⊑ fT || return false
             end
             return true
+        elseif head === :new_opaque_closure
+            length(ea) < 5 && return false
+            a = ea[1]
+            typ = argextype(a, src, sptypes)
+            typ, isexact = instanceof_tfunc(typ)
+            isexact || return false
+            typ ⊑ Tuple || return false
+            isva = argextype(ea[2], src, sptypes)
+            rt_lb = argextype(ea[3], src, sptypes)
+            rt_ub = argextype(ea[4], src, sptypes)
+            src = argextype(ea[5], src, sptypes)
+            if !(isva ⊑ Bool && rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
+                return false
+            end
+            return true
         elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck
             return true
         else
@@ -75,6 +90,7 @@ function compact_exprtype(compact::IncrementalCompact, @nospecialize(value))
     end
     return argextype(value, compact.ir, compact.ir.sptypes)
 end
+argextype(@nospecialize(value), compact::IncrementalCompact, sptypes::Vector{Any}) = compact_exprtype(compact, value)
 
 is_tuple_call(ir::IRCode, @nospecialize(def)) = isa(def, Expr) && is_known_call(def, tuple, ir, ir.sptypes)
 is_tuple_call(compact::IncrementalCompact, @nospecialize(def)) = isa(def, Expr) && is_known_call(def, tuple, compact)

@@ -242,7 +242,7 @@ const err_message = Dict(
     ErrExpectedEqualAfterKey                => "expected equal sign after key",
     ErrNoTrailingDigitAfterDot              => "expected digit after dot",
     ErrOverflowError                        => "overflowed when parsing integer",
-    ErrInvalidUnicodeScalar                 => "invalid uncidode scalar",
+    ErrInvalidUnicodeScalar                 => "invalid unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
     ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value"
 )
@@ -657,13 +657,20 @@ end
 #########
 
 function push!!(v::Vector, el)
+    # Since these types are typically non-inferrable, they are a big invalidation risk,
+    # and since it's used by the package-loading infrastructure the cost of invalidation
+    # is high. Therefore, this is written to reduce the "exposed surface area": e.g., rather
+    # than writing `T[el]` we write it as `push!(Vector{T}(undef, 1), el)` so that there
+    # is no ambiguity about what types of objects will be created.
     T = eltype(v)
     t = typeof(el)
     if el isa T || t === T
         push!(v, el::T)
         return v
     elseif T === Union{}
-        return t[el]
+        out = Vector{t}(undef, 1)
+        out[1] = el
+        return out
     else
         if typeof(T) === Union
             newT = Any
@@ -744,7 +751,7 @@ isvalid_binary(c::Char) = '0' <= c <= '1'
 
 const ValidSigs = Union{typeof.([isvalid_hex, isvalid_oct, isvalid_binary, isdigit])...}
 # This function eats things accepted by `f` but also allows eating `_` in between
-# digits. Retruns if it ate at lest one character and if it ate an underscore
+# digits. Returns if it ate at lest one character and if it ate an underscore
 function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=true)::Err{Tuple{Bool, Bool}}
     contains_underscore = false
     at_least_one = false
@@ -814,8 +821,6 @@ function parse_number_or_date_start(l::Parser)
             ate && return parse_int(l, contains_underscore)
         elseif accept(l, isdigit)
             return parse_local_time(l)
-        elseif peek(l) !== '.'
-            return ParserError(ErrLeadingZeroNotAllowedInteger)
         end
     end
 

@@ -71,7 +71,7 @@ struct Platform <: AbstractPlatform
                 if isa(value, VersionNumber)
                     value = string(value)
                 elseif isa(value, AbstractString)
-                    v = tryparse(VersionNumber, value)
+                    v = tryparse(VersionNumber, String(value))
                     if isa(v, VersionNumber)
                         value = string(v)
                     end
@@ -141,7 +141,7 @@ function Base.setindex!(p::AbstractPlatform, v::String, k::String)
     return p
 end
 
-# Hash definitino to ensure that it's stable
+# Hash definition to ensure that it's stable
 function Base.hash(p::Platform, h::UInt)
     h += 0x506c6174666f726d % UInt
     h = hash(p.tags, h)
@@ -992,7 +992,7 @@ only available in macOS `v"10.11"` and later, or an artifact can state that it r
 a libstdc++ that is at least `v"3.4.22"`, etc...
 """
 function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
-    for k in union(keys(tags(a)), keys(tags(b)))
+    for k in union(keys(tags(a)::Dict{String,String}), keys(tags(b)::Dict{String,String}))
         ak = get(tags(a), k, nothing)
         bk = get(tags(b), k, nothing)
 

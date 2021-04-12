@@ -230,16 +230,23 @@ end
 `@pure` gives the compiler a hint for the definition of a pure function,
 helping for type inference.
 
-A pure function can only depend on immutable information.
-This also means a `@pure` function cannot use any global mutable state, including
-generic functions. Calls to generic functions depend on method tables which are
-mutable global state.
-Use with caution, incorrect `@pure` annotation of a function may introduce
-hard to identify bugs. Double check for calls to generic functions.
 This macro is intended for internal compiler use and may be subject to changes.
 """
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
+end
+
+"""
+    @aggressive_constprop ex
+    @aggressive_constprop(ex)
+
+`@aggressive_constprop` requests more aggressive interprocedural constant
+propagation for the annotated function. For a method where the return type
+depends on the value of the arguments, this can yield improved inference results
+at the cost of additional compile time.
+"""
+macro aggressive_constprop(ex)
+    esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
 end
 
 """

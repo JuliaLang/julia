@@ -421,7 +421,7 @@ end
     flipsign(Float32(pi/2 - 2*(s + s*tRt)), x)
 end
 
-@noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x|>1."))
+@noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x| > 1."))
 function asin(x::T) where T<:Union{Float32, Float64}
     # Since  asin(x) = x + x^3/6 + x^5*3/40 + x^7*15/336 + ...
     # we approximate asin(x) on [0,0.5] by

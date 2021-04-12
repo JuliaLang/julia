@@ -828,7 +828,7 @@ let ε=1, μ=2, x=3, î=4
     @test µ == μ == 2
     # NFC normalization of identifiers:
     @test Meta.parse("\u0069\u0302") === Meta.parse("\u00ee")
-    @test î == 4
+    @test î == 4
     # latin vs greek ε (#14751)
     @test Meta.parse("\u025B") === Meta.parse("\u03B5")
     @test ɛ == ε == 1
@@ -1357,7 +1357,6 @@ end
 @test Meta.parse("√3x^2") == Expr(:call, :*, Expr(:call, :√, 3), Expr(:call, :^, :x, 2))
 @test Meta.parse("-3x^2") == Expr(:call, :*, -3, Expr(:call, :^, :x, 2))
 @test_throws ParseError Meta.parse("2!3")
-@test_throws ParseError Meta.parse("2√3")
 
 # issue #27914
 @test Meta.parse("2f(x)")        == Expr(:call, :*, 2, Expr(:call, :f, :x))
@@ -2158,6 +2157,12 @@ end
 @test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
 @test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)
 
+# issue 39350
+@testset "binary ⫪ and ⫫" begin
+    @test Meta.parse("a ⫪ b") == Expr(:call, :⫪, :a, :b)
+    @test Meta.parse("a ⫫ b") == Expr(:call, :⫫, :a, :b)
+end
+
 # only allow certain characters after interpolated vars (#25231)
 @test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
 @test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
@@ -2649,3 +2654,136 @@ end
 
 # issue #38501
 @test :"a $b $("str") c" == Expr(:string, "a ", :b, " ", Expr(:string, "str"), " c")
+
+@testset "property destructuring" begin
+    res = begin (; num, den) = 1 // 2 end
+    @test res == 1 // 2
+    @test num == 1
+    @test den == 2
+
+    res = begin (; b, a) = (a=1, b=2, c=3) end
+    @test res == (a=1, b=2, c=3)
+    @test b == 2
+    @test a == 1
+
+    # could make this an error instead, but I think this is reasonable
+    res = begin (; a, b, a) = (a=5, b=6) end
+    @test res == (a=5, b=6)
+    @test a == 5
+    @test b == 6
+
+    @test_throws ErrorException (; a, b) = (x=1,)
+
+    @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x end), :error)
+    @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x, y end), :error)
+    @test Meta.isexpr(Meta.@lower(begin (; c, a.b) = x end), :error)
+
+    f((; a, b)) = a, b
+    @test f((b=3, a=4)) == (4, 3)
+    @test f((b=3, c=2, a=4)) == (4, 3)
+    @test_throws ErrorException f((;))
+
+    # with type annotation
+    let num, den, a, b
+        res = begin (; num::UInt8, den::Float64) = 1 // 2 end
+        @test res === 1 // 2
+        @test num === 0x01
+        @test den === 2.0
+
+        res = begin (; b, a::Bool) = (a=1.0, b=2, c=0x03) end
+        @test res === (a=1.0, b=2, c=0x03)
+        @test b === 2
+        @test a === true
+    end
+
+    @test Meta.isexpr(Meta.@lower(f((; a, b::Int)) = a + b), :error)
+end
+
+# issue #25652
+x25652 = 1
+x25652_2 = let (x25652, _) = (x25652, nothing)
+    x25652 = x25652 + 1
+    x25652
+end
+@test x25652_2 == 2
+@test x25652 == 1
+
+@test let x = x25652
+    x25652 = x+3
+    x25652
+end == 4
+@test let (x,) = (x25652,)
+    x25652 = x+3
+    x25652
+end == 4
+
+@testset "issue #39600" begin
+    A = 1:.5:2
+    @test (!).(1 .< A .< 2) == [true, false, true]
+    @test .!(1 .< A .< 2) == [true, false, true]
+    @test (.!)(1 .< A .< 2) == [true, false, true]
+
+    @test ncalls_in_lowered(:((!).(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:(.!(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
+    @test ncalls_in_lowered(:((.!)(1 .< A .< 2)), GlobalRef(Base, :materialize)) == 1
+end
+
+# issue #39705
+@eval f39705(x) = $(Expr(:||)) && x
+@test f39705(1) === false
+
+
+struct A x end
+Base.dotgetproperty(::A, ::Symbol) = [0, 0, 0]
+
+@testset "dotgetproperty" begin
+    a = (x = [1, 2, 3],)
+    @test @inferred((a -> a.x .+= 1)(a)) == [2, 3, 4]
+
+    b = [1, 2, 3]
+    @test A(b).x === b
+    @test begin A(b).x .= 1 end == [1, 1, 1]
+    @test begin A(b).x .+= 1 end == [2, 3, 4]
+    @test b == [1, 2, 3]
+end
+
+@test Meta.@lower((::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
+@test Meta.@lower((::T,) = x) == Expr(:error, "invalid assignment location \"::T\"")
+@test Meta.@lower((; ::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
+
+# flisp conversion for quoted SSAValues
+@test eval(:(x = $(QuoteNode(Core.SSAValue(1))))) == Core.SSAValue(1)
+@test eval(:(x = $(QuoteNode(Core.SlotNumber(1))))) == Core.SlotNumber(1)
+@test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
+@test_throws ErrorException("syntax: Slot objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
+
+# juxtaposition of radical symbols (#40094)
+@test Meta.parse("2√3") == Expr(:call, :*, 2, Expr(:call, :√, 3))
+@test Meta.parse("2∛3") == Expr(:call, :*, 2, Expr(:call, :∛, 3))
+@test Meta.parse("2∜3") == Expr(:call, :*, 2, Expr(:call, :∜, 3))
+
+macro m_underscore_hygiene()
+    return :(_ = 1)
+end
+
+@test @macroexpand(@m_underscore_hygiene()) == :(_ = 1)
+
+macro m_begin_hygiene(a)
+    return :($(esc(a))[begin])
+end
+
+@test @m_begin_hygiene([1, 2, 3]) == 1
+
+# issue 40258
+@test "a $("b $("c")")" == "a b c"
+
+@test "$(([[:a, :b], [:c, :d]]...)...)" == "abcd"
+
+@test eval(Expr(:string, "a", Expr(:string, "b", "c"))) == "abc"
+@test eval(Expr(:string, "a", Expr(:string, "b", Expr(:string, "c")))) == "abc"
+
+macro m_nospecialize_unnamed_hygiene()
+    return :(f(@nospecialize(::Any)) = Any)
+end
+
+@test @m_nospecialize_unnamed_hygiene()(1) === Any

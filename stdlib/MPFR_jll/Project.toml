@@ -1,6 +1,6 @@
 name = "MPFR_jll"
 uuid = "3a97d323-0669-5f0c-9066-3539efd106a3"
-version = "4.1.1+0"
+version = "4.1.1+1"
 
 [deps]
 GMP_jll = "781609d7-10c4-51f6-84f2-b8444358ff6d"

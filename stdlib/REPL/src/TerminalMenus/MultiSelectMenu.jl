@@ -51,6 +51,9 @@ were selected by the user.
   - `selected=[]`: pre-selected items. `i ∈ selected` means that `options[i]` is preselected.
 
 Any additional keyword arguments will be passed to [`TerminalMenus.MultiSelectConfig`](@ref).
+
+!!! compat "Julia 1.6"
+    The `selected` argument requires Julia 1.6 or later.
 """
 function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=Int[], warn::Bool=true, kwargs...)
     length(options) < 1 && error("MultiSelectMenu must have at least one option")

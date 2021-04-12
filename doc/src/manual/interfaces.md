@@ -706,7 +706,7 @@ array types that have fixed dimensionality requirements.
 BroadcastStyle(a::AbstractArrayStyle{Any}, ::DefaultArrayStyle) = a
 BroadcastStyle(a::AbstractArrayStyle{N}, ::DefaultArrayStyle{N}) where N = a
 BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
-    typeof(a)(_max(Val(M),Val(N)))
+    typeof(a)(Val(max(M, N)))
 ```
 
 You do not need to write binary `BroadcastStyle`
