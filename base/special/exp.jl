@@ -62,11 +62,6 @@ LogBL(::Val{2}, ::Type{Float32}) = 0.0f0
 LogBL(::Val{:ℯ}, ::Type{Float32}) = -1.4286068f-6
 LogBL(::Val{10}, ::Type{Float32}) = -4.605039f-6
 
-# -log(base, 2) as a Float32 for Float16 version.
-LogB(::Val{2}, ::Type{Float16}) = -1.0f0
-LogB(::Val{:ℯ}, ::Type{Float16}) = -0.6931472f0
-LogB(::Val{10}, ::Type{Float16}) = -0.30103f0
-
 # Range reduced kernels
 @inline function expm1b_kernel(::Val{2}, x::Float64)
     return x * evalpoly(x, (0.6931471805599393, 0.24022650695910058,
@@ -250,7 +245,8 @@ for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
             x = T(a)
             N_float = round(x*LogBINV($base, T))
             N = unsafe_trunc(Int32, N_float)
-            r = muladd(N_float, LogB($base, Float16), x)
+            r = muladd(N_float, LogBU($base, T), x)
+            r = muladd(N_float, LogBL($base, T), r)
             small_part = expb_kernel($base, r)
             if !(abs(x) <= SUBNORM_EXP($base, T))
                 x > MAX_EXP($base, T) && return Inf16
