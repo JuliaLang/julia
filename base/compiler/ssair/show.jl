@@ -721,7 +721,9 @@ function ircode_verbose_linfo_printer(code::IRCode, used::BitSet)
                 print(io, indent)
                 ssa_guard = " "^(maxlength_idx + 4 + i)
                 entry_label = "$(ssa_guard)$(method_name(entry)) at $(entry.file):$(entry.line) "
-                hline = string("─"^(start_column-length(entry_label)-length(_strip_color(indent))+max_depth-i), "┐")
+                width_hline = start_column - length(entry_label) - length(_strip_color(indent)) + max_depth - i
+                width_hline = max(width_hline, 0) # don't error on overlong method/file names
+                hline = string("─"^width_hline, "┐")
                 printstyled(io, string(entry_label, hline), "\n"; color=:light_black)
             end
         end
