@@ -40,6 +40,7 @@ Base.trues
 Base.falses
 Base.fill
 Base.fill!
+Base.empty
 Base.similar
 ```
 
