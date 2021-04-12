@@ -54,6 +54,8 @@ Array
 
 One-dimensional dense array with elements of type `T`, often used to represent
 a mathematical vector. Alias for [`Array{T,1}`](@ref).
+
+See also [`empty`](@ref), [`similar`](@ref) and [`zero`](@ref) for creating vectors.
 """
 const Vector{T} = Array{T,1}
 
@@ -62,6 +64,9 @@ const Vector{T} = Array{T,1}
 
 Two-dimensional dense array with elements of type `T`, often used to represent
 a mathematical matrix. Alias for [`Array{T,2}`](@ref).
+
+See also [`fill`](@ref), [`zeros`](@ref), [`undef`](@ref) and [`similar`](@ref)
+for creating matrices.
 """
 const Matrix{T} = Array{T,2}
 """
