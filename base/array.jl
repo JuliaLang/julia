@@ -1162,7 +1162,7 @@ Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned; for unordered containers,
 an arbitrary element is returned.
 
-See also: [`popat!`](@ref), [`delete!`](@ref), [`splice!`](@ref), [`push!`](@ref).
+See also: [`popfirst!`](@ref), [`popat!`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref), and [`push!`](@ref).
 
 # Examples
 ```jldoctest

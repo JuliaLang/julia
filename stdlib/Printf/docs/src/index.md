@@ -1,4 +1,4 @@
-# [Printf](@id man-printf)
+# Printf
 
 ```@docs
 Printf.@printf

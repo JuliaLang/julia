@@ -393,7 +393,7 @@ first(a::AbstractArray) = a[first(eachindex(a))]
 Get the first element of an iterable collection. Return the start point of an
 [`AbstractRange`](@ref) even if it is empty.
 
-See also: [`only`](@ref), [`firstindex`](@ref), [`last`](@ref), [`tail`](@ref Base.tail).
+See also: [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
 
 # Examples
 ```jldoctest
@@ -2184,7 +2184,7 @@ julia> res
  16
  49
 
-julia> foreach((x,y) -> println(x," & ",y), tri, 1:100)
+julia> foreach((x, y) -> println(x, " & ", y), tri, 1:100)
 1 & 1
 4 & 2
 7 & 3

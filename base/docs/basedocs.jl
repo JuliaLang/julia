@@ -1856,8 +1856,8 @@ julia> tuple(1, 'b', pi)
 julia> ans === (1, 'b', π)
 true
 
-julia> Tuple([1, 2, pi])  # takes a collection
-(1.0, 2.0, 3.141592653589793)
+julia> Tuple(Real[1, 2, pi])  # takes a collection
+(1, 2, π)
 ```
 """
 tuple

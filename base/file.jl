@@ -738,12 +738,10 @@ end
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
 temporary directory all of its contents upon completion.
 
-<<<<<<< HEAD
+See also: [`mktemp`](@ref), [`mkdir`](@ref).
+
 !!! compat "Julia 1.2"
     The `prefix` keyword argument was added in Julia 1.2.
-=======
-See also: [`mktemp`](@ref), [`mkdir`](@ref).
->>>>>>> another batch of see also additions
 """
 function mktempdir(fn::Function, parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix)

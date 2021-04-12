@@ -144,7 +144,7 @@ Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
 
-See also: [`promote`](@ref), [`promote_type`](@ref).
+See instead [`promote`](@ref), [`promote_type`](@ref).
 
 # Examples
 ```jldoctest

@@ -57,7 +57,7 @@ end
 Print (using [`print`](@ref)) `xs` followed by a newline.
 If `io` is not supplied, prints to [`stdout`](@ref).
 
-See also: [`show`](@ref), [`@show`](@ref), [`@info`](@ref Logging), [`sprint`](@ref), [`Printf.@printf`](@ref man-printf).
+See also: [`@show`](@ref), [`@info`](@ref Logging), [`Printf.@printf`](@ref Printf).
 
 # Examples
 ```jldoctest

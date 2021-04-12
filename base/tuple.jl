@@ -110,7 +110,7 @@ in assignments, like `a, b... = collection`.
 !!! compat "Julia 1.6"
     `Base.rest` requires at least Julia 1.6.
 
-See also: [`first`](@ref first), [`tail`](@ref Base.tail), [`Iterators.rest`](@ref).
+See also: [`first`](@ref first), [`Iterators.rest`](@ref).
 
 # Examples
 ```jldoctest

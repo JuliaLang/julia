@@ -554,7 +554,7 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
-See also: [`Iterators.drop`](@ref), [`Iterators.take`](@ref), [`Base.tail`](@ref).
+See also: [`Iterators.drop`](@ref), [`Iterators.take`](@ref).
 
 # Examples
 ```jldoctest
@@ -925,7 +925,7 @@ Return an iterator over the product of several iterators. Each generated element
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
 changes the fastest.
 
-See also: [`zip`](@ref), [`Iterators.flatten`](@ref), `Base.splat`.
+See also: [`zip`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
 ```jldoctest

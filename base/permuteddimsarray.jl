@@ -83,7 +83,7 @@ end
 """
     permutedims(A::AbstractArray, perm)
 
-Permute the dimensions of array `A`. `perm` is a vector or a tuple of length `ndims(A)`,
+Permute the dimensions of array `A`. `perm` is a vector or a tuple of length `ndims(A)`
 specifying the permutation.
 
 See also: [`permutedims!`](@ref), [`PermutedDimsArray`](@ref), [`transpose`](@ref), [`invperm`](@ref).

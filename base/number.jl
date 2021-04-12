@@ -112,7 +112,7 @@ copy(x::Number) = x # some code treats numbers as collection-like
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 
-See also [`sign`](@ref).
+See also [`sign`](@ref) and [`copysign`](@ref).
 
 # Examples
 ```jldoctest

@@ -131,7 +131,8 @@ end
 
 Tests whether variable `s` is defined in the current scope.
 
-See also [`isdefined`](@ref), [`isassigned`](@ref).
+See also [`isdefined`](@ref) for field properties and [`isassigned`](@ref) for
+array indexes or [`haskey`](@ref) for other mappings.
 
 # Examples
 ```jldoctest
