@@ -2184,10 +2184,10 @@ julia> res
  16
  49
 
-julia> foreach((x, y) -> println(x, " & ", y), tri, 1:100)
-1 & 1
-4 & 2
-7 & 3
+julia> foreach((x, y) -> println(x, " with ", y), tri, 'a':'z')
+1 with a
+4 with b
+7 with c
 ```
 """
 foreach(f) = (f(); nothing)
