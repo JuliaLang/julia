@@ -6,12 +6,6 @@ include $(JULIAHOME)/Make.inc
 
 TAGGED_RELEASE_BANNER := ""
 
-ifneq ($(USEMSVC), 1)
-CPP_STDOUT := $(CPP) -P
-else
-CPP_STDOUT := $(CPP) -E
-endif
-
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony features_h.jl file_constants.jl uv_constants.jl version_git.jl.phony)
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)

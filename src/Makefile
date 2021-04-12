@@ -140,11 +140,13 @@ DEBUGFLAGS += "-DJL_LIBJULIA_SONAME=\"libjulia-debug.$(JL_MAJOR_SHLIB_EXT)\"" "-
 
 ifeq ($(USE_CROSS_FLISP), 1)
 FLISPDIR := $(BUILDDIR)/flisp/host
-else
-FLISPDIR := $(BUILDDIR)/flisp
-endif
 FLISP_EXECUTABLE_debug := $(FLISPDIR)/flisp-debug$(BUILD_EXE)
 FLISP_EXECUTABLE_release := $(FLISPDIR)/flisp$(BUILD_EXE)
+else
+FLISPDIR := $(BUILDDIR)/flisp
+FLISP_EXECUTABLE_debug := $(FLISPDIR)/flisp-debug$(EXE)
+FLISP_EXECUTABLE_release := $(FLISPDIR)/flisp$(EXE)
+endif
 ifeq ($(OS),WINNT)
 FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_release)
 else
