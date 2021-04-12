@@ -57,7 +57,8 @@ end
 Print (using [`print`](@ref)) `xs` followed by a newline.
 If `io` is not supplied, prints to [`stdout`](@ref).
 
-See also: [`@show`](@ref), [`@info`](@ref Logging), [`Printf.@printf`](@ref Printf).
+See also [`@show`](@ref) to print variables names with values,
+and [`Printf.@printf`](@ref man-printf) to format numbers.
 
 # Examples
 ```jldoctest
@@ -66,10 +67,10 @@ Hello, world
 
 julia> io = IOBuffer();
 
-julia> println(io, "Hello, world")
+julia> println(io, "Hello", ',', " world.")
 
 julia> String(take!(io))
-"Hello, world\\n"
+"Hello, world.\\n"
 ```
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
