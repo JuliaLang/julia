@@ -126,7 +126,7 @@ Any[]
 
 ### [Concatenation](@id man-array-concatenation)
 
-If the arguments inside the square brackets are separated by semicolons (`;`) or newlines
+If the arguments inside the square brackets are separated by single semicolons (`;`) or newlines
 instead of commas, then their contents are _vertically concatenated_ together instead of
 the arguments being used as elements themselves.
 
@@ -175,14 +175,9 @@ julia> [1 2 3] # Numbers can also be horizontally concatenated
 julia> [1;; 2;; 3;; 4]
 1×4 Matrix{Int64}:
  1  2  3  4
-
-julia> [1 2 ;; # double semicolons may only be mixed with spaces or tabs within a horizontal concatenation if used for a line break
-        3 4]
-1×4 Matrix{Int64}:
- 1  2  3  4
 ```
 
-Using semicolons (or newlines) and spaces (or tabs) can be combined to concatenate
+Single semicolons (or newlines) and spaces (or tabs) can be combined to concatenate
 both horizontally and vertically at the same time.
 
 ```jldoctest
@@ -199,9 +194,17 @@ julia> [zeros(Int, 2, 2) [1; 2]
  0  0  2
  3  4  5
 
+julia> [[1 1]; 2 3; [4 4]]
+3×2 Matrix{Int64}:
+ 1  1
+ 2  3
+ 4  4
 ```
 
-The order of elements may be reversed using single and double semicolons.
+Spaces (and tabs) have a higher precedence than semicolons, performing any horizontal
+concatenations first and then concatenating the result. Using double semicolons for the
+horizontal concatenation, on the other hand, performs any vertical concatenations before
+horizontally concatenating the result.
 
 ```jldoctest
 julia> [zeros(Int, 2, 2) ; [3 4] ;; [1; 2] ; 5]
@@ -209,25 +212,50 @@ julia> [zeros(Int, 2, 2) ; [3 4] ;; [1; 2] ; 5]
  0  0  1
  0  0  2
  3  4  5
+
+julia> [1:2; 4;; 1; 3:4]
+3×2 Matrix{Int64}:
+ 1  1
+ 2  3
+ 4  4
 ```
 
-Extending the above syntax with three or more semicolons allows you to concatentate along 3 or
-more dimensions at the same time. Fewer semicolons take precedence, so
-`[a; b;; c;;; d] == [[[a; b];; c];;; d]`.
+Just as `;` and `;;` concatenate in the first and second dimension, using more semicolons
+extends this same general scheme. The number of semicolons in the separator specifies the
+particular dimension, so `;;;` concetenates in the third dimension, `;;;;` in the 4th, and
+so on. Fewer semicolons take precedence, so the lower dimensions are generally concatenated
+first.
 
 ```jldoctest
-julia> [1 2
-        3 4;;;
-        5 6
-        7 8]
-2×2×2 Array{Int64, 3}:
+julia> [1; 2;; 3; 4;; 5; 6;;;
+        7; 8;; 9; 10;; 11; 12]
+2×3×2 Array{Int64, 3}:
 [:, :, 1] =
- 1  2
- 3  4
+ 1  3  5
+ 2  4  6
 
 [:, :, 2] =
- 5  6
- 7  8
+ 7   9  11
+ 8  10  12
+```
+
+Like before, spaces (and tabs) for horizontal concatenation have a higher precedence than
+any number of semicolons. Thus, higher dimensional arrays can also be written by specifying
+their rows first, with their elements textually arranged in a manner similar to their layout:
+
+```jldoctest
+julia> [1 3 5
+        2 4 6;;;
+        7 9 11
+        8 10 12]
+2×3×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  3  5
+ 2  4  6
+
+[:, :, 2] =
+ 7   9  11
+ 8  10  12
 
 julia> [1 2;;; 3 4;;;; 5 6;;; 7 8]
 1×2×2×2 Array{Int64, 4}:
@@ -258,17 +286,30 @@ julia> [[1 2;;; 3 4];;;; [5 6];;; [7 8]]
  7  8
 ```
 
-Terminating semicolons may also be used to extend the dimensions.
+Although they both mean concatenation in the second dimension, spaces (or tabs) and `;;`
+cannot appear in the same array expression unless the double semicolon is simply serving as
+a "line continuation" character. This allows a single horizontal concatenation to span
+multiple lines (without the line break being interpreted as a vertical concatenation).
+
+```jldoctest
+julia> [1 2 ;;
+       3 4]
+1×4 Matrix{Int64}:
+ 1  2  3  4
+```
+
+Terminating semicolons may also be used to add trailing length 1 dimensions.
 
 ```jldoctest
 julia> [1;;]
 1×1 Matrix{Int64}:
  1
 
-julia> [1;;;]
-1×1×1 Array{Int64, 3}:
+julia> [2; 3;;;]
+2×1×1 Array{Int64, 3}:
 [:, :, 1] =
- 1
+ 2
+ 3
 ```
 
 More generally, concatenation can be accomplished through the [`cat`](@ref) function.
