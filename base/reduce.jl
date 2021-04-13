@@ -529,7 +529,7 @@ julia> sum(1:20; init = 0.0)
 """
 sum(a; kw...) = sum(identity, a; kw...)
 sum(a::AbstractArray{Bool}; kw...) =
-    kw.data === NamedTuple() ? count(a) : reduce(add_sum, a; kw...)
+    isempty(kw) ? count(a) : reduce(add_sum, a; kw...)
 
 ## prod
 """

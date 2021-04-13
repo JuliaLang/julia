@@ -239,3 +239,10 @@ end
 cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not recursively calls itself
 
 # END 1.6 deprecations
+
+# BEGIN 1.7 deprecations
+
+# the plan is to eventually overload getproperty to access entries of the dict
+@deprecate getproperty(x::Pairs, s::Symbol) getfield(x, s)
+
+# END 1.7 deprecations
