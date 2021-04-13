@@ -603,6 +603,25 @@ the last expression in the function body.
 kw"function"
 
 """
+    ->
+
+`->` is used to define anonymous functions:
+
+```julia
+x -> x^2 + 2x - 1
+```
+A similar function can be defined with the short form notation:
+
+```julia
+function (x)
+    x^2 + 2x - 1
+end
+```
+See the manual section on [anonymous functions](@ref man-anonymous-functions) for more details.
+"""
+kw"->"
+
+"""
     return
 
 `return x` causes the enclosing function to exit early, passing the given value `x`
