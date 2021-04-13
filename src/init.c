@@ -648,14 +648,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     restore_signals();
 
     jl_page_size = jl_getpagesize();
-    uint64_t total_mem = uv_get_total_memory();
-    uint64_t constrained_mem = uv_get_constrained_memory();
-    if (constrained_mem > 0 && constrained_mem < total_mem)
-        total_mem = constrained_mem;
-    if (total_mem >= (size_t)-1) {
-        total_mem = (size_t)-1;
-    }
-    jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
