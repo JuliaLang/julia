@@ -215,11 +215,17 @@ map(f, t::Tuple{Any, Any})      = (@_inline_meta; (f(t[1]), f(t[2])))
 map(f, t::Tuple{Any, Any, Any}) = (@_inline_meta; (f(t[1]), f(t[2]), f(t[3])))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                       Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
-const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
-                         T,T,T,T,T,T,T,T,Vararg{T,N}}
-function map(f, t::Any16)
+const Any32{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                       Any,Any,Any,Any,Any,Any,Any,Any,
+                       Any,Any,Any,Any,Any,Any,Any,Any,
+                       Any,Any,Any,Any,Any,Any,Any,Any,
+                       Vararg{Any,N}}
+const All32{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,
+                         Vararg{T,N}}
+function map(f, t::Any32)
     n = length(t)
     A = Vector{Any}(undef, n)
     for i=1:n
@@ -235,7 +241,7 @@ function map(f, t::Tuple, s::Tuple)
     @_inline_meta
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
 end
-function map(f, t::Any16, s::Any16)
+function map(f, t::Any32, s::Any32)
     n = length(t)
     A = Vector{Any}(undef, n)
     for i = 1:n
@@ -251,7 +257,7 @@ function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
     @_inline_meta
     (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
 end
-function map(f, t1::Any16, t2::Any16, ts::Any16...)
+function map(f, t1::Any32, t2::Any32, ts::Any32...)
     n = length(t1)
     A = Vector{Any}(undef, n)
     for i = 1:n
@@ -317,8 +323,8 @@ function _totuple(T, itr, s...)
 end
 
 # use iterative algorithm for long tuples
-function _totuple(T::Type{All16{E,N}}, itr) where {E,N}
-    len = N+16
+function _totuple(T::Type{All32{E,N}}, itr) where {E,N}
+    len = N+32
     elts = collect(E, Iterators.take(itr,len))
     if length(elts) != len
         _totuple_err(T)
@@ -342,7 +348,7 @@ end
 filter(f, xs::Tuple) = afoldl((ys, x) -> f(x) ? (ys..., x) : ys, (), xs...)
 
 # use Array for long tuples
-filter(f, t::Any16) = Tuple(filter(f, collect(t)))
+filter(f, t::Any32) = Tuple(filter(f, collect(t)))
 
 ## comparison ##
 
@@ -350,7 +356,7 @@ isequal(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _isequal(t1, t2)
 _isequal(t1::Tuple{}, t2::Tuple{}) = true
 _isequal(t1::Tuple{Any}, t2::Tuple{Any}) = isequal(t1[1], t2[1])
 _isequal(t1::Tuple, t2::Tuple) = isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
-function _isequal(t1::Any16, t2::Any16)
+function _isequal(t1::Any32, t2::Any32)
     for i = 1:length(t1)
         if !isequal(t1[i], t2[i])
             return false
@@ -380,7 +386,7 @@ function _eq_missing(t1::Tuple, t2::Tuple)
         return _eq_missing(tail(t1), tail(t2))
     end
 end
-function _eq(t1::Any16, t2::Any16)
+function _eq(t1::Any32, t2::Any32)
     anymissing = false
     for i = 1:length(t1)
         eq = (t1[i] == t2[i])
@@ -396,7 +402,7 @@ end
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
 hash(::Tuple{}, h::UInt) = h + tuplehash_seed
 hash(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
-function hash(t::Any16, h::UInt)
+function hash(t::Any32, h::UInt)
     out = h + tuplehash_seed
     for i = length(t):-1:1
         out = hash(t[i], out)
@@ -417,7 +423,7 @@ function <(t1::Tuple, t2::Tuple)
     end
     return tail(t1) < tail(t2)
 end
-function <(t1::Any16, t2::Any16)
+function <(t1::Any32, t2::Any32)
     n1, n2 = length(t1), length(t2)
     for i = 1:min(n1, n2)
         a, b = t1[i], t2[i]
@@ -444,7 +450,7 @@ function isless(t1::Tuple, t2::Tuple)
     a, b = t1[1], t2[1]
     isless(a, b) || (isequal(a, b) && isless(tail(t1), tail(t2)))
 end
-function isless(t1::Any16, t2::Any16)
+function isless(t1::Any32, t2::Any32)
     n1, n2 = length(t1), length(t2)
     for i = 1:min(n1, n2)
         a, b = t1[i], t2[i]
