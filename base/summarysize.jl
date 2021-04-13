@@ -125,7 +125,7 @@ function (ss::SummarySize)(obj::Array)
             dsize += length(obj)
         end
         size += dsize
-        if !isbitstype(eltype(obj)) && !isempty(obj)
+        if !isempty(obj) && !Base.allocatedinline(eltype(obj))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end
@@ -172,9 +172,7 @@ function (ss::SummarySize)(obj::Task)
         size += ss(obj.code)::Int
     end
     size += ss(obj.storage)::Int
-    size += ss(obj.backtrace)::Int
     size += ss(obj.donenotify)::Int
-    size += ss(obj.exception)::Int
     size += ss(obj.result)::Int
     # TODO: add stack size, and possibly traverse stack roots
     return size

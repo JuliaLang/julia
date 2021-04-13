@@ -75,6 +75,13 @@ end
     @test dca !== a
     @test dca[1] !== a[1]
     @test deepcopy(q).value !== q.value
+
+    @test_throws ErrorException("deepcopy of Modules not supported") deepcopy(Base)
+
+    # deepcopy recursive dicts
+    x = Dict{Dict, Int}()
+    x[x] = 0
+    @test length(deepcopy(x)) == 1
 end
 
 @testset "issue #13124" begin
@@ -101,6 +108,8 @@ end
     @test deepcopy(Mutable(2))   !== Mutable(2)
     @inferred deepcopy(Immutable(2))
     @inferred deepcopy(Mutable(2))
+
+    @test deepcopy(Dict(0 => 0))[0] == 0
 end
 
 # issue #30911
@@ -192,4 +201,36 @@ mutable struct Bar17149
 end
 let x = Bar17149()
     @test deepcopy(x) !== x
+end
+
+@testset "copying CodeInfo" begin
+    _testfunc() = nothing
+    ci,_ = code_typed(_testfunc, ())[1]
+    ci.edges = [_testfunc]
+
+    ci2 = copy(ci)
+    # Test that edges are not shared
+    @test ci2.edges !== ci.edges
+end
+
+@testset "issue #34025" begin
+    s = [2 0; 0 3]
+    r = ones(Int, 3, 3)
+    @test copyto!(copy(r), s') == [2 3 1; 0 1 1; 0 1 1]
+    @test copyto!(copy(r), s) == copyto!(copy(r), s') ==
+          copyto!(copy(r)', s) == copyto!(copy(r)', s')
+    r = ones(Int, 3, 3)
+    s = [1 2 3 4]'
+    @test copyto!(r, s) == [1 4 1; 2 1 1; 3 1 1]
+    a = fill(1, 5)
+    r = Base.IdentityUnitRange(-1:1)
+    copyto!(a, r)
+    @test a[1:3] == [-1, 0, 1]
+end
+
+@testset "issue #34889" begin
+    s = [1, 2]
+    @test copyto!(s, view(Int[],Int[])) == [1, 2]
+    @test copyto!(s, Float64[]) == [1, 2]
+    @test copyto!(s, String[]) == [1, 2] # No error
 end

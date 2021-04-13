@@ -198,7 +198,7 @@ function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
 end
 
 # Find index for columns with largest two norm
-function indmaxcolumn(A::StridedMatrix)
+function indmaxcolumn(A::AbstractMatrix)
     mm = norm(view(A, :, 1))
     ii = 1
     for i = 2:size(A, 2)
@@ -211,7 +211,7 @@ function indmaxcolumn(A::StridedMatrix)
     return ii
 end
 
-function qrfactPivotedUnblocked!(A::StridedMatrix)
+function qrfactPivotedUnblocked!(A::AbstractMatrix)
     m, n = size(A)
     piv = Vector(UnitRange{BlasInt}(1,n))
     τ = Vector{eltype(A)}(undef, min(m,n))
@@ -256,7 +256,7 @@ qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
     qr!(A, pivot=Val(false); blocksize)
 
 `qr!` is the same as [`qr`](@ref) when `A` is a subtype of
-`StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
+[`StridedMatrix`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
 
@@ -266,35 +266,35 @@ representable by the element type of `A`, e.g. for integer types.
 # Examples
 ```jldoctest
 julia> a = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> qr!(a)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.316228  -0.948683
  -0.948683   0.316228
 R factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -3.16228  -4.42719
   0.0      -0.632456
 
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> qr!(a)
-ERROR: InexactError: Int64(-3.1622776601683795)
+ERROR: InexactError: Int64(3.1622776601683795)
 Stacktrace:
 [...]
 ```
 """
-qr!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
-qr!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
-qr!(A::StridedMatrix) = qr!(A, Val(false))
+qr!(A::AbstractMatrix, ::Val{false}) = qrfactUnblocked!(A)
+qr!(A::AbstractMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
+qr!(A::AbstractMatrix) = qr!(A, Val(false))
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
@@ -349,20 +349,20 @@ It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
 # Examples
 ```jldoctest
 julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
-3×2 Array{Float64,2}:
+3×2 Matrix{Float64}:
  3.0  -6.0
  4.0  -8.0
  0.0   1.0
 
 julia> F = qr(A)
-LinearAlgebra.QRCompactWY{Float64,Array{Float64,2}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
 Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64,Array{Float64,2}}:
+3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
  -0.6   0.0   0.8
  -0.8   0.0  -0.6
   0.0  -1.0   0.0
 R factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -5.0  10.0
   0.0  -1.0
 
@@ -421,9 +421,9 @@ end
 
 function getproperty(F::QR, d::Symbol)
     m, n = size(F)
-    if d == :R
+    if d === :R
         return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
-    elseif d == :Q
+    elseif d === :Q
         return QRPackedQ(getfield(F, :factors), F.τ)
     else
         getfield(F, d)
@@ -431,9 +431,9 @@ function getproperty(F::QR, d::Symbol)
 end
 function getproperty(F::QRCompactWY, d::Symbol)
     m, n = size(F)
-    if d == :R
+    if d === :R
         return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
-    elseif d == :Q
+    elseif d === :Q
         return QRCompactWYQ(getfield(F, :factors), F.T)
     else
         getfield(F, d)
@@ -444,13 +444,13 @@ Base.propertynames(F::Union{QR,QRCompactWY}, private::Bool=false) =
 
 function getproperty(F::QRPivoted{T}, d::Symbol) where T
     m, n = size(F)
-    if d == :R
+    if d === :R
         return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
-    elseif d == :Q
+    elseif d === :Q
         return QRPackedQ(getfield(F, :factors), F.τ)
-    elseif d == :p
+    elseif d === :p
         return getfield(F, :jpvt)
-    elseif d == :P
+    elseif d === :P
         p = F.p
         n = length(p)
         P = zeros(T, n, n)
@@ -466,6 +466,8 @@ Base.propertynames(F::QRPivoted, private::Bool=false) =
     (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
+
+inv(Q::AbstractQ) = Q'
 
 """
     QRPackedQ <: AbstractMatrix
@@ -531,6 +533,31 @@ function getindex(Q::AbstractQ, i::Integer, j::Integer)
     return dot(x, lmul!(Q, y))
 end
 
+# specialization avoiding the fallback using slow `getindex`
+function copyto!(dest::AbstractMatrix, src::AbstractQ)
+    copyto!(dest, I)
+    lmul!(src, dest)
+end
+# needed to resolve method ambiguities
+function copyto!(dest::PermutedDimsArray{T,2,perm}, src::AbstractQ) where {T,perm}
+    if perm == (1, 2)
+        copyto!(parent(dest), src)
+    else
+        @assert perm == (2, 1) # there are no other permutations of two indices
+        if T <: Real
+            copyto!(parent(dest), I)
+            lmul!(src', parent(dest))
+        else
+            # LAPACK does not offer inplace lmul!(transpose(Q), B) for complex Q
+            tmp = similar(parent(dest))
+            copyto!(tmp, I)
+            rmul!(tmp, src)
+            permutedims!(parent(dest), tmp, (2, 1))
+        end
+    end
+    return dest
+end
+
 ## Multiplication by Q
 ### QB
 lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
@@ -586,6 +613,13 @@ function (*)(A::AbstractQ, B::StridedMatrix)
         throw(DimensionMismatch("first dimension of matrix must have size either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
     end
     lmul!(Anew, Bnew)
+end
+
+function (*)(A::AbstractQ, b::Number)
+    TAb = promote_type(eltype(A), typeof(b))
+    dest = similar(A, TAb)
+    copyto!(dest, b*I)
+    lmul!(A, dest)
 end
 
 ### QcB
@@ -681,6 +715,13 @@ function (*)(A::StridedMatrix, Q::AbstractQ)
     return rmul!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
 end
 
+function (*)(a::Number, B::AbstractQ)
+    TaB = promote_type(typeof(a), eltype(B))
+    dest = similar(B, TaB)
+    copyto!(dest, a*I)
+    rmul!(dest, B)
+end
+
 ### AQc
 rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasReal} =
     (B = adjB.parent; LAPACK.gemqrt!('R','T',B.factors,B.T,A))
@@ -749,15 +790,33 @@ function *(adjA::Adjoint{<:Any,<:StridedVecOrMat}, adjQ::Adjoint{<:Any,<:Abstrac
 end
 
 ### mul!
-mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T} = lmul!(Q, copyto!(C, B))
+function mul!(C::StridedVecOrMat{T}, Q::AbstractQ{T}, B::StridedVecOrMat{T}) where {T}
+    require_one_based_indexing(C, B)
+    mB = size(B, 1)
+    mC = size(C, 1)
+    if mB < mC
+        inds = CartesianIndices(B)
+        copyto!(C, inds, B, inds)
+        C[CartesianIndices((mB+1:mC, axes(C, 2)))] .= zero(T)
+        return lmul!(Q, C)
+    else
+        return lmul!(Q, copyto!(C, B))
+    end
+end
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, Q::AbstractQ{T}) where {T} = rmul!(copyto!(C, A), Q)
 mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::StridedVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T} = rmul!(copyto!(C, A), adjQ)
 
-ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), b), 1:size(A, 2))); b)
-ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    (ldiv!(UpperTriangular(A.R), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2))); B)
+function ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat}
+    m,n = size(A)
+    ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), b), 1:size(A, 2)))
+    return b
+end
+function ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
+    m,n = size(A)
+    ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2)))
+    return B
+end
 
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
@@ -799,12 +858,12 @@ ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
     vec(ldiv!(A,reshape(B,length(B),1)))
 ldiv!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     ldiv!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
-function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
+function _wide_qr_ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
     lmul!(adjoint(A.Q), view(B, 1:m, :))
-    R = A.R
+    R = A.R # makes a copy, used as a buffer below
     @inbounds begin
         if n > m # minimum norm solution
             τ = zeros(T,m)
@@ -825,7 +884,7 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
                 end
             end
         end
-        LinearAlgebra.ldiv!(UpperTriangular(view(R, :, 1:minmn)), view(B, 1:minmn, :))
+        ldiv!(UpperTriangular(view(R, :, 1:minmn)), view(B, 1:minmn, :))
         if n > m # Apply elementary transformation to solution
             B[m + 1:mB,1:nB] .= zero(T)
             for j = 1:nB
@@ -845,7 +904,23 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     end
     return B
 end
-ldiv!(A::QR, B::StridedVector) = ldiv!(A, reshape(B, length(B), 1))[:]
+
+
+function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
+    m, n = size(A)
+    m < n && return _wide_qr_ldiv!(A, B)
+
+    mB, nB = size(B)
+    lmul!(adjoint(A.Q), view(B, 1:m, :))
+    R = A.factors
+    ldiv!(UpperTriangular(view(R,1:n,:)), view(B, 1:n, :))
+    return B
+end
+function ldiv!(A::QR, B::StridedVector)
+    ldiv!(A, reshape(B, length(B), 1))
+    return B
+end
+
 function ldiv!(A::QRPivoted, b::StridedVector)
     ldiv!(QR(A.factors,A.τ), b)
     b[1:size(A.factors, 2)] = view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]
@@ -917,3 +992,25 @@ end
 ## Lower priority: Add LQ, QL and RQ factorizations
 
 # FIXME! Should add balancing option through xgebal
+
+
+det(Q::QRPackedQ) = _det_tau(Q.τ)
+
+det(Q::QRCompactWYQ) =
+    prod(i -> _det_tau(_diagview(Q.T[:, i:min(i + size(Q.T, 1), size(Q.T, 2))])),
+         1:size(Q.T, 1):size(Q.T, 2))
+
+_diagview(A) = @view A[diagind(A)]
+
+# Compute `det` from the number of Householder reflections.  Handle
+# the case `Q.τ` contains zeros.
+_det_tau(τs::AbstractVector{<:Real}) =
+    isodd(count(!iszero, τs)) ? -one(eltype(τs)) : one(eltype(τs))
+
+# In complex case, we need to compute the non-unit eigenvalue `λ = 1 - c*τ`
+# (where `c = v'v`) of each Householder reflector.  As we know that the
+# reflector must have the determinant of 1, it must satisfy `abs2(λ) == 1`.
+# Combining this with the constraint `c > 0`, it turns out that the eigenvalue
+# (hence the determinant) can be computed as `λ = -sign(τ)^2`.
+# See: https://github.com/JuliaLang/julia/pull/32887#issuecomment-521935716
+_det_tau(τs) = prod(τ -> iszero(τ) ? one(τ) : -sign(τ)^2, τs)

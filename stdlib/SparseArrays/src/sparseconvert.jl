@@ -183,9 +183,10 @@ function _sparsem(A::AbstractTriangularSparse{Tv}) where Tv
     Ti = eltype(rowval)
     fnzrange = A isa Union{UpperTriangular,UnitUpperTriangular} ? nzrangeup : nzrangelo
     unit = A isa Union{UnitUpperTriangular,UnitLowerTriangular}
+    nz = nnz(S) + n * unit
     newcolptr = Vector{Ti}(undef, n+1)
-    newrowval = Vector{Ti}(undef, nnz(S))
-    newnzval = Vector{Tv}(undef, nnz(S))
+    newrowval = Vector{Ti}(undef, nz)
+    newnzval = Vector{Tv}(undef, nz)
     newcolptr[1] = 1
     uplo = fnzrange == nzrangeup
     newk = 1
@@ -233,7 +234,7 @@ function _sparsem(taA::Union{Transpose{Tv,<:AbstractTriangularSparse},
     uplo = A isa Union{UpperTriangular,UnitUpperTriangular}
 
     newcolptr = Vector{Ti}(undef, n+1)
-    fill!(newcolptr, 1unit)
+    fill!(newcolptr, unit)
     newcolptr[1] = 1
     @inbounds for j = 1:n
         for k = fnzrange(A, j)

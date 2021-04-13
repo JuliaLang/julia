@@ -98,10 +98,10 @@ uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)
 
 ## event loop ##
 
-eventloop() = uv_eventloop::Ptr{Cvoid}
+eventloop() = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
 
 function process_events()
-    return ccall(:jl_process_events, Int32, (Ptr{Cvoid},), eventloop())
+    return ccall(:jl_process_events, Int32, ())
 end
 
 function uv_alloc_buf end
@@ -112,17 +112,19 @@ function uv_asynccb end
 function uv_timercb end
 
 function reinit_stdio()
-    global uv_jl_alloc_buf     = @cfunction(uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid}))
-    global uv_jl_readcb        = @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}))
-    global uv_jl_writecb_task  = @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint))
-    global uv_jl_return_spawn  = @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32))
-    global uv_jl_asynccb       = @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},))
-    global uv_jl_timercb       = @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},))
-
-    global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+    opts = JLOptions()
+    if opts.color != 0
+        have_color = (opts.color == 1)
+        if !isa(stdout, TTY)
+            global stdout = IOContext(stdout, :color => have_color)
+        end
+        if !isa(stderr, TTY)
+            global stderr = IOContext(stderr, :color => have_color)
+        end
+    end
     nothing
 end
 

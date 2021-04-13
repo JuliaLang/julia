@@ -4,6 +4,10 @@ The following sections explain a few aspects of idiomatic Julia coding style. No
 are absolute; they are only suggestions to help familiarize you with the language and to help
 you choose among alternative designs.
 
+## Indentation
+
+Use 4 spaces per indentation level.
+
 ## Write functions, not just scripts
 
 Writing code as a series of steps at the top level is a quick way to get started solving a problem,
@@ -86,7 +90,7 @@ One issue here is that if a function inherently requires integers, it might be b
 the caller to decide how non-integers should be converted (e.g. floor or ceiling). Another issue
 is that declaring more specific types leaves more "space" for future method definitions.
 
-## Append `!` to names of functions that modify their arguments
+## [Append `!` to names of functions that modify their arguments](@id bang-convention)
 
 Instead of:
 
@@ -137,6 +141,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
     words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
     as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
+  * functions mutating at least one of their arguments end in `!`.
   * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 
@@ -176,7 +181,7 @@ as applicable:
 
 7. **Value**.
    For associative collections, this is the value of the key-value pair(s).
-   In cases like `fill!(x, v)`, this is `v`.
+   In cases like [`fill!(x, v)`](@ref fill!), this is `v`.
 
 8. **Everything else**.
    Any other arguments.
@@ -261,7 +266,7 @@ Decide whether the concept in question will be written as `MyType` or `MyType()`
 it.
 
 The preferred style is to use instances by default, and only add methods involving `Type{MyType}`
-later if they become necessary to solve some problem.
+later if they become necessary to solve some problems.
 
 If a type is effectively an enumeration, it should be defined as a single (ideally immutable struct or primitive)
 type, with the enumeration values being instances of it. Constructors and conversions can check

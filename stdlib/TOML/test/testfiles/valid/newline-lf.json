@@ -1,0 +1,4 @@
+{
+    "os": {"type": "string", "value": "unix"},
+    "newline": {"type": "string", "value": "lf"}
+}

@@ -35,6 +35,18 @@ x1_full[SparseArrays.nonzeroinds(spv_x1)] = nonzeros(spv_x1)
     @test count(SparseVector(8, [2, 5, 6], [true,false,true])) == 2
 end
 
+@testset "isstored" begin
+    x = spv_x1
+    stored_inds = [2, 5, 6]
+    nonstored_inds = [1, 3, 4, 7, 8]
+    for i in stored_inds
+        @test Base.isstored(x, i) == true
+    end
+    for i in nonstored_inds
+        @test Base.isstored(x, i) == false
+    end
+end
+
 @testset "conversion to dense Array" begin
     for (x, xf) in [(spv_x1, x1_full)]
         @test isa(Array(x), Vector{Float64})
@@ -48,7 +60,7 @@ end
     @test occursin("3.5", string(spv_x1))
 
     # issue #30589
-    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool,$Int} with 1 stored entry:\n  [1]  =  1"
+    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool, $Int} with 1 stored entry:\n  [1]  =  1"
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -174,6 +186,7 @@ end
             @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
             @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
             @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
+            @test sprandn(r1, Float16, 100, .9) == sprandn(r2,  Float16, 100, .9)
         end
 
         # test sprand with function inputs
@@ -249,6 +262,14 @@ end
             @test isa(r, SparseVector{Float64,Int})
             @test all(!iszero, nonzeros(r))
             @test Array(r) == Array(x)[bI]
+            bI = falses(length(x), 1) # AbstractArray rather than AbstractVector
+            bI[I, 1] .= true
+            r = x[bI]
+            @test isa(r, SparseVector{Float64,Int})
+            @test all(!iszero, nonzeros(r))
+            bIv = falses(length(x))
+            bIv[I] .= true
+            @test Array(r) == Array(x)[bIv]
         end
     end
 end
@@ -405,6 +426,16 @@ end
         x2 = sparse([1, 2], [2, 2], [1.2, 3.4], 2, 3)
         @test_throws BoundsError copyto!(x2, x1)
     end
+    let x = 1:6
+        x2 = spzeros(length(x))
+        copyto!(x2, x) # copyto!(SparseVector, AbstractVector)
+        @test Vector(x2) == collect(x)
+    end
+    let x = 1:9, x1 = spzeros(length(x)), x2 = spzeros(length(x)-1)
+        @test_throws ArgumentError copy!(x2, x)
+        copy!(x1, convert.(eltype(x1), collect(x))) # copy!(SparseVector, AbstractVector)
+        @test Vector(x1) == collect(x)
+    end
 end
 @testset "vec/reinterpret/float/complex" begin
     a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
@@ -454,6 +485,25 @@ end
         @test isa(xm, SparseMatrixCSC{Float32,Int})
         @test Array(xm) == reshape(convert(Vector{Float32}, xf), 8, 1)
     end
+end
+
+@testset "Conversion from other issparse types" begin
+    n = 10
+    D = Diagonal(rand(1:9, n, n))
+    Bl = Bidiagonal(rand(1:9, n, n), :L)
+    Bu = Bidiagonal(rand(1:9, n, n), :U)
+    T = Tridiagonal(rand(1:9, n, n))
+    S = SymTridiagonal(Symmetric(rand(1:9, n, n)))
+    @test SparseMatrixCSC(D) == D
+    @test SparseMatrixCSC(Bl) == Bl
+    @test SparseMatrixCSC(Bu) == Bu
+    @test SparseMatrixCSC(T) == T
+    @test SparseMatrixCSC(S) == S
+    @test SparseMatrixCSC{Float64, Int16}(D) == D
+    @test SparseMatrixCSC{Float64, Int16}(Bl) == Bl
+    @test SparseMatrixCSC{Float64, Int16}(Bu) == Bu
+    @test SparseMatrixCSC{Float64, Int16}(T) == T
+    @test SparseMatrixCSC{Float64, Int16}(S) == S
 end
 
 @testset "Concatenation" begin
@@ -739,6 +789,19 @@ end
     @test sum(x) == 4.0
     @test sum(abs, x) == 5.5
     @test sum(abs2, x) == 14.375
+    @test @inferred(sum(t -> true, x)) === 8
+    @test @inferred(sum(t -> abs(t) + one(t), x)) == 13.5
+
+    @test @inferred(sum(t -> true, spzeros(Float64, 8))) === 8
+    @test @inferred(sum(t -> abs(t) + one(t), spzeros(Float64, 8))) === 8.0
+
+    # reducing over an empty collection
+    # FIXME sum(f, []) throws, should be fixed both for generic and sparse vectors
+    @test_broken sum(t -> true, zeros(Float64, 0)) === 0
+    @test_broken sum(t -> true, spzeros(Float64, 0)) === 0
+    @test @inferred(sum(abs2, spzeros(Float64, 0))) === 0.0
+    @test_broken sum(t -> abs(t) + one(t), zeros(Float64, 0)) === 0.0
+    @test_broken sum(t -> abs(t) + one(t), spzeros(Float64, 0)) === 0.0
 
     @test norm(x) == sqrt(14.375)
     @test norm(x, 1) == 5.5
@@ -752,6 +815,12 @@ end
         @test minimum(x) == -0.75
         @test maximum(abs, x) == 3.5
         @test minimum(abs, x) == 0.0
+        @test @inferred(minimum(t -> true, x)) === true
+        @test @inferred(maximum(t -> true, x)) === true
+        @test @inferred(minimum(t -> abs(t) + one(t), x)) == 1.0
+        @test @inferred(maximum(t -> abs(t) + one(t), x)) == 4.5
+        @test @inferred(minimum(t -> t + one(t), x)) == 0.25
+        @test @inferred(maximum(t -> -abs(t) + one(t), x)) == 1.0
     end
 
     let x = abs.(spv_x1)
@@ -776,6 +845,15 @@ end
         @test minimum(x) == 0.0
         @test maximum(abs, x) == 0.0
         @test minimum(abs, x) == 0.0
+        @test @inferred(minimum(t -> true, x)) === true
+        @test @inferred(maximum(t -> true, x)) === true
+        @test @inferred(minimum(t -> abs(t) + one(t), x)) === 1.0
+        @test @inferred(maximum(t -> abs(t) + one(t), x)) === 1.0
+    end
+
+    let x = spzeros(Float64, 0)
+        @test_throws ArgumentError minimum(t -> true, x)
+        @test_throws ArgumentError maximum(t -> true, x)
     end
 end
 
@@ -1000,6 +1078,10 @@ end
             @test y == Af'x2f
         end
     end
+    @testset "ldiv with different element types (#40171)" begin
+        sA = sparse(Int16.(1:4), Int16.(1:4), ones(4))
+        @test all(ldiv!(LowerTriangular(sA), ones(4)) .≈ 1.)
+    end
     @testset "ldiv ops with triangular matrices and sparse vecs (#14005)" begin
         m = 10
         sparsefloatvecs = SparseVector[sprand(m, 0.4) for k in 1:3]
@@ -1013,11 +1095,11 @@ end
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)
-        densecomplexmat = I + randn(Complex{Float64}, m, m)/(4m)
+        densecomplexmat = I + randn(ComplexF64, m, m)/(4m)
 
         inttypes = (Int32, Int64, BigInt)
         floattypes = (Float32, Float64, BigFloat)
-        complextypes = (Complex{Float32}, Complex{Float64})
+        complextypes = (ComplexF32, ComplexF64)
         eltypes = (inttypes..., floattypes..., complextypes...)
 
         for eltypemat in eltypes
@@ -1086,6 +1168,45 @@ end
             @test isequal(ldiv!(transpose(mat), copy(zerospvec)), zerospvec)
         end
     end
+    @testset "Triangular and SparseVector multiplications" begin
+        n = 10
+        types = (Int, Float64, ComplexF64)
+        tritypes = (LowerTriangular, UnitUpperTriangular)
+        for ta in types
+            for tri in tritypes
+                if ta == Int
+                    T = tri(rand(1:9, n, n))
+                else
+                    T = tri(randn(ta, n, n))
+                end
+                for tb in types
+                    if tb == Int
+                        x = sparse(rand(0:4, n))
+                    else
+                        x = sprandn(tb, n, 0.6)
+                    end
+                    @test T * x ≈ Array(T) * Array(x)
+                    @test T' * x ≈ Array(T)' * Array(x)
+                    @test transpose(T) * x ≈ transpose(Array(T)) * Array(x)
+                    @test x' * T ≈ Array(x)' * Array(T)
+                    @test x' * T' ≈ Array(x)' * Array(T)'
+                    @test x' * transpose(T) ≈ Array(x)' * transpose(Array(T))
+                end
+            end
+        end
+
+        # 0-dimensional case
+        x = sparse(zeros(0))
+        for tri in tritypes
+            T = tri(zeros(0, 0))
+            @test T*x == Array(T) * Array(x)
+            @test T' * x == Array(T)' * Array(x)
+            @test transpose(T) * x == transpose(Array(T)) * Array(x)
+            @test x' * T == Array(x)' * Array(T)
+            @test x' * T' == Array(x)' * Array(T)'
+            @test x' * transpose(T) == Array(x)' * transpose(Array(T))
+        end
+    end
 end
 
 @testset "fkeep!" begin
@@ -1124,15 +1245,11 @@ end
     for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
         # Basic functionality / dropzeros!
         @test dropzeros!(copy(vwithzeros)) == v
-        @test dropzeros!(copy(vwithzeros), trim = false) == v
         # Basic functionality / dropzeros
         @test dropzeros(vwithzeros) == v
-        @test dropzeros(vwithzeros, trim = false) == v
         # Check trimming works as expected
         @test length(nonzeros(dropzeros!(copy(vwithzeros)))) == length(nonzeros(v))
         @test length(nonzeroinds(dropzeros!(copy(vwithzeros)))) == length(nonzeroinds(v))
-        @test length(nonzeros(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeros(vwithzeros))
-        @test length(nonzeroinds(dropzeros!(copy(vwithzeros), trim = false))) == length(nonzeroinds(vwithzeros))
     end
 end
 
@@ -1236,9 +1353,9 @@ mutable struct t20488 end
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparsevec(Int64[1], [1.0]))
-    @test String(take!(io)) == "1-element SparseArrays.SparseVector{Float64,Int64} with 1 stored entry:\n  [1]  =  1.0"
+    @test String(take!(io)) == "1-element SparseArrays.SparseVector{Float64, Int64} with 1 stored entry:\n  [1]  =  1.0"
     show(io, MIME"text/plain"(),  spzeros(Float64, Int64, 2))
-    @test String(take!(io)) == "2-element SparseArrays.SparseVector{Float64,Int64} with 0 stored entries"
+    @test String(take!(io)) == "2-element SparseArrays.SparseVector{Float64, Int64} with 0 stored entries"
     show(io, similar(sparsevec(rand(3) .+ 0.1), t20488))
     @test String(take!(io)) == "  [1]  =  #undef\n  [2]  =  #undef\n  [3]  =  #undef"
 end
@@ -1367,6 +1484,33 @@ end
     scv = view(A, :, 1)
     @test SparseArrays.indtype(scv) == SparseArrays.indtype(A)
     @test nnz(scv) == nnz(A[:, 1])
+end
+
+@testset "avoid aliasing of fields during constructing $T (issue #34630)" for T in
+    (SparseVector, SparseVector{Float64}, SparseVector{Float64,Int16})
+
+    A = sparse([1; 0])
+    B = T(A)
+    @test A == B
+    A[2] = 1
+    @test A != B
+    @test nonzeroinds(A) !== nonzeroinds(B)
+    @test nonzeros(A) !== nonzeros(B)
+end
+
+@testset "multiplication of Triangular sparse matrices with sparse vectors #35642" begin
+    n = 10
+    A = sprand(n, n, 5/n)
+    U = UpperTriangular(A)
+    L = LowerTriangular(A)
+    x = sprand(n, 5/n)
+    y = view(A, :, 6)
+    z = view(x, :)
+    ty = typeof
+    @testset "matvec multiplication $(ty(X)) * $(ty(v))" for X in (U, L), v in (x, y, z)
+        @test X * v ≈ Matrix(X) * Vector(v)
+        @test typeof(X * v) == typeof(x)
+    end
 end
 
 end # module

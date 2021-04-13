@@ -76,8 +76,8 @@ cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
 hascolor(::TextTerminal) = false
 
 # Utility Functions
-width(t::TextTerminal) = displaysize(t)[2]
-height(t::TextTerminal) = displaysize(t)[1]
+width(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[2]
+height(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[1]
 
 # For terminals with buffers
 flush(t::TextTerminal) = nothing
@@ -96,8 +96,8 @@ disable_bracketed_paste(t::TextTerminal) = nothing
 
 abstract type UnixTerminal <: TextTerminal end
 
-pipe_reader(t::UnixTerminal) = t.in_stream
-pipe_writer(t::UnixTerminal) = t.out_stream
+pipe_reader(t::UnixTerminal) = t.in_stream::IO
+pipe_writer(t::UnixTerminal) = t.out_stream::IO
 
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO
@@ -130,13 +130,13 @@ if Sys.iswindows()
                 t.in_stream, t.out_stream, t.err_stream)
             true
         else
-            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle, raw) != -1
+            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
         end
     end
 else
     function raw!(t::TTYTerminal, raw::Bool)
         check_open(t.in_stream)
-        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle, raw) != -1
+        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
     end
 end
 
@@ -152,22 +152,7 @@ beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
 Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
 
-if Sys.iswindows()
-    hascolor(t::TTYTerminal) = true
-else
-    function hascolor(t::TTYTerminal)
-        startswith(t.term_type, "xterm") && return true
-        try
-            @static if Sys.KERNEL == :FreeBSD
-                return success(`tput AF 0`)
-            else
-                return success(`tput setaf 0`)
-            end
-        catch
-            return false
-        end
-    end
-end
+hascolor(t::TTYTerminal) = get(t.out_stream, :color, false)::Bool
 
 # use cached value of have_color
 Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))
@@ -175,6 +160,6 @@ Base.haskey(t::TTYTerminal, key) = haskey(pipe_writer(t), key)
 Base.getindex(t::TTYTerminal, key) = getindex(pipe_writer(t), key)
 Base.get(t::TTYTerminal, key, default) = get(pipe_writer(t), key, default)
 
-Base.peek(t::TTYTerminal) = Base.peek(t.in_stream)
+Base.peek(t::TTYTerminal, ::Type{T}) where {T} = peek(t.in_stream, T)::T
 
 end # module

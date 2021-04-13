@@ -76,6 +76,7 @@ end
     @test Float16(0.5f0)^2 ≈ Float16(0.5f0^2)
     @test sin(f) ≈ sin(2f0)
     @test log10(Float16(100)) == Float16(2.0)
+    @test sin(ComplexF16(f)) ≈ sin(complex(2f0))
 
     # no domain error is thrown for negative values
     @test cbrt(Float16(-1.0)) == -1.0
@@ -177,3 +178,6 @@ const minsubf16_32 = Float32(minsubf16)
 # Ties to even, in this case up
 @test Float16(minsubf16_32 + f16eps2) == nextfloat(minsubf16)
 @test Float16(prevfloat(minsubf16_32 + f16eps2)) == minsubf16
+
+# issues #33076
+@test Float16(1f5) == Inf16

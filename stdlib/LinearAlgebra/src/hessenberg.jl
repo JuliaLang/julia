@@ -24,14 +24,14 @@ Iterating the decomposition produces the factors `F.Q` and `F.H`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3 4; 5 6 7 8; 9 10 11 12; 13 14 15 16]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
   1   2   3   4
   5   6   7   8
   9  10  11  12
  13  14  15  16
 
 julia> UpperHessenberg(A)
-4×4 UpperHessenberg{Int64,Array{Int64,2}}:
+4×4 UpperHessenberg{Int64, Matrix{Int64}}:
  1   2   3   4
  5   6   7   8
  ⋅  10  11  12
@@ -94,17 +94,96 @@ Base.copy(A::Transpose{<:Any,<:UpperHessenberg}) = tril!(transpose!(similar(A.pa
 rmul!(H::UpperHessenberg, x::Number) = (rmul!(H.data, x); H)
 lmul!(x::Number, H::UpperHessenberg) = (lmul!(x, H.data); H)
 
-# (future: we could also have specialized routines for UpperHessenberg * UpperTriangular)
-
 fillstored!(H::UpperHessenberg, x) = (fillband!(H.data, x, -1, size(H,2)-1); H)
 
 +(A::UpperHessenberg, B::UpperHessenberg) = UpperHessenberg(A.data+B.data)
 -(A::UpperHessenberg, B::UpperHessenberg) = UpperHessenberg(A.data-B.data)
-# (future: we could also have specialized routines for UpperHessenberg ± UpperTriangular)
 
-# shift Hessenberg by λI
-+(H::UpperHessenberg, J::UniformScaling) = UpperHessenberg(H.data + J)
--(J::UniformScaling, H::UpperHessenberg) = UpperHessenberg(J - H.data)
+for T = (:UniformScaling, :Diagonal, :Bidiagonal, :Tridiagonal, :SymTridiagonal,
+         :UpperTriangular, :UnitUpperTriangular)
+    for op = (:+, :-)
+        @eval begin
+            $op(H::UpperHessenberg, x::$T) = UpperHessenberg($op(H.data, x))
+            $op(x::$T, H::UpperHessenberg) = UpperHessenberg($op(x, H.data))
+        end
+    end
+end
+
+for T = (:Number, :UniformScaling, :Diagonal)
+    @eval begin
+        *(H::UpperHessenberg, x::$T) = UpperHessenberg(H.data * x)
+        *(x::$T, H::UpperHessenberg) = UpperHessenberg(x * H.data)
+        /(H::UpperHessenberg, x::$T) = UpperHessenberg(H.data / x)
+        \(x::$T, H::UpperHessenberg) = UpperHessenberg(x \ H.data)
+    end
+end
+
+function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
+    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    rmul!(HH, U)
+    UpperHessenberg(HH)
+end
+function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    lmul!(U, HH)
+    UpperHessenberg(HH)
+end
+
+function /(H::UpperHessenberg, U::UpperTriangular)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    rdiv!(HH, U)
+    UpperHessenberg(HH)
+end
+function /(H::UpperHessenberg, U::UnitUpperTriangular)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    rdiv!(HH, U)
+    UpperHessenberg(HH)
+end
+
+function \(U::UpperTriangular, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    ldiv!(U, HH)
+    UpperHessenberg(HH)
+end
+function \(U::UnitUpperTriangular, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    ldiv!(U, HH)
+    UpperHessenberg(HH)
+end
+
+function *(H::UpperHessenberg, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(H), eltype(B))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperHessenberg(zeros(TS, size(H)...)), H, B)
+    else
+        A_mul_B_td!(zeros(TS, size(H)...), H, B)
+    end
+end
+function *(B::Bidiagonal, H::UpperHessenberg)
+    TS = promote_op(matprod, eltype(B), eltype(H))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperHessenberg(zeros(TS, size(B)...)), B, H)
+    else
+        A_mul_B_td!(zeros(TS, size(B)...), B, H)
+    end
+end
+
+function /(H::UpperHessenberg, B::Bidiagonal)
+    A = Base.@invoke /(H::AbstractMatrix, B::Bidiagonal)
+    B.uplo == 'U' ? UpperHessenberg(A) : A
+end
 
 # Solving (H+µI)x = b: we can do this in O(m²) time and O(m) memory
 # (in-place in x) by the RQ algorithm from:
@@ -284,6 +363,37 @@ function logabsdet(F::UpperHessenberg; shift::Number=false)
     return (logdeterminant, P)
 end
 
+function dot(x::AbstractVector, H::UpperHessenberg, y::AbstractVector)
+    require_one_based_indexing(x, y)
+    m = size(H, 1)
+    (length(x) == m == length(y)) || throw(DimensionMismatch())
+    if iszero(m)
+        return dot(zero(eltype(x)), zero(eltype(H)), zero(eltype(y)))
+    end
+    x₁ = x[1]
+    r = dot(x₁, H[1,1], y[1])
+    r += dot(x[2], H[2,1], y[1])
+    @inbounds for j in 2:m-1
+        yj = y[j]
+        if !iszero(yj)
+            temp = adjoint(H[1,j]) * x₁
+            @simd for i in 2:j+1
+                temp += adjoint(H[i,j]) * x[i]
+            end
+            r += dot(temp, yj)
+        end
+    end
+    ym = y[m]
+    if !iszero(ym)
+        temp = adjoint(H[1,m]) * x₁
+        @simd for i in 2:m
+            temp += adjoint(H[i,m]) * x[i]
+        end
+        r += dot(temp, ym)
+    end
+    return r
+end
+
 ######################################################################################
 # Hessenberg factorizations Q(H+μI)Q' of A+μI:
 
@@ -357,26 +467,26 @@ Iterating the decomposition produces the factors `F.Q, F.H, F.μ`.
 # Examples
 ```jldoctest
 julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  4.0  9.0  7.0
  4.0  4.0  1.0
  4.0  3.0  2.0
 
 julia> F = hessenberg(A)
-Hessenberg{Float64,UpperHessenberg{Float64,Array{Float64,2}},Array{Float64,2},Array{Float64,1},Bool}
+Hessenberg{Float64, UpperHessenberg{Float64, Matrix{Float64}}, Matrix{Float64}, Vector{Float64}, Bool}
 Q factor:
-3×3 LinearAlgebra.HessenbergQ{Float64,Array{Float64,2},Array{Float64,1},false}:
+3×3 LinearAlgebra.HessenbergQ{Float64, Matrix{Float64}, Vector{Float64}, false}:
  1.0   0.0        0.0
  0.0  -0.707107  -0.707107
  0.0  -0.707107   0.707107
 H factor:
-3×3 UpperHessenberg{Float64,Array{Float64,2}}:
-  4.0      -11.3137       -1.41421
- -5.65685    5.0           2.0
-   ⋅        -8.88178e-16   1.0
+3×3 UpperHessenberg{Float64, Matrix{Float64}}:
+  4.0      -11.3137      -1.41421
+ -5.65685    5.0          2.0
+   ⋅        -1.0444e-15   1.0
 
 julia> F.Q * F.H * F.Q'
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  4.0  9.0  7.0
  4.0  4.0  1.0
  4.0  3.0  2.0
@@ -422,7 +532,7 @@ HessenbergQ(F::Hessenberg{<:Any,<:UpperHessenberg,S,W}) where {S,W} = Hessenberg
 HessenbergQ(F::Hessenberg{<:Any,<:SymTridiagonal,S,W}) where {S,W} = HessenbergQ{eltype(F.factors),S,W,true}(F.uplo, F.factors, F.τ)
 
 function getproperty(F::Hessenberg, d::Symbol)
-    d == :Q && return HessenbergQ(F)
+    d === :Q && return HessenbergQ(F)
     return getfield(F, d)
 end
 

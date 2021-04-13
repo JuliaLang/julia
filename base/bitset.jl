@@ -340,10 +340,13 @@ filter!(f, s::BitSet) = unsafe_filter!(f, s)
 @inline in(n::Int, s::BitSet) = _bits_getindex(s.bits, n, s.offset)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
 
-function iterate(s::BitSet, idx=0)
-   idx = _bits_findnext(s.bits, idx)
-   idx == -1 && return nothing
-   (idx + intoffset(s), idx+1)
+function iterate(s::BitSet, (word, idx) = (CHK0, 0))
+    while word == 0
+        idx == length(s.bits) && return nothing
+        idx += 1
+        word = @inbounds s.bits[idx]
+    end
+    trailing_zeros(word) + (idx - 1 + s.offset) << 6, (_blsr(word), idx)
 end
 
 @noinline _throw_bitset_notempty_error() =
@@ -403,13 +406,27 @@ function ==(s1::BitSet, s2::BitSet)
 
     # compare overlap values
     if overlap > 0
+        t1 = @_gc_preserve_begin a1
+        t2 = @_gc_preserve_begin a2
         _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
     end
 
     return true
 end
 
-issubset(a::BitSet, b::BitSet) = a == intersect(a,b)
+function issubset(a::BitSet, b::BitSet)
+    n = length(a.bits)
+    shift = b.offset - a.offset
+    i, j = shift, shift + length(b.bits)
+
+    f(a, b) = a == a & b
+    return (
+        all(@inbounds iszero(a.bits[i]) for i in 1:min(n, i)) &&
+        all(@inbounds f(a.bits[i], b.bits[i - shift]) for i in max(1, i+1):min(n, j)) &&
+        all(@inbounds iszero(a.bits[i]) for i in max(1, j+1):n))
+end
 ⊊(a::BitSet, b::BitSet) = a <= b && a != b
 
 

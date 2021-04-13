@@ -1,25 +1,15 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
 #include <assert.h>
-#include <errno.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 #include "dtypes.h"
 
 #if defined(_OS_WINDOWS_)
-#include <malloc.h>
 #include <sys/timeb.h>
 #include <windows.h>
 #else
 #include <sys/time.h>
-#include <sys/poll.h>
-#include <unistd.h>
+#include <sys/select.h>
 #endif
 
 #include "timefuncs.h"

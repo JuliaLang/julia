@@ -129,7 +129,7 @@ function tryparsenext(d::DatePart{'p'}, str, i, len)
     return ap == 'a' ? AM : PM, ii
 end
 
-for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
+for (tok, fn) in zip("uUeE", Any[monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         next = tryparsenext_word(str, i, len, locale, max_width(d))
         next === nothing && return nothing
@@ -161,13 +161,13 @@ end
 
 hour12(dt) = let h = hour(dt); h > 12 ? h - 12 : h == 0 ? 12 : h; end
 
-for (c, fn) in zip("YmdHIMS", [year, month, day, hour, hour12, minute, second])
+for (c, fn) in zip("YmdHIMS", Any[year, month, day, hour, hour12, minute, second])
     @eval function format(io, d::DatePart{$c}, dt)
         print(io, string($fn(dt), base = 10, pad = d.width))
     end
 end
 
-for (tok, fn) in zip("uU", [monthabbr, monthname])
+for (tok, fn) in zip("uU", Any[monthabbr, monthname])
     @eval function format(io, d::DatePart{$tok}, dt, locale)
         print(io, $fn(month(dt), locale))
     end
@@ -178,7 +178,7 @@ function format(io, d::DatePart{'p'}, dt, locale)
     print(io, ampm)
 end
 
-for (tok, fn) in zip("eE", [dayabbr, dayname])
+for (tok, fn) in zip("eE", Any[dayabbr, dayname])
     @eval function format(io, ::DatePart{$tok}, dt, locale)
         print(io, $fn(dayofweek(dt), locale))
     end
@@ -460,7 +460,7 @@ const Locale = Union{DateLocale, String}
     DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date time string following the
-pattern given in the `format` string.
+pattern given in the `format` string (see [`DateFormat`](@ref)  for syntax).
 
 This method creates a `DateFormat` object each time it is called. If you are
 parsing many date time strings of the same format, consider creating a
@@ -471,11 +471,12 @@ function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENG
 end
 
 """
-    DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+    DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date time string following the
-pattern given in the [`DateFormat`](@ref) object. Similar to
-`DateTime(::AbstractString, ::AbstractString)` but more efficient when
+pattern given in the [`DateFormat`](@ref) object, or $ISODateTimeFormat if omitted.
+
+Similar to `DateTime(::AbstractString, ::AbstractString)` but more efficient when
 repeatedly parsing similarly formatted date time strings with a pre-created
 `DateFormat` object.
 """
@@ -485,7 +486,7 @@ DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime,
     Date(d::AbstractString, format::AbstractString; locale="english") -> Date
 
 Construct a `Date` by parsing the `d` date string following the pattern given
-in the `format` string.
+in the `format` string (see [`DateFormat`](@ref) for syntax).
 
 This method creates a `DateFormat` object each time it is called. If you are
 parsing many date strings of the same format, consider creating a
@@ -496,9 +497,14 @@ function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
 end
 
 """
-    Date(d::AbstractString, df::DateFormat) -> Date
+    Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
 
-Parse a date from a date string `d` using a `DateFormat` object `df`.
+Construct a `Date` by parsing the `d` date string following the
+pattern given in the [`DateFormat`](@ref) object, or $ISODateFormat if omitted.
+
+Similar to `Date(::AbstractString, ::AbstractString)` but more efficient when
+repeatedly parsing similarly formatted date strings with a pre-created
+`DateFormat` object.
 """
 Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
 
@@ -506,7 +512,7 @@ Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
     Time(t::AbstractString, format::AbstractString; locale="english") -> Time
 
 Construct a `Time` by parsing the `t` time string following the pattern given
-in the `format` string.
+in the `format` string (see [`DateFormat`](@ref) for syntax).
 
 This method creates a `DateFormat` object each time it is called. If you are
 parsing many time strings of the same format, consider creating a
@@ -517,9 +523,14 @@ function Time(t::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
 end
 
 """
-    Time(t::AbstractString, df::DateFormat) -> Time
+    Time(t::AbstractString, df::DateFormat=ISOTimeFormat) -> Time
 
-Parse a time from a time string `t` using a `DateFormat` object `df`.
+Construct a `Time` by parsing the `t` date time string following the
+pattern given in the [`DateFormat`](@ref) object, or $ISOTimeFormat if omitted.
+
+Similar to `Time(::AbstractString, ::AbstractString)` but more efficient when
+repeatedly parsing similarly formatted time strings with a pre-created
+`DateFormat` object.
 """
 Time(t::AbstractString, df::DateFormat=ISOTimeFormat) = parse(Time, t, df)
 
@@ -578,75 +589,30 @@ function format(dt::TimeType, f::AbstractString; locale::Locale=ENGLISH)
 end
 
 # show
-
-function Base.show(io::IO, p::P) where P <: Period
-    if get(io, :compact, false)
-        print(io, p)
-    else
-        print(io, P, '(', p.value, ')')
-    end
-end
-
-function Base.show(io::IO, dt::DateTime)
-    if get(io, :compact, false)
-        print(io, dt)
-    else
-        y,m,d = yearmonthday(dt)
-        h = hour(dt)
-        mi = minute(dt)
-        s = second(dt)
-        ms = millisecond(dt)
-        if ms == 0
-            print(io, DateTime, "($y, $m, $d, $h, $mi, $s)")
-        else
-            print(io, DateTime, "($y, $m, $d, $h, $mi, $s, $ms)")
-        end
-    end
-end
-
-function Base.show(io::IO, ::MIME"text/plain", dt::DateTime)
-    print(io, dt)
-end
-
-function Base.show(io::IO, ::MIME"text/plain", dt::Date)
-    print(io, dt)
-end
-
-function Base.show(io::IO, dt::Date)
-    if get(io, :compact, false)
-        print(io, dt)
-    else
-        y,m,d = yearmonthday(dt)
-        print(io, Date, "($y, $m, $d)")
-    end
-end
-
 function Base.print(io::IO, dt::DateTime)
-    if millisecond(dt) == 0
-        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS")
+    str = if millisecond(dt) == 0
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 19)
     else
-        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS.s")
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.sss", 23)
     end
+    print(io, str)
 end
 
 function Base.print(io::IO, dt::Date)
-    format(io, dt, dateformat"YYYY-mm-dd")
-end
-
-function Base.string(dt::DateTime)
-    if millisecond(dt) == 0
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 24)
-    else
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.s", 26)
-    end
-end
-
-function Base.string(dt::Date)
     # don't use format - bypassing IOBuffer creation
     # saves a bit of time here.
     y,m,d = yearmonthday(value(dt))
     yy = y < 0 ? @sprintf("%05i", y) : lpad(y, 4, "0")
     mm = lpad(m, 2, "0")
     dd = lpad(d, 2, "0")
-    return "$yy-$mm-$dd"
+    print(io, "$yy-$mm-$dd")
+end
+
+for date_type in (:Date, :DateTime)
+    # Human readable output (i.e. "2012-01-01")
+    @eval Base.show(io::IO, ::MIME"text/plain", dt::$date_type) = print(io, dt)
+    # Parsable output (i.e. Date("2012-01-01"))
+    @eval Base.show(io::IO, dt::$date_type) = print(io, typeof(dt), "(\"", dt, "\")")
+    # Parsable output will have type info displayed, thus it is implied
+    @eval Base.typeinfo_implicit(::Type{$date_type}) = true
 end

@@ -18,6 +18,11 @@ extern "C" {
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
+
+// Resolve references to non-locally-defined variables to become references to global
+// variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
                                    int binding_effects, int eager_resolve)
 {
@@ -25,6 +30,27 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         if (module == NULL)
             return expr;
         return jl_module_globalref(module, (jl_sym_t*)expr);
+    }
+    else if (jl_is_returnnode(expr)) {
+        jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
+        if (val != jl_returnnode_value(expr)) {
+            JL_GC_PUSH1(&val);
+            expr = jl_new_struct(jl_returnnode_type, val);
+            JL_GC_POP();
+        }
+        return expr;
+    }
+    else if (jl_is_gotoifnot(expr)) {
+        jl_value_t *cond = resolve_globals(jl_gotoifnot_cond(expr), module, sparam_vals, binding_effects, eager_resolve);
+        if (cond != jl_gotoifnot_cond(expr)) {
+            intptr_t label = jl_gotoifnot_label(expr);
+            JL_GC_PUSH1(&cond);
+            expr = jl_new_struct_uninit(jl_gotoifnot_type);
+            set_nth_field(jl_gotoifnot_type, expr, 0, cond);
+            jl_gotoifnot_label(expr) = label;
+            JL_GC_POP();
+        }
+        return expr;
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
@@ -34,7 +60,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             jl_toplevel_eval_flex(module, expr, 0, 1);
             expr = jl_nothing;
         }
-        if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
+        if (jl_is_toplevel_only_expr(expr) || e->head == const_sym ||
+            e->head == coverageeffect_sym || e->head == copyast_sym ||
             e->head == quote_sym || e->head == inert_sym ||
             e->head == meta_sym || e->head == inbounds_sym ||
             e->head == boundscheck_sym || e->head == loopinfo_sym ||
@@ -43,6 +70,19 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         }
         else {
             size_t i = 0, nargs = jl_array_len(e->args);
+            if (e->head == opaque_closure_method_sym) {
+                if (nargs != 4) {
+                    jl_error("opaque_closure_method: invalid syntax");
+                }
+                jl_value_t *name = jl_exprarg(e, 0);
+                jl_value_t *nargs = jl_exprarg(e, 1);
+                jl_value_t *functionloc = jl_exprarg(e, 2);
+                jl_value_t *ci = jl_exprarg(e, 3);
+                if (!jl_is_code_info(ci)) {
+                    jl_error("opaque_closure_method: lambda should be a CodeInfo");
+                }
+                return (jl_value_t*)jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci);
+            }
             if (e->head == cfunction_sym) {
                 JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
                 jl_value_t *typ = jl_exprarg(e, 0);
@@ -126,8 +166,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
             }
-            if (e->head == method_sym || e->head == abstracttype_sym || e->head == structtype_sym ||
-                     e->head == primtype_sym || e->head == module_sym) {
+            if (e->head == method_sym || e->head == module_sym) {
                 i++;
             }
             for (; i < nargs; i++) {
@@ -203,12 +242,12 @@ void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *spar
 
 // copy a :lambda Expr into its CodeInfo representation,
 // including popping of known meta nodes
-static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
+static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
 {
-    assert(jl_is_expr(ast));
-    jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ast, 2);
-    jl_value_t *codelocs = jl_exprarg(ast, 3);
-    li->linetable = jl_exprarg(ast, 4);
+    assert(jl_is_expr(ir));
+    jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ir, 2);
+    jl_value_t *codelocs = jl_exprarg(ir, 3);
+    li->linetable = jl_exprarg(ir, 4);
     size_t nlocs = jl_array_len(codelocs);
     li->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nlocs);
     size_t j;
@@ -235,6 +274,8 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
                     li->inlineable = 1;
                 else if (ma == (jl_value_t*)propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
+                else if (ma == (jl_value_t*)aggressive_constprop_sym)
+                    li->aggressive_constprop = 1;
                 else
                     jl_array_ptr_set(meta, ins++, ma);
             }
@@ -243,8 +284,11 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
             else
                 jl_array_del_end(meta, na - ins);
         }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == return_sym) {
+            jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
+        }
     }
-    jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ast, 1);
+    jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ir, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_len(vis);
     jl_value_t *ssavalue_types = jl_array_ptr_ref(vinfo, 2);
@@ -292,6 +336,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->sparam_vals = jl_emptysvec;
     li->uninferred = NULL;
     li->backedges = NULL;
+    li->callbacks = NULL;
     li->cache = NULL;
     li->inInference = 0;
     return li;
@@ -304,7 +349,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
         (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     src->code = NULL;
-    src->codelocs = jl_nothing;
+    src->codelocs = NULL;
     src->ssavaluetypes = NULL;
     src->ssaflags = NULL;
     src->method_for_inference_limit_heuristics = jl_nothing;
@@ -321,37 +366,36 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->propagate_inbounds = 0;
     src->pure = 0;
     src->edges = jl_nothing;
+    src->aggressive_constprop = 0;
     return src;
 }
 
-jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast)
+jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
 {
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     src = jl_new_code_info_uninit();
-    jl_code_info_set_ast(src, ast);
+    jl_code_info_set_ir(src, ir);
     JL_GC_POP();
     return src;
 }
 
-void jl_linenumber_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
+void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
 {
     jl_array_t *li = (jl_array_t*)ci->linetable;
     size_t i, n = jl_array_len(li);
-    jl_value_t *rt = NULL;
-    JL_GC_PUSH1(&rt);
+    jl_value_t *rt = NULL, *lno = NULL, *inl = NULL;
+    JL_GC_PUSH3(&rt, &lno, &inl);
     for (i = 0; i < n; i++) {
         jl_value_t *ln = jl_array_ptr_ref(li, i);
-        if (jl_is_linenode(ln)) {
-            rt = jl_box_long(jl_linenode_line(ln));
-            rt = jl_new_struct(jl_lineinfonode_type, name, jl_linenode_file(ln), rt, jl_box_long(0));
-            jl_array_ptr_set(li, i, rt);
-        }
-        else if (jl_is_expr(ln) && ((jl_expr_t*)ln)->head == line_sym && jl_expr_nargs(ln) == 3) {
-            rt = jl_new_struct(jl_lineinfonode_type, jl_symbol("macro expansion"),
-                               jl_exprarg(ln, 1), jl_exprarg(ln, 0), jl_exprarg(ln, 2));
-            jl_array_ptr_set(li, i, rt);
-        }
+        assert(jl_typeis(ln, jl_lineinfonode_type));
+        jl_value_t *mod = jl_fieldref_noalloc(ln, 0);
+        jl_value_t *file = jl_fieldref_noalloc(ln, 2);
+        lno = jl_fieldref(ln, 3);
+        inl = jl_fieldref(ln, 4);
+        jl_value_t *ln_name = (jl_is_long(inl) && jl_unbox_long(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
+        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
+        jl_array_ptr_set(li, i, rt);
     }
     JL_GC_POP();
 }
@@ -376,10 +420,31 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator
     return code;
 }
 
-// return a newly allocated CodeInfo for the function signature
+// Lower `ex` into Julia IR, and (if it expands into a CodeInfo) resolve global-variable
+// references in light of the provided type parameters.
+// Like `jl_expand`, if there is an error expanding the provided expression, the return value
+// will be an error expression (an `Expr` with `error_sym` as its head), which should be eval'd
+// in the caller's context.
+JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *module,
+                                                   jl_svec_t *sparam_vals) {
+    jl_code_info_t *func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, module);
+    JL_GC_PUSH1(&func);
+    if (jl_is_code_info(func)) {
+        jl_array_t *stmts = (jl_array_t*)func->code;
+        jl_resolve_globals_in_ir(stmts, module, sparam_vals, 1);
+    }
+    JL_GC_POP();
+    return func;
+}
+
+// Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
+    if (linfo->uninferred) {
+        return (jl_code_info_t*)jl_copy_ast((jl_value_t*)linfo->uninferred);
+    }
+
     JL_TIMING(STAGED_FUNCTION);
     jl_value_t *tt = linfo->specTypes;
     jl_method_t *def = linfo->def.method;
@@ -405,25 +470,37 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
+            jl_array_t *stmts = (jl_array_t*)func->code;
+            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
         }
         else {
-            func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, def->module);
+            // Lower the user's expression and resolve references to the type parameters
+            func = jl_expand_and_resolve(ex, def->module, linfo->sparam_vals);
+
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
                     ptls->in_pure_callback = 0;
                     jl_toplevel_eval(def->module, (jl_value_t*)func);
                 }
-                jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension.");
+                jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
             }
+        }
 
-            jl_array_t *stmts = (jl_array_t*)func->code;
-            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
+        // If this generated function has an opaque closure, cache it for
+        // correctness of method identity
+        for (int i = 0; i < jl_array_len(func->code); ++i) {
+            jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
+            if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == new_opaque_closure_sym) {
+                linfo->uninferred = jl_copy_ast((jl_value_t*)func);
+                jl_gc_wb(linfo, linfo->uninferred);
+                break;
+            }
         }
 
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ptls->world_age = last_age;
-        jl_linenumber_to_lineinfo(func, (jl_value_t*)def->name);
+        jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
     }
     JL_CATCH {
         ptls->in_pure_callback = last_in;
@@ -476,7 +553,8 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     }
     m->called = called;
     m->pure = src->pure;
-    jl_linenumber_to_lineinfo(src, (jl_value_t*)m->name);
+    m->aggressive_constprop = src->aggressive_constprop;
+    jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
@@ -485,12 +563,6 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, n = jl_array_len(stmts);
     copy = jl_alloc_vec_any(n);
-    // set location from first LineInfoNode
-    if (jl_array_len(src->linetable) > 0) {
-        jl_value_t *ln = jl_array_ptr_ref(src->linetable, 0);
-        m->file = (jl_sym_t*)jl_fieldref(ln, 1);
-        m->line = jl_unbox_long(jl_fieldref(ln, 2));
-    }
     for (i = 0; i < n; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
         if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym) {
@@ -501,7 +573,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 size_t j;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj))
+                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @nospecialize on self is valid but currently ignored
@@ -545,6 +617,10 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 gen_only = 1;
                 st = jl_nothing;
             }
+            else if (nargs == 2 && jl_exprarg(st, 0) == (jl_value_t*)jl_symbol("nkw")) {
+                m->nkw = jl_unbox_long(jl_exprarg(st, 1));
+                st = jl_nothing;
+            }
         }
         else {
             st = resolve_globals(st, m->module, sparam_vars, 1, 0);
@@ -559,7 +635,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     if (gen_only)
         m->source = NULL;
     else
-        m->source = (jl_value_t*)jl_compress_ast(m, src);
+        m->source = (jl_value_t*)jl_compress_ir(m, src);
     jl_gc_wb(m, m->source);
     JL_GC_POP();
 }
@@ -569,12 +645,12 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_method_t *m =
         (jl_method_t*)jl_gc_alloc(ptls, sizeof(jl_method_t), jl_method_type);
-    m->specializations = jl_nothing;
+    m->specializations = jl_emptysvec;
+    m->speckeyset = (jl_array_t*)jl_an_empty_vec_any;
     m->sig = NULL;
     m->slot_syms = NULL;
-    m->ambig = jl_nothing;
-    m->resorted = jl_nothing;
     m->roots = NULL;
+    m->ccallable = NULL;
     m->module = module;
     m->source = NULL;
     m->unspecialized = NULL;
@@ -584,18 +660,46 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->line = 0;
     m->called = 0xff;
     m->nospecialize = module->nospecialize;
+    m->nkw = 0;
     m->invokes = NULL;
+    m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;
     m->primary_world = 1;
     m->deleted_world = ~(size_t)0;
+    m->is_for_opaque_closure = 0;
+    m->aggressive_constprop = 0;
     JL_MUTEX_INIT(&m->writelock);
     return m;
 }
 
 // method definition ----------------------------------------------------------
 
-void print_func_loc(JL_STREAM *s, jl_method_t *m);
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
+{
+    jl_method_t *m = jl_new_method_uninit(module);
+    JL_GC_PUSH1(&m);
+    // TODO: Maybe have a signature of (parent method, stmt#)?
+    m->sig = (jl_value_t*)jl_anytuple_type;
+    // Unused for opaque closures. va-ness is determined on construction
+    m->isva = 0;
+    m->is_for_opaque_closure = 1;
+    if (name == jl_nothing) {
+        m->name = jl_symbol("opaque closure");
+    } else {
+        assert(jl_is_symbol(name));
+        m->name = (jl_sym_t*)name;
+    }
+    m->nargs = jl_unbox_long(nargs) + 1;
+    assert(jl_is_linenode(functionloc));
+    jl_value_t *file = jl_linenode_file(functionloc);
+    m->file = jl_is_symbol(file) ? (jl_sym_t*)file : empty_sym;
+    m->line = jl_linenode_line(functionloc);
+    jl_method_set_source(m, ci);
+    JL_GC_POP();
+    return m;
+}
 
 // empty generic function def
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
@@ -666,18 +770,18 @@ JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAG
     return first_methtable(argt, 1);
 }
 
-extern tracer_cb jl_newmeth_tracer;
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
-JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
-                                jl_code_info_t *f,
-                                jl_module_t *module)
+JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
+                                        jl_code_info_t *f,
+                                        jl_module_t *module)
 {
-    // argdata is svec(svec(types...), svec(typevars...))
+    // argdata is svec(svec(types...), svec(typevars...), functionloc)
     jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata, 1);
+    jl_value_t *functionloc = jl_svecref(argdata, 2);
     size_t nargs = jl_svec_len(atypes);
-    int isva = jl_is_vararg_type(jl_svecref(atypes, nargs - 1));
+    int isva = jl_is_vararg(jl_svecref(atypes, nargs - 1));
     assert(jl_is_svec(atypes));
     assert(nargs > 0);
     assert(jl_is_svec(tvars));
@@ -722,14 +826,18 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel
-        // the result is that the closure variables get interpolated directly into the AST
-        f = jl_new_code_info_from_ast((jl_expr_t*)f);
+        // the result is that the closure variables get interpolated directly into the IR
+        f = jl_new_code_info_from_ir((jl_expr_t*)f);
     }
     m = jl_new_method_uninit(module);
     m->sig = argtype;
     m->name = name;
     m->isva = isva;
     m->nargs = nargs;
+    assert(jl_is_linenode(functionloc));
+    jl_value_t *file = jl_linenode_file(functionloc);
+    m->file = jl_is_symbol(file) ? (jl_sym_t*)file : empty_sym;
+    m->line = jl_linenode_line(functionloc);
     jl_method_set_source(m, f);
 
     if (jl_has_free_typevars(argtype)) {
@@ -742,7 +850,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
 
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+        if (!jl_is_type(elt) && !jl_is_typevar(elt) && !jl_is_vararg(elt)) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == unused_sym)
                 jl_exceptionf(jl_argumenterror_type,
@@ -759,7 +867,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                               jl_symbol_name(m->file),
                               m->line);
         }
-        if (jl_is_vararg_type(elt) && i < na-1)
+        if (jl_is_vararg(elt) && i < na-1)
             jl_exceptionf(jl_argumenterror_type,
                           "Vararg on non-final argument in method definition for %s at %s:%d",
                           jl_symbol_name(name),
@@ -781,6 +889,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
     JL_GC_POP();
+
+    return m;
 }
 
 #ifdef __cplusplus

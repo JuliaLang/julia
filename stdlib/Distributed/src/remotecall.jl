@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base: eltype
+
+abstract type AbstractRemoteRef end
+
 """
     client_refs
 
@@ -8,9 +12,7 @@ Tracks whether a particular `AbstractRemoteRef`
 
 The `client_refs` lock is also used to synchronize access to `.refs` and associated `clientset` state.
 """
-const client_refs = WeakKeyDict{Any, Nothing}() # used as a WeakKeySet
-
-abstract type AbstractRemoteRef end
+const client_refs = WeakKeyDict{AbstractRemoteRef, Nothing}() # used as a WeakKeySet
 
 """
     Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing)
@@ -119,6 +121,8 @@ function RemoteChannel(f::Function, pid::Integer=myid())
     end
 end
 
+Base.eltype(::Type{RemoteChannel{T}}) where {T} = eltype(T)
+
 hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
 
@@ -188,7 +192,7 @@ or to use a local [`Channel`](@ref) as a proxy:
 ```julia
 p = 1
 f = Future(p)
-@async put!(f, remotecall_fetch(long_computation, p))
+errormonitor(@async put!(f, remotecall_fetch(long_computation, p)))
 isready(f)  # will not block
 ```
 """
@@ -245,10 +249,10 @@ end
 
 const any_gc_flag = Condition()
 function start_gc_msgs_task()
-    @async while true
+    errormonitor(@async while true
         wait(any_gc_flag)
         flush_gc_msgs()
-    end
+    end)
 end
 
 function send_del_client(rr)
@@ -538,7 +542,7 @@ fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
     fetch(c::RemoteChannel)
 
 Wait for and get a value from a [`RemoteChannel`](@ref). Exceptions raised are the
-same as for a `Future`. Does not remove the item fetched.
+same as for a [`Future`](@ref). Does not remove the item fetched.
 """
 fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
 

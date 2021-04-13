@@ -46,6 +46,7 @@ end
 convert(::Type{T}, r::T) where {T<:AbstractRotation} = r
 convert(::Type{T}, r::AbstractRotation) where {T<:AbstractRotation} = T(r)
 
+Givens(i1, i2, c, s) = Givens(i1, i2, promote(c, s)...)
 Givens{T}(G::Givens{T}) where {T} = G
 Givens{T}(G::Givens) where {T} = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
 Rotation{T}(R::Rotation{T}) where {T} = R
@@ -248,6 +249,18 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     return cs, sn, r
 end
 
+# enable for unitful quantities
+function givensAlgorithm(f::T, g::T) where T
+    fs = f / oneunit(T)
+    gs = g / oneunit(T)
+    typeof(fs) === T && typeof(gs) === T &&
+    !isa(fs, Union{AbstractFloat,Complex{<:AbstractFloat}}) &&
+    throw(MethodError(givensAlgorithm, (fs, gs)))
+
+    c, s, r = givensAlgorithm(fs, gs)
+    return c, s, r * oneunit(T)
+end
+
 givensAlgorithm(f, g) = givensAlgorithm(promote(float(f), float(g))...)
 
 """
@@ -280,7 +293,7 @@ function givens(f::T, g::T, i1::Integer, i2::Integer) where T
         s = -conj(s)
         i1,i2 = i2,i1
     end
-    Givens(i1, i2, convert(T, c), convert(T, s)), r
+    Givens(i1, i2, c, s), r
 end
 """
     givens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)
