@@ -7888,7 +7888,6 @@ extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
     imaging_mode = jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
-    jl_default_cgparams.generic_context = jl_nothing;
     jl_init_debuginfo();
 
     InitializeNativeTarget();
@@ -8050,6 +8049,11 @@ extern "C" void jl_init_llvm(void)
 
 extern "C" void jl_init_codegen(void)
 {
+    static bool codegen_inited = false;
+    jl_default_cgparams.generic_context = jl_nothing;
+    if (codegen_inited)
+        return;
+
     jl_init_llvm();
     // Now that the execution engine exists, initialize all modules
     jl_init_jit();
@@ -8060,6 +8064,7 @@ extern "C" void jl_init_codegen(void)
     init_julia_llvm_env(m);
 
     jl_init_intrinsic_functions_codegen();
+    codegen_inited = true;
 }
 
 extern "C" void jl_teardown_codegen()

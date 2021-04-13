@@ -484,15 +484,52 @@ Use [`Base.include`](@ref) to evaluate a file into another module.
 """
 MainInclude.include
 
+"""
+If the --autoload option is passed, check if there is a better system image to
+use instead. The path to this system image is returned.
+"""
+function __process_autoload__()
+    init_active_project()
+    if ACTIVE_PROJECT[] === nothing
+        return nothing
+    end
+    # TODO: This should hash the contents of the manifest plus any preferences
+    # instead, excluding any dev-ed packages and their dependents. Also, it
+    # needs a cryptographically secure hash like SHA256.
+    fname = hash(String(read(project_file_manifest_path(ACTIVE_PROJECT[]))))
+    init_depot_path()
+    for path in DEPOT_PATH
+        img = joinpath(path, "sysimgs", string(fname, ".", Libc.Libdl.dlext))
+        ccall(:jl_, Cvoid, (Any,), img)
+        isfile(img) && return img
+    end
+    return nothing
+end
+
 function _start()
+    opts = JLOptions()
+    if opts.autoload != 0 && ACTIVE_PROJECT[] !== nothing
+        # If autoloading failed, still make sure to load all the packages that
+        # are in the Project.toml to make sure that whether or not autoloading
+        # succeeded, the environment behaves identically.
+        @warn "Autoloading failed. Manually loading dependencies."
+        # TODO: Instead of this, we could build a .ji file to resolve all
+        # invalidations, etc. That ji file could then also be picked up by
+        # PkgCompiler to rebuild the sysimage quickly also.
+        all_deps = explicit_project_deps_get_all(
+            env_project_file(ACTIVE_PROJECT[]))
+        for dep in all_deps
+            require(dep)
+        end
+    end
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
+    if ccall(:jl_generating_output, Cint, ()) != 0 && opts.incremental == 0
         # clear old invalid pointers
         PCRE.__init__()
     end
     try
-        exec_options(JLOptions())
+        exec_options(opts)
     catch
         invokelatest(display_error, catch_stack())
         exit(1)

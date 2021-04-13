@@ -1655,11 +1655,68 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
     JL_SIGATOMIC_END();
 }
 
+// Unloads an existing system image. Only valid early in the loading process
+// when __init__ hasn't been run yet.
+JL_DLLEXPORT void jl_unload_system_image(int dlclose_handle) JL_GC_DISABLED
+{
+    // We must get rid of all non-perm objects before closing the old system
+    // image. This tries to accomplish that by running two GC passes, and then
+    // another one after dropping the main module. This should be reasonably
+    // robust against whatever code may have run to figure out this system
+    // image, though of course, it is not fully general. The sysimg location
+    // code needs to take care not to necromance any finalizers, etc.
+    jl_gc_enable(1);
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_collect(JL_GC_FULL);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    // Reset GC roots. We need to make sure there's no marking here at all,
+    // otherwise, we might find the reference to the root task in "Base" that
+    // we're about to delete here.
+    ptls->current_task = ptls->root_task = NULL;
+    jl_main_module = NULL;
+    jl_an_empty_vec_any = NULL;
+    jl_anytuple_type_type = NULL;
+    jl_emptytuple_type = NULL;
+    jl_module_init_order = NULL;
+    jl_reset_call_cache();
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_enable(0);
+
+
+    jl_value_t **const*const tags = get_tags();
+    for (int i = 0; tags[i] != NULL; i++) {
+        jl_value_t **tag = tags[i];
+        *tag = NULL;
+    }
+
+    memset(&sysimg_fptrs, 0, sizeof(sysimg_fptrs));
+    sysimage_base = 0;
+    sysimg_gvars_base = NULL;
+    sysimg_gvars_offsets = NULL;
+    sysimg_gvars_max = 0;
+    sysimg_base = NULL;
+    sysimg_relocs = NULL;
+
+    jl_idtable_type = NULL;
+    jl_idtable_typename = NULL;
+    jl_bigint_type = NULL;
+    gmp_limb_size = 0;
+
+    jl_reset_processor_sysimg();
+
+    if (dlclose_handle)
+        jl_dlclose(jl_sysimg_handle);
+
+    jl_cleanup_serializer2();
+
+    jl_sysimg_handle = NULL;
+}
+
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
-JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
+JL_DLLEXPORT int jl_preload_sysimg_so(const char *fname)
 {
     if (jl_sysimg_handle)
-        return; // embedded target already called jl_set_sysimg_so
+        return 1; // embedded target already called jl_set_sysimg_so
 
     char *dot = (char*) strrchr(fname, '.');
     int is_ji = (dot && !strcmp(dot, ".ji"));
@@ -1667,6 +1724,8 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
     // Get handle to sys.so
     if (!is_ji) // .ji extension => load .ji file only
         jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW, 1));
+
+    return 0;
 }
 
 // Allow passing in a module handle directly, rather than a path
@@ -1738,6 +1797,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
         jl_value_t **tag = tags[i];
         *tag = jl_read_value(&s);
     }
+    jl_reset_symbol_type();
     s.ptls->root_task = (jl_task_t*)jl_gc_alloc(s.ptls, sizeof(jl_task_t), jl_task_type);
     memset(s.ptls->root_task, 0, sizeof(jl_task_t));
     s.ptls->root_task->tls = jl_read_value(&s);

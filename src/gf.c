@@ -2272,6 +2272,12 @@ STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_
 
 jl_typemap_entry_t *call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 static uint8_t pick_which[N_CALL_CACHE];
+
+void jl_reset_call_cache(void)
+{
+    memset(call_cache, 0, sizeof(call_cache));
+}
+
 #ifdef JL_GF_PROFILE
 size_t ncalls;
 void call_cache_stats()

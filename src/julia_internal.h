@@ -197,6 +197,7 @@ extern size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func;
 extern size_t jl_typeinf_world;
 extern jl_typemap_entry_t *call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
+void jl_reset_call_cache(void);
 extern jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
 JL_DLLEXPORT extern int jl_lineno;
@@ -1338,6 +1339,7 @@ void jl_write_compiler_output(void);
 #endif
 
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
+void jl_reset_symbol_type(void) JL_GC_DISABLED;
 
 // Tools for locally disabling spurious compiler warnings
 //

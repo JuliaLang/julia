@@ -486,6 +486,13 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
+function explicit_project_deps_get_all(project_file::String)
+    d = parsed_toml(project_file)
+    deps = get(d, "deps", nothing)::Union{Dict{String, Any}, Nothing}
+    deps === nothing && return PkgId[]
+    [PkgId(UUID(uuid), name) for (name, uuid) in deps if uuid !== nothing]
+end
+
 # find `where` stanza and return the PkgId for `name`
 # return `nothing` if it did not find `where` (indicating caller should continue searching)
 function explicit_manifest_deps_get(project_file::String, where::UUID, name::String)::Union{Nothing,PkgId}

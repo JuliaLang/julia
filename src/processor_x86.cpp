@@ -1011,6 +1011,11 @@ jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
     return parse_sysimg(hdl, sysimg_init_cb);
 }
 
+void jl_reset_processor_sysimg()
+{
+    jit_targets.clear();
+}
+
 std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);

@@ -734,9 +734,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_gc_enable(0);
 
     jl_resolve_sysimg_location(rel);
+    int already_loaded = 0;
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     if (jl_options.image_file)
-        jl_preload_sysimg_so(jl_options.image_file);
+        already_loaded = jl_preload_sysimg_so(jl_options.image_file);
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
@@ -764,6 +765,32 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_init_main_module();
         jl_load(jl_core_module, "boot.jl");
         post_boot_hooks();
+    } else if (jl_options.autoload) {
+        // Check if we need to load a different sysimage instead
+        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__process_autoload__"));
+        if (f) {
+            size_t last_age = ptls->world_age;
+            ptls->world_age = jl_get_world_counter();
+            jl_value_t *new_sysimg = jl_apply(&f, 1);
+            ptls->world_age = last_age;
+            if (new_sysimg != jl_nothing) {
+                jl_typeassert(new_sysimg, jl_string_type);
+                size_t plen = jl_string_len(new_sysimg);
+                char *new_sysimg_path = (char*)malloc(plen+1);
+                memcpy(new_sysimg_path, jl_string_data(new_sysimg), plen);
+                new_sysimg_path[plen] = '\0';
+
+                jl_unload_system_image(!already_loaded);
+                jl_preload_sysimg_so(new_sysimg_path);
+                jl_restore_system_image(new_sysimg_path);
+                free(new_sysimg_path);
+
+                jl_init_serializer();
+                jl_init_root_task(stack_lo, stack_hi);
+
+                jl_options.autoload = 0;
+            }
+        }
     }
 
     if (jl_base_module != NULL) {

@@ -1656,7 +1656,8 @@ JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
-JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
+JL_DLLEXPORT int jl_preload_sysimg_so(const char *fname);
+JL_DLLEXPORT void jl_unload_system_image(int dlclose_handle);
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
 JL_DLLEXPORT ios_t *jl_create_system_image(void *);
 JL_DLLEXPORT void jl_save_system_image(const char *fname);
@@ -1998,6 +1999,7 @@ typedef struct {
     int8_t warn_overwrite;
     int8_t can_inline;
     int8_t polly;
+    int8_t autoload;
     const char *trace_compile;
     int8_t fast_math;
     int8_t worker;
