@@ -95,6 +95,7 @@ Standard library changes
 * SuiteSparse is updated to 5.8.1. ([#39455])
 * The shape of an `UpperHessenberg` matrix is preserved under certain arithmetic operations, e.g. when multiplying or dividing by an `UpperTriangular` matrix. ([#40039])
 * `cis(A)` now supports matrix arguments ([#40194]).
+* `dot` now supports `UniformScaling` with `AbstractMatrix` ([#40250]).
 
 #### Markdown
 
