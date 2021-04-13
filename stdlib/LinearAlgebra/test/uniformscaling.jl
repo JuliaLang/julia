@@ -462,6 +462,20 @@ end
     @test I(3) == [1 0 0; 0 1 0; 0 0 1]
 end
 
+@testset "dot" begin
+    A = randn(3, 3)
+    λ = randn()
+    J = UniformScaling(λ)
+    @test dot(A, J) ≈ dot(J, A)
+    @test dot(A, J) ≈ tr(A' * J)
+
+    A = rand(ComplexF64, 3, 3)
+    λ = randn() + im * randn()
+    J = UniformScaling(λ)
+    @test dot(A, J) ≈ conj(dot(J, A))
+    @test dot(A, J) ≈ tr(A' * J)
+end
+
 @testset "generalized dot" begin
     x = rand(-10:10, 3)
     y = rand(-10:10, 3)
