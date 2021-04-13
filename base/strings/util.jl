@@ -522,56 +522,72 @@ _replace(io, repl::Function, str, r, pattern) =
 _replace(io, repl::Function, str, r, pattern::Function) =
     print(io, repl(str[first(r)]))
 
-replace(str::String, pat_repl::Pair{<:AbstractChar}; count::Integer=typemax(Int)) =
-    replace(str, isequal(first(pat_repl)) => last(pat_repl); count=count)
-
-replace(str::String, pat_repl::Pair{<:Union{Tuple{Vararg{AbstractChar}},
-                                            AbstractVector{<:AbstractChar},Set{<:AbstractChar}}};
-        count::Integer=typemax(Int)) =
-    replace(str, in(first(pat_repl)) => last(pat_repl), count=count)
-
 _pat_replacer(x) = x
 _free_pat_replacer(x) = nothing
 
-function replace(str::String, pat_repl::Pair; count::Integer=typemax(Int))
-    pattern, repl = pat_repl
+_pat_replacer(x::AbstractChar) = isequal(x)
+_pat_replacer(x::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}) = in(x)
+
+function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(Int)) where N
     count == 0 && return str
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
-    e = lastindex(str)
+    e1 = nextind(str, lastindex(str)) # sizeof(str)
     i = a = firstindex(str)
-    pattern = _pat_replacer(pattern)
-    r = something(findnext(pattern,str,i), 0)
-    j, k = first(r), last(r)
-    if j == 0
-        _free_pat_replacer(pattern)
+    patterns = map(p -> _pat_replacer(first(p)), pat_repl)
+    replaces = map(last, pat_repl)
+    rs = map(patterns) do p
+        r = findnext(p, str, a)
+        if r === nothing || first(r) == 0
+            return e1+1:0
+        end
+        return r
+    end
+    if all(>(e1), map(first, rs))
+        foreach(_free_pat_replacer, patterns)
         return str
     end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
-    while j != 0
+    while true
+        p = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
+        r = rs[p]
+        j, k = first(r), last(r)
+        j > e1 && break
         if i == a || i <= k
+            # copy out preserved portion
             GC.@preserve str unsafe_write(out, pointer(str, i), UInt(j-i))
-            _replace(out, repl, str, r, pattern)
+            # copy out replacement string
+            _replace(out, replaces[p], str, r, patterns[p])
         end
         if k < j
             i = j
-            j > e && break
+            j == e1 && break
             k = nextind(str, j)
         else
             i = k = nextind(str, k)
         end
-        r = something(findnext(pattern,str,k), 0)
-        r === 0:-1 || n == count && break
-        j, k = first(r), last(r)
+        n == count && break
+        let k = k
+            rs = map(patterns, rs) do p, r
+                if first(r) < k
+                    r = findnext(p, str, k)
+                    if r === nothing || first(r) == 0
+                        return e1+1:0
+                    end
+                end
+                return r
+            end
+        end
         n += 1
     end
-    _free_pat_replacer(pattern)
-    write(out, SubString(str,i))
-    String(take!(out))
+    foreach(_free_pat_replacer, patterns)
+    write(out, SubString(str, i))
+    return String(take!(out))
 end
 
+
 """
-    replace(s::AbstractString, pat=>r; [count::Integer])
+    replace(s::AbstractString, pat=>r, [pat2=>r2, ...]; [count::Integer])
 
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
@@ -583,6 +599,13 @@ character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
+
+Multiple patterns can be specified, and they will be applied left-to-right
+simultaneously, so only one pattern will be applied to any character, and the
+patterns will only be applied to the input text, not the replacements.
+
+!!! compat "Julia 1.7"
+    Support for multiple patterns requires version 1.7.
 
 # Examples
 ```jldoctest
@@ -597,10 +620,13 @@ julia> replace("The quick foxes run quickly.", "quick" => "", count=1)
 
 julia> replace("The quick foxes run quickly.", r"fox(es)?" => s"bus\\1")
 "The quick buses run quickly."
+
+julia> replace("abcabc", "a" => "b", "b" => "c", r".+" => "a")
+"bca"
 ```
 """
-replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
-    replace(String(s), pat_f, count=count)
+replace(s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
+    replace(String(s), pat_f..., count=count)
 
 # TODO: allow transform as the first argument to replace?
 

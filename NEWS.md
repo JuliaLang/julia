@@ -120,6 +120,10 @@ Standard library changes
 * Some degree trigonometric functions, `sind`, `cosd`, `tand`, `asind`, `acosd`, `asecd`, `acscd`, `acotd`, `atand` now accept an square matrix ([#39758]).
 * A backslash before a newline in command literals now always removes the newline, similar to standard string
   literals, whereas the result was not well-defined before. ([#40753])
+* `replace(::String)` now allows multiple patterns to be specified, and they
+  will be applied left-to-right simultaneously, so only one pattern will be
+  applied to any character, and the patterns will only be applied to the input
+  text, not the replacements. ([#TBD])
 
 #### Package Manager
 
