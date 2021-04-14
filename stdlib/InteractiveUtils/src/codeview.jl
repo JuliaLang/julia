@@ -127,7 +127,8 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Sy
         print(io, "Body")
         warntype_type_printer(io, rettype, true)
         println(io)
-        Base.IRShow.show_ir(lambda_io, src, lineprinter(src), warntype_type_printer)
+        irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
+        Base.IRShow.show_ir(lambda_io, src, irshow_config)
         println(io)
     end
     nothing
