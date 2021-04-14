@@ -95,8 +95,8 @@ function last_error()
     return (err_class, err_msg)
 end
 
-function GitError(code::Integer)
-    err_code = Code(code)
+GitError(err_code::Integer) = GitError(Code(err_code))
+function GitError(err_code::Code)
     err_class, err_msg = last_error()
     return GitError(err_class, err_code, err_msg)
 end
