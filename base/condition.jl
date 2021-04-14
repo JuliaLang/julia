@@ -127,9 +127,9 @@ is raised as an exception in the woken tasks.
 
 Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
 """
-notify(c::GenericCondition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
-function notify(c::GenericCondition, @nospecialize(arg), all, error)
-    assert_havelock(c)
+notify(c::GenericCondition, @nospecialize(arg = nothing); all=true, error=false, unsafe=false) = notify(c, arg, all, error; unsafe=unsafe)
+function notify(c::GenericCondition, @nospecialize(arg), all, error; unsafe=false)
+    unsafe || assert_havelock(c)
     cnt = 0
     while !isempty(c.waitq)
         t = popfirst!(c.waitq)
