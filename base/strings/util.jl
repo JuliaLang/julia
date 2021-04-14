@@ -541,6 +541,7 @@ function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(I
         if r === nothing || first(r) == 0
             return e1+1:0
         end
+        r isa Int && (r = r:r) # findnext / performance fix
         return r
     end
     if all(>(e1), map(first, rs))
@@ -574,6 +575,7 @@ function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(I
                     if r === nothing || first(r) == 0
                         return e1+1:0
                     end
+                    r isa Int && (r = r:r) # findnext / performance fix
                 end
                 return r
             end
