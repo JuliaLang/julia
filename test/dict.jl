@@ -736,7 +736,7 @@ import Base.ImmutableDict
     @test get(d4, "key1") do
         f(4)
     end === v2
-    @test get(d4, "foo") do 
+    @test get(d4, "foo") do
         f(6)
     end === 36
     @test get(d, k1) do
