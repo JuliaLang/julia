@@ -209,6 +209,9 @@ end
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
 @test_throws ArgumentError opnorm(Matrix{Float64}(undef,5,5),5)
 
+# operator norm for zero-dimensional domain is zero (see #40370)
+@test opnorm(fill(1,1,1)[:,2:1]) == 0.0
+
 @testset "generic norm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
     @test @inferred(norm(x)) ≈ sqrt(30)
