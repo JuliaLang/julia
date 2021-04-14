@@ -786,25 +786,30 @@ function edit_insert(s::PromptState, c::StringLike)
         after = options(s).auto_refresh_time_delay
         termbuf = terminal(s)
         w = width(termbuf)
-        delayup = !eof(buf) || old_wait
         offset = s.ias.curs_row == 1 || s.indent < 0 ?
             sizeof(prompt_string(s.p.prompt)::String) : s.indent
         offset += position(buf) - beginofline(buf) # size of current line
-        spinner = true
-        if offset + textwidth(str) <= w
+        spinner = '\0'
+        delayup = !eof(buf) || old_wait
+        if offset + textwidth(str) <= w && !(after == 0 && delayup)
             # Avoid full update when appending characters to the end
             # and an update of curs_row isn't necessary (conservatively estimated)
             write(termbuf, str)
-            spinner = false
+            spinner = ' ' # temporarily clear under the cursor
         elseif after == 0
             refresh_line(s)
             delayup = false
-        else
+        else # render a spinner for each key press
+            if old_wait || length(str) != 1
+                spinner = spin_seq[mod1(position(buf) - w, length(spin_seq))]
+            else
+                spinner = str[end]
+            end
             delayup = true
         end
         if delayup
-            if spinner
-                write(termbuf, spin_seq[mod1(position(buf) - w, length(spin_seq))])
+            if spinner != '\0'
+                write(termbuf, spinner)
                 cmove_left(termbuf)
             end
             s.refresh_wait = Timer(after) do t
