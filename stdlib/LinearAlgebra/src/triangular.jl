@@ -2568,6 +2568,8 @@ end
 # Jonsson I, Kågström B. Recursive blocked algorithms for solving triangular systems—
 # Part I: one-sided and coupled Sylvester-type matrix equations. (2002) ACM Trans Math Softw.
 # 28(4), https://doi.org/10.1145/592843.592845.
+# specify raise=false to avoid breaking the recursion if a LAPACKException is thrown when
+# computing one of the blocks.
 function _sylvester_quasitriu!(A, B, C; blockwidth=64, nA=checksquare(A), nB=checksquare(B), raise=true)
     if 1 ≤ nA ≤ blockwidth && 1 ≤ nB ≤ blockwidth
         _sylvester_quasitriu_base!(A, B, C; raise=raise)
