@@ -2405,7 +2405,7 @@ function _sqrt_quasitriu!(R, A; blockwidth=64, n=checksquare(A))
         _sqrt_quasitriu!(R22, A22; blockwidth=blockwidth, n=n2)
         # solve off-diagonal block
         R12 .= .- A12
-        _sylvester_quasitriu!(R11, R22, R12; blockwidth=blockwidth, nA=n1, nB=n2, catcherr=true)
+        _sylvester_quasitriu!(R11, R22, R12; blockwidth=blockwidth, nA=n1, nB=n2, raise=false)
     end
     return R
 end
@@ -2568,14 +2568,14 @@ end
 # Jonsson I, Kågström B. Recursive blocked algorithms for solving triangular systems—
 # Part I: one-sided and coupled Sylvester-type matrix equations. (2002) ACM Trans Math Softw.
 # 28(4), https://doi.org/10.1145/592843.592845.
-function _sylvester_quasitriu!(A, B, C; blockwidth=64, nA=checksquare(A), nB=checksquare(B), catcherr=false)
-    kwargs = (blockwidth=blockwidth, catcherr=catcherr)
+function _sylvester_quasitriu!(A, B, C; blockwidth=64, nA=checksquare(A), nB=checksquare(B), raise=true)
+    kwargs = (blockwidth=blockwidth, raise=raise)
     if 1 ≤ nA ≤ blockwidth && 1 ≤ nB ≤ blockwidth  # base case
         try
             _, scale = LAPACK.trsyl!('N', 'N', A, B, C)
             rmul!(C, -inv(scale))
         catch e
-            if !(catcherr && e isa LAPACKException)
+            if !(e isa LAPACKException) || raise
                 throw(e)
             end
         end
