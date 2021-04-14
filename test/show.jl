@@ -1931,13 +1931,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
         @test repr(src) == repr_ir
     end
     lines1 = split(repr(ir), '\n')
-    @test isempty(pop!(lines1))
+    @test all(isspace, pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(1), Val{1}), false)
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(2), Val{2}), true)
     Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
     Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
     lines2 = split(repr(ir), '\n')
-    @test isempty(pop!(lines2))
+    @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
     @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
     let line1 = popfirst!(lines1)
@@ -1958,7 +1958,7 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
 
     # verbose linetable
     io = IOBuffer()
-    Base.IRShow.show_ir(io, ir; verbose_linetable=true)
+    Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
     @test count(contains(r"my_fun28173 at a{80}:\d+"), eachline(io)) == 9
 end
@@ -1970,7 +1970,7 @@ let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     push!(ir.stmts.inst, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
-    @test isempty(pop!(lines))
+    @test all(isspace, pop!(lines))
     @test pop!(lines) == "   !!! ──       unreachable::#UNDEF"
 end
 

@@ -1262,7 +1262,11 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
         maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
         nd = ndigits(maxcost)
         println(io, meth)
-        IRShow.show_ir(io, code, (io, linestart, idx) -> (print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " "); return ""))
+        irshow_config = IRShow.IRShowConfig() do io, linestart, idx
+            print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
+            return ""
+        end
+        IRShow.show_ir(io, code, irshow_config)
         println(io)
     end
 end
