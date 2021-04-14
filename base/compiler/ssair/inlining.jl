@@ -710,7 +710,7 @@ function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::Meth
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult)
-    mi = specialize_method(result.linfo.def, result.linfo.specTypes,
+    mi = specialize_method(result.linfo.def::Method, result.linfo.specTypes,
         result.linfo.sparam_vals, false, true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     return mi
@@ -746,8 +746,10 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
         end
     end
 
-    if isconst && state.et !== nothing
-        push!(state.et, todo.mi)
+    et = state.et
+
+    if isconst && et !== nothing
+        push!(et, todo.mi)
         return ConstantCase(src)
     end
 
@@ -756,14 +758,13 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
     end
 
     if src === nothing
-        return compileable_specialization(state.et, spec.match)
+        return compileable_specialization(et, spec.match)
     end
 
     if isa(src, IRCode)
         src = copy(src)
     end
 
-    et = state.et
     et !== nothing && push!(et, todo.mi)
     return InliningTodo(todo.mi, src)
 end

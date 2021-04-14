@@ -1316,7 +1316,7 @@ See also: [`first`](@ref), [`last`](@ref).
     @boundscheck if i === nothing
         throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
     end
-    (ret, state) = i
+    (ret, state) = i::NTuple{2,Any}
     @boundscheck if iterate(x, state) !== nothing
         throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
     end

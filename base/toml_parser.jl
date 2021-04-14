@@ -321,7 +321,7 @@ function Base.showerror(io::IO, err::ParserError)
     printstyled(io, " error: "; color=Base.error_color())
     println(io, format_error_message_for_err_type(err))
     # In this case we want the arrow to point one character
-    pos = err.pos
+    pos = err.pos::Int
     err.type == ErrUnexpectedEofExpectedValue && (pos += 1)
     str1, err1 = point_to_line(err.str, pos, pos, io)
     @static if VERSION <= v"1.6.0-DEV.121"

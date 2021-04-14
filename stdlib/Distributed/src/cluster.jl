@@ -171,7 +171,7 @@ function check_worker_state(w::Worker)
     end
 end
 
-exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id))
+exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id)::Worker)
 function exec_conn_func(w::Worker)
     try
         f = notnothing(w.conn_func)
