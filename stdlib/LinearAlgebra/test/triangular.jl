@@ -510,7 +510,7 @@ Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 @test typeof(sqrt(complex(Atu))[1,1]) <: Complex
 
 @testset "matrix square root quasi-triangular blockwise" begin
-    @testset for T in (Float64, ComplexF64)
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
         A = schur(rand(T, 100, 100)^2).T
         @test LinearAlgebra.sqrt_quasitriu(A; blockwidth=16)^2 ≈ A
     end
