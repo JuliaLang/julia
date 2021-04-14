@@ -522,7 +522,7 @@ Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 end
 
 @testset "sylvester quasi-triangular blockwise" begin
-    @testset for T in (Float64, ComplexF64), m in (15, 40), n in (15, 45)
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64), m in (15, 40), n in (15, 45)
         A = schur(rand(T, m, m)).T
         B = schur(rand(T, n, n)).T
         C = randn(T, m, n)
