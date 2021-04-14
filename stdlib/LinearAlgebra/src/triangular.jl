@@ -2567,7 +2567,7 @@ end
 # A and B are no greater than blockwidth, based on Algorithm 1 from
 # Jonsson I, Kågström B. Recursive blocked algorithms for solving triangular systems—
 # Part I: one-sided and coupled Sylvester-type matrix equations. (2002) ACM Trans Math Softw.
-# 28(4).
+# 28(4), https://doi.org/10.1145/592843.592845.
 function _sylvester_quasitriu!(A, B, C; blockwidth=64, nA=checksquare(A), nB=checksquare(B), catcherr=false)
     kwargs = (blockwidth=blockwidth, catcherr=catcherr)
     if 1 ≤ nA ≤ blockwidth && 1 ≤ nB ≤ blockwidth  # base case
