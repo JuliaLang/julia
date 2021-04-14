@@ -480,6 +480,9 @@ Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
 Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
 
+dot(A::AbstractMatrix, J::UniformScaling) = dot(tr(A), J.λ)
+dot(J::UniformScaling, A::AbstractMatrix) = dot(J.λ, tr(A))
+
 dot(x::AbstractVector, J::UniformScaling, y::AbstractVector) = dot(x, J.λ, y)
 dot(x::AbstractVector, a::Number, y::AbstractVector) = sum(t -> dot(t[1], a, t[2]), zip(x, y))
 dot(x::AbstractVector, a::Union{Real,Complex}, y::AbstractVector) = a*dot(x, y)
