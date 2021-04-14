@@ -530,6 +530,17 @@ end
         X = LinearAlgebra._sylvester_quasitriu!(A, B, C; blockwidth=16)
         @test X === C
         @test A * X + X * B ≈ -Ccopy
+
+        @testset "test raise=false does not break recursion" begin
+            Az = zero(A)
+            Bz = zero(B)
+            C2 = copy(Ccopy)
+            @test_throws LAPACKException LinearAlgebra._sylvester_quasitriu!(Az, Bz, C2; blockwidth=16)
+            m == n || @test any(C2 .== Ccopy)  # recursion broken
+            C3 = copy(Ccopy)
+            X3 = LinearAlgebra._sylvester_quasitriu!(Az, Bz, C3; blockwidth=16, raise=false)
+            @test !any(X3 .== Ccopy)  # recursion not broken
+        end
     end
 end
 
