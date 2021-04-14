@@ -638,7 +638,10 @@ struct ANumber <: Number end
 let err_str
     err_str = @except_str ANumber()(3 + 4) MethodError
     @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
-    @test occursin("Maybe you forgot to use an operator such as *, ^, %, / etc. ?", err_str)
+    @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
+    # issue 40478
+    err_str = @except_str ANumber()(3 + 4) MethodError
+    @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
 end
 
 # Execute backtrace once before checking formatting, see #38858
