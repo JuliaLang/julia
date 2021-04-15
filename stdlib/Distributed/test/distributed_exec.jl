@@ -1590,6 +1590,11 @@ function connect(manager::ConnectTimeoutTester, pid::Int, config::WorkerConfig)
     (s, s)
 end
 
+isa_timeout_exception(ex::CompositeException) = any(isa_timeout_exception, ex.exceptions)
+isa_timeout_exception(ex::TaskFailedException) = isa_timeout_exception(ex.task.result)
+isa_timeout_exception(ex::Distributed.LaunchWorkerError) = ex.msg == "Timed out connecting to worker."
+isa_timeout_exception(ex) = false
+
 nprocs()>1 && rmprocs(workers())
 cluster_cookie("")
 npids, t, bytes, gctime, memallocs = @timed try
@@ -1597,6 +1602,7 @@ npids, t, bytes, gctime, memallocs = @timed try
         addprocs_with_testenv(ConnectTimeoutTester())
     end
 catch ex
+    isa_timeout_exception(ex) || rethrow()
     []
 end
 @test length(npids) == 0
