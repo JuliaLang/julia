@@ -107,8 +107,10 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::StridedMatrix{<:BlasFloat})  = lq!(copy(A))
-lq(x::Number) = lq(fill(x,1,1))
+lq(A::AbstractMatrix{T}) where {T}  = lq!(copy_oftype(A, lq_eltype(T)))
+lq(x::Number) = lq!(fill(convert(lq_eltype(typeof(x)), x), 1, 1))
+
+lq_eltype(::Type{T}) where {T} = typeof(zero(T) / sqrt(abs2(one(T))))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
