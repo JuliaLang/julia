@@ -126,7 +126,10 @@ Standard library changes
 
 * `mmap` is now exported ([#39816]).
 
+#### DelimitedFiles
 
+* `readdlm` now defaults to `use_mmap=false` on all OSes for increased reliability across abnormal filesystem situations ([#40415]).
+  
 Deprecated or removed
 ---------------------
 - Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in a future release.
