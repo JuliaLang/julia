@@ -128,7 +128,7 @@ Standard library changes
 
 #### DelimitedFiles
 
-* `readdlm` now defaults to `use_mmap=false` on all OSes for increased reliability across abnormal filesystem situations ([#40415]).
+* `readdlm` now defaults to `use_mmap=false` on all OSes for consistent reliability in abnormal filesystem situations ([#40415]).
   
 Deprecated or removed
 ---------------------
