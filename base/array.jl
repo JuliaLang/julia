@@ -64,10 +64,23 @@ Two-dimensional dense array with elements of type `T`, often used to represent
 a mathematical matrix. Alias for [`Array{T,2}`](@ref).
 """
 const Matrix{T} = Array{T,2}
+
 """
     VecOrMat{T}
 
-Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref).
+Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref) which allows functions to accept either a Matrix or a Vector.
+
+# Examples
+```jldoctest
+julia> Vector{Float64} <: VecOrMat{Float64}
+true
+
+julia> Matrix{Float64} <: VecOrMat{Float64}
+true
+
+julia> Array{Float64, 3} <: VecOrMat{Float64}
+false
+```
 """
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
