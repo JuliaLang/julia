@@ -665,8 +665,8 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
 
     next = iterate(itr)
     @inbounds for i in eachindex(dest)
-        x,state = next::NTuple{2,Any}
-        y,state = iterate(itr, state)::NTuple{2,Any}
+        x,state = next::ActiveIteration
+        y,state = iterate(itr, state)::ActiveIteration
         next = iterate(itr, state)
         dest[i] = number_from_hex(x) << 4 + number_from_hex(y)
     end

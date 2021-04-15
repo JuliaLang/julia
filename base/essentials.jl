@@ -889,6 +889,9 @@ next element and the new iteration state should be returned.
 """
 function iterate end
 
+# can be used to annotate the return of an active iteration
+const ActiveIteration = Tuple{Any, Any}
+
 """
     isiterable(T) -> Bool
 

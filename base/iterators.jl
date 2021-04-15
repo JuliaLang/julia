@@ -10,7 +10,7 @@ import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
-    tail, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
+    tail, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo, ActiveIteration,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, AbstractRange,
     LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple
 
@@ -1316,7 +1316,7 @@ See also: [`first`](@ref), [`last`](@ref).
     @boundscheck if i === nothing
         throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
     end
-    (ret, state) = i::NTuple{2,Any}
+    (ret, state) = i::ActiveIteration
     @boundscheck if iterate(x, state) !== nothing
         throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
     end
