@@ -147,7 +147,7 @@ The macro may be chained with `@test` to also test the returned value:
     @test (@test_logs (:info,"Doing foo with n=2") foo(2)) == 42
 
 If you want to test for the absence of warnings, you can omit specifying log
-patterns to [`@test_nowarn`](@ref) and set the `min_level` accordingly:
+patterns and set the `min_level` accordingly:
 
     # test that the expression logs no messages when the logger level is warn:
     @test_logs min_level=Logging.Warn @info("Some information") # passes
@@ -270,4 +270,3 @@ macro test_deprecated(exs...)
     res.args[4].args[3].args[2].args[2].args[2] = __source__
     res
 end
-
