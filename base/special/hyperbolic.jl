@@ -14,19 +14,6 @@
 # is preserved.
 # ====================================================
 
-@inline function exthorner(x, p::Tuple)
-    # polynomial evaluation using compensated summation.
-    # much more accurate, especially when lo can be combined with other rounding errors
-    hi, lo = p[end], zero(x)
-    for i in length(p)-1:-1:1
-        pi = p[i]
-        prod = hi*x
-        err = fma(hi, x, -prod)
-        hi = pi+prod
-        lo = fma(lo, x, prod - (hi - pi) + err)
-    end
-    return hi, lo
-end
 
 # Hyperbolic functions
 # sinh methods

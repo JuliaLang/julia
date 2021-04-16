@@ -67,7 +67,13 @@ similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
 sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
 
-copy(V::SubArray) = V.parent[V.indices...]
+function Base.copy(V::SubArray)
+    v = V.parent[V.indices...]
+    ndims(V) == 0 || return v
+    x = similar(V) # ensure proper type of x
+    x[] = v
+    return x
+end
 
 parent(V::SubArray) = V.parent
 parentindices(V::SubArray) = V.indices
@@ -134,6 +140,10 @@ it may cause a segmentation fault.
 Some immutable parent arrays (like ranges) may choose to simply
 recompute a new array in some circumstances instead of returning
 a `SubArray` if doing so is efficient and provides compatible semantics.
+
+!!! compat "Julia 1.6"
+    In Julia 1.6 or later, `view` can be called on an `AbstractString`, returning a
+    `SubString`.
 
 # Examples
 ```jldoctest
@@ -380,7 +390,7 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange
 # indexing uses the indices along the given dimension.
 # If the result is one-dimensional and it's a range, then linear
 # indexing might be offset if the index itself is offset
-# Otherwise linear indexing always starts with 1.
+# Otherwise linear indexing always matches the parent.
 compute_offset1(parent, stride1::Integer, I::Tuple) =
     (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
 compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
@@ -388,11 +398,11 @@ compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, 
 compute_offset1(parent, stride1::Integer, dims, inds::Tuple{AbstractRange}, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes1(inds[1]))) # potentially index-offsetting case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
-    (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
+    (@_inline_meta; compute_linindex(parent, I) - stride1)
 function compute_linindex(parent, I::NTuple{N,Any}) where N
     @_inline_meta
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
-    compute_linindex(1, 1, IP, I)
+    compute_linindex(first(LinearIndices(parent)), 1, IP, I)
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
     @_inline_meta

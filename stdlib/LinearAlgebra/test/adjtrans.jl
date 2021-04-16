@@ -277,6 +277,35 @@ end
     @test vec(cvec')[1] == cvec[1]'
 end
 
+@testset "Adjoint and Transpose view methods" begin
+    intvec, intmat = [1, 2], [1 2 3; 4 5 6]
+    # overload of reshape(v, Val(1)) simplifies views of row vectors:
+    @test view(adjoint(intvec), 1:2) isa SubArray{Int, 1, Vector{Int}}
+    @test view(transpose(intvec), 1:2) isa SubArray{Int, 1, Vector{Int}}
+    cvec = [1, 2im, 3, 4im]
+    @test view(transpose(cvec), 2:3) === view(cvec, 2:3)
+    @test view(adjoint(cvec), 2:3) == conj(view(cvec, 2:3))
+
+    # vector slices of transposed matrices are simplified:
+    @test view(adjoint(intmat), 1, :) isa SubArray{Int, 1, Matrix{Int}}
+    @test view(transpose(intmat), 1, :) isa SubArray{Int, 1, Matrix{Int}}
+    @test view(adjoint(intmat), 1, :) == permutedims(intmat)[1, :]
+    @test view(transpose(intmat), 1:1, :) == permutedims(intmat)[1:1, :] # not simplified
+    @test view(adjoint(intmat), :, 2) isa SubArray{Int, 1, Matrix{Int}}
+    @test view(transpose(intmat), :, 2) isa SubArray{Int, 1, Matrix{Int}}
+    @test view(adjoint(intmat), :, 2) == permutedims(intmat)[:, 2]
+    @test view(transpose(intmat), :, 2:2) == permutedims(intmat)[:, 2:2] # not simplified
+    cmat = [1 2im 3; 4im 5 6im]
+    @test view(transpose(cmat), 1, :) isa SubArray{Complex{Int}, 1, Matrix{Complex{Int}}}
+    @test view(transpose(cmat), :, 2) == cmat[2, :]
+    @test view(adjoint(cmat), :, 2) == conj(cmat[2, :]) # not simplified
+
+    # bounds checks happen before this
+    @test_throws BoundsError view(adjoint(intvec), 0:3)
+    @test_throws BoundsError view(transpose(cvec), 0:3)
+    @test_throws BoundsError view(adjoint(intmat), :, 3)
+end
+
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
     # horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers
     # should preserve the Adjoint/Transpose-wrapper to preserve semantics downstream
@@ -481,6 +510,22 @@ end
                   "$t of "*sprint(show, parent(Fop))
     @test "LinearAlgebra."*sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
                   "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
+end
+
+@testset "showarg" begin
+    io = IOBuffer()
+
+    A = ones(Float64, 3,3)
+
+    B = Adjoint(A)
+    @test summary(B) == "3×3 adjoint(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "adjoint(::Matrix{Float64})"
+
+    B = Transpose(A)
+    @test summary(B) == "3×3 transpose(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "transpose(::Matrix{Float64})"
 end
 
 @testset "strided transposes" begin

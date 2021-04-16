@@ -683,7 +683,7 @@ function copyto!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRang
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
         LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
-        tM == 'C' && conj!(B)
+        tM == 'C' && conj!(@view B[ir_dest, jr_dest])
     end
     B
 end
@@ -693,7 +693,7 @@ function copy_transpose!(B::AbstractMatrix, ir_dest::UnitRange{Int}, jr_dest::Un
         LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
         copyto!(B, ir_dest, jr_dest, M, jr_src, ir_src)
-        tM == 'C' && conj!(B)
+        tM == 'C' && conj!(@view B[ir_dest, jr_dest])
     end
     B
 end
@@ -823,7 +823,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
 
     tile_size = 0
     if isbitstype(R) && isbitstype(T) && isbitstype(S) && (tA == 'N' || tB != 'N')
-        tile_size = floor(Int, sqrt(tilebufsize / max(sizeof(R), sizeof(S), sizeof(T))))
+        tile_size = floor(Int, sqrt(tilebufsize / max(sizeof(R), sizeof(S), sizeof(T), 1)))
     end
     @inbounds begin
     if tile_size > 0

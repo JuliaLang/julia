@@ -483,6 +483,12 @@ JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
     size_t len = jl_array_len(a);
+    if (len == 0) {
+        // this may seem like purely an optimization (which it also is), but it
+        // also ensures that calling `String(a)` doesn't corrupt a previous
+        // string also created the same way, where `a = StringVector(_)`.
+        return jl_an_empty_string;
+    }
     if (a->flags.how == 3 && a->offset == 0 && a->elsize == 1 &&
         (jl_array_ndims(a) != 1 ||
          ((a->maxsize + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS)))) {

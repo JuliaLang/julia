@@ -277,7 +277,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             argv[i] = eval_value(args[i], s);
         JL_NARGSV(new_opaque_closure, 5);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], (jl_method_t*)argv[4], argv+5, nargs-5);
+            argv[3], argv[4], argv+5, nargs-5);
         JL_GC_POP();
         return ret;
     }
@@ -302,7 +302,8 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == boundscheck_sym) {
         return jl_true;
     }
-    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym) {
+    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym ||
+             head == aliasscope_sym || head == popaliasscope_sym) {
         return jl_nothing;
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {

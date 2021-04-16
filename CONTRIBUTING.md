@@ -6,7 +6,7 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 ## Learning Julia
 
-[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org) covers the language and core library features, and is searchable.
+[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike.
 
 ## Before filing an issue
 
@@ -90,7 +90,7 @@ from Julia's root directory. This will rebuild the Julia system image, then inst
 
 > **Note**
 >
-> When making changes to any of Julia's documentation it is recommended that you run `make docs` to check the your changes are valid and do not produce any errors before opening a pull request.
+> When making changes to any of Julia's documentation it is recommended that you run `make docs` to check that your changes are valid and do not produce any errors before opening a pull request.
 
 Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable) if you encounter anything that is not covered by the sections below.
 

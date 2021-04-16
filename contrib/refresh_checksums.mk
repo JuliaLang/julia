@@ -19,7 +19,7 @@ CLANG_TRIPLETS=$(filter %-darwin %-freebsd,$(TRIPLETS))
 NON_CLANG_TRIPLETS=$(filter-out %-darwin %-freebsd,$(TRIPLETS))
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
-BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind osxunwind dsfmt objconv p7zip zlib suitesparse openlibm
+BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib suitesparse openlibm blastrampoline
 BB_GCC_EXPANDED_PROJECTS=openblas csl
 BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools
 # These are non-BB source-only deps
@@ -39,7 +39,7 @@ endef
 # If $(2) == `src`, this will generate a `USE_BINARYBUILDER_FOO=0` make flag
 # It will also generate a `FOO_BB_TRIPLET=$(2)` make flag.
 define make_flags
-USE_BINARYBUILDER=$(if $(filter src,$(2)),0,1) $(call makevar,$(1))_BB_TRIPLET=$(if $(filter src,$(2)),,$(2)) LLVM_ASSERTIONS=$(if $(filter assert,$(3)),1,0) DEPS_GIT=0
+USE_BINARYBUILDER=$(if $(filter src,$(2)),0,1) $(if $(filter src,$(2)),FC_VERSION=7.0.0,) $(call makevar,$(1))_BB_TRIPLET=$(if $(filter src,$(2)),,$(2)) LLVM_ASSERTIONS=$(if $(filter assert,$(3)),1,0) DEPS_GIT=0
 endef
 
 # checksum_bb_dep takes in (name, triplet), and generates a `checksum-$(1)-$(2)` target.
@@ -47,7 +47,7 @@ endef
 # if $(3) is "assert", we set BINARYBUILDER_LLVM_ASSERTS=1
 define checksum_dep
 checksum-$(1)-$(2)-$(3):
-	-$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" $(call make_flags,$(1),$(2),$(3)) checksum-$(1)
+	-+$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" $(call make_flags,$(1),$(2),$(3)) checksum-$(1)
 .PHONY: checksum-$(1)-$(2)-$(3)
 
 # Add this guy to his project target
@@ -79,25 +79,27 @@ $(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,llvm,$(triplet),a
 
 # External stdlibs
 checksum-stdlibs:
-	-$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/stdlib" checksumall
+	-+$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/stdlib" checksumall
 all: checksum-stdlibs
 .PHONY: checksum-stdlibs
 
 # doc unicode data
 checksum-doc-unicodedata:
-	-$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/doc" checksum-unicodedata
+	-+$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/doc" checksum-unicodedata
 all: checksum-doc-unicodedata
 .PHONY: checksum-doc-unicodedata
 
 # Special LLVM source hashes for optional targets
 checksum-llvm-special-src:
-	-$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" USE_BINARYBUILDER_LLVM=0 DEPS_GIT=0 BUILD_LLDB=1 BUILD_LLVM_CLANG=1 BUILD_CUSTOM_LIBCXX=1 USECLANG=1 checksum-llvm
+	-+$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" USE_BINARYBUILDER_LLVM=0 DEPS_GIT=0 BUILD_LLDB=1 BUILD_LLVM_CLANG=1 BUILD_CUSTOM_LIBCXX=1 USECLANG=1 checksum-llvm
 all: checksum-llvm-special-src
 .PHONY: checksum-llvm-special-src
 
 # merge substring project names to avoid races
 pack-checksum-llvm-tools: | pack-checksum-llvm
+pack-checksum-llvm: | checksum-llvm-tools
 pack-checksum-csl: | pack-checksum-compilersupportlibraries
+pack-checksum-compilersupportlibraries: | checksum-csl
 
 # define how to pack parallel checksums into a single file format
 pack-checksum-%: FORCE

@@ -11,8 +11,8 @@ const LIBPATH_list = String[]
 export libopenlibm
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libopenlibm_handle = C_NULL
 libopenlibm_path = ""
@@ -26,10 +26,11 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libopenlibm_handle = dlopen(libopenlibm)
     global libopenlibm_path = dlpath(libopenlibm_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    LIBPATH[] = dirname(libopenlibm_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

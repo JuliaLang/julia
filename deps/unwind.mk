@@ -24,7 +24,11 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-static-arm.patch-applied: $(SRCCAC
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-static-arm.patch
 	echo 1 > $@
 
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-static-arm.patch-applied
+$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-cfa-rsp.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-static-arm.patch-applied
+	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u < $(SRCDIR)/patches/libunwind-cfa-rsp.patch
+	echo 1 > $@
+
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-cfa-rsp.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests
@@ -62,56 +66,66 @@ fastcheck-unwind: #none
 check-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-checked
 
 
-## OS X Unwind ##
+## LLVM libunwind ##
 
-OSXUNWIND_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="$(CFLAGS) -ggdb3 -O0" CXXFLAGS="$(CXXFLAGS) -ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="$(LDFLAGS) -Wl,-macosx_version_min,10.7"
+LLVMUNWIND_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=MinSizeRel -DLIBUNWIND_ENABLE_PEDANTIC=OFF -DLLVM_CONFIG_PATH=$(build_depsbindir)/llvm-config
 
-$(SRCCACHE)/libosxunwind-$(OSXUNWIND_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/libosxunwind/archive/v$(OSXUNWIND_VER).tar.gz
+$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz: | $(SRCCACHE)
+	$(JLDOWNLOAD) $@ https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVMUNWIND_VER)/libunwind-$(LLVMUNWIND_VER).src.tar.xz
 
-$(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/source-extracted: $(SRCCACHE)/libosxunwind-$(OSXUNWIND_VER).tar.gz
+$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/source-extracted: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz
 	$(JLCHECKSUM) $<
-	mkdir -p $(BUILDDIR)
-	cd $(BUILDDIR) && $(TAR) xfz $<
+	cd $(dir $<) && $(TAR) xf $<
+	mv $(SRCCACHE)/libunwind-$(LLVMUNWIND_VER).src $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)
 	echo 1 > $@
 
-checksum-libosxunwind: $(SRCCACHE)/libosxunwind-$(OSXUNWIND_VER).tar.gz
-	$(JLCHECKSUM) $<
-
-$(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/source-extracted
-	$(MAKE) -C $(dir $<) $(OSXUNWIND_FLAGS)
+$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-prologue-epilogue.patch-applied: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/source-extracted
+	cd $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-prologue-epilogue.patch
 	echo 1 > $@
 
-$(build_prefix)/manifest/osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled | $(build_libdir) $(build_shlibdir) $(build_includedir) $(build_prefix)/manifest
-	cp $(dir $<)/libosxunwind.a $(build_libdir)/libosxunwind.a
-	cp $(dir $<)/libosxunwind.$(SHLIB_EXT) $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
-	cp -R $(dir $<)/include/* $(build_includedir)
-	$(INSTALL_NAME_CMD)libosxunwind.$(SHLIB_EXT) $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
-	echo $(OSXUNWIND_VER) > $(build_prefix)/manifest/osxunwind
+$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-force-dwarf.patch-applied: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-prologue-epilogue.patch-applied
+	cd $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-force-dwarf.patch
+	echo 1 > $@
 
-clean-osxunwind:
-	-rm $(build_prefix)/manifest/osxunwind $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled
-	-rm -r $(build_libdir)/libosxunwind.a $(build_shlibdir)/libosxunwind.$(SHLIB_EXT) \
-		$(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
-	-$(MAKE) -C $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER) clean $(OSXUNWIND_FLAGS)
+checksum-llvmunwind: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz
+	$(JLCHECKSUM) $<
 
-distclean-osxunwind:
-	-rm -rf $(SRCCACHE)/libosxunwind-$(OSXUNWIND_VER).tar.gz \
-		$(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/source-extracted $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-force-dwarf.patch-applied
+	mkdir -p $(dir $@)
+	cd $(dir $@) && \
+	$(CMAKE) $(dir $<) $(LLVMUNWIND_OPTS)
+	echo 1 > $@
 
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled: $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured
+	$(MAKE) -C $(dir $<)
+	echo 1 > $@
 
-get-osxunwind: $(SRCCACHE)/libosxunwind-$(OSXUNWIND_VER).tar.gz
-extract-osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/source-extracted
-configure-osxunwind: extract-osxunwind
-compile-osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled
-fastcheck-osxunwind: check-osxunwind
-check-osxunwind: compile-osxunwind
-install-osxunwind: $(build_prefix)/manifest/osxunwind
+$(eval $(call staged-install, \
+	llvmunwind,llvmunwind-$(LLVMUNWIND_VER), \
+	MAKE_INSTALL,,, \
+	cp -fR $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/include/* $(build_includedir)))
+
+clean-llvmunwind:
+	-rm $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled
+	-rm -r $(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
+	-$(MAKE) -C $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER) clean
+
+distclean-llvmunwind:
+	-rm -rf $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz \
+		$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) \
+		$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)
+
+get-llvmunwind: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz
+extract-llvmunwind: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/source-extracted
+configure-llvmunwind: $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured
+compile-llvmunwind: $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled
+fastcheck-llvmunwind: check-llvmunwind
+check-llvmunwind: # no test/check provided by Makefile
 
 else # USE_BINARYBUILDER_LIBUNWIND
 
 $(eval $(call bb-install,unwind,UNWIND,false))
 
-$(eval $(call bb-install,osxunwind,OSXUNWIND,false))
+$(eval $(call bb-install,llvmunwind,LLVMUNWIND,false))
 
 endif

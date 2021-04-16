@@ -358,6 +358,7 @@ function pipe_reader end
 function pipe_writer end
 
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
+write(to::IO, from::AbstractPipe) = write(to, pipe_reader(from))
 unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)::Union{Int,UInt}
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
 flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
@@ -1022,6 +1023,8 @@ eltype(::Type{<:EachLine}) = String
 
 IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
+isdone(itr::EachLine, state...) = eof(itr.stream)
+
 struct ReadEachIterator{T, IOT <: IO}
     stream::IOT
 end
@@ -1055,6 +1058,8 @@ iterate(itr::ReadEachIterator{T}, state=nothing) where T =
 eltype(::Type{ReadEachIterator{T}}) where T = T
 
 IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
+
+isdone(itr::ReadEachIterator, state...) = eof(itr.stream)
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
@@ -1173,8 +1178,13 @@ julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 julia> countlines(io)
 1
 
+julia> eof(io) # counting lines moves the file pointer
+true
+
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
 julia> countlines(io, eol = '.')
-0
+1
 ```
 """
 function countlines(io::IO; eol::AbstractChar='\n')

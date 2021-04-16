@@ -95,6 +95,7 @@ precompile_test_harness(false) do dir
               const t17809s = Any[
                     Tuple{
                         Type{Ptr{MyType{i}}},
+                        Ptr{Type{MyType{i}}},
                         Array{Ptr{MyType{MyType{:sym}()}}(0), 0},
                         Val{Complex{Int}(1, 2)},
                         Val{3},
@@ -165,9 +166,8 @@ precompile_test_harness(false) do dir
 
               let some_method = which(Base.include, (Module, String,))
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
-                  global const some_linfo =
-                      ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                          some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
+                  global const some_linfo = Core.Compiler.specialize_method(some_method,
+                      Tuple{typeof(Base.include), Module, String}, Core.svec())
               end
 
               g() = override(1.0)
@@ -314,7 +314,7 @@ precompile_test_harness(false) do dir
                  :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils,
                  :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :Pkg, :Printf,
-                 :Profile, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
+                 :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
                  :SparseArrays, :Statistics, :SuiteSparse, :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),
@@ -341,15 +341,14 @@ precompile_test_harness(false) do dir
         @test all(i -> Foo.t17809s[i + 1] ===
             Tuple{
                 Type{Ptr{Foo.MyType{i}}},
+                Ptr{Type{Foo.MyType{i}}},
                 Array{Ptr{Foo.MyType{Foo.MyType{:sym}()}}(0), 0},
                 Val{Complex{Int}(1, 2)},
                 Val{3},
                 Val{nothing}},
             0:25)
         some_method = which(Base.include, (Module, String,))
-        some_linfo =
-                ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
-                    some_method, Tuple{typeof(Base.include), Module, String}, Core.svec(), typemax(UInt))
+        some_linfo = Core.Compiler.specialize_method(some_method, Tuple{typeof(Base.include), Module, String}, Core.svec())
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
         ft = Base.datatype_fieldtypes

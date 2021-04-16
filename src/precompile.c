@@ -353,9 +353,9 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
         jl_svec_t *specializations = def->func.method->specializations;
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
-            jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
-            if (mi != NULL)
-                precompile_enq_specialization_(mi, closure);
+            jl_value_t *mi = jl_svecref(specializations, i);
+            if (mi != jl_nothing)
+                precompile_enq_specialization_((jl_method_instance_t*)mi, closure);
         }
     }
     if (m->ccallable)

@@ -136,7 +136,6 @@ julia> x'x
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
 
 """
-    A'ᵀ
     transpose(A)
 
 Lazy transpose. Mutating the returned object should appropriately mutate `A`. Often,
@@ -145,9 +144,6 @@ that this operation is recursive.
 
 This operation is intended for linear algebra usage - for general data manipulation see
 [`permutedims`](@ref Base.permutedims), which is non-recursive.
-
-!!! compat "Julia 1.6"
-    The postfix operator `'ᵀ` requires Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -160,14 +156,6 @@ julia> transpose(A)
 2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3+2im  8+7im
  9+2im  4+6im
-
-julia> x = [3, 4im]
-2-element Vector{Complex{Int64}}:
- 3 + 0im
- 0 + 4im
-
-julia> x'ᵀx
--7 + 0im
 ```
 """
 transpose(A::AbstractVecOrMat) = Transpose(A)
@@ -184,12 +172,14 @@ function Base.showarg(io::IO, v::Adjoint, toplevel)
     Base.showarg(io, parent(v), false)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
+    return nothing
 end
 function Base.showarg(io::IO, v::Transpose, toplevel)
     print(io, "transpose(")
     Base.showarg(io, parent(v), false)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
+    return nothing
 end
 
 # some aliases for internal convenience use
@@ -250,6 +240,20 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec) = parent(v)
 vec(v::AdjointAbsVec{<:Real}) = parent(v)
+
+Base.reshape(v::TransposeAbsVec{<:Number}, ::Val{1}) = parent(v)
+Base.reshape(v::AdjointAbsVec{<:Real}, ::Val{1}) = parent(v)
+
+# these make eachrow(A') produce simpler views
+@inline Base.unsafe_view(A::Transpose{<:Number, <:AbstractMatrix}, i::Integer, j::AbstractArray) =
+    Base.unsafe_view(parent(A), j, i)
+@inline Base.unsafe_view(A::Transpose{<:Number, <:AbstractMatrix}, i::AbstractArray, j::Integer) =
+    Base.unsafe_view(parent(A), j, i)
+
+@inline Base.unsafe_view(A::Adjoint{<:Real, <:AbstractMatrix}, i::Integer, j::AbstractArray) =
+    Base.unsafe_view(parent(A), j, i)
+@inline Base.unsafe_view(A::Adjoint{<:Real, <:AbstractMatrix}, i::AbstractArray, j::Integer) =
+    Base.unsafe_view(parent(A), j, i)
 
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors

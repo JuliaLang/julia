@@ -190,6 +190,13 @@ LLVM_CPPFLAGS += -flto
 LLVM_LDFLAGS += -flto
 endif # LLVM_LTO
 
+ifeq ($(USE_LLVM_SHLIB),1)
+ifeq ($(USECLANG),0)
+# https://bugs.llvm.org/show_bug.cgi?id=48221
+LLVM_CXXFLAGS += -fno-gnu-unique
+endif
+endif
+
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
 endif
@@ -284,7 +291,7 @@ endif
 # These libraries require unwind.h from the libunwind dependency
 ifeq ($(USE_SYSTEM_LIBUNWIND),0)
 ifeq ($(OS),Darwin)
-BUILT_UNWIND := $(build_prefix)/manifest/osxunwind
+BUILT_UNWIND := $(build_prefix)/manifest/llvmunwind
 else
 BUILT_UNWIND := $(build_prefix)/manifest/unwind
 endif # Darwin
@@ -441,6 +448,15 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
+define LLVM_PROJ_PATCH
+$$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
+	cd $$(LLVM_SRC_DIR) && patch -p2 < $$(SRCDIR)/patches/$1.patch
+	echo 1 > $$@
+# declare that applying any patch must re-run the compile step
+$$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
+LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
+endef
+
 ifeq ($(LLVM_VER_SHORT),8.0)
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
 $(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
@@ -547,6 +563,11 @@ $(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLV
 $(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps))
 $(eval $(call LLVM_PATCH,llvm-11-D94980-CTR-half))
 $(eval $(call LLVM_PATCH,llvm-11-D94058-sext-atomic-ops)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D96283-dagcombine-half)) # remove for LLVM 12
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-AArch64-FastIsel-bug))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97435-AArch64-movaddrreg))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97571-AArch64-loh)) # remove for LLVM 13
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
 endif # LLVM_VER 11.0
 
 
@@ -641,5 +662,7 @@ endif
 $(eval $(call bb-install,llvm,LLVM,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
+
+install-clang install-llvm-tools: install-llvm
 
 endif # USE_BINARYBUILDER_LLVM

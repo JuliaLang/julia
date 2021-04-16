@@ -60,13 +60,13 @@ end
 function default_metafmt(level::LogLevel, _module, group, id, file, line)
     @nospecialize
     color = default_logcolor(level)
-    prefix = (level == Warn ? "Warning" : string(level))*':'
-    suffix = ""
+    prefix = string(level == Warn ? "Warning" : string(level), ':')
+    suffix::String = ""
     Info <= level < Warn && return color, prefix, suffix
     _module !== nothing && (suffix *= "$(_module)")
     if file !== nothing
         _module !== nothing && (suffix *= " ")
-        suffix *= Base.contractuser(file)
+        suffix *= Base.contractuser(file)::String
         if line !== nothing
             suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
         end
@@ -101,7 +101,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     @nospecialize
     hasmaxlog = haskey(kwargs, :maxlog) ? 1 : 0
     maxlog = get(kwargs, :maxlog, nothing)
-    if maxlog isa Integer
+    if maxlog isa Core.BuiltinInts
         remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
