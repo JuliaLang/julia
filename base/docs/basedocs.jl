@@ -603,9 +603,9 @@ the last expression in the function body.
 kw"function"
 
 """
-    ->
+    x -> y
 
-`->` is used to define anonymous functions:
+Create an anonymous function mapping argument(s) `x` to the function body `y`.
 
 ```julia
 x -> x^2 + 2x - 1
