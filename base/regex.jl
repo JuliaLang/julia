@@ -4,13 +4,13 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX | PCRE.UCP
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.MATCH_INVALID_UTF | PCRE.ALT_BSUX | PCRE.UCP
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 """
-    An abstract type representing any sort of pattern matching expression (typically a regular
-    expression).
-    `AbstractPattern` objects can be used to match strings with [`match`](@ref).
+An abstract type representing any sort of pattern matching expression
+(typically a regular expression). `AbstractPattern` objects can be used to
+match strings with [`match`](@ref).
 """
 abstract type AbstractPattern end
 
@@ -23,6 +23,9 @@ with [`match`](@ref).
 `Regex` objects can be created using the [`@r_str`](@ref) string macro. The
 `Regex(pattern[, flags])` constructor is usually used if the `pattern` string needs
 to be interpolated. See the documentation of the string macro for details on flags.
+
+!!! note
+    To escape interpolated variables use `\\Q` and `\\E` (e.g. `Regex("\\\\Q\$x\\\\E")`)
 """
 mutable struct Regex <: AbstractPattern
     pattern::String
@@ -137,8 +140,8 @@ function show(io::IO, re::Regex)
 end
 
 """
-   `AbstractMatch` objects are used to represent information about matches found in a string
-   using an `AbstractPattern`.
+`AbstractMatch` objects are used to represent information about matches found
+in a string using an `AbstractPattern`.
 """
 abstract type AbstractMatch end
 
@@ -525,6 +528,8 @@ replace_err(repl) = error("Bad replacement string: $repl")
 
 function _write_capture(io, re::RegexAndMatchData, group)
     len = PCRE.substring_length_bynumber(re.match_data, group)
+    # in the case of an optional group that doesn't match, len == 0
+    len == 0 && return
     ensureroom(io, len+1)
     PCRE.substring_copy_bynumber(re.match_data, group,
         pointer(io.data, io.ptr), len+1)

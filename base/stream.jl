@@ -1120,7 +1120,7 @@ _fd(x::Union{OS_HANDLE, RawFD}) = x
 
 function _fd(x::Union{LibuvStream, LibuvServer})
     fd = Ref{OS_HANDLE}(INVALID_OS_HANDLE)
-    if x.status != StatusUninit && x.status != StatusClosed
+    if x.status != StatusUninit && x.status != StatusClosed && x.handle != C_NULL
         err = ccall(:uv_fileno, Int32, (Ptr{Cvoid}, Ptr{OS_HANDLE}), x.handle, fd)
         # handle errors by returning INVALID_OS_HANDLE
     end

@@ -210,6 +210,18 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
 end
 
+function finish!(interp::AbstractInterpreter, caller::InferenceResult)
+    # If we didn't transform the src for caching, we may have to transform
+    # it anyway for users like typeinf_ext. Do that here.
+    opt = caller.src
+    if may_optimize(interp) && opt isa OptimizationState
+        if opt.ir !== nothing
+            caller.src = ir_to_codeinf!(opt)
+        end
+    end
+    return caller.src
+end
+
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
@@ -235,30 +247,26 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
               frames[i].cached )
         for i in 1:length(frames) ]
     empty!(frames)
-    if may_optimize(interp)
-        for (caller, _, _) in results
-            opt = caller.src
-            if opt isa OptimizationState
-                result_type = caller.result
-                @assert !(result_type isa LimitedAccuracy)
-                optimize(interp, opt, OptimizationParams(interp), result_type)
-                finish(opt.src, interp)
-                # finish updating the result struct
-                validate_code_in_debug_mode(opt.linfo, opt.src, "optimized")
-                if opt.const_api
-                    if result_type isa Const
-                        caller.src = result_type
-                    else
-                        @assert isconstType(result_type)
-                        caller.src = Const(result_type.parameters[1])
-                    end
-                elseif opt.src.inferred
-                    caller.src = opt.src::CodeInfo # stash a copy of the code (for inlining)
+    for (caller, _, _) in results
+        opt = caller.src
+        if may_optimize(interp) && opt isa OptimizationState
+            result_type = caller.result
+            @assert !(result_type isa LimitedAccuracy)
+            optimize(interp, opt, OptimizationParams(interp), result_type)
+            if opt.const_api
+                # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
+                # we're doing it is so that code_llvm can return the code
+                # for the `return ...::Const` (which never runs anyway). We should do this
+                # as a post processing step instead.
+                ir_to_codeinf!(opt)
+                if result_type isa Const
+                    caller.src = result_type
                 else
-                    caller.src = nothing
+                    @assert isconstType(result_type)
+                    caller.src = Const(result_type.parameters[1])
                 end
-                caller.valid_worlds = opt.inlining.et.valid_worlds[]
             end
+            caller.valid_worlds = opt.inlining.et.valid_worlds[]
         end
     end
     for (caller, edges, cached) in results
@@ -271,6 +279,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         if cached
             cache_result!(interp, caller)
         end
+        finish!(interp, caller)
     end
     return true
 end
@@ -289,11 +298,17 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::An
         if isa(result_type, Const)
             rettype_const = result_type.val
             const_flags = 0x2
+        elseif isa(result_type, PartialOpaque)
+            rettype_const = result_type
+            const_flags = 0x2
         elseif isconstType(result_type)
             rettype_const = result_type.parameters[1]
             const_flags = 0x2
         elseif isa(result_type, PartialStruct)
             rettype_const = result_type.fields
+            const_flags = 0x2
+        elseif isa(result_type, InterConditional)
+            rettype_const = result_type
             const_flags = 0x2
         else
             rettype_const = nothing
@@ -343,7 +358,12 @@ function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodIn
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState
-        inferred_result = inferred_result.src
+        opt = inferred_result
+        if isa(opt.src, CodeInfo)
+            inferred_result = ir_to_codeinf!(opt)
+        else
+            inferred_result = opt.src
+        end
     end
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
@@ -461,13 +481,6 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
-    nothing
-end
-
-function finish(src::CodeInfo, interp::AbstractInterpreter)
-    # convert all type information into the form consumed by the cache for inlining and code-generation
-    widen_all_consts!(src)
-    src.inferred = true
     nothing
 end
 
@@ -712,8 +725,8 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
         child = parent
-        parent = child.parent
         child === ancestor && break
+        parent = child.parent::InferenceState
     end
 end
 
@@ -770,14 +783,20 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
         update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
+        rettype = code.rettype
         if isdefined(code, :rettype_const)
-            if isa(code.rettype_const, Vector{Any}) && !(Vector{Any} <: code.rettype)
-                return PartialStruct(code.rettype, code.rettype_const), mi
+            rettype_const = code.rettype_const
+            if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+                return PartialStruct(rettype, rettype_const), mi
+            elseif rettype <: Core.OpaqueClosure && isa(rettype_const, PartialOpaque)
+                return rettype_const, mi
+            elseif isa(rettype_const, InterConditional)
+                return rettype_const, mi
             else
-                return Const(code.rettype_const), mi
+                return Const(rettype_const), mi
             end
         else
-            return code.rettype, mi
+            return rettype, mi
         end
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
@@ -827,9 +846,9 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     frame === nothing && return (nothing, Any)
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
-        opt = OptimizationState(frame, opt_params, interp)
-        optimize(interp, opt, opt_params, ignorelimited(result.result))
-        opt.src.inferred = true
+        result.src = OptimizationState(frame, opt_params, interp)
+        optimize(interp, result.src, opt_params, ignorelimited(result.result))
+        frame.src = finish!(interp, result)
     end
     ccall(:jl_typeinf_end, Cvoid, ())
     frame.inferred || return (nothing, Any)
@@ -959,7 +978,8 @@ function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospeciali
             rt = widenconst(rt)
         end
     else
-        for match in _methods(f, t, -1, get_world_counter(interp))
+        for match in _methods(f, t, -1, get_world_counter(interp))::Vector
+            match = match::Core.MethodMatch
             ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
             rt = tmerge(rt, ty)

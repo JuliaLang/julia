@@ -64,10 +64,23 @@ Two-dimensional dense array with elements of type `T`, often used to represent
 a mathematical matrix. Alias for [`Array{T,2}`](@ref).
 """
 const Matrix{T} = Array{T,2}
+
 """
     VecOrMat{T}
 
-Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref).
+Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref) which allows functions to accept either a Matrix or a Vector.
+
+# Examples
+```jldoctest
+julia> Vector{Float64} <: VecOrMat{Float64}
+true
+
+julia> Matrix{Float64} <: VecOrMat{Float64}
+true
+
+julia> Array{Float64, 3} <: VecOrMat{Float64}
+false
+```
 """
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
@@ -530,6 +543,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 ## Conversions ##
 
 convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
+convert(::Type{Union{}}, a::AbstractArray) = throw(MethodError(convert, (Union{}, a)))
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -1733,7 +1747,7 @@ function vcat(arrays::Vector{T}...) where T
     return arr
 end
 
-_cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
+_cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
 ## find ##
 

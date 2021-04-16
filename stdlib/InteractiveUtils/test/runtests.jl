@@ -60,7 +60,7 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = "ARRAY{FLOAT64, N}"
+tag = "ARRAY"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
@@ -253,6 +253,10 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 @test (@which Int[1; 2]).name === :typed_vcat
 @test (@which [1 2;3 4]).name === :hvcat
 @test (@which Int[1 2;3 4]).name === :typed_hvcat
+# issue #39426
+let x..y = 0
+    @test (@which 1..2).name === :..
+end
 
 # issue #13464
 try

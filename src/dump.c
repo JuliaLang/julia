@@ -196,7 +196,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     if (!internal && jl_unwrap_unionall(dt->name->wrapper) == (jl_value_t*)dt) {
         tag = 6; // external primary type
     }
-    else if (!dt->isconcretetype) {
+    else if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars) {
         tag = 0; // normal struct
     }
     else if (internal) {
@@ -212,8 +212,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         tag = 11; // external, but definitely new (still needs caching, but not full unique-ing)
     }
     else {
-        // this'll need unique-ing later
-        // flag this in the backref table as special
+        // this is eligible for (and possibly requires) unique-ing later,
+        // so flag this in the backref table as special
         uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, dt);
         assert(*bp != (uintptr_t)HT_NOTFOUND);
         *bp |= 1;
@@ -380,11 +380,11 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint8(s->s, m->infer);
 }
 
-static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
+static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     if (v == NULL) {
         write_uint8(s->s, TAG_NULL);
-        return;
+        return 1;
     }
 
     void *tag = ptrhash_get(&ser_tag, v);
@@ -393,28 +393,29 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         if (t8 <= LAST_TAG)
             write_uint8(s->s, 0);
         write_uint8(s->s, t8);
-        return;
+        return 1;
     }
+
     if (jl_is_symbol(v)) {
         void *idx = ptrhash_get(&common_symbol_tag, v);
         if (idx != HT_NOTFOUND) {
             write_uint8(s->s, TAG_COMMONSYM);
             write_uint8(s->s, (uint8_t)(size_t)idx);
-            return;
+            return 1;
         }
     }
     else if (v == (jl_value_t*)jl_core_module) {
         write_uint8(s->s, TAG_CORE);
-        return;
+        return 1;
     }
     else if (v == (jl_value_t*)jl_base_module) {
         write_uint8(s->s, TAG_BASE);
-        return;
+        return 1;
     }
 
     if (jl_typeis(v, jl_string_type) && jl_string_len(v) == 0) {
         jl_serialize_value(s, jl_an_empty_string);
-        return;
+        return 1;
     }
     else if (!jl_is_uint8(v)) {
         void **bp = ptrhash_bp(&backref_table, v);
@@ -428,7 +429,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 write_uint8(s->s, TAG_BACKREF);
                 write_int32(s->s, pos);
             }
-            return;
+            return 1;
         }
         intptr_t pos = backref_table_numel++;
         if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
@@ -451,6 +452,62 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         pos <<= 1;
         ptrhash_put(&backref_table, v, (char*)HT_NOTFOUND + pos + 1);
+    }
+
+    return 0;
+}
+
+static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_t *codeinst, int skip_partial_opaque) JL_GC_DISABLED
+{
+    if (jl_serialize_generic(s, (jl_value_t*)codeinst)) {
+        return;
+    }
+
+    int validate = 0;
+    if (codeinst->max_world == ~(size_t)0)
+        validate = 1; // can check on deserialize if this cache entry is still valid
+    int flags = validate << 0;
+    if (codeinst->invoke == jl_fptr_const_return)
+        flags |= 1 << 2;
+    if (codeinst->precompile)
+        flags |= 1 << 3;
+
+    // CodeInstances with PartialOpaque return type are currently not allowed
+    // to be cached. We skip them in serialization here, forcing them to
+    // be re-infered on reload.
+    int write_ret_type = validate || codeinst->min_world == 0;
+    if (write_ret_type && codeinst->rettype_const &&
+            jl_typeis(codeinst->rettype_const, jl_partial_opaque_type)) {
+        if (skip_partial_opaque) {
+            jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
+            return;
+        }
+        else {
+            jl_error("Cannot serialize CodeInstance with PartialOpaque rettype");
+        }
+    }
+
+    write_uint8(s->s, TAG_CODE_INSTANCE);
+    write_uint8(s->s, flags);
+    jl_serialize_value(s, (jl_value_t*)codeinst->def);
+    if (write_ret_type) {
+        jl_serialize_value(s, codeinst->inferred);
+        jl_serialize_value(s, codeinst->rettype_const);
+        jl_serialize_value(s, codeinst->rettype);
+    }
+    else {
+        // skip storing useless data
+        jl_serialize_value(s, NULL);
+        jl_serialize_value(s, NULL);
+        jl_serialize_value(s, jl_any_type);
+    }
+    jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
+}
+
+static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
+{
+    if (jl_serialize_generic(s, v)) {
+        return;
     }
 
     size_t i;
@@ -603,10 +660,14 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
         jl_serialize_value(s, (jl_value_t*)m->generator);
         jl_serialize_value(s, (jl_value_t*)m->invokes);
+        jl_serialize_value(s, (jl_value_t*)m->recursion_relation);
     }
     else if (jl_is_method_instance(v)) {
-        write_uint8(s->s, TAG_METHOD_INSTANCE);
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
+        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
+            jl_error("unimplemented: serialization of MethodInstances for OpaqueClosure");
+        }
+        write_uint8(s->s, TAG_METHOD_INSTANCE);
         int internal = 0;
         if (!jl_is_method(mi->def.method))
             internal = 1;
@@ -645,33 +706,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         jl_serialize_value(s, (jl_value_t*)backedges);
         jl_serialize_value(s, (jl_value_t*)NULL); //callbacks
-        jl_serialize_value(s, (jl_value_t*)mi->cache);
+        jl_serialize_code_instance(s, mi->cache, 1);
     }
     else if (jl_is_code_instance(v)) {
-        write_uint8(s->s, TAG_CODE_INSTANCE);
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)v;
-        int validate = 0;
-        if (codeinst->max_world == ~(size_t)0)
-            validate = 1; // can check on deserialize if this cache entry is still valid
-        int flags = validate << 0;
-        if (codeinst->invoke == jl_fptr_const_return)
-            flags |= 1 << 2;
-        if (codeinst->precompile)
-            flags |= 1 << 3;
-        write_uint8(s->s, flags);
-        jl_serialize_value(s, (jl_value_t*)codeinst->def);
-        if (validate || codeinst->min_world == 0) {
-            jl_serialize_value(s, codeinst->inferred);
-            jl_serialize_value(s, codeinst->rettype_const);
-            jl_serialize_value(s, codeinst->rettype);
-        }
-        else {
-            // skip storing useless data
-            jl_serialize_value(s, NULL);
-            jl_serialize_value(s, NULL);
-            jl_serialize_value(s, jl_any_type);
-        }
-        jl_serialize_value(s, codeinst->next);
+        jl_serialize_code_instance(s, (jl_code_instance_t*)v, 0);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -872,7 +910,7 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
             jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-            if (callee != NULL)
+            if ((jl_value_t*)callee != jl_nothing)
                 collect_backedges(callee);
         }
     }
@@ -1466,6 +1504,9 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         jl_gc_wb(m, m->generator);
     m->invokes = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
     jl_gc_wb(m, m->invokes);
+    m->recursion_relation = jl_deserialize_value(s, (jl_value_t**)&m->recursion_relation);
+    if (m->recursion_relation)
+        jl_gc_wb(m, m->recursion_relation);
     JL_MUTEX_INIT(&m->writelock);
     return (jl_value_t*)m;
 }
@@ -2422,6 +2463,7 @@ static jl_method_t *jl_lookup_method(jl_methtable_t *mt, jl_datatype_t *sig, siz
 
 static jl_method_t *jl_recache_method(jl_method_t *m)
 {
+    assert(!m->is_for_opaque_closure);
     jl_datatype_t *sig = (jl_datatype_t*)m->sig;
     jl_methtable_t *mt = jl_method_table_for((jl_value_t*)m->sig);
     assert((jl_value_t*)mt != jl_nothing);

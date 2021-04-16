@@ -127,7 +127,8 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Sy
         print(io, "Body")
         warntype_type_printer(io, rettype, true)
         println(io)
-        Base.IRShow.show_ir(lambda_io, src, lineprinter(src), warntype_type_printer)
+        irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
+        Base.IRShow.show_ir(lambda_io, src, irshow_config)
         println(io)
     end
     nothing
@@ -148,12 +149,8 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     end
     # get the MethodInstance for the method match
     world = typemax(UInt)
-    meth = which(f, t)
-    t = to_tuple_type(t)
-    tt = signature_type(f, t)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::Core.SimpleVector
-    meth = Base.func_for_method_checked(meth, ti, env)
-    linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, ti, env, world)
+    match = Base._which(signature_type(f, t), world)
+    linfo = Core.Compiler.specialize_method(match)
     # get the code for it
     if native
         str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo)

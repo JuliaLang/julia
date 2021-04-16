@@ -215,8 +215,8 @@ end
 function (+)(A::AbstractMatrix, J::UniformScaling)
     checksquare(A)
     B = copy_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
-    @inbounds for i in axes(A, 1)
-        B[i,i] += J
+    for i in intersect(axes(A,1), axes(A,2))
+        @inbounds B[i,i] += J
     end
     return B
 end
@@ -224,8 +224,8 @@ end
 function (-)(J::UniformScaling, A::AbstractMatrix)
     checksquare(A)
     B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, -A)
-    @inbounds for i in axes(A, 1)
-        B[i,i] += J
+    for i in intersect(axes(A,1), axes(A,2))
+        @inbounds B[i,i] += J
     end
     return B
 end
@@ -479,6 +479,9 @@ Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 ## Diagonal construction from UniformScaling
 Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
 Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
+
+dot(A::AbstractMatrix, J::UniformScaling) = dot(tr(A), J.λ)
+dot(J::UniformScaling, A::AbstractMatrix) = dot(J.λ, tr(A))
 
 dot(x::AbstractVector, J::UniformScaling, y::AbstractVector) = dot(x, J.λ, y)
 dot(x::AbstractVector, a::Number, y::AbstractVector) = sum(t -> dot(t[1], a, t[2]), zip(x, y))

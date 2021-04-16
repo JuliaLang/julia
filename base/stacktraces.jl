@@ -269,8 +269,9 @@ function show(io::IO, frame::StackFrame)
 end
 
 function Base.parentmodule(frame::StackFrame)
-    if frame.linfo isa MethodInstance
-        def = frame.linfo.def
+    linfo = frame.linfo
+    if linfo isa MethodInstance
+        def = linfo.def
         if def isa Module
             return def
         else

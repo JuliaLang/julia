@@ -239,6 +239,9 @@ setindex_shape_check(X::AbstractArray) =
 setindex_shape_check(X::AbstractArray, i::Integer) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
+setindex_shape_check(X::AbstractArray{<:Any, 0}, i::Integer...) =
+    (length(X) == prod(i) || throw_setindex_mismatch(X, i))
+
 setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
@@ -256,7 +259,7 @@ function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
 end
 
 setindex_shape_check(::Any...) =
-    throw(ArgumentError("indexed assignment with a single value to many locations is not supported; perhaps use broadcasting `.=` instead?"))
+    throw(ArgumentError("indexed assignment with a single value to possibly many locations is not supported; perhaps use broadcasting `.=` instead?"))
 
 # convert to a supported index type (array or Int)
 """

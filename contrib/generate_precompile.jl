@@ -17,32 +17,32 @@ DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
 # used by Revise.jl
-@assert precompile(Tuple{typeof(Base.parse_cache_header), String})
-@assert precompile(Base.read_dependency_src, (String, String))
+precompile(Tuple{typeof(Base.parse_cache_header), String})
+precompile(Base.read_dependency_src, (String, String))
 
 # used by Requires.jl
-@assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(push!), Vector{Function}, Function})
+precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+precompile(Tuple{typeof(push!), Vector{Function}, Function})
 
 # miscellaneous
-@assert precompile(Tuple{typeof(Base.require), Base.PkgId})
-@assert precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
-@assert precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
-@assert precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
-@assert precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
-@assert precompile(Tuple{typeof(Base.display_error), MethodError, Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}})
-@assert precompile(Tuple{typeof(Base.display_error), ErrorException})
-@assert precompile(Tuple{typeof(Base.display_error), BoundsError})
-@assert precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int64}}, Type{IOBuffer}})
-@assert precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
-@assert precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
+precompile(Tuple{typeof(Base.require), Base.PkgId})
+precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
+precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
+precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
+precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
+precompile(Tuple{typeof(Base.display_error), MethodError, Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}})
+precompile(Tuple{typeof(Base.display_error), ErrorException})
+precompile(Tuple{typeof(Base.display_error), BoundsError})
+precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int}}, Type{IOBuffer}})
+precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
+precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
     global hardcoded_precompile_statements
-    hardcoded_precompile_statements *= "@assert precompile(Tuple{typeof(show), $IO, $T})\n"
+    hardcoded_precompile_statements *= "precompile(Tuple{typeof(show), $IO, $T})\n"
 end
 
 repl_script = """
@@ -108,7 +108,7 @@ have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
 if have_repl
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+    precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
     """
 end
 
@@ -117,9 +117,9 @@ Distributed = get(Base.loaded_modules,
           nothing)
 if Distributed !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(Distributed.remotecall),Function,Int,Module,Vararg{Any, 100}})
-    @assert precompile(Tuple{typeof(Distributed.procs)})
-    @assert precompile(Tuple{typeof(Distributed.finalize_ref), Distributed.Future})
+    precompile(Tuple{typeof(Distributed.remotecall),Function,Int,Module,Vararg{Any, 100}})
+    precompile(Tuple{typeof(Distributed.procs)})
+    precompile(Tuple{typeof(Distributed.finalize_ref), Distributed.Future})
     """
 # This is disabled because it doesn't give much benefit
 # and the code in Distributed is poorly typed causing many invalidations
@@ -141,9 +141,9 @@ if Artifacts !== nothing
     precompile_script *= """
     using Artifacts, Base.BinaryPlatforms, Libdl
     artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
-    # cd(() -> (name = "c_simple"; @artifact_str(name)), dirname(artifacts_toml))
+    # cd(() -> (name = "HelloWorldC"; @artifact_str(name)), dirname(artifacts_toml))
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
-    platforms = [Artifacts.unpack_platform(e, "c_simple", artifacts_toml) for e in artifacts["c_simple"]]
+    platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
     dlopen("libjulia$(ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
@@ -164,9 +164,9 @@ FileWatching = get(Base.loaded_modules,
           nothing)
 if FileWatching !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
-    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
-    @assert precompile(Tuple{typeof(FileWatching._uv_hook_close), FileWatching.FileMonitor})
+    precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
+    precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+    precompile(Tuple{typeof(FileWatching._uv_hook_close), FileWatching.FileMonitor})
     """
 end
 
@@ -184,33 +184,33 @@ Test = get(Base.loaded_modules,
           nothing)
 if Test !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
-    @assert precompile(Tuple{typeof(Test.testset_beginend), Tuple{String, Expr}, Expr, LineNumberNode})
-    @assert precompile(Tuple{Type{Test.DefaultTestSet}, String})
-    @assert precompile(Tuple{Type{Test.DefaultTestSet}, AbstractString})
-    @assert precompile(Tuple{Core.kwftype(Type{Test.DefaultTestSet}), Any, Type{Test.DefaultTestSet}, AbstractString})
-    @assert precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
-    @assert precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
-    @assert precompile(Tuple{typeof(Test._inferred), Expr, Module})
-    @assert precompile(Tuple{typeof(Test.push_testset), Test.DefaultTestSet})
-    @assert precompile(Tuple{typeof(Test.get_alignment), Test.DefaultTestSet, Int})
-    @assert precompile(Tuple{typeof(Test.get_test_result), Any, Any})
-    @assert precompile(Tuple{typeof(Test.do_test_throws), Test.ExecutionResult, Any, Any})
-    @assert precompile(Tuple{typeof(Test.print_counts), Test.DefaultTestSet, Int, Int, Int, Int, Int, Int, Int})
-    @assert precompile(Tuple{typeof(Test._check_testset), Type, Expr})
-    @assert precompile(Tuple{typeof(Test.test_expr!), Any, Any})
-    @assert precompile(Tuple{typeof(Test.test_expr!), Any, Any, Vararg{Any, 100}})
-    @assert precompile(Tuple{typeof(Test.pop_testset)})
-    @assert precompile(Tuple{typeof(Test.match_logs), Function, Tuple{Symbol, Regex}})
-    @assert precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
-    @assert precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
-    @assert precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    @assert precompile(Tuple{typeof(Core.kwfunc(Base.CoreLogging.handle_message)), typeof((exception=nothing,)), typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    @assert precompile(Tuple{typeof(Test.detect_ambiguities), Any})
-    @assert precompile(Tuple{typeof(Test.collect_test_logs), Function})
-    @assert precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
-    @assert precompile(Tuple{typeof(Test.record), Test.DefaultTestSet, Union{Test.Error, Test.Fail}})
-    @assert precompile(Tuple{typeof(Test.filter_errors), Test.DefaultTestSet})
+    precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
+    precompile(Tuple{typeof(Test.testset_beginend), Tuple{String, Expr}, Expr, LineNumberNode})
+    precompile(Tuple{Type{Test.DefaultTestSet}, String})
+    precompile(Tuple{Type{Test.DefaultTestSet}, AbstractString})
+    precompile(Tuple{Core.kwftype(Type{Test.DefaultTestSet}), Any, Type{Test.DefaultTestSet}, AbstractString})
+    precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
+    precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
+    precompile(Tuple{typeof(Test._inferred), Expr, Module})
+    precompile(Tuple{typeof(Test.push_testset), Test.DefaultTestSet})
+    precompile(Tuple{typeof(Test.get_alignment), Test.DefaultTestSet, Int})
+    precompile(Tuple{typeof(Test.get_test_result), Any, Any})
+    precompile(Tuple{typeof(Test.do_test_throws), Test.ExecutionResult, Any, Any})
+    precompile(Tuple{typeof(Test.print_counts), Test.DefaultTestSet, Int, Int, Int, Int, Int, Int, Int})
+    precompile(Tuple{typeof(Test._check_testset), Type, Expr})
+    precompile(Tuple{typeof(Test.test_expr!), Any, Any})
+    precompile(Tuple{typeof(Test.test_expr!), Any, Any, Vararg{Any, 100}})
+    precompile(Tuple{typeof(Test.pop_testset)})
+    precompile(Tuple{typeof(Test.match_logs), Function, Tuple{Symbol, Regex}})
+    precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
+    precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
+    precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
+    precompile(Tuple{typeof(Core.kwfunc(Base.CoreLogging.handle_message)), typeof((exception=nothing,)), typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
+    precompile(Tuple{typeof(Test.detect_ambiguities), Any})
+    precompile(Tuple{typeof(Test.collect_test_logs), Function})
+    precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
+    precompile(Tuple{typeof(Test.record), Test.DefaultTestSet, Union{Test.Error, Test.Fail}})
+    precompile(Tuple{typeof(Test.filter_errors), Test.DefaultTestSet})
     """
 end
 
@@ -219,7 +219,7 @@ Profile = get(Base.loaded_modules,
           nothing)
 if Profile !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol})
     """
 end
 
@@ -292,14 +292,13 @@ function generate_precompile_statements()
                 Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
                 write(output_copy, l)
             end
-            close(output_copy)
-            close(ptm)
         catch ex
-            close(output_copy)
-            close(ptm)
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
                 rethrow() # ignore EIO on ptm after pts dies
             end
+        finally
+            close(output_copy)
+            close(ptm)
         end
         # wait for the definitive prompt before start writing to the TTY
         readuntil(output_copy, "julia>")
@@ -349,34 +348,51 @@ function generate_precompile_statements()
 
     # Execute the collected precompile statements
     n_succeeded = 0
-    include_time = @elapsed for statement in sort(collect(statements))
+    include_time = @elapsed for statement in sort!(collect(statements))
         # println(statement)
-        # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
-        # N with a large number seems to work around it.
-        ps = Meta.parse(statement)
-        if isexpr(ps, :call)
-            if isexpr(ps.args[end], :curly)
-                l = ps.args[end]
-                if length(l.args) == 2 && l.args[1] == :Vararg
-                    push!(l.args, 100)
+        # XXX: skip some that are broken. these are caused by issue #39902
+        occursin("Tuple{Artifacts.var\"#@artifact_str\", LineNumberNode, Module, Any, Any}", statement) && continue
+        occursin("Tuple{Base.Cartesian.var\"#@ncall\", LineNumberNode, Module, Int64, Any, Vararg{Any}}", statement) && continue
+        occursin("Tuple{Base.Cartesian.var\"#@ncall\", LineNumberNode, Module, Int32, Any, Vararg{Any}}", statement) && continue
+        occursin("Tuple{Base.Cartesian.var\"#@nloops\", LineNumberNode, Module, Any, Any, Any, Vararg{Any}}", statement) && continue
+        occursin("Tuple{Core.var\"#@doc\", LineNumberNode, Module, Vararg{Any}}", statement) && continue
+        # XXX: this is strange, as this isn't the correct representation of this
+        occursin("typeof(Core.IntrinsicFunction)", statement) && continue
+        # XXX: this is strange, as this method should not be getting compiled
+        occursin(", Core.Compiler.AbstractInterpreter, ", statement) && continue
+        try
+            ps = Meta.parse(statement)
+            isexpr(ps, :call) || continue
+            popfirst!(ps.args) # precompile(...)
+            ps.head = :tuple
+            l = ps.args[end]
+            if (isexpr(l, :tuple) || isexpr(l, :curly)) && length(l.args) > 0 # Tuple{...} or (...)
+                # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
+                # Replacing N with a large number works around it.
+                l = l.args[end]
+                if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] == :Vararg # Vararg{T}
+                    push!(l.args, 100) # form Vararg{T, 100} instead
                 end
             end
-        end
-        try
             # println(ps)
-            Core.eval(PrecompileStagingArea, ps)
+            ps = Core.eval(PrecompileStagingArea, ps)
+            # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
+            # Skipping them avoids the warning.
+            ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
+            ms isa Vector || continue
+            precompile(ps...)
             n_succeeded += 1
             print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
-        catch
+        catch ex
             # See #28808
-            @error "Failed to precompile $statement"
+            @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
         end
     end
     println()
     if have_repl
         # Seems like a reasonable number right now, adjust as needed
         # comment out if debugging script
-        @assert n_succeeded > 1200
+        n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
     end
 
     tot_time = time_ns() - start_time
