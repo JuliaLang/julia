@@ -1741,6 +1741,11 @@ else
     @info "SO_REUSEPORT is unsupported, skipping reuseport tests"
 end
 
+# add workers (if we do not have any) for the below tests
+if nprocs() == 1
+    addprocs_with_testenv(4; lazy=false)
+end
+
 # issue #27933
 a27933 = :_not_defined_27933
 @test remotecall_fetch(()->a27933, first(workers())) === a27933
