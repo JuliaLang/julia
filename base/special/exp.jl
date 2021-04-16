@@ -264,12 +264,17 @@ end
 @doc """
     exp(x)
 
-Compute the natural base exponential of `x`, in other words ``e^x``.
+Compute the natural base exponential of `x`, in other words ``ℯ^x``.
+
+See also [`exp2`](@ref), [`exp10`](@ref) and [`cis`](@ref).
 
 # Examples
 ```jldoctest
 julia> exp(1.0)
 2.718281828459045
+
+julia> exp(im * pi) == cis(pi)
+true
 ```
 """ exp(x::Real)
 
@@ -285,6 +290,12 @@ See also [`ldexp`](@ref), [`<<`](@ref).
 ```jldoctest
 julia> exp2(5)
 32.0
+
+julia> 2^5
+32
+
+julia> exp2(63) > typemax(Int)
+true
 ```
 """
 exp2(x)
@@ -298,6 +309,9 @@ Compute the base 10 exponential of `x`, in other words ``10^x``.
 ```jldoctest
 julia> exp10(2)
 100.0
+
+julia> 10^2
+100
 ```
 """
 exp10(x)
