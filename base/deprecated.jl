@@ -243,6 +243,9 @@ cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not re
 # BEGIN 1.7 deprecations
 
 # the plan is to eventually overload getproperty to access entries of the dict
-@deprecate getproperty(x::Pairs, s::Symbol) getfield(x, s)
+@noinline function getproperty(x::Pairs, s::Symbol)
+    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    return getfield(x, s)
+end
 
 # END 1.7 deprecations
