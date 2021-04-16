@@ -135,6 +135,7 @@ Base.collect(::Any)
 Base.collect(::Type, ::Any)
 Base.filter
 Base.filter!
+Base.mask!
 Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
