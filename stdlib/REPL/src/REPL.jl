@@ -1354,14 +1354,6 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     nothing
 end
 
-function start_repl_server(port::Int)
-    return listen(port) do server, status
-        client = accept(server)
-        run_repl(client)
-        nothing
-    end
-end
-
 print_exit_hint(repl::AbstractREPL, line) = print_exit_hint(outstream(repl), line)
 function print_exit_hint(io::IO, line)
     if lowercase(strip(line)) == "exit"
