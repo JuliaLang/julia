@@ -793,14 +793,7 @@ end
 
 # Issue #13905.
 let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
-    __source__ = LineNumberNode(@__LINE__() -  1, Symbol(@__FILE__))
-    err::LoadError
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    err = err.error::LoadError
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    err = err.error::UndefVarError
+    err::UndefVarError
     @test err.var == Symbol("@x")
  end
 

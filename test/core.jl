@@ -5646,11 +5646,9 @@ f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
 @test !f_isdefined_unionvar(1, 0)
 f_isdefined_splat(x...) = @isdefined x
 @test f_isdefined_splat(1, 2, 3)
-let err = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
+let e = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
     __source__ = LineNumberNode(@__LINE__() - 1, Symbol(@__FILE__))
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    e = err.error::MethodError
+    e::MethodError
     @test e.f === getfield(@__MODULE__, Symbol("@isdefined"))
     @test e.args === (__source__, @__MODULE__, :(:x))
 end

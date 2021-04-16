@@ -738,8 +738,7 @@ end
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
 catch ex
-    @test ex isa LoadError
-    @test ex.error isa ArgumentError
+    @test ex isa ArgumentError
 end
 
 @testset "@spawn interpolation" begin
