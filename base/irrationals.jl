@@ -19,7 +19,7 @@ for integers `n` will give a rational result when `n` is a perfect square), then
 abstract type AbstractIrrational <: Real end
 
 """
-    Irrational{sym} <: AbstractIrrational
+`Irrational{sym}` <: [`AbstractIrrational`](@ref)
 
 Number type representing an exact irrational value denoted by the
 symbol `sym`, such as [`π`](@ref pi), [`ℯ`](@ref) and [`γ`](@ref Base.MathConstants.eulergamma).

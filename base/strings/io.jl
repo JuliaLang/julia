@@ -57,9 +57,6 @@ end
 Print (using [`print`](@ref)) `xs` followed by a newline.
 If `io` is not supplied, prints to [`stdout`](@ref).
 
-See also [`@show`](@ref) to print variables names with values,
-and [`Printf.@printf`](@ref man-printf) to format numbers.
-
 # Examples
 ```jldoctest
 julia> println("Hello, world")
