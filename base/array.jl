@@ -2469,12 +2469,7 @@ function mask!(a::AbstractVector, m::AbstractVector{Bool})
         end
     end
     j > lastindex(a) && return a
-    if a isa Vector
-        resize!(a, j-1)
-        sizehint!(a, j-1)
-    else
-        deleteat!(a, j:lastindex(a))
-    end
+    deleteat!(a, j:lastindex(a))
     return a
 end
 
