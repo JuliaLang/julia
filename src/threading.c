@@ -81,6 +81,8 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     // for codegen
     return &jl_get_ptls_states_fast;
 }
+
+JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f) { }
 #elif defined(_OS_WINDOWS_)
 // Apparently windows doesn't have a static TLS model (or one that can be
 // reliably used from a shared library) either..... Use `TLSAlloc` instead.
@@ -138,6 +140,8 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     // for codegen
     return &jl_get_ptls_states;
 }
+
+JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f) { }
 #else
 // We use the faster static version in the main executable to replace
 // the slower version in the shared object. The code in different libraries
