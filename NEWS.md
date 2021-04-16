@@ -14,7 +14,7 @@ New language features
 
 Language changes
 ----------------
-
+* `macroexpand`, `@macroexpand`, and `@macroexpand1` no longer wrap errors in a `LoadError`. To reduce breakage, `@test_throws` has been modified so that many affected tests will still pass ([#38379]].
 
 Compiler/Runtime improvements
 -----------------------------
