@@ -56,6 +56,9 @@ formatted string directly to `io`.
 
 For convenience, the `Printf.format"..."` string macro form can be used for building
 a `Printf.Format` object at macro-expansion-time.
+
+!!! compat "Julia 1.6"
+    `Printf.Format` requires Julia 1.6 or later.
 """
 struct Format{S, T}
     str::S # original full format string as CodeUnits
@@ -375,6 +378,9 @@ For arbitrary precision numerics, you might extend the method like:
 ```julia
 Printf.tofloat(x::MyArbitraryPrecisionType) = BigFloat(x)
 ```
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 tofloat(x) = Float64(x)
 tofloat(x::Base.IEEEFloat) = x
@@ -419,7 +425,7 @@ const __BIG_FLOAT_MAX__ = 8192
         x = round(x, sigdigits=prec)
         newpos = Ryu.writeshortest(buf, pos, x, plus, space, hash, prec, T == Val{'g'} ? UInt8('e') : UInt8('E'), true, UInt8('.'))
     elseif T == Val{'a'} || T == Val{'A'}
-        x, neg = x < 0 ? (-x, true) : (x, false)
+        x, neg = x < 0 || x === -Base.zero(x) ? (-x, true) : (x, false)
         newpos = pos
         if neg
             buf[newpos] = UInt8('-')
@@ -450,6 +456,8 @@ const __BIG_FLOAT_MAX__ = 8192
                 buf[newpos] = UInt8('0')
                 newpos += 1
                 if prec > 0
+                    buf[newpos] = UInt8('.')
+                    newpos += 1
                     while prec > 0
                         buf[newpos] = UInt8('0')
                         newpos += 1
@@ -459,6 +467,7 @@ const __BIG_FLOAT_MAX__ = 8192
                 buf[newpos] = T <: Val{'a'} ? UInt8('p') : UInt8('P')
                 buf[newpos + 1] = UInt8('+')
                 buf[newpos + 2] = UInt8('0')
+                newpos += 3
             else
                 if prec > -1
                     s, p = frexp(x)
@@ -541,7 +550,7 @@ const __BIG_FLOAT_MAX__ = 8192
 end
 
 # pointers
-fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, Int(arg), ptrfmt(spec, arg))
+fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
 
 # old Printf compat
 function fix_dec end

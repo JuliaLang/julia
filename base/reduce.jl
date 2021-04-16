@@ -88,6 +88,8 @@ Create a mapping reducing function `rf′(acc, x) = rf(acc, f(x))`.
 struct MappingRF{F, T}
     f::F
     rf::T
+    MappingRF(f::F, rf::T) where {F,T} = new{F,T}(f, rf)
+    MappingRF(::Type{f}, rf::T) where {f,T} = new{Type{f},T}(f, rf)
 end
 
 @inline (op::MappingRF)(acc, x) = op.rf(acc, op.f(x))
@@ -235,7 +237,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return mapreduce_first(f, op, a1)
-    elseif ifirst + blksize > ilast
+    elseif ilast - ifirst < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
@@ -247,7 +249,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
         return v
     else
         # pairwise portion
-        imid = (ifirst + ilast) >> 1
+        imid = ifirst + (ilast - ifirst) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
         v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
         return op(v1, v2)

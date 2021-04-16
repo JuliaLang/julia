@@ -114,7 +114,20 @@ the current Task. Finalizers will only run when the counter is at zero. (Set
 `true` for enabling, `false` for disabling). They may still run concurrently on
 another Task or thread.
 """
-enable_finalizers(on::Bool) = ccall(:jl_gc_enable_finalizers, Cvoid, (Ptr{Cvoid}, Int32,), C_NULL, on)
+enable_finalizers(on::Bool) = on ? enable_finalizers() : disable_finalizers()
+
+function enable_finalizers()
+    Base.@_inline_meta
+    ccall(:jl_gc_enable_finalizers_internal, Cvoid, ())
+    if unsafe_load(cglobal(:jl_gc_have_pending_finalizers, Cint)) != 0
+        ccall(:jl_gc_run_pending_finalizers, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+end
+
+function disable_finalizers()
+    Base.@_inline_meta
+    ccall(:jl_gc_disable_finalizers_internal, Cvoid, ())
+end
 
 """
     GC.@preserve x1 x2 ... xn expr

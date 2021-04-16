@@ -8,6 +8,8 @@ using Distributed: RemoteException
 import Logging: Debug, Info, Warn
 
 @testset "@test" begin
+    atol = 1
+    a = (; atol=2)
     @test true
     @test 1 == 1
     @test 1 != 2
@@ -20,11 +22,28 @@ import Logging: Debug, Info, Warn
     @test isapprox(1, 1, atol=0.1)
     @test isapprox(1, 1; atol=0.1)
     @test isapprox(1, 1; [(:atol, 0)]...)
+    @test isapprox(1, 2; atol)
+    @test isapprox(1, 3; a.atol)
+end
+@testset "@test with skip/broken kwargs" begin
+    # Make sure the local variables can be used in conditions
+    a = 1
+    @test 2 + 2 == 4 broken=false
+    @test error() broken=true
+    @test !Sys.iswindows() broken=Sys.iswindows()
+    @test 1 ≈ 2 atol=1 broken=a==2
+    @test false skip=true
+    @test true skip=false
+    @test Grogu skip=isone(a)
+    @test 41 ≈ 42 rtol=1 skip=false
 end
 @testset "@test keyword precedence" begin
+    atol = 2
     # post-semicolon keyword, suffix keyword, pre-semicolon keyword
     @test isapprox(1, 2, atol=0) atol=1
     @test isapprox(1, 3, atol=0; atol=2) atol=1
+    @test isapprox(1, 2, atol=0; atol)
+    @test isapprox(1, 3, atol=0; atol) atol=1
 end
 @testset "@test should only evaluate the arguments once" begin
     g = Int[]

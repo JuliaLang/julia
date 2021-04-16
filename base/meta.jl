@@ -354,7 +354,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         return Core.GotoIfNot(
             _partially_inline!(x.cond, slot_replacements, type_signature, static_param_values,
                                slot_offset, statement_offset, boundscheck),
-            x.dest,
+            x.dest + statement_offset,
         )
     end
     if isa(x, Expr)

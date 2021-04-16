@@ -410,6 +410,7 @@ LinearAlgebra.nullspace
 Base.kron
 Base.kron!
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
+Base.cis(::AbstractMatrix)
 Base.:^(::AbstractMatrix, ::Number)
 Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)

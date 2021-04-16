@@ -9,9 +9,9 @@ tuple-like collection of values, where each entry has a unique name, represented
 can be modified in place after construction.
 
 Accessing the value associated with a name in a named tuple can be done using field
-access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]`. A tuple of the
-names can be obtained using [`keys`](@ref), and a tuple of the values can be obtained
-using [`values`](@ref).
+access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]` or `x[(:a, :b)]`.
+A tuple of the names can be obtained using [`keys`](@ref), and a tuple of the values
+can be obtained using [`values`](@ref).
 
 !!! note
     Iteration over `NamedTuple`s produces the *values* without the names. (See example
@@ -29,6 +29,9 @@ julia> x.a
 
 julia> x[:a]
 1
+
+julia> x[(:a,)]
+(a = 1,)
 
 julia> keys(x)
 (:a, :b)
@@ -76,6 +79,9 @@ julia> (; t.x)
 
 !!! compat "Julia 1.5"
     Implicit names from identifiers and dot expressions are available as of Julia 1.5.
+
+!!! compat "Julia 1.7"
+    Use of `getindex` methods with multiple `Symbol`s is available as of Julia 1.7.
 """
 Core.NamedTuple
 
@@ -106,6 +112,9 @@ NamedTuple{names}(itr) where {names} = NamedTuple{names}(Tuple(itr))
 
 NamedTuple(itr) = (; itr...)
 
+# avoids invalidating Union{}(...)
+NamedTuple{names, Union{}}(itr::Tuple) where {names} = throw(MethodError(NamedTuple{names, Union{}}, (itr,)))
+
 end # if Base
 
 length(t::NamedTuple) = nfields(t)
@@ -116,6 +125,8 @@ firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
+@inline getindex(t::NamedTuple, idxs::Tuple{Vararg{Symbol}}) = NamedTuple{idxs}(t)
+@inline getindex(t::NamedTuple, idxs::AbstractVector{Symbol}) = NamedTuple{Tuple(idxs)}(t)
 indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
 isempty(::NamedTuple{()}) = true
 isempty(::NamedTuple) = false
@@ -183,8 +194,8 @@ _nt_names(::Type{T}) where {names,T<:NamedTuple{names}} = names
 
 hash(x::NamedTuple, h::UInt) = xor(objectid(_nt_names(x)), hash(Tuple(x), h))
 
+(<)(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) < Tuple(b)
 isless(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = isless(Tuple(a), Tuple(b))
-# TODO: case where one argument's names are a prefix of the other's
 
 same_names(::NamedTuple{names}...) where {names} = true
 same_names(::NamedTuple...) = false
@@ -278,7 +289,8 @@ function merge(a::NamedTuple, itr)
     names = Symbol[]
     vals = Any[]
     inds = IdDict{Symbol,Int}()
-    for (k::Symbol, v) in itr
+    for (k, v) in itr
+        k = k::Symbol
         oldind = get(inds, k, 0)
         if oldind > 0
             vals[oldind] = v

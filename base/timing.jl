@@ -115,41 +115,44 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
-    length(timestr) < 10 && print(" "^(10 - length(timestr)))
-    print(timestr, " seconds")
-    parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
-    parens && print(" (")
-    if bytes != 0 || allocs != 0
-        allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
-        if ma == 1
-            print(Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
-        else
-            print(Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
-        end
-        print(format_bytes(bytes))
-    end
-    if gctime > 0
+    str = sprint() do io
+        print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        print(io, timestr, " seconds")
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+        parens && print(io, " (")
         if bytes != 0 || allocs != 0
-            print(", ")
+            allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
+            if ma == 1
+                print(io, Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
+            else
+                print(io, Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
+            end
+            print(io, format_bytes(bytes))
         end
-        print(Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
-    end
-    if compile_time > 0
-        if bytes != 0 || allocs != 0 || gctime > 0
-            print(", ")
+        if gctime > 0
+            if bytes != 0 || allocs != 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
-        print(Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        if compile_time > 0
+            if bytes != 0 || allocs != 0 || gctime > 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        end
+        parens && print(io, ")")
     end
-    parens && print(")")
+    newline ? println(str) : print(str)
     nothing
 end
 
 function timev_print(elapsedtime, diff::GC_Diff, compile_time)
     allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time)
-    print("\nelapsed time (ns): $elapsedtime\n")
+    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true)
+    print("elapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
@@ -168,6 +171,10 @@ A macro to execute an expression, printing the time it took to execute, the numb
 allocations, and the total number of bytes its execution caused to be allocated, before
 returning the value of the expression. Any time spent garbage collecting (gc) or
 compiling is shown as a percentage.
+
+In some cases the system will look inside the `@time` expression and compile some of the
+called code before execution of the top-level expression begins. When that happens, some
+compilation time will not be counted. To include this time you can run `@time @eval ...`.
 
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
@@ -204,9 +211,7 @@ macro time(ex)
         elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        time_print(elapsedtime, diff.allocd, diff.total_time,
-                   gc_alloc_count(diff), compile_elapsedtime)
-        println()
+        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
         val
     end
 end
@@ -251,7 +256,8 @@ macro timev(ex)
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
-        timev_print(elapsedtime, GC_Diff(gc_num(), stats), compile_elapsedtime)
+        local diff = GC_Diff(gc_num(), stats)
+        timev_print(elapsedtime, diff, compile_elapsedtime)
         val
     end
 end
@@ -261,6 +267,10 @@ end
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 number of seconds it took to execute as a floating-point number.
+
+In some cases the system will look inside the `@elapsed` expression and compile some of the
+called code before execution of the top-level expression begins. When that happens, some
+compilation time will not be counted. To include this time you can run `@elapsed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@allocated`](@ref).
@@ -320,6 +330,10 @@ end
 A macro to execute an expression, and return the value of the expression, elapsed time,
 total bytes allocated, garbage collection time, and an object with various memory allocation
 counters.
+
+In some cases the system will look inside the `@timed` expression and compile some of the
+called code before execution of the top-level expression begins. When that happens, some
+compilation time will not be counted. To include this time you can run `@timed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).

@@ -63,6 +63,23 @@ are identical to the passed values. Modifications to mutable values (such as `Ar
 a function will be visible to the caller. This is the same behavior found in Scheme, most Lisps,
 Python, Ruby and Perl, among other dynamic languages.
 
+## Argument-type declarations
+
+You can declare the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Declarations](@ref) in Julia.
+For example, the following function computes [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number) recursively:
+```
+fib(n::Integer) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)
+```
+and the `::Integer` specification means that it will only be callable when `n` is a subtype of the [abstract](@ref man-abstract-types) `Integer` type.
+
+Argument-type declarations **normally have no impact on performance**: regardless of what argument types (if any) are declared, Julia compiles a specialized version of the function for the actual argument types passed by the caller.   For example, calling `fib(1)` will trigger the compilation of specialized version of `fib` optimized specifically for `Int` arguments, which is then re-used if `fib(7)` or `fib(15)` are called.  (There are rare exceptions when an argument-type declaration can trigger additional compiler specializations; see: [Be aware of when Julia avoids specializing](@ref).)  The most common reasons to declare argument types in Julia are, instead:
+
+* **Dispatch:** As explained in [Methods](@ref), you can have different versions ("methods") of a function for different argument types, in which case the argument types are used to determine which implementation is called for which arguments.  For example, you might implement a completely different algorithm `fib(x::Number) = ...` that works for any `Number` type by using [Binet's formula](https://en.wikipedia.org/wiki/Fibonacci_number#Binet's_formula) to extend it to non-integer values.
+* **Correctness:** Type declarations can be useful if your function only returns correct results for certain argument types.  For example, if we omitted argument types and wrote `fib(n) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)`, then `fib(1.5)` would silently give us the nonsensical answer `1.0`.
+* **Clarity:** Type declarations can serve as a form of documentation about the expected arguments.
+
+However, it is a **common mistake to overly restrict the argument types**, which can unnecessarily limit the applicability of the function and prevent it from being re-used in circumstances you did not anticipate.    For example, the `fib(n::Integer)` function above works equally well for `Int` arguments (machine integers) and `BigInt` arbitrary-precision integers (see [BigFloats and BigInts](@ref)), which is especially useful because Fibonacci numbers grow exponentially rapidly and will quickly overflow any fixed-precision type like `Int` (see [Overflow behavior](@ref)).  If we had declared our function as `fib(n::Int)`, however, the application to `BigInt` would have been prevented for no reason.   In general, you should use the most general applicable abstract types for arguments, and **when in doubt, omit the argument types**.  You can always add argument-type specifications later if they become necessary, and you don't sacrifice performance or functionality by omitting them.
+
 ## The `return` Keyword
 
 The value returned by a function is the value of the last expression evaluated, which, by default,
@@ -145,6 +162,10 @@ Int8
 
 This function will always return an `Int8` regardless of the types of `x` and `y`.
 See [Type Declarations](@ref) for more on return types.
+
+Return type declarations are **rarely used** in Julia: in general, you should
+instead write "type-stable" functions in which Julia's compiler can automatically
+infer the return type.  For more information, see the [Performance Tips](@ref man-performance-tips) chapter.
 
 ### Returning nothing
 
@@ -394,6 +415,15 @@ julia> gap(minmax(10, 2))
 
 Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
 would be a two-argument function, and this example would not work.
+
+For anonymous functions, destructuring a single tuple requires an extra comma:
+
+```
+julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
+2-element Array{Int64,1}:
+ 3
+ 7
+```
 
 ## Varargs Functions
 
@@ -681,8 +711,8 @@ end
 ```
 
 The `do x` syntax creates an anonymous function with argument `x` and passes it as the first argument
-to [`map`](@ref). Similarly, `do a,b` would create a two-argument anonymous function, and a
-plain `do` would declare that what follows is an anonymous function of the form `() -> ...`.
+to [`map`](@ref). Similarly, `do a,b` would create a two-argument anonymous function. Note that `do (a,b)` would create a one-argument anonymous function,
+whose argument is a tuple to be deconstructed. A plain `do` would declare that what follows is an anonymous function of the form `() -> ...`.
 
 How these arguments are initialized depends on the "outer" function; here, [`map`](@ref) will
 sequentially set `x` to `A`, `B`, `C`, calling the anonymous function on each, just as would happen

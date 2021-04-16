@@ -307,7 +307,7 @@ function open_flags(;
 end
 
 """
-    open(f::Function, args...; kwargs....)
+    open(f::Function, args...; kwargs...)
 
 Apply the function `f` to the result of `open(args...; kwargs...)` and close the resulting file
 descriptor upon completion.
@@ -358,6 +358,7 @@ function pipe_reader end
 function pipe_writer end
 
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
+write(to::IO, from::AbstractPipe) = write(to, pipe_reader(from))
 unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)::Union{Int,UInt}
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
 flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
@@ -988,6 +989,8 @@ retained. When called with a file name, the file is opened once at the beginning
 iteration and closed at the end. If iteration is interrupted, the file will be
 closed when the `EachLine` object is garbage collected.
 
+To iterate over each line of a `String`, `eachline(IOBuffer(str))` can be used.
+
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
@@ -1019,6 +1022,8 @@ end
 eltype(::Type{<:EachLine}) = String
 
 IteratorSize(::Type{<:EachLine}) = SizeUnknown()
+
+isdone(itr::EachLine, state...) = eof(itr.stream)
 
 struct ReadEachIterator{T, IOT <: IO}
     stream::IOT
@@ -1053,6 +1058,8 @@ iterate(itr::ReadEachIterator{T}, state=nothing) where T =
 eltype(::Type{ReadEachIterator{T}}) where T = T
 
 IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
+
+isdone(itr::ReadEachIterator, state...) = eof(itr.stream)
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
@@ -1157,6 +1164,8 @@ pass the filename as the first argument. EOL markers other than `'\\n'` are supp
 passing them as the second argument.  The last non-empty line of `io` is counted even if it does not
 end with the EOL, matching the length returned by [`eachline`](@ref) and [`readlines`](@ref).
 
+To count lines of a `String`, `countlines(IOBuffer(str))` can be used.
+
 # Examples
 ```jldoctest
 julia> io = IOBuffer("JuliaLang is a GitHub organization.\\n");
@@ -1169,8 +1178,13 @@ julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 julia> countlines(io)
 1
 
+julia> eof(io) # counting lines moves the file pointer
+true
+
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
 julia> countlines(io, eol = '.')
-0
+1
 ```
 """
 function countlines(io::IO; eol::AbstractChar='\n')

@@ -159,6 +159,9 @@ end
     d = Dict(i==1 ? (1=>2) : (2.0=>3.0) for i=1:2)
     @test isa(d, Dict{Real,Real})
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
+
+    # issue #39117
+    @test Dict(t[1]=>t[2] for t in zip((1,"2"), (2,"2"))) == Dict{Any,Any}(1=>2, "2"=>"2")
 end
 
 @testset "type of Dict constructed from varargs of Pairs" begin
@@ -1172,33 +1175,33 @@ end
 
 # WeakKeyDict soundness (#38727)
 mutable struct ComparesWithGC38727
-	i::Int
+    i::Int
 end
 const armed = Ref{Bool}(true)
 @noinline fwdab38727(a, b) = invoke(Base.isequal, Tuple{Any, WeakRef}, a, b)
 function Base.isequal(a::ComparesWithGC38727, b::WeakRef)
-	# This GC.gc() here simulates a GC during compilation in the original issue
-	armed[] && GC.gc()
-        armed[] = false
-        fwdab38727(a, b)
+    # This GC.gc() here simulates a GC during compilation in the original issue
+    armed[] && GC.gc()
+    armed[] = false
+    fwdab38727(a, b)
 end
 Base.isequal(a::WeakRef, b::ComparesWithGC38727) = isequal(b, a)
 Base.:(==)(a::ComparesWithGC38727, b::ComparesWithGC38727) = a.i == b.i
 Base.hash(a::ComparesWithGC38727, u::UInt) = Base.hash(a.i, u)
 function make_cwgc38727(wkd, i)
-	f = ComparesWithGC38727(i)
-	function fin(f)
-		f.i = -1
-	end
-	finalizer(fin, f)
-	f
+    f = ComparesWithGC38727(i)
+    function fin(f)
+        f.i = -1
+    end
+    finalizer(fin, f)
+    f
 end
 @noinline mk38727(wkd) = wkd[make_cwgc38727(wkd, 1)] = nothing
 function bar()
-	wkd = WeakKeyDict{Any, Nothing}()
-	mk38727(wkd)
-	armed[] = true
-	z = getkey(wkd, ComparesWithGC38727(1), missing)
+    wkd = WeakKeyDict{Any, Nothing}()
+    mk38727(wkd)
+    armed[] = true
+    z = getkey(wkd, ComparesWithGC38727(1), missing)
 end
 # Run this twice, in case compilation the first time around
 # masks something.

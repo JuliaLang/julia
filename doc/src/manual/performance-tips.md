@@ -3,13 +3,20 @@
 In the following sections, we briefly go through a few techniques that can help make your Julia
 code run as fast as possible.
 
+## Performance critical code should be inside a function
+
+Any code that is performance critical should be inside a function. Code inside functions tends to run much faster than top level code, due to how Julia's compiler works.
+
+The use of functions is not only important for performance: functions are more reusable and testable, and clarify what steps are being done and what their inputs and outputs are, [Write functions, not just scripts](@ref) is also a recommendation of Julia's Styleguide.
+
+The functions should take arguments, instead of operating directly on global variables, see the next point.
+
 ## Avoid global variables
 
 A global variable might have its value, and therefore its type, change at any point. This makes
 it difficult for the compiler to optimize code using global variables. Variables should be local,
 or passed as arguments to functions, whenever possible.
 
-Any code that is performance critical or being benchmarked should be inside a function.
 
 We find that global names are frequently constants, and declaring them as such greatly improves
 performance:
@@ -1507,7 +1514,7 @@ The following examples may help you interpret expressions marked as containing n
         element accesses
 
   * `Base.getfield(%%x, :(:data))::ARRAY{FLOAT64,N} WHERE N`
-      * Interpretation: getting a field that is of non-leaf type. In this case, `ArrayContainer` had a
+      * Interpretation: getting a field that is of non-leaf type. In this case, the type of `x`, say `ArrayContainer`, had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
