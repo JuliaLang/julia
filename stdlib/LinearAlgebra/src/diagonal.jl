@@ -181,6 +181,7 @@ end
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
+(\)(x::Number, D::Diagonal) = Diagonal(x \ D.diag)
 
 function (*)(Da::Diagonal, Db::Diagonal)
     nDa, mDb = size(Da, 2), size(Db, 1)
@@ -426,35 +427,6 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 
-function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
-    if length(v) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
-    end
-    for i = 1:length(D.diag)
-        d = D.diag[i]
-        if iszero(d)
-            throw(SingularException(i))
-        end
-        v[i] = d\v[i]
-    end
-    v
-end
-function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
-    require_one_based_indexing(V)
-    if size(V,1) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
-    end
-    for i = 1:length(D.diag)
-        d = D.diag[i]
-        if iszero(d)
-            throw(SingularException(i))
-        end
-        for j = 1:size(V,2)
-            @inbounds V[i,j] = d\V[i,j]
-        end
-    end
-    V
-end
 ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
 ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
@@ -602,14 +574,13 @@ function diag(D::Diagonal, k::Integer=0)
 end
 tr(D::Diagonal) = sum(tr, D.diag)
 det(D::Diagonal) = prod(det, D.diag)
-logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
 function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     z = sum(log, D.diag)
     complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 
 # Matrix functions
-for f in (:exp, :log, :sqrt,
+for f in (:exp, :cis, :log, :sqrt,
           :cos, :sin, :tan, :csc, :sec, :cot,
           :cosh, :sinh, :tanh, :csch, :sech, :coth,
           :acos, :asin, :atan, :acsc, :asec, :acot,
@@ -617,8 +588,13 @@ for f in (:exp, :log, :sqrt,
     @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
 end
 
-#Linear solver
-function ldiv!(D::Diagonal, B::StridedVecOrMat)
+(\)(D::Diagonal, A::AbstractMatrix) =
+    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
+
+(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
+(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
+
+function ldiv!(D::Diagonal, B::AbstractVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
@@ -635,11 +611,6 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-(\)(D::Diagonal, A::AbstractMatrix) =
-    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
-
-(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
-(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
@@ -704,6 +675,14 @@ end
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 
+dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
+function dot(D::Diagonal, B::AbstractMatrix)
+    size(D) == size(B) || throw(DimensionMismatch("Matrix sizes $(size(D)) and $(size(B)) differ"))
+    return dot(D.diag, view(B, diagind(B)))
+end
+
+dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
+
 function _mapreduce_prod(f, x, D::Diagonal, y)
     if isempty(x) && isempty(D) && isempty(y)
         return zero(Base.promote_op(f, eltype(x), eltype(D), eltype(y)))
@@ -758,4 +737,8 @@ end
 function logabsdet(A::Diagonal)
      mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),
                A.diag)
+end
+
+function Base.muladd(A::Diagonal, B::Diagonal, z::Diagonal)
+    Diagonal(A.diag .* B.diag .+ z.diag)
 end

@@ -28,3 +28,13 @@ end
         """
 
 @test toml_str(Dict("b" => SubString("foo"))) == "b = \"foo\"\n"
+
+@testset "empty dict print" begin
+    s = """
+    user = "me"
+    [julia]
+    [option]
+    """
+    d = TOML.parse(s)
+    @test toml_str(d) == "user = \"me\"\n\n[julia]\n\n[option]\n"
+end

@@ -57,7 +57,7 @@ exception will continue propagation as if it had not been caught.
     described in [`catch_stack`](@ref).
 """
 rethrow() = ccall(:jl_rethrow, Bottom, ())
-rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
+rethrow(@nospecialize(e)) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
     code::Union{CodeInfo,Core.MethodInstance,Nothing}

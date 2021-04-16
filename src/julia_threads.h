@@ -16,8 +16,9 @@
 
 //  Options for task switching algorithm (in order of preference):
 // JL_HAVE_ASM -- mostly setjmp
-// JL_HAVE_ASYNCIFY -- task switching based on the binaryen asyncify transform
-// JL_HAVE_UNW_CONTEXT -- hybrid of libunwind for start, setjmp for resume
+// JL_HAVE_ASM && JL_HAVE_UNW_CONTEXT -- libunwind-based
+// JL_HAVE_UNW_CONTEXT -- libunwind-based
+// JL_HAVE_ASYNCIFY -- task switching based on the binary asyncify transform
 // JL_HAVE_UCONTEXT -- posix standard API, requires syscall for resume
 // JL_HAVE_SIGALTSTACK -- requires several syscall for start, setjmp for resume
 
@@ -33,24 +34,27 @@ typedef win32_ucontext_t jl_ucontext_t;
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
      defined(_CPU_ARM_) || defined(_CPU_PPC64_))
 #define JL_HAVE_ASM
-#elif defined(_OS_DARWIN_)
-#define JL_HAVE_UNW_CONTEXT
-#elif defined(_OS_LINUX_)
-#define JL_HAVE_UCONTEXT
+#endif
+#if 0
+// very slow, but more debugging
+//#elif defined(_OS_DARWIN_)
+//#define JL_HAVE_UNW_CONTEXT
+//#elif defined(_OS_LINUX_)
+//#define JL_HAVE_UNW_CONTEXT
 #elif defined(_OS_EMSCRIPTEN_)
 #define JL_HAVE_ASYNCIFY
-#else
-#define JL_HAVE_UNW_CONTEXT
+#elif !defined(JL_HAVE_ASM)
+#define JL_HAVE_UNW_CONTEXT // optimistically?
 #endif
 #endif
 
-#if defined(JL_HAVE_ASM) || defined(JL_HAVE_SIGALTSTACK)
-typedef struct {
+
+struct jl_stack_context_t {
     jl_jmp_buf uc_mcontext;
-#if defined(JL_TSAN_ENABLED)
-    void *tsan_state;
-#endif
-} jl_ucontext_t;
+};
+
+#if (!defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)) || defined(JL_HAVE_SIGALTSTACK)
+typedef struct jl_stack_context_t jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_ASYNCIFY)
 #if defined(JL_TSAN_ENABLED)
@@ -65,22 +69,27 @@ typedef struct {
     void *stacktop;
 } jl_ucontext_t;
 #endif
-#if defined(JL_HAVE_UCONTEXT) || defined(JL_HAVE_UNW_CONTEXT)
+#if defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
-typedef struct {
-    ucontext_t ctx;
-#if defined(JL_TSAN_ENABLED)
-    void *tsan_state;
+typedef unw_context_t jl_ucontext_t;
 #endif
-} jl_ucontext_t;
+#if defined(JL_HAVE_UCONTEXT)
+#include <ucontext.h>
+typedef ucontext_t jl_ucontext_t;
 #endif
 #endif
 
+// handle to reference an OS thread
+#ifdef _OS_WINDOWS_
+typedef DWORD jl_thread_t;
+#else
+typedef pthread_t jl_thread_t;
+#endif
 
 // Recursive spin lock
 typedef struct {
-    volatile unsigned long owner;
+    volatile jl_thread_t owner;
     uint32_t count;
 } jl_mutex_t;
 
@@ -201,9 +210,18 @@ struct _jl_tls_states_t {
     struct _jl_task_t *previous_task;
 #endif
     struct _jl_task_t *root_task;
+    struct _jl_timing_block_t *timing_stack;
     void *stackbase;
     size_t stacksize;
-    jl_ucontext_t base_ctx; // base context of stack
+    union {
+        jl_ucontext_t base_ctx; // base context of stack
+        // This hack is needed to support always_copy_stacks:
+#ifdef _OS_WINDOWS_
+        jl_ucontext_t copy_stack_ctx;
+#else
+        struct jl_stack_context_t copy_stack_ctx;
+#endif
+    };
     jl_jmp_buf *safe_restore;
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
@@ -221,7 +239,7 @@ struct _jl_tls_states_t {
 #else
     void *signal_stack;
 #endif
-    unsigned long system_id;
+    jl_thread_t system_id;
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
@@ -325,8 +343,23 @@ int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
 JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
+JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
+JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
+JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_ptls_t ptls);
+extern JL_DLLEXPORT int jl_gc_have_pending_finalizers;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
+
+// Copied from libuv. Add `JL_CONST_FUNC` so that the compiler
+// can optimize this better.
+static inline jl_thread_t JL_CONST_FUNC jl_thread_self(void)
+{
+#ifdef _OS_WINDOWS_
+    return GetCurrentThreadId();
+#else
+    return pthread_self();
+#endif
+}
 
 #ifdef __cplusplus
 }

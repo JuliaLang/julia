@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Expr head => argument count bounds
-const VALID_EXPR_HEADS = IdDict{Any,Any}(
+const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange}(
     :call => 1:typemax(Int),
     :invoke => 2:typemax(Int),
     :static_parameter => 1:1,
@@ -28,7 +28,10 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
     :thunk => 1:1,
-    :throw_undef_if_not => 2:2
+    :throw_undef_if_not => 2:2,
+    :aliasscope => 0:0,
+    :popaliasscope => 0:0,
+    :new_opaque_closure => 4:typemax(Int)
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this

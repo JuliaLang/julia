@@ -64,11 +64,14 @@ function init(n::Integer, delay::Real)
 end
 
 # init with default values
-# Use a max size of 1M profile samples, and fire timer every 1ms
-if Sys.iswindows()
+# Use a max size of 10M profile samples, and fire timer every 1ms
+# (that should typically give around 100 seconds of record)
+if Sys.iswindows() && Sys.WORD_SIZE == 32
+    # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
+    # so we don't want to slow the program down by quite that much
     __init__() = init(1_000_000, 0.01)
 else
-    __init__() = init(1_000_000, 0.001)
+    __init__() = init(10_000_000, 0.001)
 end
 
 """
@@ -350,6 +353,8 @@ stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
 is_running() = ccall(:jl_profile_is_running, Cint, ())!=0
 
+is_buffer_full() = ccall(:jl_profile_is_buffer_full, Cint, ())!=0
+
 get_data_pointer() = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, ()))
 
 len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
@@ -374,7 +379,7 @@ internal use; [`retrieve`](@ref) may be a better choice for most users.
 function fetch()
     maxlen = maxlen_data()
     len = len_data()
-    if (len == maxlen)
+    if is_buffer_full()
         @warn """The profile data buffer is full; profiling probably terminated
                  before your program finished. To profile for longer runs, call
                  `Profile.init()` with a larger buffer and/or larger delay."""

@@ -359,9 +359,151 @@ function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
     return Cint(0)
 end
 
+struct CertHostKey
+    parent  :: Cint
+    mask    :: Cint
+    md5     :: NTuple{16,UInt8}
+    sha1    :: NTuple{20,UInt8}
+    sha256  :: NTuple{32,UInt8}
+    type    :: Cint
+    len     :: Csize_t
+    data    :: NTuple{1024,UInt8}
+end
+
+function verify_host_error(message::AbstractString)
+    printstyled(stderr, "$message\n", color = :cyan, bold = true)
+end
+
+function certificate_callback(
+    cert_p :: Ptr{CertHostKey},
+    valid  :: Cint,
+    host_p :: Ptr{Cchar},
+    data_p :: Ptr{Cvoid},
+)::Cint
+    valid != 0 && return Consts.CERT_ACCEPT
+    host = unsafe_string(host_p)
+    cert_type = unsafe_load(convert(Ptr{Cint}, cert_p))
+    transport = cert_type == Consts.CERT_TYPE_TLS ? "TLS" :
+                cert_type == Consts.CERT_TYPE_SSH ? "SSH" : nothing
+    if !NetworkOptions.verify_host(host, transport)
+        # user has opted out of host verification
+        return Consts.CERT_ACCEPT
+    end
+    if transport == "TLS"
+        # TLS verification is done before the callback and indicated with the
+        # incoming `valid` flag, so if we get here then host verification failed
+        verify_host_error("TLS host verification: the identity of the server `$host` could not be verified. Someone could be trying to man-in-the-middle your connection. It is also possible that the correct server is using an invalid certificate or that your system's certificate authority root store is misconfigured.")
+        return Consts.CERT_REJECT
+    elseif transport == "SSH"
+        # SSH verification has to be done here
+        files = NetworkOptions.ssh_known_hosts_files()
+        cert = unsafe_load(cert_p)
+        check = ssh_knownhost_check(files, host, cert)
+        valid = false
+        if check == Consts.LIBSSH2_KNOWNHOST_CHECK_MATCH
+            valid = true
+        elseif check == Consts.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND
+            if Sys.which("ssh-keyscan") !== nothing
+                msg = "Please run `ssh-keyscan $host >> $(files[1])` in order to add the server to your known hosts file and then try again."
+            else
+                msg = "Please connect once using `ssh $host` in order to add the server to your known hosts file and then try again. You may not be allowed to log in (wrong user and/or no login allowed), but ssh will prompt you to add a host key for the server which will allow libgit2 to verify the server."
+            end
+            verify_host_error("SSH host verification: the server `$host` is not a known host. $msg")
+        elseif check == Consts.LIBSSH2_KNOWNHOST_CHECK_MISMATCH
+            verify_host_error("SSH host verification: the identity of the server `$host` does not match its known hosts record. Someone could be trying to man-in-the-middle your connection. It is also possible that the server has changed its key, in which case you should check with the server administrator and if they confirm that the key has been changed, update your known hosts file.")
+        else
+            @error("unexpected SSH known host check result", check)
+        end
+        return valid ? Consts.CERT_ACCEPT : Consts.CERT_REJECT
+    end
+    @error("unexpected transport encountered, refusing to validate", cert_type)
+    return Consts.CERT_REJECT
+end
+
+struct KnownHost
+    magic :: Cuint
+    node  :: Ptr{Cvoid}
+    name  :: Ptr{Cchar}
+    key   :: Ptr{Cchar}
+    type  :: Cint
+end
+
+function ssh_knownhost_check(
+    files :: AbstractVector{<:AbstractString},
+    host  :: AbstractString,
+    cert  :: CertHostKey,
+)
+    key = collect(cert.data)[1:cert.len]
+    return ssh_knownhost_check(files, host, key)
+end
+
+function ssh_knownhost_check(
+    files :: AbstractVector{<:AbstractString},
+    host  :: AbstractString,
+    key   :: Vector{UInt8},
+)
+    if (m = match(r"^(.+):(\d+)$", host)) !== nothing
+        host = m.captures[1]
+        port = parse(Int, m.captures[2])
+    else
+        port = 22 # default SSH port
+    end
+    len = length(key)
+    mask = Consts.LIBSSH2_KNOWNHOST_TYPE_PLAIN |
+           Consts.LIBSSH2_KNOWNHOST_KEYENC_RAW
+    session = @ccall "libssh2".libssh2_session_init_ex(
+        C_NULL :: Ptr{Cvoid},
+        C_NULL :: Ptr{Cvoid},
+        C_NULL :: Ptr{Cvoid},
+        C_NULL :: Ptr{Cvoid},
+    ) :: Ptr{Cvoid}
+    for file in files
+        ispath(file) || continue
+        hosts = @ccall "libssh2".libssh2_knownhost_init(
+            session :: Ptr{Cvoid},
+        ) :: Ptr{Cvoid}
+        count = @ccall "libssh2".libssh2_knownhost_readfile(
+            hosts :: Ptr{Cvoid},
+            file  :: Cstring,
+            1     :: Cint, # standard OpenSSH format
+        ) :: Cint
+        if count < 0
+            @warn("Error parsing SSH known hosts file `$file`")
+            @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
+            continue
+        end
+        check = @ccall "libssh2".libssh2_knownhost_checkp(
+            hosts  :: Ptr{Cvoid},
+            host   :: Cstring,
+            port   :: Cint,
+            key    :: Ptr{UInt8},
+            len    :: Csize_t,
+            mask   :: Cint,
+            C_NULL :: Ptr{Ptr{KnownHost}},
+        ) :: Cint
+        if check == Consts.LIBSSH2_KNOWNHOST_CHECK_MATCH ||
+            check == Consts.LIBSSH2_KNOWNHOST_CHECK_MISMATCH
+            @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
+            @assert 0 == @ccall "libssh2".libssh2_session_free(session::Ptr{Cvoid})::Cint
+            return check
+        else
+            @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
+            if check == Consts.LIBSSH2_KNOWNHOST_CHECK_FAILURE
+                @warn("Error searching SSH known hosts file `$file`")
+            end
+            continue
+        end
+    end
+    # name not found in any known hosts files
+    @assert 0 == @ccall "libssh2".libssh2_session_free(session::Ptr{Cvoid})::Cint
+    return Consts.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND
+end
+
 "C function pointer for `mirror_callback`"
 mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}))
 "C function pointer for `credentials_callback`"
 credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cuint, Any))
 "C function pointer for `fetchhead_foreach_callback`"
 fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Any))
+"C function pointer for `certificate_callback`"
+certificate_cb() = @cfunction(certificate_callback, Cint, (Ptr{CertHostKey}, Cint, Ptr{Cchar}, Ptr{Cvoid}))

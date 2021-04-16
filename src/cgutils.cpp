@@ -608,7 +608,10 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
             size_t fsz = 0, al = 0;
             bool isptr = !jl_islayout_inline(ty, &fsz, &al);
             if (jst->layout) {
-                assert(isptr == jl_field_isptr(jst, i));
+                // NOTE: jl_field_isptr can disagree with jl_islayout_inline here if the
+                // struct decided this field must be a pointer due to a type circularity.
+                // Example from issue #40050: `struct B <: Ref{Tuple{B}}; end`
+                isptr = jl_field_isptr(jst, i);
                 assert((isptr ? sizeof(void*) : fsz + jl_is_uniontype(ty)) == jl_field_size(jst, i));
             }
             Type *lty;
@@ -625,7 +628,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
                 // We may need to insert padding first to get to the right offset
                 if (al > MAX_ALIGN) {
                     Type *AlignmentType;
-#if JL_LLVM_VERSION >= 120000
+#if JL_LLVM_VERSION >= 110000
                     AlignmentType = ArrayType::get(FixedVectorType::get(T_int8, al), 0);
 #else
                     AlignmentType = ArrayType::get(VectorType::get(T_int8, al), 0);
@@ -669,7 +672,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
         }
         else if (isarray && !type_is_ghost(lasttype)) {
             if (isTuple && isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
-#if JL_LLVM_VERSION >= 120000
+#if JL_LLVM_VERSION >= 110000
                 struct_decl = FixedVectorType::get(lasttype, ntypes);
 #else
                 struct_decl = VectorType::get(lasttype, ntypes);
@@ -737,13 +740,13 @@ static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
     if (l > 0) {
         jl_value_t *t0 = jl_svecref(t, 0);
         if (!jl_is_concrete_type(t0)) {
-            if (allow_va && jl_is_vararg_type(t0) &&
+            if (allow_va && jl_is_vararg(t0) &&
                   jl_is_concrete_type(jl_unwrap_vararg(t0)))
                 return true;
             return false;
         }
         for (i = 1; i < l; i++) {
-            if (allow_va && i == l - 1 && jl_is_vararg_type(jl_svecref(t, i))) {
+            if (allow_va && i == l - 1 && jl_is_vararg(jl_svecref(t, i))) {
                 if (t0 != jl_unwrap_vararg(jl_svecref(t, i)))
                     return false;
                 continue;
@@ -2469,6 +2472,27 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, Value *datatype, jl_value_t 
     return tindex;
 }
 
+// Returns typeof(v), or null if v is a null pointer at run time.
+// This is used when the value might have come from an undefined variable,
+// yet we try to read its type to compute a union index when moving the value.
+static Value *emit_typeof_or_null(jl_codectx_t &ctx, Value *v)
+{
+    BasicBlock *nonnull = BasicBlock::Create(jl_LLVMContext, "nonnull", ctx.f);
+    BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "postnull", ctx.f);
+    Value *isnull = ctx.builder.CreateICmpEQ(v, Constant::getNullValue(v->getType()));
+    ctx.builder.CreateCondBr(isnull, postBB, nonnull);
+    BasicBlock *entry = ctx.builder.GetInsertBlock();
+    ctx.builder.SetInsertPoint(nonnull);
+    Value *typof = emit_typeof(ctx, v);
+    ctx.builder.CreateBr(postBB);
+    nonnull = ctx.builder.GetInsertBlock(); // could have changed
+    ctx.builder.SetInsertPoint(postBB);
+    PHINode *ti = ctx.builder.CreatePHI(typof->getType(), 2);
+    ti->addIncoming(Constant::getNullValue(typof->getType()), entry);
+    ti->addIncoming(typof, nonnull);
+    return ti;
+}
+
 // get the runtime tindex value, assuming val is already converted to type typ if it has a TIndex
 static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
 {
@@ -2479,9 +2503,12 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
 
     if (val.TIndex)
         return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
-    if (val.isboxed)
-        return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
-    return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
+    Value *typof;
+    if (val.isboxed && !jl_is_concrete_type(val.typ) && !jl_is_type_type(val.typ))
+        typof = emit_typeof_or_null(ctx, val.V);
+    else
+        typof = emit_typeof_boxed(ctx, val);
+    return compute_box_tindex(ctx, typof, val.typ, typ);
 }
 
 static void union_alloca_type(jl_uniontype_t *ut,

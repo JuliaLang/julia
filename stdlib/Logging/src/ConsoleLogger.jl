@@ -60,13 +60,13 @@ end
 function default_metafmt(level::LogLevel, _module, group, id, file, line)
     @nospecialize
     color = default_logcolor(level)
-    prefix = (level == Warn ? "Warning" : string(level))*':'
-    suffix = ""
+    prefix = string(level == Warn ? "Warning" : string(level), ':')
+    suffix::String = ""
     Info <= level < Warn && return color, prefix, suffix
     _module !== nothing && (suffix *= "$(_module)")
     if file !== nothing
         _module !== nothing && (suffix *= " ")
-        suffix *= Base.contractuser(file)
+        suffix *= Base.contractuser(file)::String
         if line !== nothing
             suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
         end
@@ -96,24 +96,25 @@ function termlength(str)
     return N
 end
 
-function handle_message(logger::ConsoleLogger, level, message, _module, group, id,
+function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module, group, id,
                         filepath, line; kwargs...)
     @nospecialize
     hasmaxlog = haskey(kwargs, :maxlog) ? 1 : 0
     maxlog = get(kwargs, :maxlog, nothing)
-    if maxlog isa Integer
-        remaining = get!(logger.message_limits, id, maxlog)
+    if maxlog isa Core.BuiltinInts
+        remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
     end
 
     # Generate a text representation of the message and all key value pairs,
     # split into lines.
-    msglines = [(indent=0, msg=l) for l in split(chomp(string(message)), '\n')]
+    msglines = [(indent=0, msg=l) for l in split(chomp(string(message)::String), '\n')]
     dsize = displaysize(logger.stream)::Tuple{Int,Int}
-    if length(kwargs) > hasmaxlog
+    nkwargs = length(kwargs)::Int
+    if nkwargs > hasmaxlog
         valbuf = IOBuffer()
-        rows_per_value = max(1, dsize[1] ÷ (length(kwargs) + 1 - hasmaxlog))
+        rows_per_value = max(1, dsize[1] ÷ (nkwargs + 1 - hasmaxlog))
         valio = IOContext(IOContext(valbuf, logger.stream),
                           :displaysize => (rows_per_value, dsize[2] - 5),
                           :limit => logger.show_limited)

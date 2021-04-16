@@ -50,9 +50,11 @@ The following two-word sequences are reserved:
 However, you can create variables with names:
 `abstract`, `mutable`, `primitive` and `type`.
 
-Finally, `where` is parsed as an infix operator for writing parametric method
-and type definitions. Also `in` and `isa` are parsed as infix operators.
-Creation of a variable named `where`, `in` or `isa` is allowed though.
+Finally:
+`where` is parsed as an infix operator for writing parametric method and type definitions;
+`in` and `isa` are parsed as infix operators;
+and `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop or `generator` expression.
+Creation of variables named `where`, `in`, `isa` or `outer` is allowed though.
 
 ```@docs
 module
@@ -234,7 +236,9 @@ Core.Function
 Base.hasmethod
 Core.applicable
 Core.invoke
+Base.@invoke
 Base.invokelatest
+Base.@invokelatest
 new
 Base.:(|>)
 Base.:(∘)
@@ -387,7 +391,10 @@ Base.AsyncCondition(::Function)
 Base.nameof(::Module)
 Base.parentmodule
 Base.pathof(::Module)
+Base.pkgdir(::Module)
 Base.moduleroot
+__module__
+__source__
 Base.@__MODULE__
 Base.@__FILE__
 Base.@__DIR__

@@ -57,6 +57,25 @@ static int endswith_extension(const char *path) JL_NOTSAFEPOINT
     return 0;
 }
 
+#ifdef _OS_WINDOWS_
+#ifdef _MSC_VER
+#if (_MSC_VER >= 1930) || (_MSC_VER < 1800)
+#error This version of MSVC has not been tested.
+#elif _MSC_VER >= 1900 // VC++ 2015 / 2017 / 2019
+#define CRTDLL_BASENAME "vcruntime140"
+#elif _MSC_VER >= 1800 // VC++ 2013
+#define CRTDLL_BASENAME "msvcr120"
+#endif
+#else
+#define CRTDLL_BASENAME "msvcrt"
+#endif
+
+const char jl_crtdll_basename[] = CRTDLL_BASENAME;
+const char jl_crtdll_name[] = CRTDLL_BASENAME ".dll";
+
+#undef CRTDLL_BASENAME
+#endif
+
 #define PATHBUF 4096
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
@@ -101,7 +120,6 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
         needsSymRefreshModuleList = 1;
     return lib;
 #else
-    dlerror(); /* Reset error status. */
     return dlopen(filename,
                   (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
                   | JL_RTLD(flags, LOCAL)
@@ -125,11 +143,15 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
 JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
-    if (!handle) return -1;
+    if (!handle) {
+        return -1;
+    }
     return !FreeLibrary((HMODULE) handle);
 #else
-    dlerror(); /* Reset error status. */
-    if (!handle) return -1;
+    if (!handle) {
+        dlerror(); /* Reset error status. */
+        return -1;
+    }
     return dlclose(handle);
 #endif
 }
@@ -149,7 +171,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
 
     /*
-      this branch returns handle of libjulia
+      this branch returns handle of libjulia-internal
     */
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_
@@ -272,19 +294,26 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 #ifdef _OS_WINDOWS_
     *value = GetProcAddress((HMODULE) handle, symbol);
 #else
-    dlerror(); /* Reset error status. */
     *value = dlsym(handle, symbol);
 #endif
 
-    /* Next, check for errors.  On Windows, a NULL pointer means the symbol
-     * was not found.  On everything else, we can have NULL symbols, so we check
-     * for non-NULL returns from dlerror().  Note that means we unconditionally
-     * call dlerror() on POSIX systems.*/
-#ifdef _OS_WINDOWS_
+    /* Next, check for errors. On Windows, a NULL pointer means the symbol was
+     * not found. On everything else, we can have NULL symbols, so we check for
+     * non-NULL returns from dlerror(). Since POSIX doesn't require `dlerror`
+     * to be implemented safely, FreeBSD doesn't (unlike everyone else, who
+     * realized decades ago that threads are here to stay), so we avoid calling
+     * `dlerror` unless we need to get the error message.
+     * https://github.com/freebsd/freebsd-src/blob/12db51d20823a5e3b9e5f8a2ea73156fe1cbfc28/libexec/rtld-elf/rtld.c#L198
+     */
     symbol_found = *value != NULL;
-#else
-    const char *err = dlerror();
-    symbol_found = err == NULL;
+#ifndef _OS_WINDOWS_
+    const char *err;
+    if (!symbol_found) {
+        dlerror(); /* Reset error status. */
+        *value = dlsym(handle, symbol);
+        err = dlerror();
+        symbol_found = *value != NULL || err == NULL;
+    }
 #endif
 
     if (!symbol_found && throw_err) {
@@ -308,22 +337,16 @@ const char *jl_dlfind_win32(const char *f_name)
     void * dummy;
     if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
         return JL_EXE_LIBNAME;
-    if (jl_dlsym(jl_dl_handle, f_name, &dummy, 0))
-        return JL_DL_LIBNAME;
+    if (jl_dlsym(jl_libjulia_internal_handle, f_name, &dummy, 0))
+        return JL_LIBJULIA_INTERNAL_DL_LIBNAME;
+    if (jl_dlsym(jl_libjulia_handle, f_name, &dummy, 0))
+        return JL_LIBJULIA_DL_LIBNAME;
     if (jl_dlsym(jl_kernel32_handle, f_name, &dummy, 0))
         return "kernel32";
+    if (jl_dlsym(jl_crtdll_handle, f_name, &dummy, 0)) // Prefer crtdll over ntdll
+        return jl_crtdll_basename;
     if (jl_dlsym(jl_ntdll_handle, f_name, &dummy, 0))
         return "ntdll";
-    if (jl_dlsym(jl_crtdll_handle, f_name, &dummy, 0))
-#if defined(_MSC_VER)
-#if _MSC_VER == 1800
-        return "msvcr120";
-#else
-#error This version of MSVC has not been tested.
-#endif
-#else
-        return "msvcrt";
-#endif
     if (jl_dlsym(jl_winsock_handle, f_name, &dummy, 0))
         return "ws2_32";
     // additional common libraries (libc?) could be added here, but in general,
@@ -334,8 +357,8 @@ const char *jl_dlfind_win32(const char *f_name)
     // explicit is preferred over implicit
     return NULL;
     // oops, we didn't find it. NULL defaults to searching jl_RTLD_DEFAULT_handle,
-    // which defaults to jl_dl_handle, where we won't find it, and will throw the
-    // appropriate error.
+    // which defaults to jl_libjulia_internal_handle, where we won't find it, and
+    // will throw the appropriate error.
 }
 #endif
 

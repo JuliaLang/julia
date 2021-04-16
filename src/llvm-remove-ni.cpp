@@ -6,6 +6,8 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/Debug.h>
 
+#include "julia.h"
+
 #define DEBUG_TYPE "remove_ni"
 
 using namespace llvm;
@@ -46,4 +48,9 @@ static RegisterPass<RemoveNIPass>
 Pass *createRemoveNIPass()
 {
     return new RemoveNIPass();
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveNIPass(LLVMPassManagerRef PM)
+{
+    unwrap(PM)->add(createRemoveNIPass());
 }

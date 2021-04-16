@@ -13,8 +13,8 @@ import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
 using Base: Process, Semaphore, JLOptions, buffer_writes, @sync_add,
             VERSION_STRING, binding_module, atexit, julia_exename,
             julia_cmd, AsyncGenerator, acquire, release, invokelatest,
-            shell_escape_posixly, uv_error, something, notnothing, isbuffered,
-            mapany
+            shell_escape_posixly, shell_escape_wincmd, escape_microsoft_c_args,
+            uv_error, something, notnothing, isbuffered, mapany
 using Base.Threads: Event
 
 using Serialization, Sockets

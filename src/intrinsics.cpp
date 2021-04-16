@@ -60,7 +60,7 @@ static void jl_init_intrinsic_functions_codegen(void)
     float_func[fpiseq] = true;
     float_func[fpislt] = true;
     float_func[abs_float] = true;
-    //float_func[copysign_float] = false; // this is actually an integer operation
+    float_func[copysign_float] = true;
     float_func[ceil_llvm] = true;
     float_func[floor_llvm] = true;
     float_func[trunc_llvm] = true;
@@ -168,7 +168,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         return ConstantFP::get(jl_LLVMContext,
                 APFloat(lt->getFltSemantics(), APInt(64, data64)));
     }
-    if (lt->isFloatingPointTy() || lt->isIntegerTy()) {
+    if (lt->isFloatingPointTy() || lt->isIntegerTy() || lt->isPointerTy()) {
         int nb = jl_datatype_size(bt);
         APInt val(8 * nb, 0);
         void *bits = const_cast<uint64_t*>(val.getRawData());
@@ -177,6 +177,11 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         if (lt->isFloatingPointTy()) {
             return ConstantFP::get(jl_LLVMContext,
                     APFloat(lt->getFltSemantics(), val));
+        }
+        if (lt->isPointerTy()) {
+            Type *Ty = IntegerType::get(jl_LLVMContext, 8 * nb);
+            Constant *addr = ConstantInt::get(Ty, val);
+            return ConstantExpr::getIntToPtr(addr, lt);
         }
         assert(cast<IntegerType>(lt)->getBitWidth() == 8u * nb);
         return ConstantInt::get(lt, val);
@@ -257,8 +262,10 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         return ConstantVector::get(fields);
     if (StructType *st = dyn_cast<StructType>(lt))
         return ConstantStruct::get(st, fields);
-    ArrayType *at = cast<ArrayType>(lt);
-    return ConstantArray::get(at, fields);
+    if (ArrayType *at = dyn_cast<ArrayType>(lt))
+        return ConstantArray::get(at, fields);
+    assert(false && "Unknown LLVM type");
+    jl_unreachable();
 }
 
 static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e)
@@ -542,6 +549,8 @@ static jl_cgval_t generic_cast(
 #endif
     }
     Value *ans = ctx.builder.CreateCast(Op, from, to);
+    if (f == fptosi || f == fptoui)
+        ans = ctx.builder.CreateFreeze(ans);
     return mark_julia_type(ctx, ans, false, jlto);
 }
 
@@ -1243,14 +1252,8 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateCall(absintr, x);
     }
     case copysign_float: {
-        Value *bits = ctx.builder.CreateBitCast(x, t);
-        Value *sbits = ctx.builder.CreateBitCast(y, t);
-        unsigned nb = cast<IntegerType>(t)->getBitWidth();
-        APInt notsignbit = APInt::getSignedMaxValue(nb);
-        APInt signbit0(nb, 0); signbit0.setBit(nb - 1);
-        return ctx.builder.CreateOr(
-                    ctx.builder.CreateAnd(bits, ConstantInt::get(t, notsignbit)),
-                    ctx.builder.CreateAnd(sbits, ConstantInt::get(t, signbit0)));
+        FunctionCallee copyintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::copysign, makeArrayRef(t));
+        return ctx.builder.CreateCall(copyintr, {x, y});
     }
     case flipsign_int: {
         ConstantInt *cx = dyn_cast<ConstantInt>(x);

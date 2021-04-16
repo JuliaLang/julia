@@ -4,26 +4,24 @@ ifeq ($(USE_BLAS64), 1)
 UMFPACK_CONFIG := -DLONGBLAS='long long'
 CHOLMOD_CONFIG := -DLONGBLAS='long long'
 SPQR_CONFIG := -DLONGBLAS='long long'
-ifeq ($(OPENBLAS_SYMBOLSUFFIX), 64_)
 UMFPACK_CONFIG += -DSUN64
 CHOLMOD_CONFIG += -DSUN64
 SPQR_CONFIG += -DSUN64
 endif
-endif
 
-# Disable trying to link against libmetis
+# Disable linking to libmetis
 CHOLMOD_CONFIG += -DNPARTITION
 
 ifneq ($(USE_BINARYBUILDER_SUITESPARSE), 1)
 
 SUITESPARSE_PROJECTS := AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR
-SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf camd ccolamd colamd cholmod klu umfpack rbio spqr)
+SUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf camd ccolamd colamd cholmod klu ldl umfpack rbio spqr)
 
 SUITE_SPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(SUITESPARSE_VER)/lib"
 ifeq ($(OS), Darwin)
 SUITE_SPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
 endif
-SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
+SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="-L$(build_shlibdir) -lblastrampoline" LAPACK="-L$(build_shlibdir) -lblastrampoline" \
 	  LDFLAGS="$(SUITE_SPARSE_LIB)" CFOPENMP="" CUDA=no CUDA_PATH="" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
 ifeq ($(OS),WINNT)
@@ -41,6 +39,9 @@ $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted: $(SRCCACHE)/SuiteSp
 	$(TAR) -C $(dir $@) --strip-components 1 -zxf $<
 	echo 1 > $@
 
+checksum-suitesparse: $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
 	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/SuiteSparse-winclang.patch
 	echo 1 > $@
@@ -50,11 +51,7 @@ $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-shlib.patch-applied: $(BU
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-shlib.patch-applied
 
-ifeq ($(USE_SYSTEM_BLAS), 0)
-$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/openblas
-else ifeq ($(USE_SYSTEM_LAPACK), 0)
-$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/lapack
-endif
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
 	$(MAKE) -C $(dir $<)SuiteSparse_config library config $(SUITESPARSE_MFLAGS)
@@ -138,10 +135,8 @@ install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EX
 
 else # USE_BINARYBUILDER_SUITESPARSE
 
-SUITESPARSE_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl/releases/download/SuiteSparse-v$(SUITESPARSE_VER)+$(SUITESPARSE_BB_REL)
-SUITESPARSE_BB_NAME := SuiteSparse.v$(SUITESPARSE_VER)
-
 $(eval $(call bb-install,suitesparse,SUITESPARSE,false))
+
 get-suitesparse-wrapper: get-suitesparse
 extract-suitesparse-wrapper: extract-suitesparse
 configure-suitesparse-wrapper: configure-suitesparse
@@ -152,6 +147,6 @@ clean-suitesparse-wrapper: clean-suitesparse
 distclean-suitesparse-wrapper: distclean-suitesparse
 install-suitesparse-wrapper: install-suitesparse
 
-# suitesparse depends on OpenBLAS
-compile-suitesparse: | $(build_prefix)/manifest/openblas
+# suitesparse depends on blastrampoline
+compile-suitesparse: | $(build_prefix)/manifest/blastrampoline
 endif

@@ -79,6 +79,9 @@ handle comparison to other types via promotion rules where possible.
 [`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
 [`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
 should therefore also implement [`hash`](@ref).
+
+If some type defines `==`, [`isequal`](@ref), and [`isless`](@ref) then it should
+also implement [`<`](@ref) to ensure consistency of comparisons.
 """
 ==
 
@@ -141,7 +144,7 @@ is defined, it is expected to satisfy the following:
   `isless(x, y) && isless(y, z)` implies `isless(x, z)`.
 
 Values that are normally unordered, such as `NaN`,
-are ordered in an arbitrary but consistent fashion.
+are ordered after regular values.
 [`missing`](@ref) values are ordered last.
 
 This is the default comparison used by [`sort`](@ref).
@@ -168,6 +171,63 @@ isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
+"""
+    isgreater(x, y)
+
+Not the inverse of `isless`! Test whether `x` is greater than `y`, according to
+a fixed total order compatible with `min`.
+
+Defined with `isless`, this function is usually `isless(y, x)`, but `NaN` and
+[`missing`](@ref) are ordered as smaller than any ordinary value with `missing`
+smaller than `NaN`.
+
+So `isless` defines an ascending total order with `NaN` and `missing` as the
+largest values and `isgreater` defines a descending total order with `NaN` and
+`missing` as the smallest values.
+
+!!! note
+
+    Like `min`, `isgreater` orders containers (tuples, vectors, etc)
+    lexigraphically with `isless(y, x)` rather than recursively with itself:
+
+    ```jldoctest
+    julia> Base.isgreater(1, NaN) # 1 is greater than NaN
+    true
+
+    julia> Base.isgreater((1,), (NaN,)) # But (1,) is not greater than (NaN,)
+    false
+
+    julia> sort([1, 2, 3, NaN]; lt=Base.isgreater)
+    4-element Vector{Float64}:
+       3.0
+       2.0
+       1.0
+     NaN
+
+    julia> sort(tuple.([1, 2, 3, NaN]); lt=Base.isgreater)
+    4-element Vector{Tuple{Float64}}:
+     (NaN,)
+     (3.0,)
+     (2.0,)
+     (1.0,)
+    ```
+
+# Implementation
+This is unexported. Types should not usually implement this function. Instead, implement `isless`.
+"""
+isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
+
+"""
+    isunordered(x)
+
+Return true if `x` is a value that is not normally orderable, such as `NaN` or `missing`.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+"""
+isunordered(x) = false
+isunordered(x::AbstractFloat) = isnan(x)
+isunordered(x::Missing) = true
 
 function ==(T::Type, S::Type)
     @_pure_meta
@@ -262,7 +322,6 @@ a partial order.
 New numeric types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
-(x < y) | (x == y)
 
 # Examples
 ```jldoctest
@@ -519,18 +578,56 @@ identity(x) = x
 xor(x::Integer) = x
 
 const ⊻ = xor
+const ⊼ = nand
+const ⊽ = nor
 
-# foldl for argument lists. expand recursively up to a point, then
-# switch to a loop. this allows small cases like `a+b+c+d` to be inlined
+# foldl for argument lists. expand fully up to a point, then
+# switch to a loop. this allows small cases like `a+b+c+d` to be managed
 # efficiently, without a major slowdown for `+(x...)` when `x` is big.
-afoldl(op,a) = a
-afoldl(op,a,b) = op(a,b)
-afoldl(op,a,b,c...) = afoldl(op, op(a,b), c...)
-function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
-    y = op(op(op(op(op(op(op(op(op(op(op(op(op(op(op(a,b),c),d),e),f),g),h),i),j),k),l),m),n),o),p)
-    for x in qs; y = op(y,x); end
-    y
+# n.b.: keep this method count small, so it can be inferred without hitting the
+# method count limit in inference
+afoldl(op, a) = a
+function afoldl(op, a, bs...)
+    l = length(bs)
+    i =  0; y = a;            l == i && return y
+    #@nexprs 31 i -> (y = op(y, bs[i]); l == i && return y)
+    i =  1; y = op(y, bs[i]); l == i && return y
+    i =  2; y = op(y, bs[i]); l == i && return y
+    i =  3; y = op(y, bs[i]); l == i && return y
+    i =  4; y = op(y, bs[i]); l == i && return y
+    i =  5; y = op(y, bs[i]); l == i && return y
+    i =  6; y = op(y, bs[i]); l == i && return y
+    i =  7; y = op(y, bs[i]); l == i && return y
+    i =  8; y = op(y, bs[i]); l == i && return y
+    i =  9; y = op(y, bs[i]); l == i && return y
+    i = 10; y = op(y, bs[i]); l == i && return y
+    i = 11; y = op(y, bs[i]); l == i && return y
+    i = 12; y = op(y, bs[i]); l == i && return y
+    i = 13; y = op(y, bs[i]); l == i && return y
+    i = 14; y = op(y, bs[i]); l == i && return y
+    i = 15; y = op(y, bs[i]); l == i && return y
+    i = 16; y = op(y, bs[i]); l == i && return y
+    i = 17; y = op(y, bs[i]); l == i && return y
+    i = 18; y = op(y, bs[i]); l == i && return y
+    i = 19; y = op(y, bs[i]); l == i && return y
+    i = 20; y = op(y, bs[i]); l == i && return y
+    i = 21; y = op(y, bs[i]); l == i && return y
+    i = 22; y = op(y, bs[i]); l == i && return y
+    i = 23; y = op(y, bs[i]); l == i && return y
+    i = 24; y = op(y, bs[i]); l == i && return y
+    i = 25; y = op(y, bs[i]); l == i && return y
+    i = 26; y = op(y, bs[i]); l == i && return y
+    i = 27; y = op(y, bs[i]); l == i && return y
+    i = 28; y = op(y, bs[i]); l == i && return y
+    i = 29; y = op(y, bs[i]); l == i && return y
+    i = 30; y = op(y, bs[i]); l == i && return y
+    i = 31; y = op(y, bs[i]); l == i && return y
+    for i in (i + 1):l
+        y = op(y, bs[i])
+    end
+    return y
 end
+typeof(afoldl).name.mt.max_args = 34
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
@@ -547,7 +644,6 @@ end
 function kron! end
 
 const var"'" = adjoint
-const var"'ᵀ" = transpose
 
 """
     \\(x, y)
@@ -725,7 +821,8 @@ const % = rem
     div(x, y)
     ÷(x, y)
 
-The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
+The quotient from Euclidean (integer) division. Generally equivalent
+to a mathematical operation x/y without a fractional part.
 
 # Examples
 ```jldoctest
@@ -838,12 +935,48 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 """
 |>(x, f) = f(x)
 
+"""
+    f = Returns(value)
+
+Create a callable `f` such that `f(args...; kw...) === value` holds.
+
+# Examples
+
+```jldoctest
+julia> f = Returns(42);
+
+julia> f(1)
+42
+
+julia> f("hello", x=32)
+42
+
+julia> f.value
+42
+```
+
+!!! compat "Julia 1.7"
+    Returns requires at least Julia 1.7.
+"""
+struct Returns{V} <: Function
+    value::V
+    Returns{V}(value) where {V} = new{V}(value)
+    Returns(value) = new{Core.Typeof(value)}(value)
+end
+
+(obj::Returns)(args...; kw...) = obj.value
+function show(io::IO, obj::Returns)
+    show(io, typeof(obj))
+    print(io, "(")
+    show(io, obj.value)
+    print(io, ")")
+end
 # function composition
 
 """
     f ∘ g
 
-Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
+Compose functions: i.e. `(f ∘ g)(args...; kwargs...)` means `f(g(args...; kwargs...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
@@ -854,7 +987,10 @@ and splatting `∘(fs...)` for composing an iterable collection of functions.
     Multiple function composition requires at least Julia 1.4.
 
 !!! compat "Julia 1.5"
-    Composition of one function ∘(f)  requires at least Julia 1.5.
+    Composition of one function ∘(f) requires at least Julia 1.5.
+
+!!! compat "Julia 1.7"
+    Using keyword arguments requires at least Julia 1.7.
 
 # Examples
 ```jldoctest
@@ -916,7 +1052,7 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...) = c.outer(c.inner(x...))
+(c::ComposedFunction)(x...; kw...) = c.outer(c.inner(x...; kw...))
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
@@ -1092,13 +1228,14 @@ julia> map(Base.splat(+), zip(1:3,4:6))
 """
 splat(f) = args->f(args...)
 
-## in & contains
+## in and related operators
 
 """
-    in(x)
+    in(collection)
+    ∈(collection)
 
-Create a function that checks whether its argument is [`in`](@ref) `x`, i.e.
-a function equivalent to `y -> y in x`. See also [`insorted`](@ref) for the use
+Create a function that checks whether its argument is [`in`](@ref) `collection`, i.e.
+a function equivalent to `y -> y in collection`. See also [`insorted`](@ref) for use
 with sorted collections.
 
 The returned function is of type `Base.Fix2{typeof(in)}`, which can be
@@ -1120,14 +1257,34 @@ function in(x, itr)
 end
 
 const ∈ = in
-∋(itr, x) = ∈(x, itr)
 ∉(x, itr) = !∈(x, itr)
+∉(itr) = Fix2(∉, itr)
+
+"""
+    ∋(collection, item) -> Bool
+
+Like [`in`](@ref), but with arguments in reverse order.
+Avoid adding methods to this function; define `in` instead.
+"""
+∋(itr, x) = in(x, itr)
+
+"""
+    ∋(item)
+
+Create a function that checks whether its argument contains the given `item`, i.e.
+a function equivalent to `y -> item in y`.
+
+!!! compat "Julia 1.6"
+    This method requires Julia 1.6 or later.
+"""
+∋(x) = Fix2(∋, x)
+
 ∌(itr, x) = !∋(itr, x)
+∌(x) = Fix2(∌, x)
 
 """
     in(item, collection) -> Bool
     ∈(item, collection) -> Bool
-    ∋(collection, item) -> Bool
 
 Determine whether an item is in the given collection, in the sense that it is
 [`==`](@ref) to one of the values generated by iterating over the collection.
@@ -1194,7 +1351,7 @@ julia> [1, 2] .∈ ([2, 3],)
  1
 ```
 """
-in, ∋
+in
 
 """
     ∉(item, collection) -> Bool

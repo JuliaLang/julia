@@ -91,7 +91,7 @@ function isperm(P::Tuple)
     end
 end
 
-isperm(P::Any16) = _isperm(P)
+isperm(P::Any32) = _isperm(P)
 
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
@@ -286,7 +286,7 @@ function invperm(P::Tuple)
     end
 end
 
-invperm(P::Any16) = Tuple(invperm(collect(P)))
+invperm(P::Any32) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
@@ -307,7 +307,7 @@ julia> 2^2 * 3^3
 !!! compat "Julia 1.6"
     The method that accepts a tuple requires Julia 1.6 or later.
 """
-function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractVector{<:Integer}}, x::Real)
+function nextprod(a::Union{Tuple{Vararg{Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end

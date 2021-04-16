@@ -104,9 +104,9 @@ module IteratorsMD
 
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
-    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 0, Val(N)))
+    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(Returns(0), Val(N)))
     oneunit(::CartesianIndex{N}) where {N} = oneunit(CartesianIndex{N})
-    oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
+    oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(Returns(1), Val(N)))
 
     # arithmetic, min/max
     @inline (-)(index::CartesianIndex{N}) where {N} =
@@ -278,6 +278,7 @@ module IteratorsMD
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
+    _convert2ind(sz::Bool) = Base.OneTo(Int8(sz))
     _convert2ind(sz::Integer) = Base.OneTo(sz)
     _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
     _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
@@ -457,7 +458,7 @@ module IteratorsMD
 
     # Split out the first N elements of a tuple
     @inline function split(t, V::Val)
-        ref = ntuple(d->true, V)  # create a reference tuple of length N
+        ref = ntuple(Returns(true), V)  # create a reference tuple of length N
         _split1(t, ref), _splitrest(t, ref)
     end
     @inline _split1(t, ref) = (t[1], _split1(tail(t), tail(ref))...)
@@ -660,6 +661,16 @@ end
     checkindex(Bool, IA1, I[1]) & checkbounds_indices(Bool, IArest, tail(I))
 end
 
+
+@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{},
+    I::Tuple{AbstractArray{Bool,N},Vararg{Any}}) where N
+    return checkbounds_indices(Bool, IA, (LogicalIndex(I[1]), tail(I)...))
+end
+@inline function checkbounds_indices(::Type{Bool}, IA::Tuple,
+    I::Tuple{AbstractArray{Bool,N},Vararg{Any}}) where N
+    return checkbounds_indices(Bool, IA, (LogicalIndex(I[1]), tail(I)...))
+end
+
 function checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{<:CartesianIndex})
     b = true
     for i in I
@@ -674,10 +685,10 @@ checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) = all(checkindex.(Boo
 # rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
 @inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
 @inline function index_ndims(i1::CartesianIndex, I...)
-    (map(x->true, i1.I)..., index_ndims(I...)...)
+    (map(Returns(true), i1.I)..., index_ndims(I...)...)
 end
 @inline function index_ndims(i1::AbstractArray{CartesianIndex{N}}, I...) where N
-    (ntuple(x->true, Val(N))..., index_ndims(I...)...)
+    (ntuple(Returns(true), Val(N))..., index_ndims(I...)...)
 end
 index_ndims() = ()
 
@@ -687,7 +698,7 @@ index_ndims() = ()
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
 @inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N
-    (ntuple(x->true, Val(N))..., index_dimsum(I...)...)
+    (ntuple(Returns(true), Val(N))..., index_dimsum(I...)...)
 end
 index_dimsum() = ()
 
@@ -773,7 +784,7 @@ end
     eachindex(IndexLinear(), A) == eachindex(IndexLinear(), I.mask)
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = axes(A) == axes(I.mask)
 @inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == axes(I.mask)
-checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = false
+checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = checkbounds_indices(Bool, inds, axes(I.mask))
 
 ensure_indexable(I::Tuple{}) = ()
 @inline ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
@@ -1688,9 +1699,9 @@ extrema(f, A::AbstractArray; dims=:) = _extrema_dims(f, A, dims)
 _extrema_dims(f, A::AbstractArray, ::Colon) = _extrema_itr(f, A)
 
 function _extrema_dims(f, A::AbstractArray, dims)
-    sz = [size(A)...]
+    sz = size(A)
     for d in dims
-        sz[d] = 1
+        sz = setindex(sz, 1, d)
     end
     T = promote_op(f, eltype(A))
     B = Array{Tuple{T,T}}(undef, sz...)

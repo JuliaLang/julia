@@ -17,13 +17,13 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
-    if (dt->layout == NULL)
+    if (dt->layout == NULL || jl_is_layout_opaque(dt->layout))
         return nullptr;
     size_t nfields = dt->layout->nfields;
     assert(nfields > 0);
     if (nfields < 2)
         return nullptr;
-#if JL_LLVM_VERSION >= 120000
+#if JL_LLVM_VERSION >= 110000
     static Type *T_vec64 = FixedVectorType::get(T_int32, 2);
     static Type *T_vec128 = FixedVectorType::get(T_int32, 4);
 #else

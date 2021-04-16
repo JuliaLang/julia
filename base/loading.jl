@@ -290,6 +290,10 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
             path = manifest_uuid_path(env, pkg)
             path === nothing || return entry_path(path, pkg.name)
         end
+        # Allow loading of stdlibs if the name/uuid are given
+        # e.g. if they have been explicitly added to the project/manifest
+        path = manifest_uuid_path(Sys.STDLIB::String, pkg)
+        path === nothing || return entry_path(path, pkg.name)
     end
     return nothing
 end
@@ -308,8 +312,9 @@ function pathof(m::Module)
     pkgid === nothing && return nothing
     origin = get(Base.pkgorigins, pkgid, nothing)
     origin === nothing && return nothing
-    origin.path === nothing && return nothing
-    return fixup_stdlib_path(origin.path)
+    path = origin.path
+    path === nothing && return nothing
+    return fixup_stdlib_path(path)
 end
 
 """
@@ -360,7 +365,8 @@ function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
 end
 
 function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothing,PkgId}
-    @assert where.uuid !== nothing
+    uuid = where.uuid
+    @assert uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
         # first check if `where` names the Project itself
@@ -371,7 +377,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             return PkgId(pkg_uuid, name)
         end
         # look for manifest file and `where` stanza
-        return explicit_manifest_deps_get(project_file, where.uuid, name)
+        return explicit_manifest_deps_get(project_file, uuid, name)
     elseif project_file
         # if env names a directory, search it
         return implicit_manifest_deps_get(env, where, name)
@@ -492,7 +498,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
     for (dep_name, entries) in d
         entries::Vector{Any}
         for entry in entries
-            entry::Dict{String, Any}
+            entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && continue
             if UUID(uuid) === where
@@ -505,7 +511,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
                     found_name = name in deps
                     break
                 else
-                    deps::Dict{String, Any}
+                    deps = deps::Dict{String, Any}
                     for (dep, uuid) in deps
                         uuid::String
                         if dep === name
@@ -538,7 +544,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
     entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
     entries === nothing && return nothing # TODO: allow name to mismatch?
     for entry in entries
-        entry::Dict{String, Any}
+        entry = entry::Dict{String, Any}
         uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
         uuid === nothing && continue
         if UUID(uuid) === pkg.uuid
@@ -558,7 +564,8 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
     hash === nothing && return nothing
     hash = SHA1(hash)
     # Keep the 4 since it used to be the default
-    for slug in (version_slug(pkg.uuid, hash, 4), version_slug(pkg.uuid, hash))
+    uuid = pkg.uuid::UUID # checked within `explicit_manifest_uuid_path`
+    for slug in (version_slug(uuid, hash, 4), version_slug(uuid, hash))
         for depot in DEPOT_PATH
             path = abspath(depot, "packages", pkg.name, slug)
             ispath(path) && return path
@@ -627,7 +634,7 @@ function find_all_in_cache_path(pkg::PkgId)
     entrypath, entryfile = cache_file_entry(pkg)
     for path in joinpath.(DEPOT_PATH, entrypath)
         isdir(path) || continue
-        for file in readdir(path)
+        for file in readdir(path, sort = false) # no sort given we sort later
             if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
                  (pkg.uuid !== nothing && startswith(file, entryfile * "_")))
                  continue
@@ -636,7 +643,14 @@ function find_all_in_cache_path(pkg::PkgId)
             isfile_casesensitive(filepath) && push!(paths, filepath)
         end
     end
-    return paths
+    if length(paths) > 1
+        # allocating the sort vector is less expensive than using sort!(.. by=mtime), which would
+        # call the relatively slow mtime multiple times per path
+        p = sortperm(mtime.(paths), rev = true)
+        return paths[p]
+    else
+        return paths
+    end
 end
 
 # these return either the array of modules loaded from the path / content given
@@ -1060,6 +1074,9 @@ Like [`include`](@ref), except reads code from the given string rather than from
 The optional first argument `mapexpr` can be used to transform the included code before
 it is evaluated: for each parsed expression `expr` in `code`, the `include_string` function
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
 """
 function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString="string")
@@ -1119,6 +1136,9 @@ interactively, or to combine files in packages that are broken into multiple sou
 The optional first argument `mapexpr` can be used to transform the included code before
 it is evaluated: for each parsed expression `expr` in `path`, the `include` function
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
 """
 Base.include # defined in Base.jl
 
@@ -1206,11 +1226,9 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     end
 end
 
-@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),Nothing))
-@assert precompile(include_package_for_output, (PkgId,String,Vector{String},Vector{String},Vector{String},typeof(_concrete_dependencies),String))
-
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+    @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
@@ -1249,9 +1267,6 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     return io
 end
 
-@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), typeof(stderr), typeof(stdout)))
-@assert precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), typeof(stderr), typeof(stdout)))
-
 function compilecache_dir(pkg::PkgId)
     entrypath, entryfile = cache_file_entry(pkg)
     return joinpath(DEPOT_PATH[1], entrypath)
@@ -1282,6 +1297,7 @@ This can be used to reduce package load times. Cache files are stored in
 for important notes.
 """
 function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+    @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
     return compilecache(pkg, path, internal_stderr, internal_stdout)
@@ -1289,15 +1305,20 @@ end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
-function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
+                      ignore_loaded_modules::Bool = true)
+
+    @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
     cachepath = compilecache_dir(pkg)
 
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
-    for (key, mod) in loaded_modules
-        if !(mod === Main || mod === Core || mod === Base)
-            push!(concrete_deps, key => module_build_id(mod))
+    if ignore_loaded_modules
+        for (key, mod) in loaded_modules
+            if !(mod === Main || mod === Core || mod === Base)
+                push!(concrete_deps, key => module_build_id(mod))
+            end
         end
     end
     # run the expression and cache the result
@@ -1535,19 +1556,20 @@ end
 
 # Test to see if this UUID is mentioned in this `Project.toml`; either as
 # the top-level UUID (e.g. that of the project itself) or as a dependency.
-function get_uuid_name(project::Dict, uuid::UUID)
-    if haskey(project, "uuid") && haskey(project, "name") &&
-                                  UUID(project["uuid"]::String) == uuid
-        return project["name"]::String
-    elseif haskey(project, "deps")
-        struuid = string(uuid)
-        for (k, v) in project["deps"]::Dict{String, Any}
-            if v::String == struuid
-                return k::String
+function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
+    uuid_p = get(project, "uuid", nothing)::Union{Nothing, String}
+    name = get(project, "name", nothing)::Union{Nothing, String}
+    if name !== nothing && uuid_p !== nothing && UUID(uuid_p) == uuid
+        return name
+    end
+    deps = get(project, "deps", nothing)::Union{Nothing, Dict{String, Any}}
+    if deps !== nothing
+        for (k, v) in deps
+            if uuid == UUID(v::String)
+                return k
             end
         end
     end
-
     return nothing
 end
 
@@ -1556,7 +1578,7 @@ function get_uuid_name(project_toml::String, uuid::UUID)
     return get_uuid_name(project, uuid)
 end
 
-function collect_preferences!(project_toml::String, uuid::UUID)
+function collect_preferences(project_toml::String, uuid::UUID)
     # We'll return a list of dicts to be merged
     dicts = Dict{String, Any}[]
 
@@ -1568,8 +1590,9 @@ function collect_preferences!(project_toml::String, uuid::UUID)
     end
 
     # Look first inside of `Project.toml` to see we have preferences embedded within there
-    if haskey(project, "preferences") && isa(project["preferences"], Dict)
-        push!(dicts, get(project["preferences"], pkg_name, Dict()))
+    proj = get(project, "preferences", nothing)
+    if proj isa Dict{String, Any}
+        push!(dicts, get(Dict{String, Any}, proj, pkg_name)::Dict{String, Any})
     end
 
     # Next, look for `(Julia)LocalPreferences.toml` files next to this `Project.toml`
@@ -1578,7 +1601,7 @@ function collect_preferences!(project_toml::String, uuid::UUID)
         toml_path = joinpath(project_dir, name)
         if isfile(toml_path)
             prefs = parsed_toml(toml_path)
-            push!(dicts, get(prefs, pkg_name, Dict{String,Any}())::Dict{String,Any})
+            push!(dicts, get(Dict{String, Any}, prefs, pkg_name)::Dict{String,Any})
 
             # If we find `JuliaLocalPreferences.toml`, don't look for `LocalPreferences.toml`
             break
@@ -1594,23 +1617,25 @@ end
 Helper function to merge preference dicts recursively, honoring overrides in nested
 dictionaries properly.
 """
-function recursive_prefs_merge(base::Dict, overrides::Dict...)
+function recursive_prefs_merge(base::Dict{String, Any}, overrides::Dict{String, Any}...)
     new_base = Base._typeddict(base, overrides...)
 
     for override in overrides
         # Clear entries are keys that should be deleted from any previous setting.
-        if haskey(override, "__clear__") && isa(override["__clear__"], Vector)
-            for k in override["__clear__"]
+        override_clear = get(override, "__clear__", nothing)
+        if override_clear isa Vector{String}
+            for k in override_clear
                 delete!(new_base, k)
             end
         end
 
-        for (k, v) in override
+        for (k, override_k) in override
             # Note that if `base` has a mapping that is _not_ a `Dict`, and `override`
-            if haskey(new_base, k) && isa(new_base[k], Dict) && isa(override[k], Dict)
-                new_base[k] = recursive_prefs_merge(new_base[k], override[k])
+            new_base_k = get(new_base, k, nothing)
+            if new_base_k isa Dict{String, Any} && override_k isa Dict{String, Any}
+                new_base[k] = recursive_prefs_merge(new_base_k, override_k)
             else
-                new_base[k] = override[k]
+                new_base[k] = override_k
             end
         end
     end
@@ -1626,29 +1651,33 @@ function get_preferences(uuid::UUID)
         end
 
         # Collect all dictionaries from the current point in the load path, then merge them in
-        dicts = collect_preferences!(project_toml, uuid)
+        dicts = collect_preferences(project_toml, uuid)
         merged_prefs = recursive_prefs_merge(merged_prefs, dicts...)
     end
     return merged_prefs
 end
 
-function get_preferences_hash(uuid::UUID, prefs_list::Vector{String})
-    # Start from the "null" hash
-    h = get_preferences_hash(nothing, prefs_list)
+function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{String})
+    # Start from a predictable hash point to ensure that the same preferences always
+    # hash to the same value, modulo changes in how Dictionaries are hashed.
+    h = UInt(0)
+    uuid === nothing && return UInt64(h)
 
     # Load the preferences
     prefs = get_preferences(uuid)
 
     # Walk through each name that's called out as a compile-time preference
     for name in prefs_list
-        if haskey(prefs, name)
-            h = hash(prefs[name], h)
+        prefs_name = get(prefs, name, nothing)::Union{String, Nothing}
+        if prefs_name !== nothing
+            h = hash(prefs_name, h)
         end
     end
-    return h
+    # We always return a `UInt64` so that our serialization format is stable
+    return UInt64(h)
 end
+
 get_preferences_hash(m::Module, prefs_list::Vector{String}) = get_preferences_hash(PkgId(m).uuid, prefs_list)
-get_preferences_hash(::Nothing, prefs_list::Vector{String}) = UInt64(0x6e65726566657250)
 
 # This is how we keep track of who is using what preferences at compile-time
 const COMPILETIME_PREFERENCES = Dict{UUID,Set{String}}()
@@ -1657,14 +1686,11 @@ const COMPILETIME_PREFERENCES = Dict{UUID,Set{String}}()
 # we mark that usage as a usage at compile-time and call this method, so that at the end of `.ji` generation,
 # we can record the list of compile-time preferences and embed that into the `.ji` header
 function record_compiletime_preference(uuid::UUID, key::String)
-    if !haskey(COMPILETIME_PREFERENCES, uuid)
-        COMPILETIME_PREFERENCES[uuid] = Set((key,))
-    else
-        push!(COMPILETIME_PREFERENCES[uuid], key)
-    end
+    pref = get!(Set{String}, COMPILETIME_PREFERENCES, uuid)
+    push!(pref, key)
     return nothing
 end
-get_compiletime_preferences(uuid::UUID) = collect(get(COMPILETIME_PREFERENCES, uuid, String[]))
+get_compiletime_preferences(uuid::UUID) = collect(get(Vector{String}, COMPILETIME_PREFERENCES, uuid))
 get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uuid)
 get_compiletime_preferences(::Nothing) = String[]
 
@@ -1793,3 +1819,23 @@ macro __DIR__()
     _dirname = dirname(String(__source__.file::Symbol))
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end
+
+"""
+    precompile(f, args::Tuple{Vararg{Any}})
+
+Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
+"""
+function precompile(@nospecialize(f), args::Tuple)
+    precompile(Tuple{Core.Typeof(f), args...})
+end
+
+function precompile(argt::Type)
+    if ccall(:jl_compile_hint, Int32, (Any,), argt) == 0
+        @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
+    end
+    true
+end
+
+precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
+precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String))
+precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), IO, IO))

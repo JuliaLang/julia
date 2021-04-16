@@ -40,7 +40,7 @@ end
     end
 end
 
-@testset "ispow2" begin
+@testset "ispow2 and iseven/isodd" begin
     for T in (Float16,Float32,Float64,BigFloat)
         for x in (0.25, 1.0, 4.0, exp2(T(exponent(floatmax(T)))), exp2(T(exponent(floatmin(T)))))
             @test ispow2(T(x))
@@ -48,6 +48,15 @@ end
         for x in (1.5, 0.0, 7.0, NaN, Inf)
             @test !ispow2(T(x))
         end
+        for x in (0, 134)
+            @test iseven(T(x)) && iseven(T(-x))
+            @test isodd(T(x+1)) && isodd(T(-x-1))
+        end
+        let x = maxintfloat(T) * π
+            @test iseven(x) && iseven(-x)
+            @test !isodd(x) && !isodd(-x)
+        end
+        @test !iseven(0.5) && !isodd(0.5)
     end
 end
 
@@ -177,4 +186,9 @@ end
 
     @test ≈(1.0; atol=1).(1.0:3.0) == [true, true, false]
 
+end
+
+@testset "isnan for Number" begin
+    struct CustomNumber <: Number end
+    @test !isnan(CustomNumber())
 end

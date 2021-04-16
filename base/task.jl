@@ -79,7 +79,12 @@ end
 function show_task_exception(io::IO, t::Task; indent = true)
     stack = catch_stack(t)
     b = IOBuffer()
-    show_exception_stack(IOContext(b, io), stack)
+    if isempty(stack)
+        # exception stack buffer not available; probably a serialized task
+        showerror(IOContext(b, io), t.result)
+    else
+        show_exception_stack(IOContext(b, io), stack)
+    end
     str = String(take!(b))
     if indent
         str = replace(str, "\n" => "\n    ")
@@ -131,10 +136,21 @@ const task_state_runnable = UInt8(0)
 const task_state_done     = UInt8(1)
 const task_state_failed   = UInt8(2)
 
+const _state_index = findfirst(==(:_state), fieldnames(Task))
+@eval function load_state_acquire(t)
+    # TODO: Replace this by proper atomic operations when available
+    @GC.preserve t llvmcall($("""
+        %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i8*
+        %rv = load atomic i8, i8* %ptr acquire, align 8
+        ret i8 %rv
+        """), UInt8, Tuple{Ptr{UInt8}},
+        Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
+end
+
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
         # TODO: this field name should be deprecated in 2.0
-        st = getfield(t, :_state)
+        st = load_state_acquire(t)
         if st === task_state_runnable
             return :runnable
         elseif st === task_state_done
@@ -177,7 +193,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = t._state !== task_state_runnable
+istaskdone(t::Task) = load_state_acquire(t) !== task_state_runnable
 
 """
     istaskstarted(t::Task) -> Bool
@@ -221,7 +237,7 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = (t._state === task_state_failed)
+istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 
@@ -404,6 +420,43 @@ macro async(expr)
             task
         end
     end
+end
+
+"""
+    errormonitor(t::Task)
+
+Print an error log to `stderr` if task `t` fails.
+"""
+function errormonitor(t::Task)
+    t2 = Task() do
+        if istaskfailed(t)
+            local errs = stderr
+            try # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Unhandled Task ")
+                display_error(errio, catch_stack(t))
+                write(errs, errio)
+            catch
+                try # try to display the secondary error atomically
+                    errio = IOContext(PipeBuffer(), errs::IO)
+                    print(errio, "\nSYSTEM: caught exception while trying to print a failed Task notice: ")
+                    display_error(errio, catch_stack())
+                    write(errs, errio)
+                    flush(errs)
+                    # and then the actual error, as best we can
+                    Core.print(Core.stderr, "while handling: ")
+                    Core.println(Core.stderr, catch_stack(t)[end][1])
+                catch e
+                    # give up
+                    Core.print(Core.stderr, "\nSYSTEM: caught exception of type ", typeof(e).name.name,
+                            " while trying to print a failed Task notice; giving up\n")
+                end
+            end
+        end
+        nothing
+    end
+    _wait2(t, t2)
+    return t
 end
 
 # Capture interpolated variables in $() and move them to let-block

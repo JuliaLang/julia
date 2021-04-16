@@ -11,6 +11,9 @@ $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/source-extracted: $(SRCCACHE)/nghttp2-$(NGHTT
 	touch -c $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/configure # old target
 	echo 1 > $@
 
+checksum-nghttp2: $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-configured: $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
@@ -50,8 +53,6 @@ check-nghttp2: $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-checked
 
 else
 
-NGHTTP2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/nghttp2_jll.jl/releases/download/nghttp2-v$(NGHTTP2_VER)+$(NGHTTP2_BB_REL)
-NGHTTP2_BB_NAME := nghttp2.v$(NGHTTP2_VER)
-
 $(eval $(call bb-install,nghttp2,NGHTTP2,false))
+
 endif

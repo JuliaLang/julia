@@ -11,3 +11,7 @@
 /ArgTools
 /Tar-*
 /Tar
+/NetworkOptions-*
+/NetworkOptions
+/*_jll/StdlibArtifacts.toml
+/*/Manifest.toml

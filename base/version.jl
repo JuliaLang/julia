@@ -110,7 +110,7 @@ function tryparse(::Type{VersionNumber}, v::AbstractString)
     m = match(VERSION_REGEX, v)
     m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = parse(VInt, major)
+    major = parse(VInt, major::AbstractString)
     minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
     patch = patch !== nothing ? parse(VInt, patch) : VInt(0)
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
@@ -250,7 +250,7 @@ else
     VersionNumber(libllvm_version_string)
 end
 
-libllvm() = ccall(:jl_get_libllvm, Any, ())
+libllvm_path() = ccall(:jl_get_libllvm, Any, ())
 
 function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit

@@ -487,6 +487,25 @@ end
     end
 end
 
+@testset "Conversion from other issparse types" begin
+    n = 10
+    D = Diagonal(rand(1:9, n, n))
+    Bl = Bidiagonal(rand(1:9, n, n), :L)
+    Bu = Bidiagonal(rand(1:9, n, n), :U)
+    T = Tridiagonal(rand(1:9, n, n))
+    S = SymTridiagonal(Symmetric(rand(1:9, n, n)))
+    @test SparseMatrixCSC(D) == D
+    @test SparseMatrixCSC(Bl) == Bl
+    @test SparseMatrixCSC(Bu) == Bu
+    @test SparseMatrixCSC(T) == T
+    @test SparseMatrixCSC(S) == S
+    @test SparseMatrixCSC{Float64, Int16}(D) == D
+    @test SparseMatrixCSC{Float64, Int16}(Bl) == Bl
+    @test SparseMatrixCSC{Float64, Int16}(Bu) == Bu
+    @test SparseMatrixCSC{Float64, Int16}(T) == T
+    @test SparseMatrixCSC{Float64, Int16}(S) == S
+end
+
 @testset "Concatenation" begin
     let m = 80, n = 100
         A = Vector{SparseVector{Float64,Int}}(undef, n)
@@ -770,6 +789,19 @@ end
     @test sum(x) == 4.0
     @test sum(abs, x) == 5.5
     @test sum(abs2, x) == 14.375
+    @test @inferred(sum(t -> true, x)) === 8
+    @test @inferred(sum(t -> abs(t) + one(t), x)) == 13.5
+
+    @test @inferred(sum(t -> true, spzeros(Float64, 8))) === 8
+    @test @inferred(sum(t -> abs(t) + one(t), spzeros(Float64, 8))) === 8.0
+
+    # reducing over an empty collection
+    # FIXME sum(f, []) throws, should be fixed both for generic and sparse vectors
+    @test_broken sum(t -> true, zeros(Float64, 0)) === 0
+    @test_broken sum(t -> true, spzeros(Float64, 0)) === 0
+    @test @inferred(sum(abs2, spzeros(Float64, 0))) === 0.0
+    @test_broken sum(t -> abs(t) + one(t), zeros(Float64, 0)) === 0.0
+    @test_broken sum(t -> abs(t) + one(t), spzeros(Float64, 0)) === 0.0
 
     @test norm(x) == sqrt(14.375)
     @test norm(x, 1) == 5.5
@@ -783,6 +815,12 @@ end
         @test minimum(x) == -0.75
         @test maximum(abs, x) == 3.5
         @test minimum(abs, x) == 0.0
+        @test @inferred(minimum(t -> true, x)) === true
+        @test @inferred(maximum(t -> true, x)) === true
+        @test @inferred(minimum(t -> abs(t) + one(t), x)) == 1.0
+        @test @inferred(maximum(t -> abs(t) + one(t), x)) == 4.5
+        @test @inferred(minimum(t -> t + one(t), x)) == 0.25
+        @test @inferred(maximum(t -> -abs(t) + one(t), x)) == 1.0
     end
 
     let x = abs.(spv_x1)
@@ -807,6 +845,15 @@ end
         @test minimum(x) == 0.0
         @test maximum(abs, x) == 0.0
         @test minimum(abs, x) == 0.0
+        @test @inferred(minimum(t -> true, x)) === true
+        @test @inferred(maximum(t -> true, x)) === true
+        @test @inferred(minimum(t -> abs(t) + one(t), x)) === 1.0
+        @test @inferred(maximum(t -> abs(t) + one(t), x)) === 1.0
+    end
+
+    let x = spzeros(Float64, 0)
+        @test_throws ArgumentError minimum(t -> true, x)
+        @test_throws ArgumentError maximum(t -> true, x)
     end
 end
 
@@ -1030,6 +1077,10 @@ end
             @test isa(y, Vector{Int})
             @test y == Af'x2f
         end
+    end
+    @testset "ldiv with different element types (#40171)" begin
+        sA = sparse(Int16.(1:4), Int16.(1:4), ones(4))
+        @test all(ldiv!(LowerTriangular(sA), ones(4)) .≈ 1.)
     end
     @testset "ldiv ops with triangular matrices and sparse vecs (#14005)" begin
         m = 10

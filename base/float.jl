@@ -78,10 +78,34 @@ for T in (Float16, Float32, Float64)
     @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
     @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
     # maximum float exponent
-    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
+    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T) - 1)
     # maximum float exponent without bias
     @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
 end
+
+"""
+    exponent_max(T)
+
+Maximum [`exponent`](@ref) value for a floating point number of type `T`.
+
+# Examples
+```jldoctest
+julia> Base.exponent_max(Float64)
+1023
+```
+
+Note, `exponent_max(T) + 1` is a possible value of the exponent field
+with bias, which might be used as sentinel value for `Inf` or `NaN`.
+"""
+function exponent_max end
+
+"""
+    exponent_raw_max(T)
+
+Maximum value of the [`exponent`](@ref) field for a floating point number of type `T` without bias,
+i.e. the maximum integer value representable by [`exponent_bits(T)`](@ref) bits.
+"""
+function exponent_raw_max end
 
 ## conversions to floating-point ##
 
@@ -447,7 +471,7 @@ Test whether a number value is a NaN, an indeterminate value which is neither an
 nor a finite number ("not a number").
 """
 isnan(x::AbstractFloat) = (x != x)::Bool
-isnan(x::Real) = false
+isnan(x::Number) = false
 
 isfinite(x::AbstractFloat) = x - x == 0
 isfinite(x::Real) = decompose(x)[3] != 0
@@ -739,6 +763,8 @@ function issubnormal(x::T) where {T<:IEEEFloat}
 end
 
 ispow2(x::AbstractFloat) = !iszero(x) && frexp(x)[1] == 0.5
+iseven(x::AbstractFloat) = isinteger(x) && (abs(x) > maxintfloat(x) || iseven(Integer(x)))
+isodd(x::AbstractFloat) = isinteger(x) && abs(x) ≤ maxintfloat(x) && isodd(Integer(x))
 
 @eval begin
     typemin(::Type{Float16}) = $(bitcast(Float16, 0xfc00))

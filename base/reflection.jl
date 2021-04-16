@@ -143,15 +143,19 @@ julia> fieldname(Rational, 2)
 ```
 """
 function fieldname(t::DataType, i::Integer)
-    if t.abstract
-        throw(ArgumentError("type does not have definite field names"))
+    throw_not_def_field() = throw(ArgumentError("type does not have definite field names"))
+    function throw_field_access(t, i, n_fields)
+        field_label = n_fields == 1 ? "field" : "fields"
+        throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
     end
+    throw_need_pos_int(i) = throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
+
+    t.abstract && throw_not_def_field()
     names = _fieldnames(t)
     n_fields = length(names)::Int
-    field_label = n_fields == 1 ? "field" : "fields"
-    i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
-    i < 1 && throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
-    return names[i]::Symbol
+    i > n_fields && throw_field_access(t, i, n_fields)
+    i < 1 && throw_need_pos_int(i)
+    return @inbounds names[i]::Symbol
 end
 
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
@@ -363,7 +367,6 @@ function datatype_nfields(dt::DataType)
     return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
 end
 
-
 """
     Base.datatype_pointerfree(dt::DataType) -> Bool
 
@@ -393,6 +396,49 @@ function datatype_fielddesc_type(dt::DataType)
     return (flags >> 1) & 3
 end
 
+# For type stability, we only expose a single struct that describes everything
+struct FieldDesc
+    isforeign::Bool
+    isptr::Bool
+    size::UInt32
+    offset::UInt32
+end
+
+struct FieldDescStorage{T}
+    ptrsize::T
+    offset::T
+end
+FieldDesc(fd::FieldDescStorage{T}) where {T} =
+    FieldDesc(false, fd.ptrsize & 1 != 0,
+              fd.ptrsize >> 1, fd.offset)
+
+struct DataTypeFieldDesc
+    dt::DataType
+    function DataTypeFieldDesc(dt::DataType)
+        dt.layout == C_NULL && throw(UndefRefError())
+        new(dt)
+    end
+end
+
+function getindex(dtfd::DataTypeFieldDesc, i::Int)
+    layout_ptr = convert(Ptr{DataTypeLayout}, dtfd.dt.layout)
+    fd_ptr = layout_ptr + sizeof(DataTypeLayout)
+    layout = unsafe_load(layout_ptr)
+    fielddesc_type = (layout.flags >> 1) & 3
+    nfields = layout.nfields
+    @boundscheck ((1 <= i <= nfields) || throw(BoundsError(dtfd, i)))
+    if fielddesc_type == 0
+        return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt8}}(fd_ptr), i))
+    elseif fielddesc_type == 1
+        return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt16}}(fd_ptr), i))
+    elseif fielddesc_type == 2
+        return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt32}}(fd_ptr), i))
+    else
+        # fielddesc_type == 3
+        return FieldDesc(true, true, 0, 0)
+    end
+end
+
 """
     ismutable(v) -> Bool
 
@@ -413,6 +459,23 @@ true
     This function requires at least Julia 1.5.
 """
 ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
+
+
+"""
+    ismutabletype(T) -> Bool
+
+Determine whether type `T` was declared as a mutable type
+(i.e. using `mutable struct` keyword).
+
+!!! compat "Julia 1.7"
+    This function requires at least Julia 1.7.
+"""
+function ismutabletype(@nospecialize(t::Type))
+    t = unwrap_unionall(t)
+    # TODO: what to do for `Union`?
+    return isa(t, DataType) && t.mutable
+end
+
 
 """
     isstructtype(T) -> Bool
@@ -733,6 +796,9 @@ function to_tuple_type(@nospecialize(t))
     end
     if isa(t, Type) && t <: Tuple
         for p in unwrap_unionall(t).parameters
+            if isa(p, Core.TypeofVararg)
+                p = p.T
+            end
             if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
@@ -821,6 +887,14 @@ function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool,
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
 end
 
+function _method_by_ftype(args...)
+    matches = _methods_by_ftype(args...)
+    if length(matches) != 1
+        error("no unique matching method found for the specified argument types")
+    end
+    return matches[1]
+end
+
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
@@ -863,8 +937,8 @@ function methods(@nospecialize(f), @nospecialize(t),
     world = typemax(UInt)
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
-    for m in _methods(f, t, -1, world)
-        m::Core.MethodMatch
+    for m in _methods(f, t, -1, world)::Vector
+        m = m::Core.MethodMatch
         (mod === nothing || m.method.module ∈ mod) && push!(ms, m.method)
     end
     MethodList(ms, typeof(f).name.mt)
@@ -953,8 +1027,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = type
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
     for match in _methods_by_ftype(tt, -1, world)::Vector
-        instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
-            (Any, Any, Any), match.method, match.spec_types, match.sparams)
+        instance = Core.Compiler.specialize_method(match)
         push!(results, instance)
     end
     return results
@@ -1074,6 +1147,9 @@ function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
+    if isa(f, Core.OpaqueClosure)
+        return code_typed_opaque_closure(f, types; optimize, debuginfo, interp)
+    end
     ft = Core.Typeof(f)
     if isa(types, Type)
         u = unwrap_unionall(types)
@@ -1110,7 +1186,8 @@ function code_typed_by_type(@nospecialize(tt::Type);
         error("signature does not correspond to a generic function")
     end
     asts = []
-    for match in matches
+    for match in matches::Vector
+        match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
         (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, optimize)
         code === nothing && error("inference not successful") # inference disabled?
@@ -1118,6 +1195,20 @@ function code_typed_by_type(@nospecialize(tt::Type);
         push!(asts, code => ty)
     end
     return asts
+end
+
+function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure), @nospecialize(types=Tuple);
+        optimize=true,
+        debuginfo::Symbol=:default,
+        interp = Core.Compiler.NativeInterpreter(closure.world))
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    if isa(closure.source, Method)
+        code = _uncompressed_ir(closure.source, closure.source.source)
+        debuginfo === :none && remove_linenums!(code)
+        return Any[Pair{CodeInfo,Any}(code, code.rettype)]
+    else
+        error("encountered invalid Core.OpaqueClosure object")
+    end
 end
 
 function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.Compiler.NativeInterpreter())
@@ -1128,7 +1219,8 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.
     types = to_tuple_type(types)
     rt = []
     world = get_world_counter()
-    for match in _methods(f, types, -1, world)
+    for match in _methods(f, types, -1, world)::Vector
+        match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
         ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
         ty === nothing && error("inference not successful") # inference disabled?
@@ -1160,7 +1252,8 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     end
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
-    for match in matches
+    for match in matches::Vector
+        match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
         (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
         code === nothing && error("inference not successful") # inference disabled?
@@ -1169,12 +1262,28 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
         maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
         nd = ndigits(maxcost)
         println(io, meth)
-        IRShow.show_ir(io, code, (io, linestart, idx) -> (print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " "); return ""))
-        println()
+        irshow_config = IRShow.IRShowConfig() do io, linestart, idx
+            print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
+            return ""
+        end
+        IRShow.show_ir(io, code, irshow_config)
+        println(io)
     end
 end
 
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
+
+function _which(@nospecialize(tt::Type), world=typemax(UInt))
+    min_valid = RefValue{UInt}(typemin(UInt))
+    max_valid = RefValue{UInt}(typemax(UInt))
+    match = ccall(:jl_gf_invoke_lookup_worlds, Any,
+        (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
+        tt, typemax(UInt), min_valid, max_valid)
+    if match === nothing
+        error("no unique matching method found for the specified argument types")
+    end
+    return match::Core.MethodMatch
+end
 
 """
     which(f, types)
@@ -1198,11 +1307,7 @@ end
 Returns the method that would be called by the given type signature (as a tuple type).
 """
 function which(@nospecialize(tt::Type))
-    m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
-    if m === nothing
-        error("no unique matching method found for the specified argument types")
-    end
-    return m::Method
+    return _which(tt).method
 end
 
 """
@@ -1410,7 +1515,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         ms = _methods_by_ftype(ti, -1, typemax(UInt), true, min, max, has_ambig)::Vector
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
-            filter!(ms) do m
+            filter!(ms) do m::Core.MethodMatch
                 return !has_bottom_parameter(m.spec_types)
             end
         end
@@ -1418,6 +1523,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         # intersection, see if both m1 and m2 may be involved in it
         have_m1 = have_m2 = false
         for match in ms
+            match = match::Core.MethodMatch
             m = match.method
             m === m1 && (have_m1 = true)
             m === m2 && (have_m2 = true)

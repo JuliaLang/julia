@@ -49,6 +49,8 @@ Base.:(~)
 Base.:(&)
 Base.:(|)
 Base.xor
+Base.nand
+Base.nor
 Base.:(!)
 &&
 ||
@@ -162,6 +164,7 @@ Base.reim
 Base.conj
 Base.angle
 Base.cis
+Base.cispi
 Base.binomial
 Base.factorial
 Base.gcd

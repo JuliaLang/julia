@@ -210,7 +210,8 @@
         ((atom? v) '())
         (else
          (case (car v)
-           ((... kw |::| =) (try-arg-name (cadr v)))
+           ((|::|) (if (length= v 2) '() (try-arg-name (cadr v))))
+           ((... kw =) (try-arg-name (cadr v)))
            ((escape) (list v))
            ((hygienic-scope) (try-arg-name (cadr v)))
            ((meta)  ;; allow certain per-argument annotations
@@ -324,7 +325,7 @@
    m parent-scope inarg))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
-  (cond ((or (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
+  (cond ((or (eq? e 'begin) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal) (underscore-symbol? e))
          e)
         ((symbol? e)
          (let ((a (assq e env)))
@@ -383,7 +384,7 @@
                  ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
 
            ((= function)
-            (if (and (pair? (cadr e)) (function-def? e))
+            (if (and (pair? (cadr e)) (function-def? e) (length> e 2))
                 ;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
                 `(,(car e) ,(resolve-in-function-lhs (cadr e) env m parent-scope inarg)
                   ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg))

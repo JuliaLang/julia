@@ -4,6 +4,10 @@ The following sections explain a few aspects of idiomatic Julia coding style. No
 are absolute; they are only suggestions to help familiarize you with the language and to help
 you choose among alternative designs.
 
+## Indentation
+
+Use 4 spaces per indentation level.
+
 ## Write functions, not just scripts
 
 Writing code as a series of steps at the top level is a quick way to get started solving a problem,
@@ -137,6 +141,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
     words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
     as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
+  * functions mutating at least one of their arguments end in `!`.
   * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 

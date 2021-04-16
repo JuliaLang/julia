@@ -11,18 +11,12 @@
 extern "C" {
 #endif
 
-jl_module_t *jl_main_module = NULL;
-jl_module_t *jl_core_module = NULL;
-jl_module_t *jl_base_module = NULL;
-jl_module_t *jl_top_module = NULL;
-
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     const jl_uuid_t uuid_zero = {0, 0};
     jl_module_t *m = (jl_module_t*)jl_gc_alloc(ptls, sizeof(jl_module_t),
                                                jl_module_type);
-    JL_GC_PUSH1(&m);
     assert(jl_is_symbol(name));
     m->name = name;
     m->parent = NULL;
@@ -41,6 +35,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
+    JL_GC_PUSH1(&m);
     if (jl_core_module) {
         jl_module_using(m, jl_core_module);
     }
@@ -628,6 +623,8 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
+    JL_TYPECHK(jl_set_global, module, (jl_value_t*)m);
+    JL_TYPECHK(jl_set_global, symbol, (jl_value_t*)var);
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     JL_GC_PROMISE_ROOTED(bp);
     jl_checked_assignment(bp, val);

@@ -409,4 +409,8 @@ end
     @test record.group == :corelogging  # name of this file
 end
 
+@testset "complicated kwargs logging macro" begin
+    @test_logs (:warn, "foo")  @warn "foo" argvals=:((DoNotCare{$(Expr(:escape, :Any))}(),))
+end
+
 end

@@ -460,7 +460,7 @@ const Locale = Union{DateLocale, String}
     DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date time string following the
-pattern given in the `format` string.
+pattern given in the `format` string (see [`DateFormat`](@ref)  for syntax).
 
 This method creates a `DateFormat` object each time it is called. If you are
 parsing many date time strings of the same format, consider creating a
@@ -471,11 +471,12 @@ function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENG
 end
 
 """
-    DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+    DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date time string following the
-pattern given in the [`DateFormat`](@ref) object. Similar to
-`DateTime(::AbstractString, ::AbstractString)` but more efficient when
+pattern given in the [`DateFormat`](@ref) object, or $ISODateTimeFormat if omitted.
+
+Similar to `DateTime(::AbstractString, ::AbstractString)` but more efficient when
 repeatedly parsing similarly formatted date time strings with a pre-created
 `DateFormat` object.
 """
@@ -485,7 +486,7 @@ DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime,
     Date(d::AbstractString, format::AbstractString; locale="english") -> Date
 
 Construct a `Date` by parsing the `d` date string following the pattern given
-in the `format` string.
+in the `format` string (see [`DateFormat`](@ref) for syntax).
 
 This method creates a `DateFormat` object each time it is called. If you are
 parsing many date strings of the same format, consider creating a
@@ -496,9 +497,14 @@ function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
 end
 
 """
-    Date(d::AbstractString, df::DateFormat) -> Date
+    Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
 
-Parse a date from a date string `d` using a `DateFormat` object `df`.
+Construct a `Date` by parsing the `d` date string following the
+pattern given in the [`DateFormat`](@ref) object, or $ISODateFormat if omitted.
+
+Similar to `Date(::AbstractString, ::AbstractString)` but more efficient when
+repeatedly parsing similarly formatted date strings with a pre-created
+`DateFormat` object.
 """
 Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
 
@@ -506,7 +512,7 @@ Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
     Time(t::AbstractString, format::AbstractString; locale="english") -> Time
 
 Construct a `Time` by parsing the `t` time string following the pattern given
-in the `format` string.
+in the `format` string (see [`DateFormat`](@ref) for syntax).
 
 This method creates a `DateFormat` object each time it is called. If you are
 parsing many time strings of the same format, consider creating a
@@ -517,9 +523,14 @@ function Time(t::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
 end
 
 """
-    Time(t::AbstractString, df::DateFormat) -> Time
+    Time(t::AbstractString, df::DateFormat=ISOTimeFormat) -> Time
 
-Parse a time from a time string `t` using a `DateFormat` object `df`.
+Construct a `Time` by parsing the `t` date time string following the
+pattern given in the [`DateFormat`](@ref) object, or $ISOTimeFormat if omitted.
+
+Similar to `Time(::AbstractString, ::AbstractString)` but more efficient when
+repeatedly parsing similarly formatted time strings with a pre-created
+`DateFormat` object.
 """
 Time(t::AbstractString, df::DateFormat=ISOTimeFormat) = parse(Time, t, df)
 
