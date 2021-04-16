@@ -610,13 +610,6 @@ Create an anonymous function mapping argument(s) `x` to the function body `y`.
 ```jldoctest
 julia> f = x -> x^2 + 2x - 1
 #1 (generic function with 1 method)
-
-julia> f(2)
-7
-A similar function can be defined with the short form notation:
-
-```julia
-function (x)
     x^2 + 2x - 1
 end
 ```
