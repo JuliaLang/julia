@@ -2462,11 +2462,11 @@ function mask!(a::AbstractVector, m::AbstractVector{Bool})
     j = firstindex(a)
     for i in eachindex(a, m)
         @inbounds begin
-            ai = a[i]
-            mi = m[i]
-            a[j] = ai
+            if m[i]
+                i == j || (a[j] = a[i])
+                j = nextind(a, j)
+            end
         end
-        j = ifelse(mi, nextind(a, j), j)
     end
     j > lastindex(a) && return a
     if a isa Vector
