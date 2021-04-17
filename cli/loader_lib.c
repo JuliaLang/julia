@@ -130,7 +130,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
 
 void * libjulia_internal = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
-    // Only initalize this once
+    // Only initialize this once
     if (libjulia_internal != NULL) {
         return;
     }
