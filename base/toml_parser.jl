@@ -242,7 +242,7 @@ const err_message = Dict(
     ErrExpectedEqualAfterKey                => "expected equal sign after key",
     ErrNoTrailingDigitAfterDot              => "expected digit after dot",
     ErrOverflowError                        => "overflowed when parsing integer",
-    ErrInvalidUnicodeScalar                 => "invalid uncidode scalar",
+    ErrInvalidUnicodeScalar                 => "invalid unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
     ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value"
 )
@@ -821,8 +821,6 @@ function parse_number_or_date_start(l::Parser)
             ate && return parse_int(l, contains_underscore)
         elseif accept(l, isdigit)
             return parse_local_time(l)
-        elseif peek(l) !== '.'
-            return ParserError(ErrLeadingZeroNotAllowedInteger)
         end
     end
 

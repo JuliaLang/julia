@@ -2195,7 +2195,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
-        show(io, f)
+        print_within_stacktrace(io, f, bold=true)
         parens && print(io, ")")
     else
         if html

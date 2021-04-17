@@ -1170,7 +1170,7 @@ function getindex(A::AbstractArray, I...)
     _getindex(IndexStyle(A), A, to_indices(A, I)...)
 end
 # To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
-getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
+@propagate_inbounds getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
 
 function unsafe_getindex(A::AbstractArray, I...)
     @_inline_meta
@@ -1489,7 +1489,7 @@ AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
 _typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
 _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
-    _typed_vcat!(_typed_vcat_similar(V, T, mapreduce(length, +, V)), V)
+    _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
 
 function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1

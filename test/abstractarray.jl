@@ -1230,3 +1230,9 @@ end
     @test [1; 1:BigInt(5)] == [1; 1:5]
     @test [1:BigInt(5); 1] == [1:5; 1]
 end
+
+@testset "reduce(vcat, ...) inferrence #40277" begin
+    x_vecs = ([5, ], [1.0, 2.0, 3.0])
+    @test @inferred(reduce(vcat, x_vecs)) == [5.0, 1.0, 2.0, 3.0]
+    @test @inferred(reduce(vcat, ([10.0], [20.0], Bool[]))) == [10.0, 20.0]
+end

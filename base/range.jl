@@ -632,7 +632,7 @@ function argmin(r::AbstractRange)
     elseif step(r) > 0
         firstindex(r)
     else
-        first(searchsorted(r, last(r)))
+        lastindex(r)
     end
 end
 
@@ -647,7 +647,7 @@ function argmax(r::AbstractRange)
     if isempty(r)
         throw(ArgumentError("range must be non-empty"))
     elseif step(r) > 0
-        first(searchsorted(r, last(r)))
+        lastindex(r)
     else
         firstindex(r)
     end
