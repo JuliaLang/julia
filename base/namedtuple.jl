@@ -112,6 +112,9 @@ NamedTuple{names}(itr) where {names} = NamedTuple{names}(Tuple(itr))
 
 NamedTuple(itr) = (; itr...)
 
+# avoids invalidating Union{}(...)
+NamedTuple{names, Union{}}(itr::Tuple) where {names} = throw(MethodError(NamedTuple{names, Union{}}, (itr,)))
+
 end # if Base
 
 length(t::NamedTuple) = nfields(t)
@@ -191,8 +194,8 @@ _nt_names(::Type{T}) where {names,T<:NamedTuple{names}} = names
 
 hash(x::NamedTuple, h::UInt) = xor(objectid(_nt_names(x)), hash(Tuple(x), h))
 
+(<)(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) < Tuple(b)
 isless(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = isless(Tuple(a), Tuple(b))
-# TODO: case where one argument's names are a prefix of the other's
 
 same_names(::NamedTuple{names}...) where {names} = true
 same_names(::NamedTuple...) = false

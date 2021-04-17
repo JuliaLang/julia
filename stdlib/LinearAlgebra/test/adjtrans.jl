@@ -275,6 +275,9 @@ end
     @test vec(Transpose(intvec)) === intvec
     cvec = [1 + 1im]
     @test vec(cvec')[1] == cvec[1]'
+    mvec = [[1 2; 3 4+5im]];
+    @test vec(transpose(mvec))[1] == transpose(mvec[1])
+    @test vec(adjoint(mvec))[1] == adjoint(mvec[1])
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
@@ -481,6 +484,22 @@ end
                   "$t of "*sprint(show, parent(Fop))
     @test "LinearAlgebra."*sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
                   "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
+end
+
+@testset "showarg" begin
+    io = IOBuffer()
+
+    A = ones(Float64, 3,3)
+
+    B = Adjoint(A)
+    @test summary(B) == "3×3 adjoint(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "adjoint(::Matrix{Float64})"
+
+    B = Transpose(A)
+    @test summary(B) == "3×3 transpose(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "transpose(::Matrix{Float64})"
 end
 
 @testset "strided transposes" begin

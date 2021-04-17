@@ -160,6 +160,11 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
+
+    # test keyword ags in composition
+    function kwf(a;b,c); a + b + c; end
+    @test (abs2 ∘ kwf)(1,b=2,c=3) == 36
+
 end
 
 @testset "function negation" begin
@@ -275,7 +280,18 @@ end
     @test ∋(0)(-2:2)
 end
 
-a = rand(3, 3)
-@test transpose(a) === a'ᵀ
-
 @test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
+
+@testset "Returns" begin
+    @test @inferred(Returns(1)()   ) === 1
+    @test @inferred(Returns(1)(23) ) === 1
+    @test @inferred(Returns("a")(2,3)) == "a"
+    @test @inferred(Returns(1)(x=1, y=2)) === 1
+    @test @inferred(Returns(Int)()) === Int
+    @test @inferred(Returns(Returns(1))()) === Returns(1)
+    f = @inferred Returns(Int)
+    @inferred f(1,2)
+    val = [1,2,3]
+    @test Returns(val)(1) === val
+    @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
+end

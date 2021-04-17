@@ -29,8 +29,8 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     valid_worlds::WorldRange # if inference and optimization is finished
-    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
+    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing, va_override=false)
+        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes, va_override)
         return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
     end
 end
@@ -210,5 +210,18 @@ add_remark!(ni::NativeInterpreter, sv, s) = nothing
 may_optimize(ni::NativeInterpreter) = true
 may_compress(ni::NativeInterpreter) = true
 may_discard_trees(ni::NativeInterpreter) = true
+verbose_stmt_info(ni::NativeInterpreter) = false
 
 method_table(ai::AbstractInterpreter) = InternalMethodTable(get_world_counter(ai))
+inlining_policy(ai::AbstractInterpreter) = default_inlining_policy
+
+# define inference bail out logic
+# `NativeInterpreter` bails out from inference when
+# - a lattice element grows up to `Any` (inter-procedural call, abstract apply)
+# - a lattice element gets down to `Bottom` (statement inference, local frame inference)
+# - inferring non-concrete toplevel call sites
+bail_out_call(interp::AbstractInterpreter, @nospecialize(t), sv)      = t === Any
+bail_out_apply(interp::AbstractInterpreter, @nospecialize(t), sv)     = t === Any
+function bail_out_toplevel_call(interp::AbstractInterpreter, @nospecialize(sig), sv)
+    return isa(sv.linfo.def, Module) && !isdispatchtuple(sig)
+end

@@ -166,7 +166,7 @@
             dotPos = 1
             while true
                 roundPos -= 1
-                if roundPos == (startpos - 1) || (buf[roundPos] == UInt8('-'))
+                if roundPos == (startpos - 1) || (buf[roundPos] == UInt8('-')) || (plus && buf[roundPos] == UInt8('+')) || (space && buf[roundPos] == UInt8(' '))
                     buf[roundPos + 1] = UInt8('1')
                     if dotPos > 1
                         buf[dotPos] = UInt8('0')

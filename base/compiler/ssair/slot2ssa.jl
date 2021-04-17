@@ -99,16 +99,19 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
     # We don't really have the information here to get rid of these.
     # We'll do so later
     if ssa === undef_token
-        insert_node!(ir, idx, Any, Expr(:throw_undef_if_not, ci.slotnames[slot], false))
+        insert_node!(ir, idx, NewInstruction(
+            Expr(:throw_undef_if_not, ci.slotnames[slot], false), Any))
         return undef_token
     end
     if !isa(ssa, Argument) && !(ssa === nothing) && ((ci.slotflags[slot] & SLOT_USEDUNDEF) != 0)
-        insert_node!(ir, idx, Any, Expr(:undefcheck, ci.slotnames[slot], ssa))
+        # insert a temporary node. type_lift_pass! will remove it
+        insert_node!(ir, idx, NewInstruction(
+            Expr(:undefcheck, ci.slotnames[slot], ssa), Any))
     end
     if isa(stmt, SlotNumber)
         return ssa
     elseif isa(stmt, TypedSlot)
-        return NewSSAValue(insert_node!(ir, idx, stmt.typ, PiNode(ssa, stmt.typ)).id - length(ir.stmts))
+        return NewSSAValue(insert_node!(ir, idx, NewInstruction(PiNode(ssa, stmt.typ), stmt.typ)).id - length(ir.stmts))
     end
     @assert false # unreachable
 end
@@ -147,6 +150,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
                     return true
                 end
             end
+            # temporarily corrupt the isdefined node. type_lift_pass! will fix it
             stmt.args[1] = ssa
         end
         return stmt
@@ -162,8 +166,8 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
                 return nothing
             end
             op[] = x
-        elseif isa(val, GlobalRef) && !isdefined(val.mod, val.name)
-            op[] = NewSSAValue(insert_node!(ir, idx, Any, val).id - length(ir.stmts))
+        elseif isa(val, GlobalRef) && !(isdefined(val.mod, val.name) && isconst(val.mod, val.name))
+            op[] = NewSSAValue(insert_node!(ir, idx, NewInstruction(val, Any)).id - length(ir.stmts))
         end
     end
     return urs[]
@@ -581,7 +585,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int, sptypes::Vector{Any},
+function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int,
                         slottypes::Vector{Any})
     code = ir.stmts.inst
     cfg = ir.cfg
@@ -624,12 +628,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 typ = MaybeUndef(Union{})
                 ssaval = nothing
                 for use in slot.uses[]
-                    insert_node!(ir, use, Union{}, Expr(:throw_undef_if_not, ci.slotnames[idx], false))
+                    insert_node!(ir, use,
+                        NewInstruction(Expr(:throw_undef_if_not, ci.slotnames[idx], false), Union{}))
                 end
                 fixup_uses!(ir, ci, code, slot.uses, idx, nothing)
             else
                 val = code[slot.defs[]].args[2]
-                typ = typ_for_val(val, ci, sptypes, slot.defs[], slottypes)
+                typ = typ_for_val(val, ci, ir.sptypes, slot.defs[], slottypes)
                 ssaval = SSAValue(make_ssa!(ci, code, slot.defs[], idx, typ))
                 fixup_uses!(ir, ci, code, slot.uses, idx, ssaval)
             end
@@ -643,7 +648,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 # Create a PhiC node in the catch entry block and
                 # an upsilon node in the corresponding enter block
                 node = PhiCNode(Any[])
-                phic_ssa = NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, li), Union{}, node).id - length(ir.stmts))
+                phic_ssa = NewSSAValue(
+                    insert_node!(ir, first_insert_for_bb(code, cfg, li),
+                        NewInstruction(node, Union{})).id - length(ir.stmts))
                 push!(phicnodes[li], (SlotNumber(idx), phic_ssa, node))
                 # Inform IDF that we now have a def in the catch block
                 if !(li in live.def_bbs)
@@ -655,7 +662,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
-            ssa = NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, block), Union{}, node).id - length(ir.stmts))
+            ssa = NewSSAValue(insert_node!(ir,
+                first_insert_for_bb(code, cfg, block), NewInstruction(node, Union{})).id - length(ir.stmts))
             push!(phi_nodes[block], ssa=>node)
         end
         push!(left, idx)
@@ -712,7 +720,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             if isa(incoming_val, NewSSAValue)
                 push!(type_refine_phi, ssaval.id)
             end
-            typ = incoming_val === undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, sptypes, -1, slottypes)
+            typ = incoming_val === undef_token ? MaybeUndef(Union{}) : typ_for_val(incoming_val, ci, ir.sptypes, -1, slottypes)
             old_entry = new_nodes.stmts[ssaval.id]
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)
@@ -736,10 +744,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 ival = incoming_vals[slot_id(slot)]
                 ivalundef = ival === undef_token
                 unode = ivalundef ? UpsilonNode() : UpsilonNode(ival)
-                typ = ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, sptypes, -1, slottypes)
+                typ = ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, ir.sptypes, -1, slottypes)
                 push!(node.values,
                     NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item),
-                                 typ, unode, true).id - length(ir.stmts)))
+                                 NewInstruction(unode, typ), true).id - length(ir.stmts)))
             end
         end
         push!(visited, item)
@@ -760,11 +768,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 if isexpr(stmt, :(=)) && isa(stmt.args[1], SlotNumber)
                     id = slot_id(stmt.args[1])
                     val = stmt.args[2]
-                    typ = typ_for_val(val, ci, sptypes, idx, slottypes)
+                    typ = typ_for_val(val, ci, ir.sptypes, idx, slottypes)
                     # Having undef_token appear on the RHS is possible if we're on a dead branch.
                     # Do something reasonable here, by marking the LHS as undef as well.
                     if val !== undef_token
-                        incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ))
+                        incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ)::Int)
                     else
                         code[idx] = nothing
                         incoming_vals[id] = undef_token
@@ -780,7 +788,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                                 typ = MaybeUndef(Union{})
                             end
                             push!(phicnodes[exc][cidx][3].values,
-                                NewSSAValue(insert_node!(ir, idx, typ, node, true).id - length(ir.stmts)))
+                                NewSSAValue(insert_node!(ir, idx, NewInstruction(node, typ), true).id - length(ir.stmts)))
                         end
                     end
                 end
@@ -845,7 +853,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             node = new_nodes.stmts[new_idx]
             phic_values = (node[:inst]::PhiCNode).values
             for i = 1:length(phic_values)
-                orig_typ = typ = typ_for_val(phic_values[i], ci, sptypes, -1, slottypes)
+                orig_typ = typ = typ_for_val(phic_values[i], ci, ir.sptypes, -1, slottypes)
                 @assert !isa(typ, MaybeUndef)
                 while isa(typ, DelayedTyp)
                     typ = types(ir)[typ.phi::NewSSAValue]
@@ -863,7 +871,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         changed = false
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
-            new_typ = recompute_type(node[:inst], ci, ir, sptypes, slottypes)
+            new_typ = recompute_type(node[:inst], ci, ir, ir.sptypes, slottypes)
             if !(node[:type] ⊑ new_typ) || !(new_typ ⊑ node[:type])
                 node[:type] = new_typ
                 changed = true
