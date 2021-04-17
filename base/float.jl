@@ -367,7 +367,7 @@ round(::Type{Bool}, x::AbstractFloat) = (-0.5 <= x < 1.5) ? 0.5 < x : throw(Inex
 round(x::IEEEFloat, r::RoundingMode{:ToZero})  = trunc_llvm(x)
 round(x::IEEEFloat, r::RoundingMode{:Down})    = floor_llvm(x)
 round(x::IEEEFloat, r::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::IEEEFloat, r::RoundingMode{:Nearest}) = rint_llvm(x)
+round(x::IEEEFloat, r::RoundingMode{:Nearest}) = roundeven_llvm(x)
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
