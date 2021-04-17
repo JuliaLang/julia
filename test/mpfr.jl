@@ -675,14 +675,17 @@ end
     end
     setprecision(21) do
         @test string(parse(BigFloat, "0.1")) == "0.10000002"
+        @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
     end
     setprecision(40) do
         @test string(parse(BigFloat, "0.1")) == "0.10000000000002"
+        @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
     end
     setprecision(123) do
         @test string(parse(BigFloat, "0.1")) == "0.0999999999999999999999999999999999999953"
+        @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
     end
 end
