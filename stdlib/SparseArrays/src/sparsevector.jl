@@ -125,6 +125,7 @@ Base.unaliascopy(S::SparseVector) = typeof(S)(length(S), unaliascopy(nonzeroinds
 ### Construct empty sparse vector
 
 spzeros(len::Integer) = spzeros(Float64, len)
+spzeros(dims::Tuple{<:Integer}) = spzeros(Float64, dims[1])
 spzeros(::Type{T}, len::Integer) where {T} = SparseVector(len, Int[], T[])
 spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} = SparseVector(len, Ti[], Tv[])
 
