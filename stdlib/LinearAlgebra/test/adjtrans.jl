@@ -275,6 +275,9 @@ end
     @test vec(Transpose(intvec)) === intvec
     cvec = [1 + 1im]
     @test vec(cvec')[1] == cvec[1]'
+    mvec = [[1 2; 3 4+5im]];
+    @test vec(transpose(mvec))[1] == transpose(mvec[1])
+    @test vec(adjoint(mvec))[1] == adjoint(mvec[1])
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
