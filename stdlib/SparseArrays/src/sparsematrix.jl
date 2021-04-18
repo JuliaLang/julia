@@ -2315,9 +2315,14 @@ function getindex_I_sorted_linear(A::AbstractSparseMatrixCSC{Tv,Ti}, I::Abstract
     colptrA = getcolptr(A); rowvalA = rowvals(A); nzvalA = nonzeros(A)
     colptrS = Vector{Ti}(undef, nJ+1)
     colptrS[1] = 1
-    cacheI = zeros(Int, size(A, 1))
 
-    ptrS   = 1
+    m = size(A,1)
+
+    # since we linear in complexity we can just use a hashmap
+    # a more efficient hashmap would be great
+    hashmapI = Dict(I[i] => i for i = nI:-1:1)
+
+    ptrS  = 1
     # build the cache and determine result size
     @inbounds for j = 1:nJ
         col = J[j]
@@ -2332,8 +2337,8 @@ function getindex_I_sorted_linear(A::AbstractSparseMatrixCSC{Tv,Ti}, I::Abstract
                 ptrA += 1
             elseif rowI < rowA
                 ptrI += 1
-            else
-                (cacheI[rowA] == 0) && (cacheI[rowA] = ptrI)
+            else # found a match
+                haskey(hashmapI, rowA) || (hashmapI[rowA] = ptrI)
                 ptrS += 1
                 ptrI += 1
             end
@@ -2352,7 +2357,7 @@ function getindex_I_sorted_linear(A::AbstractSparseMatrixCSC{Tv,Ti}, I::Abstract
         stopA::Int = colptrA[col+1]
         while ptrA < stopA
             rowA = rowvalA[ptrA]
-            ptrI = cacheI[rowA]
+            ptrI = haskey(hashmapI, rowA) ? hashmapI[rowA] : 0
             if ptrI > 0
                 while ptrI <= nI && I[ptrI] == rowA
                     rowvalS[ptrS] = ptrI
@@ -2378,60 +2383,67 @@ function getindex_I_sorted_bsearch_I(A::AbstractSparseMatrixCSC{Tv,Ti}, I::Abstr
 
     m = size(A, 1)
 
-    # cacheI is used first to store num occurrences of each row in columns of interest
-    # and later to store position of first occurrence of each row in I
-    cacheI = zeros(Int, m)
-
-    # count rows
+    # scout the length of cache we need
+    ptrS::Int = 0
     @inbounds for j = 1:nJ
         col = J[j]
-        for ptrA in colptrA[col]:(colptrA[col+1]-1)
-            cacheI[rowvalA[ptrA]] += 1
-        end
+        ptrS += (colptrA[col+1] - colptrA[col])
     end
 
-    # fill cache and count nnz
-    ptrS::Int = 0
-    ptrI::Int = 1
-    @inbounds for j = 1:m
-        cval = cacheI[j]
-        (cval == 0) && continue
-        ptrI = searchsortedfirst(I, j, ptrI, nI, Base.Order.Forward)
-        cacheI[j] = ptrI
-        while ptrI <= nI && I[ptrI] == j
-            ptrS += cval
-            ptrI += 1
+    # new definition of cacheI uses the same indexing as rowval of A[:, J] (in compressed format),
+    # so indexing into it is easy, while avoiding the complexity depending on m
+    # Additionally we use a hashmap to avoid repeatedly searching for the same entry
+    cacheI = zeros(Int, ptrS)
+
+    # find relevant rows and put them into the
+    ptrS = 0 # this will count the number of nonzeros that we will have in S
+    ptrI::Int = 1 # this is the position in the cache
+    ptrC::Int = 1 # points to the current position in the cache
+    @inbounds for j = 1:nJ
+        col = J[j]
+        ptrA = colptrA[col]
+        stopA = colptrA[col+1]
+        while ptrA < stopA
+            rowA = rowvalA[ptrA]
+            ptrI = searchsortedfirst(I, rowA, ptrI, nI, Base.Order.Forward)
+            cacheI[ptrC] = ptrI
+            while ptrI <= nI && I[ptrI] == rowA
+                ptrS += 1
+                ptrI += 1
+            end
+            (ptrI > nI) && break
+            ptrA += 1
+            ptrC += 1
         end
-        if ptrI > nI
-            @simd for i=(j+1):m; @inbounds cacheI[i]=ptrI; end
-            break
-        end
+        ptrC += stopA - ptrA # adjust cache pointer
+        ptrI = 1
     end
     rowvalS = Vector{Ti}(undef, ptrS)
     nzvalS  = Vector{Tv}(undef, ptrS)
     colptrS[nJ+1] = ptrS+1
 
-    # fill the values
+    # second pass to fill the values (this one doesn't perform bsearch so it is much faster)
     ptrS = 1
+    ptrC = 1
     @inbounds for j = 1:nJ
         col = J[j]
-        ptrA::Int = colptrA[col]
-        stopA::Int = colptrA[col+1]
+        ptrA = colptrA[col]
+        stopA = colptrA[col+1]
         while ptrA < stopA
             rowA = rowvalA[ptrA]
-            ptrI = cacheI[rowA]
+            ptrI = cacheI[ptrC]
             (ptrI > nI) && break
-            if ptrI > 0
-                while I[ptrI] == rowA
-                    rowvalS[ptrS] = ptrI
-                    nzvalS[ptrS] = nzvalA[ptrA]
-                    ptrS += 1
-                    ptrI += 1
-                    (ptrI > nI) && break
-                end
+            while ptrI > 0 && I[ptrI] == rowA
+                rowvalS[ptrS] = ptrI
+                nzvalS[ptrS] = nzvalA[ptrA]
+                ptrS += 1
+                ptrI += 1
+                (ptrI > nI) && break
             end
             ptrA += 1
+            ptrC += 1
         end
+        ptrC += stopA - ptrA
         colptrS[j+1] = ptrS
     end
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
