@@ -75,7 +75,11 @@ end
 @testset "other constructors" begin
     # construct empty sparse vector
 
-    @test exact_equal(spzeros(Float64, 8), SparseVector(8, Int[], Float64[]))
+    for dims in (8, (8,))
+        @test exact_equal(spzeros(dims), SparseVector(8, Int[], Float64[]))
+        @test exact_equal(spzeros(Float64, dims), SparseVector(8, Int[], Float64[]))
+        @test exact_equal(spzeros(Float64, Int16, dims), SparseVector(8, Int16[], Float64[]))
+    end
 
     @testset "from list of indices and values" begin
         @test exact_equal(
