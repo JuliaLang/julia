@@ -299,6 +299,10 @@ Random.seed!(1)
         M4 = rand(elty, n÷2, n÷2)
         @test kron(D3, M4) ≈ kron(DM3, M4)
         @test kron(M4, D3) ≈ kron(M4, DM3)
+        X = [ones(1,1) for i in 1:2, j in 1:2]
+        @test kron(I(2), X)[1,3] == zeros(1,1)
+        X = [ones(2,2) for i in 1:2, j in 1:2]
+        @test kron(I(2), X)[1,3] == zeros(2,2)
     end
     @testset "iszero, isone, triu, tril" begin
         Dzero = Diagonal(zeros(elty, 10))
