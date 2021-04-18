@@ -740,6 +740,14 @@ end
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
 end
 
+
+@testset "permutedims (#39447)" begin
+    for D in (Diagonal(zeros(5)), Diagonal(zeros(5) .+ 1im), Diagonal([[1,2],[3,4]]))
+        @test permutedims(D) === permutedims(D,(1,2)) === permutedims(D,(2,1)) === D
+        @test_throws ArgumentError permutedims(D,(1,3))
+    end
+end
+
 @testset "Inner product" begin
     A = Diagonal(rand(10) .+ im)
     B = Diagonal(rand(10) .+ im)
