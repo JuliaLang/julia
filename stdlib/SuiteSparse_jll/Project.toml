@@ -1,6 +1,6 @@
 name = "SuiteSparse_jll"
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "5.8.1+0"
+version = "5.8.1+2"
 
 [deps]
 libblastrampoline_jll = "8e850b90-86db-534c-a0d3-1478176c7d93"

@@ -16,6 +16,21 @@ using SparseArrays: getcolptr
 # CHOLMOD tests
 Random.seed!(123)
 
+@testset "Check that the Common and Method Julia structs are consistent with their C counterparts" begin
+    common_size = ccall((:jl_cholmod_common_size, :libsuitesparse_wrapper), Csize_t, ())
+    @test common_size == sizeof(CHOLMOD.Common)
+
+    method_offsets = Vector{Csize_t}(undef,15)
+    ccall((:jl_cholmod_method_offsets, :libsuitesparse_wrapper),
+        Nothing, (Ptr{Csize_t},), method_offsets)
+    @test method_offsets == fieldoffset.(CHOLMOD.Method,1:length(method_offsets))
+
+    common_offsets = Vector{Csize_t}(undef,107)
+    ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
+        Nothing, (Ptr{Csize_t},), common_offsets)
+    @test common_offsets == fieldoffset.(CHOLMOD.Common,1:length(common_offsets))
+end
+
 @testset "based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/" begin
 
 # chm_rdsp(joinpath(Sys.BINDIR, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
@@ -237,8 +252,8 @@ end
 ## The struct pointer must be constructed by the library constructor and then modified afterwards to checks that the method throws
 @testset "illegal dtype (for now but should be supported at some point)" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 4)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -246,8 +261,8 @@ end
 
 @testset "illegal dtype" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 4)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -255,8 +270,8 @@ end
 
 @testset "illegal xtype" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 3)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -264,8 +279,8 @@ end
 
 @testset "illegal itype I" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 2)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -273,8 +288,8 @@ end
 
 @testset "illegal itype II" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 2)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -324,8 +339,8 @@ end
 # Test Sparse and Factor
 @testset "test free!" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     @test CHOLMOD.free!(p)
 end
 
