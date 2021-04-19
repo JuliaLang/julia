@@ -117,6 +117,11 @@ julia> selectdim(A, 2, 3)
 2-element view(::Matrix{Int64}, :, 3) with eltype Int64:
  3
  7
+
+julia> selectdim(A, 2, 3:4)
+2×2 view(::Matrix{Int64}, :, 3:4) with eltype Int64:
+ 3  4
+ 7  8
 ```
 """
 @inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, _setindex(i, d, map(Slice, axes(A))...))
