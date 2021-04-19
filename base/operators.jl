@@ -563,6 +563,8 @@ extrema(f, x::Real) = (y = f(x); (y, y))
 
 The identity function. Returns its argument.
 
+See also: [`one`](@ref), [`oneunit`](@ref), and [`LinearAlgebra`](@ref man-linalg)'s `I`.
+
 # Examples
 ```jldoctest
 julia> identity("Well, what did you expect?")
@@ -696,7 +698,7 @@ julia> bitstring(Int8(3))
 julia> bitstring(Int8(12))
 "00001100"
 ```
-See also [`>>`](@ref), [`>>>`](@ref).
+See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 """
 function <<(x::Integer, c::Integer)
     @_inline_meta
@@ -803,6 +805,8 @@ end
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
+See also: [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
+
 # Examples
 ```jldoctest
 julia> x = 15; y = 4;
@@ -812,6 +816,10 @@ julia> x % y
 
 julia> x == div(x, y) * y + rem(x, y)
 true
+
+julia> rem.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -2  -1  0  -2  -1  0  1  2  0  1  2
 ```
 """
 rem
@@ -824,6 +832,8 @@ const % = rem
 The quotient from Euclidean (integer) division. Generally equivalent
 to a mathematical operation x/y without a fractional part.
 
+See also: [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
+
 # Examples
 ```jldoctest
 julia> 9 ÷ 4
@@ -834,6 +844,10 @@ julia> -5 ÷ 3
 
 julia> 5.0 ÷ 2
 2.0
+
+julia> div.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -1  -1  -1  0  0  0  0  0  1  1  1
 ```
 """
 div
@@ -1010,7 +1024,7 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 ```
-See also [`ComposedFunction`](@ref).
+See also [`ComposedFunction`](@ref), [`!f::Function`](@ref).
 """
 function ∘ end
 
@@ -1070,6 +1084,8 @@ end
 Predicate function negation: when the argument of `!` is a function, it returns a
 function which computes the boolean negation of `f`.
 
+See also [`∘`](@ref).
+
 # Examples
 ```jldoctest
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
@@ -1090,6 +1106,8 @@ julia> filter(!isletter, str)
 A type representing a partially-applied version of the two-argument function
 `f`, with the first argument fixed to the value "x". In other words,
 `Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+
+See also [`Fix2`](@ref Base.Fix2).
 """
 struct Fix1{F,T} <: Function
     f::F
@@ -1350,6 +1368,8 @@ julia> [1, 2] .∈ ([2, 3],)
  0
  1
 ```
+
+See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 """
 in
 

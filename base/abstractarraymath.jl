@@ -36,7 +36,7 @@ julia> vec(1:3)
 1:3
 ```
 
-See also [`reshape`](@ref).
+See also [`reshape`](@ref), [`dropdims`](@ref).
 """
 vec(a::AbstractArray) = reshape(a,length(a))
 vec(a::AbstractVector) = a
@@ -51,6 +51,8 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
 `size(A,i)` must equal 1 for all `i` in `dims`.
+
+See also: [`reshape`](@ref), [`vec`](@ref).
 
 # Examples
 ```jldoctest
@@ -106,6 +108,8 @@ Return a view of all the data of `A` where the index for dimension `d` equals `i
 
 Equivalent to `view(A,:,:,...,i,:,:,...)` where `i` is in position `d`.
 
+See also: [`eachslice`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2 3 4; 5 6 7 8]
@@ -142,6 +146,8 @@ circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, s
 Circularly shift, i.e. rotate, the data in an array. The second argument is a tuple or
 vector giving the amount to shift in each dimension, or an integer to shift only in the
 first dimension.
+
+See also: [`circshift!`](@ref), [`circcopy!`](@ref), [`bitrotate`](@ref), [`<<`](@ref).
 
 # Examples
 ```jldoctest
@@ -190,8 +196,6 @@ julia> circshift(a, -1)
  1
  1
 ```
-
-See also [`circshift!`](@ref).
 """
 function circshift(a::AbstractArray, shiftamt)
     circshift!(similar(a), a, map(Integer, (shiftamt...,)))
@@ -203,6 +207,8 @@ end
     repeat(A::AbstractArray, counts::Integer...)
 
 Construct an array by repeating array `A` a given number of times in each dimension, specified by `counts`.
+
+See also: [`fill`](@ref), [`Iterators.repeated`](@ref), [`Iterators.cycle`](@ref).
 
 # Examples
 ```jldoctest
@@ -397,7 +403,7 @@ end#module
 Create a generator that iterates over the first dimension of vector or matrix `A`,
 returning the rows as `AbstractVector` views.
 
-See also [`eachcol`](@ref) and [`eachslice`](@ref).
+See also [`eachcol`](@ref), [`eachslice`](@ref), [`mapslices`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
@@ -465,7 +471,7 @@ the data from the other dimensions in `A`.
 Only a single dimension in `dims` is currently supported. Equivalent to `(view(A,:,:,...,i,:,:
 ...)) for i in axes(A, dims))`, where `i` is in position `dims`.
 
-See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
+See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref), and [`selectdim`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
