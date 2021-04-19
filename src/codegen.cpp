@@ -608,7 +608,10 @@ static const auto jlegal_func = new JuliaFunction{
     [](LLVMContext &C) {
         Type *T = PointerType::get(T_jlvalue, AddressSpace::CalleeRooted);
         return FunctionType::get(T_int32, {T, T}, false); },
-    nullptr,
+    [](LLVMContext &C) { return AttributeList::get(C,
+            Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind, Attribute::ArgMemOnly}),
+            AttributeSet(),
+            None); },
 };
 static const auto jl_alloc_obj_func = new JuliaFunction{
     "julia.gc_alloc_obj",
