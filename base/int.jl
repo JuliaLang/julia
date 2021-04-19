@@ -82,7 +82,8 @@ signed(::Type{T}) where {T<:Signed} = T
 
 (<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)
 
-(-)(x::BitInteger)                    = neg_int(x)
+(-)(x::BitSigned)                     = neg_int(x)
+(-)(x::BitUnsigned)                   = throw(DomainError(x, "-unsigned"))
 (-)(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
 (+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 (*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)

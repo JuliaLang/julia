@@ -305,7 +305,7 @@ muladd(z::Complex, w::Complex, x::Complex) =
 
 +(x::Bool, z::Complex) = Complex(x + real(z), imag(z))
 +(z::Complex, x::Bool) = Complex(real(z) + x, imag(z))
--(x::Bool, z::Complex) = Complex(x - real(z), - imag(z))
+-(x::Bool, z::Complex) = Complex(x - real(z), false - imag(z))
 -(z::Complex, x::Bool) = Complex(real(z) - x, imag(z))
 *(x::Bool, z::Complex) = Complex(x * real(z), x * imag(z))
 *(z::Complex, x::Bool) = Complex(real(z) * x, imag(z) * x)

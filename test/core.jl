@@ -1253,9 +1253,9 @@ let
    @test UInt(b) == 1
    @test UInt(c) == typemax(UInt)
 
-   @test b - a == -(a - b) == 1
-   @test c - a == -(a - c) == typemax(UInt)
-   @test c - b == -(b - c) == typemax(UInt) - 1
+   @test b - a == 0 - (a - b) == 1
+   @test c - a == 0 - (a - c) == typemax(UInt)
+   @test c - b == 0 - (b - c) == typemax(UInt) - 1
    @test a < b < c
 end
 

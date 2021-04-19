@@ -322,7 +322,7 @@ function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
     a = first(r)
     U = uint_sup(T)
     s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
-    # mod(-s, s) could be put in the Sampler object for repeated calls, but
+    # mod(0-s, s) could be put in the Sampler object for repeated calls, but
     # this would be an advantage only for very big s and number of calls
     SamplerRangeNDL(a, s)
 end
@@ -332,15 +332,16 @@ function rand(rng::AbstractRNG, sp::SamplerRangeNDL{U,T}) where {U,T}
     x = widen(rand(rng, U))
     m = x * s
     l = m % U
+    z = zero(s)
     if l < s
-        t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
+        t = mod(z-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
         while l < t
             x = widen(rand(rng, U))
             m = x * s
             l = m % U
         end
     end
-    (s == 0 ? x : m >> (8*sizeof(U))) % T + sp.a
+    (s == z ? x : m >> (8*sizeof(U))) % T + sp.a
 end
 
 

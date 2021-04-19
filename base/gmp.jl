@@ -330,7 +330,7 @@ end
 rem(x::BigInt, ::Type{Bool}) = !iszero(x) & unsafe_load(x.d) % Bool # never unsafe here
 
 rem(x::BigInt, ::Type{T}) where T<:Union{SLimbMax,ULimbMax} =
-    iszero(x) ? zero(T) : flipsign(unsafe_load(x.d) % T, x.size)
+    iszero(x) ? zero(T) : flipsign(unsafe_load(x.d) % signed(T), x.size) % T
 
 function rem(x::BigInt, ::Type{T}) where T<:Union{Base.BitUnsigned,Base.BitSigned}
     u = zero(T)
@@ -530,10 +530,10 @@ end
 -(x::BigInt, c::CulongMax) = MPZ.sub_ui(x, c)
 -(c::CulongMax, x::BigInt) = MPZ.ui_sub(c, x)
 
-+(x::BigInt, c::ClongMax) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
-+(c::ClongMax, x::BigInt) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
--(x::BigInt, c::ClongMax) = c < 0 ? +(x, -(c % Culong)) : -(x, convert(Culong, c))
--(c::ClongMax, x::BigInt) = c < 0 ? -(x + -(c % Culong)) : -(convert(Culong, c), x)
++(x::BigInt, c::ClongMax) = c < 0 ? x - (-Clong(c) % Culong) : x + (c % Culong)
++(c::ClongMax, x::BigInt) = c < 0 ? x - (-Clong(c) % Culong) : x + (c % Culong)
+-(x::BigInt, c::ClongMax) = c < 0 ? x + (-Clong(c) % Culong) : x - (c % Culong)
+-(c::ClongMax, x::BigInt) = c < 0 ? -(x + (-Clong(c) % Culong)) : (c % Culong) - x
 
 *(x::BigInt, c::CulongMax) = MPZ.mul_ui(x, c)
 *(c::CulongMax, x::BigInt) = x * c

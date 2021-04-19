@@ -340,10 +340,10 @@ function aligned_sizeof(T::Type)
     @_pure_meta
     if isbitsunion(T)
         _, sz, al = uniontype_layout(T)
-        return (sz + al - 1) & -al
+        return (sz + al - 1) & ~(al - 1)
     elseif allocatedinline(T)
         al = datatype_alignment(T)
-        return (Core.sizeof(T) + al - 1) & -al
+        return (Core.sizeof(T) + al - 1) & ~(al - 1)
     else
         return Core.sizeof(Ptr{Cvoid})
     end

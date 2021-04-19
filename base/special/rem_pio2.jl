@@ -190,11 +190,11 @@ function paynehanek(x::Float64)
     w = w1 + w2 + w3         # quotient fraction after division by 2π
 
     # adjust for sign of x
-    w = flipsign(w,x)
+    w = flipsign(w % Int128, x)
 
     # 4. convert to quadrant, quotient fraction after division by π/2:
-    q = (((w>>125)%Int +1)>>1) # nearest quadrant
-    f = (w<<2) % Int128 # fraction part of quotient after division by π/2, taking values on [-0.5,0.5)
+    q = (((w >>> 125) % Int + 1) >> 1) # nearest quadrant
+    f = w << 2 # fraction part of quotient after division by π/2, taking values on [-0.5,0.5)
 
     # 5. convert quotient fraction to split precision Float64
     z_hi,z_lo = fromfraction(f)

@@ -154,9 +154,11 @@ julia> sign(0 + im)
 ```
 """
 sign(x::Number) = iszero(x) ? x/abs(oneunit(x)) : x/abs(x)
-sign(x::Real) = ifelse(x < zero(x), oftype(one(x),-1), ifelse(x > zero(x), one(x), typeof(one(x))(x)))
-sign(x::Unsigned) = ifelse(x > zero(x), one(x), oftype(one(x),0))
-abs(x::Real) = ifelse(signbit(x), -x, x)
+sign(x::Real) = x < zero(x) ? oftype(one(x), -1) :
+                x > zero(x) ? one(x) :
+                              typeof(one(x))(x)
+sign(x::Unsigned) = x > zero(x) ? one(x) : oftype(one(x), 0)
+abs(x::Real) = signbit(x) ? -x : +x
 
 """
     abs2(x)
@@ -185,7 +187,7 @@ julia> flipsign(5, -3)
 -5
 ```
 """
-flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, +x) # the + is for type-stability on Bool
+flipsign(x::Real, y::Real) = signbit(y) ? -x : +x # the + is for type-stability on Bool
 
 """
     copysign(x, y) -> z
@@ -201,7 +203,7 @@ julia> copysign(-1, 2)
 1
 ```
 """
-copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
+copysign(x::Real, y::Real) = signbit(x) != signbit(y) ? -x : +x
 
 conj(x::Real) = x
 transpose(x::Number) = x
