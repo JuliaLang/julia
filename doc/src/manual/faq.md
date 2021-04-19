@@ -714,25 +714,31 @@ julia> remotecall_fetch(anon_bar, 2)
 1
 ```
 
-## Troubleshooting "method not matched" (parametric invariance, etc.)
+## Troubleshooting "method not matched": parametric type invariance and `MethodError`s
 
 ### Why doesn't it work to declare `foo(bar::Vector{Real}) = 42` and then call `foo([1])`?
 
-As you'll see if you try this, the result is
+As you'll see if you try this, the result is a `MethodError`:
 
 ```jldoctest
 julia> foo(x::Vector{Real}) = 42
 foo (generic function with 1 method)
 
 julia> foo([1])
-ERROR: MethodError: no method matching foo(::Array{Int64,1})
+ERROR: MethodError: no method matching foo(::Vector{Int64})
 Closest candidates are:
-  foo(!Matched::Array{Real,1}) at REPL[2]:1
+  foo(!Matched::Vector{Real}) at none:1
 ```
 
-This is because `Vector{Real}` is not a supertype of `Vector{Int}`! You'd probably solve this problem with something like `foo{T<:Real}(bar::Vector{T})` (or the short form `foo(bar::Vector{<:Real})` if the static parameter `T` is not required). The `T` is a wild card; you first specify that it must be a subtype of real, then allow the function to take any vector of that type.
+This is because `Vector{Real}` is not a supertype of `Vector{Int}`! You can solve this problem with something
+like `foo(bar::Vector{T}) where {T<:Real}` (or the short form `foo(bar::Vector{<:Real})` if the static parameter `T`
+is not needed in the body of the function). The `T` is a wild card: you first specify that it must be a
+subtype of Real, then specify the function takes a Vector of with elements of that type.
 
-Of course, this same issue goes for any composite type `Comp`, not just `Vector`. If `Comp` has an element declared of type `Y`, then another type `Comp2` with an element of type `X<:Y` is not a subtype of `Comp`.
+This same issue goes for any composite type `Comp`, not just `Vector`. If `Comp` has a parameter declared of
+type `Y`, then another type `Comp2` with a parameter of type `X<:Y` is not a subtype of `Comp`. This is
+type-invariance (by contrast, Tuple is type-covariant in its parameters). See [Parametric Composite
+Types](@ref man-parametric-composite-types) for more explanation of these.
 
 ### Why does Julia use `*` for string concatenation? Why not `+` or something else?
 
