@@ -572,6 +572,18 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
             print_linebreaks && println(io)
         end
     end
+function show_compact_backtrace(io::IO, t::Vector)
+    #= Show the lowest stackframe and display a message telling user how to
+    retrieve the full trace =#
+
+    modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
+
+    println(io, "\nLocation:")
+
+    print_stackframe(io, 1, trace[1][1], trace[1][2], 1, modulecolordict, modulecolorcycler)
+
+    println(io, "\nUse `stacktrace(errs)` to retrieve the full stack trace.")
 end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
