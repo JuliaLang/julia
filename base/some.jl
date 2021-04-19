@@ -64,6 +64,8 @@ Return `true` if `x === nothing`, and return `false` if not.
 
 !!! compat "Julia 1.1"
     This function requires at least Julia 1.1.
+
+See also [`something`](@ref), [`notnothing`](@ref), [`ismissing`](@ref).
 """
 isnothing(x) = x === nothing
 
@@ -75,7 +77,7 @@ Return the first value in the arguments which is not equal to [`nothing`](@ref),
 if any. Otherwise throw an error.
 Arguments of type [`Some`](@ref) are unwrapped.
 
-See also [`coalesce`](@ref).
+See also [`coalesce`](@ref), [`skipmissing`](@ref).
 
 # Examples
 ```jldoctest

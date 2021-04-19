@@ -168,6 +168,8 @@ end
 
 Simultaneously compute the sine and cosine of `x`, where `x` is in radians, returning
 a tuple `(sine, cosine)`.
+
+See also [`cis`](@ref), [`sincospi`](@ref), [`sincosd`](@ref).
 """
 function sincos(x::T) where T<:Union{Float32, Float64}
     if abs(x) < T(pi)/4
@@ -742,6 +744,8 @@ mulpi_ext(x::Real) = pi*x # Fallback
     sinpi(x)
 
 Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
+
+See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
 function sinpi(x::T) where T<:AbstractFloat
     if !isfinite(x)
@@ -863,6 +867,8 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
+
+See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
 function sincospi(x::T) where T<:AbstractFloat
     if !isfinite(x)
@@ -1069,6 +1075,8 @@ isinf_real(x::Number) = false
     sinc(x)
 
 Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
+
+See also [`cosc`](@ref), its derivative.
 """
 sinc(x::Number) = _sinc(float(x))
 sinc(x::Integer) = iszero(x) ? one(x) : zero(x)

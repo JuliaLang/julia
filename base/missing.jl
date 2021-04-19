@@ -201,6 +201,8 @@ Use [`collect`](@ref) to obtain an `Array` containing the non-`missing` values i
 be a `Vector` since it is not possible to remove missings while preserving dimensions
 of the input.
 
+See also [`coalesce`](@ref), [`ismissing`](@ref), [`something`](@ref).
+
 # Examples
 ```jldoctest
 julia> x = skipmissing([1, missing, 2])
@@ -404,7 +406,7 @@ end
 Return the first value in the arguments which is not equal to [`missing`](@ref),
 if any. Otherwise return `missing`.
 
-See also [`something`](@ref).
+See also [`skipmissing`](@ref), [`something`](@ref).
 
 # Examples
 

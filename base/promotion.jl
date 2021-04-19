@@ -5,7 +5,6 @@
 """
     typejoin(T, S)
 
-
 Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
 they both inherit.
 """
@@ -144,6 +143,17 @@ end
 Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
+
+See instead [`promote`](@ref), [`promote_type`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.promote_typejoin(Int, Float64)
+Real
+
+julia> Base.promote_type(Int, Float64)
+Float64
+```
 """
 function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
@@ -191,6 +201,9 @@ tolerated; for example, `promote_type(Int64, Float64)` returns
 [`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
 represented exactly as `Float64` values.
 
+See also: [`promote`](@ref), [`promote_typejoin`](@ref), [`promote_rule`](@ref).
+
+# Examples
 ```jldoctest
 julia> promote_type(Int64, Float64)
 Float64
@@ -253,6 +266,8 @@ promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = 
 
 Convert all arguments to a common type, and return them all (as a tuple).
 If no arguments can be converted, an error is raised.
+
+See also: [`promote_type`], [`promote_rule`].
 
 # Examples
 ```jldoctest
@@ -335,7 +350,7 @@ where usually `^ == Base.^` unless `^` has been defined in the calling
 namespace.) If `y` is a negative integer literal, then `Base.literal_pow`
 transforms the operation to `inv(x)^-y` by default, where `-y` is positive.
 
-
+# Examples
 ```jldoctest
 julia> 3^5
 243

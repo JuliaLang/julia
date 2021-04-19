@@ -158,6 +158,7 @@ Base.typejoin
 Base.typeintersect
 Base.promote_type
 Base.promote_rule
+Base.promote_typejoin
 Base.isdispatchtuple
 ```
 
@@ -213,12 +214,14 @@ Core.Union
 Union{}
 Core.UnionAll
 Core.Tuple
+Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
 Base.isnothing
+Base.notnothing
 Base.Some
 Base.something
 Base.Enums.Enum
@@ -243,6 +246,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
+Base.splat
 ```
 
 ## Syntax
@@ -406,6 +410,7 @@ Base.isconst
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
+Base.@locals
 ```
 
 ## Internals
