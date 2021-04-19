@@ -275,6 +275,9 @@ end
     @test vec(Transpose(intvec)) === intvec
     cvec = [1 + 1im]
     @test vec(cvec')[1] == cvec[1]'
+    mvec = [[1 2; 3 4+5im]];
+    @test vec(transpose(mvec))[1] == transpose(mvec[1])
+    @test vec(adjoint(mvec))[1] == adjoint(mvec[1])
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
@@ -571,6 +574,26 @@ end
     @test_throws DimensionMismatch [1, 2]' * [1,2,3]
     @test Int[]' * Int[] == 0
     @test transpose(Int[]) * Int[] == 0
+end
+
+@testset "reductions: $adjtrans" for adjtrans in [transpose, adjoint]
+    mat = rand(ComplexF64, 3,5)
+    @test sum(adjtrans(mat)) ≈ sum(collect(adjtrans(mat)))
+    @test sum(adjtrans(mat), dims=1) ≈ sum(collect(adjtrans(mat)), dims=1)
+    @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
+
+    @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
+    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
+
+    mat = [rand(ComplexF64,2,2) for _ in 1:3, _ in 1:5]
+    @test sum(adjtrans(mat)) ≈ sum(collect(adjtrans(mat)))
+    @test sum(adjtrans(mat), dims=1) ≈ sum(collect(adjtrans(mat)), dims=1)
+    @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
+
+    @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
+    @test sum(x -> x[1,2], adjtrans(mat)) ≈ sum(x -> x[1,2], collect(adjtrans(mat)))
+    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
+    @test sum(x -> x[1,2], adjtrans(mat), dims=1) ≈ sum(x -> x[1,2], collect(adjtrans(mat)), dims=1)
 end
 
 end # module TestAdjointTranspose

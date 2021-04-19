@@ -75,7 +75,11 @@ end
 @testset "other constructors" begin
     # construct empty sparse vector
 
-    @test exact_equal(spzeros(Float64, 8), SparseVector(8, Int[], Float64[]))
+    for dims in (8, (8,))
+        @test exact_equal(spzeros(dims), SparseVector(8, Int[], Float64[]))
+        @test exact_equal(spzeros(Float64, dims), SparseVector(8, Int[], Float64[]))
+        @test exact_equal(spzeros(Float64, Int16, dims), SparseVector(8, Int16[], Float64[]))
+    end
 
     @testset "from list of indices and values" begin
         @test exact_equal(
@@ -1420,22 +1424,22 @@ end
     @test typeof(simA) == SparseMatrixCSC{eltype(nonzeros(A)),eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(nonzeroinds(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test similar with entry type and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(nonzeroinds(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(nonzeroinds(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
 end
 
 @testset "Fast operations on full column views" begin
