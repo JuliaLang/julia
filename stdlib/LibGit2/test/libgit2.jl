@@ -171,12 +171,6 @@ end
     @test findfirst(isequal(LibGit2.Consts.FEATURE_HTTPS), f) !== nothing
 end
 
-@testset "No error at first" begin
-    class, msg = LibGit2.Error.last_error()
-    @test msg == "No errors"
-    @test class == LibGit2.Error.Class(0)
-end
-
 @testset "OID" begin
     z = LibGit2.GitHash()
     @test LibGit2.iszero(z)
