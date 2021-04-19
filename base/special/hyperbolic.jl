@@ -14,6 +14,7 @@
 # is preserved.
 # ====================================================
 
+
 # Hyperbolic functions
 # sinh methods
 H_SMALL_X(::Type{Float64}) = 2.0^-28
@@ -49,6 +50,11 @@ function sinh_kernel(x::Float32)
     return Float32(res*x)
 end
 
+@inline function sinh16_kernel(x::Float32)
+    res = evalpoly(x*x, (1.0f0, 0.16666667f0, 0.008333337f0, 0.00019841001f0,
+                         2.7555539f-6, 2.514339f-8, 1.6260095f-10))
+    return Float16(res*x)
+end
 
 function sinh(x::T) where T<:Union{Float32,Float64}
     # Method
@@ -72,6 +78,14 @@ function sinh(x::T) where T<:Union{Float32,Float64}
     end
     E = exp(absx)
     return copysign(T(.5)*(E - 1/E),x)
+end
+
+function Base.sinh(a::Float16)
+    x = Float32(a)
+    absx = abs(x)
+    absx <= SINH_SMALL_X(Float32) && return sinh16_kernel(x)
+    E = exp(absx)
+    return Float16(copysign(.5f0*(E - 1/E),x))
 end
 
 COSH_SMALL_X(::Type{T}) where T= one(T)
