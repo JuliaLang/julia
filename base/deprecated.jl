@@ -117,12 +117,14 @@ function firstcaller(bt::Vector, funcsyms)
             end
             found = lkup.func in funcsyms
             # look for constructor type name
-            if !found && lkup.linfo isa Core.MethodInstance
+            if !found
                 li = lkup.linfo
-                ft = ccall(:jl_first_argument_datatype, Any, (Any,), li.def.sig)
-                if isa(ft, DataType) && ft.name === Type.body.name
-                    ft = unwrap_unionall(ft.parameters[1])
-                    found = (isa(ft, DataType) && ft.name.name in funcsyms)
+                if li isa Core.MethodInstance
+                    ft = ccall(:jl_first_argument_datatype, Any, (Any,), (li.def::Method).sig)
+                    if isa(ft, DataType) && ft.name === Type.body.name
+                        ft = unwrap_unionall(ft.parameters[1])
+                        found = (isa(ft, DataType) && ft.name.name in funcsyms)
+                    end
                 end
             end
         end

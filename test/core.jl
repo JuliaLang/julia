@@ -410,7 +410,7 @@ function foo23996(xs...)
     bar(::AbstractFloat) = push!(rets, 2)
     bar(::Bool) = foobar()
     for x in xs
-	bar(x)
+        bar(x)
     end
     rets
 end
@@ -2389,19 +2389,14 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
 end
 
 # call overloading (#2403)
-(x::Int)(y::Int) = x + 3y
 issue2403func(f) = f(7)
-let x = 10
-    @test x(3) == 19
-    @test x((3,)...) == 19
-    @test issue2403func(x) == 31
-end
 mutable struct Issue2403
     x
 end
 (i::Issue2403)(y) = i.x + 2y
 let x = Issue2403(20)
     @test x(3) == 26
+    @test x((3,)...) == 26
     @test issue2403func(x) == 34
 end
 
@@ -4124,15 +4119,6 @@ let ex = quote
     @test ex.args[2] == :test
 end
 
-# issue #25652
-x25652 = 1
-x25652_2 = let (x25652, _) = (x25652, nothing)
-    x25652 = x25652 + 1
-    x25652
-end
-@test x25652_2 == 2
-@test x25652 == 1
-
 # issue #15180
 function f15180(x::T) where T
     X = Vector{T}(undef, 1)
@@ -5000,7 +4986,8 @@ gVararg(a::fVararg(Int)) = length(a)
     false
 catch e
     (e::ErrorException).msg
-end == "The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension."
+end == "The function body AST defined by this @generated function is not pure. " *
+       "This likely means it contains a closure, a comprehension or a generator."
 
 let x = 1
     global g18444
@@ -5079,19 +5066,6 @@ end
 end
 @test f17255(10000)[1]
 GC.enable(true)
-
-# PR #39133, ensure that @time evaluates in the same scope
-function time_macro_scope()
-    @time time_macro_local_var = 1
-    time_macro_local_var
-end
-@test time_macro_scope() == 1
-
-function timev_macro_scope()
-    @timev timev_macro_local_var = 1
-    timev_macro_local_var
-end
-@time timev_macro_scope() == 1
 
 # issue #18710
 bad_tvars() where {T} = 1
@@ -5318,6 +5292,16 @@ if Sys.WORD_SIZE == 64
         return
     end
     @test_nowarn tester20360()
+end
+
+# issue #39717
+let a = Base.StringVector(2^17)
+    b = String(a)
+    c = String(a)
+    GC.gc()
+    @test sizeof(a) == 0
+    @test sizeof(b) == 2^17
+    @test sizeof(c) == 0
 end
 
 @test_throws ArgumentError eltype(Bottom)
@@ -5662,11 +5646,9 @@ f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
 @test !f_isdefined_unionvar(1, 0)
 f_isdefined_splat(x...) = @isdefined x
 @test f_isdefined_splat(1, 2, 3)
-let err = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
+let e = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
     __source__ = LineNumberNode(@__LINE__() - 1, Symbol(@__FILE__))
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    e = err.error::MethodError
+    e::MethodError
     @test e.f === getfield(@__MODULE__, Symbol("@isdefined"))
     @test e.args === (__source__, @__MODULE__, :(:x))
 end
@@ -5983,11 +5965,11 @@ end
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(undef, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        A = Array{U}(undef, ntuple(x->10, N)...)
+        A = Array{U}(undef, ntuple(Returns(10), N)...)
         @test length(A) == 10^N
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
@@ -6068,11 +6050,11 @@ using Serialization
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(undef, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        len = ntuple(x->10, N)
+        len = ntuple(Returns(10), N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
         A = Array{U}(undef, len)
         @test length(A) == prod(len)
@@ -7238,6 +7220,11 @@ end
 @test_broken isbitstype(Tuple{B33954})
 @test_broken isbitstype(B33954)
 
+struct B40050 <: Ref{Tuple{B40050}}
+end
+@test string((B40050(),)) == "($B40050(),)"
+@test_broken isbitstype(Tuple{B40050})
+
 # Issue #34206/34207
 function mre34206(a, n)
     va = view(a, :)
@@ -7300,11 +7287,27 @@ end
 
 # issue #36104
 module M36104
+using Test
 struct T36104
     v::Vector{M36104.T36104}
 end
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
+end
+# with a gensymmed unionall
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+@test_throws ErrorException begin
+    struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data::S
+        uplo::Char
+    end
 end
 end
 @test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
@@ -7550,3 +7553,12 @@ function f18621()
 end
 @test f18621() == 1:5
 @test [_ for _ in 1:5] == 1:5
+
+# issue #35130
+const T35130 = Tuple{Vector{Int}, <:Any}
+@eval struct A35130
+    x::Vector{Tuple{Vector{Int}, Any}}
+    A35130(x) = $(Expr(:new, :A35130, :x))
+end
+h35130(x) = A35130(Any[x][1]::Vector{T35130})
+@test h35130(T35130[([1],1)]) isa A35130

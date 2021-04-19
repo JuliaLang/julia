@@ -88,7 +88,7 @@ Random.seed!(1)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
-            for func in (exp, sinh, cosh, tanh, sech, csch, coth)
+            for func in (exp, cis, sinh, cosh, tanh, sech, csch, coth)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)
             end
             @test log(Diagonal(abs.(D.diag))) ≈ log(abs.(DM)) atol=n^3*eps(relty)
@@ -100,6 +100,10 @@ Random.seed!(1)
                 @test func(D) ≈ func(DM) atol=n^2*eps(relty)*2
             end
         end
+    end
+
+    @testset "Two-dimensional Euler formula for Diagonal" begin
+        @test cis(Diagonal([π, π])) ≈ -I
     end
 
     @testset "Linear solve" begin
@@ -295,6 +299,10 @@ Random.seed!(1)
         M4 = rand(elty, n÷2, n÷2)
         @test kron(D3, M4) ≈ kron(DM3, M4)
         @test kron(M4, D3) ≈ kron(M4, DM3)
+        X = [ones(1,1) for i in 1:2, j in 1:2]
+        @test kron(I(2), X)[1,3] == zeros(1,1)
+        X = [ones(2,2) for i in 1:2, j in 1:2]
+        @test kron(I(2), X)[1,3] == zeros(2,2)
     end
     @testset "iszero, isone, triu, tril" begin
         Dzero = Diagonal(zeros(elty, 10))
@@ -568,6 +576,7 @@ end
     @test ishermitian(Dsym) == false
 
     @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
+    @test cis(D) == Diagonal([cis([1 2; 3 4]), cis([1 2; 3 4])])
     @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
     @test sqrt(D) == Diagonal([sqrt([1 2; 3 4]), sqrt([1 2; 3 4])])
 
@@ -733,6 +742,23 @@ end
     @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
     @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
+end
+
+
+@testset "permutedims (#39447)" begin
+    for D in (Diagonal(zeros(5)), Diagonal(zeros(5) .+ 1im), Diagonal([[1,2],[3,4]]))
+        @test permutedims(D) === permutedims(D,(1,2)) === permutedims(D,(2,1)) === D
+        @test_throws ArgumentError permutedims(D,(1,3))
+    end
+end
+
+@testset "Inner product" begin
+    A = Diagonal(rand(10) .+ im)
+    B = Diagonal(rand(10) .+ im)
+    @test dot(A, B) ≈ dot(Matrix(A), B)
+    @test dot(A, B) ≈ dot(A, Matrix(B))
+    @test dot(A, B) ≈ dot(Matrix(A), Matrix(B))
+    @test dot(A, B) ≈ conj(dot(B, A))
 end
 
 end # module TestDiagonal

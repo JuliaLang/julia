@@ -220,7 +220,7 @@ function lookup_doc(ex)
     if isa(ex, Symbol) && Base.isoperator(ex)
         str = string(ex)
         isdotted = startswith(str, ".")
-        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment
+        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment && ex !== :(:=)
             op = str[1:end-1]
             eq = isdotted ? ".=" : "="
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
@@ -243,10 +243,12 @@ end
 
 function summarize(binding::Binding, sig)
     io = IOBuffer()
-    println(io, "No documentation found.\n")
     if defined(binding)
-        summarize(io, resolve(binding), binding)
+        binding_res = resolve(binding)
+        !isa(binding_res, Module) && println(io, "No documentation found.\n")
+        summarize(io, binding_res, binding)
     else
+        println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
         println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
     end
@@ -264,44 +266,96 @@ function summarize(io::IO, λ::Function, binding::Binding)
     println(io, "```\n", methods(λ), "\n```")
 end
 
-function summarize(io::IO, T::DataType, binding::Binding)
+function summarize(io::IO, TT::Type, binding::Binding)
     println(io, "# Summary")
-    println(io, "```")
-    println(io,
-            T.abstract ? "abstract type" :
-            T.mutable  ? "mutable struct" :
-            Base.isstructtype(T) ? "struct" : "primitive type",
-            " ", T, " <: ", supertype(T)
-            )
-    println(io, "```")
-    if !T.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
-        println(io, "# Fields")
+    T = Base.unwrap_unionall(TT)
+    if T isa DataType
         println(io, "```")
-        pad = maximum(length(string(f)) for f in fieldnames(T))
-        for (f, t) in zip(fieldnames(T), T.types)
-            println(io, rpad(f, pad), " :: ", t)
+        print(io,
+            T.abstract ? "abstract type " :
+            T.mutable  ? "mutable struct " :
+            Base.isstructtype(T) ? "struct " :
+            "primitive type ")
+        supert = supertype(T)
+        println(io, T)
+        println(io, "```")
+        if !T.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
+            println(io, "# Fields")
+            println(io, "```")
+            pad = maximum(length(string(f)) for f in fieldnames(T))
+            for (f, t) in zip(fieldnames(T), T.types)
+                println(io, rpad(f, pad), " :: ", t)
+            end
+            println(io, "```")
         end
-        println(io, "```")
-    end
-    if !isempty(subtypes(T))
-        println(io, "# Subtypes")
-        println(io, "```")
-        for t in subtypes(T)
-            println(io, t)
+        subt = subtypes(TT)
+        if !isempty(subt)
+            println(io, "# Subtypes")
+            println(io, "```")
+            for t in subt
+                println(io, Base.unwrap_unionall(t))
+            end
+            println(io, "```")
         end
-        println(io, "```")
-    end
-    if supertype(T) != Any
-        println(io, "# Supertype Hierarchy")
-        println(io, "```")
-        Base.show_supertypes(io, T)
-        println(io)
-        println(io, "```")
+        if supert != Any
+            println(io, "# Supertype Hierarchy")
+            println(io, "```")
+            Base.show_supertypes(io, T)
+            println(io)
+            println(io, "```")
+        end
+    elseif T isa Union
+        println(io, "`", binding, "` is of type `", typeof(TT), "`.\n")
+        println(io, "# Union Composed of Types")
+        for T1 in Base.uniontypes(T)
+            println(io, " - `", Base.rewrap_unionall(T1, TT), "`")
+        end
+    else # unreachable?
+        println(io, "`", binding, "` is of type `", typeof(TT), "`.\n")
     end
 end
 
-function summarize(io::IO, m::Module, binding::Binding)
-    println(io, "No docstring found for module `", m, "`.\n")
+function find_readme(m::Module)::Union{String, Nothing}
+    mpath = pathof(m)
+    isnothing(mpath) && return nothing
+    !isfile(mpath) && return nothing # modules in sysimage, where src files are omitted
+    path = dirname(mpath)
+    top_path = pkgdir(m)
+    while true
+        for file in readdir(path; join=true, sort=true)
+            isfile(file) && (basename(lowercase(file)) in ["readme.md", "readme"]) || continue
+            return file
+        end
+        path == top_path && break # go no further than pkgdir
+        path = dirname(path) # work up through nested modules
+    end
+    return nothing
+end
+function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
+    readme_path = find_readme(m)
+    if isnothing(readme_path)
+        println(io, "No docstring or readme file found for module `$m`.\n")
+    else
+        println(io, "No docstring found for module `$m`.")
+    end
+    exports = filter!(!=(nameof(m)), names(m))
+    if isempty(exports)
+        println(io, "Module does not export any names.")
+    else
+        println(io, "# Exported names")
+        print(io, "  `")
+        join(io, exports, "`, `")
+        println(io, "`\n")
+    end
+    if !isnothing(readme_path)
+        readme_lines = readlines(readme_path)
+        isempty(readme_lines) && return  # don't say we are going to print empty file
+        println(io, "# Displaying contents of readme found at `$(readme_path)`")
+        for line in first(readme_lines, nlines)
+            println(io, line)
+        end
+        length(readme_lines) > nlines && println(io, "\n[output truncated to first $nlines lines]")
+    end
 end
 
 function summarize(io::IO, @nospecialize(T), binding::Binding)
@@ -528,8 +582,10 @@ function matchinds(needle, haystack; acronym::Bool = false)
     is = Int[]
     lastc = '\0'
     for (i, char) in enumerate(haystack)
+        while !isempty(chars) && isspace(first(chars))
+            popfirst!(chars) # skip spaces
+        end
         isempty(chars) && break
-        while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if lowercase(char) == lowercase(chars[1]) &&
            (!acronym || !isletter(lastc))
             push!(is, i)

@@ -117,13 +117,18 @@ julia> selectdim(A, 2, 3)
 2-element view(::Matrix{Int64}, :, 3) with eltype Int64:
  3
  7
+
+julia> selectdim(A, 2, 3:4)
+2×2 view(::Matrix{Int64}, :, 3:4) with eltype Int64:
+ 3  4
+ 7  8
 ```
 """
 @inline selectdim(A::AbstractArray, d::Integer, i) = _selectdim(A, d, i, _setindex(i, d, map(Slice, axes(A))...))
 @noinline function _selectdim(A, d, i, idxs)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
     nd = ndims(A)
-    d > nd && (i == 1 || throw(BoundsError(A, (ntuple(k->Colon(),d-1)..., i))))
+    d > nd && (i == 1 || throw(BoundsError(A, (ntuple(Returns(Colon()),d-1)..., i))))
     return view(A, idxs...)
 end
 
@@ -225,7 +230,7 @@ function repeat(A::AbstractArray, counts...)
 end
 
 """
-    repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))
+    repeat(A::AbstractArray; inner=ntuple(Returns(1), ndims(A)), outer=ntuple(Returns(1), ndims(A)))
 
 Construct an array by repeating the entries of `A`. The i-th element of `inner` specifies
 the number of times that the individual entries of the i-th dimension of `A` should be
@@ -491,7 +496,7 @@ julia> collect(eachslice(M, dims=2))
     length(dims) == 1 || throw(ArgumentError("only single dimensions are supported"))
     dim = first(dims)
     dim <= ndims(A) || throw(DimensionMismatch("A doesn't have $dim dimensions"))
-    inds_before = ntuple(d->(:), dim-1)
-    inds_after = ntuple(d->(:), ndims(A)-dim)
+    inds_before = ntuple(Returns(:), dim-1)
+    inds_after = ntuple(Returns(:), ndims(A)-dim)
     return (view(A, inds_before..., i, inds_after...) for i in axes(A, dim))
 end

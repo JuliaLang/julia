@@ -83,7 +83,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
     int n = 0;
     for (i = 0; i < l; i++) {
         jl_datatype_t *fld = (jl_datatype_t*)jl_field_type(ty, i);
-        if (!jl_is_datatype(fld) || ((jl_datatype_t*)fld)->layout == NULL)
+        if (!jl_is_datatype(fld) || ((jl_datatype_t*)fld)->layout == NULL || jl_is_layout_opaque(((jl_datatype_t*)fld)->layout))
             return 9;
         n += isHFA((jl_datatype_t*)fld, ty0, hva);
         if (n > 8)

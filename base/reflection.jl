@@ -887,6 +887,14 @@ function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool,
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
 end
 
+function _method_by_ftype(args...)
+    matches = _methods_by_ftype(args...)
+    if length(matches) != 1
+        error("no unique matching method found for the specified argument types")
+    end
+    return matches[1]
+end
+
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
@@ -929,8 +937,8 @@ function methods(@nospecialize(f), @nospecialize(t),
     world = typemax(UInt)
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
-    for m in _methods(f, t, -1, world)
-        m::Core.MethodMatch
+    for m in _methods(f, t, -1, world)::Vector
+        m = m::Core.MethodMatch
         (mod === nothing || m.method.module ∈ mod) && push!(ms, m.method)
     end
     MethodList(ms, typeof(f).name.mt)
@@ -1019,8 +1027,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = type
     tt = signature_type(f, t)
     results = Core.MethodInstance[]
     for match in _methods_by_ftype(tt, -1, world)::Vector
-        instance = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
-            (Any, Any, Any), match.method, match.spec_types, match.sparams)
+        instance = Core.Compiler.specialize_method(match)
         push!(results, instance)
     end
     return results
@@ -1179,7 +1186,8 @@ function code_typed_by_type(@nospecialize(tt::Type);
         error("signature does not correspond to a generic function")
     end
     asts = []
-    for match in matches
+    for match in matches::Vector
+        match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
         (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, optimize)
         code === nothing && error("inference not successful") # inference disabled?
@@ -1211,7 +1219,8 @@ function return_types(@nospecialize(f), @nospecialize(types=Tuple), interp=Core.
     types = to_tuple_type(types)
     rt = []
     world = get_world_counter()
-    for match in _methods(f, types, -1, world)
+    for match in _methods(f, types, -1, world)::Vector
+        match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
         ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
         ty === nothing && error("inference not successful") # inference disabled?
@@ -1243,7 +1252,8 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     end
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
-    for match in matches
+    for match in matches::Vector
+        match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
         (code, ty) = Core.Compiler.typeinf_code(interp, meth, match.spec_types, match.sparams, true)
         code === nothing && error("inference not successful") # inference disabled?
@@ -1252,12 +1262,28 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
         maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
         nd = ndigits(maxcost)
         println(io, meth)
-        IRShow.show_ir(io, code, (io, linestart, idx) -> (print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " "); return ""))
-        println()
+        irshow_config = IRShow.IRShowConfig() do io, linestart, idx
+            print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
+            return ""
+        end
+        IRShow.show_ir(io, code, irshow_config)
+        println(io)
     end
 end
 
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
+
+function _which(@nospecialize(tt::Type), world=typemax(UInt))
+    min_valid = RefValue{UInt}(typemin(UInt))
+    max_valid = RefValue{UInt}(typemax(UInt))
+    match = ccall(:jl_gf_invoke_lookup_worlds, Any,
+        (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
+        tt, typemax(UInt), min_valid, max_valid)
+    if match === nothing
+        error("no unique matching method found for the specified argument types")
+    end
+    return match::Core.MethodMatch
+end
 
 """
     which(f, types)
@@ -1281,11 +1307,7 @@ end
 Returns the method that would be called by the given type signature (as a tuple type).
 """
 function which(@nospecialize(tt::Type))
-    m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
-    if m === nothing
-        error("no unique matching method found for the specified argument types")
-    end
-    return m::Method
+    return _which(tt).method
 end
 
 """
@@ -1493,7 +1515,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         ms = _methods_by_ftype(ti, -1, typemax(UInt), true, min, max, has_ambig)::Vector
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
-            filter!(ms) do m
+            filter!(ms) do m::Core.MethodMatch
                 return !has_bottom_parameter(m.spec_types)
             end
         end
@@ -1501,6 +1523,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         # intersection, see if both m1 and m2 may be involved in it
         have_m1 = have_m2 = false
         for match in ms
+            match = match::Core.MethodMatch
             m = match.method
             m === m1 && (have_m1 = true)
             m === m2 && (have_m2 = true)

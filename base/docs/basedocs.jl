@@ -603,6 +603,32 @@ the last expression in the function body.
 kw"function"
 
 """
+    x -> y
+
+Create an anonymous function mapping argument(s) `x` to the function body `y`.
+
+```jldoctest
+julia> f = x -> x^2 + 2x - 1
+#1 (generic function with 1 method)
+
+julia> f(2)
+7
+```
+
+Anonymous functions can also be defined for multiple argumets.
+```jldoctest
+julia> g = (x,y) -> x^2 + y^2
+#2 (generic function with 1 method)
+
+julia> g(2,3)
+13
+```
+
+See the manual section on [anonymous functions](@ref man-anonymous-functions) for more details.
+"""
+kw"->"
+
+"""
     return
 
 `return x` causes the enclosing function to exit early, passing the given value `x`
@@ -746,8 +772,9 @@ kw"while"
 `end` marks the conclusion of a block of expressions, for example
 [`module`](@ref), [`struct`](@ref), [`mutable struct`](@ref),
 [`begin`](@ref), [`let`](@ref), [`for`](@ref) etc.
-`end` may also be used when indexing into an array to represent
-the last index of a dimension.
+
+`end` may also be used when indexing to represent the last index of a
+collection or the last index of a dimension of an array.
 
 # Examples
 ```jldoctest
@@ -1017,6 +1044,22 @@ end
 
 Usually `begin` will not be necessary, since keywords such as [`function`](@ref) and [`let`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
+
+`begin` may also be used when indexing to represent the first index of a
+collection or the first index of a dimension of an array.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> A[begin, :]
+2-element Array{Int64,1}:
+ 1
+ 2
+```
 """
 kw"begin"
 
@@ -1242,7 +1285,7 @@ julia> isa(+, Function)
 true
 
 julia> typeof(sin)
-typeof(sin)
+typeof(sin) (singleton type of function sin, subtype of Function)
 
 julia> ans <: Function
 true
@@ -2259,6 +2302,9 @@ AssertionError
 
 An error occurred while [`include`](@ref Base.include)ing, [`require`](@ref Base.require)ing, or [`using`](@ref) a file. The error specifics
 should be available in the `.error` field.
+
+!!! compat "Julia 1.7"
+    LoadErrors are no longer emitted by `@macroexpand`, `@macroexpand1`, and `macroexpand` as of Julia 1.7.
 """
 LoadError
 

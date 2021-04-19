@@ -440,7 +440,7 @@ end
 function ssh_knownhost_check(
     files :: AbstractVector{<:AbstractString},
     host  :: AbstractString,
-    key   :: String,
+    key   :: Vector{UInt8},
 )
     if (m = match(r"^(.+):(\d+)$", host)) !== nothing
         host = m.captures[1]
@@ -448,6 +448,7 @@ function ssh_knownhost_check(
     else
         port = 22 # default SSH port
     end
+    len = length(key)
     mask = Consts.LIBSSH2_KNOWNHOST_TYPE_PLAIN |
            Consts.LIBSSH2_KNOWNHOST_KEYENC_RAW
     session = @ccall "libssh2".libssh2_session_init_ex(
@@ -471,13 +472,12 @@ function ssh_knownhost_check(
             @ccall "libssh2".libssh2_knownhost_free(hosts::Ptr{Cvoid})::Cvoid
             continue
         end
-        size = ncodeunits(key)
         check = @ccall "libssh2".libssh2_knownhost_checkp(
             hosts  :: Ptr{Cvoid},
             host   :: Cstring,
             port   :: Cint,
             key    :: Ptr{UInt8},
-            size   :: Csize_t,
+            len    :: Csize_t,
             mask   :: Cint,
             C_NULL :: Ptr{Ptr{KnownHost}},
         ) :: Cint

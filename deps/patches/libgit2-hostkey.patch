@@ -18,7 +18,7 @@ index e8cd2d180..54293cd31 100644
  
  /**
 diff --git a/src/transports/ssh.c b/src/transports/ssh.c
-index f4ed05bb1..049697796 100644
+index f4ed05bb1..ec6366a5f 100644
 --- a/src/transports/ssh.c
 +++ b/src/transports/ssh.c
 @@ -523,6 +523,7 @@ static int _git_ssh_setup_conn(
@@ -47,7 +47,7 @@ index f4ed05bb1..049697796 100644
  		cert_ptr = &cert;
  
 -		error = t->owner->certificate_check_cb((git_cert *) cert_ptr, 0, urldata.host, t->owner->message_cb_payload);
-+		if (git_net_url_is_default_port(&urldata)) {
++		if (atoi(urldata.port) == SSH_DEFAULT_PORT) {
 +			host_and_port = urldata.host;
 +		} else {
 +			size_t n = strlen(urldata.host) + strlen(urldata.port) + 2;

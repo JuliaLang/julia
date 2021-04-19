@@ -224,7 +224,7 @@ let ex = :(a + b)
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825(::Array{T, N}, ::Array, ::Vector{T} where T)")
+                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} in")
 
 mutable struct TLayout
     x::Int8
