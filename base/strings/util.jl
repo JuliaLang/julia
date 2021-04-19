@@ -428,7 +428,7 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
     r = findnext(iter.splitter, iter.str, k)::Union{Nothing,Int,UnitRange{Int}}
     while r !== nothing && n != iter.limit - 1 && first(r) <= lastindex(iter.str)
         j, k = first(r), nextind(iter.str, last(r))::Int
-        k_ = ifelse(k <= j, nextind(iter.str, j), k)
+        k_ = k <= j ? nextind(iter.str, j) : k
         if i < k
             substr = @inbounds SubString(iter.str, i, prevind(iter.str, j)::Int)
             return (substr, (max(i, k), k_, n + Int(i < j)))
