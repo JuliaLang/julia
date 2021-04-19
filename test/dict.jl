@@ -684,6 +684,7 @@ import Base.ImmutableDict
     d4 = ImmutableDict(d3, k2 => v1)
     dnan = ImmutableDict{String, Float64}(k2, NaN)
     dnum = ImmutableDict(dnan, k2 => 1)
+    f(x) = x^2
 
     @test isempty(collect(d))
     @test !isempty(collect(d1))
@@ -729,6 +730,18 @@ import Base.ImmutableDict
     @test get(d4, "key1", :default) === v2
     @test get(d4, "foo", :default) === :default
     @test get(d, k1, :default) === :default
+    @test get(d1, "key1") do
+        f(2)
+    end === v1
+    @test get(d4, "key1") do
+        f(4)
+    end === v2
+    @test get(d4, "foo") do
+        f(6)
+    end === 36
+    @test get(d, k1) do
+        f(8)
+    end === 64
     @test d1["key1"] === v1
     @test d4["key1"] === v2
     @test empty(d3) === d
