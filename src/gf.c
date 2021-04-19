@@ -1368,7 +1368,7 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
     }
     if (!jl_is_method(replaced->def.method))
         return; // shouldn't happen, but better to be safe
-    JL_LOCK_NOGC(&replaced->def.method->writelock);
+    JL_LOCK(&replaced->def.method->writelock);
     jl_code_instance_t *codeinst = replaced->cache;
     while (codeinst) {
         if (codeinst->max_world == ~(size_t)0) {
@@ -1388,13 +1388,13 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
             invalidate_method_instance(replaced, max_world, depth + 1);
         }
     }
-    JL_UNLOCK_NOGC(&replaced->def.method->writelock);
+    JL_UNLOCK(&replaced->def.method->writelock);
 }
 
 // invalidate cached methods that overlap this definition
 static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
 {
-    JL_LOCK_NOGC(&replaced_mi->def.method->writelock);
+    JL_LOCK(&replaced_mi->def.method->writelock);
     jl_array_t *backedges = replaced_mi->backedges;
     if (backedges) {
         // invalidate callers (if any)
@@ -1405,7 +1405,7 @@ static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_w
             invalidate_method_instance(replaced[i], max_world, 1);
         }
     }
-    JL_UNLOCK_NOGC(&replaced_mi->def.method->writelock);
+    JL_UNLOCK(&replaced_mi->def.method->writelock);
     if (why && _jl_debug_method_invalidation) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)replaced_mi);
         jl_value_t *loctag = jl_cstr_to_string(why);

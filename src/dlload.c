@@ -156,7 +156,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 #endif
 }
 
-JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err) JL_NOTSAFEPOINT // (or throw)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
 {
     char path[PATHBUF], relocated[PATHBUF];
     int i;
@@ -178,20 +178,12 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                 (LPCWSTR)(uintptr_t)(&jl_load_dynamic_library),
                                 (HMODULE*)&handle)) {
-#ifndef __clang_analyzer__
-            // Hide the error throwing from the analyser since there isn't a way to express
-            // "safepoint only when throwing error" currently.
             jl_error("could not load base module");
-#endif
         }
 #else
         Dl_info info;
         if (!dladdr((void*)(uintptr_t)&jl_load_dynamic_library, &info) || !info.dli_fname) {
-#ifndef __clang_analyzer__
-            // Hide the error throwing from the analyser since there isn't a way to express
-            // "safepoint only when throwing error" currently.
             jl_error("could not load base module");
-#endif
         }
         handle = dlopen(info.dli_fname, RTLD_NOW);
 #endif
@@ -274,11 +266,7 @@ notfound:
 #else
         const char *reason = dlerror();
 #endif
-#ifndef __clang_analyzer__
-        // Hide the error throwing from the analyser since there isn't a way to express
-        // "safepoint only when throwing error" currently.
         jl_errorf("could not load library \"%s\"\n%s", modname, reason);
-#endif
     }
     handle = NULL;
 
