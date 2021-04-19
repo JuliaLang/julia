@@ -688,13 +688,13 @@ macro test_nowarn(expr)
         # Duplicate some code from `@test_warn` to allow printing the content of
         # `stderr` again to `stderr` here while suppressing it for `@test_warn`.
         # If that shouldn't be used, it would be possible to just use
-        #     @test_warn r"^(?!.)"s $(esc(expr))
+        #     @test_warn isempty $(esc(expr))
         # here.
         let fname = tempname()
             try
                 ret = open(fname, "w") do f
                     redirect_stderr(f) do
-                    $(esc(expr))
+                        $(esc(expr))
                     end
                 end
                 stderr_content = read(fname, String)
