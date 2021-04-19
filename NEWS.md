@@ -132,6 +132,9 @@ Standard library changes
 
 * `mmap` is now exported ([#39816]).
 
+#### DelimitedFiles
+
+* `readdlm` now defaults to `use_mmap=false` on all OSes for consistent reliability in abnormal filesystem situations ([#40415]).
 
 Deprecated or removed
 ---------------------
