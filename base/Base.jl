@@ -214,6 +214,8 @@ include("cartesian.jl")
 using .Cartesian
 include("multidimensional.jl")
 
+include("fillarrays.jl")
+
 include("broadcast.jl")
 using .Broadcast
 using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!

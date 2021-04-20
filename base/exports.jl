@@ -48,6 +48,7 @@ export
     Dims,
     Enum,
     ExponentialBackOff,
+    Fill,
     IndexCartesian,
     IndexLinear,
     IndexStyle,
