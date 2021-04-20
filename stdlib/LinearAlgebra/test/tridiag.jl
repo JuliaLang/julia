@@ -585,6 +585,8 @@ end
     F2 = eigen(A2)
     test_approx_eq_modphase(F.vectors, F2.vectors)
     @test F.values ≈ F2.values
+    @test eigvecs(A) ≈ eigvecs(A2)
+    @test eigvecs(A, eigvals(A)[1:1]) ≈ eigvecs(A2, eigvals(A2)[1:1])
 end
 
 end # module TestTridiagonal
