@@ -140,11 +140,6 @@ The Unicode characters `ɛ` (U+025B: Latin small letter open e)
 and `µ` (U+00B5: micro sign) are treated as equivalent to the corresponding
 Greek letters, because the former are easily accessible via some input methods.
 
-A name consisting entirely of underscores (`_`) can only be used for assignment or as an
-argument in a function definition (known as an _lvalue_), but its bound value cannot be
-accessed.
-
-
 ## Stylistic Conventions
 
 While Julia imposes few restrictions on valid names, it has become useful to adopt the following
