@@ -1833,7 +1833,9 @@ end
     # test that stored zeros are still stored zeros in the diagonal
     S = sparse([1,3],[1,3],[0.0,0.0]); V = diag(S)
     @test nonzeroinds(V) == [1,3]
+    @test Base.eachstoredindex(V) == [1,3]
     @test nonzeros(V) == [0.0,0.0]
+    @test V[Base.eachstoredindex(V)] == nonzeros(V)
 end
 
 @testset "expandptr" begin
@@ -2873,6 +2875,14 @@ end
          UnitUpperTriangular, UnitLowerTriangular)
 
         @test SparseMatrixCSC(at(wr(A))) == Matrix(at(wr(B)))
+    end
+
+    @testset "eachstoredindex($(wr))" for wr in (UpperTriangular, LowerTriangular,
+                                                 UnitUpperTriangular, UnitLowerTriangular,
+                                                 Hermitian, (Hermitian, :L), Symmetric, (Symmetric, :L), Transpose, Adjoint)
+        S = dowrap(wr, A)
+        sum(S[Base.eachstoredindex(S)]) == sum(S)
+        sum(S[Base.eachstoredindex(S)]) == sum(Matrix(S))
     end
 
     @test sparse([1,2,3,4,5]') == SparseMatrixCSC([1 2 3 4 5])

@@ -111,6 +111,8 @@ end
 
 parent(D::Diagonal) = D.diag
 
+Base.eachstoredindex(D::Diagonal) = diagind(D)
+
 ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
 ishermitian(D::Diagonal) = all(ishermitian, D.diag)

@@ -77,6 +77,9 @@ function nonzeroinds(x::SparseColumnView)
     @inbounds y = view(rowvals(A), nzrange(A, colidx))
     return y
 end
+
+Base.eachstoredindex(x::SparseVector) = getfield(x, :nzind)
+
 nonzeroinds(x::SparseVectorView) = nonzeroinds(parent(x))
 
 rowvals(x::SparseVectorUnion) = nonzeroinds(x)

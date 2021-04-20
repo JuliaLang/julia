@@ -1515,7 +1515,7 @@ function findnz(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     V = Vector{Tv}(undef, numnz)
 
     count = 1
-    @inbounds for col = 1 : size(S, 2), k = getcolptr(S)[col] : (getcolptr(S)[col+1]-1)
+    @inbounds for col in 1:size(S, 2), k in nzrange(S, col)
         I[count] = rowvals(S)[k]
         J[count] = col
         V[count] = nonzeros(S)[k]
@@ -1523,6 +1523,33 @@ function findnz(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     end
 
     return (I, J, V)
+end
+
+function Base.eachstoredindex(S::AbstractSparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+    numnz = nnz(S)
+    indices = Vector{CartesianIndex{2}}(undef, numnz)
+    count = 1
+    @inbounds for col in 1:size(S, 2), k in nzrange(S, col)
+        indices[count] = CartesianIndex(rowvals(S)[k], col)
+        count += 1
+    end
+    return indices
+end
+
+function Base.eachstoredindex(S::Union{Adjoint{T, ST}, Transpose{T, ST}}) where {T, ST <: AbstractSparseMatrixCSC{T}}
+    P = parent(S)
+    numnz = nnz(P)
+    indices = Vector{CartesianIndex{2}}(undef, numnz)
+    count = 1
+    @inbounds for col = 1 : size(P, 2), k = getcolptr(P)[col] : (getcolptr(P)[col+1]-1)
+        indices[count] = CartesianIndex(col, rowvals(P)[k])
+        count += 1
+    end
+    return indices
+end
+
+function Base.eachstoredindex(S::Union{Symmetric{T, ST}, LinearAlgebra.AbstractTriangular{T, ST}, UpperHessenberg{T, ST}, Hermitian{T, ST}}) where {T, ST <: AbstractSparseMatrixCSC{T}}
+    return Base.eachstoredindex(parent(S))
 end
 
 function _sparse_findnextnz(m::AbstractSparseMatrixCSC, ij::CartesianIndex{2})
