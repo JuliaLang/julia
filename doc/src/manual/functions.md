@@ -415,7 +415,7 @@ julia> d
 
 !!! compat "Julia 1.6"
     `...` with assignment requires Julia 1.6
-    
+
 If the last symbol in the assignment list is suffixed by `...` (known as _slurping_), then
 it will collect the remaining elements of the iterator:
 
