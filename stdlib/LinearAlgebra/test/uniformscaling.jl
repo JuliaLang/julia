@@ -528,4 +528,12 @@ end
     @test sum(A - I) ≈ -3.0
 end
 
+@testset "type promotion when dividing UniformScaling by matrix" begin
+    A = randn(5,5)
+    cA = complex(A)
+    J = (5+2im)*I
+    @test J/A ≈ J/cA
+    @test A\J ≈ cA\J
+end
+
 end # module TestUniformscaling
