@@ -873,7 +873,7 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.broken, " broken.")
 end
 
-function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
+function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true, compacttrace=false)
     printstyled(io, string(ex), color=Base.error_color())
 end
 
@@ -891,7 +891,7 @@ struct FallbackTestSetException <: Exception
     msg::String
 end
 
-function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
+function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true, compacttrace=false)
     printstyled(io, ex.msg, color=Base.error_color())
 end
 
