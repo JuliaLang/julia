@@ -301,6 +301,7 @@ Base.ignorestatus
 Base.detach
 Base.Cmd
 Base.setenv
+Base.addenv
 Base.withenv
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
