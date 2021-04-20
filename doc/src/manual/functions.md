@@ -431,7 +431,7 @@ julia> b
  2
  3
  4
- ```
+```
 This behaviour can be customized for specific types by extending [`Base.rest`](@ref).
 
 ## Argument destructuring
