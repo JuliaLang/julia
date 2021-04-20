@@ -853,7 +853,7 @@ let code = quote
 end
 
 @testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
-    # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_RNG.seed)` block
+    # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_SEED)` block
     seed = rand(UInt128)
     Random.seed!(seed)
     a = rand()
