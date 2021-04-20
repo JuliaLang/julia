@@ -370,8 +370,8 @@ The value on the right should be an iterator (see [Iteration interface](@ref man
 at least as long as the number of variables on the left (any excess elements of the
 iterator are ignored).
 
-This can be used to simulate returning multiple values from functions by returning a tuple or
-other iterable value. For example, the following function returns a two values:
+This can be used to return multiple values from functions by returning a tuple or
+other iterable value. For example, the following function returns two values:
 
 ```jldoctest foofunc
 julia> function foo(a,b)
