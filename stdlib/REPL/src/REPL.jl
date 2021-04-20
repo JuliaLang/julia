@@ -160,8 +160,10 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 println(err)
             end
             lasterr = current_exceptions()
+            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
         end
     end
+
     Base.sigatomic_end()
     nothing
 end
@@ -281,7 +283,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             Base.sigatomic_end()
             if iserr
                 ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, val)
-                Base.invokelatest(Base.display_error, errio, val)
+                Base.invokelatest(Base.display_error, errio, val, true)
             else
                 if val !== nothing && show_value
                     try

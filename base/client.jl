@@ -92,20 +92,23 @@ function scrub_repl_backtrace(bt)
     return bt
 end
 
-function display_error(io::IO, er, bt)
+function display_error(io::IO, er, bt, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
+    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing, compacttrace)
     println(io)
 end
-function display_error(io::IO, stack::ExceptionStack)
+
+function display_error(io::IO, stack::ExceptionStack, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
-    show_exception_stack(IOContext(io, :limit => true), bt)
+    show_exception_stack(IOContext(io, :limit => true), bt, compacttrace)
     println(io)
 end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
+
+lasterr() = isdefined(Main, :err) ? display_error(Main.err) : nothing
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
@@ -149,6 +152,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
             end
+            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
         end
     end
     isa(stdin, TTY) && println()

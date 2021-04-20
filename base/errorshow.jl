@@ -83,24 +83,24 @@ function showerror(io::IO, ex::TypeError)
     Experimental.show_error_hints(io, ex)
 end
 
-function showerror(io::IO, ex, bt; backtrace=true)
+function showerror(io::IO, ex, bt; backtrace=true, compacttrace=false)
     try
         showerror(io, ex)
     finally
-        backtrace && show_backtrace(io, bt)
+        backtrace && show_backtrace(io, bt, compacttrace)
     end
 end
 
-function showerror(io::IO, ex::LoadError, bt; backtrace=true)
+function showerror(io::IO, ex::LoadError, bt; backtrace=true, compacttrace=false)
     !isa(ex.error, LoadError) && print(io, "LoadError: ")
-    showerror(io, ex.error, bt, backtrace=backtrace)
+    showerror(io, ex.error, bt; backtrace=backtrace, compacttrace)
     print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
-function showerror(io::IO, ex::InitError, bt; backtrace=true)
+function showerror(io::IO, ex::InitError, bt; backtrace=true, compacttrace=false)
     print(io, "InitError: ")
-    showerror(io, ex.error, bt, backtrace=backtrace)
+    showerror(io, ex.error, bt; backtrace=backtrace, compacttrace)
     print(io, "\nduring initialization of module ", ex.mod)
 end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
@@ -572,7 +572,9 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
             print_linebreaks && println(io)
         end
     end
-function show_compact_backtrace(io::IO, t::Vector)
+end
+
+function show_compact_backtrace(io::IO, trace::Vector)
     #= Show the lowest stackframe and display a message telling user how to
     retrieve the full trace =#
 
@@ -581,9 +583,15 @@ function show_compact_backtrace(io::IO, t::Vector)
 
     println(io, "\nLocation:")
 
-    print_stackframe(io, 1, trace[1][1], trace[1][2], 1, modulecolordict, modulecolorcycler)
+    # pick the top-most frame that isn't in Julia
+    i = findfirst(bt) do frame
+        file = String(frame.file)
+        !startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL")
+    end
 
-    println(io, "\nUse `stacktrace(errs)` to retrieve the full stack trace.")
+    print_stackframe(io, i, trace[i][1], trace[i][2], ndigits(i), modulecolordict, modulecolorcycler)
+
+    println(io, "\nUse `lasterr()` to retrieve the full stack trace.")
 end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
@@ -744,7 +752,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
 end
 
 
-function show_backtrace(io::IO, t::Vector)
+function show_backtrace(io::IO, t::Vector, compacttrace = false)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
@@ -772,7 +780,11 @@ function show_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
+    if compacttrace
+        show_compact_backtrace(io, filtered)
+    else
+        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
+    end
     return
 end
 
@@ -861,7 +873,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     return _simplify_include_frames(ret)
 end
 
-function show_exception_stack(io::IO, stack)
+function show_exception_stack(io::IO, stack, compacttrace = false)
     # Display exception stack with the top of the stack first.  This ordering
     # means that the user doesn't have to scroll up in the REPL to discover the
     # root cause.
@@ -871,7 +883,7 @@ function show_exception_stack(io::IO, stack)
             printstyled(io, "\ncaused by: ", color=error_color())
         end
         exc, bt = stack[i]
-        showerror(io, exc, bt, backtrace = bt!==nothing)
+        showerror(io, exc, bt; backtrace = bt!==nothing, compacttrace)
         i == 1 || println(io)
     end
 end

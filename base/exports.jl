@@ -625,6 +625,7 @@ export
     IOContext,
     displaysize,
     dump,
+    lasterr,
     print,
     println,
     printstyled,
