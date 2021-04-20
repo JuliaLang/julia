@@ -25,6 +25,21 @@ finalizer(my_mutable_struct) do x
     ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Finalizing %s.", repr(x))
 end
 ```
+
+A finalizer may be registered at object construction. In the following example note that
+we implicitly rely on the finalizer returning the newly created mutable struct `x`.
+
+# Example
+```julia
+mutable struct MyMutableStruct
+    bar
+    function MyMutableStruct(bar)
+        x = new(bar)
+        f(t) = @async println("Finalizing \$t.")
+        finalizer(f, x)
+    end
+end
+```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
     if !ismutable(o)
@@ -92,6 +107,29 @@ Control whether garbage collection is enabled using a boolean argument (`true` f
 enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 
 """
+    GC.enable_finalizers(on::Bool)
+
+Increment or decrement the counter that controls the running of finalizers on
+the current Task. Finalizers will only run when the counter is at zero. (Set
+`true` for enabling, `false` for disabling). They may still run concurrently on
+another Task or thread.
+"""
+enable_finalizers(on::Bool) = on ? enable_finalizers() : disable_finalizers()
+
+function enable_finalizers()
+    Base.@_inline_meta
+    ccall(:jl_gc_enable_finalizers_internal, Cvoid, ())
+    if unsafe_load(cglobal(:jl_gc_have_pending_finalizers, Cint)) != 0
+        ccall(:jl_gc_run_pending_finalizers, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+end
+
+function disable_finalizers()
+    Base.@_inline_meta
+    ccall(:jl_gc_disable_finalizers_internal, Cvoid, ())
+end
+
+"""
     GC.@preserve x1 x2 ... xn expr
 
 Mark the objects `x1, x2, ...` as being *in use* during the evaluation of the
@@ -132,9 +170,9 @@ directly to `ccall` which counts as an explicit use.)
 julia> let
            x = "Hello"
            p = pointer(x)
-           GC.@preserve x @ccall strlen(p::Cstring)::Cint
+           Int(GC.@preserve x @ccall strlen(p::Cstring)::Csize_t)
            # Preferred alternative
-           @ccall strlen(x::Cstring)::Cint
+           Int(@ccall strlen(x::Cstring)::Csize_t)
        end
 5
 ```

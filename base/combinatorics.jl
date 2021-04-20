@@ -91,7 +91,7 @@ function isperm(P::Tuple)
     end
 end
 
-isperm(P::Any16) = _isperm(P)
+isperm(P::Any32) = _isperm(P)
 
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
@@ -166,7 +166,7 @@ julia> perm = [2, 4, 3, 1];
 julia> permute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  4
  3
@@ -213,7 +213,7 @@ julia> perm = [2, 4, 3, 1];
 julia> invpermute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
@@ -228,12 +228,19 @@ invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
 Return the inverse permutation of `v`.
 If `B = A[v]`, then `A == B[invperm(v)]`.
 
+See also [`sortperm`](@ref), [`invpermute!`](@ref), [`isperm`](@ref), [`permutedims`](@ref).
+
 # Examples
 ```jldoctest
+julia> p = (2, 3, 1);
+
+julia> invperm(p)
+(3, 1, 2)
+
 julia> v = [2; 4; 3; 1];
 
 julia> invperm(v)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
@@ -242,14 +249,14 @@ julia> invperm(v)
 julia> A = ['a','b','c','d'];
 
 julia> B = A[v]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> B[invperm(v)]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
@@ -286,7 +293,7 @@ function invperm(P::Tuple)
     end
 end
 
-invperm(P::Any16) = Tuple(invperm(collect(P)))
+invperm(P::Any32) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
@@ -307,7 +314,7 @@ julia> 2^2 * 3^3
 !!! compat "Julia 1.6"
     The method that accepts a tuple requires Julia 1.6 or later.
 """
-function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractVector{<:Integer}}, x::Real)
+function nextprod(a::Union{Tuple{Vararg{Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end

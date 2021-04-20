@@ -40,6 +40,7 @@ Base.trues
 Base.falses
 Base.fill
 Base.fill!
+Base.empty
 Base.similar
 ```
 
@@ -91,6 +92,7 @@ Base.Broadcast.result_style
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
 Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
+Base.copy!
 Base.isassigned
 Base.Colon
 Base.CartesianIndex
@@ -100,6 +102,7 @@ Base.LinearIndices
 Base.to_indices
 Base.checkbounds
 Base.checkindex
+Base.elsize
 ```
 
 ## Views (SubArrays and other view types)
@@ -127,6 +130,7 @@ Base.reinterpret
 Base.reshape
 Base.dropdims
 Base.vec
+Base.SubArray
 ```
 
 ## Concatenation and permutation

@@ -5,17 +5,6 @@
 
 // Thread-local storage access
 
-// Copied from libuv. Add `JL_CONST_FUNC` so that the compiler
-// can optimize this better.
-static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
-{
-#ifdef _OS_WINDOWS_
-    return (unsigned long)GetCurrentThreadId();
-#else
-    return (unsigned long)pthread_self();
-#endif
-}
-
 typedef struct _jl_tls_states_t jl_tls_states_t;
 
 typedef jl_tls_states_t *jl_ptls_t;

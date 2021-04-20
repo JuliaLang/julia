@@ -138,6 +138,7 @@ Base.filter!
 Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
+Base.rest
 ```
 
 ## Indexable Collections
@@ -199,10 +200,8 @@ Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
 Base.haskey
-Base.get(::Any, ::Any, ::Any)
 Base.get
-Base.get!(::Any, ::Any, ::Any)
-Base.get!(::Function, ::Any, ::Any)
+Base.get!
 Base.getkey
 Base.delete!
 Base.pop!(::Any, ::Any, ::Any)
@@ -269,6 +268,7 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
+Base.popat!
 Base.pushfirst!
 Base.popfirst!
 Base.insert!

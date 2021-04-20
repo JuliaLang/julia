@@ -9,14 +9,20 @@
 #define JL_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 \
                         + LLVM_VERSION_PATCH)
 
-#if JL_LLVM_VERSION < 80000
-    #error Only LLVM versions >= 8.0.0 are supported by Julia
+#if JL_LLVM_VERSION < 90000
+    #error Only LLVM versions >= 9.0.0 are supported by Julia
 #endif
 #if JL_LLVM_VERSION < 100000
 #define Align(a) (a)
 #endif
 
+#ifndef LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING
 #define LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING 0
+#endif
+
+#ifndef LLVM_ENABLE_STATS
+#define LLVM_ENABLE_STATS 0
+#endif
 
 #if defined(__GNUC__) && (__GNUC__ >= 9)
 // Added in GCC 9, this warning is annoying

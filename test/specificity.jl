@@ -62,7 +62,7 @@ _z_z_z_(::Int, c...) = 3
 @test args_morespecific(Tuple{Union{Int,String},Type{Pair{A,B} where B}} where A, Tuple{Integer,UnionAll})
 
 # PR #21750
-let A = Tuple{Any, Tuple{Vararg{Integer,N} where N}},
+let A = Tuple{Any, Tuple{Vararg{Integer}}},
     B = Tuple{Any, Tuple{Any}},
     C = Tuple{Any, Tuple{}}
     @test args_morespecific(A, B)
@@ -111,16 +111,16 @@ f17016(f, t1::Tuple) = 1
 @test !args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
 @test !args_morespecific((Tuple{Type{T}, Any} where T<:VecElement), Tuple{Type{Any}, Any})
 
-@test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any, N} where N}} where T<:Tuple{Any, Vararg{Any, N} where N},
+@test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any}}} where T<:Tuple{Any, Vararg{Any}},
                          Tuple{Type{Any}, Any})
-@test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any, N} where N}} where T<:Tuple{Any, Vararg{Any, N} where N},
+@test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any}}} where T<:Tuple{Any, Vararg{Any}},
                          Tuple{Type{Tuple}, Tuple})
-@test !args_morespecific(Tuple{Type{T}, T} where T<:Tuple{Any, Vararg{Any, N} where N},
+@test !args_morespecific(Tuple{Type{T}, T} where T<:Tuple{Any, Vararg{Any}},
                          Tuple{Type{T}, Any} where T<:VecElement)
 
 @test args_morespecific(Tuple{Any, Tuple{}, Tuple{}}, Tuple{Any, Tuple{Any}})
 @test args_morespecific(Tuple{Any, Tuple{Any}, Tuple{Any}}, Tuple{Any, Tuple{Any, Any}})
-@test args_morespecific(Tuple{Any, Vararg{Tuple{}, N} where N}, Tuple{Any, Tuple{Any}})
+@test args_morespecific(Tuple{Any, Vararg{Tuple{}}}, Tuple{Any, Tuple{Any}})
 
 @test  args_morespecific(Tuple{T, T} where T<:AbstractFloat, Tuple{T, T, T} where T<:AbstractFloat)
 @test  args_morespecific(Tuple{T, Real, T} where T<:AbstractFloat, Tuple{T, T} where T<:Real)
@@ -137,10 +137,10 @@ f17016(f, t1::Tuple) = 1
                          Tuple{T, T} where T<:Union{Base.StepRangeLen, Base.LinRange})
 
 @test args_morespecific(Tuple{Type{Tuple}, Any, Any},
-                        Tuple{Type{Tuple{Vararg{E, N} where N}}, Any, Any} where E)
+                        Tuple{Type{Tuple{Vararg{E}}}, Any, Any} where E)
 
 @test args_morespecific(Tuple{Type{Tuple{}}, Tuple{}},
-                        Tuple{Type{T}, T} where T<:Tuple{Any, Vararg{Any, N} where N})
+                        Tuple{Type{T}, T} where T<:Tuple{Any, Vararg{Any}})
 
 @test args_morespecific(Tuple{Type{CartesianIndex{N}}} where N,
                         Tuple{Type{CartesianIndex{N}},Vararg{Int,N}} where N)
@@ -235,14 +235,14 @@ let N = Tuple{Type{Union{Nothing, T}}, Union{Nothing, T}} where T,
 end
 
 # issue #29528
-@test !args_morespecific(Tuple{Array,Vararg{Int64,N} where N}, Tuple{AbstractArray, Array})
+@test !args_morespecific(Tuple{Array,Vararg{Int64}}, Tuple{AbstractArray, Array})
 @test !args_morespecific(Tuple{Array,Vararg{Int64,N}} where N, Tuple{AbstractArray, Array})
 @test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N}} where N)
-@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N} where N})
+@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64}})
 @test !args_morespecific(Tuple{Array,Int64}, Tuple{AbstractArray, Array})
 
 # issue #30114
-let T1 = Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64},N} where N}},CartesianIndices{N,R} where R<:Tuple{Vararg{AbstractUnitRange{Int64},N}}} where N
+let T1 = Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64}}}},CartesianIndices{N,R} where R<:Tuple{Vararg{AbstractUnitRange{Int64},N}}} where N
     T2 = Tuple{Type{T},T} where T<:AbstractArray
     T3 = Tuple{Type{AbstractArray{T,N} where N},AbstractArray} where T
     T4 = Tuple{Type{AbstractArray{T,N}},AbstractArray{s57,N} where s57} where N where T
@@ -254,7 +254,7 @@ let T1 = Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64},N} where N}},Cartesian
 end
 
 @test !args_morespecific(Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64},N}}},} where N,
-                         Tuple{Type{Tuple{Vararg{AbstractUnitRange,N} where N}},})
+                         Tuple{Type{Tuple{Vararg{AbstractUnitRange}}},})
 
 @test  args_morespecific(Tuple{Type{SubArray{T,2,P} where T}, Array{T}} where T where P,
                          Tuple{Type{AbstractArray{T,N} where N},AbstractArray} where T)

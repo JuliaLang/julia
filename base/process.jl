@@ -93,7 +93,7 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         cmd.flags,
         cmd.env === nothing ? C_NULL : cmd.env,
         isempty(cmd.dir) ? C_NULL : cmd.dir,
-        uv_jl_return_spawn::Ptr{Cvoid})
+        @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
     if err != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         throw(_UVError("could not spawn " * repr(cmd), err))
@@ -418,7 +418,7 @@ end
 
 Run `command` and return the resulting output as a `String`.
 """
-read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
+read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
 
 """
     run(command, args...; wait::Bool = true)
@@ -546,7 +546,7 @@ Returns successfully if the process has already exited, but throws an
 error if killing the process failed for other reasons (e.g. insufficient
 permissions).
 """
-function kill(p::Process, signum::Integer)
+function kill(p::Process, signum::Integer=SIGTERM)
     iolock_begin()
     if process_running(p)
         @assert p.handle != C_NULL
@@ -558,9 +558,8 @@ function kill(p::Process, signum::Integer)
     iolock_end()
     nothing
 end
-kill(ps::Vector{Process}) = foreach(kill, ps)
-kill(ps::ProcessChain) = foreach(kill, ps.processes)
-kill(p::Process) = kill(p, SIGTERM)
+kill(ps::Vector{Process}, signum::Integer=SIGTERM) = for p in ps; kill(p, signum); end
+kill(ps::ProcessChain, signum::Integer=SIGTERM) = kill(ps.processes, signum)
 
 """
     getpid(process) -> Int32

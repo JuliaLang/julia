@@ -4,6 +4,11 @@ module TestTridiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -74,6 +79,8 @@ end
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
         @test eltype(ST) == elty
+        @test SymTridiagonal{elty, Vector{elty}}(ST) === ST
+        @test SymTridiagonal{Int64, Vector{Int64}}(ST) isa SymTridiagonal{Int64, Vector{Int64}}
         TT = Tridiagonal{elty}([1,2,3], [1,2,3,4], [1,2,3])
         @test eltype(TT) == elty
         ST = SymTridiagonal{elty,Vector{elty}}(d, GenericArray(dl))
@@ -138,12 +145,18 @@ end
 
         @test !istril(SymTridiagonal(d,dl))
         @test istril(SymTridiagonal(d,zerosdl))
+        @test !istril(SymTridiagonal(d,dl),-2)
         @test !istriu(SymTridiagonal(d,dl))
         @test istriu(SymTridiagonal(d,zerosdl))
+        @test !istriu(SymTridiagonal(d,dl),2)
         @test istriu(Tridiagonal(zerosdl,d,du))
         @test !istriu(Tridiagonal(dl,d,zerosdu))
+        @test istriu(Tridiagonal(zerosdl,zerosd,du),1)
+        @test !istriu(Tridiagonal(dl,d,zerosdu),2)
         @test istril(Tridiagonal(dl,d,zerosdu))
         @test !istril(Tridiagonal(zerosdl,d,du))
+        @test istril(Tridiagonal(dl,zerosd,zerosdu),-1)
+        @test !istril(Tridiagonal(dl,d,zerosdu),-2)
 
         @test isdiag(SymTridiagonal(d,zerosdl))
         @test !isdiag(SymTridiagonal(d,dl))
@@ -285,6 +298,11 @@ end
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cmn,B,Cnn)
                 @test_throws DimensionMismatch LinearAlgebra.mul!(Cnm,B,Cnn)
             end
+        end
+        @testset "Negation" begin
+            mA = -A
+            @test mA isa mat_type
+            @test -mA == A
         end
         if mat_type == SymTridiagonal
             @testset "Tridiagonal/SymTridiagonal mixing ops" begin
@@ -445,7 +463,7 @@ end
     F = lu(Tridiagonal(sparse(1.0I, 3, 3)))
     @test F.L == Matrix(I, 3, 3)
     @test startswith(sprint(show, MIME("text/plain"), F),
-          "LinearAlgebra.LU{Float64,LinearAlgebra.Tridiagonal{Float64,SparseArrays.SparseVector")
+          "LinearAlgebra.LU{Float64, LinearAlgebra.Tridiagonal{Float64, SparseArrays.SparseVector")
 end
 
 @testset "Issue 29630" begin
@@ -553,6 +571,38 @@ end
 
     @test diag(T + 2I) == zero(d)
     @test diag(S + 2I) == zero(d)
+end
+
+@testset "convert Tridiagonal to SymTridiagonal error" begin
+    du = rand(Float64, 4)
+    d  = rand(Float64, 5)
+    dl = rand(Float64, 4)
+    T = Tridiagonal(dl, d, du)
+    @test_throws ArgumentError SymTridiagonal{Float32}(T)
+end
+
+# Issue #38765
+@testset "Eigendecomposition with different lengths" begin
+    # length(A.ev) can be either length(A.dv) or length(A.dv) - 1
+    A = SymTridiagonal(fill(1.0, 3), fill(-1.0, 3))
+    F = eigen(A)
+    A2 = SymTridiagonal(fill(1.0, 3), fill(-1.0, 2))
+    F2 = eigen(A2)
+    test_approx_eq_modphase(F.vectors, F2.vectors)
+    @test F.values ≈ F2.values ≈ eigvals(A) ≈ eigvals(A2)
+    @test eigvecs(A) ≈ eigvecs(A2)
+    @test eigvecs(A, eigvals(A)[1:1]) ≈ eigvecs(A2, eigvals(A2)[1:1])
+end
+
+@testset "non-commutative algebra (#39701)" begin
+    for A in (SymTridiagonal(Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4))),
+              Tridiagonal(Quaternion.(randn(4), randn(4), randn(4), randn(4)), Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4))))
+        c = Quaternion(1,2,3,4)
+        @test A * c ≈ Matrix(A) * c
+        @test A / c ≈ Matrix(A) / c
+        @test c * A ≈ c * Matrix(A)
+        @test c \ A ≈ c \ Matrix(A)
+    end
 end
 
 end # module TestTridiagonal

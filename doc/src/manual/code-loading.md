@@ -1,4 +1,4 @@
-# Code Loading
+# [Code Loading](@id code-loading)
 
 !!! note
     This chapter covers the technical details of package loading. To install packages, use [`Pkg`](@ref Pkg), Julia's built-in package manager, to add packages to your active environment. To use packages already in your active environment, write `import X` or `using X`, as described in the [Modules documentation](@ref modules).
@@ -160,11 +160,11 @@ What happens if `import Zebra` is evaluated in the main `App` code base? Since `
 **The paths map** of a project environment is extracted from the manifest file. The path of a package `uuid` named `X` is determined by these rules (in order):
 
 1. If the project file in the directory matches `uuid` and name `X`, then either:
-  - It has a toplevel `path` entry, then `uuid` will be mapped to that path, interpreted relative to the directory containing the project file.
-  - Otherwise, `uuid` is mapped to  `src/X.jl` relative to the directory containing the project file.
+   - It has a toplevel `path` entry, then `uuid` will be mapped to that path, interpreted relative to the directory containing the project file.
+   - Otherwise, `uuid` is mapped to  `src/X.jl` relative to the directory containing the project file.
 2. If the above is not the case and the project file has a corresponding manifest file and the manifest contains a stanza matching `uuid` then:
-  - If it has a `path` entry, use that path (relative to the directory containing the manifest file).
-  - If it has a `git-tree-sha1` entry, compute a deterministic hash function of `uuid` and `git-tree-sha1`—call it `slug`—and look for a directory named `packages/X/$slug` in each directory in the Julia `DEPOT_PATH` global array. Use the first such directory that exists.
+   - If it has a `path` entry, use that path (relative to the directory containing the manifest file).
+   - If it has a `git-tree-sha1` entry, compute a deterministic hash function of `uuid` and `git-tree-sha1`—call it `slug`—and look for a directory named `packages/X/$slug` in each directory in the Julia `DEPOT_PATH` global array. Use the first such directory that exists.
 
 If any of these result in success, the path to the source code entry point will be either that result, the relative path from that result plus `src/X.jl`; otherwise, there is no path mapping for `uuid`. When loading `X`, if no source code path is found, the lookup will fail, and the user may be prompted to install the appropriate package version or to take other corrective action (e.g. declaring `X` as a dependency).
 
@@ -211,7 +211,7 @@ This example map includes three different kinds of package locations (the first 
 
 ### Package directories
 
-Package directories provide a simpler kind of environment without the ability to handle name collisions. In a package directory, the set of top-level packages is the set of subdirectories that "look like" packages. A package `X` is exists in a package directory if the directory contains one of the following "entry point" files:
+Package directories provide a simpler kind of environment without the ability to handle name collisions. In a package directory, the set of top-level packages is the set of subdirectories that "look like" packages. A package `X` exists in a package directory if the directory contains one of the following "entry point" files:
 
 - `X.jl`
 - `X/src/X.jl`

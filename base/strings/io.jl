@@ -64,13 +64,13 @@ Hello, world
 
 julia> io = IOBuffer();
 
-julia> println(io, "Hello, world")
+julia> println(io, "Hello", ',', " world.")
 
 julia> String(take!(io))
-"Hello, world\\n"
+"Hello, world.\\n"
 ```
 """
-println(io::IO, xs...) = print(io, xs..., '\n')
+println(io::IO, xs...) = print(io, xs..., "\n")
 
 ## conversion of general objects to strings ##
 
@@ -79,14 +79,19 @@ println(io::IO, xs...) = print(io, xs..., '\n')
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
-`context` can be either an [`IOContext`](@ref) whose properties will be used,
-or a `Pair` specifying a property and its value. `sizehint` suggests the capacity
-of the buffer (in bytes).
+`context` can be an [`IOContext`](@ref) whose properties will be used, a `Pair`
+specifying a property and its value, or a tuple of `Pair` specifying multiple
+properties and their values. `sizehint` suggests the capacity of the buffer (in
+bytes).
 
-The optional keyword argument `context` can be set to `:key=>value` pair
-or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
-stream passed to `f`.  The optional `sizehint` is a suggested size (in bytes)
-to allocate for the buffer used to write the string.
+The optional keyword argument `context` can be set to a `:key=>value` pair, a
+tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
+attributes are used for the I/O stream passed to `f`.  The optional `sizehint`
+is a suggested size (in bytes) to allocate for the buffer used to write the
+string.
+
+!!! compat "Julia 1.7"
+    Passing a tuple to keyword `context` requires Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -94,12 +99,14 @@ julia> sprint(show, 66.66666; context=:compact => true)
 "66.6667"
 
 julia> sprint(showerror, BoundsError([1], 100))
-"BoundsError: attempt to access 1-element Array{Int64,1} at index [100]"
+"BoundsError: attempt to access 1-element Vector{Int64} at index [100]"
 ```
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     s = IOBuffer(sizehint=sizehint)
-    if context !== nothing
+    if context isa Tuple
+        f(IOContext(s, context...), args...)
+    elseif context !== nothing
         f(IOContext(s, context), args...)
     else
         f(s, args...)
@@ -157,13 +164,15 @@ end
 """
     string(xs...)
 
-Create a string from any values, except `nothing`, using the [`print`](@ref) function.
+Create a string from any values using the [`print`](@ref) function.
 
 `string` should usually not be defined directly. Instead, define a method
 `print(io::IO, x::MyType)`. If `string(x)` for a certain type needs to be
 highly efficient, then it may make sense to add a method to `string` and
 define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
 functions are consistent.
+
+See also: [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
 
 # Examples
 ```jldoctest
@@ -173,26 +182,18 @@ julia> string("a", 1, true)
 """
 string(xs...) = print_to_string(xs...)
 
+string(a::Symbol) = String(a)
+
 # note: print uses an encoding determined by `io` (defaults to UTF-8), whereas
 #       write uses an encoding determined by `s` (UTF-8 for `String`)
 print(io::IO, s::AbstractString) = for c in s; print(io, c); end
-write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
+write(io::IO, s::AbstractString) = (len = 0; for c in s; len += Int(write(io, c))::Int; end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 # optimized methods to avoid iterating over chars
 write(io::IO, s::Union{String,SubString{String}}) =
-    GC.@preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+    GC.@preserve s Int(unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))))::Int
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
-
-## printing literal quoted string data ##
-
-# this is the inverse of print_unescaped_chars(io, s, "\\\")
-
-function print_quoted_literal(io, s::AbstractString)
-    print(io, '"')
-    for c = s; c == '"' ? print(io, "\\\"") : print(io, c); end
-    print(io, '"')
-end
 
 """
     repr(x; context=nothing)
@@ -256,7 +257,7 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 
 Join an array of `strings` into a single string, inserting the given delimiter (if any) between
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
-two strings. If `io` is given, the result is written to `io` rather than returned as
+two strings. If `io` is given, the result is written to `io` rather than returned
 as a `String`.
 
 `strings` can be any iterable over elements `x` which are convertible to strings
@@ -308,8 +309,8 @@ escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
-    escape_string(str::AbstractString[, esc])::AbstractString
-    escape_string(io, str::AbstractString[, esc::])::Nothing
+    escape_string(str::AbstractString[, esc]; keep = ())::AbstractString
+    escape_string(io, str::AbstractString[, esc]; keep = ())::Nothing
 
 General escaping of traditional C and Unicode escape sequences. The first form returns the
 escaped string, the second prints the result to `io`.
@@ -321,10 +322,19 @@ unambiguous), unicode code point (`"\\u"` prefix) or hex (`"\\x"` prefix).
 The optional `esc` argument specifies any additional characters that should also be
 escaped by a prepending backslash (`\"` is also escaped by default in the first form).
 
+The argument `keep` specifies a collection of characters which are to be kept as
+they are. Notice that `esc` has precedence here.
+
+!!! compat "Julia 1.7"
+    The `keep` argument is available as of Julia 1.7.
+
 # Examples
 ```jldoctest
 julia> escape_string("aaa\\nbbb")
 "aaa\\\\nbbb"
+
+julia> escape_string("aaa\\nbbb"; keep = '\\n')
+"aaa\\nbbb"
 
 julia> escape_string("\\xfe\\xff") # invalid utf-8
 "\\\\xfe\\\\xff"
@@ -339,13 +349,15 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 ## See also
 [`unescape_string`](@ref) for the reverse operation.
 """
-function escape_string(io::IO, s::AbstractString, esc="")
+function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
     a = Iterators.Stateful(s)
-    for c in a
+    for c::AbstractChar in a
         if c in esc
             print(io, '\\', c)
+        elseif c in keep
+            print(io, c)
         elseif isascii(c)
-            c == '\0'          ? print(io, escape_nul(peek(a))) :
+            c == '\0'          ? print(io, escape_nul(peek(a)::Union{AbstractChar,Nothing})) :
             c == '\e'          ? print(io, "\\e") :
             c == '\\'          ? print(io, "\\\\") :
             '\a' <= c <= '\r'  ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
@@ -354,10 +366,10 @@ function escape_string(io::IO, s::AbstractString, esc="")
         elseif !isoverlong(c) && !ismalformed(c)
             isprint(c)         ? print(io, c) :
             c <= '\x7f'        ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
-            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 4 : 2)) :
-                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)) ? 8 : 4))
+            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
+                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
         else # malformed or overlong
-            u = bswap(reinterpret(UInt32, c))
+            u = bswap(reinterpret(UInt32, c)::UInt32)
             while true
                 print(io, "\\x", string(u % UInt8, base = 16, pad = 2))
                 (u >>= 8) == 0 && break
@@ -366,7 +378,8 @@ function escape_string(io::IO, s::AbstractString, esc="")
     end
 end
 
-escape_string(s::AbstractString, esc=('\"',)) = sprint(escape_string, s, esc, sizehint=lastindex(s))
+escape_string(s::AbstractString, esc=('\"',); keep = ()) =
+    sprint((io)->escape_string(io, s, esc; keep = keep), sizehint=lastindex(s))
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')
@@ -425,7 +438,7 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
                 m = c == 'x' ? 2 :
                     c == 'u' ? 4 : 8
                 while (k += 1) <= m && !isempty(a)
-                    nc = peek(a)
+                    nc = peek(a)::AbstractChar
                     n = '0' <= nc <= '9' ? n<<4 + (nc-'0') :
                         'a' <= nc <= 'f' ? n<<4 + (nc-'a'+10) :
                         'A' <= nc <= 'F' ? n<<4 + (nc-'A'+10) : break
@@ -445,7 +458,7 @@ function unescape_string(io::IO, s::AbstractString, keep = ())
                 k = 1
                 n = c-'0'
                 while (k += 1) <= 3 && !isempty(a)
-                    c = peek(a)
+                    c = peek(a)::AbstractChar
                     n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                     popfirst!(a)
                 end
@@ -481,7 +494,7 @@ Create an immutable byte (`UInt8`) vector using string syntax.
 # Examples
 ```jldoctest
 julia> v = b"12\\x01\\x02"
-4-element Base.CodeUnits{UInt8,String}:
+4-element Base.CodeUnits{UInt8, String}:
  0x31
  0x32
  0x01
@@ -529,7 +542,7 @@ macro raw_str(s); s; end
 
 Escape a string in the manner used for parsing raw string literals.
 For each double-quote (`"`) character in input string `s`, this
-function counts the number _n_ of preceeding backslash (`\\`) characters,
+function counts the number _n_ of preceding backslash (`\\`) characters,
 and then increases there the number of backslashes from _n_ to 2_n_+1
 (even for _n_ = 0). It also doubles a sequence of backslashes at the end
 of the string.
@@ -619,6 +632,8 @@ julia> Base.unindent("   a\\n   b", 2)
 julia> Base.unindent("\\ta\\n\\tb", 2, tabwidth=8)
 "      a\\n      b"
 ```
+
+See also `indent` from the [`MultilineStrings` package](https://github.com/invenia/MultilineStrings.jl).
 """
 function unindent(str::AbstractString, indent::Int; tabwidth=8)
     indent == 0 && return str

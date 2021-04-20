@@ -21,13 +21,13 @@ Construct a matrix from the diagonal of `A`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  4  5  6
  7  8  9
 
 julia> Diagonal(A)
-3×3 Diagonal{Int64,Array{Int64,1}}:
+3×3 Diagonal{Int64, Vector{Int64}}:
  1  ⋅  ⋅
  ⋅  5  ⋅
  ⋅  ⋅  9
@@ -43,12 +43,12 @@ Construct a matrix with `V` as its diagonal.
 # Examples
 ```jldoctest
 julia> V = [1, 2]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
 julia> Diagonal(V)
-2×2 Diagonal{Int64,Array{Int64,1}}:
+2×2 Diagonal{Int64, Vector{Int64}}:
  1  ⋅
  ⋅  2
 ```
@@ -91,7 +91,7 @@ end
     r
 end
 diagzero(::Diagonal{T},i,j) where {T} = zero(T)
-diagzero(D::Diagonal{Matrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+diagzero(D::Diagonal{<:AbstractMatrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
@@ -174,8 +174,23 @@ end
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
-(*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
-(*)(D::Diagonal, V::AbstractVector) = D.diag .* V
+(\)(x::Number, D::Diagonal) = Diagonal(x \ D.diag)
+
+function (*)(Da::Diagonal, Db::Diagonal)
+    nDa, mDb = size(Da, 2), size(Db, 1)
+    if nDa != mDb
+        throw(DimensionMismatch("second dimension of Da, $nDa, does not match first dimension of Db, $mDb"))
+    end
+    return Diagonal(Da.diag .* Db.diag)
+end
+
+function (*)(D::Diagonal, V::AbstractVector)
+    nD = size(D, 2)
+    if nD != length(V)
+        throw(DimensionMismatch("second dimension of D, $nD, does not match length of V, $(length(V))"))
+    end
+    return D.diag .* V
+end
 
 (*)(A::AbstractTriangular, D::Diagonal) =
     rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
@@ -297,14 +312,6 @@ function rmul!(A::AbstractMatrix, transB::Transpose{<:Any,<:Diagonal})
     return rmul!(A, transpose(B))
 end
 
-# Elements of `out` may not be defined (e.g., for `BigFloat`). To make
-# `mul!(out, A, B)` work for such cases, `out .*ₛ beta` short-circuits
-# `out * beta`.  Using `broadcasted` to avoid the multiplication
-# inside this function.
-function *ₛ end
-Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false : broadcasted(*, out, beta)
-
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
 @inline mul!(out::AbstractVector, A::Diagonal, in::AbstractVector,
              alpha::Number, beta::Number) =
@@ -413,35 +420,6 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 
-function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
-    if length(v) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
-    end
-    for i = 1:length(D.diag)
-        d = D.diag[i]
-        if iszero(d)
-            throw(SingularException(i))
-        end
-        v[i] = d\v[i]
-    end
-    v
-end
-function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
-    require_one_based_indexing(V)
-    if size(V,1) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
-    end
-    for i = 1:length(D.diag)
-        d = D.diag[i]
-        if iszero(d)
-            throw(SingularException(i))
-        end
-        for j = 1:size(V,2)
-            @inbounds V[i,j] = d\V[i,j]
-        end
-    end
-    V
-end
 ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
 ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
@@ -494,14 +472,13 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     invoke(\, Tuple{Union{QR,QRCompactWY,QRPivoted}, AbstractVecOrMat}, A, B)
 
 
-@inline function kron!(C::AbstractMatrix{T}, A::Diagonal, B::Diagonal) where T
-    fill!(C, zero(T))
+@inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
     valA = A.diag; nA = length(valA)
     valB = B.diag; nB = length(valB)
     nC = checksquare(C)
     @boundscheck nC == nA*nB ||
         throw(DimensionMismatch("expect C to be a $(nA*nB)x$(nA*nB) matrix, got size $(nC)x$(nC)"))
-
+    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
     @inbounds for i = 1:nA, j = 1:nB
         idx = (i-1)*nB+j
         C[idx, idx] = valA[i] * valB[j]
@@ -519,9 +496,12 @@ end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     Base.require_one_based_indexing(B)
-    (mA, nA) = size(A); (mB, nB) = size(B); (mC, nC) = size(C);
+    (mA, nA) = size(A)
+    (mB, nB) = size(B)
+    (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch("expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
+    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
     m = 1
     @inbounds for j = 1:nA
         A_jj = A[j,j]
@@ -539,9 +519,12 @@ end
 
 @inline function kron!(C::AbstractMatrix, A::AbstractMatrix, B::Diagonal)
     require_one_based_indexing(A)
-    (mA, nA) = size(A); (mB, nB) = size(B); (mC, nC) = size(C);
+    (mA, nA) = size(A)
+    (mB, nB) = size(B)
+    (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch("expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
+    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
     m = 1
     @inbounds for j = 1:nA
         for l = 1:mB
@@ -557,23 +540,13 @@ end
     return C
 end
 
-function kron(A::Diagonal{T}, B::AbstractMatrix{S}) where {T<:Number, S<:Number}
-    (mA, nA) = size(A); (mB, nB) = size(B)
-    R = zeros(Base.promote_op(*, T, S), mA * mB, nA * nB)
-    return @inbounds kron!(R, A, B)
-end
-
-function kron(A::AbstractMatrix{T}, B::Diagonal{S}) where {T<:Number, S<:Number}
-    (mA, nA) = size(A); (mB, nB) = size(B)
-    R = zeros(promote_op(*, T, S), mA * mB, nA * nB)
-    return @inbounds kron!(R, A, B)
-end
-
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
 adjoint(D::Diagonal{<:Number}) = conj(D)
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
+Base.permutedims(D::Diagonal) = D
+Base.permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
 function diag(D::Diagonal, k::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
@@ -589,14 +562,13 @@ function diag(D::Diagonal, k::Integer=0)
 end
 tr(D::Diagonal) = sum(tr, D.diag)
 det(D::Diagonal) = prod(det, D.diag)
-logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
 function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     z = sum(log, D.diag)
     complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 
 # Matrix functions
-for f in (:exp, :log, :sqrt,
+for f in (:exp, :cis, :log, :sqrt,
           :cos, :sin, :tan, :csc, :sec, :cot,
           :cosh, :sinh, :tanh, :csch, :sech, :coth,
           :acos, :asin, :atan, :acsc, :asec, :acot,
@@ -604,8 +576,13 @@ for f in (:exp, :log, :sqrt,
     @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
 end
 
-#Linear solver
-function ldiv!(D::Diagonal, B::StridedVecOrMat)
+(\)(D::Diagonal, A::AbstractMatrix) =
+    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
+
+(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
+(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
+
+function ldiv!(D::Diagonal, B::AbstractVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
@@ -622,11 +599,6 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-(\)(D::Diagonal, A::AbstractMatrix) =
-    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
-
-(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
-(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
@@ -691,6 +663,14 @@ end
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 
+dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
+function dot(D::Diagonal, B::AbstractMatrix)
+    size(D) == size(B) || throw(DimensionMismatch("Matrix sizes $(size(D)) and $(size(B)) differ"))
+    return dot(D.diag, view(B, diagind(B)))
+end
+
+dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
+
 function _mapreduce_prod(f, x, D::Diagonal, y)
     if isempty(x) && isempty(D) && isempty(y)
         return zero(Base.promote_op(f, eltype(x), eltype(D), eltype(y)))
@@ -745,4 +725,8 @@ end
 function logabsdet(A::Diagonal)
      mapreduce(x -> (log(abs(x)), sign(x)), ((d1, s1), (d2, s2)) -> (d1 + d2, s1 * s2),
                A.diag)
+end
+
+function Base.muladd(A::Diagonal, B::Diagonal, z::Diagonal)
+    Diagonal(A.diag .* B.diag .+ z.diag)
 end

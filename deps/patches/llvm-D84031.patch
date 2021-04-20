@@ -1,0 +1,10 @@
+--- a/lib/CodeGen/CodeGenPrepare.cpp
++++ b/lib/CodeGen/CodeGenPrepare.cpp
+@@ -540,6 +540,7 @@
+     LargeOffsetGEPID.clear();
+   }
+ 
++  NewGEPBases.clear();
+   SunkAddrs.clear();
+ 
+   if (!DisableBranchOpts) {

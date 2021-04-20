@@ -6,8 +6,13 @@ import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
 """
     UniformScaling{T<:Number}
 
-Generically sized uniform scaling operator defined as a scalar times the
-identity operator, `λ*I`. See also [`I`](@ref).
+Generically sized uniform scaling operator defined as a scalar times
+the identity operator, `λ*I`. Although without an explicit `size`, it
+acts similarly to a matrix in many cases and includes support for some
+indexing. See also [`I`](@ref).
+
+!!! compat "Julia 1.6"
+     Indexing using ranges is available as of Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -16,14 +21,19 @@ UniformScaling{Float64}
 2.0*I
 
 julia> A = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> J*A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  2.0  4.0
  6.0  8.0
+
+julia> J[1:2, 1:2]
+2×2 Matrix{Float64}:
+ 2.0  0.0
+ 0.0  2.0
 ```
 """
 struct UniformScaling{T<:Number}
@@ -41,7 +51,7 @@ julia> fill(1, (5,6)) * I == fill(1, (5,6))
 true
 
 julia> [1 2im 3; 1im 2 3] * I
-2×3 Array{Complex{Int64},2}:
+2×3 Matrix{Complex{Int64}}:
  1+0im  0+2im  3+0im
  0+1im  2+0im  3+0im
 ```
@@ -59,13 +69,13 @@ Construct a `Diagonal` matrix from a `UniformScaling`.
 # Examples
 ```jldoctest
 julia> I(3)
-3×3 Diagonal{Bool,Array{Bool,1}}:
+3×3 Diagonal{Bool, Vector{Bool}}:
  1  ⋅  ⋅
  ⋅  1  ⋅
  ⋅  ⋅  1
 
 julia> (0.7*I)(3)
-3×3 Diagonal{Float64,Array{Float64,1}}:
+3×3 Diagonal{Float64, Vector{Float64}}:
  0.7   ⋅    ⋅
   ⋅   0.7   ⋅
   ⋅    ⋅   0.7
@@ -78,6 +88,28 @@ ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
+getindex(x::UniformScaling, n::Integer, m::AbstractRange{<:Integer}) = getindex(x, m, n)
+function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::Integer) where T
+    v = zeros(T, length(n))
+    @inbounds for (i,ii) in enumerate(n)
+        if ii == m
+            v[i] = x.λ
+        end
+    end
+    return v
+end
+
+
+function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::AbstractRange{<:Integer}) where T
+    A = zeros(T, length(n), length(m))
+    @inbounds for (j,jj) in enumerate(m), (i,ii) in enumerate(n)
+        if ii == jj
+            A[i,j] = x.λ
+        end
+    end
+    return A
+end
+
 function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     s = "$(J.λ)"
     if occursin(r"\w+\s*[\+\-]\s*\w+", s)
@@ -86,6 +118,8 @@ function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     print(io, typeof(J), "\n$s*I")
 end
 copy(J::UniformScaling) = UniformScaling(J.λ)
+
+Base.convert(::Type{UniformScaling{T}}, J::UniformScaling) where {T} = UniformScaling(convert(T, J.λ))
 
 conj(J::UniformScaling) = UniformScaling(conj(J.λ))
 real(J::UniformScaling) = UniformScaling(real(J.λ))
@@ -113,6 +147,7 @@ isposdef(J::UniformScaling) = isposdef(J.λ)
 (-)(J::UniformScaling, x::Number) = J.λ - x
 (-)(x::Number, J::UniformScaling) = x - J.λ
 
+(+)(J::UniformScaling)                      = UniformScaling(+J.λ)
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+)(B::BitArray{2}, J::UniformScaling)      = Array(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + Array(B)
@@ -180,8 +215,8 @@ end
 function (+)(A::AbstractMatrix, J::UniformScaling)
     checksquare(A)
     B = copy_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
-    @inbounds for i in axes(A, 1)
-        B[i,i] += J
+    for i in intersect(axes(A,1), axes(A,2))
+        @inbounds B[i,i] += J
     end
     return B
 end
@@ -189,8 +224,8 @@ end
 function (-)(J::UniformScaling, A::AbstractMatrix)
     checksquare(A)
     B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, -A)
-    @inbounds for i in axes(A, 1)
-        B[i,i] += J
+    for i in intersect(axes(A,1), axes(A,2))
+        @inbounds B[i,i] += J
     end
     return B
 end
@@ -230,7 +265,8 @@ end
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
 
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
-/(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
+/(J::UniformScaling, A::AbstractMatrix) =
+    (invA = inv(A); lmul!(J.λ, convert(AbstractMatrix{promote_type(eltype(J),eltype(invA))}, invA)))
 /(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
 /(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) / J
 
@@ -238,7 +274,8 @@ end
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
-\(A::AbstractMatrix, J::UniformScaling) = rmul!(inv(A), J.λ)
+\(A::AbstractMatrix, J::UniformScaling) =
+    (invA = inv(A); rmul!(convert(AbstractMatrix{promote_type(eltype(invA),eltype(J))}, invA), J.λ))
 \(F::Factorization, J::UniformScaling) = F \ J(size(F,1))
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
@@ -288,6 +325,9 @@ function ==(A::StridedMatrix, J::UniformScaling)
     end
     return true
 end
+
+isequal(A::AbstractMatrix, J::UniformScaling) = false
+isequal(J::UniformScaling, A::AbstractMatrix) = false
 
 function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
             atol::Real=0, rtol::Real=Base.rtoldefault(T,S,atol), nans::Bool=false) where {T<:Number,S<:Number}
@@ -442,6 +482,18 @@ Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
 Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
 
+dot(A::AbstractMatrix, J::UniformScaling) = dot(tr(A), J.λ)
+dot(J::UniformScaling, A::AbstractMatrix) = dot(J.λ, tr(A))
+
 dot(x::AbstractVector, J::UniformScaling, y::AbstractVector) = dot(x, J.λ, y)
 dot(x::AbstractVector, a::Number, y::AbstractVector) = sum(t -> dot(t[1], a, t[2]), zip(x, y))
 dot(x::AbstractVector, a::Union{Real,Complex}, y::AbstractVector) = a*dot(x, y)
+
+# muladd
+Base.muladd(A::UniformScaling, B::UniformScaling, z::UniformScaling) =
+    UniformScaling(A.λ * B.λ + z.λ)
+Base.muladd(A::Union{Diagonal, UniformScaling}, B::Union{Diagonal, UniformScaling}, z::Union{Diagonal, UniformScaling}) =
+    Diagonal(_diag_or_value(A) .* _diag_or_value(B) .+ _diag_or_value(z))
+
+_diag_or_value(A::Diagonal) = A.diag
+_diag_or_value(A::UniformScaling) = A.λ

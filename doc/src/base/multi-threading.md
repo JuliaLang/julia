@@ -2,6 +2,7 @@
 
 ```@docs
 Base.Threads.@threads
+Base.Threads.foreach
 Base.Threads.@spawn
 Base.Threads.threadid
 Base.Threads.nthreads
