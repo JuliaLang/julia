@@ -368,17 +368,7 @@ julia> b
 
 The value on the right should be an iterator (see [Iteration interface](@ref man-interface-iteration))
 at least as long as the number of variables on the left (any excess elements of the
-iterator are ignored). Additionally a single underscore `_` (which is an otherwise invalid
-variable name, see [Allowed Variable Names](@ref man-allowed-variable-names)) can be used
-on the left to avoid assigning specific elements:
-
-```jldoctest
-julia> _, _, _, d = 1:10
-1:10
-
-julia> d
-4
-```
+iterator are ignored).
 
 This can be used to simulate returning multiple values from functions by returning a tuple or
 other iterable value. For example, the following function returns a two values:
@@ -410,6 +400,39 @@ julia> x
 julia> y
 6
 ```
+
+If only a subset of the elements of the iterator are required, a common convention is to assign ignored elements to a variable
+consisting of only underscores `_` (which is an otherwise invalid variable name, see
+[Allowed Variable Names](@ref man-allowed-variable-names)):
+
+```jldoctest
+julia> _, _, _, d = 1:10
+1:10
+
+julia> d
+4
+```
+
+!!! compat "Julia 1.6"
+    `...` with assignment requires Julia 1.6
+    
+If the last symbol in the assignment list is suffixed by `...` (known as _slurping_), then
+it will collect the remaining elements of the iterator:
+
+```jldoctest
+julia> a, b... = 1:4
+1:4
+
+julia> a
+1
+
+julia> b
+3-element Vector{Int64}:
+ 2
+ 3
+ 4
+ ```
+This behaviour can be customized for specific types by extending [`Base.rest`](@ref).
 
 ## Argument destructuring
 
