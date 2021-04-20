@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+
+export SHORT_COMMIT="${BUILDKITE_COMMIT:0:10}"
+export OS="$BUILDKITE_AGENT_META_DATA_OS"
+export ARCH="$BUILDKITE_AGENT_META_DATA_ARCH"
+export NTHREADS=6
+export MAKE=make
+export VERSION="$(cut -d. -f1,2 VERSION)"
+
+MAKEFLAGS=""
+MAKEFLAGS+="USECCACHE=1 "
+MAKEFLAGS+="SRCCACHE=/tmp/srccache "
+MAKEFLAGS+="VERBOSE=1 "
+MAKEFLAGS+="TAGGED_RELEASE_BANNER='Official https://julialang.org/ release' "
+
+if [[ "$BUILDKITE_PULL_REQUEST" == "false" && "$BUILDKITE_BRANCH" == "master" ]]; then
+  export IS_MASTER=true
+else
+  export IS_MASTER=false
+fi
+
+if [[ "$BUILDKITE_PULL_REQUEST" == "false" || "$BUILKITE_PULL_REQUEST" == "https://github.com/JuliaLang/julia" ]]; then
+  export IS_FORK=false
+else
+  export IS_FORK=true
+fi
+
+# We only build OS-specific packages for master, otherwise we just build tarballs.
+export PKG_EXT=tar.gz
+if [[ "$IS_MASTER" == "true" ]]; then
+  case "$OS" in
+    mac)
+      export PKG_EXT=dmg
+      ;;
+    winnt)
+      export PKG_EXT=exe
+      ;;
+  esac
+fi
+
+case "$OS" in
+  winnt)
+    export NTHREADS=9
+    MAKEFLAGS+="OPENBLAS_NO_AVX512=1 "
+    ;;
+  mac)
+    export NTHREADS=5
+    ;;
+  freebsd)
+    export MAKE=gmake
+    ;;
+  musl)
+    export NTHREADS=3
+    ;;
+esac
+
+case "$ARCH" in
+  i686)
+    export BITS=32
+    MAKEFLAGS+="MARCH=pentium4 "
+    MAKEFLAGS+="JULIA_CPU_TARGET=pentium4;sandybridge,-xsaveopt,clone_all "
+    ;;
+  x86_64)
+    export BITS=64
+    MAKEFLAGS+="MARCH=x86-64 "
+    MAKEFLAGS+="JULIA_CPU_TARGET=generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1) "
+    ;;
+  armv7l)
+    export BITS=armv7
+    MAKEFLAGS+="MARCH=armv7l-a "
+    MAKEFLAGS+="JULIA_CPU_TARGET=armv7-a;armv7-a,neon;armv7-a,neon,vfp4 "
+    ;;
+  ppc64le)
+    export BITS=ppc64le
+    MAKEFLAGS+="JULIA_CPU_TARGET=pwr8 "
+    ;;
+  aarch64)
+    export BITS=aarch64
+    export NTHREADS=8
+    MAKEFLAGS+="MARCH=armv8-a "
+    MAKEFLAGS+="JULIA_CPU_TARGET=generic;cortex-a57;thunderx2t99;armv8.2-a,crypto,fullfp16,lse,rdm "
+    ;;
+esac
+
+MAKEFLAGS+="-j$NTHREADS "
+
+export MAKEFLAGS
+
+# This is a hack for the Docker plugin.
+cat >> "$BUILDKITE_ENV_FILE" << EOF
+ARCH="$ARCH"
+BITS="$BITS"
+IS_FORK="$IS_FORK"
+IS_MASTER="$IS_MASTER"
+MAKE="$MAKE"
+MAKEFLAGS="$MAKEFLAGS"
+NTHREADS="$NTHREADS"
+OS="$OS"
+PKG_EXT="$PKG_EXT"
+SHORT_COMMIT="$SHORT_COMMIT"
+VERSION="$VERSION"
+EOF
