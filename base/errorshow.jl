@@ -87,7 +87,7 @@ function showerror(io::IO, ex, bt; backtrace=true, compacttrace=false)
     try
         showerror(io, ex)
     finally
-        backtrace && show_backtrace(io, bt, compacttrace)
+        backtrace && show_backtrace(io, bt; compacttrace)
     end
 end
 
