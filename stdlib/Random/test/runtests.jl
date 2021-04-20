@@ -627,7 +627,7 @@ guardseed() do
     m = MersenneTwister(0)
     @test Random.seed!() === g
     @test Random.seed!(rand(UInt)) === g
-    @test Random.seed!(rand(UInt32, rand(1:10))) === g
+    @test Random.seed!(rand(UInt32, rand(1:8))) === g
     @test Random.seed!(m) === m
     @test Random.seed!(m, rand(UInt)) === m
     @test Random.seed!(m, rand(UInt32, rand(1:10))) === m
@@ -751,28 +751,26 @@ end
     @test Random.seed!(GLOBAL_RNG, 0) === LOCAL_RNG
     @test Random.seed!(GLOBAL_RNG) === LOCAL_RNG
 
-    mt = MersenneTwister(1)
-    @test copy!(mt, GLOBAL_RNG) === mt
-    @test mt == LOCAL_RNG
-    Random.seed!(mt, 2)
-    @test mt != LOCAL_RNG
-    @test copy!(GLOBAL_RNG, mt) === LOCAL_RNG
-    @test mt == LOCAL_RNG
-    mt2 = copy(GLOBAL_RNG)
-    @test mt2 isa typeof(LOCAL_RNG)
-    @test mt2 !== LOCAL_RNG
-    @test mt2 == LOCAL_RNG
+    xo = Xoshiro()
+    @test copy!(xo, GLOBAL_RNG) === xo
+    @test xo == LOCAL_RNG
+    Random.seed!(xo, 2)
+    @test xo != LOCAL_RNG
+    @test copy!(GLOBAL_RNG, xo) === LOCAL_RNG
+    @test xo == LOCAL_RNG
+    xo2 = copy(GLOBAL_RNG)
+    @test xo2 !== LOCAL_RNG
+    @test xo2 == LOCAL_RNG
 
     for T in (Random.UInt52Raw{UInt64},
-              Random.UInt2x52Raw{UInt128},
               Random.UInt104Raw{UInt128},
               Random.CloseOpen12_64)
         x = Random.SamplerTrivial(T())
-        @test rand(GLOBAL_RNG, x) === rand(mt, x)
+        @test rand(GLOBAL_RNG, x) === rand(xo, x)
     end
     for T in (Int64, UInt64, Int128, UInt128, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)
         x = Random.SamplerType{T}()
-        @test rand(GLOBAL_RNG, x) === rand(mt, x)
+        @test rand(GLOBAL_RNG, x) === rand(xo, x)
     end
 
     A = fill(0.0, 100, 100)
@@ -781,21 +779,21 @@ end
     vB = view(B, :, :)
     I1 = Random.SamplerTrivial(Random.CloseOpen01{Float64}())
     I2 = Random.SamplerTrivial(Random.CloseOpen12{Float64}())
-    @test rand!(GLOBAL_RNG, A, I1) === A == rand!(mt, B, I1) === B
+    @test rand!(GLOBAL_RNG, A, I1) === A == rand!(xo, B, I1) === B
     B = fill!(B, 1.0)
     @test rand!(GLOBAL_RNG, vA, I1) === vA
-    rand!(mt, vB, I1)
+    rand!(xo, vB, I1)
     @test A == B
     for T in (Float16, Float32)
         B = fill!(B, 1.0)
-        @test rand!(GLOBAL_RNG, A, I2) === A == rand!(mt, B, I2) === B
+        @test rand!(GLOBAL_RNG, A, I2) === A == rand!(xo, B, I2) === B
         B = fill!(B, 1.0)
-        @test rand!(GLOBAL_RNG, A, I1) === A == rand!(mt, B, I1) === B
+        @test rand!(GLOBAL_RNG, A, I1) === A == rand!(xo, B, I1) === B
     end
     for T in Base.BitInteger_types
         x = Random.SamplerType{T}()
         B = fill!(B, 1.0)
-        @test rand!(GLOBAL_RNG, A, x) === A == rand!(mt, B, x) === B
+        @test rand!(GLOBAL_RNG, A, x) === A == rand!(xo, B, x) === B
     end
     # issue #33170
     @test Sampler(GLOBAL_RNG, 2:4, Val(1)) isa SamplerRangeNDL
