@@ -373,7 +373,7 @@ variable name, see [Allowed Variable Names](@ref man-allowed-variable-names)) ca
 on the left to avoid assigning specific elements:
 
 ```jldoctest
-julia> _,_,_,d = 1:10
+julia> _, _, _, d = 1:10
 1:10
 
 julia> d
