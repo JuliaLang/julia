@@ -13,7 +13,7 @@ module IteratorsMD
     using .Base.Iterators: Reverse, PartitionIterator
     using .Base: @propagate_inbounds
 
-    export CartesianIndex, CartesianIndices
+    export CartesianIndex, CartesianIndices, haskey
 
     """
         CartesianIndex(i, j, k...)   -> I
@@ -161,6 +161,15 @@ module IteratorsMD
     end
 
     Base._ind2sub(t::Tuple, ind::CartesianIndex) = Tuple(ind)
+
+    #adding haskey method for cartesian indices in tuples
+    # see #38579
+    #Case for CartesianIndex
+    function haskey(container::Tuple, key::CartesianIndex{1})
+        key[1] ∈  keys(container)
+    end
+
+
 
     # Iteration over the elements of CartesianIndex cannot be supported until its length can be inferred,
     # see #23719

@@ -81,7 +81,7 @@ function _maxlength(t::Tuple, t2::Tuple, t3::Tuple...)
     max(length(t), _maxlength(t2, t3...))
 end
 
-function haskey(container, key)
+function haskey(container::Tuple, key::Real)
     @_inline_meta
     key ∈ keys(container)
 end
