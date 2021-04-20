@@ -10,7 +10,7 @@ using .Main.Quaternions
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
-Random.seed!(123)
+Random.seed!(1234543)
 
 @testset "basic functions" begin
     @test I === I' # transpose

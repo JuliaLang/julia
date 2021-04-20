@@ -15,17 +15,17 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(1234321)
+Random.seed!(1234323)
 
 @testset "Matrix condition number" begin
     ainit = rand(n,n)
     @testset "for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         ainit = convert(Matrix{elty}, ainit)
         for a in (copy(ainit), view(ainit, 1:n, 1:n))
-            @test cond(a,1) ≈ 4.837320054554436e+02 atol=0.01
-            @test cond(a,2) ≈ 1.960057871514615e+02 atol=0.01
-            @test cond(a,Inf) ≈ 3.757017682707787e+02 atol=0.01
-            @test cond(a[:,1:5]) ≈ 10.233059337453463 atol=0.01
+            @test cond(a,1) ≈ 50.60863783272028 atol=0.5
+            @test cond(a,2) ≈ 23.059634761613314 atol=0.5
+            @test cond(a,Inf) ≈ 45.12503933120795 atol=0.4
+            @test cond(a[:,1:5]) ≈ 5.719500544258695 atol=0.01
             @test_throws ArgumentError cond(a,3)
         end
     end

@@ -147,20 +147,20 @@ Scalar and array methods for `Die` now work as expected:
 
 ```jldoctest Die; setup = :(Random.seed!(1))
 julia> rand(Die)
-Die(15)
+Die(6)
 
 julia> rand(MersenneTwister(0), Die)
 Die(11)
 
 julia> rand(Die, 3)
 3-element Vector{Die}:
- Die(18)
- Die(5)
+ Die(15)
+ Die(19)
  Die(4)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
 3-element Vector{Die}:
- Die(5)
+ Die(17)
  Die(20)
  Die(15)
 ```
@@ -175,12 +175,12 @@ In order to define random generation out of objects of type `S`, the following m
 julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
 
 julia> rand(Die(4))
-3
+1
 
 julia> rand(Die(4), 3)
 3-element Vector{Any}:
+ 3
  4
- 1
  1
 ```
 

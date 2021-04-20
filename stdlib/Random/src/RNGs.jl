@@ -355,48 +355,37 @@ function seed!(r::MersenneTwister, seed::Vector{UInt32})
     return r
 end
 
-seed!(r::MersenneTwister=default_rng()) = seed!(r, make_seed())
+seed!(r::MersenneTwister) = seed!(r, make_seed())
 seed!(r::MersenneTwister, n::Integer) = seed!(r, make_seed(n))
-seed!(seed::Union{Integer,Vector{UInt32}}) = seed!(default_rng(), seed)
 
 
 ### Global RNG
-
-const THREAD_RNGs = MersenneTwister[]
-@inline default_rng() = default_rng(Threads.threadid())
-@noinline function default_rng(tid::Int)
-    0 < tid <= length(THREAD_RNGs) || _rng_length_assert()
-    if @inbounds isassigned(THREAD_RNGs, tid)
-        @inbounds MT = THREAD_RNGs[tid]
-    else
-        MT = MersenneTwister()
-        @inbounds THREAD_RNGs[tid] = MT
-    end
-    return MT
-end
-@noinline _rng_length_assert() =  @assert false "0 < tid <= length(THREAD_RNGs)"
-
-function __init__()
-    resize!(empty!(THREAD_RNGs), Threads.nthreads()) # ensures that we didn't save a bad object
-    seed!(TaskLocalRNG())
-end
-
 
 struct _GLOBAL_RNG <: AbstractRNG
     global const GLOBAL_RNG = _GLOBAL_RNG.instance
 end
 
-# GLOBAL_RNG currently represents a MersenneTwister
-typeof_rng(::_GLOBAL_RNG) = MersenneTwister
+# GLOBAL_RNG currently uses TaskLocalRNG
+typeof_rng(::_GLOBAL_RNG) = TaskLocalRNG
 
-copy!(dst::MersenneTwister, ::_GLOBAL_RNG) = copy!(dst, default_rng())
-copy!(::_GLOBAL_RNG, src::MersenneTwister) = copy!(default_rng(), src)
+@inline default_rng() = TaskLocalRNG()
+@inline default_rng(tid::Int) = TaskLocalRNG()
+
+copy!(dst::Xoshiro, ::_GLOBAL_RNG) = copy!(dst, default_rng())
+copy!(::_GLOBAL_RNG, src::Xoshiro) = copy!(default_rng(), src)
 copy(::_GLOBAL_RNG) = copy(default_rng())
 
-seed!(::_GLOBAL_RNG, seed::Vector{UInt32}) = seed!(default_rng(), seed)
-seed!(::_GLOBAL_RNG, n::Integer) = seed!(default_rng(), n)
-seed!(::_GLOBAL_RNG, ::Nothing) = seed!(default_rng(), nothing)
-seed!(::_GLOBAL_RNG) = seed!(default_rng(), nothing)
+GLOBAL_SEED = 0
+
+seed!(::_GLOBAL_RNG, seed) = (global GLOBAL_SEED = seed; seed!(default_rng(), seed))
+
+function seed!(rng::_GLOBAL_RNG)
+    seed!(rng, (rand(RandomDevice(), UInt64), rand(RandomDevice(), UInt64),
+                rand(RandomDevice(), UInt64), rand(RandomDevice(), UInt64)))
+end
+seed!() = seed!(GLOBAL_RNG)
+seed!(rng::_GLOBAL_RNG, ::Nothing) = seed!(rng)  # to resolve ambiguity
+seed!(seed::Union{Integer,Vector{UInt32},Vector{UInt64},NTuple{4,UInt64}}) = seed!(GLOBAL_RNG, seed)
 
 rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
 rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
@@ -418,6 +407,10 @@ for T in (Float16, Float32)
 end
 for T in BitInteger_types
     @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerType{$T}) = rand!(default_rng(), A, I)
+end
+
+function __init__()
+    seed!(GLOBAL_RNG)
 end
 
 
