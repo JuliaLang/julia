@@ -2357,7 +2357,7 @@ function getindex_I_sorted_linear(A::AbstractSparseMatrixCSC{Tv,Ti}, I::Abstract
         stopA::Int = colptrA[col+1]
         while ptrA < stopA
             rowA = rowvalA[ptrA]
-            ptrI = haskey(hashmapI, rowA) ? hashmapI[rowA] : 0
+            ptrI = get(hashmapI, rowA, 0)
             if ptrI > 0
                 while ptrI <= nI && I[ptrI] == rowA
                     rowvalS[ptrS] = ptrI
