@@ -48,9 +48,11 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 """
     dropdims(A; dims)
 
-Remove the dimensions specified by `dims` from array `A`.
-Elements of `dims` must be unique and within the range `1:ndims(A)`.
-`size(A,i)` must equal 1 for all `i` in `dims`.
+Return an array with the same data as `A`, but with dimensions—specified by
+`dims`—removed. The two arrays share the same underlying data, so that the
+result is mutable if and only if `A` is mutable, and setting elements of one
+alters the values of the other. Elements of `dims` must be unique and within
+the range `1:ndims(A)`. `size(A,i)` must equal 1 for all `i` in `dims`.
 
 See also: [`reshape`](@ref), [`vec`](@ref).
 
@@ -62,10 +64,18 @@ julia> a = reshape(Vector(1:4),(2,2,1,1))
  1  3
  2  4
 
-julia> dropdims(a; dims=3)
+julia> b = dropdims(a; dims=3)
 2×2×1 Array{Int64, 3}:
 [:, :, 1] =
  1  3
+ 2  4
+
+julia> b[1,1,1] = 5;
+
+julia> a
+2×2×1×1 Array{Int64, 4}:
+[:, :, 1, 1] =
+ 5  3
  2  4
 ```
 """
