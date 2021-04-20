@@ -353,8 +353,7 @@ isopen(io::GenericIOBuffer) = io.readable || io.writable || io.seekable || bytes
 """
     take!(b::IOBuffer)
 
-Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
-`IOBuffer` is reset to its initial state.
+Obtain the contents of an `IOBuffer` as an array. Afterwards, the `IOBuffer` is reset to its initial state.
 
 # Examples
 ```jldoctest
