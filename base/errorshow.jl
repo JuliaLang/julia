@@ -584,14 +584,14 @@ function show_compact_backtrace(io::IO, trace::Vector)
     println(io, "\nLocation:")
 
     # pick the top-most frame that isn't in Julia
-    i = findfirst(trace) do frame, _
-        file = String(frame.file)
+    i = findfirst(trace) do frame
+        file = String(frame[1].file)
         !startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL")
     end
 
     print_stackframe(io, i, trace[i][1], trace[i][2], ndigits(i), modulecolordict, modulecolorcycler)
 
-    i > 1 && println(io, "\nUse `lasterr()` to retrieve the full stack trace.")
+    length(trace) > 1 && print(io, "\nUse `lasterr()` to retrieve the full stack trace.")
 end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
