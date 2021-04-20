@@ -981,6 +981,7 @@ un_fintrinsic(ceil_float,ceil_llvm)
 un_fintrinsic(floor_float,floor_llvm)
 un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
+un_fintrinsic(roundeven_float,roundeven_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm_fast)
 

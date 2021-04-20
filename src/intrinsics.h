@@ -87,6 +87,7 @@
     ADD_I(floor_llvm, 1) \
     ADD_I(trunc_llvm, 1) \
     ADD_I(rint_llvm, 1) \
+    ADD_I(roundeven_llvm, 1) \
     ADD_I(sqrt_llvm, 1) \
     ADD_I(sqrt_llvm_fast, 1) \
     /*  pointer access */ \

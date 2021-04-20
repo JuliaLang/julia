@@ -367,9 +367,9 @@ round(x::Float16, r::RoundingMode{:Down})    = floor_llvm(x)
 round(x::Float64, r::RoundingMode{:Up})      = ceil_llvm(x)
 round(x::Float32, r::RoundingMode{:Up})      = ceil_llvm(x)
 round(x::Float16, r::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::Float64, r::RoundingMode{:Nearest}) = rint_llvm(x)
-round(x::Float32, r::RoundingMode{:Nearest}) = rint_llvm(x)
-round(x::Float16, r::RoundingMode{:Nearest}) = rint_llvm(x)
+round(x::Float64, r::RoundingMode{:Nearest}) = roundeven_llvm(x)
+round(x::Float32, r::RoundingMode{:Nearest}) = roundeven_llvm(x)
+round(x::Float16, r::RoundingMode{:Nearest}) = roundeven_llvm(x)
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32

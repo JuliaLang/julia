@@ -65,6 +65,7 @@ static void jl_init_intrinsic_functions_codegen(void)
     float_func[floor_llvm] = true;
     float_func[trunc_llvm] = true;
     float_func[rint_llvm] = true;
+    float_func[roundeven_llvm] = true;
     float_func[sqrt_llvm] = true;
     float_func[sqrt_llvm_fast] = true;
 }
@@ -1285,6 +1286,10 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case rint_llvm: {
         FunctionCallee rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, makeArrayRef(t));
         return ctx.builder.CreateCall(rintintr, x);
+    }
+    case roundeven_llvm: {
+        FunctionCallee roundevenintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::roundeven, makeArrayRef(t));
+        return ctx.builder.CreateCall(roundevenintr, x);
     }
     case sqrt_llvm: {
         FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
