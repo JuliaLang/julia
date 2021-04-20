@@ -44,11 +44,15 @@
  *        specified.
  */
 #if defined(__GNUC__)
+#  define jl_fence() __atomic_thread_fence(__ATOMIC_SEQ_CST)
+#  define jl_fence_release() __atomic_thread_fence(__ATOMIC_RELEASE)
 #  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
 #  define jl_atomic_fetch_add_relaxed(obj, arg)         \
     __atomic_fetch_add(obj, arg, __ATOMIC_RELAXED)
 #  define jl_atomic_fetch_add(obj, arg)                 \
     __atomic_fetch_add(obj, arg, __ATOMIC_SEQ_CST)
+#  define jl_atomic_add_fetch(obj, arg)                 \
+    __atomic_add_fetch(obj, arg, __ATOMIC_SEQ_CST)
 #  define jl_atomic_fetch_and_relaxed(obj, arg)         \
     __atomic_fetch_and(obj, arg, __ATOMIC_RELAXED)
 #  define jl_atomic_fetch_and(obj, arg)                 \
@@ -62,6 +66,8 @@
 // the __atomic builtins or c11 atomics with GNU extension or c11 _Generic
 #  define jl_atomic_compare_exchange(obj, expected, desired)    \
     __sync_val_compare_and_swap(obj, expected, desired)
+#  define jl_atomic_bool_compare_exchange(obj, expected, desired)          \
+    __sync_bool_compare_and_swap(obj, expected, desired)
 #  define jl_atomic_exchange(obj, desired)              \
     __atomic_exchange_n(obj, desired, __ATOMIC_SEQ_CST)
 #  define jl_atomic_exchange_relaxed(obj, desired)      \
@@ -69,6 +75,8 @@
 // TODO: Maybe add jl_atomic_compare_exchange_weak for spin lock
 #  define jl_atomic_store(obj, val)                     \
     __atomic_store_n(obj, val, __ATOMIC_SEQ_CST)
+#  define jl_atomic_store_relaxed(obj, val)             \
+    __atomic_store_n(obj, val, __ATOMIC_RELAXED)
 #  if defined(__clang__) || defined(__ICC) || defined(__INTEL_COMPILER) || \
     !(defined(_CPU_X86_) || defined(_CPU_X86_64_))
 // ICC and Clang doesn't have this bug...
@@ -87,7 +95,20 @@
     __atomic_load_n(obj, __ATOMIC_SEQ_CST)
 #  define jl_atomic_load_acquire(obj)           \
     __atomic_load_n(obj, __ATOMIC_ACQUIRE)
+#ifdef JL_TSAN_ENABLED
+// For the sake of tsan, call these loads consume ordering since they will act
+// as such on the processors we support while normally, the compiler would
+// upgrade this to acquire ordering, which is strong (and slower) than we want.
+#  define jl_atomic_load_relaxed(obj)           \
+    __atomic_load_n(obj, __ATOMIC_CONSUME)
+#else
+#  define jl_atomic_load_relaxed(obj)           \
+    __atomic_load_n(obj, __ATOMIC_RELAXED)
+#endif
 #elif defined(_COMPILER_MICROSOFT_)
+// TODO: these only define compiler barriers, and aren't correct outside of x86
+#  define jl_fence() _ReadWriteBarrier()
+#  define jl_fence_release() _WriteBarrier()
 #  define jl_signal_fence() _ReadWriteBarrier()
 
 // add
@@ -200,6 +221,7 @@ jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
     return (T)_InterlockedCompareExchange64((volatile __int64*)obj,
                                             (__int64)desired, (__int64)expected);
 }
+// TODO: jl_atomic_bool_compare_exchange
 // atomic exchange
 template<typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
@@ -257,6 +279,11 @@ static inline void jl_atomic_store_release(volatile T *obj, T2 val)
     jl_signal_fence();
     *obj = (T)val;
 }
+template<typename T, typename T2>
+static inline void jl_atomic_store_relaxed(volatile T *obj, T2 val)
+{
+    *obj = (T)val;
+}
 // atomic loads
 template<typename T>
 static inline T jl_atomic_load(volatile T *obj)
@@ -275,5 +302,42 @@ static inline T jl_atomic_load_acquire(volatile T *obj)
 #else
 #  error "No atomic operations supported."
 #endif
+
+#ifdef __clang_analyzer__
+// for the purposes of the analyzer, we can turn these into non-atomic expressions with similar properties
+
+#undef jl_atomic_exchange
+#undef jl_atomic_exchange_relaxed
+#define jl_atomic_exchange(obj, desired) \
+    (__extension__({ \
+            __typeof__((obj)) p = (obj); \
+            __typeof__(*p) temp = *p; \
+            *p = desired; \
+            temp; \
+        }))
+#define jl_atomic_exchange_relaxed jl_atomic_exchange
+
+#undef jl_atomic_compare_exchange
+#define jl_atomic_compare_exchange(obj, expected, desired) ((expected), jl_atomic_exchange((obj), (desired)))
+
+#undef jl_atomic_bool_compare_exchange
+#define jl_atomic_bool_compare_exchange(obj, expected, desired) ((expected) == jl_atomic_exchange((obj), (desired)))
+
+#undef jl_atomic_store
+#undef jl_atomic_store_release
+#undef jl_atomic_store_relaxed
+#define jl_atomic_store(obj, val)         (*(obj) = (val))
+#define jl_atomic_store_release(obj, val) (*(obj) = (val))
+#define jl_atomic_store_relaxed(obj, val) (*(obj) = (val))
+
+#undef jl_atomic_load
+#undef jl_atomic_load_acquire
+#undef jl_atomic_load_relaxed
+#define jl_atomic_load(obj)         (*(obj))
+#define jl_atomic_load_acquire(obj) (*(obj))
+#define jl_atomic_load_relaxed(obj) (*(obj))
+
+#endif
+
 
 #endif // JL_ATOMICS_H

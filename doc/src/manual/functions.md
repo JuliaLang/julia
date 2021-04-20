@@ -1,7 +1,7 @@
 # [Functions](@id man-functions)
 
 In Julia, a function is an object that maps a tuple of argument values to a return value. Julia
-functions are not pure mathematical functions, in the sense that functions can alter and be affected
+functions are not pure mathematical functions, because they can alter and be affected
 by the global state of the program. The basic syntax for defining functions in Julia is:
 
 ```jldoctest
@@ -10,6 +10,9 @@ julia> function f(x,y)
        end
 f (generic function with 1 method)
 ```
+
+This function accepts two arguments `x` and `y` and returns the value
+of the last expression evaluated, which is `x + y`.
 
 There is a second, more terse syntax for defining a function in Julia. The traditional function
 declaration syntax demonstrated above is equivalent to the following compact "assignment form":
@@ -32,7 +35,7 @@ julia> f(2,3)
 ```
 
 Without parentheses, the expression `f` refers to the function object, and can be passed around
-like any value:
+like any other value:
 
 ```jldoctest fofxy
 julia> g = f;
@@ -60,12 +63,30 @@ are identical to the passed values. Modifications to mutable values (such as `Ar
 a function will be visible to the caller. This is the same behavior found in Scheme, most Lisps,
 Python, Ruby and Perl, among other dynamic languages.
 
+## Argument-type declarations
+
+You can declare the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Declarations](@ref) in Julia.
+For example, the following function computes [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number) recursively:
+```
+fib(n::Integer) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)
+```
+and the `::Integer` specification means that it will only be callable when `n` is a subtype of the [abstract](@ref man-abstract-types) `Integer` type.
+
+Argument-type declarations **normally have no impact on performance**: regardless of what argument types (if any) are declared, Julia compiles a specialized version of the function for the actual argument types passed by the caller.   For example, calling `fib(1)` will trigger the compilation of specialized version of `fib` optimized specifically for `Int` arguments, which is then re-used if `fib(7)` or `fib(15)` are called.  (There are rare exceptions when an argument-type declaration can trigger additional compiler specializations; see: [Be aware of when Julia avoids specializing](@ref).)  The most common reasons to declare argument types in Julia are, instead:
+
+* **Dispatch:** As explained in [Methods](@ref), you can have different versions ("methods") of a function for different argument types, in which case the argument types are used to determine which implementation is called for which arguments.  For example, you might implement a completely different algorithm `fib(x::Number) = ...` that works for any `Number` type by using [Binet's formula](https://en.wikipedia.org/wiki/Fibonacci_number#Binet's_formula) to extend it to non-integer values.
+* **Correctness:** Type declarations can be useful if your function only returns correct results for certain argument types.  For example, if we omitted argument types and wrote `fib(n) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)`, then `fib(1.5)` would silently give us the nonsensical answer `1.0`.
+* **Clarity:** Type declarations can serve as a form of documentation about the expected arguments.
+
+However, it is a **common mistake to overly restrict the argument types**, which can unnecessarily limit the applicability of the function and prevent it from being re-used in circumstances you did not anticipate.    For example, the `fib(n::Integer)` function above works equally well for `Int` arguments (machine integers) and `BigInt` arbitrary-precision integers (see [BigFloats and BigInts](@ref)), which is especially useful because Fibonacci numbers grow exponentially rapidly and will quickly overflow any fixed-precision type like `Int` (see [Overflow behavior](@ref)).  If we had declared our function as `fib(n::Int)`, however, the application to `BigInt` would have been prevented for no reason.   In general, you should use the most general applicable abstract types for arguments, and **when in doubt, omit the argument types**.  You can always add argument-type specifications later if they become necessary, and you don't sacrifice performance or functionality by omitting them.
+
 ## The `return` Keyword
 
 The value returned by a function is the value of the last expression evaluated, which, by default,
 is the last expression in the body of the function definition. In the example function, `f`, from
-the previous section this is the value of the expression `x + y`. As in C and most other imperative
-or functional languages, the `return` keyword causes a function to return immediately, providing
+the previous section this is the value of the expression `x + y`.
+As an alternative, as in many other languages,
+the `return` keyword causes a function to return immediately, providing
 an expression whose value is returned:
 
 ```julia
@@ -125,7 +146,9 @@ There are three possible points of return from this function, returning the valu
 expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
-A return type can also be specified in the function declaration using the `::` operator. This converts
+### Return type
+
+A return type can be specified in the function declaration using the `::` operator. This converts
 the return value to the specified type.
 
 ```jldoctest
@@ -139,6 +162,34 @@ Int8
 
 This function will always return an `Int8` regardless of the types of `x` and `y`.
 See [Type Declarations](@ref) for more on return types.
+
+Return type declarations are **rarely used** in Julia: in general, you should
+instead write "type-stable" functions in which Julia's compiler can automatically
+infer the return type.  For more information, see the [Performance Tips](@ref man-performance-tips) chapter.
+
+### Returning nothing
+
+For functions that do not need to return a value (functions used only for some side effects),
+the Julia convention is to return the value [`nothing`](@ref):
+
+```julia
+function printx(x)
+    println("x = $x")
+    return nothing
+end
+```
+
+This is a *convention* in the sense that `nothing` is not a Julia keyword
+but a only singleton object of type `Nothing`.
+Also, you may notice that the `printx` function example above is contrived,
+because `println` already returns `nothing`, so that the `return` line is redundant.
+
+There are two possible shortened forms for the `return nothing` expression.
+On the one hand, the `return` keyword implicitly returns `nothing`, so it can be used alone.
+On the other hand, since functions implicitly return their last expression evaluated,
+`nothing` can be used alone when it's the last expression.
+The preference for the expression `return nothing` as opposed to `return` or `nothing`
+alone is a matter of coding style.
 
 ## Operators Are Functions
 
@@ -211,8 +262,8 @@ as arguments. A classic example is [`map`](@ref), which applies a function to ea
 an array and returns a new array containing the resulting values:
 
 ```jldoctest
-julia> map(round, [1.2,3.5,1.7])
-3-element Array{Float64,1}:
+julia> map(round, [1.2, 3.5, 1.7])
+3-element Vector{Float64}:
  1.0
  4.0
  2.0
@@ -224,8 +275,8 @@ situations, the anonymous function construct allows easy creation of a single-us
 without needing a name:
 
 ```jldoctest
-julia> map(x -> x^2 + 2x - 1, [1,3,-1])
-3-element Array{Int64,1}:
+julia> map(x -> x^2 + 2x - 1, [1, 3, -1])
+3-element Vector{Int64}:
   2
  14
  -2
@@ -235,6 +286,25 @@ An anonymous function accepting multiple arguments can be written using the synt
 A zero-argument anonymous function is written as `()->3`. The idea of a function with no arguments
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
+
+As an example, consider this call to [`get`](@ref):
+
+```julia
+get(dict, key) do
+    # default value calculated here
+    time()
+end
+```
+
+The code above is equivalent to calling `get` with an anonymous function containing the code
+enclosed between `do` and `end`, like so:
+
+```julia
+get(()->time(), dict, key)
+```
+
+The call to [`time`](@ref) is delayed by wrapping it in a 0-argument anonymous function
+that is called only when the requested key is absent from `dict`.
 
 ## Tuples
 
@@ -268,15 +338,19 @@ The components of tuples can optionally be named, in which case a *named tuple* 
 constructed:
 
 ```jldoctest
-julia> x = (a=1, b=1+1)
-(a = 1, b = 2)
+julia> x = (a=2, b=1+2)
+(a = 2, b = 3)
+
+julia> x[1]
+2
 
 julia> x.a
-1
+2
 ```
 
 Named tuples are very similar to tuples, except that fields can additionally be accessed by name
-using dot syntax (`x.a`).
+using dot syntax (`x.a`) in addition to the regular indexing syntax
+(`x[1]`).
 
 ## Multiple Return Values
 
@@ -314,7 +388,7 @@ julia> y
 6
 ```
 
-You can also return multiple values via an explicit usage of the `return` keyword:
+You can also return multiple values using the `return` keyword:
 
 ```julia
 function foo(a,b)
@@ -333,21 +407,29 @@ a symbol, then an assignment `(x, y) = argument` will be inserted for you:
 ```julia
 julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
 
-julia> range((min, max)) = max - min
+julia> gap((min, max)) = max - min
 
-julia> range(minmax(10, 2))
+julia> gap(minmax(10, 2))
 8
 ```
 
-Notice the extra set of parentheses in the definition of `range`.
-Without those, `range` would be a two-argument function, and this example would
-not work.
+Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
+would be a two-argument function, and this example would not work.
+
+For anonymous functions, destructuring a single tuple requires an extra comma:
+
+```
+julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
+2-element Array{Int64,1}:
+ 3
+ 7
+```
 
 ## Varargs Functions
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
 Such functions are traditionally known as "varargs" functions, which is short for "variable number
-of arguments". You can define a varargs function by following the last argument with an ellipsis:
+of arguments". You can define a varargs function by following the last positional argument with an ellipsis:
 
 ```jldoctest barfunc
 julia> bar(a,b,x...) = (a,b,x)
@@ -410,7 +492,7 @@ Furthermore, the iterable object splatted into a function call need not be a tup
 
 ```jldoctest barfunc
 julia> x = [3,4]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  3
  4
 
@@ -418,7 +500,7 @@ julia> bar(1,2,x...)
 (1, 2, (3, 4))
 
 julia> x = [1,2,3,4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
@@ -435,7 +517,7 @@ often is):
 julia> baz(a,b) = a + b;
 
 julia> args = [1,2]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -443,7 +525,7 @@ julia> baz(args...)
 3
 
 julia> args = [1,2,3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -459,8 +541,9 @@ call will fail, just as it would if too many arguments were given explicitly.
 
 ## Optional Arguments
 
-In many cases, function arguments have sensible default values and therefore might not need to
-be passed explicitly in every call. For example, the function [`Date(y, [m, d])`](@ref)
+It is often possible to provide sensible default values for function arguments.
+This can save users from having to pass every argument on every call.
+For example, the function [`Date(y, [m, d])`](@ref)
 from `Dates` module constructs a `Date` type for a given year `y`, month `m` and day `d`.
 However, `m` and `d` arguments are optional and their default value is `1`.
 This behavior can be expressed concisely as:
@@ -473,11 +556,11 @@ function Date(y::Int64, m::Int64=1, d::Int64=1)
 end
 ```
 
-Observe, that this definition calls another method of `Date` function that takes one argument
-of `UTInstant{Day}` type.
+Observe, that this definition calls another method of the `Date` function that takes one argument
+of type `UTInstant{Day}`.
 
 With this definition, the function can be called with either one, two or three arguments, and
-`1` is automatically passed when any of the arguments is not specified:
+`1` is automatically passed when only one or two of the arguments are specified:
 
 ```jldoctest
 julia> using Dates
@@ -533,6 +616,14 @@ function f(;x::Int=1)
 end
 ```
 
+Keyword arguments can also be used in varargs functions:
+
+```julia
+function plot(x...; style="solid")
+    ###
+end
+```
+
 Extra keyword arguments can be collected using `...`, as in varargs functions:
 
 ```julia
@@ -540,6 +631,10 @@ function f(x; y=0, kwargs...)
     ###
 end
 ```
+
+Inside `f`, `kwargs` will be an immutable key-value iterator over a named tuple.
+Named tuples (as well as dictionaries with keys of `Symbol`) can be passed as
+keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
 If a keyword argument is not assigned a default value in the method definition,
 then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
@@ -552,12 +647,13 @@ f(3, y=5) # ok, y is assigned
 f(3)      # throws UndefKeywordError(:y)
 ```
 
-Inside `f`, `kwargs` will be a named tuple. Named tuples (as well as dictionaries) can be passed as
-keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
-
 One can also pass `key => value` expressions after a semicolon. For example, `plot(x, y; :width => 2)`
 is equivalent to `plot(x, y, width=2)`. This is useful in situations where the keyword name is computed
 at runtime.
+
+When a bare identifier or dot expression occurs after a semicolon, the keyword argument name is
+implied by the identifier or field name. For example `plot(x, y; width)` is equivalent to
+`plot(x, y; width=width)` and `plot(x, y; options.width)` is equivalent to `plot(x, y; width=options.width)`.
 
 The nature of keyword arguments makes it possible to specify the same argument more than once.
 For example, in the call `plot(x, y; options..., width=2)` it is possible that the `options` structure
@@ -615,8 +711,8 @@ end
 ```
 
 The `do x` syntax creates an anonymous function with argument `x` and passes it as the first argument
-to [`map`](@ref). Similarly, `do a,b` would create a two-argument anonymous function, and a
-plain `do` would declare that what follows is an anonymous function of the form `() -> ...`.
+to [`map`](@ref). Similarly, `do a,b` would create a two-argument anonymous function. Note that `do (a,b)` would create a one-argument anonymous function,
+whose argument is a tuple to be deconstructed. A plain `do` would declare that what follows is an anonymous function of the form `() -> ...`.
 
 How these arguments are initialized depends on the "outer" function; here, [`map`](@ref) will
 sequentially set `x` to `A`, `B`, `C`, calling the anonymous function on each, just as would happen
@@ -657,8 +753,63 @@ the arguments of the user function are initialized.
 A `do` block, like any other inner function, can "capture" variables from its
 enclosing scope. For example, the variable `data` in the above example of
 `open...do` is captured from the outer scope. Captured variables
-can create performance challenges as discussed in [performance tips](@ref man-performance-tips).
+can create performance challenges as discussed in [performance tips](@ref man-performance-captured).
 
+## Function composition and piping
+
+Functions in Julia can be combined by composing or piping (chaining) them together.
+
+Function composition is when you combine functions together and apply the resulting composition to arguments.
+You use the function composition operator (`∘`) to compose the functions, so `(f ∘ g)(args...)` is the same as `f(g(args...))`.
+
+You can type the composition operator at the REPL and suitably-configured editors using `\circ<tab>`.
+
+For example, the `sqrt` and `+` functions can be composed like this:
+
+```jldoctest
+julia> (sqrt ∘ +)(3, 6)
+3.0
+```
+
+This adds the numbers first, then finds the square root of the result.
+
+The next example composes three functions and maps the result over an array of strings:
+
+```jldoctest
+julia> map(first ∘ reverse ∘ uppercase, split("you can compose functions like this"))
+6-element Vector{Char}:
+ 'U': ASCII/Unicode U+0055 (category Lu: Letter, uppercase)
+ 'N': ASCII/Unicode U+004E (category Lu: Letter, uppercase)
+ 'E': ASCII/Unicode U+0045 (category Lu: Letter, uppercase)
+ 'S': ASCII/Unicode U+0053 (category Lu: Letter, uppercase)
+ 'E': ASCII/Unicode U+0045 (category Lu: Letter, uppercase)
+ 'S': ASCII/Unicode U+0053 (category Lu: Letter, uppercase)
+```
+
+Function chaining (sometimes called "piping" or "using a pipe" to send data to a subsequent function) is when you apply a function to the previous function's output:
+
+```jldoctest
+julia> 1:10 |> sum |> sqrt
+7.416198487095663
+```
+
+Here, the total produced by `sum` is passed to the `sqrt` function. The equivalent composition would be:
+
+```jldoctest
+julia> (sqrt ∘ sum)(1:10)
+7.416198487095663
+```
+
+The pipe operator can also be used with broadcasting, as `.|>`, to provide a useful combination of the chaining/piping and dot vectorization syntax (described next).
+
+```jldoctest
+julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length]
+4-element Vector{Any}:
+  "A"
+  "tsil"
+  "Of"
+ 7
+```
 
 ## [Dot Syntax for Vectorizing Functions](@id man-vectorized)
 
@@ -670,25 +821,25 @@ can call fast library code written in a low-level language. In Julia, vectorized
 *not* required for performance, and indeed it is often beneficial to write your own loops (see
 [Performance Tips](@ref man-performance-tips)), but they can still be convenient. Therefore, *any* Julia function
 `f` can be applied elementwise to any array (or other collection) with the syntax `f.(A)`.
-For example `sin` can be applied to all elements in the vector `A`, like so:
+For example, `sin` can be applied to all elements in the vector `A` like so:
 
 ```jldoctest
 julia> A = [1.0, 2.0, 3.0]
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  1.0
  2.0
  3.0
 
 julia> sin.(A)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  0.8414709848078965
  0.9092974268256817
  0.1411200080598672
 ```
 
 Of course, you can omit the dot if you write a specialized "vector" method of `f`, e.g. via `f(A::AbstractArray) = map(f, A)`,
-and this is just as efficient as `f.(A)`. But that approach requires you to decide in advance
-which functions you want to vectorize.
+and this is just as efficient as `f.(A)`. The advantage of the `f.(A)` syntax is that which functions are vectorizable need not be decided upon
+in advance by the library writer.
 
 More generally, `f.(args...)` is actually equivalent to `broadcast(f, args...)`, which allows
 you to operate on multiple arrays (even of different shapes), or a mix of arrays and scalars (see
@@ -705,13 +856,13 @@ julia> A = [1.0, 2.0, 3.0];
 julia> B = [4.0, 5.0, 6.0];
 
 julia> f.(pi, A)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  13.42477796076938
  17.42477796076938
  21.42477796076938
 
 julia> f.(A, B)
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  19.0
  26.0
  33.0
@@ -733,8 +884,8 @@ the results (see [Pre-allocating outputs](@ref)). A convenient syntax for this i
 is equivalent to `broadcast!(identity, X, ...)` except that, as above, the `broadcast!` loop is
 fused with any nested "dot" calls. For example, `X .= sin.(Y)` is equivalent to `broadcast!(sin, X, Y)`,
 overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-indexing expression,
-e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
-`broadcast!(sin, view(X, 2:lastindex(X)), Y)`,
+e.g. `X[begin+1:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g.
+`broadcast!(sin, view(X, firstindex(X)+1:lastindex(X)), Y)`,
 so that the left-hand side is updated in-place.
 
 Since adding dots to many operations and function calls in an expression
@@ -748,7 +899,7 @@ julia> Y = [1.0, 2.0, 3.0, 4.0];
 julia> X = similar(Y); # pre-allocate output array
 
 julia> @. X = sin(cos(Y)) # equivalent to X .= sin.(cos.(Y))
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
   0.5143952585235492
  -0.4042391538522658
  -0.8360218615377305
@@ -763,7 +914,7 @@ they are equivalent to `broadcast` calls and are fused with other nested "dot" c
 You can also combine dot operations with function chaining using [`|>`](@ref), as in this example:
 ```jldoctest
 julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
-5-element Array{Real,1}:
+5-element Vector{Real}:
     1
     0.5
     6

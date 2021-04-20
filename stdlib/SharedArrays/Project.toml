@@ -6,3 +6,9 @@ Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

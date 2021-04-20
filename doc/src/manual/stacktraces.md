@@ -88,18 +88,16 @@ Symbol("~/julia/usr/share/julia/stdlib/v0.7/REPL/src/REPL.jl")
 julia> frame.line
 5
 
-julia> top_frame.linfo
+julia> frame.linfo
 MethodInstance for eval(::Module, ::Expr)
 
-julia> top_frame.inlined
+julia> frame.inlined
 false
 
-julia> top_frame.from_c
+julia> frame.from_c
 false
-```
 
-```julia-repl
-julia> top_frame.pointer
+julia> frame.pointer
 0x00007f92d6293171
 ```
 
@@ -130,7 +128,7 @@ julia> example()
 [...]
 ```
 
-You may notice that in the example above the first stack frame points points at line 4, where
+You may notice that in the example above the first stack frame points at line 4, where
 [`stacktrace`](@ref) is called, rather than line 2, where *bad_function* is called, and `bad_function`'s
 frame is missing entirely. This is understandable, given that [`stacktrace`](@ref) is called
 from the context of the *catch*. While in this example it's fairly easy to find the actual source
@@ -186,6 +184,56 @@ ERROR: Whoops!
  grandparent() at REPL[3]:3
 [...]
 ```
+
+## Exception stacks and `catch_stack`
+
+!!! compat "Julia 1.1"
+    Exception stacks requires at least Julia 1.1.
+
+While handling an exception further exceptions may be thrown. It can be useful to inspect all these exceptions to
+identify the root cause of a problem. The julia runtime supports this by pushing each exception onto an internal
+*exception stack* as it occurs. When the code exits a `catch` normally, any exceptions which were pushed onto the stack
+in the associated `try` are considered to be successfully handled and are removed from the stack.
+
+The stack of current exceptions can be accessed using the experimental [`Base.catch_stack`](@ref) function. For example,
+
+```julia-repl
+julia> try
+           error("(A) The root cause")
+       catch
+           try
+               error("(B) An exception while handling the exception")
+           catch
+               for (exc, bt) in Base.catch_stack()
+                   showerror(stdout, exc, bt)
+                   println(stdout)
+               end
+           end
+       end
+(A) The root cause
+Stacktrace:
+ [1] error(::String) at error.jl:33
+ [2] top-level scope at REPL[7]:2
+ [3] eval(::Module, ::Any) at boot.jl:319
+ [4] eval_user_input(::Any, ::REPL.REPLBackend) at REPL.jl:85
+ [5] macro expansion at REPL.jl:117 [inlined]
+ [6] (::getfield(REPL, Symbol("##26#27")){REPL.REPLBackend})() at task.jl:259
+(B) An exception while handling the exception
+Stacktrace:
+ [1] error(::String) at error.jl:33
+ [2] top-level scope at REPL[7]:5
+ [3] eval(::Module, ::Any) at boot.jl:319
+ [4] eval_user_input(::Any, ::REPL.REPLBackend) at REPL.jl:85
+ [5] macro expansion at REPL.jl:117 [inlined]
+ [6] (::getfield(REPL, Symbol("##26#27")){REPL.REPLBackend})() at task.jl:259
+```
+
+In this example the root cause exception (A) is first on the stack, with a further exception (B) following it. After
+exiting both catch blocks normally (i.e., without throwing a further exception) all exceptions are removed from the stack
+and are no longer accessible.
+
+The exception stack is stored on the `Task` where the exceptions occurred. When a task fails with uncaught exceptions,
+`catch_stack(task)` may be used to inspect the exception stack for that task.
 
 ## Comparison with [`backtrace`](@ref)
 
@@ -262,4 +310,3 @@ julia> frame = StackTraces.lookup(pointer)
 julia> println("The top frame is from $(frame[1].func)!")
 The top frame is from jl_apply_generic!
 ```
-

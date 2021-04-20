@@ -8,7 +8,7 @@
 #abstract type Vararg{T} end
 
 #mutable struct Symbol
-#    #opaque
+## opaque
 #end
 
 #mutable struct TypeName
@@ -53,25 +53,43 @@
 #abstract type DenseArray{T,N} <: AbstractArray{T,N} end
 
 #mutable struct Array{T,N} <: DenseArray{T,N}
+## opaque
 #end
 
 #mutable struct Module
-#    name::Symbol
+## opaque
+#end
+
+#mutable struct SimpleVector
+## opaque
+#end
+
+#mutable struct String
+## opaque
 #end
 
 #mutable struct Method
+#...
 #end
 
 #mutable struct MethodInstance
+#...
+#end
+
+#mutable struct CodeInstance
+#...
 #end
 
 #mutable struct CodeInfo
+#...
 #end
 
 #mutable struct TypeMapLevel
+#...
 #end
 
 #mutable struct TypeMapEntry
+#...
 #end
 
 #abstract type Ref{T} end
@@ -86,11 +104,11 @@
 
 #struct LineNumberNode
 #    line::Int
-#    file::Any # nominally Union{Symbol,Nothing}
+#    file::Union{Symbol,Nothing}
 #end
 
 #struct LineInfoNode
-#    mod::Module
+#    module::Module
 #    method::Symbol
 #    file::Symbol
 #    line::Int
@@ -101,13 +119,22 @@
 #    label::Int
 #end
 
+#struct GotoIfNot
+#    cond::Any
+#    dest::Int
+#end
+
+#struct ReturnNode
+#    val::Any
+#end
+
 #struct PiNode
 #    val
 #    typ
 #end
 
 #struct PhiNode
-#    edges::Vector{Any}
+#    edges::Vector{Int32}
 #    values::Vector{Any}
 #end
 
@@ -142,7 +169,7 @@
 
 export
     # key types
-    Any, DataType, Vararg, ANY, NTuple,
+    Any, DataType, Vararg, NTuple,
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple,
     # special objects
@@ -196,9 +223,9 @@ primitive type Int8    <: Signed   8 end
 primitive type Int16   <: Signed   16 end
 primitive type UInt16  <: Unsigned 16 end
 #primitive type Int32   <: Signed   32 end
-primitive type UInt32  <: Unsigned 32 end
+#primitive type UInt32  <: Unsigned 32 end
 #primitive type Int64   <: Signed   64 end
-primitive type UInt64  <: Unsigned 64 end
+#primitive type UInt64  <: Unsigned 64 end
 primitive type Int128  <: Signed   128 end
 primitive type UInt128 <: Unsigned 128 end
 
@@ -208,15 +235,29 @@ else
     const UInt = UInt32
 end
 
+function iterate end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
+
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
+
+TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
+TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
+TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
+
+UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
+
+const Vararg = ccall(:jl_toplevel_eval_in, Any, (Any, Any), Core, _expr(:new, TypeofVararg))
+
+# let the compiler assume that calling Union{} as a constructor does not need
+# to be considered ever (which comes up often as Type{<:T})
+Union{}(a...) = throw(MethodError(Union{}, a))
 
 Expr(@nospecialize args...) = _expr(args...)
 
@@ -257,14 +298,23 @@ struct DomainError <: Exception
     DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
 end
 struct TypeError <: Exception
+    # `func` is the name of the builtin function that encountered a type error,
+    # the name of the type that hit an error in its definition or application, or
+    # some other brief description of where the error happened.
+    # `context` optionally adds extra detail, e.g. the name of the type parameter
+    # that got a bad value.
     func::Symbol
-    context::AbstractString
+    context::Union{AbstractString,Symbol}
     expected::Type
     got
+    TypeError(func, context, @nospecialize(expected::Type), @nospecialize(got)) =
+        new(func, context, expected, got)
 end
+TypeError(where, @nospecialize(expected::Type), @nospecialize(got)) =
+    TypeError(Symbol(where), "", expected, got)
 struct InexactError <: Exception
     func::Symbol
-    T::Type
+    T  # Type
     val
     InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
 end
@@ -337,16 +387,7 @@ mutable struct WeakRef
                                       (Ptr{Cvoid}, Any), getptls(), v)
 end
 
-TypeVar(n::Symbol) =
-    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
-TypeVar(n::Symbol, @nospecialize(ub)) =
-    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub)
-TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) =
-    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
-
-UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
-
-(::Type{Tuple{}})() = () # Tuple{}()
+Tuple{}() = ()
 
 struct VecElement{T}
     value::T
@@ -359,22 +400,40 @@ _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :Any)
 _new(:SSAValue, :Int)
+_new(:Argument, :Int)
+_new(:ReturnNode, :Any)
+eval(Core, :(ReturnNode() = $(Expr(:new, :ReturnNode)))) # unassigned val indicates unreachable
+eval(Core, :(GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))))
 eval(Core, :(LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
 eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
+LineNumberNode(l::Int, f::String) = LineNumberNode(l, Symbol(f))
 eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
-eval(Core, :(PhiNode(edges::Array{Any, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
+eval(Core, :(PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
 eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
 eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
-eval(Core, :(LineInfoNode(mod::Module, method::Symbol, file::Symbol, line::Int, inlined_at::Int) =
+eval(Core, :(LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
              $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
+eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+                          @nospecialize(inferred), const_flags::Int32,
+                          min_world::UInt, max_world::UInt) =
+                ccall(:jl_new_codeinst, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
+                    mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
+eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))))
+eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
+eval(Core, :(PartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :isva, :parent, :source))))
+eval(Core, :(InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :vtype, :elsetype))))
+eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
+    $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
-Task(@nospecialize(f)) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
+function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
+    return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
+end
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,
@@ -413,7 +472,7 @@ Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d
 Array{T,1}() where {T} = Array{T,1}(undef, 0)
 
 
-(::Type{Array{T,N} where T})(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
+(Array{T,N} where T)(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
 
 Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
 Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
@@ -421,11 +480,12 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
-function Symbol(s::String)
+eval(Core, :(function Symbol(s::String)
+    $(Expr(:meta, :pure))
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
                  sizeof(s))
-end
+end))
 function Symbol(a::Array{UInt8,1})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
@@ -435,13 +495,15 @@ Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
-export CodeInfo, MethodInstance, GotoNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
+export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    Const, PartialStruct
 
-import Core: CodeInfo, MethodInstance, GotoNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode
+import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    Const, PartialStruct
 
 end
 
@@ -457,6 +519,14 @@ macro __doc__(x)
 end
 atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
+
+# macros for big integer syntax
+macro int128_str end
+macro uint128_str end
+macro big_str end
+
+# macro for command syntax
+macro cmd end
 
 
 # simple stand-alone print definitions for debugging
@@ -514,57 +584,28 @@ function (g::GeneratedFunctionStub)(@nospecialize args...)
                          Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
                          Expr(:return, body),
                          Expr(:meta, :pop_loc))))
-    if g.spnames === nothing
+    spnames = g.spnames
+    if spnames === nothing
         return lam
     else
-        return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+        return Expr(Symbol("with-static-parameters"), lam, spnames...)
     end
 end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
-"""
-    NamedTuple{names}(args::Tuple)
-
-Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
-"""
 NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
 
 using .Intrinsics: sle_int, add_int
 
-macro generated()
-    return Expr(:generated)
-end
-
-function NamedTuple{names,T}(args::T) where {names, T <: Tuple}
-    if @generated
-        N = nfields(names)
-        flds = Array{Any,1}(undef, N)
-        i = 1
-        while sle_int(i, N)
-            arrayset(false, flds, :(getfield(args, $i)), i)
-            i = add_int(i, 1)
-        end
-        Expr(:new, :(NamedTuple{names,T}), flds...)
-    else
-        N = nfields(names)
-        NT = NamedTuple{names,T}
-        flds = Array{Any,1}(undef, N)
-        i = 1
-        while sle_int(i, N)
-            arrayset(false, flds, getfield(args, i), i)
-            i = add_int(i, 1)
-        end
-        ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), NT,
-              ccall(:jl_array_ptr, Ptr{Cvoid}, (Any,), flds), toUInt32(N))::NT
-    end
-end
+eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
+             $(Expr(:splatnew, :(NamedTuple{names,T}), :args))))
 
 # constructors for built-in types
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, T::Type, @nospecialize(val)) = (@_noinline_meta; throw(InexactError(f, T, val)))
+throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@_noinline_meta; throw(InexactError(f, T, val)))
 
 function is_top_bit_set(x)
     @_inline_meta
@@ -576,9 +617,9 @@ function is_top_bit_set(x::Union{Int8,UInt8})
     eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
 end
 
-function check_top_bit(x)
+function check_top_bit(::Type{To}, x) where {To}
     @_inline_meta
-    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, typeof(x), x)
+    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, To, x)
     x
 end
 
@@ -603,22 +644,22 @@ toInt8(x::Int16)      = checked_trunc_sint(Int8, x)
 toInt8(x::Int32)      = checked_trunc_sint(Int8, x)
 toInt8(x::Int64)      = checked_trunc_sint(Int8, x)
 toInt8(x::Int128)     = checked_trunc_sint(Int8, x)
-toInt8(x::UInt8)      = bitcast(Int8, check_top_bit(x))
-toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_top_bit(x))
-toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_top_bit(x))
-toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_top_bit(x))
-toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_top_bit(x))
-toInt8(x::Bool)       = and_int(zext_int(Int8, x), Int8(1))
+toInt8(x::UInt8)      = bitcast(Int8, check_top_bit(Int8, x))
+toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_top_bit(Int8, x))
+toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_top_bit(Int8, x))
+toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_top_bit(Int8, x))
+toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_top_bit(Int8, x))
+toInt8(x::Bool)       = and_int(bitcast(Int8, x), Int8(1))
 toInt16(x::Int8)      = sext_int(Int16, x)
 toInt16(x::Int16)     = x
 toInt16(x::Int32)     = checked_trunc_sint(Int16, x)
 toInt16(x::Int64)     = checked_trunc_sint(Int16, x)
 toInt16(x::Int128)    = checked_trunc_sint(Int16, x)
 toInt16(x::UInt8)     = zext_int(Int16, x)
-toInt16(x::UInt16)    = bitcast(Int16, check_top_bit(x))
-toInt16(x::UInt32)    = checked_trunc_sint(Int16, check_top_bit(x))
-toInt16(x::UInt64)    = checked_trunc_sint(Int16, check_top_bit(x))
-toInt16(x::UInt128)   = checked_trunc_sint(Int16, check_top_bit(x))
+toInt16(x::UInt16)    = bitcast(Int16, check_top_bit(Int16, x))
+toInt16(x::UInt32)    = checked_trunc_sint(Int16, check_top_bit(Int16, x))
+toInt16(x::UInt64)    = checked_trunc_sint(Int16, check_top_bit(Int16, x))
+toInt16(x::UInt128)   = checked_trunc_sint(Int16, check_top_bit(Int16, x))
 toInt16(x::Bool)      = and_int(zext_int(Int16, x), Int16(1))
 toInt32(x::Int8)      = sext_int(Int32, x)
 toInt32(x::Int16)     = sext_int(Int32, x)
@@ -627,9 +668,9 @@ toInt32(x::Int64)     = checked_trunc_sint(Int32, x)
 toInt32(x::Int128)    = checked_trunc_sint(Int32, x)
 toInt32(x::UInt8)     = zext_int(Int32, x)
 toInt32(x::UInt16)    = zext_int(Int32, x)
-toInt32(x::UInt32)    = bitcast(Int32, check_top_bit(x))
-toInt32(x::UInt64)    = checked_trunc_sint(Int32, check_top_bit(x))
-toInt32(x::UInt128)   = checked_trunc_sint(Int32, check_top_bit(x))
+toInt32(x::UInt32)    = bitcast(Int32, check_top_bit(Int32, x))
+toInt32(x::UInt64)    = checked_trunc_sint(Int32, check_top_bit(Int32, x))
+toInt32(x::UInt128)   = checked_trunc_sint(Int32, check_top_bit(Int32, x))
 toInt32(x::Bool)      = and_int(zext_int(Int32, x), Int32(1))
 toInt64(x::Int8)      = sext_int(Int64, x)
 toInt64(x::Int16)     = sext_int(Int64, x)
@@ -639,8 +680,8 @@ toInt64(x::Int128)    = checked_trunc_sint(Int64, x)
 toInt64(x::UInt8)     = zext_int(Int64, x)
 toInt64(x::UInt16)    = zext_int(Int64, x)
 toInt64(x::UInt32)    = zext_int(Int64, x)
-toInt64(x::UInt64)    = bitcast(Int64, check_top_bit(x))
-toInt64(x::UInt128)   = checked_trunc_sint(Int64, check_top_bit(x))
+toInt64(x::UInt64)    = bitcast(Int64, check_top_bit(Int64, x))
+toInt64(x::UInt128)   = checked_trunc_sint(Int64, check_top_bit(Int64, x))
 toInt64(x::Bool)      = and_int(zext_int(Int64, x), Int64(1))
 toInt128(x::Int8)     = sext_int(Int128, x)
 toInt128(x::Int16)    = sext_int(Int128, x)
@@ -651,9 +692,9 @@ toInt128(x::UInt8)    = zext_int(Int128, x)
 toInt128(x::UInt16)   = zext_int(Int128, x)
 toInt128(x::UInt32)   = zext_int(Int128, x)
 toInt128(x::UInt64)   = zext_int(Int128, x)
-toInt128(x::UInt128)  = bitcast(Int128, check_top_bit(x))
+toInt128(x::UInt128)  = bitcast(Int128, check_top_bit(Int128, x))
 toInt128(x::Bool)     = and_int(zext_int(Int128, x), Int128(1))
-toUInt8(x::Int8)      = bitcast(UInt8, check_top_bit(x))
+toUInt8(x::Int8)      = bitcast(UInt8, check_top_bit(UInt8, x))
 toUInt8(x::Int16)     = checked_trunc_uint(UInt8, x)
 toUInt8(x::Int32)     = checked_trunc_uint(UInt8, x)
 toUInt8(x::Int64)     = checked_trunc_uint(UInt8, x)
@@ -663,9 +704,9 @@ toUInt8(x::UInt16)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt32)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt64)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt128)   = checked_trunc_uint(UInt8, x)
-toUInt8(x::Bool)      = and_int(zext_int(UInt8, x), UInt8(1))
-toUInt16(x::Int8)     = sext_int(UInt16, check_top_bit(x))
-toUInt16(x::Int16)    = bitcast(UInt16, check_top_bit(x))
+toUInt8(x::Bool)      = and_int(bitcast(UInt8, x), UInt8(1))
+toUInt16(x::Int8)     = sext_int(UInt16, check_top_bit(UInt16, x))
+toUInt16(x::Int16)    = bitcast(UInt16, check_top_bit(UInt16, x))
 toUInt16(x::Int32)    = checked_trunc_uint(UInt16, x)
 toUInt16(x::Int64)    = checked_trunc_uint(UInt16, x)
 toUInt16(x::Int128)   = checked_trunc_uint(UInt16, x)
@@ -675,9 +716,9 @@ toUInt16(x::UInt32)   = checked_trunc_uint(UInt16, x)
 toUInt16(x::UInt64)   = checked_trunc_uint(UInt16, x)
 toUInt16(x::UInt128)  = checked_trunc_uint(UInt16, x)
 toUInt16(x::Bool)     = and_int(zext_int(UInt16, x), UInt16(1))
-toUInt32(x::Int8)     = sext_int(UInt32, check_top_bit(x))
-toUInt32(x::Int16)    = sext_int(UInt32, check_top_bit(x))
-toUInt32(x::Int32)    = bitcast(UInt32, check_top_bit(x))
+toUInt32(x::Int8)     = sext_int(UInt32, check_top_bit(UInt32, x))
+toUInt32(x::Int16)    = sext_int(UInt32, check_top_bit(UInt32, x))
+toUInt32(x::Int32)    = bitcast(UInt32, check_top_bit(UInt32, x))
 toUInt32(x::Int64)    = checked_trunc_uint(UInt32, x)
 toUInt32(x::Int128)   = checked_trunc_uint(UInt32, x)
 toUInt32(x::UInt8)    = zext_int(UInt32, x)
@@ -686,10 +727,10 @@ toUInt32(x::UInt32)   = x
 toUInt32(x::UInt64)   = checked_trunc_uint(UInt32, x)
 toUInt32(x::UInt128)  = checked_trunc_uint(UInt32, x)
 toUInt32(x::Bool)     = and_int(zext_int(UInt32, x), UInt32(1))
-toUInt64(x::Int8)     = sext_int(UInt64, check_top_bit(x))
-toUInt64(x::Int16)    = sext_int(UInt64, check_top_bit(x))
-toUInt64(x::Int32)    = sext_int(UInt64, check_top_bit(x))
-toUInt64(x::Int64)    = bitcast(UInt64, check_top_bit(x))
+toUInt64(x::Int8)     = sext_int(UInt64, check_top_bit(UInt64, x))
+toUInt64(x::Int16)    = sext_int(UInt64, check_top_bit(UInt64, x))
+toUInt64(x::Int32)    = sext_int(UInt64, check_top_bit(UInt64, x))
+toUInt64(x::Int64)    = bitcast(UInt64, check_top_bit(UInt64, x))
 toUInt64(x::Int128)   = checked_trunc_uint(UInt64, x)
 toUInt64(x::UInt8)    = zext_int(UInt64, x)
 toUInt64(x::UInt16)   = zext_int(UInt64, x)
@@ -697,11 +738,11 @@ toUInt64(x::UInt32)   = zext_int(UInt64, x)
 toUInt64(x::UInt64)   = x
 toUInt64(x::UInt128)  = checked_trunc_uint(UInt64, x)
 toUInt64(x::Bool)     = and_int(zext_int(UInt64, x), UInt64(1))
-toUInt128(x::Int8)    = sext_int(UInt128, check_top_bit(x))
-toUInt128(x::Int16)   = sext_int(UInt128, check_top_bit(x))
-toUInt128(x::Int32)   = sext_int(UInt128, check_top_bit(x))
-toUInt128(x::Int64)   = sext_int(UInt128, check_top_bit(x))
-toUInt128(x::Int128)  = bitcast(UInt128, check_top_bit(x))
+toUInt128(x::Int8)    = sext_int(UInt128, check_top_bit(UInt128, x))
+toUInt128(x::Int16)   = sext_int(UInt128, check_top_bit(UInt128, x))
+toUInt128(x::Int32)   = sext_int(UInt128, check_top_bit(UInt128, x))
+toUInt128(x::Int64)   = sext_int(UInt128, check_top_bit(UInt128, x))
+toUInt128(x::Int128)  = bitcast(UInt128, check_top_bit(UInt128, x))
 toUInt128(x::UInt8)   = zext_int(UInt128, x)
 toUInt128(x::UInt16)  = zext_int(UInt128, x)
 toUInt128(x::UInt32)  = zext_int(UInt128, x)
@@ -731,6 +772,7 @@ Int64(x::Ptr) = Int64(UInt32(x))
 UInt64(x::Ptr) = UInt64(UInt32(x))
 end
 Ptr{T}(x::Union{Int,UInt,Ptr}) where {T} = bitcast(Ptr{T}, x)
+Ptr{T}() where {T} = Ptr{T}(0)
 
 Signed(x::UInt8)    = Int8(x)
 Unsigned(x::Int8)   = UInt8(x)
@@ -743,10 +785,28 @@ Unsigned(x::Int64)  = UInt64(x)
 Signed(x::UInt128)  = Int128(x)
 Unsigned(x::Int128) = UInt128(x)
 
-Signed(x::Union{Float32, Float64, Bool})   = Int(x)
-Unsigned(x::Union{Float32, Float64, Bool}) = UInt(x)
+Signed(x::Union{Float16, Float32, Float64, Bool})   = Int(x)
+Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
-Integer(x::Union{Float32, Float64}) = Int(x)
+Integer(x::Union{Float16, Float32, Float64}) = Int(x)
+
+# Binding for the julia parser, called as
+#
+#    Core._parse(text, filename, offset, options)
+#
+# Parse Julia code from the buffer `text`, starting at `offset` and attributing
+# it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
+# len::Int)` for a raw unmanaged buffer. `options` should be one of `:atom`,
+# `:statement` or `:all`, indicating how much the parser will consume.
+#
+# `_parse` must return an `svec` containing an `Expr` and the new offset as an
+# `Int`.
+#
+# The internal jl_parse which will call into Core._parse if not `nothing`.
+_parse = nothing
+
+# support for deprecated uses of internal _apply function
+_apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

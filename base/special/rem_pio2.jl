@@ -44,23 +44,6 @@ const INV_2PI = UInt64[
     0x9afe_d7ec_47e3_5742,
     0x1580_cc11_bf1e_daea]
 
-"""
-    highword(x)
-
-Return the high word of `x` as a `UInt32`.
-"""
-@inline highword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)
-@inline highword(x::Float64) = highword(reinterpret(UInt64, x))
-
-"""
-    poshighword(x)
-
-Return positive part of the high word of `x` as a `UInt32`.
-"""
-@inline poshighword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)&0x7fffffff
-@inline poshighword(x::Float32) = reinterpret(UInt32, x)&0x7fffffff
-@inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
-
 @inline function cody_waite_2c_pio2(x::Float64, fn, n)
     pio2_1 = 1.57079632673412561417e+00
     pio2_1t = 6.07710050650619224932e-11
@@ -155,7 +138,8 @@ function paynehanek(x::Float64)
     X = (u & significand_mask(Float64)) | (one(UInt64) << significand_bits(Float64))
     # Get k from formula above
     # k = exponent(x)-52
-    k = Int((u & exponent_mask(Float64)) >> significand_bits(Float64)) - exponent_bias(Float64) - significand_bits(Float64)
+    raw_exponent = ((u & exponent_mask(Float64)) >> significand_bits(Float64)) % Int
+    k = raw_exponent - exponent_bias(Float64) - significand_bits(Float64)
 
     # 2. Let α = 1/2π, then:
     #
@@ -225,12 +209,13 @@ function paynehanek(x::Float64)
 end
 
 """
-    rem_pio2_kernel(x, xhp)
+    rem_pio2_kernel(x::Union{Float32, Float64})
 
-Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k`
-such that ``k \\mod 3 == K \\mod 3`` where ``K*π/2 = x - rem``. Note, that it is
-only meant for use when ``|x|>=π/4``, and that ``π/2`` is always subtracted or
-added for ``π/4<|x|<=π/2`` instead of simply returning `x`.
+Calculate `x` divided by `π/2` accurately for arbitrarily large `x`.
+Returns a pair `(k, r)`, where `k` is the quadrant of the result
+(multiple of π/2) and `r` is the remainder, such that ``k * π/2 = x - r``.
+The remainder is given as a double-double pair.
+`k` is positive if `x > 0` and is negative if `x ≤ 0`.
 """
 @inline function rem_pio2_kernel(x::Float64)
     xhp = poshighword(x)

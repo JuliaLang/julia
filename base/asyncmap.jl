@@ -124,8 +124,7 @@ function verify_ntasks(iterable, ntasks)
     end
 
     if ntasks == 0
-        chklen = IteratorSize(iterable)
-        if (chklen isa HasLength) || (chklen isa HasShape)
+        if haslength(iterable)
             ntasks = max(1,min(100, length(iterable)))
         else
             ntasks = 100
@@ -167,7 +166,7 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
             # in asyncrun due to a closed channel.
             asyncrun_excp = ex
         else
-            rethrow(ex)
+            rethrow()
         end
     end
 
@@ -191,13 +190,13 @@ end
 
 function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     if isa(ntasks, Function)
-        nt = ntasks()
+        nt = ntasks()::Int
         # start at least one worker task.
         if nt == 0
             nt = 1
         end
     else
-        nt = ntasks
+        nt = ntasks::Int
     end
 
     # Use an unbuffered channel for communicating with the worker tasks. In the event

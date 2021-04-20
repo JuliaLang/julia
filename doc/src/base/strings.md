@@ -7,7 +7,7 @@ Base.codepoint
 Base.length(::AbstractString)
 Base.sizeof(::AbstractString)
 Base.:*(::Union{AbstractChar, AbstractString}, ::Union{AbstractChar, AbstractString}...)
-Base.:^(::AbstractString, ::Integer)
+Base.:^(::Union{AbstractString, AbstractChar}, ::Integer)
 Base.string
 Base.repeat(::AbstractString, ::Integer)
 Base.repeat(::AbstractChar, ::Integer)
@@ -20,10 +20,12 @@ Base.ncodeunits(::AbstractString)
 Base.codeunit
 Base.codeunits
 Base.ascii
+Base.Regex
 Base.@r_str
 Base.SubstitutionString
 Base.@s_str
 Base.@raw_str
+Base.@b_str
 Base.Docs.@html_str
 Base.Docs.@text_str
 Base.isvalid(::Any)
@@ -31,6 +33,8 @@ Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
 Base.match
 Base.eachmatch
+Base.RegexMatch
+Base.keys(::RegexMatch)
 Base.isless(::AbstractString, ::AbstractString)
 Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
@@ -38,7 +42,9 @@ Base.lpad
 Base.rpad
 Base.findfirst(::AbstractString, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
+Base.findnext(::AbstractChar, ::AbstractString, ::Integer)
 Base.findlast(::AbstractString, ::AbstractString)
+Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
@@ -50,6 +56,7 @@ Base.lstrip
 Base.rstrip
 Base.startswith
 Base.endswith
+Base.contains
 Base.first(::AbstractString, ::Integer)
 Base.last(::AbstractString, ::Integer)
 Base.uppercase
@@ -75,7 +82,6 @@ Base.ispunct
 Base.isspace
 Base.isuppercase
 Base.isxdigit
-Core.Symbol
 Base.escape_string
 Base.unescape_string
 ```

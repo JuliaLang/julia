@@ -1,14 +1,6 @@
-# Printf
-
-```@meta
-DocTestSetup = :(using Printf)
-```
+# [Printf](@id man-printf)
 
 ```@docs
 Printf.@printf
 Printf.@sprintf
-```
-
-```@meta
-DocTestSetup = nothing
 ```

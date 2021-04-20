@@ -1,0 +1,298 @@
+From ea31bbe661abef761e49983b56923e6523b9463a Mon Sep 17 00:00:00 2001
+From: aone <info@keka.io>
+Date: Thu, 7 Mar 2019 10:06:16 +0100
+Subject: [PATCH] Enhanced encryption strength from 7-Zip 19.00
+
+https://github.com/aonez/Keka/issues/379
+https://sourceforge.net/p/sevenzip/bugs/2176
+---
+ .../CPP/7zip/Archive/Wim/WimHandlerOut.cpp    |   2 +-
+ Bin/p7zip/source/CPP/7zip/Crypto/7zAes.cpp    |   4 +-
+ Bin/p7zip/source/CPP/7zip/Crypto/RandGen.cpp  | 135 ++++++++++++++++--
+ Bin/p7zip/source/CPP/7zip/Crypto/RandGen.h    |  19 +++
+ Bin/p7zip/source/CPP/7zip/Crypto/WzAes.cpp    |   2 +-
+ .../source/CPP/7zip/Crypto/ZipCrypto.cpp      |   2 +-
+ 6 files changed, 146 insertions(+), 18 deletions(-)
+
+diff --git a/Bin/p7zip/source/CPP/7zip/Archive/Wim/WimHandlerOut.cpp b/Bin/p7zip/source/CPP/7zip/Archive/Wim/WimHandlerOut.cpp
+index 1d198df0..39679883 100644
+--- a/Bin/p7zip/source/CPP/7zip/Archive/Wim/WimHandlerOut.cpp
++++ b/Bin/p7zip/source/CPP/7zip/Archive/Wim/WimHandlerOut.cpp
+@@ -671,7 +671,7 @@ void CHeader::SetDefaultFields(bool useLZX)
+     ChunkSize = kChunkSize;
+     ChunkSizeBits = kChunkSizeBits;
+   }
+-  g_RandomGenerator.Generate(Guid, 16);
++  MY_RAND_GEN(Guid, 16);
+   PartNumber = 1;
+   NumParts = 1;
+   NumImages = 1;
+diff --git a/Bin/p7zip/source/CPP/7zip/Crypto/7zAes.cpp b/Bin/p7zip/source/CPP/7zip/Crypto/7zAes.cpp
+index d33b562a..2ed69bad 100644
+--- a/Bin/p7zip/source/CPP/7zip/Crypto/7zAes.cpp
++++ b/Bin/p7zip/source/CPP/7zip/Crypto/7zAes.cpp
+@@ -164,8 +164,8 @@ STDMETHODIMP CEncoder::ResetInitVector()
+ {
+   for (unsigned i = 0; i < sizeof(_iv); i++)
+     _iv[i] = 0;
+-  _ivSize = 8;
+-  g_RandomGenerator.Generate(_iv, _ivSize);
++  _ivSize = 16;
++  MY_RAND_GEN(_iv, _ivSize);
+   return S_OK;
+ }
+ 
+diff --git a/Bin/p7zip/source/CPP/7zip/Crypto/RandGen.cpp b/Bin/p7zip/source/CPP/7zip/Crypto/RandGen.cpp
+index f5ea31f0..a70f4ec8 100644
+--- a/Bin/p7zip/source/CPP/7zip/Crypto/RandGen.cpp
++++ b/Bin/p7zip/source/CPP/7zip/Crypto/RandGen.cpp
+@@ -2,14 +2,44 @@
+ 
+ #include "StdAfx.h"
+ 
++#include "RandGen.h"
++
++#ifndef USE_STATIC_SYSTEM_RAND
++
+ #ifndef _7ZIP_ST
+ #include "../../Windows/Synchronization.h"
+ #endif
+ 
+-#include "RandGen.h"
+ 
+-#ifndef _WIN32
++#ifdef _WIN32
++
++#ifdef _WIN64
++#define USE_STATIC_RtlGenRandom
++#endif
++
++#ifdef USE_STATIC_RtlGenRandom
++
++#include <ntsecapi.h>
++
++EXTERN_C_BEGIN
++#ifndef RtlGenRandom
++  #define RtlGenRandom SystemFunction036
++  BOOLEAN WINAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
++#endif
++EXTERN_C_END
++
++#else
++EXTERN_C_BEGIN
++typedef BOOLEAN (WINAPI * Func_RtlGenRandom)(PVOID RandomBuffer, ULONG RandomBufferLength);
++EXTERN_C_END
++#endif
++
++
++#else
+ #include <unistd.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
+ #define USE_POSIX_TIME
+ #define USE_POSIX_TIME2
+ #endif
+@@ -21,11 +51,9 @@
+ #endif
+ #endif
+ 
+-// This is not very good random number generator.
+-// Please use it only for salt.
+-// First generated data block depends from timer and processID.
++// The seed and first generated data block depend from processID,
++// theadID, timer and system random generator, if available.
+ // Other generated data blocks depend from previous state
+-// Maybe it's possible to restore original timer value from generated value.
+ 
+ #define HASH_UPD(x) Sha256_Update(&hash, (const Byte *)&x, sizeof(x));
+ 
+@@ -34,25 +62,102 @@ void CRandomGenerator::Init()
+   CSha256 hash;
+   Sha256_Init(&hash);
+ 
++  unsigned numIterations = 1000;
++
++  {
++  #ifndef UNDER_CE
++  const unsigned kNumIterations_Small = 100;
++  const unsigned kBufSize = 32;
++  Byte buf[kBufSize];
++  #endif
++
+   #ifdef _WIN32
++
+   DWORD w = ::GetCurrentProcessId();
+   HASH_UPD(w);
+   w = ::GetCurrentThreadId();
+   HASH_UPD(w);
++
++  #ifdef UNDER_CE
++  /*
++  if (CeGenRandom(kBufSize, buf))
++  {
++    numIterations = kNumIterations_Small;
++    Sha256_Update(&hash, buf, kBufSize);
++  }
++  */
++  #elif defined(USE_STATIC_RtlGenRandom)
++  if (RtlGenRandom(buf, kBufSize))
++  {
++    numIterations = kNumIterations_Small;
++    Sha256_Update(&hash, buf, kBufSize);
++  }
+   #else
++  {
++    HMODULE hModule = ::LoadLibrary(TEXT("Advapi32.dll"));
++    if (hModule)
++    {
++      // SystemFunction036() is real name of RtlGenRandom() function
++      Func_RtlGenRandom my_RtlGenRandom = (Func_RtlGenRandom)GetProcAddress(hModule, "SystemFunction036");
++      if (my_RtlGenRandom)
++      {
++        if (my_RtlGenRandom(buf, kBufSize))
++        {
++          numIterations = kNumIterations_Small;
++          Sha256_Update(&hash, buf, kBufSize);
++        }
++      }
++      ::FreeLibrary(hModule);
++    }
++  }
++  #endif
++
++  #else
++  
+   pid_t pid = getpid();
+   HASH_UPD(pid);
+   pid = getppid();
+   HASH_UPD(pid);
++
++  {
++    int f = open("/dev/urandom", O_RDONLY);
++    unsigned numBytes = kBufSize;
++    if (f >= 0)
++    {
++      do
++      {
++        int n = read(f, buf, numBytes);
++        if (n <= 0)
++          break;
++        Sha256_Update(&hash, buf, n);
++        numBytes -= n;
++      }
++      while (numBytes);
++      close(f);
++      if (numBytes == 0)
++        numIterations = kNumIterations_Small;
++    }
++  }
++  /*
++  {
++    int n = getrandom(buf, kBufSize, 0);
++    if (n > 0)
++    {
++      Sha256_Update(&hash, buf, n);
++      if (n == kBufSize)
++        numIterations = kNumIterations_Small;
++    }
++  }
++  */
++
++  #endif
++  }
++
++  #ifdef _DEBUG
++  numIterations = 2;
+   #endif
+ 
+-  for (unsigned i = 0; i <
+-    #ifdef _DEBUG
+-    2;
+-    #else
+-    1000;
+-    #endif
+-    i++)
++  do
+   {
+     #ifdef _WIN32
+     LARGE_INTEGER v;
+@@ -83,6 +188,8 @@ void CRandomGenerator::Init()
+       Sha256_Update(&hash, _buff, SHA256_DIGEST_SIZE);
+     }
+   }
++  while (--numIterations);
++
+   Sha256_Final(&hash, _buff);
+   _needInit = false;
+ }
+@@ -120,3 +227,5 @@ void CRandomGenerator::Generate(Byte *data, unsigned size)
+ }
+ 
+ CRandomGenerator g_RandomGenerator;
++
++#endif
+diff --git a/Bin/p7zip/source/CPP/7zip/Crypto/RandGen.h b/Bin/p7zip/source/CPP/7zip/Crypto/RandGen.h
+index cfdcd60d..5122ec4b 100644
+--- a/Bin/p7zip/source/CPP/7zip/Crypto/RandGen.h
++++ b/Bin/p7zip/source/CPP/7zip/Crypto/RandGen.h
+@@ -5,6 +5,21 @@
+ 
+ #include "../../../C/Sha256.h"
+ 
++#ifdef _WIN64
++// #define USE_STATIC_SYSTEM_RAND
++#endif
++
++#ifdef USE_STATIC_SYSTEM_RAND
++
++#ifdef _WIN32
++#include <ntsecapi.h>
++#define MY_RAND_GEN(data, size) RtlGenRandom(data, size)
++#else
++#define MY_RAND_GEN(data, size) getrandom(data, size, 0)
++#endif
++
++#else
++
+ class CRandomGenerator
+ {
+   Byte _buff[SHA256_DIGEST_SIZE];
+@@ -18,4 +33,8 @@ public:
+ 
+ extern CRandomGenerator g_RandomGenerator;
+ 
++#define MY_RAND_GEN(data, size) g_RandomGenerator.Generate(data, size)
++
++#endif
++
+ #endif
+diff --git a/Bin/p7zip/source/CPP/7zip/Crypto/WzAes.cpp b/Bin/p7zip/source/CPP/7zip/Crypto/WzAes.cpp
+index 4572f06e..d415ab84 100644
+--- a/Bin/p7zip/source/CPP/7zip/Crypto/WzAes.cpp
++++ b/Bin/p7zip/source/CPP/7zip/Crypto/WzAes.cpp
+@@ -96,7 +96,7 @@ STDMETHODIMP CBaseCoder::Init()
+ HRESULT CEncoder::WriteHeader(ISequentialOutStream *outStream)
+ {
+   unsigned saltSize = _key.GetSaltSize();
+-  g_RandomGenerator.Generate(_key.Salt, saltSize);
++  MY_RAND_GEN(_key.Salt, saltSize);
+   Init2();
+   RINOK(WriteStream(outStream, _key.Salt, saltSize));
+   return WriteStream(outStream, _key.PwdVerifComputed, kPwdVerifSize);
+diff --git a/Bin/p7zip/source/CPP/7zip/Crypto/ZipCrypto.cpp b/Bin/p7zip/source/CPP/7zip/Crypto/ZipCrypto.cpp
+index ae715063..8610297a 100644
+--- a/Bin/p7zip/source/CPP/7zip/Crypto/ZipCrypto.cpp
++++ b/Bin/p7zip/source/CPP/7zip/Crypto/ZipCrypto.cpp
+@@ -49,7 +49,7 @@ HRESULT CEncoder::WriteHeader_Check16(ISequentialOutStream *outStream, UInt16 cr
+      PKZIP 2.0+ used 1 byte CRC check. It's more secure.
+      We also use 1 byte CRC. */
+ 
+-  g_RandomGenerator.Generate(h, kHeaderSize - 1);
++  MY_RAND_GEN(h, kHeaderSize - 1);
+   // h[kHeaderSize - 2] = (Byte)(crc);
+   h[kHeaderSize - 1] = (Byte)(crc >> 8);
+   
+-- 
+2.17.1
+

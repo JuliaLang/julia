@@ -121,7 +121,7 @@ of common properties.
 ## Working with Files
 
 Like many other environments, Julia has an [`open`](@ref) function, which takes a filename and
-returns an `IOStream` object that you can use to read and write things from the file. For example,
+returns an [`IOStream`](@ref) object that you can use to read and write things from the file. For example,
 if we have a file, `hello.txt`, whose contents are `Hello, World!`:
 
 ```julia-repl
@@ -193,13 +193,13 @@ Let's first create a simple server:
 ```julia-repl
 julia> using Sockets
 
-julia> @async begin
+julia> errormonitor(@async begin
            server = listen(2000)
            while true
                sock = accept(server)
                println("Hello World\n")
            end
-       end
+       end)
 Task (runnable) @0x00007fd31dc11ae0
 ```
 
@@ -210,31 +210,31 @@ same function may also be used to create various other kinds of servers:
 
 ```julia-repl
 julia> listen(2000) # Listens on localhost:2000 (IPv4)
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(ip"127.0.0.1",2000) # Equivalent to the first
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(ip"::1",2000) # Listens on localhost:2000 (IPv6)
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(IPv4(0),2001) # Listens on port 2001 on all IPv4 interfaces
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(IPv6(0),2001) # Listens on port 2001 on all IPv6 interfaces
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen("testsocket") # Listens on a UNIX domain socket
-Base.PipeServer(active)
+Sockets.PipeServer(active)
 
 julia> listen("\\\\.\\pipe\\testsocket") # Listens on a Windows named pipe
-Base.PipeServer(active)
+Sockets.PipeServer(active)
 ```
 
 Note that the return type of the last invocation is different. This is because this server does not
 listen on TCP, but rather on a named pipe (Windows) or UNIX domain socket. Also note that Windows
 named pipe format has to be a specific pattern such that the name prefix (`\\.\pipe\`) uniquely
-identifies the [file type](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365783(v=vs.85).aspx).
+identifies the [file type](https://docs.microsoft.com/windows/desktop/ipc/pipe-names).
 The difference between TCP and named pipes or
 UNIX domain sockets is subtle and has to do with the [`accept`](@ref) and [`connect`](@ref)
 methods. The [`accept`](@ref) method retrieves a connection to the client that is connecting on
@@ -265,7 +265,7 @@ printed the message and waited for the next client. Reading and writing works in
 To see this, consider the following simple echo server:
 
 ```julia-repl
-julia> @async begin
+julia> errormonitor(@async begin
            server = listen(2001)
            while true
                sock = accept(server)
@@ -273,15 +273,15 @@ julia> @async begin
                    write(sock, readline(sock, keep=true))
                end
            end
-       end
+       end)
 Task (runnable) @0x00007fd31dc12e60
 
 julia> clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
-julia> @async while isopen(clientside)
+julia> errormonitor(@async while isopen(clientside)
            write(stdout, readline(clientside, keep=true))
-       end
+       end)
 Task (runnable) @0x00007fd31dc11870
 
 julia> println(clientside,"Hello World from the Echo Server")
@@ -311,4 +311,43 @@ resolution:
 ```julia-repl
 julia> getaddrinfo("google.com")
 ip"74.125.226.225"
+```
+
+## Asynchronous I/O
+
+
+All I/O operations exposed by [`Base.read`](@ref) and [`Base.write`](@ref) can be performed
+asynchronously through the use of [coroutines](@ref man-tasks). You can create a new coroutine to
+read from or write to a stream using the [`@async`](@ref) macro:
+
+```julia-repl
+julia> task = @async open("foo.txt", "w") do io
+           write(io, "Hello, World!")
+       end;
+
+julia> wait(task)
+
+julia> readlines("foo.txt")
+1-element Array{String,1}:
+ "Hello, World!"
+```
+
+It's common to run into situations where you want to perform multiple asynchronous operations
+concurrently and wait until they've all completed. You can use the [`@sync`](@ref) macro to cause
+your program to block until all of the coroutines it wraps around have exited:
+
+```julia-repl
+julia> using Sockets
+
+julia> @sync for hostname in ("google.com", "github.com", "julialang.org")
+           @async begin
+               conn = connect(hostname, 80)
+               write(conn, "GET / HTTP/1.1\r\nHost:$(hostname)\r\n\r\n")
+               readline(conn, keep=true)
+               println("Finished connection to $(hostname)")
+           end
+       end
+Finished connection to google.com
+Finished connection to julialang.org
+Finished connection to github.com
 ```

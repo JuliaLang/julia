@@ -25,6 +25,8 @@ isinteger(x::Integer) = true
 Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
 
+See also: [`isone`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+
 # Examples
 ```jldoctest
 julia> iszero(0.0)
@@ -59,16 +61,34 @@ true
 """
 isone(x) = x == one(x) # fallback method
 
+"""
+    isfinite(f) -> Bool
+
+Test whether a number is finite.
+
+# Examples
+```jldoctest
+julia> isfinite(5)
+true
+
+julia> isfinite(NaN32)
+false
+```
+"""
+isfinite(x::Number) = iszero(x - x)
+
 size(x::Number) = ()
-size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
+size(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 axes(x::Number) = ()
-axes(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : OneTo(1)
+axes(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : OneTo(1)
 eltype(::Type{T}) where {T<:Number} = T
 ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 firstindex(x::Number) = 1
+firstindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
 lastindex(x::Number) = 1
+lastindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
 IteratorSize(::Type{<:Number}) = HasShape{0}()
 keys(::Number) = OneTo(1)
 
@@ -80,7 +100,7 @@ function getindex(x::Number, i::Integer)
 end
 function getindex(x::Number, I::Integer...)
     @_inline_meta
-    @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
+    @boundscheck all(isone, I) || throw(BoundsError())
     x
 end
 first(x::Number) = x
@@ -88,33 +108,11 @@ last(x::Number) = x
 copy(x::Number) = x # some code treats numbers as collection-like
 
 """
-    divrem(x, y)
-
-The quotient and remainder from Euclidean division. Equivalent to `(div(x,y), rem(x,y))` or
-`(x÷y, x%y)`.
-
-# Examples
-```jldoctest
-julia> divrem(3,7)
-(0, 3)
-
-julia> divrem(7,3)
-(2, 1)
-```
-"""
-divrem(x,y) = (div(x,y),rem(x,y))
-
-"""
-    fldmod(x, y)
-
-The floored quotient and modulus after division. Equivalent to `(fld(x,y), mod(x,y))`.
-"""
-fldmod(x,y) = (fld(x,y),mod(x,y))
-
-"""
     signbit(x)
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+
+See also [`sign`](@ref) and [`copysign`](@ref).
 
 # Examples
 ```jldoctest
@@ -137,10 +135,27 @@ signbit(x::Real) = x < 0
     sign(x)
 
 Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).
+
+See also [`signbit`](@ref), [`zero`](@ref), [`copysign`](@ref), [`flipsign`](@ref).
+
+# Examples
+```jldoctest
+julia> sign(-4.0)
+-1.0
+
+julia> sign(99)
+1
+
+julia> sign(-0.0)
+-0.0
+
+julia> sign(0 + im)
+0.0 + 1.0im
+```
 """
-sign(x::Number) = x == 0 ? x/abs(oneunit(x)) : x/abs(x)
-sign(x::Real) = ifelse(x < 0, oftype(one(x),-1), ifelse(x > 0, one(x), typeof(one(x))(x)))
-sign(x::Unsigned) = ifelse(x > 0, one(x), oftype(one(x),0))
+sign(x::Number) = iszero(x) ? x/abs(oneunit(x)) : x/abs(x)
+sign(x::Real) = ifelse(x < zero(x), oftype(one(x),-1), ifelse(x > zero(x), one(x), typeof(one(x))(x)))
+sign(x::Unsigned) = ifelse(x > zero(x), one(x), oftype(one(x),0))
 abs(x::Real) = ifelse(signbit(x), -x, x)
 
 """
@@ -216,6 +231,9 @@ julia> inv(1 + 2im) * (1 + 2im)
 julia> inv(2//3)
 3//2
 ```
+
+!!! compat "Julia 1.2"
+    `inv(::Missing)` requires at least Julia 1.2.
 """
 inv(x::Number) = one(x)/x
 
@@ -225,10 +243,18 @@ inv(x::Number) = one(x)/x
 
 Multiply `x` and `y`, giving the result as a larger type.
 
+See also [`promote`](@ref), [`Base.add_sum`](@ref).
+
 # Examples
 ```jldoctest
-julia> widemul(Float32(3.), 4.)
-1.2e+01
+julia> widemul(Float32(3.0), 4.0) isa BigFloat
+true
+
+julia> typemax(Int8) * typemax(Int8)
+1
+
+julia> widemul(typemax(Int8), typemax(Int8))  # == 127^2
+16129
 ```
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
@@ -242,8 +268,11 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
 
 """
     zero(x)
+    zero(::Type)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+
+See also [`iszero`](@ref), [`one`](@ref), [`oneunit`](@ref), [`oftype`](@ref).
 
 # Examples
 ```jldoctest
@@ -254,7 +283,7 @@ julia> zero(big"2.0")
 0.0
 
 julia> zero(rand(2,2))
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0  0.0
  0.0  0.0
 ```
@@ -281,6 +310,9 @@ should return an identity value of the same precision
 
 If you want a quantity that is of the same type as `x`, or of type `T`,
 even if `x` is dimensionful, use [`oneunit`](@ref) instead.
+
+See also the [`identity`](@ref) function,
+and `I` in [`LinearAlgebra`](@ref man-linalg) for the identity matrix.
 
 # Examples
 ```jldoctest
@@ -319,8 +351,6 @@ julia> import Dates; oneunit(Dates.Day)
 """
 oneunit(x::T) where {T} = T(one(x))
 oneunit(::Type{T}) where {T} = T(one(T))
-
-_default_type(::Type{Number}) = Int
 
 """
     big(T::Type)

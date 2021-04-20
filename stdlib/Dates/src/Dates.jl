@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
     Dates
 
@@ -53,7 +51,7 @@ include("parse.jl")
 include("deprecated.jl")
 
 export Period, DatePeriod, TimePeriod,
-       Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
+       Year, Quarter, Month, Week, Day, Hour, Minute, Second, Millisecond,
        Microsecond, Nanosecond,
        TimeZone, UTC, TimeType, DateTime, Date, Time,
        # periods.jl

@@ -4,14 +4,15 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: | $(build_prefix)/manifest/gmp
 endif
 
-ifeq ($(USE_SYSTEM_MPFR), 0)
+ifneq ($(USE_BINARYBUILDER_MPFR),1)
+
+MPFR_OPTS := --enable-thread-safe --enable-shared-cache --disable-float128 --disable-decimal-float
 ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS := --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
-endif
+MPFR_OPTS += --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
 endif
 ifeq ($(BUILD_OS),WINNT)
 ifeq ($(OS),WINNT)
-MPFR_OPTS += --disable-thread-safe CFLAGS="$(CFLAGS) -DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"
+MPFR_OPTS += CFLAGS="$(CFLAGS) -DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"
 endif
 endif
 
@@ -26,12 +27,16 @@ MPFR_OPTS += --host=none-unknown-linux
 endif
 
 $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)
+	$(JLDOWNLOAD) $@ https://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)
 $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -jxf $<
+	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/mpfr-$(MPFR_VER)/config.sub
 	touch -c $(SRCCACHE)/mpfr-$(MPFR_VER)/configure # old target
 	echo 1 > $@
+
+checksum-mpfr: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
+	$(JLCHECKSUM) $<
 
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
 	mkdir -p $(dir $@)
@@ -69,3 +74,9 @@ configure-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured
 compile-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
 fastcheck-mpfr: check-mpfr
 check-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-checked
+
+else # USE_BINARYBUILDER_MPFR
+
+$(eval $(call bb-install,mpfr,MPFR,false))
+
+endif

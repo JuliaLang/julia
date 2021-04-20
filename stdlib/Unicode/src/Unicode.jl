@@ -1,16 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 module Unicode
 
 export graphemes
 
 """
+    Unicode.normalize(s::AbstractString; keywords...)
     Unicode.normalize(s::AbstractString, normalform::Symbol)
 
-Normalize the string `s` according to one of the four "normal forms" of the Unicode
-standard: `normalform` can be `:NFC`, `:NFD`, `:NFKC`, or `:NFKD`.  Normal forms C
+Normalize the string `s`. By default, canonical composition (`compose=true`) is performed without ensuring
+Unicode versioning stability (`compat=false`), which produces the shortest possible equivalent string
+but may introduce composition characters not present in earlier Unicode versions.
+
+Alternatively, one of the four "normal forms" of the Unicode standard can be specified:
+`normalform` can be `:NFC`, `:NFD`, `:NFKC`, or `:NFKD`.  Normal forms C
 (canonical composition) and D (canonical decomposition) convert different visually identical
 representations of the same abstract string into a single canonical form, with form C being
 more compact.  Normal forms KC and KD additionally canonicalize "compatibility equivalents":
@@ -18,7 +21,7 @@ they convert characters that are abstractly similar but visually distinct into a
 canonical choice (e.g. they expand ligatures into the individual characters), with form KC
 being more compact.
 
-Alternatively, finer control and additional transformations may be be obtained by calling
+Alternatively, finer control and additional transformations may be obtained by calling
 `Unicode.normalize(s; keywords...)`, where any number of the following boolean keywords
 options (which all default to `false` except for `compose`) are specified:
 
@@ -37,12 +40,15 @@ options (which all default to `false` except for `compose`) are specified:
   spaces; newlines are also converted to spaces unless a newline-conversion flag was
   specified
 * `rejectna=true`: throw an error if unassigned code points are found
-* `stable=true`: enforce Unicode Versioning Stability
+* `stable=true`: enforce Unicode versioning stability (never introduce characters missing from earlier Unicode versions)
 
 For example, NFKC corresponds to the options `compose=true, compat=true, stable=true`.
 
 # Examples
 ```jldoctest
+julia> "é" == Unicode.normalize("é") #LHS: Unicode U+00e9, RHS: U+0065 & U+0301
+true
+
 julia> "μ" == Unicode.normalize("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
 true
 
@@ -82,13 +88,5 @@ single characters, even though they may contain more than one codepoint; for exa
 letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
-
-# BEGIN 0.7 deprecations
-
-@deprecate is_assigned_char(c::Char) Unicode.isassigned(c)
-@deprecate normalize_string(s::AbstractString, nf::Symbol; kwargs...) Unicode.normalize(s, nf; kwargs...)
-@deprecate normalize_string(s::AbstractString; kwargs...) Unicode.normalize(s; kwargs...)
-
-# END 0.7 deprecations
 
 end

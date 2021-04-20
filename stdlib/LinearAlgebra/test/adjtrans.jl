@@ -273,6 +273,11 @@ end
     intvec = [1, 2]
     @test vec(Adjoint(intvec)) === intvec
     @test vec(Transpose(intvec)) === intvec
+    cvec = [1 + 1im]
+    @test vec(cvec')[1] == cvec[1]'
+    mvec = [[1 2; 3 4+5im]];
+    @test vec(transpose(mvec))[1] == transpose(mvec[1])
+    @test vec(adjoint(mvec))[1] == adjoint(mvec[1])
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
@@ -378,8 +383,8 @@ end
     # TODO tighten type asserts once pinv yields Transpose/Adjoint
     @test pinv(Adjoint(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
     @test pinv(Transpose(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
-    @test pinv(Adjoint(complexvec))::Vector{Complex{Float64}} ≈ pinv(conj(rowcomplexvec))
-    @test pinv(Transpose(complexvec))::Vector{Complex{Float64}} ≈ pinv(rowcomplexvec)
+    @test pinv(Adjoint(complexvec))::Vector{ComplexF64} ≈ pinv(conj(rowcomplexvec))
+    @test pinv(Transpose(complexvec))::Vector{ComplexF64} ≈ pinv(rowcomplexvec)
 end
 
 @testset "Adjoint/Transpose-wrapped vector left-division" begin
@@ -479,6 +484,116 @@ end
                   "$t of "*sprint(show, parent(Fop))
     @test "LinearAlgebra."*sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
                   "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
+end
+
+@testset "showarg" begin
+    io = IOBuffer()
+
+    A = ones(Float64, 3,3)
+
+    B = Adjoint(A)
+    @test summary(B) == "3×3 adjoint(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "adjoint(::Matrix{Float64})"
+
+    B = Transpose(A)
+    @test summary(B) == "3×3 transpose(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "transpose(::Matrix{Float64})"
+end
+
+@testset "strided transposes" begin
+    for t in (Adjoint, Transpose)
+        @test strides(t(rand(3))) == (3, 1)
+        @test strides(t(rand(3,2))) == (3, 1)
+        @test strides(t(view(rand(3, 2), :))) == (6, 1)
+        @test strides(t(view(rand(3, 2), :, 1:2))) == (3, 1)
+
+        A = rand(3)
+        @test pointer(t(A)) === pointer(A)
+        B = rand(3,1)
+        @test pointer(t(B)) === pointer(B)
+    end
+    @test_throws MethodError strides(Adjoint(rand(3) .+ rand(3).*im))
+    @test_throws MethodError strides(Adjoint(rand(3, 2) .+ rand(3, 2).*im))
+    @test strides(Transpose(rand(3) .+ rand(3).*im)) == (3, 1)
+    @test strides(Transpose(rand(3, 2) .+ rand(3, 2).*im)) == (3, 1)
+
+    C = rand(3) .+ rand(3).*im
+    @test_throws ErrorException pointer(Adjoint(C))
+    @test pointer(Transpose(C)) === pointer(C)
+    D = rand(3,2) .+ rand(3,2).*im
+    @test_throws ErrorException pointer(Adjoint(D))
+    @test pointer(Transpose(D)) === pointer(D)
+end
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+@testset "offset axes" begin
+    s = Base.Slice(-3:3)'
+    @test axes(s) === (Base.OneTo(1), Base.IdentityUnitRange(-3:3))
+    @test collect(LinearIndices(s)) == reshape(1:7, 1, 7)
+    @test collect(CartesianIndices(s)) == reshape([CartesianIndex(1,i) for i = -3:3], 1, 7)
+    @test s[1] == -3
+    @test s[7] ==  3
+    @test s[4] ==  0
+    @test_throws BoundsError s[0]
+    @test_throws BoundsError s[8]
+    @test s[1,-3] == -3
+    @test s[1, 3] ==  3
+    @test s[1, 0] ==  0
+    @test_throws BoundsError s[1,-4]
+    @test_throws BoundsError s[1, 4]
+end
+
+@testset "specialized conj of Adjoint/Transpose" begin
+    realmat = [1 2; 3 4]
+    complexmat = ComplexF64[1+im 2; 3 4-im]
+    nested = [[complexmat] [-complexmat]; [0complexmat] [3complexmat]]
+    @testset "AdjOrTrans{...,$(typeof(i))}" for i in (
+                                                      realmat, vec(realmat),
+                                                      complexmat, vec(complexmat),
+                                                      nested, vec(nested),
+                                                     )
+        for (t,type) in ((transpose, Adjoint), (adjoint, Transpose))
+            M = t(i)
+            @test conj(M) isa type
+            @test conj(M) == conj(collect(M))
+            @test conj(conj(M)) === M
+        end
+    end
+    # test if `conj(transpose(::Hermitian))` is a no-op
+    hermitian = Hermitian([1 2+im; 2-im 3])
+    @test conj(transpose(hermitian)) === hermitian
+end
+
+@testset "empty and mismatched lengths" begin
+    # issue 36678
+    @test_throws DimensionMismatch [1, 2]' * [1,2,3]
+    @test Int[]' * Int[] == 0
+    @test transpose(Int[]) * Int[] == 0
+end
+
+@testset "reductions: $adjtrans" for adjtrans in [transpose, adjoint]
+    mat = rand(ComplexF64, 3,5)
+    @test sum(adjtrans(mat)) ≈ sum(collect(adjtrans(mat)))
+    @test sum(adjtrans(mat), dims=1) ≈ sum(collect(adjtrans(mat)), dims=1)
+    @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
+
+    @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
+    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
+
+    mat = [rand(ComplexF64,2,2) for _ in 1:3, _ in 1:5]
+    @test sum(adjtrans(mat)) ≈ sum(collect(adjtrans(mat)))
+    @test sum(adjtrans(mat), dims=1) ≈ sum(collect(adjtrans(mat)), dims=1)
+    @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
+
+    @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
+    @test sum(x -> x[1,2], adjtrans(mat)) ≈ sum(x -> x[1,2], collect(adjtrans(mat)))
+    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
+    @test sum(x -> x[1,2], adjtrans(mat), dims=1) ≈ sum(x -> x[1,2], collect(adjtrans(mat)), dims=1)
 end
 
 end # module TestAdjointTranspose

@@ -9,10 +9,14 @@ if Sys.iswindows()
 end
 
 @test length(ARGS) == 1
+
 @testset "embedding example" begin
     out = Pipe()
     err = Pipe()
-    p = run(pipeline(Cmd(ARGS), stdin=devnull, stdout=out, stderr=err), wait=false)
+    embedded_cmd_path = abspath(ARGS[1])
+    p = cd(@__DIR__) do
+        run(pipeline(Cmd([embedded_cmd_path]), stdin=devnull, stdout=out, stderr=err), wait=false)
+    end
     close(out.in)
     close(err.in)
     out_task = @async readlines(out)

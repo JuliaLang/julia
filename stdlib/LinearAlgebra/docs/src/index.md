@@ -1,16 +1,16 @@
-# Linear Algebra
+# [Linear Algebra](@id man-linalg)
 
 ```@meta
-DocTestSetup = :(using LinearAlgebra)
+DocTestSetup = :(using LinearAlgebra, SparseArrays, SuiteSparse)
 ```
 
 In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations
-of many common and useful linear algebra operations. Basic operations, such as [`tr`](@ref), [`det`](@ref),
+of many common and useful linear algebra operations which can be loaded with `using LinearAlgebra`. Basic operations, such as [`tr`](@ref), [`det`](@ref),
 and [`inv`](@ref) are all supported:
 
 ```jldoctest
 julia> A = [1 2 3; 4 1 6; 7 8 1]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  2  3
  4  1  6
  7  8  1
@@ -22,7 +22,7 @@ julia> det(A)
 104.0
 
 julia> inv(A)
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  -0.451923   0.211538    0.0865385
   0.365385  -0.192308    0.0576923
   0.240385   0.0576923  -0.0673077
@@ -32,19 +32,19 @@ As well as other useful operations, such as finding eigenvalues or eigenvectors:
 
 ```jldoctest
 julia> A = [-4. -17.; 2. 2.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -4.0  -17.0
   2.0    2.0
 
 julia> eigvals(A)
-2-element Array{Complex{Float64},1}:
- -1.0 + 5.0im
+2-element Vector{ComplexF64}:
  -1.0 - 5.0im
+ -1.0 + 5.0im
 
 julia> eigvecs(A)
-2×2 Array{Complex{Float64},2}:
-  0.945905+0.0im        0.945905-0.0im
- -0.166924-0.278207im  -0.166924+0.278207im
+2×2 Matrix{ComplexF64}:
+  0.945905-0.0im        0.945905+0.0im
+ -0.166924+0.278207im  -0.166924-0.278207im
 ```
 
 In addition, Julia provides many [factorizations](@ref man-linalg-factorizations) which can be used to
@@ -54,20 +54,20 @@ for more information. As an example:
 
 ```jldoctest
 julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
    1.5   2.0  -4.0
    3.0  -1.0  -6.0
  -10.0   2.3   4.0
 
 julia> factorize(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64, Matrix{Float64}}
 L factor:
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   1.0    0.0       0.0
  -0.15   1.0       0.0
  -0.3   -0.132196  1.0
 U factor:
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  -10.0  2.3     4.0
    0.0  2.345  -3.4
    0.0  0.0    -5.24947
@@ -78,25 +78,25 @@ best we can do. Compare with:
 
 ```jldoctest
 julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-BunchKaufman{Float64,Array{Float64,2}}
+BunchKaufman{Float64, Matrix{Float64}}
 D factor:
-3×3 Tridiagonal{Float64,Array{Float64,1}}:
+3×3 Tridiagonal{Float64, Vector{Float64}}:
  -1.64286   0.0   ⋅
   0.0      -2.8  0.0
    ⋅        0.0  5.0
 U factor:
-3×3 UnitUpperTriangular{Float64,Array{Float64,2}}:
+3×3 UnitUpperTriangular{Float64, Matrix{Float64}}:
  1.0  0.142857  -0.8
   ⋅   1.0       -0.6
   ⋅    ⋅         1.0
 permutation:
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -109,13 +109,13 @@ these properties. For instance:
 
 ```jldoctest
 julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
 
 julia> sB = Symmetric(B)
-3×3 Symmetric{Float64,Array{Float64,2}}:
+3×3 Symmetric{Float64, Matrix{Float64}}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
@@ -127,25 +127,25 @@ half of it. For example:
 
 ```jldoctest
 julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
 
 julia> sB = Symmetric(B)
-3×3 Symmetric{Float64,Array{Float64,2}}:
+3×3 Symmetric{Float64, Matrix{Float64}}:
   1.5   2.0  -4.0
   2.0  -1.0  -3.0
  -4.0  -3.0   5.0
 
 julia> x = [1; 2; 3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
 
 julia> sB\x
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
  -1.7391304347826084
  -1.1086956521739126
  -1.4565217391304346
@@ -162,31 +162,37 @@ specialized routines that are specially developed for particular matrix types.
 The following tables summarize the types of special matrices that have been implemented in Julia,
 as well as whether hooks to various optimized methods for them in LAPACK are available.
 
-| Type                      | Description                                                                      |
-|:------------------------- |:-------------------------------------------------------------------------------- |
-| [`Symmetric`](@ref)       | [Symmetric matrix](https://en.wikipedia.org/wiki/Symmetric_matrix)               |
-| [`Hermitian`](@ref)       | [Hermitian matrix](https://en.wikipedia.org/wiki/Hermitian_matrix)               |
-| [`UpperTriangular`](@ref) | Upper [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
-| [`LowerTriangular`](@ref) | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
-| [`Tridiagonal`](@ref)     | [Tridiagonal matrix](https://en.wikipedia.org/wiki/Tridiagonal_matrix)           |
-| [`SymTridiagonal`](@ref)  | Symmetric tridiagonal matrix                                                     |
-| [`Bidiagonal`](@ref)      | Upper/lower [bidiagonal matrix](https://en.wikipedia.org/wiki/Bidiagonal_matrix) |
-| [`Diagonal`](@ref)        | [Diagonal matrix](https://en.wikipedia.org/wiki/Diagonal_matrix)                 |
-| [`UniformScaling`](@ref)  | [Uniform scaling operator](https://en.wikipedia.org/wiki/Uniform_scaling)        |
+| Type                          | Description                                                                                   |
+|:----------------------------- |:--------------------------------------------------------------------------------------------- |
+| [`Symmetric`](@ref)           | [Symmetric matrix](https://en.wikipedia.org/wiki/Symmetric_matrix)                            |
+| [`Hermitian`](@ref)           | [Hermitian matrix](https://en.wikipedia.org/wiki/Hermitian_matrix)                            |
+| [`UpperTriangular`](@ref)     | Upper [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)                    |
+| [`UnitUpperTriangular`](@ref) | Upper [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix) with unit diagonal |
+| [`LowerTriangular`](@ref)     | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)                    |     |
+| [`UnitLowerTriangular`](@ref) | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix) with unit diagonal |
+| [`UpperHessenberg`](@ref)     | Upper [Hessenberg matrix](https://en.wikipedia.org/wiki/Hessenberg_matrix)
+| [`Tridiagonal`](@ref)         | [Tridiagonal matrix](https://en.wikipedia.org/wiki/Tridiagonal_matrix)                        |
+| [`SymTridiagonal`](@ref)      | Symmetric tridiagonal matrix                                                                  |
+| [`Bidiagonal`](@ref)          | Upper/lower [bidiagonal matrix](https://en.wikipedia.org/wiki/Bidiagonal_matrix)              |
+| [`Diagonal`](@ref)            | [Diagonal matrix](https://en.wikipedia.org/wiki/Diagonal_matrix)                              |
+| [`UniformScaling`](@ref)      | [Uniform scaling operator](https://en.wikipedia.org/wiki/Uniform_scaling)                     |
 
 ### Elementary operations
 
-| Matrix type               | `+` | `-` | `*` | `\` | Other functions with optimized methods                      |
-|:------------------------- |:--- |:--- |:--- |:--- |:----------------------------------------------------------- |
-| [`Symmetric`](@ref)       |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
-| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
-| [`UpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
-| [`LowerTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
-| [`SymTridiagonal`](@ref)  | M   | M   | MS  | MV  | [`eigmax`](@ref), [`eigmin`](@ref)                          |
-| [`Tridiagonal`](@ref)     | M   | M   | MS  | MV  |                                                             |
-| [`Bidiagonal`](@ref)      | M   | M   | MS  | MV  |                                                             |
-| [`Diagonal`](@ref)        | M   | M   | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref), [`/`](@ref) |
-| [`UniformScaling`](@ref)  | M   | M   | MVS | MVS | [`/`](@ref)                                                 |
+| Matrix type                   | `+` | `-` | `*` | `\` | Other functions with optimized methods                      |
+|:----------------------------- |:--- |:--- |:--- |:--- |:----------------------------------------------------------- |
+| [`Symmetric`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
+| [`Hermitian`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
+| [`UpperTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
+| [`UnitUpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
+| [`LowerTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
+| [`UnitLowerTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
+| [`UpperHessenberg`](@ref)     |     |     |     | MM  | [`inv`](@ref), [`det`](@ref)                                |
+| [`SymTridiagonal`](@ref)      | M   | M   | MS  | MV  | [`eigmax`](@ref), [`eigmin`](@ref)                          |
+| [`Tridiagonal`](@ref)         | M   | M   | MS  | MV  |                                                             |
+| [`Bidiagonal`](@ref)          | M   | M   | MS  | MV  |                                                             |
+| [`Diagonal`](@ref)            | M   | M   | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref), [`/`](@ref) |
+| [`UniformScaling`](@ref)      | M   | M   | MVS | MVS | [`/`](@ref)                                                 |
 
 Legend:
 
@@ -198,16 +204,18 @@ Legend:
 
 ### Matrix factorizations
 
-| Matrix type               | LAPACK | [`eigen`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
-|:------------------------- |:------ |:------------- |:----------------- |:----------------- |:------------- |:----------------- |
-| [`Symmetric`](@ref)       | SY     |               | ARI               |                   |               |                   |
-| [`Hermitian`](@ref)       | HE     |               | ARI               |                   |               |                   |
-| [`UpperTriangular`](@ref) | TR     | A             | A                 | A                 |               |                   |
-| [`LowerTriangular`](@ref) | TR     | A             | A                 | A                 |               |                   |
-| [`SymTridiagonal`](@ref)  | ST     | A             | ARI               | AV                |               |                   |
-| [`Tridiagonal`](@ref)     | GT     |               |                   |                   |               |                   |
-| [`Bidiagonal`](@ref)      | BD     |               |                   |                   | A             | A                 |
-| [`Diagonal`](@ref)        | DI     |               | A                 |                   |               |                   |
+| Matrix type                   | LAPACK | [`eigen`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
+|:----------------------------- |:------ |:------------- |:----------------- |:----------------- |:------------- |:----------------- |
+| [`Symmetric`](@ref)           | SY     |               | ARI               |                   |               |                   |
+| [`Hermitian`](@ref)           | HE     |               | ARI               |                   |               |                   |
+| [`UpperTriangular`](@ref)     | TR     | A             | A                 | A                 |               |                   |
+| [`UnitUpperTriangular`](@ref) | TR     | A             | A                 | A                 |               |                   |
+| [`LowerTriangular`](@ref)     | TR     | A             | A                 | A                 |               |                   |
+| [`UnitLowerTriangular`](@ref) | TR     | A             | A                 | A                 |               |                   |
+| [`SymTridiagonal`](@ref)      | ST     | A             | ARI               | AV                |               |                   |
+| [`Tridiagonal`](@ref)         | GT     |               |                   |                   |               |                   |
+| [`Bidiagonal`](@ref)          | BD     |               |                   |                   | A             | A                 |
+| [`Diagonal`](@ref)            | DI     |               | A                 |                   |               |                   |
 
 Legend:
 
@@ -233,27 +241,27 @@ To see the `UniformScaling` operator in action:
 julia> U = UniformScaling(2);
 
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> a + U
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  2
  3  6
 
 julia> a * U
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  6  8
 
 julia> [a U]
-2×4 Array{Int64,2}:
+2×4 Matrix{Int64}:
  1  2  2  0
  3  4  0  2
 
 julia> b = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 
@@ -263,6 +271,12 @@ Stacktrace:
 [...]
 ```
 
+If you need to solve many systems of the form `(A+μI)x = b` for the same `A` and different `μ`, it might be beneficial
+to first compute the Hessenberg factorization `F` of `A` via the [`hessenberg`](@ref) function.
+Given `F`, Julia employs an efficient algorithm for `(F+μ*I) \ b` (equivalent to `(A+μ*I)x \ b`) and related
+operations like determinants.
+
+
 ## [Matrix factorizations](@id man-linalg-factorizations)
 
 [Matrix factorizations (a.k.a. matrix decompositions)](https://en.wikipedia.org/wiki/Matrix_decomposition)
@@ -270,35 +284,40 @@ compute the factorization of a matrix into a product of matrices, and are one of
 in linear algebra.
 
 The following table summarizes the types of matrix factorizations that have been implemented in
-Julia. Details of their associated methods can be found in the [Standard Functions](@ref) section
+Julia. Details of their associated methods can be found in the [Standard functions](@ref) section
 of the Linear Algebra documentation.
 
-| Type              | Description                                                                                                    |
-|:----------------- |:-------------------------------------------------------------------------------------------------------------- |
-| `Cholesky`        | [Cholesky factorization](https://en.wikipedia.org/wiki/Cholesky_decomposition)                                 |
-| `CholeskyPivoted` | [Pivoted](https://en.wikipedia.org/wiki/Pivot_element) Cholesky factorization                                  |
-| `LU`              | [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition)                                             |
-| `LUTridiagonal`   | LU factorization for [`Tridiagonal`](@ref) matrices                                                            |
-| `QR`              | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                             |
-| `QRCompactWY`     | Compact WY form of the QR factorization                                                                        |
-| `QRPivoted`       | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |
-| `Hessenberg`      | [Hessenberg decomposition](http://mathworld.wolfram.com/HessenbergDecomposition.html)                          |
-| `Eigen`           | [Spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_(matrix))                            |
-| `SVD`             | [Singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition)                     |
-| `GeneralizedSVD`  | [Generalized SVD](https://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version) |
+| Type               | Description                                                                                                    |
+|:------------------ |:-------------------------------------------------------------------------------------------------------------- |
+| `BunchKaufman`     | Bunch-Kaufman factorization                                                                                    |
+| `Cholesky`         | [Cholesky factorization](https://en.wikipedia.org/wiki/Cholesky_decomposition)                                 |
+| `CholeskyPivoted`  | [Pivoted](https://en.wikipedia.org/wiki/Pivot_element) Cholesky factorization                                  |
+| `LDLt`             | [LDL(T) factorization](https://en.wikipedia.org/wiki/Cholesky_decomposition#LDL_decomposition)                 |
+| `LU`               | [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition)                                             |
+| `QR`               | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                             |
+| `QRCompactWY`      | Compact WY form of the QR factorization                                                                        |
+| `QRPivoted`        | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |
+| `LQ`               | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition) of `transpose(A)`                           |
+| `Hessenberg`       | [Hessenberg decomposition](http://mathworld.wolfram.com/HessenbergDecomposition.html)                          |
+| `Eigen`            | [Spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix)                         |
+| `GeneralizedEigen` | [Generalized spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix#Generalized_eigenvalue_problem)                            |
+| `SVD`              | [Singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition)                     |
+| `GeneralizedSVD`   | [Generalized SVD](https://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version) |
+| `Schur`            | [Schur decomposition](https://en.wikipedia.org/wiki/Schur_decomposition)                                       |
+| `GeneralizedSchur` | [Generalized Schur decomposition](https://en.wikipedia.org/wiki/Schur_decomposition#Generalized_Schur_decomposition) |
 
+## Standard functions
 
-
-
-## Standard Functions
-
-Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/).
- Sparse factorizations call functions from [SuiteSparse](http://faculty.cse.tamu.edu/davis/suitesparse.html).
+Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/). Sparse matrix factorizations call functions from [SuiteSparse](http://suitesparse.com). Other sparse solvers are available as Julia packages.
 
 ```@docs
 Base.:*(::AbstractMatrix, ::AbstractMatrix)
 Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
+LinearAlgebra.SingularException
+LinearAlgebra.PosDefException
+LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
+LinearAlgebra.dot(::Any, ::Any, ::Any)
 LinearAlgebra.cross
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
@@ -309,26 +328,40 @@ LinearAlgebra.Symmetric
 LinearAlgebra.Hermitian
 LinearAlgebra.LowerTriangular
 LinearAlgebra.UpperTriangular
+LinearAlgebra.UnitLowerTriangular
+LinearAlgebra.UnitUpperTriangular
+LinearAlgebra.UpperHessenberg
 LinearAlgebra.UniformScaling
+LinearAlgebra.I
+LinearAlgebra.UniformScaling(::Integer)
+LinearAlgebra.Factorization
+LinearAlgebra.LU
 LinearAlgebra.lu
 LinearAlgebra.lu!
+LinearAlgebra.Cholesky
+LinearAlgebra.CholeskyPivoted
 LinearAlgebra.cholesky
 LinearAlgebra.cholesky!
 LinearAlgebra.lowrankupdate
 LinearAlgebra.lowrankdowndate
 LinearAlgebra.lowrankupdate!
 LinearAlgebra.lowrankdowndate!
+LinearAlgebra.LDLt
 LinearAlgebra.ldlt
 LinearAlgebra.ldlt!
-LinearAlgebra.qr
-LinearAlgebra.qr!
 LinearAlgebra.QR
 LinearAlgebra.QRCompactWY
 LinearAlgebra.QRPivoted
-LinearAlgebra.lq!
+LinearAlgebra.qr
+LinearAlgebra.qr!
+LinearAlgebra.LQ
 LinearAlgebra.lq
+LinearAlgebra.lq!
+LinearAlgebra.BunchKaufman
 LinearAlgebra.bunchkaufman
 LinearAlgebra.bunchkaufman!
+LinearAlgebra.Eigen
+LinearAlgebra.GeneralizedEigen
 LinearAlgebra.eigvals
 LinearAlgebra.eigvals!
 LinearAlgebra.eigmax
@@ -336,12 +369,17 @@ LinearAlgebra.eigmin
 LinearAlgebra.eigvecs
 LinearAlgebra.eigen
 LinearAlgebra.eigen!
+LinearAlgebra.Hessenberg
 LinearAlgebra.hessenberg
 LinearAlgebra.hessenberg!
-LinearAlgebra.schur!
+LinearAlgebra.Schur
+LinearAlgebra.GeneralizedSchur
 LinearAlgebra.schur
+LinearAlgebra.schur!
 LinearAlgebra.ordschur
 LinearAlgebra.ordschur!
+LinearAlgebra.SVD
+LinearAlgebra.GeneralizedSVD
 LinearAlgebra.svd
 LinearAlgebra.svd!
 LinearAlgebra.svdvals
@@ -370,7 +408,11 @@ Base.inv(::AbstractMatrix)
 LinearAlgebra.pinv
 LinearAlgebra.nullspace
 Base.kron
+Base.kron!
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
+Base.cis(::AbstractMatrix)
+Base.:^(::AbstractMatrix, ::Number)
+Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)
 LinearAlgebra.sqrt(::StridedMatrix{<:Real})
 LinearAlgebra.cos(::StridedMatrix{<:Real})
@@ -410,11 +452,14 @@ LinearAlgebra.isdiag
 LinearAlgebra.ishermitian
 Base.transpose
 LinearAlgebra.transpose!
+LinearAlgebra.Transpose
 Base.adjoint
 LinearAlgebra.adjoint!
+LinearAlgebra.Adjoint
 Base.copy(::Union{Transpose,Adjoint})
 LinearAlgebra.stride1
 LinearAlgebra.checksquare
+LinearAlgebra.peakflops
 ```
 
 ## Low-level matrix operations
@@ -432,7 +477,7 @@ LinearAlgebra.ldiv!
 LinearAlgebra.rdiv!
 ```
 
-## BLAS Functions
+## BLAS functions
 
 In Julia (as in much of scientific computation), dense linear-algebra operations are based on
 the [LAPACK library](http://www.netlib.org/lapack/), which in turn is built on top of basic linear-algebra
@@ -444,33 +489,33 @@ linear algebra routines it is useful to call the BLAS functions directly.
 that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
 four methods defined, for [`Float64`](@ref), [`Float32`](@ref), `ComplexF64`, and `ComplexF32` arrays.
 
-### [BLAS Character Arguments](@id stdlib-blas-chars)
+### [BLAS character arguments](@id stdlib-blas-chars)
 Many BLAS functions accept arguments that determine whether to transpose an argument (`trans`),
 which triangle of a matrix to reference (`uplo` or `ul`),
 whether the diagonal of a triangular matrix can be assumed to
 be all ones (`dA`) or which side of a matrix multiplication
 the input argument belongs on (`side`). The possibilities are:
 
-#### [Multplication Order](@id stdlib-blas-side)
+#### [Multiplication order](@id stdlib-blas-side)
 | `side` | Meaning                                                             |
 |:-------|:--------------------------------------------------------------------|
 | `'L'`  | The argument goes on the *left* side of a matrix-matrix operation.  |
 | `'R'`  | The argument goes on the *right* side of a matrix-matrix operation. |
 
-#### [Triangle Referencing](@id stdlib-blas-uplo)
+#### [Triangle referencing](@id stdlib-blas-uplo)
 | `uplo`/`ul` | Meaning                                               |
 |:------------|:------------------------------------------------------|
 | `'U'`       | Only the *upper* triangle of the matrix will be used. |
 | `'L'`       | Only the *lower* triangle of the matrix will be used. |
 
-#### [Transposition Operation](@id stdlib-blas-trans)
+#### [Transposition operation](@id stdlib-blas-trans)
 | `trans`/`tX` | Meaning                                                 |
 |:-------------|:--------------------------------------------------------|
 | `'N'`        | The input matrix `X` is not transposed or conjugated.   |
 | `'T'`        | The input matrix `X` will be transposed.                |
 | `'C'`        | The input matrix `X` will be conjugated and transposed. |
 
-#### [Unit Diagonal](@id stdlib-blas-diag)
+#### [Unit diagonal](@id stdlib-blas-diag)
 | `diag`/`dX` | Meaning                                                   |
 |:------------|:----------------------------------------------------------|
 | `'N'`       | The diagonal values of the matrix `X` will be read.       |
@@ -478,21 +523,28 @@ the input argument belongs on (`side`). The possibilities are:
 
 ```@docs
 LinearAlgebra.BLAS
+LinearAlgebra.BLAS.dot
 LinearAlgebra.BLAS.dotu
 LinearAlgebra.BLAS.dotc
 LinearAlgebra.BLAS.blascopy!
 LinearAlgebra.BLAS.nrm2
 LinearAlgebra.BLAS.asum
 LinearAlgebra.axpy!
+LinearAlgebra.axpby!
 LinearAlgebra.BLAS.scal!
 LinearAlgebra.BLAS.scal
+LinearAlgebra.BLAS.iamax
 LinearAlgebra.BLAS.ger!
 LinearAlgebra.BLAS.syr!
 LinearAlgebra.BLAS.syrk!
 LinearAlgebra.BLAS.syrk
+LinearAlgebra.BLAS.syr2k!
+LinearAlgebra.BLAS.syr2k
 LinearAlgebra.BLAS.her!
 LinearAlgebra.BLAS.herk!
 LinearAlgebra.BLAS.herk
+LinearAlgebra.BLAS.her2k!
+LinearAlgebra.BLAS.her2k
 LinearAlgebra.BLAS.gbmv!
 LinearAlgebra.BLAS.gbmv
 LinearAlgebra.BLAS.sbmv!
@@ -510,6 +562,12 @@ LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.symv!
 LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemm!
+LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemv!
+LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.trmm!
 LinearAlgebra.BLAS.trmm
 LinearAlgebra.BLAS.trsm!
@@ -519,10 +577,10 @@ LinearAlgebra.BLAS.trmv
 LinearAlgebra.BLAS.trsv!
 LinearAlgebra.BLAS.trsv
 LinearAlgebra.BLAS.set_num_threads
-LinearAlgebra.I
+LinearAlgebra.BLAS.get_num_threads
 ```
 
-## LAPACK Functions
+## LAPACK functions
 
 `LinearAlgebra.LAPACK` provides wrappers for some of the LAPACK functions for linear algebra.
  Those functions that overwrite one of the input arrays have names ending in `'!'`.

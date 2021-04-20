@@ -25,27 +25,30 @@ extern "C" {
 static char const *const extensions[] = { "", ".dylib" };
 #elif defined(_OS_WINDOWS_)
 static char const *const extensions[] = { "", ".dll" };
-extern int needsSymRefreshModuleList;
+extern volatile int needsSymRefreshModuleList;
 #else
 static char const *const extensions[] = { "", ".so" };
 #endif
 #define N_EXTENSIONS (sizeof(extensions) / sizeof(char*))
 
-static int endswith_extension(const char *path)
+static int endswith_extension(const char *path) JL_NOTSAFEPOINT
 {
     if (!path)
         return 0;
     size_t len = strlen(path);
     // Skip the first one since it is empty
-    for (size_t i = 1;i < N_EXTENSIONS;i++) {
+    for (size_t i = 1; i < N_EXTENSIONS; i++) {
         const char *ext = extensions[i];
         size_t extlen = strlen(ext);
-        if (len < extlen) return 0;
+        if (len < extlen)
+            return 0;
         // Skip version extensions if present
-        size_t j = len-1;
+        size_t j = len - 1;
         while (j > 0) {
-            if (path[j] == '.' || (path[j] >= '0' && path[j] <= '9')) j--;
-            else break;
+            if (path[j] == '.' || (path[j] >= '0' && path[j] <= '9'))
+                j--;
+            else
+                break;
         }
         if ((j == len-1 || path[j+1] == '.') && memcmp(ext, path + j - extlen + 1, extlen) == 0) {
             return 1;
@@ -54,37 +57,69 @@ static int endswith_extension(const char *path)
     return 0;
 }
 
-#define PATHBUF 512
+#ifdef _OS_WINDOWS_
+#ifdef _MSC_VER
+#if (_MSC_VER >= 1930) || (_MSC_VER < 1800)
+#error This version of MSVC has not been tested.
+#elif _MSC_VER >= 1900 // VC++ 2015 / 2017 / 2019
+#define CRTDLL_BASENAME "vcruntime140"
+#elif _MSC_VER >= 1800 // VC++ 2013
+#define CRTDLL_BASENAME "msvcr120"
+#endif
+#else
+#define CRTDLL_BASENAME "msvcrt"
+#endif
 
-extern char *julia_bindir;
+const char jl_crtdll_basename[] = CRTDLL_BASENAME;
+const char jl_crtdll_name[] = CRTDLL_BASENAME ".dll";
+
+#undef CRTDLL_BASENAME
+#endif
+
+#define PATHBUF 4096
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
-static void JL_NORETURN jl_dlerror(const char *fmt, const char *sym)
-{
 #ifdef _OS_WINDOWS_
-    CHAR reason[256];
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-            NULL, GetLastError(),
-            MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
-            reason, sizeof(reason) / sizeof(reason[0]), NULL);
-#else
-    const char *reason = dlerror();
-#endif
-    jl_errorf(fmt, sym, reason);
+static void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
+{
+    DWORD res;
+    LPWSTR errmsg;
+    res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                         FORMAT_MESSAGE_FROM_SYSTEM |
+                         FORMAT_MESSAGE_IGNORE_INSERTS |
+                         FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                         NULL, code,
+                         MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+                         (LPWSTR)&errmsg, 0, NULL);
+    if (!res && (GetLastError() == ERROR_MUI_FILE_NOT_FOUND ||
+                 GetLastError() == ERROR_RESOURCE_TYPE_NOT_FOUND)) {
+      res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                           FORMAT_MESSAGE_FROM_SYSTEM |
+                           FORMAT_MESSAGE_IGNORE_INSERTS |
+                           FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                           NULL, code,
+                           0, (LPWSTR)&errmsg, 0, NULL);
+    }
+    res = WideCharToMultiByte(CP_UTF8, 0, errmsg, -1, reason, len, NULL, NULL);
+    assert(res > 0 || GetLastError() == ERROR_INSUFFICIENT_BUFFER);
+    reason[len - 1] = '\0';
+    LocalFree(errmsg);
 }
+#endif
 
-JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
+JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT
 {
 #if defined(_OS_WINDOWS_)
-    needsSymRefreshModuleList = 1;
     size_t len = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
     if (!len) return NULL;
     WCHAR *wfilename = (WCHAR*)alloca(len * sizeof(WCHAR));
     if (!MultiByteToWideChar(CP_UTF8, 0, filename, -1, wfilename, len)) return NULL;
-    return LoadLibraryExW(wfilename, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    HANDLE lib = LoadLibraryExW(wfilename, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    if (lib)
+        needsSymRefreshModuleList = 1;
+    return lib;
 #else
-    dlerror(); /* Reset error status. */
     return dlopen(filename,
                   (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
                   | JL_RTLD(flags, LOCAL)
@@ -95,7 +130,7 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
 #ifdef RTLD_NOLOAD
                   | JL_RTLD(flags, NOLOAD)
 #endif
-#if defined(RTLD_DEEPBIND) && !defined(JL_ASAN_ENABLED)
+#if defined(RTLD_DEEPBIND) && !(defined(JL_ASAN_ENABLED) || defined(JL_TSAN_ENABLED) || defined(JL_MSAN_ENABLED))
                   | JL_RTLD(flags, DEEPBIND)
 #endif
 #ifdef RTLD_FIRST
@@ -105,22 +140,29 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
 #endif
 }
 
-JL_DLLEXPORT int jl_dlclose(void *handle)
+JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
-    if (!handle) return -1;
+    if (!handle) {
+        return -1;
+    }
     return !FreeLibrary((HMODULE) handle);
 #else
-    dlerror(); /* Reset error status. */
-    if (!handle) return -1;
+    if (!handle) {
+        dlerror(); /* Reset error status. */
+        return -1;
+    }
     return dlclose(handle);
 #endif
 }
 
-static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int throw_err)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
 {
-    char path[PATHBUF];
+    char path[PATHBUF], relocated[PATHBUF];
     int i;
+#ifdef _OS_WINDOWS_
+    int err;
+#endif
     uv_stat_t stbuf;
     void *handle;
     int abspath;
@@ -129,7 +171,7 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
 
     /*
-      this branch returns handle of libjulia
+      this branch returns handle of libjulia-internal
     */
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_
@@ -140,8 +182,9 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
         }
 #else
         Dl_info info;
-        if (!dladdr((void*)(uintptr_t)&jl_load_dynamic_library, &info) || !info.dli_fname)
+        if (!dladdr((void*)(uintptr_t)&jl_load_dynamic_library, &info) || !info.dli_fname) {
             jl_error("could not load base module");
+        }
         handle = dlopen(info.dli_fname, RTLD_NOW);
 #endif
         goto done;
@@ -153,9 +196,13 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
       this branch permutes all base paths in DL_LOAD_PATH with all extensions
       note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH),
             and also skip for absolute paths
+      We also do simple string replacement here for elements starting with `@executable_path/`.
+      While these exist as OS concepts on Darwin, we want to use them on other platforms
+      such as Windows, so we emulate them here.
     */
     if (!abspath && jl_base_module != NULL) {
-        jl_array_t *DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
+        jl_binding_t *b = jl_get_module_binding(jl_base_module, jl_symbol("DL_LOAD_PATH"));
+        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? b->value : NULL);
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
@@ -163,16 +210,32 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
                 size_t len = strlen(dl_path);
                 if (len == 0)
                     continue;
-                for (i=0; i < n_extensions; i++) {
+
+                // Is this entry supposed to be relative to the bindir?
+                if (len >= 16 && strncmp(dl_path, "@executable_path", 16) == 0) {
+                    snprintf(relocated, PATHBUF, "%s%s", jl_options.julia_bindir, dl_path + 16);
+                    len = len - 16 + strlen(jl_options.julia_bindir);
+                } else {
+                    strncpy(relocated, dl_path, PATHBUF);
+                    relocated[PATHBUF-1] = '\0';
+                }
+                for (i = 0; i < n_extensions; i++) {
                     const char *ext = extensions[i];
                     path[0] = '\0';
-                    if (dl_path[len-1] == PATHSEPSTRING[0])
-                        snprintf(path, PATHBUF, "%s%s%s", dl_path, modname, ext);
+                    if (relocated[len-1] == PATHSEPSTRING[0])
+                        snprintf(path, PATHBUF, "%s%s%s", relocated, modname, ext);
                     else
-                        snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", dl_path, modname, ext);
-                    handle = jl_dlopen(path, flags);
-                    if (handle)
-                        goto done;
+                        snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", relocated, modname, ext);
+#ifdef _OS_WINDOWS_
+                    if (i == 0) { // LoadLibrary already tested the extensions, we just need to check the `stat` result
+#endif
+                        handle = jl_dlopen(path, flags);
+                        if (handle)
+                            goto done;
+#ifdef _OS_WINDOWS_
+                        err = GetLastError();
+                    }
+#endif
                     // bail out and show the error if file actually exists
                     if (jl_stat(path, (char*)&stbuf) == 0)
                         goto notfound;
@@ -182,76 +245,97 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
     }
 
     // now fall back and look in default library paths, for all extensions
-    for(i=0; i < n_extensions; i++) {
+    for (i = 0; i < n_extensions; i++) {
         const char *ext = extensions[i];
         path[0] = '\0';
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         handle = jl_dlopen(path, flags);
         if (handle)
             goto done;
+#ifdef _OS_WINDOWS_
+        err = GetLastError();
+        break; // LoadLibrary already tested the rest
+#endif
     }
 
 notfound:
-    if (throw_err)
-        jl_dlerror("could not load library \"%s\"\n%s", modname);
-    return NULL;
+    if (throw_err) {
+#ifdef _OS_WINDOWS_
+        char reason[256];
+        win32_formatmessage(err, reason, sizeof(reason));
+#else
+        const char *reason = dlerror();
+#endif
+        jl_errorf("could not load library \"%s\"\n%s", modname, reason);
+    }
+    handle = NULL;
 
 done:
     return handle;
 }
 
-JL_DLLEXPORT void *jl_load_dynamic_library_e(const char *modname, unsigned flags)
+JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT
 {
-    return jl_load_dynamic_library_(modname, flags, 0);
-}
+    int symbol_found = 0;
 
-JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags)
-{
-    return jl_load_dynamic_library_(modname, flags, 1);
-}
-
-JL_DLLEXPORT void *jl_dlsym_e(void *handle, const char *symbol)
-{
+    /* First, get the symbol value */
 #ifdef _OS_WINDOWS_
-    void *ptr = GetProcAddress((HMODULE) handle, symbol);
+    *value = GetProcAddress((HMODULE) handle, symbol);
 #else
-    dlerror(); /* Reset error status. */
-    void *ptr = dlsym(handle, symbol);
+    *value = dlsym(handle, symbol);
 #endif
-    return ptr;
-}
 
-JL_DLLEXPORT void *jl_dlsym(void *handle, const char *symbol)
-{
-    void *ptr = jl_dlsym_e(handle, symbol);
-    if (!ptr)
-        jl_dlerror("could not load symbol \"%s\":\n%s", symbol);
-    return ptr;
+    /* Next, check for errors. On Windows, a NULL pointer means the symbol was
+     * not found. On everything else, we can have NULL symbols, so we check for
+     * non-NULL returns from dlerror(). Since POSIX doesn't require `dlerror`
+     * to be implemented safely, FreeBSD doesn't (unlike everyone else, who
+     * realized decades ago that threads are here to stay), so we avoid calling
+     * `dlerror` unless we need to get the error message.
+     * https://github.com/freebsd/freebsd-src/blob/12db51d20823a5e3b9e5f8a2ea73156fe1cbfc28/libexec/rtld-elf/rtld.c#L198
+     */
+    symbol_found = *value != NULL;
+#ifndef _OS_WINDOWS_
+    const char *err;
+    if (!symbol_found) {
+        dlerror(); /* Reset error status. */
+        *value = dlsym(handle, symbol);
+        err = dlerror();
+        symbol_found = *value != NULL || err == NULL;
+    }
+#endif
+
+    if (!symbol_found && throw_err) {
+#ifdef _OS_WINDOWS_
+        char err[256];
+        win32_formatmessage(GetLastError(), err, sizeof(err));
+#endif
+#ifndef __clang_analyzer__
+        // Hide the error throwing from the analyser since there isn't a way to express
+        // "safepoint only when throwing error" currently.
+        jl_errorf("could not load symbol \"%s\":\n%s", symbol, err);
+#endif
+    }
+    return symbol_found;
 }
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
 const char *jl_dlfind_win32(const char *f_name)
 {
-    if (jl_dlsym_e(jl_exe_handle, f_name))
+    void * dummy;
+    if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
         return JL_EXE_LIBNAME;
-    if (jl_dlsym_e(jl_dl_handle, f_name))
-        return JL_DL_LIBNAME;
-    if (jl_dlsym_e(jl_kernel32_handle, f_name))
+    if (jl_dlsym(jl_libjulia_internal_handle, f_name, &dummy, 0))
+        return JL_LIBJULIA_INTERNAL_DL_LIBNAME;
+    if (jl_dlsym(jl_libjulia_handle, f_name, &dummy, 0))
+        return JL_LIBJULIA_DL_LIBNAME;
+    if (jl_dlsym(jl_kernel32_handle, f_name, &dummy, 0))
         return "kernel32";
-    if (jl_dlsym_e(jl_ntdll_handle, f_name))
+    if (jl_dlsym(jl_crtdll_handle, f_name, &dummy, 0)) // Prefer crtdll over ntdll
+        return jl_crtdll_basename;
+    if (jl_dlsym(jl_ntdll_handle, f_name, &dummy, 0))
         return "ntdll";
-    if (jl_dlsym_e(jl_crtdll_handle, f_name))
-#if defined(_MSC_VER)
-#if _MSC_VER == 1800
-        return "msvcr120";
-#else
-#error This version of MSVC has not been tested.
-#endif
-#else
-        return "msvcrt";
-#endif
-    if (jl_dlsym_e(jl_winsock_handle, f_name))
+    if (jl_dlsym(jl_winsock_handle, f_name, &dummy, 0))
         return "ws2_32";
     // additional common libraries (libc?) could be added here, but in general,
     // it is better to specify the library explicitly in the code. This exists
@@ -261,8 +345,8 @@ const char *jl_dlfind_win32(const char *f_name)
     // explicit is preferred over implicit
     return NULL;
     // oops, we didn't find it. NULL defaults to searching jl_RTLD_DEFAULT_handle,
-    // which defaults to jl_dl_handle, where we won't find it, and will throw the
-    // appropriate error.
+    // which defaults to jl_libjulia_internal_handle, where we won't find it, and
+    // will throw the appropriate error.
 }
 #endif
 

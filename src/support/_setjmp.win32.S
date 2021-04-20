@@ -48,18 +48,112 @@
  *  _setjmp(a)
  * by restoring registers from the stack.
  * The previous signal state is NOT restored.
+ *  _swapcontext(a, b)
+ * Store the current context in a and resume in context b
+ *
+ * TODO: save/restore floating point control state
+ * and reset avx state
+ * and update fs:[0xEOC] to contain the address of the stack
  */
 
 #define CNAME jl_setjmp
 #include "ENTRY.i387.h"
+    mov    eax,DWORD PTR [esp+4] // arg 1
+    mov    edx,DWORD PTR [esp+0] // rta
+    mov    DWORD PTR [eax+0],ebp
+    mov    DWORD PTR [eax+4],ebx
+    mov    DWORD PTR [eax+8],edi
+    mov    DWORD PTR [eax+12],esi
+    mov    DWORD PTR [eax+16],esp
+    mov    DWORD PTR [eax+20],edx // eip
+    mov    edx,DWORD PTR fs:[0] // seh registration
+    mov    DWORD PTR [eax+24],edx
+    xor    eax,eax # return 0
+    ret
+#include "END.h"
+
+
+#define CNAME jl_longjmp
+#include "ENTRY.i387.h"
+    mov    edx,DWORD PTR [esp+4] // arg 1
+    mov    eax,DWORD PTR [esp+8] // arg 2
+    mov    ebp,DWORD PTR [edx+24] // seh registration
+    mov    ecx,DWORD PTR [edx+20] // eip
+    mov    esp,DWORD PTR [edx+16]
+    mov    esi,DWORD PTR [edx+12]
+    mov    edi,DWORD PTR [edx+8]
+    mov    ebx,DWORD PTR [edx+4]
+    mov    DWORD PTR fs:[0],ebp
+    mov    ebp,DWORD PTR [edx+0]
+    mov    DWORD PTR [esp],ecx
+    test   eax,eax
+    jne    a
+    inc    eax
+a:  ret    // jmp ecx
+#include "END.h"
+
+
+#define CNAME jl_swapcontext
+#include "ENTRY.i387.h"
     mov    eax,DWORD PTR [esp+4]
+    // save stack registers
+    mov    edx,DWORD PTR fs:[8] // stack top (low)
+    mov    ecx,DWORD PTR fs:[4] // stack bottom (high)
+    mov    DWORD PTR [eax+0],edx // sp
+    sub    ecx,edx
+    mov    DWORD PTR [eax+4],ecx // ssize
+    add    eax,8
+    // save uc_mcontext
     mov    edx,DWORD PTR [esp+0]
-    mov    DWORD PTR [eax+0],ebp  /* rta */
+    mov    ecx,DWORD PTR fs:[0]
+    mov    DWORD PTR [eax+0],ebp
     mov    DWORD PTR [eax+4],ebx
     mov    DWORD PTR [eax+8],edi
     mov    DWORD PTR [eax+12],esi
     mov    DWORD PTR [eax+16],esp
     mov    DWORD PTR [eax+20],edx
-    xor    eax,eax
+    mov    DWORD PTR [eax+24],ecx
+    add    esp,4
+    jmp    _jl_setcontext
+#include "END.h"
+
+
+#define CNAME jl_setcontext
+#include "ENTRY.i387.h"
+    mov    eax,DWORD PTR [esp+4]
+    // restore stack registers
+    mov    edx,DWORD PTR [eax+0]
+    mov    ecx,DWORD PTR [eax+4]
+    mov    DWORD PTR fs:[8],edx // stack top (low)
+    add    ecx,edx
+    mov    DWORD PTR fs:[4],ecx // stack bottom (high)
+    add    eax,8
+    // restore uc_mcontext
+    mov    ebp,DWORD PTR [eax+24]
+    mov    ecx,DWORD PTR [eax+20]
+    mov    esp,DWORD PTR [eax+16]
+    mov    esi,DWORD PTR [eax+12]
+    mov    edi,DWORD PTR [eax+8]
+    mov    ebx,DWORD PTR [eax+4]
+    mov    DWORD PTR fs:[0],ebp
+    mov    ebp,DWORD PTR [eax+0]
+    mov    DWORD PTR [esp],ecx
+    xor    eax,eax # return 0
+    inc    eax # HACK: return 1
+    ret
+#include "END.h"
+
+
+#define CNAME __readgs
+#include "ENTRY.i387.h"
+    mov eax,gs
+    ret
+#include "END.h"
+
+
+#define CNAME __readgsdword
+#include "ENTRY.i387.h"
+    mov eax,DWORD PTR [esp+4]
+    mov eax,gs:[eax]
     ret
 #include "END.h"

@@ -1,6 +1,0 @@
-name = "RecursiveDep"
-uuid = "f5db5478-804a-11e8-3275-3180cf89cd91"
-version = "0.1.0"
-
-[deps]
-RecursiveDep2 = "63fe803a-804b-11e8-2b51-3d06555b755a"

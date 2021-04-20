@@ -5,16 +5,19 @@
 """
     typejoin(T, S)
 
-
 Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
 they both inherit.
 """
-typejoin() = (@_pure_meta; Bottom)
-typejoin(@nospecialize(t)) = (@_pure_meta; t)
+typejoin() = Bottom
+typejoin(@nospecialize(t)) = t
 typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_pure_meta
-    if a <: b
+    if isa(a, TypeVar)
+        return typejoin(a.ub, b)
+    elseif isa(b, TypeVar)
+        return typejoin(a, b.ub)
+    elseif a <: b
         return b
     elseif b <: a
         return a
@@ -22,10 +25,6 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return UnionAll(a.var, typejoin(a.body, b))
     elseif isa(b, UnionAll)
         return UnionAll(b.var, typejoin(a, b.body))
-    elseif isa(a, TypeVar)
-        return typejoin(a.ub, b)
-    elseif isa(b, TypeVar)
-        return typejoin(a, b.ub)
     elseif isa(a, Union)
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
@@ -34,9 +33,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters, b.parameters
-        lar = length(ap)::Int
-        lbr = length(bp)::Int
+        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
+        lar = length(ap)
+        lbr = length(bp)
         if lar == 0
             return Tuple{Vararg{tailjoin(bp, 1)}}
         end
@@ -78,10 +77,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
+    a, b = a::DataType, b::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
-                a = supertype(a)
+                a = supertype(a)::DataType
             end
             if a.name === Type.body.name
                 ap = a.parameters[1]
@@ -104,7 +104,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
                     aprimary = aprimary{ai}
                 else
-                    pushfirst!(vars, aprimary.var)
+                    # pushfirst!(vars, aprimary.var)
+                    _growbeg!(vars, 1)
+                    arrayset(false, vars, aprimary.var, 1)
                     aprimary = aprimary.body
                 end
             end
@@ -113,10 +115,27 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             end
             return aprimary
         end
-        b = supertype(b)
+        b = supertype(b)::DataType
     end
     return Any
 end
+
+# return an upper-bound on type `a` with type `b` removed
+# such that `return <: a` && `Union{return, b} == Union{a, b}`
+# WARNING: this is wrong for some objects for which subtyping is broken
+#          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
+function typesplit(@nospecialize(a), @nospecialize(b))
+    @_pure_meta
+    if a <: b
+        return Bottom
+    end
+    if isa(a, Union)
+        return Union{typesplit(a.a, b),
+                     typesplit(a.b, b)}
+    end
+    return a
+end
+
 
 """
     promote_typejoin(T, S)
@@ -124,30 +143,32 @@ end
 Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
+
+See instead [`promote`](@ref), [`promote_type`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.promote_typejoin(Int, Float64)
+Real
+
+julia> Base.promote_type(Int, Float64)
+Float64
+```
 """
-promote_typejoin(@nospecialize(a), @nospecialize(b)) = _promote_typejoin(a, b)::Type
-_promote_typejoin(@nospecialize(a), @nospecialize(b)) = typejoin(a, b)
-_promote_typejoin(::Type{Nothing}, ::Type{T}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-_promote_typejoin(::Type{T}, ::Type{Nothing}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Nothing} : Any
-_promote_typejoin(::Type{Missing}, ::Type{T}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-_promote_typejoin(::Type{T}, ::Type{Missing}) where {T} =
-    isconcretetype(T) || T === Union{} ? Union{T, Missing} : Any
-_promote_typejoin(::Type{Nothing}, ::Type{Missing}) = Union{Nothing, Missing}
-_promote_typejoin(::Type{Missing}, ::Type{Nothing}) = Union{Nothing, Missing}
-_promote_typejoin(::Type{Nothing}, ::Type{Nothing}) = Nothing
-_promote_typejoin(::Type{Missing}, ::Type{Missing}) = Missing
+function promote_typejoin(@nospecialize(a), @nospecialize(b))
+    c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
+    return Union{a, b, c}::Type
+end
+_promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
+
 
 # Returns length, isfixed
 function full_va_len(p)
     isempty(p) && return 0, true
     last = p[end]
     if isvarargtype(last)
-        N = unwrap_unionall(last).parameters[2]
-        if isa(N, Integer)
-            return (length(p) + N - 1)::Int, true
+        if isdefined(last, :N) && isa(last.N, Int)
+            return length(p)::Int + last.N - 1, true
         end
         return length(p)::Int, false
     end
@@ -180,6 +201,9 @@ tolerated; for example, `promote_type(Int64, Float64)` returns
 [`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
 represented exactly as `Float64` values.
 
+See also: [`promote`](@ref), [`promote_typejoin`](@ref), [`promote_rule`](@ref).
+
+# Examples
 ```jldoctest
 julia> promote_type(Int64, Float64)
 Float64
@@ -231,10 +255,6 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
-# To fix ambiguities
-promote_rule(::Type{Any}, ::Type{<:Any}) = Any
-promote_rule(::Type{<:Any}, ::Type{Any}) = Any
-promote_rule(::Type{Any}, ::Type{Any}) = Any
 
 promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
@@ -246,6 +266,8 @@ promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = 
 
 Convert all arguments to a common type, and return them all (as a tuple).
 If no arguments can be converted, an error is raised.
+
+See also: [`promote_type`], [`promote_rule`].
 
 # Examples
 ```jldoctest
@@ -325,19 +347,21 @@ If `y` is an `Int` literal (e.g. `2` in `x^2` or `-3` in `x^-3`), the Julia code
 enable compile-time specialization on the value of the exponent.
 (As a default fallback we have `Base.literal_pow(^, x, Val(y)) = ^(x,y)`,
 where usually `^ == Base.^` unless `^` has been defined in the calling
-namespace.)
+namespace.) If `y` is a negative integer literal, then `Base.literal_pow`
+transforms the operation to `inv(x)^-y` by default, where `-y` is positive.
 
+# Examples
 ```jldoctest
 julia> 3^5
 243
 
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> A^3
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  37   54
  81  118
 ```
@@ -351,9 +375,6 @@ muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)
 
-div(x::Real, y::Real) = div(promote(x,y)...)
-fld(x::Real, y::Real) = fld(promote(x,y)...)
-cld(x::Real, y::Real) = cld(promote(x,y)...)
 rem(x::Real, y::Real) = rem(promote(x,y)...)
 mod(x::Real, y::Real) = mod(promote(x,y)...)
 
@@ -363,11 +384,6 @@ fld1(x::Real, y::Real) = fld1(promote(x,y)...)
 max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
-
-# "Promotion" that takes a function into account and tries to preserve
-# non-concrete types. These are meant to be used mainly by elementwise
-# operations, so it is advised against overriding them
-_default_type(T::Type) = T
 
 if isdefined(Core, :Compiler)
     const _return_type = Core.Compiler.return_type
@@ -382,28 +398,11 @@ Guess what an appropriate container eltype would be for storing results of
 `f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
 
 !!! warning
-    In pathological cases, the type returned by `promote_op(f, argtypes...)` may not even
-    be a supertype of the return value of `f(::argtypes...)`. Therefore, `promote_op`
-    should _not_ be used e.g. in the preallocation of an output array.
-
-!!! warning
     Due to its fragility, use of `promote_op` should be avoided. It is preferable to base
     the container eltype on the type of the actual elements. Only in the absence of any
     elements (for an empty result container), it may be unavoidable to call `promote_op`.
 """
-promote_op(::Any...) = Any
-function promote_op(f, ::Type{S}) where S
-    TT = Tuple{_default_type(S)}
-    T = _return_type(f, TT)
-    isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
-    return typejoin(S, T)
-end
-function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
-    TT = Tuple{_default_type(R), _default_type(S)}
-    T = _return_type(f, TT)
-    isdispatchtuple(Tuple{R}) && isdispatchtuple(Tuple{S}) && return isdispatchtuple(Tuple{T}) ? T : Any
-    return typejoin(R, S, T)
-end
+promote_op(f, S::Type...) = _return_type(f, Tuple{S...})
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 

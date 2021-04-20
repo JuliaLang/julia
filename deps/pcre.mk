@@ -1,5 +1,6 @@
 ## PCRE ##
 
+ifneq ($(USE_BINARYBUILDER_PCRE),1)
 # Force optimization for PCRE flags (Issue #11668)
 PCRE_CFLAGS := -O3
 PCRE_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
@@ -10,13 +11,24 @@ $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2: | $(SRCCACHE)
 $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
-	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/configure # old target
-	echo $1 > $@
+	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/pcre2-$(PCRE_VER)/config.sub
+	echo 1 > $@
 
-$(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
+checksum-pcre2: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
+	$(JLCHECKSUM) $<
+
+$(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
+	cd $(SRCCACHE)/pcre2-$(PCRE_VER) && patch -d src/sljit -p2 -f < $(SRCDIR)/patches/pcre2-sljit-apple-silicon-support.patch
+	echo 1 > $@
+
+$(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-nomprotect.patch-applied: $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied
+	cd $(SRCCACHE)/pcre2-$(PCRE_VER) && patch -d src/sljit -p2 -f < $(SRCDIR)/patches/pcre2-sljit-nomprotect.patch
+	echo 1 > $@
+
+$(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-nomprotect.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS)" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"
+	$(dir $<)/configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS) -g -O0" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"
 	echo 1 > $@
 
 $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured
@@ -34,6 +46,7 @@ endif
 $(eval $(call staged-install, \
 	pcre,pcre2-$$(PCRE_VER), \
 	MAKE_INSTALL,$$(LIBTOOL_CCLD),, \
+	rm $$(build_shlibdir)/libpcre2-posix.* && \
 	$$(INSTALL_NAME_CMD)libpcre2-8.$$(SHLIB_EXT) $$(build_shlibdir)/libpcre2-8.$$(SHLIB_EXT)))
 
 clean-pcre:
@@ -50,3 +63,9 @@ configure-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured
 compile-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
 fastcheck-pcre: check-pcre
 check-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-checked
+
+else # USE_BINARYBUILDER_PCRE
+
+$(eval $(call bb-install,pcre,PCRE,false))
+
+endif

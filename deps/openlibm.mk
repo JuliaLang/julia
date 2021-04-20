@@ -1,4 +1,5 @@
 ## openlibm ##
+ifneq ($(USE_BINARYBUILDER_OPENLIBM), 1)
 OPENLIBM_GIT_URL := git://github.com/JuliaMath/openlibm.git
 OPENLIBM_TAR_URL = https://api.github.com/repos/JuliaMath/openlibm/tarball/$1
 $(eval $(call git-external,openlibm,OPENLIBM,,,$(BUILDDIR)))
@@ -25,3 +26,9 @@ configure-openlibm: extract-openlibm
 compile-openlibm: $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/build-compiled
 fastcheck-openlibm: check-openlibm
 check-openlibm: compile-openlibm
+
+else # USE_BINARYBUILDER_OPENLIBM
+
+$(eval $(call bb-install,openlibm,OPENLIBM,false))
+
+endif

@@ -3,8 +3,13 @@
 using REPL.REPLCompletions
 using Test
 using Random
-import OldPkg
-
+using REPL
+    @testset "Check symbols previously not shown by REPL.doc_completions()" begin
+    symbols = ["?","=","[]","[","]","{}","{","}",";","","'","&&","||","julia","Julia","new","@var_str"]
+        for i in symbols
+            @test REPL.doc_completions(i)[1]==i
+        end
+    end
 let ex = quote
     module CompletionFoo
         using Random
@@ -60,6 +65,7 @@ let ex = quote
         test7() = rand(Bool) ? 1 : 1.0
         test8() = Any[1][1]
         kwtest(; x=1, y=2, w...) = pass
+        kwtest2(a; x=1, y=2, w...) = pass
 
         array = [1, 1]
         varfloat = 0.1
@@ -68,7 +74,7 @@ let ex = quote
 
         test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
         test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
-                         contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
+                         occursin=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                          "α"=>12, :α=>13)
         test_customdict = CustomDict(test_dict)
 
@@ -86,38 +92,31 @@ let ex = quote
     Core.eval(Main, ex)
 end
 
-function temp_pkg_dir_noinit(fn::Function)
-    # Used in tests below to set up and tear down a sandboxed package directory
-    # Unlike the version in test/pkg.jl, this does not run OldPkg.init so does not
-    # clone METADATA (only Pkg and LibGit2 tests should need internet access)
-    tmpdir = joinpath(tempdir(),randstring())
-    withenv("JULIA_PKGDIR" => tmpdir) do
-        @test !isdir(OldPkg.dir())
-        try
-            mkpath(OldPkg.dir())
-            @test isdir(OldPkg.dir())
-            fn()
-        finally
-            rm(tmpdir, recursive=true)
-        end
-    end
-end
-
 function map_completion_text(completions)
     c, r, res = completions
     return map(completion_text, c), r, res
 end
 
-test_complete(s) = map_completion_text(completions(s,lastindex(s)))
-test_scomplete(s) =  map_completion_text(shell_completions(s,lastindex(s)))
-test_bslashcomplete(s) =  map_completion_text(bslash_completions(s,lastindex(s))[2])
-test_complete_context(s) =  map_completion_text(completions(s,lastindex(s),Main.CompletionFoo))
+test_complete(s) = map_completion_text(@inferred(completions(s,lastindex(s))))
+test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s,lastindex(s))))
+test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s,lastindex(s)))[2])
+test_complete_context(s) =  map_completion_text(@inferred(completions(s,lastindex(s),Main.CompletionFoo)))
+
+module M32377 end
+test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
 
 let s = ""
     c, r = test_complete(s)
     @test "CompletionFoo" in c
     @test isempty(r)
     @test s[r] == ""
+end
+
+let s = "using REP"
+    c, r = test_complete_32377(s)
+    @test count(isequal("REPL"), c) == 1
+    # issue #30234
+    @test !Base.isbindingresolved(M32377, :tanh)
 end
 
 let s = "Comp"
@@ -137,7 +136,7 @@ end
 let s = "Main.CompletionFoo."
     c, r = test_complete(s)
     @test "bar" in c
-    @test r == 20:19
+    @test r === 20:19
     @test s[r] == ""
 end
 
@@ -147,6 +146,21 @@ let s = "Main.CompletionFoo.f"
     @test r == 20:20
     @test s[r] == "f"
     @test !("foobar" in c)
+end
+
+# test method completions when `!` operator precedes
+let
+    s = "!is"
+    c, r = test_complete(s)
+    @test "isa" in c
+    @test s[r] == "is"
+    @test !("!" in c)
+
+    s = "!!is"
+    c, r = test_complete(s)
+    @test "isa" in c
+    @test s[r] == "is"
+    @test !("!" in c)
 end
 
 # issue #6424
@@ -277,6 +291,14 @@ let s = "\"C:\\\\ \\alpha"
     @test length(c) == 1
 end
 
+# test latex symbol completion in getindex expressions (#24705)
+let s = "tuple[\\alpha"
+    c, r, res = test_complete_context(s)
+    @test c[1] == "α"
+    @test r == 7:12
+    @test length(c) == 1
+end
+
 let s = "\\a"
     c, r, res = test_complete(s)
     "\\alpha" in c
@@ -303,6 +325,27 @@ let s = "max("
     end
     @test r == 1:3
     @test s[r] == "max"
+end
+
+# test method completions when `!` operator precedes
+let
+    s = "!("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(!))
+    @test s[r] == s[1:end-1]
+
+    s = "!isnothing("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(isnothing))
+    @test s[r] == s[1:end-1]
+
+    s = "!!isnothing("
+    c, r, res = test_complete(s)
+    @test !res
+    @test all(m -> string(m) in c, methods(isnothing))
+    @test s[r] == s[1:end-1]
 end
 
 # Test completion of methods with input concrete args and args where typeinference determine their type
@@ -366,15 +409,14 @@ end
 
 let s = "(1, CompletionFoo.test2(`')'`,"
     c, r, res = test_complete(s)
-    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
     @test length(c) == 1
+    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
 end
 
-let s = "CompletionFoo.test3([1, 2] + CompletionFoo.varfloat,"
+let s = "CompletionFoo.test3([1, 2] .+ CompletionFoo.varfloat,"
     c, r, res = test_complete(s)
     @test !res
-    @test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
-    @test length(c) == 1
+    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
 end
 
 let s = "CompletionFoo.test3([1.,2.], 1.,"
@@ -400,8 +442,7 @@ end
 let s = "CompletionFoo.test5(broadcast((x,y)->x==y, push!(Base.split(\"\",' '),\"\",\"\"), \"\"),"
     c, r, res = test_complete(s)
     @test !res
-    @test_broken length(c) == 1
-    @test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+    @test_broken only(c) == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
 end
 
 # test partial expression expansion
@@ -443,11 +484,31 @@ let s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
 end
 #################################################################
 
+# method completions with kwargs
 let s = "CompletionFoo.kwtest( "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
     @test occursin("x, y, w...", c[1])
+end
+
+for s in ("CompletionFoo.kwtest(;",
+          "CompletionFoo.kwtest(; x=1, ",
+          "CompletionFoo.kwtest(; kw=1, ",
+          )
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("x, y, w...", c[1])
+end
+
+for s in ("CompletionFoo.kwtest2(1; x=1,",
+          "CompletionFoo.kwtest2(1; kw=1, ",
+          )
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("a; x, y, w...", c[1])
 end
 
 # Test of inference based getfield completion
@@ -501,39 +562,6 @@ let s = "#=\nmax"
 end
 
 # Test completion of packages
-mkp(p) = ((@assert !isdir(p)); mkpath(p))
-temp_pkg_dir_noinit() do
-    push!(LOAD_PATH, OldPkg.dir())
-    try
-        # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
-        # but not <Mod>/ if no corresponding .jl file is found
-        pkg_dir = OldPkg.dir("CompletionFooPackage", "src")
-        mkp(pkg_dir)
-        touch(joinpath(pkg_dir, "CompletionFooPackage.jl"))
-
-        pkg_dir = OldPkg.dir("CompletionFooPackage2.jl", "src")
-        mkp(pkg_dir)
-        touch(joinpath(pkg_dir, "CompletionFooPackage2.jl"))
-
-        touch(OldPkg.dir("CompletionFooPackage3.jl"))
-
-        mkp(OldPkg.dir("CompletionFooPackageNone"))
-        mkp(OldPkg.dir("CompletionFooPackageNone2.jl"))
-
-        s = "using Completion"
-        c,r = test_complete(s)
-        @test "CompletionFoo" in c #The module
-        @test "CompletionFooPackage" in c #The package
-        @test "CompletionFooPackage2" in c #The package
-        @test "CompletionFooPackage3" in c #The package
-        @test !("CompletionFooPackageNone" in c) #The package
-        @test !("CompletionFooPackageNone2" in c) #The package
-        @test s[r] == "Completion"
-    finally
-        @test pop!(LOAD_PATH) == OldPkg.dir()
-    end
-end
-
 path = joinpath(tempdir(),randstring())
 pushfirst!(LOAD_PATH, path)
 try
@@ -586,7 +614,12 @@ end
 
 # The return type is of importance, before #8995 it would return nothing
 # which would raise an error in the repl code.
-@test (String[], 0:-1, false) == test_scomplete("\$a")
+let c, r, res
+    c, r, res = test_scomplete("\$a")
+    @test c == String[]
+    @test r === 0:-1
+    @test res === false
+end
 
 if Sys.isunix()
 let s, c, r
@@ -630,11 +663,14 @@ let s, c, r
     @test s[r] == "tmp"
 
     # This should match things that are inside the tmp directory
-    if !isdir("/tmp/tmp")
-        s = "/tmp/"
+    s = tempdir()
+    if !endswith(s, "/")
+        s = string(s, "/")
+    end
+    if !isdir(joinpath(s, "tmp"))
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r == 6:5
+        @test r === length(s) + 1:0
         @test s[r] == ""
     end
 
@@ -651,7 +687,7 @@ let s, c, r
         file = joinpath(path, "repl completions")
         s = "/tmp "
         c,r = test_scomplete(s)
-        @test r == 6:5
+        @test r === 6:5
     end
 
     # Test completing paths with an escaped trailing space
@@ -666,20 +702,22 @@ let s, c, r
     end
 
     # Tests homedir expansion
-    let path, s, c, r
-        path = homedir()
-        dir = joinpath(path, "tmpfoobar")
-        mkdir(dir)
-        s = "\"" * path * "/tmpfoob"
-        c,r = test_complete(s)
-        @test "tmpfoobar/" in c
-        l = 3 + length(path)
-        @test r == l:l+6
-        @test s[r] == "tmpfoob"
-        s = "\"~"
-        @test "tmpfoobar/" in c
-        c,r = test_complete(s)
-        rm(dir)
+    mktempdir() do tmphome
+        withenv("HOME" => tmphome, "USERPROFILE" => tmphome) do
+            path = homedir()
+            dir = joinpath(path, "tmpfoobar")
+            mkdir(dir)
+            s = "\"" * path * "/tmpfoob"
+            c,r = test_complete(s)
+            @test "tmpfoobar/" in c
+            l = 3 + length(path)
+            @test r == l:l+6
+            @test s[r] == "tmpfoob"
+            s = "\"~"
+            @test "tmpfoobar/" in c
+            c,r = test_complete(s)
+            rm(dir)
+        end
     end
 
     # Tests detecting of files in the env path (in shell mode)
@@ -753,7 +791,7 @@ mktempdir() do path
             s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c, r = test_complete(s)
             @test r == lastindex(s)-4:lastindex(s)
-            @test "space\\ .file\"" in c
+            @test "space .file\"" in c
         end
         # Test for issue #10324
         s = "cd(\"$dir_space"
@@ -804,7 +842,7 @@ end
 if Sys.iswindows()
     tmp = tempname()
     touch(tmp)
-    path = dirname(tmp)
+    path = realpath(dirname(tmp))
     file = basename(tmp)
     temp_name = basename(path)
     cd(path) do
@@ -848,6 +886,17 @@ let s = "CompletionFoo.tuple."
     @test isempty(c)
 end
 
+@testset "sub/superscripts" begin
+    @test "⁽¹²³⁾ⁿ" in test_complete("\\^(123)n")[1]
+    @test "ⁿ" in test_complete("\\^n")[1]
+    @test "ᵞ" in test_complete("\\^gamma")[1]
+    @test isempty(test_complete("\\^(123)nq")[1])
+    @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
+    @test "ₙ" in test_complete("\\_n")[1]
+    @test "ᵧ" in test_complete("\\_gamma")[1]
+    @test isempty(test_complete("\\_(123)nq")[1])
+end
+
 # test Dicts
 function test_dict_completion(dict_name)
     s = "$dict_name[\"ab"
@@ -872,9 +921,9 @@ function test_dict_completion(dict_name)
     s = "$dict_name[Ba"
     c, r = test_complete(s)
     @test c == Any["Base]"]
-    s = "$dict_name[co"
+    s = "$dict_name[occ"
     c, r = test_complete(s)
-    @test c == Any["contains]"]
+    @test c == Any["occursin]"]
     s = "$dict_name[`l"
     c, r = test_complete(s)
     @test c == Any["`ls`]"]
@@ -905,6 +954,9 @@ function test_dict_completion(dict_name)
     s = "$dict_name[:α"
     c, r = test_complete(s)
     @test c == Any[":α]"]
+    s = "$dict_name["
+    c, r = test_complete(s)
+    @test c == sort!(repr.(keys(Main.CompletionFoo.test_dict)))
 end
 test_dict_completion("CompletionFoo.test_dict")
 test_dict_completion("CompletionFoo.test_customdict")
@@ -962,7 +1014,7 @@ end
 let s = ""
     c, r = test_complete_context(s)
     @test "bar" in c
-    @test r == 1:0
+    @test r === 1:0
     @test s[r] == ""
 end
 
@@ -1001,6 +1053,16 @@ let s = "type_test.xx.y"
     @test s[r] == "y"
 end
 
+let s = ":(function foo(::Int) end).args[1].args[2]."
+    c, r = test_complete_context(s)
+    @test c == Any[]
+end
+
+let s = "log(log.(x),"
+    c, r = test_complete_context(s)
+    @test !isempty(c)
+end
+
 let s = "Base.return_types(getin"
     c, r = test_complete_context(s)
     @test "getindex" in c
@@ -1022,9 +1084,28 @@ let s = "test(1,1, "
     @test s[r] == "test"
 end
 
+let s = "test.(1,1, "
+    c, r, res = test_complete_context(s)
+    @test !res
+    @test length(c) == 4
+    @test r == 1:4
+    @test s[r] == "test"
+end
+
 let s = "prevind(\"θ\",1,"
     c, r, res = test_complete_context(s)
     @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
     @test r == 1:7
     @test s[r] == "prevind"
+end
+
+# Issue #32840
+let s = "typeof(+)."
+    c, r = test_complete_context(s)
+    @test length(c) == length(fieldnames(DataType))
+end
+
+let s = "test_dict[\"ab"
+    c, r = test_complete_context(s)
+    @test c == Any["\"abc\"", "\"abcd\""]
 end

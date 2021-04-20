@@ -2,8 +2,8 @@
 
 using Random, Sockets
 
-const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
-const STDLIBS = filter!(x -> isdir(joinpath(STDLIB_DIR, x)), readdir(STDLIB_DIR))
+const STDLIB_DIR = Sys.STDLIB
+const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
 
 """
 
@@ -40,26 +40,28 @@ function choosetests(choices = [])
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
-        "operators", "path", "ccall", "parse", "loading", "bigint",
-        "bigfloat", "sorting", "spawn", "backtrace",
+        "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",
+        "sorting", "spawn", "backtrace", "exceptions",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
-        "euler", "show",
-        "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
+        "euler", "show", "client",
+        "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs",
-        "misc", "threads",
-        "enums", "cmdlineargs", "int",
-        "checked", "bitset", "floatfuncs", "precompile", "inline",
+        "misc", "threads", "stress", "binaryplatforms", "atexit",
+        "enums", "cmdlineargs", "int", "interpreter",
+        "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "secretbuffer", "specificity", "codegen",
-        "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
+        "channels", "iostream", "secretbuffer", "specificity",
+        "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
+        "smallarrayshrink", "opaque_closure", "filesystem", "download"
     ]
 
     tests = []
     skip_tests = []
     exit_on_error = false
+    use_revise = false
     seed = rand(RandomDevice(), UInt128)
 
     for (i, t) in enumerate(choices)
@@ -68,6 +70,8 @@ function choosetests(choices = [])
             break
         elseif t == "--exit-on-error"
             exit_on_error = true
+        elseif t == "--revise"
+            use_revise = true
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[8:end])
         else
@@ -79,58 +83,27 @@ function choosetests(choices = [])
         tests = testnames
     end
 
-
-    unicodetests = ["unicode/utf8"]
-    if "unicode" in skip_tests
-        filter!(x -> (x != "unicode" && !(x in unicodetests)), tests)
-    elseif "unicode" in tests
-        # specifically selected case
-        filter!(x -> x != "unicode", tests)
-        prepend!(tests, unicodetests)
+    function filtertests!(tests, name, files=[name])
+       flt = x -> (x != name && !(x in files))
+       if name in skip_tests
+           filter!(flt, tests)
+       elseif name in tests
+           filter!(flt, tests)
+           prepend!(tests, files)
+       end
     end
 
-    stringtests = ["strings/basic", "strings/search", "strings/util",
-                   "strings/io", "strings/types"]
-    if "strings" in skip_tests
-        filter!(x -> (x != "strings" && !(x in stringtests)), tests)
-    elseif "strings" in tests
-        # specifically selected case
-        filter!(x -> x != "strings", tests)
-        prepend!(tests, stringtests)
-    end
-
+    filtertests!(tests, "unicode", ["unicode/utf8"])
+    filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
+                   "strings/io", "strings/types"])
     # do subarray before sparse but after linalg
-    if "subarray" in skip_tests
-        filter!(x -> x != "subarray", tests)
-    elseif "subarray" in tests
-        filter!(x -> x != "subarray", tests)
-        prepend!(tests, ["subarray"])
-    end
-
-    compilertests = ["compiler/compiler", "compiler/validation"]
-
-    if "compiler" in skip_tests
-        filter!(x -> (x != "compiler" && !(x in compilertests)), tests)
-    elseif "compiler" in tests
-        # specifically selected case
-        filter!(x -> x != "compiler", tests)
-        prepend!(tests, compilertests)
-    end
-
-    if "stdlib" in skip_tests
-        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
-    elseif "stdlib" in tests
-        filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
-        prepend!(tests, STDLIBS)
-    end
-
+    filtertests!(tests, "subarray")
+    filtertests!(tests, "compiler", ["compiler/inference", "compiler/validation",
+        "compiler/ssair", "compiler/irpasses", "compiler/codegen",
+        "compiler/inline", "compiler/contextual"])
+    filtertests!(tests, "stdlib", STDLIBS)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
-    if "ambiguous" in skip_tests
-        filter!(x -> x != "ambiguous", tests)
-    elseif "ambiguous" in tests
-        filter!(x -> x != "ambiguous", tests)
-        prepend!(tests, ["ambiguous"])
-    end
+    filtertests!(tests, "ambiguous")
 
     if startswith(string(Sys.ARCH), "arm")
         # Remove profile from default tests on ARM since it currently segfaults
@@ -139,7 +112,8 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    net_required_for = ["Sockets", "LibGit2"]
+    net_required_for = ["download", "Sockets", "LibGit2", "LibCURL", "Downloads",
+                        "Artifacts", "LazyArtifacts"]
     net_on = true
     try
         ipa = getipaddr()
@@ -159,7 +133,6 @@ function choosetests(choices = [])
 
     filter!(!in(skip_tests), tests)
 
-    explicit_pkg     =  "OldPkg/pkg"        in tests
     explicit_pkg3    =  "Pkg/pkg"       in tests
     explicit_libgit2 =  "LibGit2/online" in tests
     new_tests = String[]
@@ -177,12 +150,11 @@ function choosetests(choices = [])
     end
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     append!(tests, new_tests)
-    explicit_pkg     || filter!(x -> x != "OldPkg/pkg",        tests)
     explicit_pkg3    || filter!(x -> x != "Pkg/pkg",       tests)
     explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
 
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(skip_tests), tests)
 
-    tests, net_on, exit_on_error, seed
+    tests, net_on, exit_on_error, use_revise, seed
 end

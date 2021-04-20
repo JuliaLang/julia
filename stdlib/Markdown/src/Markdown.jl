@@ -1,14 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-__precompile__(true)
-
 """
 Tools for working with the Markdown file format. Mainly for documentation.
 """
 module Markdown
 
-import Base: show, ==, with_output_color
+import Base: show, ==, with_output_color, mapany
 using Base64: stringmime
+
+# Margin for printing in terminal.
+const margin = 2
 
 include("parse/config.jl")
 include("parse/util.jl")
@@ -23,8 +24,7 @@ include("render/plain.jl")
 include("render/html.jl")
 include("render/latex.jl")
 include("render/rst.jl")
-
-include(joinpath("render", "terminal", "render.jl"))
+include("render/terminal/render.jl")
 
 export @md_str, @doc_str
 

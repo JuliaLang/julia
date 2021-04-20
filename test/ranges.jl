@@ -1,13 +1,38 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+@testset "range construction" begin
+    @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
+    @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
+
+    r = 3.0:2:11
+    @test r == range(start=first(r), step=step(r), stop=last(r)                  )
+    @test r == range(start=first(r), step=step(r),               length=length(r))
+    @test r == range(start=first(r),               stop=last(r), length=length(r))
+    @test r == range(                step=step(r), stop=last(r), length=length(r))
+
+    r = 4:9
+    @test r === range(start=first(r), stop=last(r)                  )
+    @test r === range(start=first(r),               length=length(r))
+    @test r === range(                stop=last(r), length=length(r))
+    @test r === range(first(r),       last(r)                       )
+    # the next ones use ==, because it changes the eltype
+    @test r ==  range(first(r),       last(r),      length(r)       )
+    @test r ==  range(start=first(r), stop=last(r), length=length(r))
+
+    for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
+        @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
+    end
+end
+
 using Dates, Random
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+isdefined(Main, :PhysQuantities) || @eval Main include("testhelpers/PhysQuantities.jl")
+using .Main.PhysQuantities
 
 # Compare precision in a manner sensitive to subnormals, which lose
 # precision compared to widening.
 function cmp_sn(w, hi, lo, slopbits=0)
     if !isfinite(hi)
-        if abs(w) > realmax(typeof(hi))
+        if abs(w) > floatmax(typeof(hi))
             return isinf(hi) && sign(w) == sign(hi)
         end
         if isnan(w) && isnan(hi)
@@ -121,7 +146,7 @@ astuple(x) = (x.hi, x.lo)
 
 function cmp_sn2(w, hi, lo, slopbits=0)
     if !isfinite(hi)
-        if abs(w) > realmax(typeof(hi))
+        if abs(w) > floatmax(typeof(hi))
             return isinf(hi) && sign(w) == sign(hi)
         end
         if isnan(w) && isnan(hi)
@@ -187,11 +212,12 @@ end
     @test isnan(Float64(x0/0))
     @test isnan(Float64(x0/0.0))
 
-    x = Base.TwicePrecision(Main.TestHelpers.PhysQuantity{1}(4.0))
-    @test x.hi*2 === Main.TestHelpers.PhysQuantity{1}(8.0)
+    x = Base.TwicePrecision(PhysQuantity{1}(4.0))
+    @test x.hi*2 === PhysQuantity{1}(8.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
-    @test x.hi/2 === Main.TestHelpers.PhysQuantity{1}(2.0)
+    @test x.hi/2 === PhysQuantity{1}(2.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
+    @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -255,6 +281,39 @@ end
         @test length(1:0) == 0
         @test length(0.0:-0.5) == 0
         @test length(1:2:0) == 0
+        @test length(Char(0):Char(0x001fffff)) == 2097152
+        @test length(typemax(UInt64)//one(UInt64):1:typemax(UInt64)//one(UInt64)) == 1
+    end
+    @testset "keys/values" begin
+        keytype_is_correct(r) = keytype(r) == eltype(keys(r))
+        valtype_is_correct(r) = valtype(r) == eltype(values(r))
+        @test keytype_is_correct(1:3)
+        @test keytype_is_correct(1:.3:4)
+        @test keytype_is_correct(.1:.1:.3)
+        @test keytype_is_correct(Int8(1):Int8(5))
+        @test keytype_is_correct(Int16(1):Int8(5))
+        @test keytype_is_correct(Int16(1):Int8(3):Int8(5))
+        @test keytype_is_correct(Int8(1):Int16(3):Int8(5))
+        @test keytype_is_correct(Int8(1):Int8(3):Int16(5))
+        @test keytype_is_correct(Int64(1):Int64(5))
+        @test keytype_is_correct(Int64(1):Int64(5))
+        @test keytype_is_correct(Int128(1):Int128(5))
+        @test keytype_is_correct(Base.OneTo(4))
+        @test keytype_is_correct(Base.OneTo(Int32(4)))
+
+        @test valtype_is_correct(1:3)
+        @test valtype_is_correct(1:.3:4)
+        @test valtype_is_correct(.1:.1:.3)
+        @test valtype_is_correct(Int8(1):Int8(5))
+        @test valtype_is_correct(Int16(1):Int8(5))
+        @test valtype_is_correct(Int16(1):Int8(3):Int8(5))
+        @test valtype_is_correct(Int8(1):Int16(3):Int8(5))
+        @test valtype_is_correct(Int8(1):Int8(3):Int16(5))
+        @test valtype_is_correct(Int64(1):Int64(5))
+        @test valtype_is_correct(Int64(1):Int64(5))
+        @test valtype_is_correct(Int128(1):Int128(5))
+        @test valtype_is_correct(Base.OneTo(4))
+        @test valtype_is_correct(Base.OneTo(Int32(4)))
     end
     @testset "findall(::Base.Fix2{typeof(in)}, ::Array)" begin
         @test findall(in(3:20), [5.2, 3.3]) == findall(in(Vector(3:20)), [5.2, 3.3])
@@ -265,6 +324,20 @@ end
             r = 15:-2:-38
             @test findall(in(span), r) == 1:6
         end
+    end
+    @testset "findfirst" begin
+        @test findfirst(isequal(3), Base.OneTo(10)) == 3
+        @test findfirst(==(0), Base.OneTo(10)) == nothing
+        @test findfirst(==(11), Base.OneTo(10)) == nothing
+        @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
+        @test findfirst(==(2), Int16(3):Int16(7)) == nothing
+        @test findfirst(isequal(8), 3:7) == nothing
+        @test findfirst(isequal(7), 1:2:10) == 4
+        @test findfirst(==(7), 1:2:10) == 4
+        @test findfirst(==(10), 1:2:10) == nothing
+        @test findfirst(==(11), 1:2:10) == nothing
+        @test findfirst(==(-7), 1:-1:-10) == 9
+        @test findfirst(==(2),1:-1:2) == nothing
     end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
@@ -321,6 +394,35 @@ end
 
         @test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
         @test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
+
+        @testset "Support StepRange with a non-numeric step" begin
+            start = Date(1914, 7, 28)
+            stop = Date(1918, 11, 11)
+
+            @test intersect(start:Day(1):stop, start:Day(1):stop) == start:Day(1):stop
+            @test intersect(start:Day(1):stop, start:Day(5):stop) == start:Day(5):stop
+            @test intersect(start-Day(10):Day(1):stop-Day(10), start:Day(5):stop) ==
+                start:Day(5):stop-Day(10)-mod(stop-start, Day(5))
+        end
+    end
+    @testset "issubset" begin
+        @test issubset(1:3, 1:typemax(Int)) #32461
+        @test issubset(1:3, 1:3)
+        @test issubset(1:3, 1:4)
+        @test issubset(1:3, 0:3)
+        @test issubset(1:3, 0:4)
+        @test !issubset(1:5, 2:5)
+        @test !issubset(1:5, 1:4)
+        @test !issubset(1:5, 2:4)
+        @test issubset(Base.OneTo(5), Base.OneTo(10))
+        @test !issubset(Base.OneTo(10), Base.OneTo(5))
+        @test issubset(1:3:10, 1:10)
+        @test !issubset(1:10, 1:3:10)
+        # with empty ranges
+        @test issubset(2:1, 3:4) #35225
+        @test issubset(2:1, 3:2)
+        @test issubset(Base.OneTo(0), Base.OneTo(3))
+        @test issubset(Base.OneTo(0), Base.OneTo(-3))
     end
     @testset "sort/sort!/partialsort" begin
         @test sort(UnitRange(1,2)) == UnitRange(1,2)
@@ -382,10 +484,10 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (3:6)[5:4] == 7:6
+    @test (3:6)[5:4] === 7:6
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (0:2:10)[7:6] == 12:2:10
+    @test (0:2:10)[7:6] === 12:2:10
     @test_throws BoundsError (0:2:10)[7:7]
 end
 # indexing with negative ranges (#8351)
@@ -397,9 +499,18 @@ end
 @test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
 
 @testset "overflow in length" begin
-    @test_throws OverflowError length(0:typemax(Int))
-    @test_throws OverflowError length(typemin(Int):typemax(Int))
-    @test_throws OverflowError length(-1:typemax(Int)-1)
+    Tset = Int === Int64 ? (Int,UInt,Int128,UInt128) :
+                           (Int,UInt,Int64,UInt64,Int128, UInt128)
+    for T in Tset
+        @test_throws OverflowError length(zero(T):typemax(T))
+        @test_throws OverflowError length(typemin(T):typemax(T))
+        @test_throws OverflowError length(zero(T):one(T):typemax(T))
+        @test_throws OverflowError length(typemin(T):one(T):typemax(T))
+        if T <: Signed
+            @test_throws OverflowError length(-one(T):typemax(T)-one(T))
+            @test_throws OverflowError length(-one(T):one(T):typemax(T)-one(T))
+        end
+    end
 end
 @testset "loops involving typemin/typemax" begin
     n = 0
@@ -497,24 +608,36 @@ end
     @test sum(0:0.000001:1) == 500000.5
     @test sum(0:0.1:10) == 505.
 end
-@testset "broadcasted operations with scalars" begin
-    @test broadcast(-, 1:3) === -1:-1:-3
-    @test broadcast(-, 1:3, 2) === -1:1
-    @test broadcast(-, 1:3, 0.25) === 1-0.25:3-0.25
-    @test broadcast(+, 1:3) === 1:3
-    @test broadcast(+, 1:3, 2) === 3:5
-    @test broadcast(+, 1:3, 0.25) === 1+0.25:3+0.25
-    @test broadcast(+, 1:2:6, 1) === 2:2:6
-    @test broadcast(+, 1:2:6, 0.3) === 1+0.3:2:5+0.3
-    @test broadcast(-, 1:2:6, 1) === 0:2:4
-    @test broadcast(-, 1:2:6, 0.3) === 1-0.3:2:5-0.3
-    @test broadcast(-, 2, 1:3) === 1:-1:-1
+@testset "broadcasted operations with scalars" for T in (Int, UInt, Int128)
+    @test broadcast(-, T(1):3, 2) === T(1)-2:1
+    @test broadcast(-, T(1):3, 0.25) === T(1)-0.25:3-0.25
+    @test broadcast(+, T(1):3) === T(1):3
+    @test broadcast(+, T(1):3, 2) === T(3):5
+    @test broadcast(+, T(1):3, 0.25) === T(1)+0.25:3+0.25
+    @test broadcast(+, T(1):2:6, 1) === T(2):2:6
+    @test broadcast(+, T(1):2:6, 0.3) === T(1)+0.3:2:5+0.3
+    @test broadcast(-, T(1):2:6, 1) === T(0):2:4
+    @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
+    is_unsigned = T <: Unsigned
+    is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
+    @test broadcast(-, T(1):3) == -T(1):-1:-T(3) broken=is_unsigned
+    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1) broken=is_unsigned
 end
-@testset "operations between ranges and arrays" begin
-    @test all(([1:5;] + (5:-1:1)) .== 6)
-    @test all(((5:-1:1) + [1:5;]) .== 6)
-    @test all(([1:5;] - (1:5)) .== 0)
-    @test all(((1:5) - [1:5;]) .== 0)
+@testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
+    @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
+    @test all(((T(5):-1:1) + [T(1):5;]) .=== T(6))
+    @test all(([T(1):5;] - (T(1):5)) .=== T(0))
+    @test all(((T(1):5) - [T(1):5;]) .=== T(0))
+end
+@testset "issue #32442: Broadcasting over views with non-`Int` indices" begin
+    a=rand(UInt32,20)
+    c=rand(UInt64,5)
+    @test reinterpret(UInt64,view(a,UInt64.(11:20))) .- c ==
+          reinterpret(UInt64,view(a,(11:20))) .- c ==
+          reinterpret(UInt64,view(a,(UInt64(11):UInt64(20)))) .- c ==
+          copy(reinterpret(UInt64,view(a,(UInt64(11):UInt64(20))))) .- c
+
+    @test view(a,(Int32(11):Int32(20))) .+ [1] == a[11:20] .+ 1
 end
 @testset "tricky floating-point ranges" begin
     for (start, step, stop, len) in ((1, 1, 3, 3), (0, 1, 3, 4),
@@ -670,11 +793,11 @@ end
 
 @testset "range with very large endpoints for type $T" for T = (Float32, Float64)
     largeint = Int(min(maxintfloat(T), typemax(Int)))
-    a = realmax()
+    a = floatmax()
     for i = 1:5
         @test [range(a, stop=a, length=1);] == [a]
         @test [range(-a, stop=-a, length=1);] == [-a]
-        b = realmax()
+        b = floatmax()
         for j = 1:5
             @test [range(-a, stop=b, length=0);] == []
             @test [range(-a, stop=b, length=2);] == [-a,b]
@@ -714,9 +837,12 @@ end
 @testset "comparing and hashing ranges" begin
     Rs = AbstractRange[1:1, 1:1:1, 1:2, 1:1:2,
                        map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 1:-1:0, 17:-3:0,
-                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
+                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),map(Float32,LinRange(0.0, 1.0, 11)),
                        1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
-                       range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20))]
+                       range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20)),
+                       3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0),
+                       Base.OneTo(1), 1:1, 1:-3:1, 1//1:1//3:1//1, range(1.0, step=2.5, length=1),
+                       LinRange(1,1,1), LinRange(1,1,2)]
     for r in Rs
         local r
         ar = Vector(r)
@@ -736,6 +862,7 @@ end
     @test 1:1:10 == 1:10 == 1:10 == Base.OneTo(10) == Base.OneTo(10)
     @test 1:10 != 2:10 != 2:11 != Base.OneTo(11)
     @test Base.OneTo(10) != Base.OneTo(11) != 1:10
+    @test Base.OneTo(0) == 5:4
 end
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
@@ -895,14 +1022,25 @@ end
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
 end
 
+@testset "Ranges with <:Integer eltype but non-integer step (issue #32419)" begin
+    @test eltype(StepRange(1, 1//1, 2)) === Int
+    @test_throws ArgumentError StepRange(1, 1//2, 2)
+    @test eltype(StepRangeLen{Int}(1, 1//1, 2)) === Int
+    @test_throws ArgumentError StepRangeLen{Int}(1, 1//2, 2)
+    @test eltype(LinRange{Int}(1, 5, 3)) === Int
+    @test_throws ArgumentError LinRange{Int}(1, 5, 4)
+end
+
 @testset "LinRange ops" begin
     @test 2*LinRange(0,3,4) == LinRange(0,6,4)
     @test LinRange(0,3,4)*2 == LinRange(0,6,4)
     @test LinRange(0,3,4)/3 == LinRange(0,1,4)
     @test broadcast(-, 2, LinRange(0,3,4)) == LinRange(2,-1,4)
     @test broadcast(+, 2, LinRange(0,3,4)) == LinRange(2,5,4)
-    @test -LinRange(0,3,4) == LinRange(0,-3,4)
-    @test reverse(LinRange(0,3,4)) == LinRange(3,0,4)
+    @test -LinRange{Int}(0,3,4) === LinRange{Int}(0,-3,4)
+    @test -LinRange{Float64}(0.,3.,4) === LinRange{Float64}(-0.,-3.,4)
+    @test reverse(LinRange{Int}(0,3,4)) === LinRange{Int}(3,0,4)
+    @test reverse(LinRange{Float64}(0.,3.,4)) === LinRange{Float64}(3.,0.,4)
 end
 @testset "Issue #11245" begin
     io = IOBuffer()
@@ -1103,6 +1241,31 @@ end
     @test convert(Array{Float64,1}, r) == a
 end
 
+@testset "extrema" begin
+    @test_throws ArgumentError minimum(1:2:-1)
+    @test_throws ArgumentError argmin(Base.OneTo(-1))
+    @test_throws ArgumentError maximum(Base.OneTo(-1))
+    @test_throws ArgumentError argmax(1:-1)
+
+    for (r, imin, imax) in [
+            (Base.OneTo(5), 1, 5),
+            (1:10, 1, 10),
+            (10:-1:0, 11, 1),
+            (range(10, stop=20, length=5), 1, 5),
+            (range(10.3, step=-2, length=7), 7, 1),
+           ]
+        @test minimum(r) === r[imin]
+        @test maximum(r) === r[imax]
+        @test imin === argmin(r)
+        @test imax === argmax(r)
+        @test extrema(r) === (r[imin], r[imax])
+    end
+
+    r = 1f8-10:1f8
+    @test_broken argmin(f) == argmin(collect(r))
+    @test_broken argmax(f) == argmax(collect(r))
+end
+
 @testset "OneTo" begin
     let r = Base.OneTo(-5)
         @test isempty(r)
@@ -1118,6 +1281,8 @@ end
         @test last(r) == 3
         @test minimum(r) == 1
         @test maximum(r) == 3
+        @test argmin(r) == 1
+        @test argmax(r) == 3
         @test r[2] == 2
         @test r[2:3] === 2:3
         @test_throws BoundsError r[4]
@@ -1130,6 +1295,7 @@ end
             @test i == (k += 1)
         end
         @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
+        @test union(r, Base.OneTo(4)) == Base.OneTo(4)
         @test intersect(r, 0:5) == 1:3
         @test intersect(r, 2) === intersect(2, r) === 2:2
         @test findall(in(r), r) === findall(in(1:length(r)), r) ===
@@ -1224,14 +1390,25 @@ Base.rem(x, y::NotReal) = rem(x, y.val)
 Base.isless(x, y::NotReal) = isless(x, y.val)
 @test (:)(1, NotReal(1), 5) isa StepRange{Int,NotReal}
 
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using .Main.TestHelpers: Furlong
+isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+using .Main.Furlongs
+
 @testset "dimensional correctness" begin
     @test length(Vector(Furlong(2):Furlong(10))) == 9
     @test length(range(Furlong(2), length=9)) == 9
     @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
           Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
+end
+
+@testset "sum arbitrary types" begin
+    @test sum(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong{1,Float64}(104.5)
+    @test sum(StepRangeLen(Furlong(1), Furlong(0.5), 19)) == Furlong{1,Float64}(104.5)
+    @test sum(0f0:0.001f0:1f0) == 500.5
+    @test sum(0f0:0.000001f0:1f0) == 500000.5
+    @test sum(0f0:0.1f0:10f0) == 505.
+    @test sum(Float16(0):Float16(0.001):Float16(1)) ≈ 500.5
+    @test sum(Float16(0):Float16(0.1):Float16(10)) == 505.
 end
 
 @testset "issue #22270" begin
@@ -1285,6 +1462,22 @@ end
     x = range(3, stop=3, length=5)
     @test step(x) == 0.0
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+end
+
+@testset "Views of ranges" begin
+    @test view(Base.OneTo(10), Base.OneTo(5)) === Base.OneTo(5)
+    @test view(1:10, 1:5) === 1:5
+    @test view(1:10, 1:2:5) === 1:2:5
+    @test view(1:2:9, 1:5) === 1:2:9
+
+    # Ensure we don't hit a fallback `view` if there's a better `getindex` implementation
+    vmt = collect(methods(view, Tuple{AbstractRange, AbstractRange}))
+    for m in methods(getindex, Tuple{AbstractRange, AbstractRange})
+        tt = Base.tuple_type_tail(m.sig)
+        tt == Tuple{AbstractArray,Vararg{Any,N}} where N && continue
+        vm = findfirst(sig->tt <: Base.tuple_type_tail(sig.sig), vmt)
+        @test vmt[vm].sig != Tuple{typeof(view),AbstractArray,Vararg{Any,N}} where N
+    end
 end
 
 @testset "Issue #26608" begin
@@ -1368,4 +1561,331 @@ end # module NonStandardIntegerRangeTest
             end
         end
     end
+end
+
+@testset "constant-valued ranges (issues #10391 and #29052)" begin
+    for r in ((1:4), (1:1:4), (1.0:4.0))
+        is_int = eltype(r) === Int
+        @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
+        @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
+        @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
+        @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
+        @test @inferred(r .+ (4.0:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        @test @inferred(0.0 * r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(0.0 .* r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r / Inf) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r ./ Inf) == [0.0, 0.0, 0.0, 0.0]
+    end
+
+    @test_broken @inferred(range(0, step=0, length=4)) == [0, 0, 0, 0]
+    @test @inferred(range(0, stop=0, length=4)) == [0, 0, 0, 0]
+    @test @inferred(range(0.0, step=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, stop=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0, step=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, step=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0, stop=0.0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+    @test @inferred(range(0.0, stop=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
+
+    z4 = 0.0 * (1:4)
+    @test @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
+    @test @inferred(z4 .+ z4) === z4
+end
+
+@testset "getindex" begin
+    @test getindex((typemax(UInt64)//one(UInt64):typemax(UInt64)//one(UInt64)), 1) == typemax(UInt64)//one(UInt64)
+end
+
+@testset "Issue #30006" begin
+    @test Base.Slice(Base.OneTo(5))[Int32(1)] == Int32(1)
+    @test Base.Slice(Base.OneTo(3))[Int8(2)] == Int8(2)
+    @test Base.Slice(1:10)[Int32(2)] == Int32(2)
+    @test Base.Slice(1:10)[Int8(2)] == Int8(2)
+end
+
+@testset "allocation of TwicePrecision call" begin
+    @test @allocated(0:286.493442:360) == 0
+    @test @allocated(0:286:360) == 0
+end
+
+@testset "range with start and stop" begin
+    for starts in [-1, 0, 1, 10]
+        for stops in [-2, 0, 2, 100]
+            for lengths in [2, 10, 100]
+                if stops >= starts
+                    @test range(starts, stops, length=lengths) === range(starts, stop=stops, length=lengths)
+                end
+            end
+            for steps in [0.01, 1, 2]
+                @test range(starts, stops, step=steps) === range(starts, stop=stops, step=steps)
+            end
+        end
+    end
+end
+
+@testset "Reverse empty ranges" begin
+    @test reverse(1:0) === 0:-1:1
+    @test reverse(Base.OneTo(0)) === 0:-1:1
+    # Almost `1.0:-1.0:2.0`, only different is the step which is
+    # `Base.TwicePrecision(-1.0, 0.0)`
+    @test reverse(1.0:0.0) === StepRangeLen(Base.TwicePrecision(1.0, 0.0),
+                                            Base.TwicePrecision(-1.0, -0.0), 0)
+    @test reverse(reverse(1.0:0.0)) === 1.0:0.0
+end
+
+@testset "Issue #30944 ranges with non-IEEEFloat types" begin
+    # We want to test the creation of a range with BigFloat start or step
+    @test range(big(1.0), length=10) == big(1.0):1:10
+    @test range(1, step = big(1.0), length=10) == big(1.0):1:10
+    @test range(1.0, step = big(1.0), length=10) == big(1.0):1:10
+end
+
+@testset "mod with ranges" begin
+    for n in -10:10
+        @test mod(n, 0:4) == mod(n, 5)
+        @test mod(n, 1:5) == mod1(n, 5)
+        @test mod(n, 2:6) == 2 + mod(n-2, 5)
+        @test mod(n, Base.OneTo(5)) == mod1(n, 5)
+    end
+    @test mod(Int32(3), 1:5) == 3
+    @test mod(big(typemax(Int))+99, 0:4) == mod(big(typemax(Int))+99, 5)
+    @test_throws MethodError mod(3.141, 1:5)
+    @test_throws MethodError mod(3, UnitRange(1.0,5.0))
+    @test_throws MethodError mod(3, 1:2:7)
+    @test_throws DivideError mod(3, 1:0)
+end
+
+@testset "clamp with unitrange" begin
+    for n in -10:10
+        @test clamp(n, 0:4) == clamp(n, 0, 4)
+        @test clamp(n, Base.OneTo(5)) == clamp(n, 1, 5)
+    end
+    @test clamp(Int32(3), 1:5) === Int(3)
+    @test clamp(big(typemax(Int))+99, 0:4) == 4
+    @test_throws MethodError clamp(3.141, 1:5)
+    @test_throws MethodError clamp(3, UnitRange(1.0,5.0))
+    @test_throws MethodError clamp(3, 1:2:7)
+    @test clamp(3, 1:0) == clamp(3, 1, 0) == 0
+    @test clamp(-3, 1:0) == clamp(-3, 1, 0) == 1
+end
+
+@testset "issue #33882" begin
+    r = StepRangeLen('a',2,4)
+    @test step(r) === 2
+    @test collect(r) == ['a','c','e','g']
+end
+
+@testset "diff of ranges, #36116" begin
+    for r in (0:2, 0:1:2, 0.0:1.0:2.0, LinRange(0,2,3))
+        @test diff(r) == diff(collect(r)) == fill(1, 2)
+        @test_throws ArgumentError diff(r, dims=2)
+    end
+    for r in (0:2:5, 0.1:0.1:2.0, LinRange(0,2,33))
+        @test diff(r) == diff(collect(r)) == [r[i+1] - r[i] for i in 1:length(r)-1]
+    end
+end
+
+@testset "Return type of indexing with ranges" begin
+    for T = (Base.OneTo{Int}, UnitRange{Int}, StepRange{Int,Int}, StepRangeLen{Int}, LinRange{Int})
+        @test eltype(T(1:5)) === eltype(T(1:5)[1:2])
+    end
+end
+
+@testset "Type-stable intersect (#32410)" begin
+    for T = (StepRange{Int,Int}, StepRange{BigInt,Int}, StepRange{BigInt,BigInt})
+        @test @inferred(intersect(T(1:2:5), 1:5)) == 1:2:5
+        @test @inferred(intersect(1:5, T(1:2:5))) == 1:2:5
+        @test @inferred(intersect(T(5:-2:1), 1:5)) == 5:-2:1
+        @test @inferred(intersect(1:5, T(5:-2:1))) == 1:2:5
+        @test isempty(@inferred(intersect(T(5:2:3), 1:5)))
+        @test isempty(@inferred(intersect(1:5, T(5:2:3))))
+    end
+    @test @inferred(intersect(1:2:5, 1//1:1:5//1)) == 1:2:5
+    @test @inferred(intersect(1//1:1:5//1, 1:2:5)) == 1:2:5
+    @test @inferred(intersect(big(1):big(5), 3)) == 3:3
+    @test @inferred(intersect(3, big(1):big(5))) == 3:3
+end
+
+@testset "eltype of range(::Integer; step::Rational, length) (#37295)" begin
+    @test range(1, step=1//2, length=3) == [1//1, 3//2, 2//1]
+    @test eltype(range(1, step=1//2, length=3)) === Rational{Int}
+    @test typeof(step(range(1, step=1//2, length=3))) === Rational{Int}
+
+    @test range(1//1, step=2, length=3) == [1, 3, 5]
+    @test eltype(range(1//1, step=2, length=3)) === Rational{Int}
+    @test typeof(step(range(1//1, step=2, length=3))) === Int
+
+    @test range(Int16(1), step=Rational{Int8}(1,2), length=3) == [1//1, 3//2, 2//1]
+    @test eltype(range(Int16(1), step=Rational{Int8}(1,2), length=3)) === Rational{Int16}
+    @test typeof(step(range(Int16(1), step=Rational{Int8}(1,2), length=3))) === Rational{Int8}
+
+    @test range(Rational{Int8}(1), step=Int16(2), length=3) == [1, 3, 5]
+    @test eltype(range(Rational{Int8}(1), step=Int16(2), length=3)) === Rational{Int16}
+    @test typeof(step(range(Rational{Int8}(1), step=Int16(2), length=3))) === Int16
+
+    @test range('a', step=2, length=3) == ['a', 'c', 'e']
+    @test eltype(range('a', step=2, length=3)) === Char
+    @test typeof(step(range('a', step=2, length=3))) === Int
+
+    @test isempty(range(typemax(Int)//1, step=1, length=0))
+    @test eltype(range(typemax(Int)//1, step=1, length=0)) === Rational{Int}
+    @test typeof(step(range(typemax(Int)//1, step=1, length=0))) === Int
+
+    @test isempty(range(typemin(Int), step=-1//1, length=0))
+    @test eltype(range(typemin(Int), step=-1//1, length=0)) === Rational{Int}
+    @test typeof(step(range(typemin(Int), step=-1//1, length=0))) === Rational{Int}
+
+    @test StepRangeLen(Int8(1), Int8(2), 3) == Int8[1, 3, 5]
+    @test eltype(StepRangeLen(Int8(1), Int8(2), 3)) === Int8
+    @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3))) === Int8
+
+    @test StepRangeLen(Int8(1), Int8(2), 3, 2) == Int8[-1, 1, 3]
+    @test eltype(StepRangeLen(Int8(1), Int8(2), 3, 2)) === Int8
+    @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3, 2))) === Int8
+end
+
+@testset "Bool indexing of ranges" begin
+    @test_throws ArgumentError Base.OneTo(true)
+    @test_throws ArgumentError Base.OneTo(true:true:true)
+
+    @test_throws ArgumentError (1:2)[true]
+    @test_throws ArgumentError (big(1):big(2))[true]
+    @test_throws ArgumentError Base.OneTo(10)[true]
+    @test_throws ArgumentError (1:2:5)[true]
+    @test_throws ArgumentError LinRange(1,2,2)[true]
+    @test_throws ArgumentError (1.0:2.0:5.0)[true]
+    r = 3:2
+    r2 = r[true:false]
+    @test r2 == collect(r)[true:false]
+    @test r.start == r2.start && r.stop == r2.stop
+    @test_throws BoundsError r[true:true]
+    @test_throws BoundsError r[false:true]
+    r = 3:3
+    r2 = r[true:true]
+    @test r2 == collect(r)[true:true]
+    @test r.start == r2.start && r.stop == r2.stop
+    r2 = r[false:false]
+    @test r2.start == 3 && r2.stop == 2
+    @test_throws BoundsError r[true:false]
+    @test_throws BoundsError r[false:true]
+    r = 2:3
+    r2 = r[false:true]
+    @test r2 == collect(r)[false:true]
+    @test r2.start == r2.stop == 3
+    @test_throws BoundsError r[true:false]
+    @test_throws BoundsError r[true:true]
+
+    r = 2:1
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    @test_throws BoundsError r[false:true:false]
+
+    r = 2:2
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = 1:2
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = 2:1:1
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    @test_throws BoundsError r[false:true:false]
+
+    r = 2:1:2
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = 1:1:2
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa StepRange && r2.start == 2 && r2.step == 1 && r2.stop == 2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = 2.0:1.0:1.0
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    @test_throws BoundsError r[false:true:false]
+
+    r = 2.0:1.0:2.0
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = 1.0:1.0:2.0
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = StepRangeLen(2, 1, 0)
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    @test_throws BoundsError r[false:true:false]
+
+    r = StepRangeLen(2, 1, 1)
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa StepRangeLen && r2 == 2:1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = StepRangeLen(1, 1, 2)
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa StepRangeLen && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
+
+    r = LinRange(2, 1, 0)
+    r2 = r[true:true:false]
+    @test r2 == collect(r)[true:true:false]
+    @test r2 isa LinRange && r2 == 2:1
+    @test_throws BoundsError r[false:true:false]
+
+    r = LinRange(2, 2, 1)
+    r2 = r[false:true:false]
+    @test r2 == collect(r)[false:true:false]
+    @test r2 isa LinRange && r2 == 2:1
+    r2 = r[true:true:true]
+    @test r2 == collect(r)[true:true:true]
+    @test r2 isa LinRange && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[false:true:true]
+
+    r = LinRange(1, 2, 2)
+    r2 = r[false:true:true]
+    @test r2 == collect(r)[false:true:true]
+    @test r2 isa LinRange && r2 == 2:2
+    @test_throws BoundsError r[true:true:false]
+    @test_throws BoundsError r[true:true:true]
 end
