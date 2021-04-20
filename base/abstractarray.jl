@@ -101,12 +101,15 @@ unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use check
 """
     keys(a::AbstractArray)
 
-Return the tuple of valid indices for array `a`. This is equivalent to
-[`LinearIndices(a)`](@ref) for vectors, and to [`CartesianIndices(axes(a))`](@ref)
-for higher-dimensional arrays.
+Return an efficient array describing all valid indices for `a` arranged in the shape of `a` itself.
 
-This may not return the most efficient indices type to iterate over `a`:
-use [`eachindex`](@ref) instead for maximum performance.
+They keys of 1-dimensional arrays (vectors) are integers, whereas all other N-dimensional
+arrays use [`CartesianIndex`](@ref) to describe their locations.  Often the special array
+types [`LinearIndices`](@ref) and [`CartesianIndices`](@ref) are used to efficiently
+represent these arrays of integers and `CartesianIndex`es, respectively.
+
+Note that the `keys` of an array might not be the most efficient index type; for maximum
+performance use  [`eachindex`](@ref) instead.
 """
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
