@@ -18,6 +18,33 @@ For similar reasons, automated translation to Julia would also typically generat
 
 On the other hand, language *interoperability* is extremely useful: we want to exploit existing high-quality code in other languages from Julia (and vice versa)!  The best way to enable this is not a transpiler, but rather via easy inter-language calling facilities.  We have worked hard on this, from the built-in `ccall` intrinsic (to call C and Fortran libraries) to [JuliaInterop](https://github.com/JuliaInterop) packages that connect Julia to Python, Matlab, C++, and more.
 
+## [Public API](@id man-api)
+
+### How does Julia define its public API?
+
+The only interfaces that are stable with respect to [SemVer](https://semver.org/) of `julia`
+version are the Julia `Base` and standard libraries interfaces described in
+[the documentation](https://docs.julialang.org/) and not marked as unstable (e.g.,
+experimental and internal).  Functions, types, and constants are not part of the public
+API if they are not included in the documentation, _even if they have docstrings_.
+
+### There is a useful undocumented function/type/constant. Can I use it?
+
+Updating Julia may break your code if you use non-public API.  If the code is
+self-contained, it may be a good idea to copy it into your project.  If you want to rely on
+a complex non-public API, especially when using it from a stable package, it is a good idea
+to open an [issue](https://github.com/JuliaLang/julia/issues) or
+[pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
+into a public API.  However, we do not discourage the attempt to create packages that expose
+stable public interfaces while relying on non-public implementation details of `julia` and
+buffering the differences across different `julia` versions.
+
+### The documentation is not accurate enough. Can I rely on the existing behavior?
+
+Please open an [issue](https://github.com/JuliaLang/julia/issues) or
+[pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning the
+existing behavior into a public API.
+
 ## Sessions and the REPL
 
 ### How do I delete an object in memory?
