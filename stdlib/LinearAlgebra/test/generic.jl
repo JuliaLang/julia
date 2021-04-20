@@ -210,7 +210,17 @@ end
 @test_throws ArgumentError opnorm(Matrix{Float64}(undef,5,5),5)
 
 # operator norm for zero-dimensional domain is zero (see #40370)
-@test opnorm(fill(1,1,1)[:,2:1]) == 0.0
+@testset "opnorm" begin
+    for m in (0, 1, 2)
+        @test @inferred(opnorm(fill(1,0,m))) == 0.0
+        @test @inferred(opnorm(fill(1,m,0))) == 0.0
+    end
+    for m in (1, 2)
+        @test @inferred(opnorm(fill(1im,1,m))) ≈ sqrt(m)
+        @test @inferred(opnorm(fill(1im,m,1))) ≈ sqrt(m)
+    end
+    @test @inferred(opnorm(fill(1,2,2))) ≈ 2
+end
 
 @testset "generic norm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
