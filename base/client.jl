@@ -101,7 +101,7 @@ show(io::IO, exs::ExceptionInfo) = display_error(io, exs.errors)
 function display_error(io::IO, er, bt, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing, compacttrace)
+    showerror(IOContext(io, :limit => true), er, bt; backtrace = bt!==nothing, compacttrace)
     println(io)
 end
 
