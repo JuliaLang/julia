@@ -279,15 +279,15 @@ kw"global"
 """
     ' '
 
-the single-quote character delimits Char (that is, character) literals.
+A pair of single-quote characters delimit a [`Char`](@ref) (that is, character) literal.
 
 # Examples
 ```jldoctest
-julia> println('j')
-j
+julia> 'j'
+'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
 ```
 """
-kw"' '"
+kw"''"
 
 """
     =
