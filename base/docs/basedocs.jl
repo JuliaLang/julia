@@ -277,6 +277,19 @@ julia> z
 kw"global"
 
 """
+    ' '
+
+A pair of single-quote characters delimit a [`Char`](@ref) (that is, character) literal.
+
+# Examples
+```jldoctest
+julia> 'j'
+'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
+```
+"""
+kw"''"
+
+"""
     =
 
 `=` is the assignment operator.
