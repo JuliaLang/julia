@@ -49,10 +49,12 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
     dropdims(A; dims)
 
 Return an array with the same data as `A`, but with the dimensions specified by
-`dims` removed. The two arrays may share the same underlying data, such that the
+`dims` removed. `size(A,d)` must equal 1 for every `d` in `dims`,
+and repeated dimensions or numbers outside `1:ndims(A)` are forbidden.
+
+The result may share the same underlying data as `A`, such that the
 result is mutable if and only if `A` is mutable, and setting elements of one
-alters the values of the other. Elements of `dims` must be unique and within
-the range `1:ndims(A)`. `size(A,i)` must equal 1 for all `i` in `dims`.
+alters the values of the other.
 
 See also: [`reshape`](@ref), [`vec`](@ref).
 
