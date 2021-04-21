@@ -584,7 +584,7 @@ function show_compact_backtrace(io::IO, trace::Vector)
     # pick the top-most frame that isn't in Julia
     i = findfirst(trace) do frame
         file = String(frame[1].file)
-        !startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL")
+        !contains(file, r"[/\\].julia[/\\]packages[/\\]|[/\\]julia[/\\]stdlib") && (!startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL"))
     end
 
     if i !== nothing
