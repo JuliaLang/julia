@@ -70,8 +70,8 @@ ee = typemax(Int64)
         end
     end
     @testset "division" begin
-        oz = big(2 // 0)
-        zo = big(0 // 2)
+        oz = big(1 // 0)
+        zo = big(0 // 1)
 
         @test_throws DivideError() oz / oz
         @test oz == oz / one(oz)
