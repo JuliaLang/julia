@@ -744,6 +744,10 @@ end
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
 end
 
+@testset "Diagonal(undef)" begin
+    d = Diagonal{Float32}(undef, 2)
+    @test length(d.diag) == 2
+end
 
 @testset "permutedims (#39447)" begin
     for D in (Diagonal(zeros(5)), Diagonal(zeros(5) .+ 1im), Diagonal([[1,2],[3,4]]))
