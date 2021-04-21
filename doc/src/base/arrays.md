@@ -52,6 +52,7 @@ Base.size
 Base.axes(::Any)
 Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
+Base.keys(::AbstractArray)
 Base.eachindex
 Base.IndexStyle
 Base.IndexLinear
