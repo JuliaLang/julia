@@ -63,6 +63,13 @@ AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal) = diagm(0 => D.diag)
 Array(D::Diagonal) = Matrix(D)
 
+"""
+    Diagonal{T}(undef, n)
+
+Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
+"""
+Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
+
 # For D<:Diagonal, similar(D[, neweltype]) should yield a Diagonal matrix.
 # On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
 # The first method below effects the former, and the second the latter.
