@@ -216,7 +216,8 @@ include("multidimensional.jl")
 
 include("broadcast.jl")
 using .Broadcast
-using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!
+using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!,
+                  broadcast_preserving_zero_d, andand, oror
 
 # missing values
 include("missing.jl")
