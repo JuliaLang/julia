@@ -78,8 +78,8 @@ ee = typemax(Int64)
         @test -oz == oz / (-one(oz))
         @test zero(oz) == one(oz) / oz
         @test_throws DivideError() zo / zo
-        @test typemax(BigFloat) == one(zo) / zo
-        @test typemin(BigFloat) == -one(zo) / zo
+        @test one(zo) / zo == big(1//0)
+        @test -one(zo) / zo == big(-1//0)
     end
 end
 @testset "div, fld, mod, rem" begin
