@@ -574,6 +574,7 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     end
 end
 
+import StackTraces.top_level_scope_sym
 function show_compact_backtrace(io::IO, trace::Vector)
     #= Show the lowest stackframe and display a message telling user how to
     retrieve the full trace =#
@@ -584,7 +585,9 @@ function show_compact_backtrace(io::IO, trace::Vector)
     # pick the top-most frame that isn't in Julia
     i = findfirst(trace) do frame
         file = String(frame[1].file)
-        !contains(file, r"[/\\].julia[/\\]packages[/\\]|[/\\]julia[/\\]stdlib") && (!startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL"))
+        !contains(file, r"[/\\].julia[/\\]packages[/\\]|[/\\]julia[/\\]stdlib") &&
+        (!startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL")) &&
+        (frame[1].func != top_level_scope_sym)
     end
 
     if i !== nothing
