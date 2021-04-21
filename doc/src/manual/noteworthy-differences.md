@@ -353,7 +353,13 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 - The typical Julia workflow for prototyping also uses continuous manipulation of the image, implemented with the [Revise.jl](https://github.com/timholy/Revise.jl) package.
 
-- Bignums are supported, but conversion is not automatic; ordinary integers [overflow](@ref faq-integer-arithmetic).
+- For performance, Julia prefers that operations have [type stability](@ref man-type-stability). Where Common Lisp abstracts away from the underlying machine operations, Julia cleaves closer to them. For example:
+  - Integer division using `/` always returns a floating-point result, even if the computation is exact.
+    - `//` always returns a rational result
+    - `÷` always returns a (truncated) integer result
+  - Bignums are supported, but conversion is not automatic; ordinary integers [overflow](@ref faq-integer-arithmetic).
+  - Complex numbers are supported, but to get complex results, [you need complex inputs](@ref faq-domain-errors).
+  - There are multiple Complex and Rational types, with different component types.
 
 - Modules (namespaces) can be hierarchical. [`import`](@ref) and [`using`](@ref) have a dual role: they load the code and make it available in the namespace. `import` for only the module name is possible (roughly equivalent to `ASDF:LOAD-OP`). Slot names don't need to be exported separately. Global variables can't be assigned to from outside the module (except with `eval(mod, :(var = val))` as an escape hatch).
 
