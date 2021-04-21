@@ -452,7 +452,7 @@ be a useful idiom as new local variables are freshly created each time local sco
 are entered, but this is only observable in the case of variables that outlive their
 scope via closures.
 
-See also [`begin`](@ref) blocks, which similarly group multiple expressions together but do
+By contrast, [`begin`](@ref) blocks also group multiple expressions together but do
 not introduce scope or have the special assignment syntax.
 
 ### Examples
