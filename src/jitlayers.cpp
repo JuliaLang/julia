@@ -94,10 +94,12 @@ uint64_t jl_cumulative_compile_time_ns_after()
 // and adds the result to the jitlayers
 // (and the shadow module),
 // and generates code for it
-static jl_callptr_t _jl_compile_codeinst(
+extern "C" {
+JL_DLLEXPORT jl_callptr_t jl_compile_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
-        size_t world)
+        size_t world,
+        const jl_cgparams_t *cg_params)
 {
     // TODO: Merge with jl_dump_compiles?
     static ios_t f_precompile;
@@ -119,6 +121,7 @@ static jl_callptr_t _jl_compile_codeinst(
     jl_codegen_params_t params;
     params.cache = true;
     params.world = world;
+    params.params = cg_params;
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
     {
         jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
@@ -223,6 +226,15 @@ static jl_callptr_t _jl_compile_codeinst(
         }
     }
     return fptr;
+}
+}
+
+static jl_callptr_t _jl_compile_codeinst(
+        jl_code_instance_t *codeinst,
+        jl_code_info_t *src,
+        size_t world)
+{
+    return jl_compile_codeinst(codeinst, src, world, &jl_default_cgparams);
 }
 
 const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
