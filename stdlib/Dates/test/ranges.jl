@@ -582,6 +582,25 @@ a = Dates.Time(23, 1, 1)
       hash([Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
       hash(Date("2018-1-03"):Day(1):Date("2018-1-05"))
 
+@testset "months are irregular steps -- issue 35203" begin
+    yr = Date(1852):Year(4):Date(1940)
+    @test Base.RangeStepStyle(yr) === Base.RangeStepIrregular()
+    y21 = yr[21+1]
+    @test findfirst(isequal(y21), yr) == findfirst(isequal(y21), collect(yr))
+    mr = Date(1998,8,7):Month(1):Date(2001,9,11)
+    @test Base.RangeStepStyle(mr) === Base.RangeStepIrregular()
+    m36 = mr[36+1]
+    @test findfirst(isequal(m36), mr) == findfirst(isequal(m36), collect(mr))
+    # but days etc. are regular
+    dr = Date(2020,03,27):Day(1):Date(2021,03,21)
+    @test Base.RangeStepStyle(dr) === Base.RangeStepRegular()
+    aday = rand(dr)
+    i1fast = findfirst(isequal(aday), dr)
+    i1slow = findfirst(d -> d==aday, dr)
+    @test i1fast == i1slow
+    @test dr[i1fast] == aday
+end
+
 @testset "range overflow" begin
     # DateTime ranges interactions with overflow. If not handled correctly `Dates.len` could
     # infinite loop
