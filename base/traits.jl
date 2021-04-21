@@ -55,6 +55,8 @@ Base.RangeStepStyle(::Type{<:OrdinalRange{<:T, <:S}}) = Base.RangeStepRegular()
 
 By default, all range types are assumed to be `RangeStepIrregular`, except
 ranges with an element type which is a subtype of `Integer`.
+The module `Dates` also defines ranges whose step is a `FixedPeriod` to be regular,
+for example steps of a `Day(1)` but not `Month(1)`.
 """
 abstract type RangeStepStyle end
 struct RangeStepRegular   <: RangeStepStyle end # range with regular step
