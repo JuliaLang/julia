@@ -581,15 +581,16 @@ function show_compact_backtrace(io::IO, trace::Vector)
     modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
-    println(io, "\nLocation:")
-
     # pick the top-most frame that isn't in Julia
     i = findfirst(trace) do frame
         file = String(frame[1].file)
         !startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL")
     end
 
-    print_stackframe(io, i, trace[i][1], trace[i][2], ndigits(i), modulecolordict, modulecolorcycler)
+    if i !== nothing
+        println(io, "\nLocation:")
+        print_stackframe(io, i, trace[i][1], trace[i][2], ndigits(i), modulecolordict, modulecolorcycler)
+    end
 
     length(trace) > 1 && print(io, "\nUse `err` to retrieve the full stack trace.")
 end
