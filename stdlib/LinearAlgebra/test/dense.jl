@@ -145,9 +145,13 @@ end
         @testset "Matrix square root" begin
             asq = sqrt(a)
             @test asq*asq ≈ a
+            @test sqrt(transpose(a))*sqrt(transpose(a)) ≈ transpose(a)
+            @test sqrt(adjoint(a))*sqrt(adjoint(a)) ≈ adjoint(a)
             asym = a + a' # symmetric indefinite
             asymsq = sqrt(asym)
             @test asymsq*asymsq ≈ asym
+            @test sqrt(transpose(asym))*sqrt(transpose(asym)) ≈ transpose(asym)
+            @test sqrt(adjoint(asym))*sqrt(adjoint(asym)) ≈ adjoint(asym)
             if eltype(a) <: Real  # real square root
                 apos = a * a
                 @test sqrt(apos)^2 ≈ apos
@@ -447,6 +451,11 @@ end
                                      183.765138646367 183.765138646366  163.679601723179;
                                       71.797032399996  91.8825693231832 111.968106246371]')
         @test exp(A1) ≈ eA1
+        @test exp(adjoint(A1)) ≈ adjoint(eA1)
+        @test exp(transpose(A1)) ≈ transpose(eA1)
+        for f in (sin, cos, sinh, cosh, tanh, tan)
+            @test f(adjoint(A1)) ≈ f(copy(adjoint(A1)))
+        end
 
         A2  = convert(Matrix{elty},
                       [29.87942128909879    0.7815750847907159 -2.289519314033932;
@@ -457,20 +466,28 @@ end
                        -18231880972009252.0  60605228702221920.0 101291842930249760.0;
                        -30475770808580480.0 101291842930249728.0 169294411240851968.0])
         @test exp(A2) ≈ eA2
+        @test exp(adjoint(A2)) ≈ adjoint(eA2)
+        @test exp(transpose(A2)) ≈ transpose(eA2)
 
         A3  = convert(Matrix{elty}, [-131 19 18;-390 56 54;-387 57 52])
         eA3 = convert(Matrix{elty}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
                                       0.367879439109187 1.47151775849686  1.10363831732856;
                                       0.135335281175235 0.406005843524598 0.541341126763207]')
         @test exp(A3) ≈ eA3
+        @test exp(adjoint(A3)) ≈ adjoint(eA3)
+        @test exp(transpose(A3)) ≈ transpose(eA3)
 
         A4 = convert(Matrix{elty}, [0.25 0.25; 0 0])
         eA4 = convert(Matrix{elty}, [1.2840254166877416 0.2840254166877415; 0 1])
         @test exp(A4) ≈ eA4
+        @test exp(adjoint(A4)) ≈ adjoint(eA4)
+        @test exp(transpose(A4)) ≈ transpose(eA4)
 
         A5 = convert(Matrix{elty}, [0 0.02; 0 0])
         eA5 = convert(Matrix{elty}, [1 0.02; 0 1])
         @test exp(A5) ≈ eA5
+        @test exp(adjoint(A5)) ≈ adjoint(eA5)
+        @test exp(transpose(A5)) ≈ transpose(eA5)
 
         # Hessenberg
         @test hessenberg(A1).H ≈ convert(Matrix{elty},
@@ -496,15 +513,23 @@ end
                                      1/4 1/5 1/6 1/7;
                                      1/5 1/6 1/7 1/8])
         @test exp(log(A4)) ≈ A4
+        @test exp(log(transpose(A4))) ≈ transpose(A4)
+        @test exp(log(adjoint(A4))) ≈ adjoint(A4)
 
         A5  = convert(Matrix{elty}, [1 1 0 1; 0 1 1 0; 0 0 1 1; 1 0 0 1])
         @test exp(log(A5)) ≈ A5
+        @test exp(log(transpose(A5))) ≈ transpose(A5)
+        @test exp(log(adjoint(A5))) ≈ adjoint(A5)
 
         A6  = convert(Matrix{elty}, [-5 2 0 0 ; 1/2 -7 3 0; 0 1/3 -9 4; 0 0 1/4 -11])
         @test exp(log(A6)) ≈ A6
+        @test exp(log(transpose(A6))) ≈ transpose(A6)
+        @test exp(log(adjoint(A6))) ≈ adjoint(A6)
 
         A7  = convert(Matrix{elty}, [1 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1])
         @test exp(log(A7)) ≈ A7
+        @test exp(log(transpose(A7))) ≈ transpose(A7)
+        @test exp(log(adjoint(A7))) ≈ adjoint(A7)
     end
 
     @testset "Integer promotion tests" begin
