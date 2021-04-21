@@ -92,6 +92,12 @@ function scrub_repl_backtrace(bt)
     return bt
 end
 
+struct ExceptionInfo
+    errors::Vector{Tuple{Any, Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}}}
+end
+
+show(io::IO, exs::ExceptionInfo) = display_error(io, exs.errors)
+
 function display_error(io::IO, er, bt, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
@@ -107,8 +113,6 @@ function display_error(io::IO, stack::ExceptionStack, compacttrace = false)
 end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
-
-lasterr() = isdefined(Main, :err) ? display_error(Main.err) : nothing
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
@@ -152,7 +156,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
             end
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
+            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, ExceptionInfo(lasterr))
         end
     end
     isa(stdin, TTY) && println()

@@ -591,7 +591,7 @@ function show_compact_backtrace(io::IO, trace::Vector)
 
     print_stackframe(io, i, trace[i][1], trace[i][2], ndigits(i), modulecolordict, modulecolorcycler)
 
-    length(trace) > 1 && print(io, "\nUse `lasterr()` to retrieve the full stack trace.")
+    length(trace) > 1 && print(io, "\nUse `err` to retrieve the full stack trace.")
 end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
