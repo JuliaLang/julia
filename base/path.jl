@@ -188,8 +188,8 @@ basename(path::AbstractString) = splitdir(path)[2]
 """
     splitext(path::AbstractString) -> (AbstractString, AbstractString)
 
-If the last component of a path contains a dot, split the path into everything before the
-dot and everything including and after the dot. Otherwise, return a tuple of the argument
+If the last component of a path contains one or more dots, split the path into everything before the
+last dot and everything including and after the dot. Otherwise, return a tuple of the argument
 unmodified and the empty string. "splitext" is short for "split extension".
 
 # Examples
@@ -197,8 +197,11 @@ unmodified and the empty string. "splitext" is short for "split extension".
 julia> splitext("/home/myuser/example.jl")
 ("/home/myuser/example", ".jl")
 
-julia> splitext("/home/myuser/example")
-("/home/myuser/example", "")
+julia> splitext("/home/myuser/example.tar.gz")
+("/home/myuser/example.tar", ".gz")
+
+julia> splitext("/home/my.user/example")
+("/home/my.user/example", "")
 ```
 """
 function splitext(path::String)
