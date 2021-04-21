@@ -531,8 +531,11 @@ function hist_from_file(hp::REPLHistoryProvider, path::String)
             countlines += 1
             line = getline(file_lines, countlines)
         end
-        push!(hp.modes, mode)
-        push!(hp.history, join(lines, '\n'))
+        command = join(lines, '\n')
+        if command ∉ hp.history
+           push!(hp.modes, mode)
+           push!(hp.history, command)
+        end
     end
     hp.start_idx = length(hp.history)
     return hp
@@ -550,8 +553,7 @@ function add_history(hist::REPLHistoryProvider, s::PromptState)
     str = rstrip(String(take!(copy(s.input_buffer))))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
-    !isempty(hist.history) &&
-        isequal(mode, hist.modes[end]) && str == hist.history[end] && return
+    !isempty(hist.history) && isequal(mode, hist.modes[end]) && str ∈ hist.history && return
     push!(hist.modes, mode)
     push!(hist.history, str)
     hist.history_file === nothing && return
