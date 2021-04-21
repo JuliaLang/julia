@@ -69,6 +69,18 @@ ee = typemax(Int64)
             @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
         end
     end
+    @testset "division" begin
+        oz = big(2 // 0)
+        zo = big(0 // 2)
+
+        @test_throws DivideError() oz / oz
+        @test oz == oz / one(oz)
+        @test -oz == oz / (-one(oz))
+        @test zero(oz) == one(oz) / oz
+        @test_throws DivideError() zo / zo
+        @test typemax(BigFloat) == one(zo) / zo
+        @test typemin(BigFloat) == -one(zo) / zo
+    end
 end
 @testset "div, fld, mod, rem" begin
     for i = -10:10, j = [-10:-1; 1:10]
