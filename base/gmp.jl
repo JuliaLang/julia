@@ -931,7 +931,7 @@ function Base.://(x::Rational{BigInt}, y::Rational{BigInt})
         if iszero(x.num)
             throw(DivideError())
         end
-        return (isneg(x.num) ? -one(BigFloat) : one(BigFloat)) // y.num
+        return (isneg(x.num) ? -one(BigInt) : one(BigInt)) // y.num
     end
     zq = _MPQ()
     ccall((:__gmpq_div, :libgmp), Cvoid,
