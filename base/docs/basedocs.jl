@@ -453,6 +453,18 @@ For other purposes, `:( ... )` and `quote .. end` blocks are treated identically
 kw"quote"
 
 """
+    @
+
+The at sign followed by a macro name marks a macro call. Macros provide the
+ability to include generated code in the final body of a program. A macro maps
+a tuple of arguments, expressed as space-separated expressions or a
+function-call-like argument list, to a returned *expression*. The resulting
+expression is compiled directly into the surrounding code. See
+[Metaprogramming](@ref man-macros) for more details and examples.
+"""
+kw"@"
+
+"""
     {}
 
 Curly braces are used to specify [type parameters](@ref man-parametric-types).
