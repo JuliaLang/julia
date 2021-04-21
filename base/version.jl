@@ -107,7 +107,7 @@ end
 
 function tryparse(::Type{VersionNumber}, v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
-    m = match(VERSION_REGEX, String(v))
+    m = match(VERSION_REGEX, String(v)::String)
     m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
     major = parse(VInt, major::AbstractString)
