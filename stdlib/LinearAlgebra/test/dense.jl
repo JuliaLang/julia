@@ -453,6 +453,9 @@ end
         @test exp(A1) ≈ eA1
         @test exp(adjoint(A1)) ≈ adjoint(eA1)
         @test exp(transpose(A1)) ≈ transpose(eA1)
+        for f in (sin, cos, sinh, cosh, tanh, tan)
+            @test f(adjoint(A1)) ≈ f(copy(adjoint(A1)))
+        end
 
         A2  = convert(Matrix{elty},
                       [29.87942128909879    0.7815750847907159 -2.289519314033932;
