@@ -221,10 +221,10 @@ To ensure that the file can be opened at the given line, you may need to call
 `define_editor` first.
 """
 function edit(@nospecialize f)
-    ms = methods(f)
-    length(m) == 1 && edit(functionloc(m[1])...)
-    length(m) > 1 && return ms
-    lenth(m) == 0 && functionloc(f) # throws
+    ms = methods(f).ms
+    length(ms) == 1 && edit(functionloc(ms[1])...)
+    length(ms) > 1 && return ms
+    length(ms) == 0 && functionloc(f) # throws
     nothing
 end
 edit(@nospecialize(f), idx::Integer) = edit(methods(f).ms[idx])
