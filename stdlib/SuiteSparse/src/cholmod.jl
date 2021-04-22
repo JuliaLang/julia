@@ -274,9 +274,11 @@ function __init__()
         ### to temporary memory. We need to manage a copy for each thread.
         nt = Threads.nthreads()
         resize!(common, nt)
+        errorhandler = @cfunction(error_handler, Cvoid, (Cint, Cstring, Cint, Cstring))
         for i in 1:nt
             common[i] = Common()
             common[i].print = 0  # no printing from CHOLMOD by default
+            common[i].error_handler = errorhandler
         end
 
         # Register gc tracked allocator if CHOLMOD is new enough

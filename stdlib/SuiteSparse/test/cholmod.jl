@@ -238,8 +238,9 @@ end
         @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
         rm(testfile)
 
+        # this also tests that the error message is correctly retrieved from the library
         writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-        @test_throws ArgumentError sparse(CHOLMOD.Sparse(testfile))
+        @test_throws CHOLMOD.CHOLMODException("indices out of range") sparse(CHOLMOD.Sparse(testfile))
         rm(testfile)
     end
 end
