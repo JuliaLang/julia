@@ -1368,40 +1368,6 @@ function insert!(a::Array{T,1}, i::Integer, item) where T
 end
 
 """
-    keepat!(a::Vector, inds)
-
-Remove the items at all the indices which are not given by `inds`, and return the modified `a`.
-Items which are kept are shifted to fill the resulting gaps.
-
-`inds` can be either an iterator or a collection of sorted and unique integer indices.
-See also [`deleteat!`](@ref).
-
-# Examples
-```jldoctest
-julia> keepat!([6, 5, 4, 3, 2, 1], 1:2:5)
-3-element Array{Int64,1}:
- 6
- 4
- 2
-```
-"""
-function keepat!(a::AbstractVector, inds)
-    isempty(inds) && return a
-    local prev
-    i = firstindex(a)
-    for k in inds
-        @isdefined(prev) && (prev <= k || throw(ArgumentError("indices must be sorted")))
-        if i != k
-            a[i] = a[k]
-        end
-        prev = k
-        i = nextind(a, i)
-    end
-    deleteat!(a, i:lastindex(a))
-    return a
-end
-
-"""
     deleteat!(a::Vector, i::Integer)
 
 Remove the item at the given `i` and return the modified `a`. Subsequent items
