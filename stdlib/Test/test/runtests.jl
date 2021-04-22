@@ -503,7 +503,7 @@ import Test: record, finish
 using Test: get_testset_depth, get_testset
 using Test: AbstractTestSet, Result, Pass, Fail, Error
 struct CustomTestSet <: Test.AbstractTestSet
-    description::AbstractString
+    description::String
     foo::Int
     results::Vector
     # constructor takes a description string and options keyword arguments
