@@ -911,3 +911,20 @@ end
     @test C * C' == Sparse(spzeros(3, 3))
     @test C' * C == Sparse(spzeros(0, 0))
 end
+
+@testset "permutation handling" begin
+    @testset "default permutation" begin
+        # Assemble arrow matrix
+        A = sparse(5I,3,3)
+        A[:,1] .= 1; A[1,:] .= A[:,1]
+
+        # Ensure cholesky eliminates the fill-in
+        @test cholesky(A).p[1] != 1
+    end
+
+    @testset "user-specified permutation" begin
+        n = 100
+        A = sprand(n,n,5/n) |> t -> t't + I
+        @test cholesky(A, perm=1:n).p == 1:n
+    end
+end

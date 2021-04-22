@@ -1359,9 +1359,9 @@ end
 ## Factorization methods
 
 ## Compute that symbolic factorization only
-function fact_(A::Sparse{<:VTypes};
+function symbolic(A::Sparse{<:VTypes};
     perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing,
-    postorder::Bool=true, userperm_only::Bool=true)
+    postorder::Bool=isnothing(perm)||isempty(perm), userperm_only::Bool=true)
 
     sA = unsafe_load(pointer(A))
     sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
@@ -1423,7 +1423,7 @@ function cholesky(A::Sparse; shift::Real=0.0, check::Bool = true,
     cm.print = 0
 
     # Compute the symbolic factorization
-    F = fact_(A; perm = perm)
+    F = symbolic(A; perm = perm)
 
     # Compute the numerical factorization
     cholesky!(F, A; shift = shift, check = check)
@@ -1592,7 +1592,7 @@ function ldlt(A::Sparse; shift::Real=0.0, check::Bool = true,
     cm.supernodal = 0
 
     # Compute the symbolic factorization
-    F = fact_(A; perm = perm)
+    F = symbolic(A; perm = perm)
 
     # Compute the numerical factorization
     ldlt!(F, A; shift = shift, check = check)
