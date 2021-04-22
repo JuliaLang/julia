@@ -1204,7 +1204,7 @@ _simple_count(pred, itr, init) = _simple_count_helper(Generator(pred, itr), init
 
 function _simple_count_helper(g, init::T) where {T}
     n::T = init
-    for x in itr
+    for x in g
         n += x::Bool
     end
     return n
