@@ -94,6 +94,7 @@ Standard library changes
 * OpenBLAS is updated to 0.3.13. ([#39216])
 * SuiteSparse is updated to 5.8.1. ([#39455])
 * The shape of an `UpperHessenberg` matrix is preserved under certain arithmetic operations, e.g. when multiplying or dividing by an `UpperTriangular` matrix. ([#40039])
+* Real quasitriangular Schur factorizations `S` can now be efficiently to converted to complex upper-triangular form with `Schur{Complex}(S)` ([#40573]).
 * `cis(A)` now supports matrix arguments ([#40194]).
 * `dot` now supports `UniformScaling` with `AbstractMatrix` ([#40250]).
 
