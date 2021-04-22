@@ -12,7 +12,7 @@ where it is not supported. The error message, in the `msg` field
 may provide more specific details.
 """
 struct MissingException <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 showerror(io::IO, ex::MissingException) =

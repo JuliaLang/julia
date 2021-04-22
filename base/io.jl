@@ -15,7 +15,7 @@ struct EOFError <: Exception end
 A system call failed with an error code (in the `errno` global variable).
 """
 struct SystemError <: Exception
-    prefix::AbstractString
+    prefix::String
     errnum::Int32
     extrainfo
     SystemError(p::AbstractString, e::Integer, extrainfo) = new(p, e, extrainfo)

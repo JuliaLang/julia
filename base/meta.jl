@@ -188,7 +188,7 @@ The expression passed to the [`parse`](@ref) function could not be interpreted a
 expression.
 """
 struct ParseError <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 function _parse_string(text::AbstractString, filename::AbstractString,

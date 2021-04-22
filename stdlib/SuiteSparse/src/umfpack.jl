@@ -18,7 +18,7 @@ import ..increment, ..increment!, ..decrement, ..decrement!
 
 include("umfpack_h.jl")
 struct MatrixIllConditionedException <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 function umferror(status::Integer)

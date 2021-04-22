@@ -13,7 +13,7 @@ Mostly used to represent files returned by [`open`](@ref).
 mutable struct IOStream <: IO
     handle::Ptr{Cvoid}
     ios::Array{UInt8,1}
-    name::AbstractString
+    name::String
     mark::Int64
     lock::ReentrantLock
     _dolock::Bool
