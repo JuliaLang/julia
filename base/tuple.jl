@@ -104,8 +104,9 @@ state `itr_state`. Return a `Tuple`, if `collection` itself is a `Tuple`, a subt
 `AbstractVector`, if `collection` is an `AbstractArray`, a subtype of `AbstractString`
 if `collection` is an `AbstractString`, and an arbitrary iterator, falling back to
 `Iterators.rest(collection[, itr_state])`, otherwise.
-Can be overloaded for user-defined collection types to customize the behavior of slurping
-in assignments, like `a, b... = collection`.
+
+Can be overloaded for user-defined collection types to customize the behavior of [slurping
+in assignments](@ref destructuring-assignment), like `a, b... = collection`.
 
 !!! compat "Julia 1.6"
     `Base.rest` requires at least Julia 1.6.

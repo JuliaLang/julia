@@ -352,12 +352,26 @@ Named tuples are very similar to tuples, except that fields can additionally be 
 using dot syntax (`x.a`) in addition to the regular indexing syntax
 (`x[1]`).
 
-## Multiple Return Values
+## [Destructuring Assignment and Multiple Return Values](@id destructuring-assignment)
 
-In Julia, one returns a tuple of values to simulate returning multiple values. However, tuples
-can be created and destructured without needing parentheses, thereby providing an illusion that
-multiple values are being returned, rather than a single tuple value. For example, the following
-function returns a pair of values:
+A comma-separated list of variables (optionally wrapped in parentheses) can appear on the
+left side of an assignment: the value on the right side is _destructured_ by iterating
+over and assigning to each variable in turn:
+
+```jldoctest
+julia> (a,b,c) = 1:3
+1:3
+
+julia> b
+2
+```
+
+The value on the right should be an iterator (see [Iteration interface](@ref man-interface-iteration))
+at least as long as the number of variables on the left (any excess elements of the
+iterator are ignored).
+
+This can be used to return multiple values from functions by returning a tuple or
+other iterable value. For example, the following function returns two values:
 
 ```jldoctest foofunc
 julia> function foo(a,b)
@@ -374,8 +388,7 @@ julia> foo(2,3)
 (5, 6)
 ```
 
-A typical usage of such a pair of return values, however, extracts each value into a variable.
-Julia supports simple tuple "destructuring" that facilitates this:
+Destructuring assignment extracts each value into a variable:
 
 ```jldoctest foofunc
 julia> x, y = foo(2,3)
@@ -388,15 +401,79 @@ julia> y
 6
 ```
 
-You can also return multiple values using the `return` keyword:
+Another common use is for swapping variables:
+```jldoctest foofunc
+julia> y, x = x, y
+(5, 6)
 
-```julia
-function foo(a,b)
-    return a+b, a*b
-end
+julia> x
+6
+
+julia> y
+5
 ```
 
-This has the exact same effect as the previous definition of `foo`.
+If only a subset of the elements of the iterator are required, a common convention is to assign ignored elements to a variable
+consisting of only underscores `_` (which is an otherwise invalid variable name, see
+[Allowed Variable Names](@ref man-allowed-variable-names)):
+
+```jldoctest
+julia> _, _, _, d = 1:10
+1:10
+
+julia> d
+4
+```
+
+Other valid left-hand side expressions can be used as elements of the assignment list, which will call [`setindex!`](@ref) or [`setproperty!`](@ref), or recursively destructure individual elements of the iterator:
+
+```jldoctest
+julia> X = zeros(3);
+
+julia> X[1], (a,b) = (1, (2, 3))
+(1, (2, 3))
+
+julia> X
+3-element Vector{Float64}:
+ 1.0
+ 0.0
+ 0.0
+
+julia> a
+2
+
+julia> b
+3
+```
+
+!!! compat "Julia 1.6"
+    `...` with assignment requires Julia 1.6
+
+If the last symbol in the assignment list is suffixed by `...` (known as _slurping_), then
+it will be assigned a collection or lazy iterator of the remaining elements of the
+right-hand side iterator:
+
+```jldoctest
+julia> a, b... = "hello"
+"hello"
+
+julia> a
+'h': ASCII/Unicode U+0068 (category Ll: Letter, lowercase)
+
+julia> b
+"ello"
+
+julia> a, b... = Iterators.map(abs2, 1:4)
+Base.Generator{UnitRange{Int64}, typeof(abs2)}(abs2, 1:4)
+
+julia> a
+1
+
+julia> b
+Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.Generator{UnitRange{Int64}, typeof(abs2)}(abs2, 1:4), 1)
+```
+
+See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
 
 ## Argument destructuring
 
