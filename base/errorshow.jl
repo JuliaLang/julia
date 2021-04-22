@@ -585,6 +585,19 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
+    function print_omitted_modules(i, j)
+        # Find modules involved in intermediate frames and print them
+        modules = filter(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
+        length(modules) > 0 || return
+        print(repeat(' ', ndigits_max + 2))
+        for m ∈ modules
+            modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
+            printstyled(io, m, color = modulecolor)
+            print(" ")
+        end
+        println()
+    end
+
     # find all frames that aren't in Julia base, stdlib, or an added package
     is = findall(trace) do frame
         file = String(frame[1].file)
@@ -599,12 +612,19 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     if length(is) > 0
         println(io, "\nStacktrace:")
 
-        is[1] == 0 || println(repeat(' ', ndigits_max + 2) * "⋮")
+        if is[1] > 0
+            print_omitted_modules(1, is[1])
+            println(repeat(' ', ndigits_max + 2) * "⋮")
+        end
 
         lasti = first(is)
-        for i ∈ is
+        @views for i ∈ is
             i == 0 && continue
-            i == lasti + 1 || println(repeat(' ', ndigits_max + 2) * "⋮")
+            if i > lasti + 1
+                println(repeat(' ', ndigits_max + 2) * "⋮ ")
+                print_omitted_modules(lasti + 1, i - 1)
+                println(repeat(' ', ndigits_max + 2) * "⋮")
+            end
             print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
             if i < num_frames
                 println(io)
@@ -709,6 +729,11 @@ end
 # from `modulecolorcycler`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
+    modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
+    print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+end
+
+function get_modulecolor!(modulecolordict, m, modulecolorcycler)
     if m !== nothing
         while parentmodule(m) !== m
             pm = parentmodule(m)
@@ -718,11 +743,10 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
         if !haskey(modulecolordict, m)
             modulecolordict[m] = popfirst!(modulecolorcycler)
         end
-        modulecolor = modulecolordict[m]
+        return modulecolordict[m]
     else
-        modulecolor = :default
+        return :default
     end
-    print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
 end
 
 
