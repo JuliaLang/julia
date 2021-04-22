@@ -2560,7 +2560,7 @@ Remove the items at all the indices which are not given by `inds`,
 and return the modified `a`.
 Items which are kept are shifted to fill the resulting gaps.
 
-`inds` can be either an iterator or a collection of sorted integer indices.
+`inds` must be an iterator of sorted and unique integer indices.
 See also [`deleteat!`](@ref).
 
 !!! compat "Julia 1.7"
@@ -2576,13 +2576,13 @@ julia> keepat!([6, 5, 4, 3, 2, 1], 1:2:5)
 ```
 """
 function keepat!(a::AbstractVector, inds)
-    isempty(inds) && return a
     local prev
     i = firstindex(a)
     for k in inds
-        @isdefined(prev) && (prev <= k || throw(ArgumentError("indices must be sorted")))
+        @isdefined(prev) && (prev < k || throw(ArgumentError("indices must be sorted")))
+        ak = a[k] # must happen even when i==k for bounds checking
         if i != k
-            a[i] = a[k]
+            @inbounds a[i] = ak # k > i, so a[i] is inbounds
         end
         prev = k
         i = nextind(a, i)
