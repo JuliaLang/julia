@@ -574,28 +574,49 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     end
 end
 
-import StackTraces.top_level_scope_sym
-function show_compact_backtrace(io::IO, trace::Vector)
+import Base.StackTraces.top_level_scope_sym
+function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     #= Show the lowest stackframe and display a message telling user how to
     retrieve the full trace =#
+
+    num_frames = length(trace)
+    ndigits_max = ndigits(num_frames)
 
     modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
-    # pick the top-most frame that isn't in Julia
-    i = findfirst(trace) do frame
+    # find all frames that aren't in Julia base, stdlib, or an added package
+    is = findall(trace) do frame
         file = String(frame[1].file)
         !contains(file, r"[/\\].julia[/\\]packages[/\\]|[/\\]julia[/\\]stdlib") &&
         (!startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL")) &&
         (frame[1].func != top_level_scope_sym)
     end
 
-    if i !== nothing
-        println(io, "\nLocation:")
-        print_stackframe(io, i, trace[i][1], trace[i][2], ndigits(i), modulecolordict, modulecolorcycler)
+    # include one frame lower
+    is = sort(union(is, is .- 1))
+
+    if length(is) > 0
+        println(io, "\nStacktrace:")
+        
+        is[1] == 0 || println(repeat(' ', ndigits_max + 2) * "⋮")
+
+        lasti = first(is)
+        for i ∈ is
+            i == 0 && continue
+            i == lasti + 1 || println(repeat(' ', ndigits_max + 2) * "⋮")
+            print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
+            if i < num_frames
+                println(io)
+                print_linebreaks && println(io)
+            end
+            lasti = i
+        end
+    else
+        println()
     end
 
-    length(trace) > 1 && print(io, "\nUse `err` to retrieve the full stack trace.")
+    length(trace) > length(is) && print(io, "Use `err` to retrieve the full stack trace.")
 end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
@@ -785,7 +806,7 @@ function show_backtrace(io::IO, t::Vector, compacttrace = false)
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
     if compacttrace
-        show_compact_backtrace(io, filtered)
+        show_compact_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     else
         show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     end
