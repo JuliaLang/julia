@@ -598,7 +598,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
 
     if length(is) > 0
         println(io, "\nStacktrace:")
-        
+
         is[1] == 0 || println(repeat(' ', ndigits_max + 2) * "⋮")
 
         lasti = first(is)
