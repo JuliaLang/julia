@@ -2579,7 +2579,9 @@ function keepat!(a::AbstractVector, inds)
     local prev
     i = firstindex(a)
     for k in inds
-        @isdefined(prev) && (prev < k || throw(ArgumentError("indices must be sorted")))
+        if @isdefined(prev)
+            prev < k || throw(ArgumentError("indices must be unique and sorted"))
+        end
         ak = a[k] # must happen even when i==k for bounds checking
         if i != k
             @inbounds a[i] = ak # k > i, so a[i] is inbounds
