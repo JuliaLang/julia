@@ -90,7 +90,7 @@ julia> sqrt = 4
 ERROR: cannot assign a value to variable Base.sqrt from module Main
 ```
 
-## Allowed Variable Names
+## [Allowed Variable Names](@id man-allowed-variable-names)
 
 Variable names must begin with a letter (A-Z or a-z), underscore, or a subset of Unicode code
 points greater than 00A0; in particular, [Unicode character categories](http://www.fileformat.info/info/unicode/category/index.htm)
