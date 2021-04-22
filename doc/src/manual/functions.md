@@ -401,6 +401,18 @@ julia> y
 6
 ```
 
+Another common use is for swapping variables:
+```jldoctest foofunc
+julia> y, x = x, y
+(5, 6)
+
+julia> x
+6
+
+julia> y
+5
+```
+
 If only a subset of the elements of the iterator are required, a common convention is to assign ignored elements to a variable
 consisting of only underscores `_` (which is an otherwise invalid variable name, see
 [Allowed Variable Names](@ref man-allowed-variable-names)):
@@ -411,6 +423,27 @@ julia> _, _, _, d = 1:10
 
 julia> d
 4
+```
+
+Other valid left-hand side expressions can be used as elements of the assignment list, which will call [`setindex!`](@ref) or [`setproperty!`](@ref), or recursively destructure individual elements of the iterator:
+
+```jldoctest
+julia> X = zeros(3);
+
+julia> X[1], (a,b) = (1, (2, 3))
+(1, (2, 3))
+
+julia> X
+3-element Vector{Float64}:
+ 1.0
+ 0.0
+ 0.0
+
+julia> a
+2
+
+julia> b
+3
 ```
 
 !!! compat "Julia 1.6"
