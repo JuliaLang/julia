@@ -352,7 +352,7 @@ Named tuples are very similar to tuples, except that fields can additionally be 
 using dot syntax (`x.a`) in addition to the regular indexing syntax
 (`x[1]`).
 
-## Destructuring Assignment and Multiple Return Values
+## [Destructuring Assignment and Multiple Return Values](@id destructuring-assignment)
 
 A comma-separated list of variables (optionally wrapped in parentheses) can appear on the
 left side of an assignment: the value on the right side is _destructured_ by iterating
@@ -450,22 +450,30 @@ julia> b
     `...` with assignment requires Julia 1.6
 
 If the last symbol in the assignment list is suffixed by `...` (known as _slurping_), then
-it will collect the remaining elements of the iterator:
+it will be assigned a collection or lazy iterator of the remaining elements of the
+right-hand side iterator:
 
 ```jldoctest
-julia> a, b... = 1:4
-1:4
+julia> a, b... = "hello"
+"hello"
+
+julia> a
+'h': ASCII/Unicode U+0068 (category Ll: Letter, lowercase)
+
+julia> b
+"ello"
+
+julia> a, b... = Iterators.map(abs2, 1:4)
+Base.Generator{UnitRange{Int64}, typeof(abs2)}(abs2, 1:4)
 
 julia> a
 1
 
 julia> b
-3-element Vector{Int64}:
- 2
- 3
- 4
+Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.Generator{UnitRange{Int64}, typeof(abs2)}(abs2, 1:4), 1)
 ```
-This behaviour can be customized for specific types by extending [`Base.rest`](@ref).
+
+See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
 
 ## Argument destructuring
 
