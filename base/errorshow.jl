@@ -9,7 +9,7 @@ This method is used to display the exception after a call to [`throw`](@ref).
 # Examples
 ```jldoctest
 julia> struct MyException <: Exception
-           msg::AbstractString
+           msg::String
        end
 
 julia> function Base.showerror(io::IO, err::MyException)
