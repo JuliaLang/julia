@@ -73,9 +73,11 @@ $(foreach project,$(BB_GCC_EXPANDED_PROJECTS),$(foreach triplet,$(TRIPLETS),$(fo
 $(foreach project,$(BB_CXX_EXPANDED_PROJECTS),$(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,$(project),$(triplet)-$(cxxstring_abi))))))
 $(foreach project,$(BB_CXX_EXPANDED_PROJECTS),$(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,$(project),$(triplet)))))
 
-# Special libLLVM_asserts_jll targets
+# Special libLLVM_asserts_jll/LLVM_assert_jll targets
 $(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,llvm,$(triplet)-$(cxxstring_abi),assert))))
+$(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,llvm-tools,$(triplet)-$(cxxstring_abi),assert))))
 $(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,llvm,$(triplet),assert)))
+$(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,llvm-tools,$(triplet),assert)))
 
 # External stdlibs
 checksum-stdlibs:
