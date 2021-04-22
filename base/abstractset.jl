@@ -147,7 +147,7 @@ Set{Float64} with 1 element:
 """
 function intersect(s::AbstractSet, itr, itrs...)
     # determine if swap order is useful and viable
-    if length(s)>50 && haslength(itr) && all(haslength.(itrs))
+    if length(s)>50 && haslength(itr) && all(map(haslength, itrs))
         itrs_lengths = length.(itrs)
         min_length = minimum(itrs_lengths)
         # do nothing if s is longer than the rest or itr is already the shortest
