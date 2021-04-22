@@ -324,6 +324,8 @@ end
 
 end # os-test
 
+joinpath(paths::AbstractString...)::String = joinpath(paths)
+
 """
     joinpath(parts::AbstractString...) -> String
     joinpath(parts::Vector{AbstractString}) -> String
