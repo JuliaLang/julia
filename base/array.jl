@@ -1385,21 +1385,20 @@ julia> keepat!([6, 5, 4, 3, 2, 1], 1:2:5)
  2
 ```
 """
-function keepat!(a::Vector, inds)
-    n = length(a)
-    l = 0
-    i = 1
+function keepat!(a::AbstractVector, inds)
+    isempty(inds) && return a
+    local prev
+    i = firstindex(a)
     for k in inds
-        1 <= k <= n || throw(BoundsError(a, k))
-        l < k || throw(ArgumentError("indices must be unique and sorted"))
+        @isdefined(prev) && (prev <= k || throw(ArgumentError("indices must be sorted")))
         if i != k
-            @inbounds a[i] = a[k]
+            a[i] = a[k]
         end
-        l = k
-        i += 1
+        prev = k
+        i = nextind(a, i)
     end
-    _deleteend!(a, n-i+1)
-    a
+    deleteat!(a, i:lastindex(a))
+    return a
 end
 
 """
