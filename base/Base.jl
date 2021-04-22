@@ -58,6 +58,22 @@ if false
     println(io::IO, x...) = Core.println(io, x...)
 end
 
+iterate(ic::Core.Compiler.IncrementalCompact) = Core.Compiler.iterate(ic)
+iterate(ic::Core.Compiler.IncrementalCompact, st) = Core.Compiler.iterate(ic, st)
+getindex(ic::Core.Compiler.IncrementalCompact, idx) = Core.Compiler.getindex(ic, idx)
+setindex!(ic::Core.Compiler.IncrementalCompact, v, idx) = Core.Compiler.setindex!(ic, v, idx)
+getindex(ic::Core.Compiler.Instruction, idx) = Core.Compiler.getindex(ic, idx)
+setindex!(ic::Core.Compiler.Instruction, v, idx) = Core.Compiler.setindex!(ic, v, idx)
+getindex(ir::Core.Compiler.IRCode, idx) = Core.Compiler.getindex(ir, idx)
+setindex!(ir::Core.Compiler.IRCode, v, idx) = Core.Compiler.setindex!(ir, v, idx)
+getindex(ref::Core.Compiler.UseRef) = Core.Compiler.getindex(ref)
+iterate(uses::Core.Compiler.UseRefIterator) = Core.Compiler.iterate(uses)
+iterate(uses::Core.Compiler.UseRefIterator, st) = Core.Compiler.iterate(uses, st)
+iterate(p::Core.Compiler.Pair) = Core.Compiler.iterate(p)
+iterate(p::Core.Compiler.Pair, st) = Core.Compiler.iterate(p, st)
+getindex(m::Core.Compiler.MethodLookupResult, idx::Int) = Core.Compiler.getindex(m, idx)
+
+
 """
     time_ns()
 
