@@ -254,16 +254,19 @@ function splitpath(p::String)
     return out
 end
 
-joinpath(path::AbstractString)::String = path
-
 if Sys.iswindows()
 
-function joinpath(path::AbstractString, paths::AbstractString...)::String
-    result_drive, result_path = splitdrive(path)
+function joinpath(paths::Union{Tuple, AbstractVector})::String
+    assertstring(x) = x isa AbstractString || throw(ArgumentError("path component is not a string: $(repr(x))"))
 
-    local p_drive, p_path
-    for p in paths
-        p_drive, p_path = splitdrive(p)
+    isempty(paths) && throw(ArgumentError("collection of path components must be non-empty"))
+    assertstring(paths[1])
+    result_drive, result_path = splitdrive(paths[1])
+
+    p_path = ""
+    for i in firstindex(paths)+1:lastindex(paths)
+        assertstring(paths[i])
+        p_drive, p_path = splitdrive(paths[i])
 
         if startswith(p_path, ('\\', '/'))
             # second path is absolute
@@ -299,8 +302,15 @@ end
 
 else
 
-function joinpath(path::AbstractString, paths::AbstractString...)::String
-    for p in paths
+function joinpath(paths::Union{Tuple, AbstractVector})::String
+    assertstring(x) = x isa AbstractString || throw(ArgumentError("path component is not a string: $(repr(x))"))
+
+    isempty(paths) && throw(ArgumentError("collection of path components must be non-empty"))
+    assertstring(paths[1])
+    path = paths[1]
+    for i in firstindex(paths)+1:lastindex(paths)
+        p = paths[i]
+        assertstring(p)
         if isabspath(p)
             path = p
         elseif isempty(path) || path[end] == '/'
@@ -314,8 +324,12 @@ end
 
 end # os-test
 
+joinpath(paths::AbstractString...)::String = joinpath(paths)
+
 """
     joinpath(parts::AbstractString...) -> String
+    joinpath(parts::Vector{AbstractString}) -> String
+    joinpath(parts::Tuple{AbstractString}) -> String
 
 Join path components into a full path. If some argument is an absolute path or
 (on Windows) has a drive specification that doesn't match the drive computed for
@@ -329,6 +343,11 @@ letter casing, hence `joinpath("C:\\A","c:b") = "C:\\A\\b"`.
 # Examples
 ```jldoctest
 julia> joinpath("/home/myuser", "example.jl")
+"/home/myuser/example.jl"
+```
+
+```jldoctest
+julia> joinpath(["/home/myuser", "example.jl"])
 "/home/myuser/example.jl"
 ```
 """
