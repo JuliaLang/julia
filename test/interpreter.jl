@@ -30,3 +30,11 @@ let p = Pipe(),
     wait(proc)
     close(p)
 end
+
+# interpreting Expr(:isdefined, ::QuoteNode)
+let code = """
+           @generated f() = Expr(:isdefined, QuoteNode(Float64))
+           f()
+           """
+    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -E $code`, String) == "true\n"
+end

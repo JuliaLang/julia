@@ -236,7 +236,8 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             }
         }
         else {
-            assert(0 && "malformed isdefined expression");
+            // QuoteNode or other implicitly quoted object
+            defined = 1;
         }
         return defined ? jl_true : jl_false;
     }
