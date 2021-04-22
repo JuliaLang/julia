@@ -343,8 +343,13 @@ letter casing, hence `joinpath("C:\\A","c:b") = "C:\\A\\b"`.
 julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
+
+```jldoctest
+julia> joinpath(["/home/myuser", "example.jl"])
+"/home/myuser/example.jl"
+```
 """
-joinpath(paths::AbstractString...)::String = joinpath(paths)
+joinpath
 
 """
     normpath(path::AbstractString) -> String
