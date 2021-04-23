@@ -229,8 +229,12 @@ _maxnnzfrom(shape::NTuple{2}, A::AbstractSparseMatrixCSC) = nnz(A) * div(shape[1
 @inline _unchecked_maxnnzbcres(shape, As...) = _unchecked_maxnnzbcres(shape, As)
 @inline _checked_maxnnzbcres(shape::NTuple{1}, As...) = shape[1] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
 @inline _checked_maxnnzbcres(shape::NTuple{2}, As...) = shape[1] != 0 && shape[2] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
-@inline _allocres(shape::NTuple{1}, indextype, entrytype, maxnnz) = sizehint!(SparseVector(shape[1], indextype[], entrytype[]), maxnnz)
-@inline _allocres(shape::NTuple{2}, indextype, entrytype, maxnnz) = sizehint!(SparseMatrixCSC(shape..., fill(indextype(1), shape[2]+1), indextype[], entrytype[]), maxnnz)
+@inline function _allocres(shape::Union{NTuple{1},NTuple{2}}, indextype, entrytype, maxnnz)
+    X = spzeros(entrytype, indextype, shape)
+    resize!(storedinds(X), maxnnz)
+    resize!(storedvals(X), maxnnz)
+    return X
+end
 
 # (4) _map_zeropres!/_map_notzeropres! specialized for a single sparse vector/matrix
 "Stores only the nonzero entries of `map(f, Array(A))` in `C`."
