@@ -1297,8 +1297,8 @@ julia> io = open(...)
 julia> redirect(f, stdout=io, stdin=io) # not supported
 ```
 
-!!! compat "Julia 1.6"
-    `redirect` requires Julia 1.6 or later.
+!!! compat "Julia 1.7"
+    `redirect` requires Julia 1.7 or later.
 """
 function redirect(f; stdin=nothing, stderr=nothing, stdout=nothing)
 
