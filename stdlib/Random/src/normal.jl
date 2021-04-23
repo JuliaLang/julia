@@ -214,6 +214,22 @@ for randfun in [:randn, :randexp]
             A
         end
 
+        # optimization for Xoshiro, which randomizes natively Array{UInt64}
+        function $randfun!(rng::Union{Xoshiro, TaskLocalRNG}, A::Array{Float64})
+            if length(A) < 7
+                for i in eachindex(A)
+                    @inbounds A[i] = $randfun(rng, Float64)
+                end
+            else
+                GC.@preserve A rand!(rng, UnsafeView{UInt64}(pointer(A), length(A)))
+
+                for i in eachindex(A)
+                    @inbounds A[i] = $_randfun(rng, reinterpret(UInt64, A[i]))
+                end
+            end
+            A
+        end
+
         $randfun!(A::AbstractArray) = $randfun!(default_rng(), A)
 
         # generating arrays

@@ -2,7 +2,8 @@
 
 module XoshiroSimd
 # Getting the xoroshiro RNG to reliably vectorize is somewhat of a hassle without Simd.jl.
-import ..Random: TaskLocalRNG, rand, rand!, Xoshiro, SamplerType, CloseOpen01, SamplerTrivial
+import ..Random: TaskLocalRNG, rand, rand!, Xoshiro, CloseOpen01, UnsafeView,
+                 SamplerType, SamplerTrivial
 using Base: BitInteger_types
 
 # Vector-width. Influences random stream. We may want to tune this before merging.
@@ -330,7 +331,7 @@ function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Array{Float64}, ::Sampler
 end
 
 for T in BitInteger_types
-    @eval function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Array{$T}, ::SamplerType{$T})
+    @eval function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Union{Array{$T}, UnsafeView{$T}}, ::SamplerType{$T})
         GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof($T), UInt8, xoshiroWidth())
         dst
     end
