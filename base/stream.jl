@@ -1241,6 +1241,9 @@ redirect_stdin
 
 Redirect a subset of the streams `stdin`, `stderr`, `stdout`.
 Each argument must be an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+
+!!! compat "Julia 1.7"
+    `redirect` requires Julia 1.7 or later.
 """
 function redirect(;stdin=nothing, stderr=nothing, stdout=nothing)
     stdin  === nothing || redirect_stdin(stdin)
