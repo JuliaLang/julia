@@ -29,6 +29,10 @@ end
     @test fib_noinline_wrap(3) == 2
     @test fib_noinline_wrap(4) == 3
     @test fib_noinline_wrap(5) == 5
+    @test fib1() == 1
+    @test fib2() == 1
+    @test fib3() == 2
+    @test fib10() == 55
 end
 
 @testset "return via Ref" begin

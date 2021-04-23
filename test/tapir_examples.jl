@@ -13,6 +13,10 @@ function fib(N)
 end
 
 @noinline fib_noinline_wrap(N) = fib(N)
+@noinline fib1() = fib(1)
+@noinline fib2() = fib(2)
+@noinline fib3() = fib(3)
+@noinline fib10() = fib(10)
 
 ###
 # Interesting corner cases and broken IR

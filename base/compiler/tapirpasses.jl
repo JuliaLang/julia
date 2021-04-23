@@ -976,6 +976,7 @@ function opaque_closure_method_from_ssair(ir::IRCode)
         functionloc = LineNumberNode(lin.line, lin.file)
     end
     ci = code_info_from_ssair(ir)
+    ci = remove_tapir!(ci)  # TODO: do this at IRCode
     nargs = length(ir.argtypes)
     name = :_tapir_outlined_function
     return ccall(
