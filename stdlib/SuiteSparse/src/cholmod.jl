@@ -1117,7 +1117,7 @@ function SparseMatrixCSC{Tv,SuiteSparse_long}(A::Sparse{Tv}) where Tv
             "with stype == 0 before converting to SparseMatrixCSC"))
     end
     args = _extract_args(s)
-    s.sorted == 0 && sortBuffers!(args...);
+    s.sorted == 0 && _sort_buffers!(args...);
     return _trim_nz_builder!(args...)
 end
 
@@ -1125,7 +1125,7 @@ function Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A::Sparse{
     s = unsafe_load(pointer(A))
     issymmetric(A) || throw(ArgumentError("matrix is not symmetric"))
     args = _extract_args(s)
-    s.sorted == 0 && sortBuffers!(args...)
+    s.sorted == 0 && _sort_buffers!(args...)
     Symmetric(_trim_nz_builder!(args...), s.stype > 0 ? :U : :L)
 end
 convert(T::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}}, A::Sparse{Float64}) = T(A)
@@ -1134,7 +1134,7 @@ function Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}(A::Sparse{Tv}) where
     s = unsafe_load(pointer(A))
     ishermitian(A) || throw(ArgumentError("matrix is not Hermitian"))
     args = _extract_args(s)
-    s.sorted == 0 && sortBuffers!(args...)
+    s.sorted == 0 && _sort_buffers!(args...)
     Hermitian(_trim_nz_builder!(args...), s.stype > 0 ? :U : :L)
 end
 convert(T::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv}) where {Tv<:VTypes} = T(A)
@@ -1958,8 +1958,7 @@ end
     B::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 
 # Sort all the indices in each column for the construction of a CSC sparse matrix
-# sortBuffers!(A, sortindices = :sortcols)        # Sort each column with sort()
-function sortBuffers!(m, n, colptr::Vector{Ti}, rowval::Vector{Ti}, nzval::Vector{Tv}) where {Ti <: Integer, Tv}
+function _sort_buffers!(m, n, colptr::Vector{Ti}, rowval::Vector{Ti}, nzval::Vector{Tv}) where {Ti <: Integer, Tv}
     index = Base.zeros(Ti, m)
     row = Base.zeros(Ti, m)
     val = Base.zeros(Tv, m)
