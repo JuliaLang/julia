@@ -4,16 +4,23 @@
 
 const empty_sym = Symbol("")
 function strip_gensym(sym)
-    if sym === Symbol("#self#") || sym === Symbol("#unused#")
+    if sym === :var"#self#" || sym === :var"#unused#"
         return empty_sym
     end
     return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[i]
-    if i == nargs && isva && !isvarargtype(t)
-        t = Vararg{t,length(sig.parameters)-nargs+1}
+    t = sig.parameters[unwrapva(min(i, end))]
+    if i == nargs && isva
+        va = sig.parameters[end]
+        if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
+            t = va
+        else
+            ntotal = length(sig.parameters)
+            isvarargtype(va) && (ntotal += va.N - 1)
+            t = Vararg{t,ntotal-nargs+1}
+        end
     end
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
@@ -27,31 +34,20 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
         t === Any && return s, ""
     end
     if isvarargtype(t)
-        v1, v2 = nothing, nothing
-        if isa(t, UnionAll)
-            v1 = t.var
-            t = t.body
-            if isa(t, UnionAll)
-                v2 = t.var
-                t = t.body
-            end
-        end
-        ut = unwrap_unionall(t)
-        tt, tn = ut.parameters[1], ut.parameters[2]
-        if isa(tn, TypeVar) && (tn === v1 || tn === v2)
-            if tt === Any || (isa(tt, TypeVar) && (tt === v1 || tt === v2))
+        if !isdefined(t, :N)
+            if unwrapva(t) === Any
                 return string(s, "..."), ""
             else
-                return s, string_with_env(env, tt) * "..."
+                return s, string_with_env(env, unwrapva(t)) * "..."
             end
         end
-        return s, string_with_env(env, "Vararg{", tt, ", ", tn, "}")
+        return s, string_with_env(env, "Vararg{", t.T, ", ", t.N, "}")
     end
     return s, string_with_env(env, t)
 end
 
 function method_argnames(m::Method)
-    argnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), m.slot_syms)
+    argnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), m.slot_syms)
     isempty(argnames) && return argnames
     return argnames[1:m.nargs]
 end
@@ -73,7 +69,7 @@ function arg_decl_parts(m::Method, html=false)
         end
         decls = Tuple{String,String}[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
-        decls[1] = ("", sprint(show_signature_function, sig.parameters[1], false, decls[1][1], html,
+        decls[1] = ("", sprint(show_signature_function, unwrapva(sig.parameters[1]), false, decls[1][1], html,
                                context = show_env))
     else
         decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]

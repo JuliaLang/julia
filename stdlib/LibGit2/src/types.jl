@@ -520,7 +520,7 @@ end
 
 function Base.show(io::IO, df::DiffFile)
     println(io, "DiffFile:")
-    println(io, "Oid: $(df.id))")
+    println(io, "Oid: $(df.id)")
     println(io, "Path: $(df.path)")
     println(io, "Size: $(df.size)")
 end

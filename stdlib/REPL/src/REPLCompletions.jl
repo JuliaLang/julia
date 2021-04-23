@@ -413,9 +413,9 @@ function get_type_call(expr::Expr)
     end
     # use _methods_by_ftype as the function is supplied as a type
     world = Base.get_world_counter()
-    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
+    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)::Vector
     length(matches) == 1 || return (Any, false)
-    match = first(matches)
+    match = first(matches)::Core.MethodMatch
     # Typeinference
     interp = Core.Compiler.NativeInterpreter()
     return_type = Core.Compiler.typeinf_type(interp, match.method, match.spec_types, match.sparams)
@@ -533,6 +533,11 @@ const whitespace_chars = [" \t\n\r"...]
 # bslash_completions function to try and complete on escaped characters in strings
 const bslash_separators = [whitespace_chars..., "\"'`"...]
 
+const subscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k, "\\_") && length(k)==3)
+const subscript_regex = Regex("^\\\\_[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(subscripts)) * "]+\\z")
+const superscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k, "\\^") && length(k)==3)
+const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(superscripts)) * "]+\\z")
+
 # Aux function to detect whether we're right after a
 # using or import keyword
 function afterusing(string::String, startpos::Int)
@@ -555,6 +560,12 @@ function bslash_completions(string::String, pos::Int)
         latex = get(latex_symbols, s, "")
         if !isempty(latex) # complete an exact match
             return (true, (Completion[BslashCompletion(latex)], slashpos:pos, true))
+        elseif occursin(subscript_regex, s)
+            sub = map(c -> subscripts[c], s[3:end])
+            return (true, (Completion[BslashCompletion(sub)], slashpos:pos, true))
+        elseif occursin(superscript_regex, s)
+            sup = map(c -> superscripts[c], s[3:end])
+            return (true, (Completion[BslashCompletion(sup)], slashpos:pos, true))
         end
         emoji = get(emoji_symbols, s, "")
         if !isempty(emoji)

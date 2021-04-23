@@ -87,6 +87,7 @@ function popfirst!(q::InvasiveLinkedList{T}) where {T}
     return val
 end
 
+# this function assumes `val` is found in `q`
 function list_deletefirst!(q::InvasiveLinkedList{T}, val::T) where T
     val.queue === q || return
     head = q.head::T
@@ -97,10 +98,10 @@ function list_deletefirst!(q::InvasiveLinkedList{T}, val::T) where T
             q.head = val.next::T
         end
     else
-        head_next = head.next
+        head_next = head.next::T
         while head_next !== val
             head = head_next
-            head_next = head.next::Union{T, Nothing}
+            head_next = head.next::T
         end
         if q.tail::T === val
             head.next = nothing

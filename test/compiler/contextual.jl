@@ -71,11 +71,8 @@ module MiniCassette
         end
 
         tt = Tuple{f, args...}
-        mthds = _methods_by_ftype(tt, -1, typemax(UInt))
-        @assert length(mthds) == 1
-        match = mthds[1]
-        mi = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
-            (Any, Any, Any), match.method, match.spec_types, match.sparams)
+        match = Base._method_by_ftype(tt, -1, typemax(UInt))
+        mi = Core.Compiler.specialize_method(match)
         # Unsupported in this mini-cassette
         @assert !mi.def.isva
         code_info = retrieve_code_info(mi)

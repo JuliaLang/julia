@@ -13,6 +13,15 @@ include("testenv.jl")
 tests, net_on, exit_on_error, use_revise, seed = choosetests(ARGS)
 tests = unique(tests)
 
+if Sys.islinux()
+    const SYS_rrcall_check_presence = 1008
+    global running_under_rr() = 0 == ccall(:syscall, Int,
+        (Int, Int, Int, Int, Int, Int, Int),
+        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
+else
+    global running_under_rr() = false
+end
+
 if use_revise
     using Revise
     union!(Revise.stdlib_names, Symbol.(STDLIBS))
@@ -65,6 +74,7 @@ end
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
+move_to_node1("Distributed")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
@@ -81,6 +91,16 @@ prepend!(tests, linalg_tests)
 
 import LinearAlgebra
 cd(@__DIR__) do
+    # `net_on` implies that we have access to the loopback interface which is
+    # necessary for Distributed multi-processing. There are some test
+    # environments that do not allow access to loopback, so we must disable
+    # addprocs when `net_on` is false. Note that there exist build environments,
+    # including Nix, where `net_on` is false but we still have access to the
+    # loopback interface. It would be great to make this check more specific to
+    # identify those situations somehow. See
+    #   * https://github.com/JuliaLang/julia/issues/6722
+    #   * https://github.com/JuliaLang/julia/pull/29384
+    #   * https://github.com/JuliaLang/julia/pull/40348
     n = 1
     if net_on
         n = min(Sys.CPU_THREADS, length(tests))
@@ -136,17 +156,22 @@ cd(@__DIR__) do
         finally
             unlock(print_lock)
         end
+        nothing
     end
 
     global print_testworker_started = (name, wrkr)->begin
+        pid = running_under_rr() ? remotecall_fetch(getpid, wrkr) : 0
+        at = lpad("($wrkr)", name_align - textwidth(name) + 1, " ")
         lock(print_lock)
         try
-            printstyled(name, color=:white)
-            printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
-                " "^elapsed_align, "started at $(now())\n", color=:white)
+            printstyled(name, at, " |", " "^elapsed_align,
+                    "started at $(now())",
+                    (pid > 0 ? " on pid $pid" : ""),
+                    "\n", color=:white)
         finally
             unlock(print_lock)
         end
+        nothing
     end
 
     function print_testworker_errored(name, wrkr, @nospecialize(e))

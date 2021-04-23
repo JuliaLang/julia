@@ -20,6 +20,7 @@ if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main
 let
     # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
+    # Run with the `--exclude-jlls` option to filter out all JLL packages
     stdlibs = [
         # No dependencies
         :ArgTools,
@@ -30,7 +31,6 @@ let
         :Libdl,
         :Logging,
         :Mmap,
-        :MozillaCACerts_jll,
         :NetworkOptions,
         :SHA,
         :Serialization,
@@ -39,7 +39,6 @@ let
 
         # 1-depth packages
         :DelimitedFiles,
-        :LibCURL_jll,
         :LinearAlgebra,
         :Markdown,
         :Printf,
@@ -51,14 +50,12 @@ let
         :Distributed,
         :Future,
         :InteractiveUtils,
-        :LibCURL,
         :LibGit2,
         :Profile,
         :SparseArrays,
         :UUIDs,
 
         # 3-depth packages
-        :Downloads,
         :REPL,
         :SharedArrays,
         :Statistics,
@@ -67,9 +64,15 @@ let
         :Test,
 
         # 4-depth packages
-        :Pkg,
+        :LibCURL,
 
         # 5-depth packages
+        :Downloads,
+
+        # 6-depth packages
+        :Pkg,
+
+        # 7-depth packages
         :LazyArtifacts,
     ]
     maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)

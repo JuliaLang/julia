@@ -4,13 +4,13 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX | PCRE.UCP
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.MATCH_INVALID_UTF | PCRE.ALT_BSUX | PCRE.UCP
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 """
-    An abstract type representing any sort of pattern matching expression (typically a regular
-    expression).
-    `AbstractPattern` objects can be used to match strings with [`match`](@ref).
+An abstract type representing any sort of pattern matching expression
+(typically a regular expression). `AbstractPattern` objects can be used to
+match strings with [`match`](@ref).
 """
 abstract type AbstractPattern end
 
@@ -23,6 +23,9 @@ with [`match`](@ref).
 `Regex` objects can be created using the [`@r_str`](@ref) string macro. The
 `Regex(pattern[, flags])` constructor is usually used if the `pattern` string needs
 to be interpolated. See the documentation of the string macro for details on flags.
+
+!!! note
+    To escape interpolated variables use `\\Q` and `\\E` (e.g. `Regex("\\\\Q\$x\\\\E")`)
 """
 mutable struct Regex <: AbstractPattern
     pattern::String
@@ -104,7 +107,7 @@ listed after the ending quote, to change its behaviour:
   `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
   these sequences only match ASCII characters.
 
-See `Regex` if interpolation is needed.
+See [`Regex`](@ref) if interpolation is needed.
 
 # Examples
 ```jldoctest
@@ -119,8 +122,9 @@ function show(io::IO, re::Regex)
     imsxa = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED|PCRE.UCP
     opts = re.compile_options
     if (opts & ~imsxa) == (DEFAULT_COMPILER_OPTS & ~imsxa)
-        print(io, 'r')
-        print_quoted_literal(io, re.pattern)
+        print(io, "r\"")
+        escape_raw_string(io, re.pattern)
+        print(io, "\"")
         if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
         if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
         if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
@@ -136,14 +140,52 @@ function show(io::IO, re::Regex)
 end
 
 """
-   `AbstractMatch` objects are used to represent information about matches found in a string
-   using an `AbstractPattern`.
+`AbstractMatch` objects are used to represent information about matches found
+in a string using an `AbstractPattern`.
 """
 abstract type AbstractMatch end
 
-# TODO: map offsets into strings in other encodings back to original indices.
-# or maybe it's better to just fail since that would be quite slow
+"""
+    RegexMatch
 
+A type representing a single match to a `Regex` found in a string.
+Typically created from the [`match`](@ref) function.
+
+The `match` field stores the substring of the entire matched string.
+The `captures` field stores the substrings for each capture group, indexed by number.
+To index by capture group name, the entire match object should be indexed instead,
+as shown in the examples.
+The location of the start of the match is stored in the `offset` field.
+The `offsets` field stores the locations of the start of each capture group,
+with 0 denoting a group that was not captured.
+
+This type can be used as an iterator over the capture groups of the `Regex`,
+yielding the substrings captured in each group.
+Because of this, the captures of a match can be destructured.
+If a group was not captured, `nothing` will be yielded instead of a substring.
+
+Methods that accept a `RegexMatch` object are defined for [`iterate`](@ref),
+[`length`](@ref), [`eltype`](@ref), [`keys`](@ref keys(::RegexMatch)), [`haskey`](@ref), and
+[`getindex`](@ref), where keys are the the names or numbers of a capture group.
+See [`keys`](@ref keys(::RegexMatch)) for more information.
+
+# Examples
+```jldoctest
+julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
+RegexMatch("11:30", hour="11", minute="30", 3=nothing)
+
+julia> hr, min, ampm = m;
+
+julia> hr
+"11"
+
+julia> m["minute"]
+"30"
+
+julia> m.match
+"11:30"
+```
+"""
 struct RegexMatch <: AbstractMatch
     match::SubString{String}
     captures::Vector{Union{Nothing,SubString{String}}}
@@ -152,19 +194,46 @@ struct RegexMatch <: AbstractMatch
     regex::Regex
 end
 
+"""
+    keys(m::RegexMatch) -> Vector
+
+Return a vector of keys for all capture groups of the underlying regex.
+A key is included even if the capture group fails to match.
+That is, `idx` will be in the return value even if `m[idx] == nothing`.
+
+Unnamed capture groups will have integer keys corresponding to their index.
+Named capture groups will have string keys.
+
+!!! compat "Julia 1.6"
+    This method was added in Julia 1.6
+
+# Examples
+```jldoctest
+julia> keys(match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30"))
+3-element Vector{Any}:
+  "hour"
+  "minute"
+ 3
+```
+"""
+function keys(m::RegexMatch)
+    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
+    return map(eachindex(m.captures)) do i
+        # If the capture group is named, return it's name, else return it's index
+        get(idx_to_capture_name, i, i)
+    end
+end
+
 function show(io::IO, m::RegexMatch)
     print(io, "RegexMatch(")
     show(io, m.match)
-    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
-    if !isempty(m.captures)
+    capture_keys = keys(m)
+    if !isempty(capture_keys)
         print(io, ", ")
-        for i = 1:length(m.captures)
-            # If the capture group is named, show the name.
-            # Otherwise show its index.
-            capture_name = get(idx_to_capture_name, i, i)
+        for (i, capture_name) in enumerate(capture_keys)
             print(io, capture_name, "=")
             show(io, m.captures[i])
-            if i < length(m.captures)
+            if i < length(m)
                 print(io, ", ")
             end
         end
@@ -187,6 +256,10 @@ function haskey(m::RegexMatch, name::Symbol)
     return idx > 0
 end
 haskey(m::RegexMatch, name::AbstractString) = haskey(m, Symbol(name))
+
+iterate(m::RegexMatch, args...) = iterate(m.captures, args...)
+length(m::RegexMatch) = length(m.captures)
+eltype(m::RegexMatch) = eltype(m.captures)
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
@@ -265,7 +338,7 @@ end
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
-Search for the first match of the regular expression `r` in `s` and return a `RegexMatch`
+Search for the first match of the regular expression `r` in `s` and return a [`RegexMatch`](@ref)
 object containing the match, or nothing if the match failed. The matching substring can be
 retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
 `m.captures` The optional `idx` argument specifies an index at which to start the search.
@@ -397,8 +470,28 @@ function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; ov
 end
 
 """
+    findall(c::AbstractChar, s::AbstractString)
+
+Return a vector `I` of the indices of `s` where `s[i] == c`. If there are no such
+elements in `s`, return an empty array.
+
+# Examples
+```jldoctest
+julia> findall('a', "batman")
+2-element Vector{Int64}:
+ 2
+ 5
+```
+
+!!! compat "Julia 1.7"
+     This method requires at least Julia 1.7.
+"""
+findall(c::AbstractChar, s::AbstractString) = findall(isequal(c),s)
+
+
+"""
     count(
-        pattern::Union{AbstractString,AbstractPattern},
+        pattern::Union{AbstractChar,AbstractString,AbstractPattern},
         string::AbstractString;
         overlap::Bool = false,
     )
@@ -411,8 +504,11 @@ original string, otherwise they must be from disjoint character ranges.
 
 !!! compat "Julia 1.3"
      This method requires at least Julia 1.3.
+
+!!! compat "Julia 1.7"
+      Using a character as the pattern requires at least Julia 1.7.
 """
-function count(t::Union{AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
+function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
     i, e = firstindex(s), lastindex(s)
     while true
@@ -456,8 +552,9 @@ isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)::Bool
 iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)::Union{Nothing,Tuple{AbstractChar,Int}}
 
 function show(io::IO, s::SubstitutionString)
-    print(io, "s")
-    print_quoted_literal(io, s.string)
+    print(io, "s\"")
+    escape_raw_string(io, s.string)
+    print(io, "\"")
 end
 
 """
@@ -494,6 +591,8 @@ replace_err(repl) = error("Bad replacement string: $repl")
 
 function _write_capture(io, re::RegexAndMatchData, group)
     len = PCRE.substring_length_bynumber(re.match_data, group)
+    # in the case of an optional group that doesn't match, len == 0
+    len == 0 && return
     ensureroom(io, len+1)
     PCRE.substring_copy_bynumber(re.match_data, group,
         pointer(io.data, io.ptr), len+1)

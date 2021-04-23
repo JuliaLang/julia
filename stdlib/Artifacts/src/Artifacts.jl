@@ -11,12 +11,11 @@ export artifact_exists, artifact_path, artifact_meta, artifact_hash,
 """
     parse_toml(path::String)
 
-Uses Base.TOML to parse a TOML file
+Uses Base.TOML to parse a TOML file. Do not mutate the returned dictionary.
 """
 function parse_toml(path::String)
-    p = Base.TOML.Parser()
-    Base.TOML.reinit!(p, read(path, String); filepath=path)
-    return Base.TOML.parse(p)
+    # Uses the caching mechanics for toml files in Base
+    Base.parsed_toml(path)
 end
 
 # keep in sync with Base.project_names and Base.manifest_names
@@ -542,7 +541,9 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     meta = artifact_meta(name, artifact_dict, artifacts_toml; platform)
     if meta !== nothing && get(meta, "lazy", false)
         if lazyartifacts isa Module && isdefined(lazyartifacts, :ensure_artifact_installed)
-            nameof(lazyartifacts) === :Pkg && Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
+            if nameof(lazyartifacts) in (:Pkg, :Artifacts)
+                Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
+            end
             return jointail(lazyartifacts.ensure_artifact_installed(string(name), artifacts_toml; platform), path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
@@ -550,7 +551,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     error("Artifact $(repr(name)) was not installed correctly. Try `using Pkg; Pkg.instantiate()` to re-install all missing resources.")
 end
 
-"""
+raw"""
     split_artifact_slash(name::String)
 
 Splits an artifact indexing string by path deliminters, isolates the first path element,
@@ -558,7 +559,7 @@ returning that and the `joinpath()` of the remaining arguments.  This normalizes
 separators to the native path separator for the current platform.  Examples:
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using Artifacts: split_artifact_slash)
 julia> split_artifact_slash("Foo")
 ("Foo", "")
 
@@ -604,7 +605,7 @@ function artifact_slash_lookup(name::String, artifact_dict::Dict,
 
     meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml; platform)
     if meta === nothing
-        error("Cannot locate artifact '$(name)' in '$(artifacts_toml)'")
+        error("Cannot locate artifact '$(name)' for $(triplet(platform)) in '$(artifacts_toml)'")
     end
     hash = SHA1(meta["git-tree-sha1"])
     return artifact_name, artifact_path_tail, hash
@@ -660,9 +661,13 @@ macro artifact_str(name, platform=nothing)
     Base.include_dependency(artifacts_toml)
 
     # Check if the user has provided `LazyArtifacts`, and thus supports lazy artifacts
-    lazyartifacts = isdefined(__module__, :LazyArtifacts) ? GlobalRef(__module__, :LazyArtifacts) : nothing
-    if lazyartifacts === nothing && isdefined(__module__, :Pkg)
-        lazyartifacts = GlobalRef(__module__, :Pkg) # deprecated
+    # If not, check to see if `Pkg` or `Pkg.Artifacts` has been imported.
+    lazyartifacts = nothing
+    for module_name in (:LazyArtifacts, :Pkg, :Artifacts)
+        if isdefined(__module__, module_name)
+            lazyartifacts = GlobalRef(__module__, module_name)
+            break
+        end
     end
 
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
@@ -672,7 +677,7 @@ macro artifact_str(name, platform=nothing)
         platform = HostPlatform()
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
         return quote
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))::String
         end
     else
         if platform === nothing
@@ -681,7 +686,7 @@ macro artifact_str(name, platform=nothing)
         return quote
             local platform = $(esc(platform))
             local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))::String
         end
     end
 end

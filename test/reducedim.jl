@@ -195,6 +195,7 @@ end
     end
 
 end
+
 ## findmin/findmax/minimum/maximum
 
 A = [1.0 5.0 6.0;
@@ -217,6 +218,39 @@ for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
     @test isequal(maximum!(copy(rval), A, init=false), rval)
+end
+
+@testset "missing in findmin/findmax" begin
+    B = [1.0 missing NaN;
+         5.0 NaN missing]
+    for (tup, rval, rind) in [(1, [5.0 missing missing], [CartesianIndex(2, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
+                              (2, [missing; missing],    [CartesianIndex(1, 2) CartesianIndex(2, 3)] |> permutedims)]
+        (rval′, rind′) = findmax(B, dims=tup)
+        @test all(rval′ .=== rval)
+        @test all(rind′ .== rind)
+        @test all(maximum(B, dims=tup) .=== rval)
+    end
+
+    for (tup, rval, rind) in [(1, [1.0 missing missing], [CartesianIndex(1, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
+                              (2, [missing; missing],    [CartesianIndex(1, 2) CartesianIndex(2, 3)] |> permutedims)]
+        (rval′, rind′) = findmin(B, dims=tup)
+        @test all(rval′ .=== rval)
+        @test all(rind′ .== rind)
+        @test all(minimum(B, dims=tup) .=== rval)
+    end
+end
+
+@testset "reducedim_init min/max unorderable handling" begin
+    x = Any[1.0, NaN]
+    y = [1, missing]
+    for (v, rval1, rval2) in [(x, [NaN], x),
+                              (y, [missing], y),
+                              (Any[1. NaN; 1. 1.], Any[1. NaN], Any[NaN, 1.])]
+        for f in (minimum, maximum)
+            @test all(f(v, dims=1) .=== rval1)
+            @test all(f(v, dims=2) .=== rval2)
+        end
+    end
 end
 
 #issue #23209

@@ -3,7 +3,9 @@
 using Test, Distributed, SharedArrays, Random
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
-addprocs_with_testenv(4)
+# These processes explicitly want to share memory, we can't have
+# them in separate rr sessions
+addprocs_with_testenv(4; rr_allowed=false)
 @test nprocs() == 5
 
 @everywhere using Test, SharedArrays
@@ -174,6 +176,12 @@ d = SharedArrays.shmem_fill(1.0, (10,10,10))
 @test fill(1., 100, 10) == reshape(d,(100,10))
 d = SharedArrays.shmem_fill(1.0, (10,10,10))
 @test_throws DimensionMismatch reshape(d,(50,))
+# issue #40249, reshaping on another process
+let m = SharedArray{ComplexF64}(10, 20, 30)
+    m2 = remotecall_fetch(() -> reshape(m, (100, :)), id_other)
+    @test size(m2) == (100, 60)
+    @test m2 isa SharedArray
+end
 
 # rand, randn
 d = SharedArrays.shmem_rand(dims)

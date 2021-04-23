@@ -104,11 +104,14 @@ state `itr_state`. Return a `Tuple`, if `collection` itself is a `Tuple`, a subt
 `AbstractVector`, if `collection` is an `AbstractArray`, a subtype of `AbstractString`
 if `collection` is an `AbstractString`, and an arbitrary iterator, falling back to
 `Iterators.rest(collection[, itr_state])`, otherwise.
-Can be overloaded for user-defined collection types to customize the behavior of slurping
-in assignments, like `a, b... = collection`.
+
+Can be overloaded for user-defined collection types to customize the behavior of [slurping
+in assignments](@ref destructuring-assignment), like `a, b... = collection`.
 
 !!! compat "Julia 1.6"
     `Base.rest` requires at least Julia 1.6.
+
+See also: [`first`](@ref first), [`Iterators.rest`](@ref).
 
 # Examples
 ```jldoctest
@@ -186,6 +189,8 @@ safe_tail(t::Tuple{}) = ()
 
 Return a `Tuple` consisting of all but the last component of `x`.
 
+See also: [`first`](@ref), [`tail`](@ref Base.tail).
+
 # Examples
 ```jldoctest
 julia> Base.front((1,2,3))
@@ -210,16 +215,22 @@ end
 
 # 1 argument function
 map(f, t::Tuple{})              = ()
-map(f, t::Tuple{Any,})          = (f(t[1]),)
-map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
-map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
+map(f, t::Tuple{Any,})          = (@_inline_meta; (f(t[1]),))
+map(f, t::Tuple{Any, Any})      = (@_inline_meta; (f(t[1]), f(t[2])))
+map(f, t::Tuple{Any, Any, Any}) = (@_inline_meta; (f(t[1]), f(t[2]), f(t[3])))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                       Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
-const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
-                         T,T,T,T,T,T,T,T,Vararg{T,N}}
-function map(f, t::Any16)
+const Any32{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                       Any,Any,Any,Any,Any,Any,Any,Any,
+                       Any,Any,Any,Any,Any,Any,Any,Any,
+                       Any,Any,Any,Any,Any,Any,Any,Any,
+                       Vararg{Any,N}}
+const All32{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,
+                         Vararg{T,N}}
+function map(f, t::Any32)
     n = length(t)
     A = Vector{Any}(undef, n)
     for i=1:n
@@ -229,13 +240,13 @@ function map(f, t::Any16)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
-map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (f(t[1],s[1]),)
-map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (f(t[1],s[1]), f(t[2],s[2]))
+map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (@_inline_meta; (f(t[1],s[1]),))
+map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (@_inline_meta; (f(t[1],s[1]), f(t[2],s[2])))
 function map(f, t::Tuple, s::Tuple)
     @_inline_meta
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
 end
-function map(f, t::Any16, s::Any16)
+function map(f, t::Any32, s::Any32)
     n = length(t)
     A = Vector{Any}(undef, n)
     for i = 1:n
@@ -251,7 +262,7 @@ function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
     @_inline_meta
     (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
 end
-function map(f, t1::Any16, t2::Any16, ts::Any16...)
+function map(f, t1::Any32, t2::Any32, ts::Any32...)
     n = length(t1)
     A = Vector{Any}(undef, n)
     for i = 1:n
@@ -287,9 +298,9 @@ function tuple_type_tail(T::Type)
     else
         T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
         if isvatuple(T) && length(T.parameters) == 1
-            va = T.parameters[1]
-            (isa(va, DataType) && isa(va.parameters[2], Int)) || return T
-            return Tuple{Vararg{va.parameters[1], va.parameters[2]-1}}
+            va = unwrap_unionall(T.parameters[1])::Core.TypeofVararg
+            (isdefined(va, :N) && isa(va.N, Int)) || return T
+            return Tuple{Vararg{va.T, va.N-1}}
         end
         return Tuple{argtail(T.parameters...)...}
     end
@@ -317,8 +328,8 @@ function _totuple(T, itr, s...)
 end
 
 # use iterative algorithm for long tuples
-function _totuple(T::Type{All16{E,N}}, itr) where {E,N}
-    len = N+16
+function _totuple(T::Type{All32{E,N}}, itr) where {E,N}
+    len = N+32
     elts = collect(E, Iterators.take(itr,len))
     if length(elts) != len
         _totuple_err(T)
@@ -342,7 +353,7 @@ end
 filter(f, xs::Tuple) = afoldl((ys, x) -> f(x) ? (ys..., x) : ys, (), xs...)
 
 # use Array for long tuples
-filter(f, t::Any16) = Tuple(filter(f, collect(t)))
+filter(f, t::Any32) = Tuple(filter(f, collect(t)))
 
 ## comparison ##
 
@@ -350,7 +361,7 @@ isequal(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _isequal(t1, t2)
 _isequal(t1::Tuple{}, t2::Tuple{}) = true
 _isequal(t1::Tuple{Any}, t2::Tuple{Any}) = isequal(t1[1], t2[1])
 _isequal(t1::Tuple, t2::Tuple) = isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
-function _isequal(t1::Any16, t2::Any16)
+function _isequal(t1::Any32, t2::Any32)
     for i = 1:length(t1)
         if !isequal(t1[i], t2[i])
             return false
@@ -380,7 +391,7 @@ function _eq_missing(t1::Tuple, t2::Tuple)
         return _eq_missing(tail(t1), tail(t2))
     end
 end
-function _eq(t1::Any16, t2::Any16)
+function _eq(t1::Any32, t2::Any32)
     anymissing = false
     for i = 1:length(t1)
         eq = (t1[i] == t2[i])
@@ -396,7 +407,7 @@ end
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
 hash(::Tuple{}, h::UInt) = h + tuplehash_seed
 hash(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
-function hash(t::Any16, h::UInt)
+function hash(t::Any32, h::UInt)
     out = h + tuplehash_seed
     for i = length(t):-1:1
         out = hash(t[i], out)
@@ -417,7 +428,7 @@ function <(t1::Tuple, t2::Tuple)
     end
     return tail(t1) < tail(t2)
 end
-function <(t1::Any16, t2::Any16)
+function <(t1::Any32, t2::Any32)
     n1, n2 = length(t1), length(t2)
     for i = 1:min(n1, n2)
         a, b = t1[i], t2[i]
@@ -444,7 +455,7 @@ function isless(t1::Tuple, t2::Tuple)
     a, b = t1[1], t2[1]
     isless(a, b) || (isequal(a, b) && isless(tail(t1), tail(t2)))
 end
-function isless(t1::Any16, t2::Any16)
+function isless(t1::Any32, t2::Any32)
     n1, n2 = length(t1), length(t2)
     for i = 1:min(n1, n2)
         a, b = t1[i], t2[i]

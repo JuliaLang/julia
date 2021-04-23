@@ -43,22 +43,24 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 
 // This is necessary, because otherwise the analyzer considers this undefined
 // behavior and terminates the exploration
-#define JL_GC_PUSHFRAME(frame,n)     \
-  JL_CPPALLOCA(frame, sizeof(*frame)+((n) * sizeof(jl_value_t*)));                  \
+#define JL_GC_PUSHFRAME(frame,locals,n)     \
+  JL_CPPALLOCA(frame, sizeof(*frame)+((n) * sizeof(jl_value_t*)));  \
   memset(&frame[1], 0, sizeof(void*) * n); \
-  _JL_GC_PUSHARGS((jl_value_t**)&frame[1], n);
+  _JL_GC_PUSHARGS((jl_value_t**)&frame[1], n); \
+  locals = (jl_value_t**)&frame[1];
 
 #else
 
 #define JL_GC_ENCODE_PUSHFRAME(n)  ((((size_t)(n))<<2)|2)
 
-#define JL_GC_PUSHFRAME(frame,n)                                                    \
+#define JL_GC_PUSHFRAME(frame,locals,n)                                             \
   JL_CPPALLOCA(frame, sizeof(*frame)+(((n)+3)*sizeof(jl_value_t*)));                \
   ((void**)&frame[1])[0] = NULL;                                                    \
   ((void**)&frame[1])[1] = (void*)JL_GC_ENCODE_PUSHFRAME(n);                        \
   ((void**)&frame[1])[2] = jl_pgcstack;                                             \
   memset(&((void**)&frame[1])[3], 0, (n)*sizeof(jl_value_t*));                      \
-  jl_pgcstack = (jl_gcframe_t*)&(((void**)&frame[1])[1])
+  jl_pgcstack = (jl_gcframe_t*)&(((void**)&frame[1])[1]);                           \
+  locals = &((jl_value_t**)&frame[1])[3];
 
 // we define this separately so that we can populate the frame before we add it to the backtrace
 // it's recommended to mark the containing function with NOINLINE, though not essential
@@ -268,6 +270,17 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return v;
     }
+    else if (head == new_opaque_closure_sym) {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, nargs);
+        for (size_t i = 0; i < nargs; i++)
+            argv[i] = eval_value(args[i], s);
+        JL_NARGSV(new_opaque_closure, 5);
+        jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
+            argv[3], argv[4], argv+5, nargs-5);
+        JL_GC_POP();
+        return ret;
+    }
     else if (head == static_parameter_sym) {
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);
@@ -289,7 +302,8 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == boundscheck_sym) {
         return jl_true;
     }
-    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym) {
+    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym ||
+             head == aliasscope_sym || head == popaliasscope_sym) {
         return jl_nothing;
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {
@@ -618,8 +632,8 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
-    JL_GC_PUSHFRAME(s, nroots);
-    jl_value_t **locals = (jl_value_t**)&s[1] + 3;
+    jl_value_t **locals = NULL;
+    JL_GC_PUSHFRAME(s, locals, nroots);
     locals[0] = (jl_value_t*)src;
     locals[1] = (jl_value_t*)stmts;
     s->locals = locals + 2;
@@ -651,15 +665,50 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     return r;
 }
 
+jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+{
+    jl_method_t *source = oc->source;
+    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_array_t*)source->source);
+    interpreter_state *s;
+    unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
+    jl_value_t **locals = NULL;
+    JL_GC_PUSHFRAME(s, locals, nroots);
+    locals[0] = (jl_value_t*)oc;
+    // The analyzer has some trouble with this
+    locals[1] = (jl_value_t*)code;
+    JL_GC_PROMISE_ROOTED(code);
+    locals[2] = (jl_value_t*)oc->captures;
+    s->locals = locals + 2;
+    s->src = code;
+    s->module = source->module;
+    s->sparam_vals = NULL;
+    s->preevaluation = 0;
+    s->continue_at = 0;
+    s->mi = NULL;
+
+    size_t defargs = source->nargs;
+    int isva = !!oc->isva;
+    assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
+    for (size_t i = 1; i < defargs - isva; i++)
+        s->locals[i] = args[i - 1];
+    if (isva) {
+        assert(defargs >= 2);
+        s->locals[defargs - 1] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
+    }
+    JL_GC_ENABLEFRAME(s);
+    jl_value_t *r = eval_body(code->code, s, 0, 0);
+    JL_GC_POP();
+    return r;
+}
+
 jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src)
 {
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src);
-    JL_GC_PUSHFRAME(s, nroots);
+    JL_GC_PUSHFRAME(s, s->locals, nroots);
     jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     s->src = src;
-    s->locals = (jl_value_t**)&s[1] + 3;
     s->module = m;
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
@@ -678,7 +727,9 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
 jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e, jl_code_info_t *src, jl_svec_t *sparam_vals)
 {
     interpreter_state *s;
-    JL_GC_PUSHFRAME(s, 0);
+    jl_value_t **locals;
+    JL_GC_PUSHFRAME(s, locals, 0);
+    (void)locals;
     s->src = src;
     s->module = m;
     s->sparam_vals = sparam_vals;

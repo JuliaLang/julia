@@ -79,21 +79,9 @@ JL_DLLEXPORT void jl_init(void)
 {
     char *libbindir = NULL;
 #ifdef _OS_WINDOWS_
-    void *hdl = (void*)jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 0);
-    if (hdl) {
-        char *to_free = (char*)jl_pathname_for_handle(hdl);
-        if (to_free) {
-            libbindir = strdup(dirname(to_free));
-            free(to_free);
-        }
-    }
+    libbindir = strdup(jl_get_libdir());
 #else
-    Dl_info dlinfo;
-    if (dladdr((void*)jl_init, &dlinfo) != 0 && dlinfo.dli_fname) {
-        char *to_free = strdup(dlinfo.dli_fname);
-        (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", dirname(to_free), "bin");
-        free(to_free);
-    }
+    (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
 #endif
     if (!libbindir) {
         printf("jl_init unable to find libjulia!\n");
@@ -175,15 +163,16 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
 JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
 {
     jl_value_t *v;
+    nargs++; // add f to args
     JL_TRY {
         jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, nargs+1);
+        JL_GC_PUSHARGS(argv, nargs);
         argv[0] = (jl_value_t*)f;
-        for(int i=1; i<nargs+1; i++)
-            argv[i] = args[i-1];
+        for (int i = 1; i < nargs; i++)
+            argv[i] = args[i - 1];
         size_t last_age = jl_get_ptls_states()->world_age;
         jl_get_ptls_states()->world_age = jl_get_world_counter();
-        v = jl_apply(argv, nargs+1);
+        v = jl_apply(argv, nargs);
         jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
@@ -202,7 +191,7 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
         JL_GC_PUSH1(&f);
         size_t last_age = jl_get_ptls_states()->world_age;
         jl_get_ptls_states()->world_age = jl_get_world_counter();
-        v = jl_apply(&f, 1);
+        v = jl_apply_generic(f, NULL, 0);
         jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
@@ -220,7 +209,8 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
     JL_TRY {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 2);
-        argv[0] = f; argv[1] = a;
+        argv[0] = f;
+        argv[1] = a;
         size_t last_age = jl_get_ptls_states()->world_age;
         jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, 2);
@@ -241,7 +231,9 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
     JL_TRY {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 3);
-        argv[0] = f; argv[1] = a; argv[2] = b;
+        argv[0] = f;
+        argv[1] = a;
+        argv[2] = b;
         size_t last_age = jl_get_ptls_states()->world_age;
         jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, 3);
@@ -263,7 +255,10 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
     JL_TRY {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 4);
-        argv[0] = f; argv[1] = a; argv[2] = b; argv[3] = c;
+        argv[0] = f;
+        argv[1] = a;
+        argv[2] = b;
+        argv[3] = c;
         size_t last_age = jl_get_ptls_states()->world_age;
         jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, 4);
@@ -508,25 +503,21 @@ static int exec_program(char *program)
         // TODO: It is possible for this output
         //       to be mangled due to `jlbacktrace`
         //       printing directly to STDERR_FILENO.
-        jl_value_t *errs = jl_stderr_obj();
-        JL_GC_PUSH1(&errs);
-        volatile int shown_err = 0;
+        int shown_err = 0;
         jl_printf(JL_STDERR, "error during bootstrap:\n");
-        JL_TRY {
+        jl_value_t *exc = jl_current_exception();
+        jl_value_t *showf = jl_base_module ? jl_get_function(jl_base_module, "show") : NULL;
+        if (showf) {
+            jl_value_t *errs = jl_stderr_obj();
             if (errs) {
-                jl_value_t *showf = jl_get_function(jl_base_module, "show");
-                if (showf != NULL) {
-                    jl_call2(showf, errs, jl_current_exception());
+                if (jl_call2(showf, errs, exc)) {
                     jl_printf(JL_STDERR, "\n");
                     shown_err = 1;
                 }
             }
         }
-        JL_CATCH {
-        }
-        JL_GC_POP();
         if (!shown_err) {
-            jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+            jl_static_show((JL_STREAM*)STDERR_FILENO, exc);
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         }
         jlbacktrace(); // written to STDERR_FILENO
@@ -663,6 +654,17 @@ static void lock_low32(void)
 // Actual definition in `ast.c`
 void jl_lisp_prompt(void);
 
+static void rr_detach_teleport(void) {
+#ifdef _OS_LINUX_
+#define RR_CALL_BASE 1000
+#define SYS_rrcall_detach_teleport (RR_CALL_BASE + 9)
+    int err = syscall(SYS_rrcall_detach_teleport, 0, 0, 0, 0, 0, 0);
+    if (err < 0 || jl_running_under_rr(1)) {
+        jl_error("Failed to detach from rr session");
+    }
+#endif
+}
+
 JL_DLLEXPORT int repl_entrypoint(int argc, char *argv[])
 {
     // no-op on Windows, note that the caller must have already converted
@@ -678,7 +680,19 @@ JL_DLLEXPORT int repl_entrypoint(int argc, char *argv[])
         memmove(&argv[1], &argv[2], (argc-2)*sizeof(void*));
         argc--;
     }
+    char **orig_argv = argv;
     jl_parse_opts(&argc, (char***)&argv);
+
+    // The parent process requested that we detach from the rr session.
+    // N.B.: In a perfect world, we would only do this for the portion of
+    // the execution where we actually need to exclude rr (e.g. because we're
+    // testing for the absence of a memory-model-dependent bug).
+    if (jl_options.rr_detach && jl_running_under_rr(0)) {
+        rr_detach_teleport();
+        execv("/proc/self/exe", orig_argv);
+        jl_error("Failed to self-execute");
+    }
+
     julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     if (lisp_prompt) {
         jl_get_ptls_states()->world_age = jl_get_world_counter();

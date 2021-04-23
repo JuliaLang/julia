@@ -90,6 +90,9 @@ If `sizeof(T) = n*sizeof(S)` for `n>1`, `A`'s first dimension must be
 of size `n` and `B` lacks `A`'s first dimension. Conversely, if `sizeof(S) = n*sizeof(T)` for `n>1`,
 `B` gets a new first dimension of size `n`. The dimensionality is unchanged if `sizeof(T) == sizeof(S)`.
 
+!!! compat "Julia 1.6"
+    This method requires at least Julia 1.6.
+
 # Examples
 
 ```jldoctest
@@ -158,6 +161,8 @@ function strides(a::ReinterpretArray)
     size_to_strides(1, size(a)...)
 end
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+
+similar(a::ReinterpretArray, T::Type, d::Dims) = similar(a.parent, T, d)
 
 function check_readable(a::ReinterpretArray{T, N, S} where N) where {T,S}
     # See comment in check_writable
@@ -276,7 +281,8 @@ eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A
 
 parent(a::ReinterpretArray) = a.parent
 dataids(a::ReinterpretArray) = dataids(a.parent)
-unaliascopy(a::ReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))
+unaliascopy(a::NonReshapedReinterpretArray{T}) where {T} = reinterpret(T, unaliascopy(a.parent))
+unaliascopy(a::ReshapedReinterpretArray{T}) where {T} = reinterpret(reshape, T, unaliascopy(a.parent))
 
 function size(a::NonReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     psize = size(a.parent)
@@ -677,7 +683,7 @@ end
 
 @noinline function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted,
                                   ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
-    if ifirst.j + blksize > ilast.j
+    if ilast.j - ifirst.j < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[SCI(2,ifirst.j)]
@@ -696,7 +702,7 @@ end
         return v
     else
         # pairwise portion
-        jmid = (ifirst.j + ilast.j) >> 1
+        jmid = ifirst.j + (ilast.j - ifirst.j) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, SCI(K,jmid), blksize)
         v2 = mapreduce_impl(f, op, A, SCI(1,jmid+1), ilast, blksize)
         return op(v1, v2)

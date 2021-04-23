@@ -99,7 +99,7 @@ close(s)
 push!(l, ("PipeEndpoint", io))
 
 #FIXME See https://github.com/JuliaLang/julia/issues/14747
-#      Reading from open(::Command) seems to deadlock on Linux/Travis
+#      Reading from open(::Command) seems to deadlock on Linux
 #=
 if !Sys.iswindows()
 
@@ -616,4 +616,12 @@ let p = Pipe()
     @test read(p.out, 49) == data[end-48:end]
     wait(t)
     close(p)
+end
+
+@testset "issue #27412" for itr in [eachline(IOBuffer("a")), readeach(IOBuffer("a"), Char)]
+    @test !isempty(itr)
+    # check that the earlier isempty did not consume the iterator
+    @test !isempty(itr)
+    first(itr) # consume the iterator
+    @test  isempty(itr) # now it is empty
 end

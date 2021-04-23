@@ -313,10 +313,12 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
         end
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
+        errormonitor(t)
         Base._wait2(t, cleanup)
         start_repl_backend(backend, consumer)
     else
         t = @async start_repl_backend(backend, consumer)
+        errormonitor(t)
         Base._wait2(t, cleanup)
         run_frontend(repl, backend_ref)
     end
@@ -920,7 +922,8 @@ function setup_interface(
             Expr(:call, :(Base.repl_cmd),
                 :(Base.cmd_gen($(Base.shell_parse(line::String)[1]))),
                 outstream(repl))
-        end)
+        end,
+        sticky = true)
 
 
     ################################# Stage II #############################
@@ -1229,14 +1232,6 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     put!(backend.repl_channel, (nothing, -1))
     dopushdisplay && popdisplay(d)
     nothing
-end
-
-function start_repl_server(port::Int)
-    return listen(port) do server, status
-        client = accept(server)
-        run_repl(client)
-        nothing
-    end
 end
 
 end # module

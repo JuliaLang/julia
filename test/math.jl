@@ -391,12 +391,18 @@ end
             T != Rational{Int} && @test sind(convert(T,-0.0))::fT === -zero(fT)
             @test sind(convert(T,-180.0))::fT === -zero(fT)
             @test sind(convert(T,-360.0))::fT === -zero(fT)
+            if T <: AbstractFloat
+                @test isnan(sind(T(NaN)))
+            end
         end
         @testset "cosd" begin
             @test cosd(convert(T,90))::fT === zero(fT)
             @test cosd(convert(T,270))::fT === zero(fT)
             @test cosd(convert(T,-90))::fT === zero(fT)
             @test cosd(convert(T,-270))::fT === zero(fT)
+            if T <: AbstractFloat
+                @test isnan(cosd(T(NaN)))
+            end
         end
         @testset "sincosd" begin
             @test sincosd(convert(T,-360))::fTsc === ( -zero(fT),  one(fT) )
@@ -407,6 +413,10 @@ end
             @test sincosd(convert(T,  90))::fTsc === (   one(fT), zero(fT) )
             @test sincosd(convert(T, 180))::fTsc === (  zero(fT), -one(fT) )
             @test sincosd(convert(T, 270))::fTsc === (  -one(fT), zero(fT) )
+            if T <: AbstractFloat
+                @test_throws DomainError sincosd(T(Inf))
+                @test all(isnan.(sincosd(T(NaN))))
+            end
         end
 
         @testset "$name" for (name, (sinpi, cospi)) in (
@@ -519,6 +529,27 @@ end
         @test cosc(x)  ≈ Float64(cosc(big(x)))
         @test sinc(complex(x, x))  ≈ ComplexF64(sinc(complex(big(x),  big(x))))
         @test cosc(complex(x, x))  ≈ ComplexF64(cosc(complex(big(x),  big(x))))
+    end
+end
+
+@testset "half-integer and nan/infs for sincospi,sinpi,cospi" begin
+    @testset for T in (ComplexF32, ComplexF64)
+        @test sincospi(T(0.5, 0.0)) == (T(1.0,0.0), T(0.0, -0.0))
+        @test sincospi(T(1.5, 0.0)) == (T(-1.0,0.0), T(0.0, 0.0))
+        @test sinpi(T(1.5, 1.5)) ≈ T(-cosh(3*π/2), 0.0)
+        @test cospi(T(0.5, 0.5)) ≈ T(0.0, -sinh(π/2))
+        s, c = sincospi(T(Inf64, 0.0))
+        @test isnan(real(s)) && imag(s) == zero(real(T))
+        @test isnan(real(c)) && imag(c) == -zero(real(T))
+        s, c = sincospi(T(NaN, 0.0))
+        @test isnan(real(s)) && imag(s) == zero(real(T))
+        @test isnan(real(c)) && imag(c) == zero(real(T))
+        s, c = sincospi(T(NaN, Inf64))
+        @test isnan(real(s)) && isinf(imag(s))
+        @test isinf(real(c)) && isnan(imag(c))
+        s, c = sincospi(T(NaN, 2))
+        @test isnan(real(s)) && isnan(imag(s))
+        @test isnan(real(c)) && isnan(imag(c))
     end
 end
 
@@ -647,6 +678,17 @@ end
         @test isnan_type(T, log1p(T(NaN)))
         @test_throws DomainError log1p(-2*one(T))
     end
+    @testset "log of subnormals" begin
+        # checked results with WolframAlpha
+        for (T, lr) in ((Float32, LinRange(2.f0^(-129), 2.f0^(-128), 1000)),
+                        (Float64, LinRange(2.0^(-1025), 2.0^(-1024), 1000)))
+            for x in lr
+                @test log(x)   ≈ T(log(widen(x))) rtol=2eps(T)
+                @test log2(x)  ≈ T(log2(widen(x))) rtol=2eps(T)
+                @test log10(x) ≈ T(log10(widen(x))) rtol=2eps(T)
+            end
+        end
+    end
 end
 
 @testset "vectorization of 2-arg functions" begin
@@ -710,6 +752,8 @@ end
     @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
     @test sincos(NaN) === (NaN, NaN)
     @test sincos(NaN32) === (NaN32, NaN32)
+    @test_throws DomainError sincos(Inf32)
+    @test_throws DomainError sincos(Inf64)
 end
 
 @testset "test fallback definitions" begin
@@ -1163,7 +1207,7 @@ end
         @test (@inferred hypot(T(1e10), T(1e10), T(1e10), T(1e10))) ≈ 2e10
         @test isnan_type(T, hypot(T(3), T(3//4), T(NaN)))
         @test hypot(T(1), T(0)) === T(1)
-	    @test hypot(T(1), T(0), T(0)) === T(1)
+        @test hypot(T(1), T(0), T(0)) === T(1)
         @test (@inferred hypot(T(Inf), T(Inf), T(Inf))) == T(Inf)
         for s in (zero(T), floatmin(T)*1e3, floatmax(T)*1e-3, T(Inf))
             @test hypot(1s, 2s)     ≈ s * hypot(1, 2)   rtol=8eps(T)
@@ -1182,6 +1226,10 @@ end
         let x = sqrt(nextfloat(zero(T))/eps(T))/8, f = sqrt(4eps(T))
             @test hypot(x, x*f) ≈ x * hypot(one(f), f) rtol=eps(T)
             @test hypot(x, x*f, x*f) ≈ x * hypot(one(f), f, f) rtol=eps(T)
+        end
+        let x = floatmax(T)/2
+            @test (@inferred hypot(x, x/4)) ≈ x * sqrt(17/BigFloat(16))
+            @test (@inferred hypot(x, x/4, x/4)) ≈ x * sqrt(9/BigFloat(8))
         end
     end
     # hypot on Complex returns Real

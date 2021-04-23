@@ -253,7 +253,14 @@ function exec_options(opts)
     end
 
     # load ~/.julia/config/startup.jl file
-    startup && load_julia_startup()
+    if startup
+        try
+            load_julia_startup()
+        catch
+            invokelatest(display_error, catch_stack())
+            !(repl || is_interactive) && exit(1)
+        end
+    end
 
     # process cmds list
     for (cmd, arg) in cmds
@@ -471,6 +478,9 @@ it is evaluated: for each parsed expression `expr` in `path`, the `include` func
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 
 Use [`Base.include`](@ref) to evaluate a file into another module.
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
 """
 MainInclude.include
 

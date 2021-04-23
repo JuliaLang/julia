@@ -8,6 +8,8 @@ using Distributed: RemoteException
 import Logging: Debug, Info, Warn
 
 @testset "@test" begin
+    atol = 1
+    a = (; atol=2)
     @test true
     @test 1 == 1
     @test 1 != 2
@@ -20,11 +22,28 @@ import Logging: Debug, Info, Warn
     @test isapprox(1, 1, atol=0.1)
     @test isapprox(1, 1; atol=0.1)
     @test isapprox(1, 1; [(:atol, 0)]...)
+    @test isapprox(1, 2; atol)
+    @test isapprox(1, 3; a.atol)
+end
+@testset "@test with skip/broken kwargs" begin
+    # Make sure the local variables can be used in conditions
+    a = 1
+    @test 2 + 2 == 4 broken=false
+    @test error() broken=true
+    @test !Sys.iswindows() broken=Sys.iswindows()
+    @test 1 ≈ 2 atol=1 broken=a==2
+    @test false skip=true
+    @test true skip=false
+    @test Grogu skip=isone(a)
+    @test 41 ≈ 42 rtol=1 skip=false
 end
 @testset "@test keyword precedence" begin
+    atol = 2
     # post-semicolon keyword, suffix keyword, pre-semicolon keyword
     @test isapprox(1, 2, atol=0) atol=1
     @test isapprox(1, 3, atol=0; atol=2) atol=1
+    @test isapprox(1, 2, atol=0; atol)
+    @test isapprox(1, 3, atol=0; atol) atol=1
 end
 @testset "@test should only evaluate the arguments once" begin
     g = Int[]
@@ -125,6 +144,8 @@ let fails = @testset NoThrowTestSet begin
         @test startswith(str1, str2)
         # 20 - Fail - endswith
         @test endswith(str1, str2)
+        # 21 - Fail - contains
+        @test contains(str1, str2)
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -228,6 +249,11 @@ let fails = @testset NoThrowTestSet begin
     let str = sprint(show, fails[20])
         @test occursin("Expression: endswith(str1, str2)", str)
         @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[21])
+        @test occursin("Expression: contains(str1, str2)", str)
+        @test occursin("Evaluated: contains(\"Hello\", \"World\")", str)
     end
 end
 
@@ -477,7 +503,7 @@ import Test: record, finish
 using Test: get_testset_depth, get_testset
 using Test: AbstractTestSet, Result, Pass, Fail, Error
 struct CustomTestSet <: Test.AbstractTestSet
-    description::AbstractString
+    description::String
     foo::Int
     results::Vector
     # constructor takes a description string and options keyword arguments
@@ -1035,4 +1061,112 @@ end
         result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
         @test occursin(expected, result)
     end
+end
+
+# Non-booleans in @test (#35888)
+struct T35888 end
+Base.isequal(::T35888, ::T35888) = T35888()
+Base.:!(::T35888) = missing
+let errors = @testset NoThrowTestSet begin
+        # 1 - evaluates to non-Boolean
+        @test missing
+        # 2 - evaluates to non-Boolean
+        @test !missing
+        # 3 - evaluates to non-Boolean
+        @test isequal(5)
+        # 4 - evaluates to non-Boolean
+        @test !isequal(5)
+        # 5 - evaluates to non-Boolean
+        @test isequal(T35888(), T35888())
+        # 6 - evaluates to non-Boolean
+        @test !isequal(T35888(), T35888())
+        # 7 - evaluates to non-Boolean
+        @test 1 < 2 < missing
+        # 8 - evaluates to non-Boolean
+        @test !(1 < 2 < missing)
+        # 9 - TypeError in chained comparison
+        @test 1 < 2 < missing < 4
+        # 10 - TypeError in chained comparison
+        @test !(1 < 2 < missing < 4)
+    end
+
+    for err in errors
+        @test err isa Test.Error
+    end
+
+    let str = sprint(show, errors[1])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: missing", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[2])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !missing", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[3])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: isequal(5)", str)
+    end
+
+    let str = sprint(show, errors[4])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !(isequal(5))", str)
+    end
+
+    let str = sprint(show, errors[5])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: isequal(T35888(), T35888())", str)
+        @test occursin("Value: $T35888()", str)
+    end
+
+    let str = sprint(show, errors[6])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !(isequal(T35888(), T35888()))", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[7])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: 1 < 2 < missing", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[8])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !(1 < 2 < missing)", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[9])
+        @test occursin("TypeError: non-boolean (Missing) used in boolean context", str)
+        @test occursin("Expression: 1 < 2 < missing < 4", str)
+    end
+
+    let str = sprint(show, errors[10])
+        @test occursin("TypeError: non-boolean (Missing) used in boolean context", str)
+        @test occursin("Expression: !(1 < 2 < missing < 4)", str)
+    end
+end
+
+macro test_macro_throw_1()
+    throw(ErrorException("Real error"))
+end
+macro test_macro_throw_2()
+    throw(LoadError("file", 111, ErrorException("Real error")))
+end
+
+@testset "Soft deprecation of @test_throws LoadError [@]macroexpand[1]" begin
+    # If a macroexpand was detected, undecorated LoadErrors can stand in for any error.
+    # This will throw a deprecation warning.
+    @test_deprecated (@test_throws LoadError macroexpand(@__MODULE__, :(@test_macro_throw_1)))
+    @test_deprecated (@test_throws LoadError @macroexpand @test_macro_throw_1)
+    # Decorated LoadErrors are unwrapped if the actual exception matches the inner, but not the outer, exception, regardless of whether or not a macroexpand is detected.
+    # This will not throw a deprecation warning.
+    @test_throws LoadError("file", 111, ErrorException("Real error")) macroexpand(@__MODULE__, :(@test_macro_throw_1))
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_1
+    # Decorated LoadErrors are not unwrapped if a LoadError was thrown.
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
 end

@@ -80,8 +80,16 @@ you read from a remote object to obtain data needed by the next local operation.
 but is more efficient.
 
 ```julia-repl
-julia> remotecall_fetch(getindex, 2, r, 1, 1)
+julia> remotecall_fetch(r-> fetch(r)[1, 1], 2, r)
 0.18526337335308085
+```
+
+This fetches the array on worker 2 and returns the first value. Note, that `fetch` doesn't move any data in
+this case, since it's executed on the worker that owns the array. One can also write:
+
+```julia-repl
+julia> remotecall_fetch(getindex, 2, r, 1, 1)
+0.10824216411304866
 ```
 
 Remember that [`getindex(r,1,1)`](@ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
@@ -580,7 +588,7 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> @async make_jobs(n); # feed the jobs channel with "n" jobs
+julia> errormonitor(@async make_jobs(n)); # feed the jobs channel with "n" jobs
 
 julia> for p in workers() # start tasks on the workers to process requests in parallel
            remote_do(do_work, p, jobs, results)

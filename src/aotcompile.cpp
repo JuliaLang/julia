@@ -279,8 +279,8 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
-// all reachable & inferrrable functions. The `policy` flag switches between the defaul
-// mode `0` and the extern mode `1`.
+// all reachable & inferrrable functions. The `policy` flag switches between the default
+// mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
 void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _policy)
 {
@@ -292,9 +292,14 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     JL_LOCK(&codegen_lock);
-    uint64_t compiler_start_time = jl_hrtime();
+    uint64_t compiler_start_time = 0;
+    int tid = jl_threadid();
+    if (jl_measure_compile_time[tid])
+        compiler_start_time = jl_hrtime();
 
     CompilationPolicy policy = (CompilationPolicy) _policy;
+    if (policy == CompilationPolicy::ImagingMode)
+        imaging_mode = 1;
     std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
 
     // compile all methods for the current world and type-inference world
@@ -304,7 +309,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
         if (!params.world)
             continue;
         // Don't emit methods for the typeinf_world with extern policy
-        if (policy == CompilationPolicy::Extern && params.world == jl_typeinf_world)
+        if (policy != CompilationPolicy::Default && params.world == jl_typeinf_world)
             continue;
         size_t i, l;
         for (i = 0, l = jl_array_len(methods); i < l; i++) {
@@ -401,22 +406,26 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
-    for (GlobalObject &G : clone->global_objects()) {
-        if (!G.isDeclaration()) {
-            G.setLinkage(Function::InternalLinkage);
-            makeSafeName(G);
-            addComdat(&G);
+    if (policy == CompilationPolicy::Default) {
+        for (GlobalObject &G : clone->global_objects()) {
+            if (!G.isDeclaration()) {
+                G.setLinkage(Function::InternalLinkage);
+                makeSafeName(G);
+                addComdat(&G);
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-            // Add unwind exception personalities to functions to handle async exceptions
-            if (Function *F = dyn_cast<Function>(&G))
-                F->setPersonalityFn(juliapersonality_func);
+                // Add unwind exception personalities to functions to handle async exceptions
+                if (Function *F = dyn_cast<Function>(&G))
+                    F->setPersonalityFn(juliapersonality_func);
 #endif
+            }
         }
     }
 
     data->M = std::move(clone);
-
-    jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
+    if (jl_measure_compile_time[tid])
+        jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+    if (policy == CompilationPolicy::ImagingMode)
+        imaging_mode = 0;
     JL_UNLOCK(&codegen_lock); // Might GC
     return (void*)data;
 }
@@ -893,7 +902,10 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         std::unique_ptr<Module> m;
         jl_llvm_functions_t decls;
         JL_LOCK(&codegen_lock);
-        uint64_t compiler_start_time = jl_hrtime();
+        uint64_t compiler_start_time = 0;
+        int tid = jl_threadid();
+        if (jl_measure_compile_time[tid])
+            compiler_start_time = jl_hrtime();
         std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output);
 
         Function *F = NULL;
@@ -917,7 +929,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
             m.release(); // the return object `llvmf` will be the owning pointer
         }
         JL_GC_POP();
-        jl_cumulative_compile_time += (jl_hrtime() - compiler_start_time);
+        if (jl_measure_compile_time[tid])
+            jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
         JL_UNLOCK(&codegen_lock); // Might GC
         if (F)
             return F;

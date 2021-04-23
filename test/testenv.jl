@@ -18,6 +18,9 @@ if !@isdefined(testenv_defined)
         push!(test_exeflags.exec, "--startup-file=no")
         push!(test_exeflags.exec, "--depwarn=error")
     end
+    if haskey(ENV, "JULIA_TEST_EXTRA_EXEFLAGS")
+        append!(test_exeflags.exec, Base.shell_split(ENV["JULIA_TEST_EXTRA_EXEFLAGS"]))
+    end
 
     if haskey(ENV, "JULIA_TEST_EXENAME")
         popfirst!(test_exeflags.exec)
@@ -26,7 +29,16 @@ if !@isdefined(testenv_defined)
         const test_exename = popfirst!(test_exeflags.exec)
     end
 
-    addprocs_with_testenv(X; kwargs...) = addprocs(X; exename=test_exename, exeflags=test_exeflags, kwargs...)
+    if haskey(ENV, "JULIA_RR")
+        const rr_exename = `$(Base.shell_split(ENV["JULIA_RR"]))`
+    else
+        const rr_exename = ``
+    end
+
+    function addprocs_with_testenv(X; rr_allowed=true, kwargs...)
+        exename = rr_allowed ? `$rr_exename $test_exename` : test_exename
+        addprocs(X; exename=exename, exeflags=test_exeflags, kwargs...)
+    end
 
     const curmod = @__MODULE__
     const curmod_name = fullname(curmod)
@@ -36,4 +48,12 @@ if !@isdefined(testenv_defined)
     # platforms that support cfunction with closures
     # (requires LLVM back-end support for trampoline intrinsics)
     const cfunction_closure = Sys.ARCH === :x86_64 || Sys.ARCH === :i686
+
+    macro async_logerr(expr)
+        :(@async try
+            $(esc(expr))
+        catch err
+            @error("An async task failed", exception=(err, catch_backtrace()))
+        end)
+    end
 end

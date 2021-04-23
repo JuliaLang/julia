@@ -103,7 +103,7 @@ The fields of the structure are:
 | blksize | The file-system preferred block size for the file                  |
 | blocks  | The number of such blocks allocated                                |
 | mtime   | Unix timestamp of when the file was last modified                  |
-| ctime   | Unix timestamp of when the file was created                        |
+| ctime   | Unix timestamp of when the file's metadata was changed             |
 
 """
 stat(path...) = stat(joinpath(path...))

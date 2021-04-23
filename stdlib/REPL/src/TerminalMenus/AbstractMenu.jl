@@ -149,6 +149,9 @@ keypress(m::AbstractMenu, i::UInt32) = false
     numoptions(m::AbstractMenu) -> Int
 
 Return the number of options in menu `m`. Defaults to `length(options(m))`.
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 numoptions(m::AbstractMenu) = length(options(m))
 
@@ -169,6 +172,9 @@ number used for the initial cursor position. `cursor` can be either an
 control of the cursor position from the outside.
 
 Returns `selected(m)`.
+
+!!! compat "Julia 1.6"
+    The `cursor` argument requires Julia 1.6 or later.
 """
 request(m::AbstractMenu; kwargs...) = request(terminal, m; kwargs...)
 
@@ -197,9 +203,9 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
             lastoption = numoptions(m)
             c = readkey(term.in_stream)
 
-            if c == Int(ARROW_UP)
+            if c == Int(ARROW_UP) || c == Int('k')
                 cursor[] = move_up!(m, cursor[], lastoption)
-            elseif c == Int(ARROW_DOWN)
+            elseif c == Int(ARROW_DOWN) || c == Int('j')
                 cursor[] = move_down!(m, cursor[], lastoption)
             elseif c == Int(PAGE_UP)
                 cursor[] = page_up!(m, cursor[], lastoption)
@@ -211,7 +217,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
             elseif c == Int(END_KEY)
                 cursor[] = lastoption
                 m.pageoffset = lastoption - m.pagesize
-            elseif c == 13 # <enter>
+            elseif c == 13 || c == Int(' ') # <enter> or <space>
                 # will break if pick returns true
                 pick(m, cursor[]) && break
             elseif c == UInt32('q')
@@ -322,7 +328,14 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
         # like clamp, except this takes the min if max < min
         m.pageoffset = max(0, min(cursoridx - m.pagesize ÷ 2, lastoption - m.pagesize))
     else
-        print(buf, "\x1b[999D\x1b[$(ncleared)A")   # move left 999 spaces and up `ncleared` lines
+        print(buf, "\r")
+        if ncleared > 0
+            # Move up `ncleared` lines. However, moving up zero lines
+            # is interpreted as one line, so need to do this
+            # conditionally. (More specifically, the `0` value means
+            # to use the default, and for move up this is one.)
+            print(buf, "\x1b[$(ncleared)A")
+        end
     end
 
     nheaderlines = 0
@@ -354,7 +367,7 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
         printcursor(buf, m, i == cursoridx)
         writeline(buf, m, i, i == cursoridx)
 
-        (firstline == lastline || i != lastline) && print(buf, "\r\n")
+        (i != lastline) && print(buf, "\r\n")
     end
 
     newstate = nheaderlines + lastline - firstline  # final line doesn't have `\n`

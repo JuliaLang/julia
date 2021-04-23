@@ -14,19 +14,6 @@
 # is preserved.
 # ====================================================
 
-@inline function exthorner(x, p::Tuple)
-	# polynomial evaluation using compensated summation.
-	# much more accurate, especially when lo can be combined with other rounding errors
-    hi, lo = p[end], zero(x)
-    for i in length(p)-1:-1:1
-        pi = p[i]
-        prod = hi*x
-        err = fma(hi, x, -prod)
-        hi = pi+prod
-        lo = fma(lo, x, prod - (hi - pi) + err)
-    end
-    return hi, lo
-end
 
 # Hyperbolic functions
 # sinh methods
@@ -37,10 +24,8 @@ H_SMALL_X(::Type{Float32}) = 2f-12
 H_MEDIUM_X(::Type{Float32}) = 9f0
 
 H_LARGE_X(::Type{Float64}) = 709.7822265633563 # nextfloat(709.7822265633562)
-H_OVERFLOW_X(::Type{Float64}) = 710.475860073944 # nextfloat(710.4758600739439)
 
 H_LARGE_X(::Type{Float32}) = 88.72283f0
-H_OVERFLOW_X(::Type{Float32}) = 89.415985f0
 
 SINH_SMALL_X(::Type{Float64}) = 2.1
 SINH_SMALL_X(::Type{Float32}) = 3.0f0
@@ -65,6 +50,11 @@ function sinh_kernel(x::Float32)
     return Float32(res*x)
 end
 
+@inline function sinh16_kernel(x::Float32)
+    res = evalpoly(x*x, (1.0f0, 0.16666667f0, 0.008333337f0, 0.00019841001f0,
+                         2.7555539f-6, 2.514339f-8, 1.6260095f-10))
+    return Float16(res*x)
+end
 
 function sinh(x::T) where T<:Union{Float32,Float64}
     # Method
@@ -75,7 +65,7 @@ function sinh(x::T) where T<:Union{Float32,Float64}
     #               approximate sinh(x) with a  minimax polynomial
     #      b)   SINH_SMALL_X <= x < H_LARGE_X
     #               return sinh(x) = (exp(x) - exp(-x))/2
-    #      d)   H_LARGE_X  <= x < H_OVERFLOW_X
+    #      d)   H_LARGE_X  <= x
     #               return sinh(x) = exp(x/2)/2 * exp(x/2)
     #               Note that this branch automatically deals with Infs and NaNs
 
@@ -88,6 +78,14 @@ function sinh(x::T) where T<:Union{Float32,Float64}
     end
     E = exp(absx)
     return copysign(T(.5)*(E - 1/E),x)
+end
+
+function Base.sinh(a::Float16)
+    x = Float32(a)
+    absx = abs(x)
+    absx <= SINH_SMALL_X(Float32) && return sinh16_kernel(x)
+    E = exp(absx)
+    return Float16(copysign(.5f0*(E - 1/E),x))
 end
 
 COSH_SMALL_X(::Type{T}) where T= one(T)
@@ -112,9 +110,9 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     #               approximate sinh(x) with a minimax polynomial
     #      b)   COSH_SMALL_X <= x < H_LARGE_X
     #               return cosh(x) = = (exp(x) + exp(-x))/2
-    #      e)   H_LARGE_X  <= x < H_OVERFLOW_X
+    #      e)   H_LARGE_X  <= x
     #               return cosh(x) = exp(x/2)/2 * exp(x/2)
-    #      			Note that this branch automatically deals with Infs and NaNs
+    #               Note that this branch automatically deals with Infs and NaNs
 
     absx = abs(x)
     if absx <= COSH_SMALL_X(T)
@@ -245,14 +243,10 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     # Method
     # 1.Reduced x to positive by atanh(-x) = -atanh(x)
     # 2. Find the branch and the expression to calculate and return it
-    #     a) 0 <= x < 2^-28
-    #         return x
-    #     b) 2^-28 <= x < 0.5
-    #         return 0.5*log1p(2x+2x*x/(1-x))
-    #     c) 0.5 <= x < 1
-    #         return 0.5*log1p(2x/1-x)
-    #     d) x = 1
-    #         return Inf
+    #     a) 0 <= x < 0.5
+    #         return 0.5*log1p(2x/(1-x))
+    #     b) 0.5 <= x <= 1
+    #         return 0.5*log((x+1)/(1-x))
     # Special cases:
     #    if |x| > 1 throw DomainError
     isnan(x) && return x
@@ -262,20 +256,12 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     if absx > 1
         atanh_domain_error(x)
     end
-    if absx < T(2)^-28
-        # in a)
-        return x
-    end
     if absx < T(0.5)
+        # in a)
+        t = log1p(T(2)*absx/(T(1)-absx))
+    else
         # in b)
-        t = absx+absx
-        t = T(0.5)*log1p(t+t*absx/(T(1)-absx))
-    elseif absx < T(1)
-        # in c)
-        t = T(0.5)*log1p((absx + absx)/(T(1)-absx))
-    elseif absx == T(1)
-        # in d)
-        return copysign(T(Inf), x)
+        t = log((T(1)+absx)/(T(1)-absx))
     end
-    return copysign(t, x)
+    return T(0.5)*copysign(t, x)
 end
