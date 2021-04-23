@@ -928,3 +928,18 @@ end
         @test cholesky(A, perm=1:n).p == 1:n
     end
 end
+
+@testset "Check common is still in default state" begin
+    # This test intentially depends on all the above tests!
+    current_common = CHOLMOD.common[Threads.threadid()]
+    default_common = CHOLMOD.Common()
+    @test current_common.print == 0
+    for name in (
+        :nmethods,
+        :postorder,
+        :final_ll,
+        :supernodal,
+    )
+        @test getproperty(current_common, name) == getproperty(default_common, name)
+    end
+end
