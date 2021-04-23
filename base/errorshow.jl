@@ -589,13 +589,13 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         # Find modules involved in intermediate frames and print them
         modules = filter(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
         length(modules) > 0 || return
-        print(repeat(' ', ndigits_max + 2))
+        print(io, repeat(' ', ndigits_max + 2))
         for m ∈ modules
             modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
             printstyled(io, m, color = modulecolor)
-            print(" ")
+            print(io, " ")
         end
-        println()
+        println(io)
     end
 
     # find all frames that aren't in Julia base, stdlib, or an added package
@@ -614,16 +614,16 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
 
         if is[1] > 0
             print_omitted_modules(1, is[1])
-            println(repeat(' ', ndigits_max + 2) * "⋮")
+            println(io, repeat(' ', ndigits_max + 2) * "⋮")
         end
 
         lasti = first(is)
         @views for i ∈ is
             i == 0 && continue
             if i > lasti + 1
-                println(repeat(' ', ndigits_max + 2) * "⋮ ")
+                println(io, repeat(' ', ndigits_max + 2) * "⋮ ")
                 print_omitted_modules(lasti + 1, i - 1)
-                println(repeat(' ', ndigits_max + 2) * "⋮")
+                println(io, repeat(' ', ndigits_max + 2) * "⋮")
             end
             print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
             if i < num_frames
@@ -633,7 +633,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
             lasti = i
         end
     else
-        println()
+        println(io)
     end
 
     length(trace) > length(is) && print(io, "Use `err` to retrieve the full stack trace.")
