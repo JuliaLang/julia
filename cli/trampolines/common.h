@@ -23,6 +23,9 @@
                             .ascii STR(-export:##I(name)); \
                             .ascii " "; \
                             .section .text
+#elif defined(__ELF__)
+#define DEBUGINFO(name)     .type CNAME(name),@function
+#define EXPORT(name)        .size CNAME(name), . - CNAME(name)
 #else
 #define DEBUGINFO(name)
 #define EXPORT(name)
