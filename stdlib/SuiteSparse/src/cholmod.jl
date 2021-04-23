@@ -701,14 +701,14 @@ end
 ### cholmod_check.h ###
 function print_sparse(A::Sparse{Tv}, name::String) where Tv<:VTypes
     isascii(name) || error("non-ASCII name: $name")
-    common[Threads.threadid()] = 3
+    common[Threads.threadid()].print = 3
     @isok ccall((@cholmod_name("print_sparse"),:libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}, Ptr{Common}),
                  A, name, common[Threads.threadid()])
     nothing
 end
 function print_factor(F::Factor{Tv}, name::String) where Tv<:VTypes
-    common[Threads.threadid()] = 3
+    common[Threads.threadid()].print = 3
     @isok ccall((@cholmod_name("print_factor"),:libcholmod), Cint,
             (Ptr{C_Factor{Tv}}, Ptr{UInt8}, Ptr{Common}),
                 F, name, common[Threads.threadid()])
