@@ -351,6 +351,15 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     return symbol(fl_ctx, allascii ? str.buf : normalize(fl_ctx, str.buf));
 }
 
+/* convert a string to a symbol, first applying normalization */
+value_t fl_string2normsymbol(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "string->normsymbol", nargs, 1);
+    if (!fl_isstring(fl_ctx, args[0]))
+        type_error(fl_ctx, "string->normsymbol", "string", args[0]);
+    return symbol(fl_ctx, normalize(fl_ctx, (char*)cvalue_data(args[0])));
+}
+
 static const builtinspec_t julia_flisp_func_info[] = {
     { "skip-ws", fl_skipws },
     { "accum-julia-symbol", fl_accum_julia_symbol },
@@ -360,6 +369,7 @@ static const builtinspec_t julia_flisp_func_info[] = {
     { "op-suffix-char?", fl_julia_op_suffix_char },
     { "strip-op-suffix", fl_julia_strip_op_suffix },
     { "underscore-symbol?", fl_julia_underscore_symbolp },
+    { "string->normsymbol", fl_string2normsymbol },
     { NULL, NULL }
 };
 
