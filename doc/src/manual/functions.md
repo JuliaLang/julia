@@ -154,7 +154,7 @@ the return value to the specified type.
 ```jldoctest
 julia> function g(x, y)::Int8
            return x * y
-       end;
+       end
 
 julia> typeof(g(1, 2))
 Int8
