@@ -68,7 +68,7 @@ end
 
 # Julia copy of the cholmod_method_struct
 # https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/CHOLMOD/Include/cholmod_core.h#L655
-# Keep this synchronized with __init__() below and jl_cholmod_method_offsets in
+# Keep this synchronized with `jl_cholmod_method_offsets` in
 # https://github.com/JuliaLang/julia/blob/master/deps/SuiteSparse_wrapper.c
 struct Method
     lnz::Cdouble
@@ -90,7 +90,7 @@ end
 
 # Julia copy of the cholmod_common_struct
 # https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/CHOLMOD/Include/cholmod_core.h#L414
-# Keep this synchronized with __init__() below and jl_cholmod_common_offsets in
+# Keep this synchronized with `jl_cholmod_method_offsets` in
 # https://github.com/JuliaLang/julia/blob/master/deps/SuiteSparse_wrapper.c
 mutable struct Common
     dbound::Cdouble
