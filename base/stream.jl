@@ -1363,7 +1363,7 @@ end
 Run the function `f` while redirecting [`stdout`](@ref) to `stream`.
 Upon completion, [`stdout`](@ref) is restored to its prior setting.
 """
-redirect_stdout
+redirect_stdout(f::Function, stream)
 
 """
     redirect_stderr(f::Function, stream)
@@ -1371,7 +1371,7 @@ redirect_stdout
 Run the function `f` while redirecting [`stderr`](@ref) to `stream`.
 Upon completion, [`stderr`](@ref) is restored to its prior setting.
 """
-redirect_stderr
+redirect_stderr(f::Function, stream)
 
 """
     redirect_stdin(f::Function, stream)
@@ -1379,7 +1379,7 @@ redirect_stderr
 Run the function `f` while redirecting [`stdin`](@ref) to `stream`.
 Upon completion, [`stdin`](@ref) is restored to its prior setting.
 """
-redirect_stdin
+redirect_stdin(f::Function, stream)
 
 mark(x::LibuvStream)     = mark(x.buffer)
 unmark(x::LibuvStream)   = unmark(x.buffer)
