@@ -561,7 +561,7 @@ $(eval $(call LLVM_PATCH,llvm-11-ppc-half-ctr)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-ppc-sp-from-bp)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps))
-$(eval $(call LLVM_PATCH,llvm-11-D94980-CTR-half))
+$(eval $(call LLVM_PATCH,llvm-11-D94980-CTR-half)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D94058-sext-atomic-ops)) # remove for LLVM 12
 $(eval $(call LLVM_PATCH,llvm-11-D96283-dagcombine-half)) # remove for LLVM 12
 $(eval $(call LLVM_PROJ_PATCH,llvm-11-AArch64-FastIsel-bug))
@@ -570,6 +570,20 @@ $(eval $(call LLVM_PROJ_PATCH,llvm-11-D97571-AArch64-loh)) # remove for LLVM 13
 $(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
 endif # LLVM_VER 11.0
 
+ifeq ($(LLVM_VER_SHORT),12.0)
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485)) # Needs upstreaming
+$(eval $(call LLVM_PATCH,llvm-12-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
+endif
+$(eval $(call LLVM_PATCH,llvm-11-D93154-globalisel-as))
+$(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-AArch64-FastIsel-bug))
+$(eval $(call LLVM_PATCH,llvm-12-D97435-AArch64-movaddrreg))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97571-AArch64-loh)) # remove for LLVM 13
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
+endif # LLVM_VER 12.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)
