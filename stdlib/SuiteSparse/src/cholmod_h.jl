@@ -78,7 +78,3 @@ function error_handler(status::Cint, file::Cstring, line::Cint, message::Cstring
     status < 0 && throw(CHOLMODException(unsafe_string(message)))
     nothing
 end
-
-macro isok(A)
-    :($(esc(A)) == TRUE)
-end

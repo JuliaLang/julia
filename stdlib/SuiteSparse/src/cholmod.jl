@@ -185,8 +185,8 @@ mutable struct Common
         ccall((@cholmod_name("start"), :libcholmod),
             Cint, (Ptr{Common},), common)
         finalizer(common) do common
-            @isok ccall((@cholmod_name("finish"), :libcholmod),
-                Cint, (Ptr{Common},), common)
+            ccall((@cholmod_name("finish"), :libcholmod),
+                  Cint, (Ptr{Common},), common) == TRUE
         end
     end
 end
@@ -520,9 +520,9 @@ function allocate_dense(m::Integer, n::Integer, d::Integer, ::Type{Tv}) where {T
 end
 
 function free!(p::Ptr{C_Dense{Tv}}) where {Tv<:VTypes}
-    @isok ccall((@cholmod_name("free_dense"), :libcholmod), Cint,
-                (Ref{Ptr{C_Dense{Tv}}}, Ptr{Common}),
-                p, common[Threads.threadid()])
+    ccall((@cholmod_name("free_dense"), :libcholmod), Cint,
+          (Ref{Ptr{C_Dense{Tv}}}, Ptr{Common}),
+          p, common[Threads.threadid()]) == TRUE
 end
 function zeros(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
     Dense(ccall((@cholmod_name("zeros"), :libcholmod), Ptr{C_Dense{Tv}},
@@ -594,16 +594,16 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
 end
 
 function free!(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
-    @isok ccall((@cholmod_name("free_sparse"), :libcholmod), Cint,
-            (Ref{Ptr{C_Sparse{Tv}}}, Ptr{Common}),
-                ptr, common[Threads.threadid()])
+    ccall((@cholmod_name("free_sparse"), :libcholmod), Cint,
+          (Ref{Ptr{C_Sparse{Tv}}}, Ptr{Common}),
+          ptr, common[Threads.threadid()]) == TRUE
 end
 
 function free!(ptr::Ptr{C_Factor{Tv}}) where Tv<:VTypes
     # Warning! Important that finalizer doesn't modify the global Common struct.
-    @isok ccall((@cholmod_name("free_factor"), :libcholmod), Cint,
-            (Ref{Ptr{C_Factor{Tv}}}, Ptr{Common}),
-                ptr, common[Threads.threadid()])
+    ccall((@cholmod_name("free_factor"), :libcholmod), Cint,
+          (Ref{Ptr{C_Factor{Tv}}}, Ptr{Common}),
+          ptr, common[Threads.threadid()]) == TRUE
 end
 
 function aat(A::Sparse{Tv}, fset::Vector{SuiteSparse_long}, mode::Integer) where Tv<:VRealTypes
@@ -637,9 +637,9 @@ end
 
 function change_factor!(F::Factor{Tv}, to_ll::Bool, to_super::Bool, to_packed::Bool,
                         to_monotonic::Bool) where Tv<:VTypes
-    @isok ccall((@cholmod_name("change_factor"),:libcholmod), Cint,
-            (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv}}, Ptr{Common}),
-                xtyp(Tv), to_ll, to_super, to_packed, to_monotonic, F, common[Threads.threadid()])
+    ccall((@cholmod_name("change_factor"),:libcholmod), Cint,
+          (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv}}, Ptr{Common}),
+          xtyp(Tv), to_ll, to_super, to_packed, to_monotonic, F, common[Threads.threadid()]) == TRUE
 end
 
 function check_sparse(A::Sparse{Tv}) where Tv<:VTypes
