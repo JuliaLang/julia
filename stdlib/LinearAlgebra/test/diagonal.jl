@@ -411,6 +411,7 @@ end
     KronTestArray(data::AbstractArray) = KronTestArray{eltype(data), ndims(data), typeof(data)}(data)
     Base.size(A::KronTestArray) = size(A.data)
     LinearAlgebra.kron(A::KronTestArray, B::KronTestArray) = KronTestArray(kron(A.data, B.data))
+    Base.getindex(K::KronTestArray{<:Any,N}, i::Vararg{Int,N}) where {N} = K.data[i...]
 
     A = KronTestArray([1, 2, 3]);
     @test kron(A, A) isa KronTestArray
