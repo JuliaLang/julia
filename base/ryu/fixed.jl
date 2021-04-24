@@ -1,4 +1,4 @@
-@inline function writefixed(buf, pos, v::T,
+function writefixed(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     @assert 0 < pos <= length(buf)
