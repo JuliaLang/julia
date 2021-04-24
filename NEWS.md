@@ -113,6 +113,7 @@ Standard library changes
 
 #### SparseArrays
 
+* new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
 
 #### Dates
 

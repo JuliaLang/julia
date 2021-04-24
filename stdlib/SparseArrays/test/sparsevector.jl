@@ -1419,14 +1419,14 @@ end
     # test entry points to similar with entry type, index type, and non-Dims shape specification
     @test similar(A, Float32, Int8, 6, 6) == similar(A, Float32, Int8, (6, 6))
     @test similar(A, Float32, Int8, 6) == similar(A, Float32, Int8, (6,))
-    # test similar with Dims{2} specification (preserves storage space only, not stored-entry structure)
+    # test similar with Dims{2} specification (preserves allocated storage space only, not stored-entry structure)
     simA = similar(A, (6,6))
     @test typeof(simA) == SparseMatrixCSC{eltype(nonzeros(A)),eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
     @test length(rowvals(simA)) == 0
     @test length(nonzeros(simA)) == 0
-    # test similar with entry type and Dims{2} specification (preserves storage space only)
+    # test similar with entry type and Dims{2} specification (preserves allocated storage space only)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)

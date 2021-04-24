@@ -1094,60 +1094,46 @@ function Vector{T}(D::Dense{T}) where T
 end
 Vector(D::Dense{T}) where {T} = Vector{T}(D)
 
+function _extract_args(s)
+    return (s.nrow, s.ncol, increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), own = false)),
+        increment(unsafe_wrap(Array, s.i, (s.nzmax,), own = false)),
+        copy(unsafe_wrap(Array, s.x, (s.nzmax,), own = false)))
+end
+
+# Trim extra elements in rowval and nzval left around sometimes by CHOLMOD rutines
+function _trim_nz_builder!(m, n, colptr, rowval, nzval)
+    l = colptr[end] - 1
+    resize!(rowval, l)
+    resize!(nzval, l)
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
+end
+
 function SparseMatrixCSC{Tv,SuiteSparse_long}(A::Sparse{Tv}) where Tv
     s = unsafe_load(pointer(A))
     if s.stype != 0
         throw(ArgumentError("matrix has stype != 0. Convert to matrix " *
             "with stype == 0 before converting to SparseMatrixCSC"))
     end
-
-    B = SparseMatrixCSC(s.nrow, s.ncol,
-        increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), own = false)),
-        increment(unsafe_wrap(Array, s.i, (s.nzmax,), own = false)),
-        copy(unsafe_wrap(Array, s.x, (s.nzmax,), own = false)))
-
-    if s.sorted == 0
-        return SparseArrays.sortSparseMatrixCSC!(B)
-    else
-        return B
-    end
+    args = _extract_args(s)
+    s.sorted == 0 && _sort_buffers!(args...);
+    return _trim_nz_builder!(args...)
 end
 
 function Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A::Sparse{Float64})
     s = unsafe_load(pointer(A))
-    if !issymmetric(A)
-        throw(ArgumentError("matrix is not symmetric"))
-    end
-
-    B = Symmetric(SparseMatrixCSC(s.nrow, s.ncol,
-        increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), own = false)),
-        increment(unsafe_wrap(Array, s.i, (s.nzmax,), own = false)),
-        copy(unsafe_wrap(Array, s.x, (s.nzmax,), own = false))), s.stype > 0 ? :U : :L)
-
-    if s.sorted == 0
-        return SparseArrays.sortSparseMatrixCSC!(B.data)
-    else
-        return B
-    end
+    issymmetric(A) || throw(ArgumentError("matrix is not symmetric"))
+    args = _extract_args(s)
+    s.sorted == 0 && _sort_buffers!(args...)
+    Symmetric(_trim_nz_builder!(args...), s.stype > 0 ? :U : :L)
 end
 convert(T::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}}, A::Sparse{Float64}) = T(A)
 
 function Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}(A::Sparse{Tv}) where Tv<:VTypes
     s = unsafe_load(pointer(A))
-    if !ishermitian(A)
-        throw(ArgumentError("matrix is not Hermitian"))
-    end
-
-    B = Hermitian(SparseMatrixCSC(s.nrow, s.ncol,
-        increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), own = false)),
-        increment(unsafe_wrap(Array, s.i, (s.nzmax,), own = false)),
-        copy(unsafe_wrap(Array, s.x, (s.nzmax,), own = false))), s.stype > 0 ? :U : :L)
-
-    if s.sorted == 0
-        return SparseArrays.sortSparseMatrixCSC!(B.data)
-    else
-        return B
-    end
+    ishermitian(A) || throw(ArgumentError("matrix is not Hermitian"))
+    args = _extract_args(s)
+    s.sorted == 0 && _sort_buffers!(args...)
+    Hermitian(_trim_nz_builder!(args...), s.stype > 0 ? :U : :L)
 end
 convert(T::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv}) where {Tv<:VTypes} = T(A)
 
@@ -1156,14 +1142,14 @@ function sparse(A::Sparse{Float64}) # Notice! Cannot be type stable because of s
     if s.stype == 0
         return SparseMatrixCSC{Float64,SuiteSparse_long}(A)
     end
-    return Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A)
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A)
 end
 function sparse(A::Sparse{ComplexF64}) # Notice! Cannot be type stable because of stype
     s = unsafe_load(pointer(A))
     if s.stype == 0
         return SparseMatrixCSC{ComplexF64,SuiteSparse_long}(A)
     end
-    return Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long}}(A)
+    Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long}}(A)
 end
 function sparse(F::Factor)
     s = unsafe_load(pointer(F))
@@ -1175,7 +1161,8 @@ function sparse(F::Factor)
         L, d = getLd!(LD)
         A = (L * Diagonal(d)) * L'
     end
-    SparseArrays.sortSparseMatrixCSC!(A)
+    # no need to sort buffers here, as A isa SparseMatrixCSC
+    # and it is taken care in sparse
     p = get_perm(F)
     if p != [1:s.n;]
         pinv = Vector{Int}(undef, length(p))
@@ -1967,5 +1954,58 @@ end
     B::Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{Float64,Ti},
     B::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+
+# Sort all the indices in each column for the construction of a CSC sparse matrix
+function _sort_buffers!(m, n, colptr::Vector{Ti}, rowval::Vector{Ti}, nzval::Vector{Tv}) where {Ti <: Integer, Tv}
+    index = Base.zeros(Ti, m)
+    row = Base.zeros(Ti, m)
+    val = Base.zeros(Tv, m)
+
+    perm = Base.Perm(Base.ord(isless, identity, false, Base.Order.Forward), row)
+
+    @inbounds for i = 1:n
+        nzr = colptr[i]:colptr[i+1]-1
+        numrows = length(nzr)
+        if numrows <= 1
+            continue
+        elseif numrows == 2
+            f = first(nzr)
+            s = f+1
+            if rowval[f] > rowval[s]
+                rowval[f], rowval[s] = rowval[s], rowval[f]
+                nzval[f],  nzval[s]  = nzval[s],  nzval[f]
+            end
+            continue
+        end
+        resize!(row, numrows)
+        resize!(index, numrows)
+
+        jj = 1
+        @simd for j = nzr
+            row[jj] = rowval[j]
+            val[jj] = nzval[j]
+            jj += 1
+        end
+
+        if numrows <= 16
+            alg = Base.Sort.InsertionSort
+        else
+            alg = Base.Sort.QuickSort
+        end
+
+        # Reset permutation
+        index .= 1:numrows
+
+        Base.sort!(index, alg, perm)
+
+        jj = 1
+        @simd for j = nzr
+            rowval[j] = row[index[jj]]
+            nzval[j] = val[index[jj]]
+            jj += 1
+        end
+    end
+end
+
 
 end #module
