@@ -442,7 +442,7 @@ isequal(x::Float64, y::Float64) = fpiseq(x, y)
 
 # interpret as sign-magnitude integer
 @inline function _fpint(x)
-    IntT = signed(uinttype(typeof(x)))
+    IntT = inttype(typeof(x))
     ix = reinterpret(IntT, x)
     return ifelse(ix < zero(IntT), ix ⊻ typemax(IntT), ix)
 end
