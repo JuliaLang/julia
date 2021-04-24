@@ -795,12 +795,13 @@ end
     end
 end
 
-@testset "Check inputs to Sparse. Related to #20024" for A_ in (
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[]),
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[1.0]))
-    args = (size(A_)..., getcolptr(A_) .- 1, rowvals(A_) .- 1, nonzeros(A_))
-    @test_throws ArgumentError CHOLMOD.Sparse(args...)
-    @test_throws ArgumentError CHOLMOD.Sparse(A_)
+@testset "Check inputs to Sparse. Related to #20024" for t_ in (
+    (2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
+    (2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
+    (2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
+    (2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+    @test_throws ArgumentError SparseMatrixCSC(t_...)
+    @test_throws ArgumentError CHOLMOD.Sparse(t_[1], t_[2], t_[3] .- 1, t_[4] .- 1, t_[5])
 end
 
 @testset "sparse right multiplication of Symmetric and Hermitian matrices #21431" begin
