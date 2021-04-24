@@ -416,6 +416,7 @@ end
     @test kron(A, A) isa KronTestArray
     Ad = Diagonal(A);
     @test kron(Ad, Ad).diag isa KronTestArray
+    @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
 end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin
