@@ -493,13 +493,7 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     return C
 end
 
-function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
-    valA = A.diag; nA = length(valA)
-    valB = B.diag; nB = length(valB)
-    valC = Vector{typeof(zero(T1)*zero(T2))}(undef,nA*nB)
-    C = Diagonal(valC)
-    return @inbounds kron!(C, A, B)
-end
+kron(A::Diagonal{<:Number}, B::Diagonal{<:Number}) = Diagonal(kron(A.diag, B.diag))
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     Base.require_one_based_indexing(B)
