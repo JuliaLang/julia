@@ -439,9 +439,19 @@ end
 isequal(x::Float16, y::Float16) = fpiseq(x, y)
 isequal(x::Float32, y::Float32) = fpiseq(x, y)
 isequal(x::Float64, y::Float64) = fpiseq(x, y)
-isless( x::Float16, y::Float16) = fpislt(x, y)
-isless( x::Float32, y::Float32) = fpislt(x, y)
-isless( x::Float64, y::Float64) = fpislt(x, y)
+
+# interpret as sign-magnitude integer
+@inline function _fpint(x)
+    IntT = inttype(typeof(x))
+    ix = reinterpret(IntT, x)
+    return ifelse(ix < zero(IntT), ix ⊻ typemax(IntT), ix)
+end
+
+@inline function isless(a::T, b::T) where T<:IEEEFloat
+    (isnan(a) || isnan(b)) && return !isnan(a)
+
+    return _fpint(a) < _fpint(b)
+end
 
 # Exact Float (Tf) vs Integer (Ti) comparisons
 # Assumes:
