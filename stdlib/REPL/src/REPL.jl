@@ -776,18 +776,28 @@ find_hist_file() = get(ENV, "JULIA_HISTORY",
 
 backend(r::AbstractREPL) = r.backendref
 
-# Allows an external package to add hooks into the code loading
+# Allows an external package to add hooks into the code loading.
+# The hook should take a Vector{Symbol} of package names and
 # return true if all packages could be installed, false if not
 # to e.g. install packages on demand
 const install_packages_hooks = Any[]
 
 function eval_with_backend(ast, backend::REPLBackendRef)
-    mods_to_be_loaded = modules_to_be_loaded(ast)
-    mods_not_found = list_unfindable_modules(mods_to_be_loaded)
-    !isempty(mods_not_found) && pass_to_install_package_hooks(mods_not_found)
+    if !isempty(install_packages_hooks)
+        check_for_missing_packages_and_run_hooks(ast)
+    end
     put!(backend.repl_channel, (ast, 1))
-    resp = take!(backend.response_channel) # (val, iserr)
-    return resp
+    return take!(backend.response_channel) # (val, iserr)
+end
+
+function check_for_missing_packages_and_run_hooks(ast)
+    mods = modules_to_be_loaded(ast)
+    filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
+    if !isempty(mods)
+        for f in install_packages_hooks
+            f(mods) && return
+        end
+    end
 end
 
 function modules_to_be_loaded(ast, mods = Symbol[])
@@ -795,7 +805,7 @@ function modules_to_be_loaded(ast, mods = Symbol[])
         for arg in ast.args
             if first(arg.args) isa Symbol # i.e. `Foo`
                 push!(mods, first(arg.args))
-            else # i.e. `Foo: Bar`
+            else # i.e. `Foo: bar`
                 push!(mods, first(first(arg.args).args))
             end
         end
@@ -804,16 +814,6 @@ function modules_to_be_loaded(ast, mods = Symbol[])
         arg isa Expr && modules_to_be_loaded(arg, mods)
     end
     return mods
-end
-
-function list_unfindable_modules(mods)
-    filter(mod -> isnothing(Base.identify_package(String(mod))), mods)
-end
-
-function pass_to_install_package_hooks(mods)
-    for f in install_packages_hooks
-        f(mods) && return
-    end
 end
 
 function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon::Bool = true)
