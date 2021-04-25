@@ -15,7 +15,7 @@ import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 Vector type for storing sparse vectors.
 """
 struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
-    n::Int              # Length of the sparse vector
+    n::Ti              # Length of the sparse vector
     nzind::Vector{Ti}   # Indices of stored values
     nzval::Vector{Tv}   # Stored values, typically nonzeros
 
@@ -23,7 +23,7 @@ struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
         length(nzind) == length(nzval) ||
             throw(ArgumentError("index and value vectors must be the same length"))
-        new(convert(Int, n), nzind, nzval)
+        new(convert(Ti, n), nzind, nzval)
     end
 end
 
