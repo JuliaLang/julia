@@ -403,6 +403,23 @@ Random.seed!(1)
 
 end
 
+@testset "kron (issue #40595)" begin
+    # custom array type to test that kron on Diagonal matrices preserves types of the parents if possible
+    struct KronTestArray{T, N, AT} <: AbstractArray{T, N}
+        data::AT
+    end
+    KronTestArray(data::AbstractArray) = KronTestArray{eltype(data), ndims(data), typeof(data)}(data)
+    Base.size(A::KronTestArray) = size(A.data)
+    LinearAlgebra.kron(A::KronTestArray, B::KronTestArray) = KronTestArray(kron(A.data, B.data))
+    Base.getindex(K::KronTestArray{<:Any,N}, i::Vararg{Int,N}) where {N} = K.data[i...]
+
+    A = KronTestArray([1, 2, 3]);
+    @test kron(A, A) isa KronTestArray
+    Ad = Diagonal(A);
+    @test kron(Ad, Ad).diag isa KronTestArray
+    @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
+end
+
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
