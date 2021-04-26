@@ -76,6 +76,9 @@ end
 answer_color(::AbstractREPL) = ""
 
 const JULIA_PROMPT = "julia> "
+const PKG_PROMPT = "pkg> "
+const SHELL_PROMPT = "shell> "
+const HELP_PROMPT = "help?> "
 
 mutable struct REPLBackend
     "channel for AST"
@@ -934,7 +937,7 @@ function setup_interface(
         on_enter = return_callback)
 
     # Setup help mode
-    help_mode = Prompt("help?> ",
+    help_mode = Prompt(HELP_PROMPT,
         prompt_prefix = hascolor ? repl.help_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
@@ -946,7 +949,7 @@ function setup_interface(
 
 
     # Set up shell mode
-    shell_mode = Prompt("shell> ";
+    shell_mode = Prompt(SHELL_PROMPT;
         prompt_prefix = hascolor ? repl.shell_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
@@ -1052,7 +1055,10 @@ function setup_interface(
             oldpos = firstindex(input)
             firstline = true
             isprompt_paste = false
-            jl_prompt_len = 7 # "julia> "
+            jl_prompt_len = length(JULIA_PROMPT)
+            pkg_prompt_len = length(PKG_PROMPT)
+            shell_prompt_len = length(SHELL_PROMPT)
+            help_prompt_len = length(HELP_PROMPT)
             while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
                     # Check if the next statement starts with "julia> ", in that case
@@ -1065,7 +1071,23 @@ function setup_interface(
                     if (firstline || isprompt_paste) && startswith(SubString(input, oldpos), JULIA_PROMPT)
                         isprompt_paste = true
                         oldpos += jl_prompt_len
-                    # If we are prompt pasting and current statement does not begin with julia> , skip to next line
+                        transition(s, julia_prompt)
+                    # Check if input line starts with "pkg> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), PKG_PROMPT)
+                        isprompt_paste = true
+                        oldpos += pkg_prompt_len
+                        Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
+                    # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), SHELL_PROMPT)
+                        isprompt_paste = true
+                        oldpos += shell_prompt_len
+                        transition(s, shell_mode)
+                    # Check if input line starts with "help?> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), HELP_PROMPT)
+                        isprompt_paste = true
+                        oldpos += help_prompt_len
+                        transition(s, help_mode)
+                    # If we are prompt pasting and current statement does not begin with a mode prefix, skip to next line
                     elseif isprompt_paste
                         while input[oldpos] != '\n'
                             oldpos = nextind(input, oldpos)

@@ -750,6 +750,23 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "begin")
     @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
 
+    # Test switching repl modes
+    sendrepl2("""\e[200~
+            julia> A = 1
+
+            shell> pwd
+
+            help?> Int
+
+            pkg> st
+
+            julia> B = 2
+            \e[201~
+             """)
+    wait(c)
+    @test Main.A == 1
+    @test Main.B == 2
+
     # Close repl
     write(stdin_write, '\x04')
     Base.wait(repltask)
