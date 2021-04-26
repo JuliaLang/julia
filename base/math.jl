@@ -911,19 +911,13 @@ end
     z
 end
 @inline function ^(x::Float32, y::Float32)
-    z = Float32(exp2_fast(log2(Float64(x))*y))
+    z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
     end
     z
 end
-@inline function ^(x::Float16, y::Float16)
-    z = Float16(exp2_fast(log2(Float32(x))*y))
-    if isnan(z) & !isnan(x+y)
-        throw_exp_domainerror(x)
-    end
-    z
-end
+@inline ^(x::Float16, y::Float16) = Float16(Float32(x)^Float32(y))  # TODO: optimize
 
 @inline function ^(x::Float64, y::Integer)
     y == -1 && return inv(x)
@@ -931,7 +925,7 @@ end
     y == 1 && return x
     y == 2 && return x*x
     y == 3 && return x*x*x
-    return x^Float64(y)
+    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
 end
 @inline function ^(x::Float32, y::Integer)
     y == -1 && return inv(x)
@@ -939,7 +933,7 @@ end
     y == 1 && return x
     y == 2 && return x*x
     y == 3 && return x*x*x
-    x^Float32(y)
+    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
