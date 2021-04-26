@@ -1096,6 +1096,9 @@ end
 # Issue 39427
 @test occursin("does not exist", sprint(show, help_result(":=")))
 
+# Issue #40563
+@test occursin("does not exist", sprint(show, help_result("..")))
+
 # Issue #25930
 
 # Brief and extended docs (issue #25930)
