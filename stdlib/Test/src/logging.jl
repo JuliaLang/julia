@@ -178,7 +178,7 @@ macro test_logs(exs...)
                     $(esc(expression))
                 end
                 if didmatch
-                    testres = Pass(:test, nothing, nothing, value)
+                    testres = Pass(:test, $orig_expr, nothing, value, $sourceloc)
                 else
                     testres = LogTestFailure($orig_expr, $sourceloc,
                                              $(QuoteNode(exs[1:end-1])), logs)
