@@ -307,6 +307,8 @@ function active_project(search_load_path::Bool=true)
     end
 end
 
+
+const _LOAD_PATH = Ref{Union{Vector{String}, Nothing}}()
 """
     load_path()
 
@@ -314,6 +316,9 @@ Return the fully expanded value of [`LOAD_PATH`](@ref) that is searched for proj
 packages.
 """
 function load_path()
+    if _LOAD_PATH[] !== nothing
+        return _LOAD_PATH[]
+    end
     paths = String[]
     for env in LOAD_PATH
         path = load_path_expand(env)

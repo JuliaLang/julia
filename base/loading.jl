@@ -128,13 +128,19 @@ end
 
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
+const dummy_uuid_cache = Dict{String, UUID}()
 function dummy_uuid(project_file::String)
+    if haskey(dummy_uuid_cache, project_file)
+        return dummy_uuid_cache[project_file]
+    end
     project_path = try
         realpath(project_file)
     catch
         project_file
     end
-    return uuid5(ns_dummy_uuid, project_path)
+    uuid = uuid5(ns_dummy_uuid, project_path)
+    dummy_uuid_cache[project_file] = uuid
+    return uuid
 end
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
@@ -337,20 +343,14 @@ const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 const preferences_names = ("JuliaLocalPreferences.toml", "LocalPreferences.toml")
 
 # classify the LOAD_PATH entry to be one of:
-#  - `false`: nonexistant / nothing to see here
 #  - `true`: `env` is an implicit environment
 #  - `path`: the path of an explicit project file
 function env_project_file(env::String)::Union{Bool,String}
-    if isdir(env)
-        for proj in project_names
-            project_file = joinpath(env, proj)
-            isfile_casesensitive(project_file) && return project_file
-        end
-        return true
-    elseif basename(env) in project_names && isfile_casesensitive(env)
+    if basename(env) in project_names # && isfile_casesensitive(env)
         return env
+    else
+        return true
     end
-    return false
 end
 
 function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
@@ -404,10 +404,9 @@ end
 
 # find project file's top-level UUID entry (or nothing)
 function project_file_name_uuid(project_file::String, name::String)::PkgId
-    uuid = dummy_uuid(project_file)
     d = parsed_toml(project_file)
     uuid′ = get(d, "uuid", nothing)::Union{String, Nothing}
-    uuid′ === nothing || (uuid = UUID(uuid′))
+    uuid = uuid′ === nothing ? dummy_uuid(project_file) : UUID(uuid′)
     name = get(d, "name", name)::String
     return PkgId(uuid, name)
 end
@@ -420,6 +419,8 @@ end
 # find project file's corresponding manifest file
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     dir = abspath(dirname(project_file))
+    # TODO: fix
+    return joinpath(dir, "Manifest.toml")
     d = parsed_toml(project_file)
     explicit_manifest = get(d, "manifest", nothing)::Union{String, Nothing}
     if explicit_manifest !== nothing
@@ -462,9 +463,9 @@ end
 
 # given a path and a name, return the entry point
 function entry_path(path::String, name::String)::Union{Nothing,String}
+    path_common = normpath(joinpath(path, "src", "$name.jl"))
+    isfile_casesensitive(path_common) && return path_common
     isfile_casesensitive(path) && return normpath(path)
-    path = normpath(joinpath(path, "src", "$name.jl"))
-    isfile_casesensitive(path) && return path
     return nothing # source not found
 end
 
@@ -646,7 +647,7 @@ function find_all_in_cache_path(pkg::PkgId)
     if length(paths) > 1
         # allocating the sort vector is less expensive than using sort!(.. by=mtime), which would
         # call the relatively slow mtime multiple times per path
-        p = sortperm(mtime.(paths), rev = true)
+        p = sortperm(mtime.(paths), rev=true)
         return paths[p]
     else
         return paths
@@ -865,6 +866,9 @@ For more details regarding code loading, see the manual sections on [modules](@r
 [parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
+    try
+    _LOAD_PATH[] = nothing
+    _LOAD_PATH[] = load_path()
     uuidkey = identify_package(into, String(mod))
     # Core.println("require($(PkgId(into)), $mod) -> $uuidkey")
     if uuidkey === nothing
@@ -901,6 +905,9 @@ function require(into::Module, mod::Symbol)
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
     return require(uuidkey)
+    finally
+    _LOAD_PATH[] = nothing
+    end
 end
 
 mutable struct PkgOrigin
