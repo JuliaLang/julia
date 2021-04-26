@@ -183,7 +183,7 @@ function show(io::IO, rng::MersenneTwister)
     if rng.adv_jump == 0 && rng.adv == 0
         return print(io, MersenneTwister, "(", seed_str, ")")
     end
-    print(io, "$MersenneTwister($seed_str, (")
+    print(io, MersenneTwister, "(", seed_str, ", (")
     # state
     adv = Integer[rng.adv_jump, rng.adv]
     if rng.adv_vals != -1 || rng.adv_ints != -1
