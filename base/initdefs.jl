@@ -307,6 +307,12 @@ function active_project(search_load_path::Bool=true)
     end
 end
 
+"""
+    load_path()
+
+Return the fully expanded value of [`LOAD_PATH`](@ref) that is searched for projects and
+packages.
+"""
 function load_path()
     paths = String[]
     for env in LOAD_PATH
