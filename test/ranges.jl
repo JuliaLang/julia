@@ -1690,6 +1690,15 @@ end
     end
 end
 
+@testset "Char ranges are regular" begin
+    r = 'a':'z'
+    r2 = 'α':2:'ω'
+    r3 = StepRangeLen('a',3,10)
+    @test Base.RangeStepStyle(r) === Base.RangeStepRegular()
+    @test Base.RangeStepStyle(r2) === Base.RangeStepRegular()
+    @test Base.RangeStepStyle(r3) === Base.RangeStepRegular()
+end
+
 @testset "Type-stable intersect (#32410)" begin
     for T = (StepRange{Int,Int}, StepRange{BigInt,Int}, StepRange{BigInt,BigInt})
         @test @inferred(intersect(T(1:2:5), 1:5)) == 1:2:5
