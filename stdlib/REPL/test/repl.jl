@@ -753,15 +753,19 @@ fake_repl() do stdin_write, stdout_read, repl
     # Test switching repl modes
     sendrepl2("""\e[200~
             julia> A = 1
+            1
 
             shell> pwd
+            /home/usr
 
             help?> Int
+            Dummy docstring
 
             pkg> st
+            Dummy pkg info
 
             julia> B = 2
-            \e[201~
+            2\e[201~
              """)
     wait(c)
     @test Main.A == 1
