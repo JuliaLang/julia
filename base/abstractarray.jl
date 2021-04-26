@@ -1135,6 +1135,28 @@ copymutable(itr) = collect(itr)
 
 zero(x::AbstractArray{T}) where {T} = fill!(similar(x), zero(T))
 
+"""
+    zeros!(x::AbstractArray)
+
+Fills `x` with zeros. This is equivalent to `fill!(x, zero(eltype(x)))`.
+See also [`zeros`](@ref) and [`ones!`](@ref).
+
+!!! compat "Julia 1.7"
+    This method is available as of Julia 1.7.
+"""
+zeros!(x::AbstractArray) = fill!(x, zero(eltype(x)))
+
+"""
+    ones!(x::AbstractArray)
+
+Fills `x` with ones. This is equivalent to `fill!(x, one(eltype(x)))`.
+See also [`ones`](@ref) and [`zeros!`](@ref).
+
+!!! compat "Julia 1.7"
+    This method is available as of Julia 1.7.
+"""
+ones!(x::AbstractArray) = fill!(x, one(eltype(x)))
+
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
 
