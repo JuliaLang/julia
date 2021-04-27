@@ -1295,3 +1295,30 @@ Base.wait(frontend_task)
 macro throw_with_linenumbernode(err)
     Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
 end
+
+@testset "Install missing packages via hooks" begin
+    @testset "Parse AST for packages" begin
+        mods = REPL.modules_to_be_loaded(Meta.parse("using Foo"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Meta.parse("import Foo"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Meta.parse("using Foo, Bar"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Meta.parse("import Foo, Bar"))
+        @test mods == [:Foo, :Bar]
+
+        mods = REPL.modules_to_be_loaded(Meta.parse("if false using Foo end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Meta.parse("if false if false using Foo end end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Meta.parse("if false using Foo, Bar end"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Meta.parse("if false using Foo: bar end"))
+        @test mods == [:Foo]
+
+        mods = REPL.modules_to_be_loaded(Meta.parse("import Foo.bar as baz"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Meta.parse("using .Foo"))
+        @test mods == []
+    end
+end
