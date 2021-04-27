@@ -4,7 +4,7 @@
 
 import Base: typesof, insert!
 
-separate_kwargs(args...; kwargs...) = (args, kwargs.data)
+separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
 """
 Transform a dot expression into one where each argument has been replaced by a
