@@ -957,14 +957,19 @@ end
     end
     z
 end
+<<<<<<< HEAD
 @inline function ^(x::Float32, y::Float32)
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
     x==0 && return T(y==0)
+=======
+@inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
+    x == 0 && return T(y == 0)
+>>>>>>> Update base/math.jl
     x = widen(x) # convert Float16/Float32 to Float32/Float64
-    x<0 && !isinteger(y) && throw_exp_domainerror(x)
-    ans = T(exp2(log2(abs(x))*y))
-    return (x<0 && isodd(y)) ? -ans : ans
+    x < 0 && !isinteger(y) && throw_exp_domainerror(x)
+    ans = T(exp2(log2(abs(x)) * y))
+    return (x < 0 && isodd(y)) ? -ans : ans
 end
 
 # compensated power by squaring
