@@ -241,7 +241,27 @@ ci = code_lowered(f, Tuple{Int})[1]
 
 g(::Val{x}) where {x} = x ? 1 : 0
 ci = code_lowered(g, Tuple{Val{true}})[1]
-@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[Val{true}], 0, 0, :propagate)[1] ==
-   Core.GotoIfNot(QuoteNode(Val{true}), 3)
-@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[Val{true}], 0, 2, :propagate)[1] ==
-   Core.GotoIfNot(QuoteNode(Val{true}), 5)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 0, :propagate)[1] ==
+   Core.GotoIfNot(QuoteNode(true), 3)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 2, :propagate)[1] ==
+   Core.GotoIfNot(QuoteNode(true), 5)
+
+@testset "inlining with isdefined" begin
+    isdefined_slot(x) = @isdefined(x)
+    ci = code_lowered(isdefined_slot, Tuple{Int})[1]
+    @test Meta.partially_inline!(ci.code, [], Tuple{typeof(isdefined_slot), Int},
+                                 Any[Int], 0, 0, :propagate)[1] == Expr(:isdefined, Core.SlotNumber(2))
+    @test Meta.partially_inline!(ci.code, [isdefined_slot, 1], Tuple{typeof(isdefined_slot), Int},
+                                 Any[Int], 0, 0, :propagate)[1] == true
+
+    isdefined_sparam(::T) where {T} = @isdefined(T)
+    ci = code_lowered(isdefined_sparam, Tuple{Int})[1]
+    @test Meta.partially_inline!(ci.code, [], Tuple{typeof(isdefined_sparam), Int},
+                                 Any[Int], 0, 0, :propagate)[1] == true
+
+    @eval isdefined_globalref(x) = $(Expr(:isdefined, GlobalRef(Base, :foo)))
+    ci = code_lowered(isdefined_globalref, Tuple{Int})[1]
+    @test Meta.partially_inline!(ci.code, Any[isdefined_globalref, 1], Tuple{typeof(isdefined_globalref), Int},
+                                 Any[Int], 0, 0, :propagate)[1] == Expr(:isdefined, GlobalRef(Base, :foo))
+
+end
