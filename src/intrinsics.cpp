@@ -198,11 +198,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
         while (fields.size() < llvm_idx)
             fields.push_back(
-#if JL_LLVM_VERSION >= 110000
                 UndefValue::get(GetElementPtrInst::getTypeAtIndex(lt, fields.size())));
-#else
-                UndefValue::get(cast<CompositeType>(lt)->getTypeAtIndex(fields.size())));
-#endif
         const uint8_t *ov = (const uint8_t*)ptr + offs;
         if (jl_is_uniontype(ft)) {
             // compute the same type layout as julia_struct_to_llvm
