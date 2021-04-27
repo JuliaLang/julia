@@ -912,11 +912,11 @@ end
     z
 end
 @inline function ^(x::T, y::T) where T <: Union{Float16, Float32}
-    x==0 && return T(y==0)
+    x == 0 && return T(y == 0)
     x = widen(x) # convert Float16/Float32 to Float32/Float64
-    x<0 && !isinteger(y) && throw_exp_domainerror(x)
-    ans = T(exp2(log2(abs(x))*y))
-    return (x<0 && isodd(y)) ? -ans : ans
+    x < 0 && !isinteger(y) && throw_exp_domainerror(x)
+    ans = T(exp2(log2(abs(x)) * y))
+    return (x < 0 && isodd(y)) ? -ans : ans
 end
 
 @inline function ^(x::Float64, y::Integer)
