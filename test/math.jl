@@ -149,6 +149,8 @@ end
             @test x^y ≈ big(x)^big(y)
             @test x^1 === x
             @test x^yi ≈ big(x)^yi
+            @test (-x)^yi == x^yi
+            @test (-x)^(yi+1) == -(x^(yi+1))
             @test acos(x) ≈ acos(big(x))
             @test acosh(1+x) ≈ acosh(big(1+x))
             @test asin(x) ≈ asin(big(x))
