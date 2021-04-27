@@ -904,6 +904,7 @@ function modf(x::Float64)
 end
 
 @inline function ^(x::Float64, y::Float64)
+    x==0 && return Float64(y==0)
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
