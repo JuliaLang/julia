@@ -81,6 +81,8 @@ See also: [`ncodeunits`](@ref)
 """
 codeunit(s::AbstractString)
 
+const CodeunitType = Union{Type{UInt8},Type{UInt16},Type{UInt32}}
+
 """
     codeunit(s::AbstractString, i::Integer) -> Union{UInt8, UInt16, UInt32}
 
@@ -174,14 +176,14 @@ julia> sizeof("∀")
 3
 ```
 """
-sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
+sizeof(s::AbstractString) = ncodeunits(s)::Int * sizeof(codeunit(s)::CodeunitType)
 firstindex(s::AbstractString) = 1
-lastindex(s::AbstractString) = thisind(s, ncodeunits(s))
-isempty(s::AbstractString) = iszero(ncodeunits(s))
+lastindex(s::AbstractString) = thisind(s, ncodeunits(s)::Int)
+isempty(s::AbstractString) = iszero(ncodeunits(s)::Int)
 
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
-    @inbounds return isvalid(s, i) ? iterate(s, i)[1] : string_index_err(s, i)
+    @inbounds return isvalid(s, i) ? (iterate(s, i)::NTuple{2,Any})[1] : string_index_err(s, i)
 end
 
 getindex(s::AbstractString, i::Colon) = s
@@ -204,9 +206,9 @@ end
 ## bounds checking ##
 
 checkbounds(::Type{Bool}, s::AbstractString, i::Integer) =
-    1 ≤ i ≤ ncodeunits(s)
+    1 ≤ i ≤ ncodeunits(s)::Int
 checkbounds(::Type{Bool}, s::AbstractString, r::AbstractRange{<:Integer}) =
-    isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s))
+    isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s)::Int)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
     all(i -> checkbounds(Bool, s, i), I)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Integer}) =
@@ -382,12 +384,12 @@ julia> length("jμΛIα")
 5
 ```
 """
-length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s))
+length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s)::Int)
 
 function length(s::AbstractString, i::Int, j::Int)
     @boundscheck begin
-        0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
+        0 < i ≤ ncodeunits(s)::Int+1 || throw(BoundsError(s, i))
+        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
     end
     n = 0
     for k = i:j
@@ -434,7 +436,7 @@ ERROR: BoundsError: attempt to access 2-codeunit String at index [-1]
 thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
 
 function thisind(s::AbstractString, i::Int)
-    z = ncodeunits(s) + 1
+    z = ncodeunits(s)::Int + 1
     i == z && return i
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
     @inbounds while 1 < i && !(isvalid(s, i)::Bool)
@@ -602,9 +604,9 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
 ## string map, filter ##
 
 function map(f, s::AbstractString)
-    out = StringVector(max(4, sizeof(s)÷sizeof(codeunit(s))))
+    out = StringVector(max(4, sizeof(s)::Int÷sizeof(codeunit(s)::CodeunitType)))
     index = UInt(1)
-    for c in s
+    for c::AbstractChar in s
         c′ = f(c)
         isa(c′, AbstractChar) || throw(ArgumentError(
             "map(f, s::AbstractString) requires f to return AbstractChar; " *
@@ -674,13 +676,16 @@ cases where `v` contains non-ASCII characters.)
 
 # Examples
 ```jldoctest
-julia> r = reverse("Julia")
-"ailuJ"
+julia> s = "Julia🚀"
+"Julia🚀"
 
-julia> for i in 1:length(r)
-           print(r[reverseind("Julia", i)])
+julia> r = reverse(s)
+"🚀ailuJ"
+
+julia> for i in eachindex(s)
+           print(r[reverseind(r, i)])
        end
-Julia
+Julia🚀
 ```
 """
 reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
@@ -735,7 +740,7 @@ end
 length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
 size(s::CodeUnits) = (length(s),)
-elsize(s::CodeUnits{T}) where {T} = sizeof(T)
+elsize(s::Type{<:CodeUnits{T}}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 @inline iterate(s::CodeUnits, i=1) = (i % UInt) - 1 < length(s) ? (@inbounds s[i], i + 1) : nothing
@@ -756,7 +761,7 @@ for new string types if necessary.
 # Examples
 ```jldoctest
 julia> codeunits("Juλia")
-6-element Base.CodeUnits{UInt8,String}:
+6-element Base.CodeUnits{UInt8, String}:
  0x4a
  0x75
  0xce

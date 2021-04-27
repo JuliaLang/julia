@@ -5,7 +5,6 @@ module FakePTYs
 if Sys.iswindows()
     pushfirst!(LOAD_PATH, Sys.STDLIB)
     using Sockets
-    Sockets.__init__()
     popfirst!(LOAD_PATH)
 end
 

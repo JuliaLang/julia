@@ -43,7 +43,7 @@ julia> ev = [7, 8, 9]
  9
 
 julia> SymTridiagonal(dv, ev)
-4×4 SymTridiagonal{Int64,Vector{Int64}}:
+4×4 SymTridiagonal{Int64, Vector{Int64}}:
  1  7  ⋅  ⋅
  7  2  8  ⋅
  ⋅  8  3  9
@@ -52,7 +52,7 @@ julia> SymTridiagonal(dv, ev)
 julia> A = SymTridiagonal(fill([1 2; 3 4], 3), fill([1 2; 3 4], 2));
 
 julia> A[1,1]
-2×2 Symmetric{Int64,Matrix{Int64}}:
+2×2 Symmetric{Int64, Matrix{Int64}}:
  1  2
  2  4
 
@@ -89,7 +89,7 @@ julia> A = [1 2 3; 2 4 5; 3 5 6]
  3  5  6
 
 julia> SymTridiagonal(A)
-3×3 SymTridiagonal{Int64,Vector{Int64}}:
+3×3 SymTridiagonal{Int64, Vector{Int64}}:
  1  2  ⋅
  2  4  5
  ⋅  5  6
@@ -97,7 +97,7 @@ julia> SymTridiagonal(A)
 julia> B = reshape([[1 2; 2 3], [1 2; 3 4], [1 3; 2 4], [1 2; 2 3]], 2, 2);
 
 julia> SymTridiagonal(B)
-2×2 SymTridiagonal{Matrix{Int64},Vector{Matrix{Int64}}}:
+2×2 SymTridiagonal{Matrix{Int64}, Vector{Matrix{Int64}}}:
  [1 2; 2 3]  [1 3; 2 4]
  [1 2; 3 4]  [1 2; 2 3]
 ```
@@ -204,9 +204,11 @@ end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, A.ev+B.ev)
 -(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv-B.dv, A.ev-B.ev)
+-(A::SymTridiagonal) = SymTridiagonal(-A.dv, -A.ev)
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
-*(B::Number, A::SymTridiagonal) = A*B
+*(B::Number, A::SymTridiagonal) = SymTridiagonal(B*A.dv, B*A.ev)
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
+\(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
 @inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
@@ -321,7 +323,7 @@ returns the specific corresponding eigenvectors.
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64,Vector{Float64}}:
+3×3 SymTridiagonal{Float64, Vector{Float64}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
@@ -507,7 +509,7 @@ julia> du = [4, 5, 6];
 julia> d = [7, 8, 9, 0];
 
 julia> Tridiagonal(dl, d, du)
-4×4 Tridiagonal{Int64,Vector{Int64}}:
+4×4 Tridiagonal{Int64, Vector{Int64}}:
  7  4  ⋅  ⋅
  1  8  5  ⋅
  ⋅  2  9  6
@@ -536,7 +538,7 @@ julia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]
  1  2  3  4
 
 julia> Tridiagonal(A)
-4×4 Tridiagonal{Int64,Vector{Int64}}:
+4×4 Tridiagonal{Int64, Vector{Int64}}:
  1  2  ⋅  ⋅
  1  2  3  ⋅
  ⋅  2  3  4
@@ -608,7 +610,7 @@ Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(
 
 \(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ copy(B)
 
-function diag(M::Tridiagonal{T}, n::Integer=0) where T
+function diag(M::Tridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
@@ -732,8 +734,9 @@ end
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du-B.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
-*(B::Number, A::Tridiagonal) = A*B
+*(B::Number, A::Tridiagonal) = Tridiagonal(B*A.dl, B*A.d, B*A.du)
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
+\(B::Number, A::Tridiagonal) = Tridiagonal(B\A.dl, B\A.d, B\A.du)
 
 ==(A::Tridiagonal, B::Tridiagonal) = (A.dl==B.dl) && (A.d==B.d) && (A.du==B.du)
 ==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)

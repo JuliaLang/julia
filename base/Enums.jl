@@ -47,13 +47,17 @@ function Base.show(io::IO, ::MIME"text/plain", x::Enum)
     show(io, Integer(x))
 end
 
-function Base.show(io::IO, ::MIME"text/plain", t::Type{<:Enum})
-    print(io, "Enum ")
-    Base.show_datatype(io, t)
-    print(io, ":")
-    for x in instances(t)
-        print(io, "\n", Symbol(x), " = ")
-        show(io, Integer(x))
+function Base.show(io::IO, m::MIME"text/plain", t::Type{<:Enum})
+    if isconcretetype(t)
+        print(io, "Enum ")
+        Base.show_datatype(io, t)
+        print(io, ":")
+        for x in instances(t)
+            print(io, "\n", Symbol(x), " = ")
+            show(io, Integer(x))
+        end
+    else
+        invoke(show, Tuple{IO, MIME"text/plain", Type}, io, m, t)
     end
 end
 
@@ -116,7 +120,7 @@ julia> instances(Fruit)
 (apple, orange, kiwi)
 ```
 """
-macro enum(T, syms...)
+macro enum(T::Union{Symbol,Expr}, syms...)
     if isempty(syms)
         throw(ArgumentError("no arguments given for Enum $T"))
     end
@@ -131,7 +135,7 @@ macro enum(T, syms...)
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    values = basetype[]
+    values = Vector{basetype}()
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
     lo = hi = 0

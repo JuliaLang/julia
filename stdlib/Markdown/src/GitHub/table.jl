@@ -45,7 +45,6 @@ function github_table(stream::IO, md::MD)
         align = nothing
         while (row = parserow(stream)) !== nothing
             if length(rows) == 0
-                isempty(row[1]) && return false
                 cols = length(row)
             end
             if align === nothing && length(rows) == 1 # Must have a --- row

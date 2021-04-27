@@ -52,7 +52,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
          Ptr{CHOLMOD.C_Sparse{Tv}}, Ptr{CHOLMOD.C_Sparse{Tv}}, Ptr{CHOLMOD.C_Dense{Tv}},
          Ptr{Ptr{CHOLMOD.C_Sparse{Tv}}}, Ptr{Ptr{CHOLMOD.C_Dense{Tv}}}, Ptr{Ptr{CHOLMOD.C_Sparse{Tv}}},
          Ptr{Ptr{CHOLMOD.SuiteSparse_long}}, Ptr{Ptr{CHOLMOD.C_Sparse{Tv}}}, Ptr{Ptr{CHOLMOD.SuiteSparse_long}},
-         Ptr{Ptr{CHOLMOD.C_Dense{Tv}}}, Ptr{Cvoid}),
+         Ptr{Ptr{CHOLMOD.C_Dense{Tv}}}, Ptr{CHOLMOD.Common}),
         ordering,       # all, except 3:given treated as 0:fixed
         tol,            # columns with 2-norm <= tol treated as 0
         econ,           # e = max(min(m,econ),rank(A))
@@ -68,7 +68,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         H,              # m-by-nh Householder vectors
         HPinv,          # size m row permutation
         HTau,           # 1-by-nh Householder coefficients
-        CHOLMOD.common_struct[Threads.threadid()]) # /* workspace and parameters */
+        CHOLMOD.common[Threads.threadid()]) # /* workspace and parameters */
 
     if rnk < 0
         error("Sparse QR factorization failed")
@@ -86,8 +86,8 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # correct deallocator function is called and that the memory count in
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Cvoid,
-            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
-            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common_struct[Threads.threadid()])
+            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{CHOLMOD.Common}),
+            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common[Threads.threadid()])
     end
     hpinv = HPinv[]
     if hpinv == C_NULL
@@ -101,8 +101,8 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # correct deallocator function is called and that the memory count in
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Cvoid,
-            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
-            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common_struct[Threads.threadid()])
+            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{CHOLMOD.Common}),
+            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common[Threads.threadid()])
     end
 
     return rnk, _E, _HPinv
@@ -164,22 +164,22 @@ solve least squares or underdetermined problems with [`\\`](@ref). The function 
 # Examples
 ```jldoctest
 julia> A = sparse([1,2,3,4], [1,1,2,2], [1.0,1.0,1.0,1.0])
-4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+4×2 SparseMatrixCSC{Float64, Int64} with 4 stored entries:
  1.0   ⋅
  1.0   ⋅
   ⋅   1.0
   ⋅   1.0
 
 julia> qr(A)
-SuiteSparse.SPQR.QRSparse{Float64,Int64}
+SuiteSparse.SPQR.QRSparse{Float64, Int64}
 Q factor:
-4×4 SuiteSparse.SPQR.QRSparseQ{Float64,Int64}:
+4×4 SuiteSparse.SPQR.QRSparseQ{Float64, Int64}:
  -0.707107   0.0        0.0       -0.707107
   0.0       -0.707107  -0.707107   0.0
   0.0       -0.707107   0.707107   0.0
  -0.707107   0.0        0.0        0.707107
 R factor:
-2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+2×2 SparseMatrixCSC{Float64, Int64} with 2 stored entries:
  -1.41421    ⋅
    ⋅       -1.41421
 Row permutation:
@@ -223,7 +223,7 @@ LinearAlgebra.qr(A::SparseMatrixCSC{<:Union{ComplexF16,ComplexF32}}; tol=_defaul
 LinearAlgebra.qr(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}};
    tol=_default_tol(A)) where {T<:AbstractFloat} =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
-    "Try qr(convert(SparseMatrixCSC{Float64/ComplexF64,Int}, A)) for ",
+    "Try qr(convert(SparseMatrixCSC{Float64/ComplexF64, Int}, A)) for ",
     "sparse floating point QR using SPQR or qr(Array(A)) for generic ",
     "dense QR.")))
 LinearAlgebra.qr(A::SparseMatrixCSC; tol=_default_tol(A)) = qr(float(A); tol=tol)
@@ -288,48 +288,6 @@ function LinearAlgebra.rmul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRSparseQ})
     return A
 end
 
-"""
-    getproperty(F::QRSparse, d::Symbol)
-
-Extract factors of a QRSparse factorization. Possible values of `d` are
-- `Q` : `QRSparseQ` matrix of the ``Q`` factor in Householder form
-- `R` : `UpperTriangular` ``R`` factor
-- `prow` : Vector of the row permutations applied to the factorized matrix
-- `pcol` : Vector of the column permutations applied to the factorized matrix
-
-# Examples
-```jldoctest
-julia> F = qr(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
-
-julia> F.Q
-4×4 SuiteSparse.SPQR.QRSparseQ{Float64,Int64}:
- 1.0  0.0  0.0  0.0
- 0.0  1.0  0.0  0.0
- 0.0  0.0  1.0  0.0
- 0.0  0.0  0.0  1.0
-
-julia> F.R
-4×4 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
- 3.0   ⋅    ⋅    ⋅
-  ⋅   4.0   ⋅   2.0
-  ⋅    ⋅   5.0   ⋅
-  ⋅    ⋅    ⋅   1.0
-
-julia> F.prow
-4-element Vector{Int64}:
- 2
- 3
- 4
- 1
-
-julia> F.pcol
-4-element Vector{Int64}:
- 2
- 3
- 4
- 1
-```
-"""
 @inline function Base.getproperty(F::QRSparse, d::Symbol)
     if d === :Q
         return QRSparseQ(F.factors, F.τ, size(F, 2))
@@ -441,7 +399,7 @@ when the problem is underdetermined.
 # Examples
 ```jldoctest
 julia> A = sparse([1,2,4], [1,1,1], [1.0,1.0,1.0], 4, 2)
-4×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+4×2 SparseMatrixCSC{Float64, Int64} with 3 stored entries:
  1.0   ⋅
  1.0   ⋅
   ⋅    ⋅

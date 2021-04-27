@@ -230,15 +230,17 @@ for (key, msg, fun, hash) in (
     (b"key", b"The quick brown fox jumps over the lazy dog", hmac_sha256, "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8"),
 )
     global nerrors
-    digest = bytes2hex(fun(Vector(key), Vector(msg)))
-    if digest != hash
+    digest1 = bytes2hex(fun(Vector(key), Vector(msg)))
+    digest2 = bytes2hex(fun(Vector(key), IOBuffer(Vector(msg))))
+    if digest1 != hash || digest2 != hash
         print("\n")
         @warn(
         """
         For $fun($(String(key)), $(String(msg))) expected:
             $hash
         Calculated:
-            $digest
+            $digest1
+            $digest2
         """)
         nerrors += 1
     else

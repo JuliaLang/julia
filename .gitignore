@@ -31,3 +31,4 @@
 /perf*
 .DS_Store
 .idea/*
+.vscode/*

@@ -97,49 +97,22 @@ dynamic dispatch, but a mere heuristic indicating that dynamic
 dispatch is extremely expensive.
 
 Each statement gets analyzed for its total cost in a function called
-`statement_cost`. You can run this yourself by following the sketch below,
-where `f` is your function and `tt` is the Tuple-type of the arguments:
-
-```jldoctest
-# A demo on `fill(3.5, (2, 3))`
-f = fill
-tt = Tuple{Float64, Tuple{Int,Int}}
-# Create the objects we need to interact with the compiler
-opt_params = Core.Compiler.OptimizationParams()
-mi = Base.method_instances(f, tt)[1]
-ci = code_typed(f, tt)[1][1]
-interp = Core.Compiler.NativeInterpreter()
-opt = Core.Compiler.OptimizationState(mi, opt_params, interp)
-# Calculate cost of each statement
-cost(stmt::Expr) = Core.Compiler.statement_cost(stmt, -1, ci, opt.sptypes, opt.slottypes, opt.params)
-cost(stmt) = 0
-cst = map(cost, ci.code)
-
-# output
-
-31-element Vector{Int64}:
-  0
-  0
- 20
-  4
-  1
-  1
-  1
-  0
-  0
-  0
-  ⋮
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
-  0
+`statement_cost`. You can display the cost associated with each statement
+as follows:
+```jldoctest; filter=r"tuple.jl:\d+"
+julia> Base.print_statement_costs(stdout, map, (typeof(sqrt), Tuple{Int},)) # map(sqrt, (2,))
+map(f, t::Tuple{Any}) in Base at tuple.jl:179
+  0 1 ─ %1  = Base.getfield(_3, 1, true)::Int64
+  1 │   %2  = Base.sitofp(Float64, %1)::Float64
+  2 │   %3  = Base.lt_float(%2, 0.0)::Bool
+  0 └──       goto #3 if not %3
+  0 2 ─       invoke Base.Math.throw_complex_domainerror(:sqrt::Symbol, %2::Float64)::Union{}
+  0 └──       unreachable
+ 20 3 ─ %7  = Base.Math.sqrt_llvm(%2)::Float64
+  0 └──       goto #4
+  0 4 ─       goto #5
+  0 5 ─ %10 = Core.tuple(%7)::Tuple{Float64}
+  0 └──       return %10
 ```
 
-The output is a `Vector{Int}` holding the estimated cost of each
-statement in `ci.code`.  Note that `ci` includes the consequences of
-inlining callees, and consequently the costs do too.
+The line costs are in the left column. This includes the consequences of inlining and other forms of optimization.

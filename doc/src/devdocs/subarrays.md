@@ -18,12 +18,12 @@ DocTestSetup = :(import Random; Random.seed!(1234))
 julia> A = rand(2,3,4);
 
 julia> S1 = view(A, :, 1, 2:3)
-2×2 view(::Array{Float64,3}, :, 1, 2:3) with eltype Float64:
+2×2 view(::Array{Float64, 3}, :, 1, 2:3) with eltype Float64:
  0.200586  0.066423
  0.298614  0.956753
 
 julia> S2 = view(A, 1, :, 2:3)
-3×2 view(::Array{Float64,3}, 1, :, 2:3) with eltype Float64:
+3×2 view(::Array{Float64, 3}, 1, :, 2:3) with eltype Float64:
  0.200586  0.066423
  0.246837  0.646691
  0.648882  0.276021

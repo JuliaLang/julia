@@ -22,6 +22,8 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
+    AbstractMatch,
+    AbstractPattern,
     AbstractDict,
     BigFloat,
     BigInt,
@@ -38,6 +40,7 @@ export
     ComplexF64,
     ComplexF32,
     ComplexF16,
+    ComposedFunction,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -67,6 +70,7 @@ export
     Rational,
     Regex,
     RegexMatch,
+    Returns,
     RoundFromZero,
     RoundDown,
     RoundingMode,
@@ -165,6 +169,10 @@ export
     ≢,
     xor,
     ⊻,
+    nand,
+    nor,
+    ⊼,
+    ⊽,
     %,
     ÷,
     &,
@@ -226,6 +234,7 @@ export
     cbrt,
     ceil,
     cis,
+    cispi,
     clamp,
     cld,
     cmp,
@@ -457,6 +466,7 @@ export
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    insorted,
     startswith,
 
 # linear algebra
@@ -650,7 +660,9 @@ export
     isbits,
     isequal,
     ismutable,
+    ismutabletype,
     isless,
+    isunordered,
     ifelse,
     objectid,
     sizeof,
@@ -675,6 +687,7 @@ export
     timedwait,
     asyncmap,
     asyncmap!,
+    errormonitor,
 
 # channels
     take!,
@@ -783,6 +796,7 @@ export
     close,
     countlines,
     eachline,
+    readeach,
     eof,
     fd,
     fdio,
@@ -904,7 +918,7 @@ export
     uperm,
     walkdir,
 
-# external processes ## TODO: whittle down these exports.
+# external processes
     detach,
     getpid,
     ignorestatus,
@@ -913,6 +927,7 @@ export
     process_running,
     run,
     setenv,
+    addenv,
     success,
     withenv,
 

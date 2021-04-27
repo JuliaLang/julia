@@ -130,8 +130,8 @@ Enable or disable color text
 Load or save history
 
 .TP
---compile={yes|no|all}
-Enable or disable compiler, or request exhaustive compilation
+--compile={yes|no|all|min}
+Enable or disable compiler, or request exhaustive or minimal compilation
 
 .TP
 -C, --cpu-target=<target>
@@ -144,6 +144,10 @@ Run time-intensive code optimizations
 .TP
 -O <n>, --optimize=<n>
 Set the optimization level to <n>
+
+.TP
+--min-optlevel=<n>
+Set the minimum optimization level to <n>, overriding per-module settings
 
 .TP
 -g

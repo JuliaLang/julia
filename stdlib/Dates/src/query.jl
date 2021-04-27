@@ -652,11 +652,14 @@ Return the quarter that `dt` resides in. Range of value is 1:4.
 """
 quarterofyear(dt::TimeType) = quarter(dt)
 
-const QUARTERDAYS = (0, 90, 181, 273)
+const QUARTERDAYS = (0, 31, 59, 0, 30, 61, 0, 31, 62, 0, 31, 61)
 
 """
     dayofquarter(dt::TimeType) -> Int
 
 Return the day of the current quarter of `dt`. Range of value is 1:92.
 """
-dayofquarter(dt::TimeType) = dayofyear(dt) - QUARTERDAYS[quarterofyear(dt)]
+function dayofquarter(dt::TimeType)
+    (y, m, d) = yearmonthday(dt)
+    return QUARTERDAYS[m] + d + (m == 3 && isleapyear(y))
+end
