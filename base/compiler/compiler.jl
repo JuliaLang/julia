@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compiler
+getfield(Core, :eval)(Core, :(baremodule Compiler
 
 using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
-             _apply, _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
-             MethodInstance, CodeInstance, MethodMatch
+             _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
+             MethodInstance, CodeInstance, MethodMatch, PartialOpaque
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
@@ -98,6 +98,10 @@ include("ordering.jl")
 using .Order
 include("sort.jl")
 using .Sort
+
+# We don't include some.jl, but this definition is still useful.
+something(x::Nothing, y...) = something(y...)
+something(x::Any, y...) = x
 
 ############
 # compiler #

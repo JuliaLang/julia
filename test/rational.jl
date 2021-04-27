@@ -116,6 +116,14 @@ using Test
     @test abs(one(Rational{UInt})) === one(Rational{UInt})
     @test abs(one(Rational{Int})) === one(Rational{Int})
     @test abs(-one(Rational{Int})) === one(Rational{Int})
+
+    # inf addition
+    @test 1//0 + 1//0 == 1//0
+    @test -1//0 - 1//0 == -1//0
+    @test_throws DivideError 1//0 - 1//0
+    @test_throws DivideError -1//0 + 1//0
+    @test Int128(1)//0 + 1//0 isa Rational{Int128}
+    @test 1//0 + Int128(1)//0 isa Rational{Int128}
 end
 
 @testset "Rational methods" begin

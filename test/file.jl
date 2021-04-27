@@ -29,23 +29,49 @@ end
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
+    @test stat(dirlink) == stat(subdir)
+    @test readdir(dirlink) == readdir(subdir)
+
     # relative link
-    cd(subdir)
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
     reldir = joinpath("..", "adir2")
     symlink(reldir, relsubdirlink)
-    cd(pwd_)
+    @test stat(relsubdirlink) == stat(subdir2)
+    @test readdir(relsubdirlink) == readdir(subdir2)
+
+    # creation of symlink to directory that does not yet exist
+    new_dir = joinpath(subdir, "new_dir")
+    foo_file = joinpath(subdir, "new_dir", "foo")
+    nedlink = joinpath(subdir, "non_existant_dirlink")
+    symlink("new_dir", nedlink; dir_target=true)
+    try
+        readdir(nedlink)
+        @test false
+    catch e
+        @test isa(e, Base.IOError)
+        # It's surprisingly difficult to know what numeric value this will be across platforms
+        # so we'll just check the string representation instead. :(
+        @test endswith(e.msg, "(ENOENT)")
+    end
+    mkdir(new_dir)
+    touch(foo_file)
+    @test readdir(new_dir) == readdir(nedlink)
+
+    rm(foo_file)
+    rm(new_dir)
+    rm(nedlink)
 end
 
-if !Sys.iswindows()
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     link = joinpath(dir, "afilelink.txt")
     symlink(file, link)
+    @test stat(file) == stat(link)
+
     # relative link
-    cd(subdir)
     rellink = joinpath(subdir, "rel_afilelink.txt")
     relfile = joinpath("..", "afile.txt")
     symlink(relfile, rellink)
-    cd(pwd_)
+    @test stat(rellink) == stat(file)
 end
 
 using Random
@@ -444,8 +470,8 @@ cp(newfile, c_file)
 
 @test isdir(c_subdir)
 @test isfile(c_file)
-@test_throws SystemError rm(c_tmpdir)
-@test_throws SystemError rm(c_tmpdir, force=true)
+@test_throws Base.IOError rm(c_tmpdir)
+@test_throws Base.IOError rm(c_tmpdir, force=true)
 
 # create temp dir in specific directory
 d_tmpdir = mktempdir(c_tmpdir)
@@ -1350,11 +1376,9 @@ end
 ############
 # Clean up #
 ############
-if !Sys.iswindows()
+if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     rm(link)
     rm(rellink)
-end
-if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     rm(dirlink)
     rm(relsubdirlink)
 end
@@ -1425,6 +1449,31 @@ let n = tempname()
     @test read(io) == UInt8[0x41]
     close(io); close(w)
     rm(n)
+end
+
+# PR #39906
+if !Sys.iswindows()
+    @testset "rm empty directories without read permissions" begin
+        mktempdir() do d
+            mkdir(joinpath(d, "nonempty"))
+            touch(joinpath(d, "nonempty", "a"))
+            mkdir(joinpath(d, "empty_outer"))
+            mkdir(joinpath(d, "empty_outer", "empty_inner"))
+
+            chmod(joinpath(d, "nonempty"), 0o333)
+            chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
+
+            # Test that an empty directory, even when we can't read its contents, is deletable
+            rm(joinpath(d, "empty_outer"); recursive=true, force=true)
+            @test !isdir(joinpath(d, "empty_outer"))
+
+            # But a non-empty directory is not
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            chmod(joinpath(d, "nonempty"), 0o777)
+            rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test !isdir(joinpath(d, "nonempty"))
+        end
+    end
 end
 
 @test_throws ArgumentError mkpath("fakepath", mode = -1)
@@ -1542,4 +1591,17 @@ end
         # Reset permissions to all at the end, so it can be deleted properly.
         chmod(dir, 0o777; recursive=true)
     end
+end
+
+if Sys.iswindows()
+@testset "mkdir/rm permissions" begin
+    # test delete permission in system folders (i.e. impliclty test chmod permissions)
+    # issue #38433
+    @test withenv("TMP" => "C:\\") do
+        mktempdir() do dir end
+    end === nothing
+    # same as above, but test rm explicitly
+    tmp = mkdir(tempname("C:\\"))
+    @test rm(tmp) === nothing
+end
 end

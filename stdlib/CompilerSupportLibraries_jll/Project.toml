@@ -1,6 +1,6 @@
 name = "CompilerSupportLibraries_jll"
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "0.3.6+1"
+version = "0.4.0+1"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"

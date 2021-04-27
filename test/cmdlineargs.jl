@@ -50,7 +50,7 @@ let
     @test format_filename("%a%%b") == "a%b"
 end
 
-let exename = `$(Base.julia_cmd()) --startup-file=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # tests for handling of ENV errors
     let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
                 setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
@@ -71,6 +71,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
     let v = readchomperrors(`$exename -i -e '
             empty!(LOAD_PATH)
+            @eval Sys STDLIB=mktempdir()
             Base.unreference_module(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
             '`)
         # simulate not having a working version of InteractiveUtils,
@@ -94,7 +95,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
 end
 
-let exename = `$(Base.julia_cmd()) --startup-file=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --version
     let v = split(read(`$exename -v`, String), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
@@ -109,9 +110,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 
     # ~ expansion in --project and JULIA_PROJECT
     if !Sys.iswindows()
-        expanded = abspath(expanduser("~/foo"))
-        @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
-        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir())))
+        let expanded = abspath(expanduser("~/foo/Project.toml"))
+            @test expanded == readchomp(`$exename --project='~/foo' -e 'println(Base.active_project())'`)
+            @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir()))
+        end
+    end
+
+    # handling of @projectname in --project and JULIA_PROJECT
+    let expanded = abspath(Base.load_path_expand("@foo"))
+        @test expanded == readchomp(`$exename --project='@foo' -e 'println(Base.active_project())'`)
+        @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
     # --quiet, --banner
@@ -204,7 +212,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     end
     # We want to test oversubscription, but on manycore machines, this can
     # actually exhaust limited PID spaces
-    cpu_threads = max(2*cpu_threads, min(200, 10*cpu_threads))
+    cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
+    if Sys.WORD_SIZE == 32
+        cpu_threads = min(cpu_threads, 50)
+    end
     @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
     withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
         @test read(`$exename -e $code`, String) == string(cpu_threads)
@@ -338,6 +349,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O`) == "3"
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" --optimize`) == "3"
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O0`) == "0"
+
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level_min"`) == "0"
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level_min" --min-optlevel=2`) == "2"
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
@@ -673,7 +687,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 end
 
 # issue #6310
-let exename = `$(Base.julia_cmd()) --startup-file=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test writereadpipeline("2+2", exename) == ("4\n", true)
     @test writereadpipeline("2+2\n3+3\n4+4", exename) == ("4\n6\n8\n", true)
     @test writereadpipeline("", exename) == ("", true)
@@ -698,7 +712,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
 end
 
 # incomplete inputs to stream REPL
-let exename = `$(Base.julia_cmd()) --startup-file=no`
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     in = Pipe(); out = Pipe(); err = Pipe()
     proc = run(pipeline(exename, stdin = in, stdout = out, stderr = err), wait=false)
     write(in, "f(\n")
@@ -710,7 +724,7 @@ end
 
 # Issue #29855
 for yn in ("no", "yes")
-    exename = `$(Base.julia_cmd()) --inline=no --startup-file=no --inline=$yn`
+    exename = `$(Base.julia_cmd()) --inline=no --startup-file=no --color=no --inline=$yn`
     v = writereadpipeline("Base.julia_cmd()", exename)
     if yn == "no"
         @test occursin(r" --inline=no", v[1])
@@ -719,3 +733,6 @@ for yn in ("no", "yes")
     end
     @test v[2]
 end
+
+# issue #39259, shadowing `ARGS`
+@test success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)

@@ -270,6 +270,17 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return v;
     }
+    else if (head == new_opaque_closure_sym) {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, nargs);
+        for (size_t i = 0; i < nargs; i++)
+            argv[i] = eval_value(args[i], s);
+        JL_NARGSV(new_opaque_closure, 5);
+        jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
+            argv[3], argv[4], argv+5, nargs-5);
+        JL_GC_POP();
+        return ret;
+    }
     else if (head == static_parameter_sym) {
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);
@@ -291,7 +302,8 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == boundscheck_sym) {
         return jl_true;
     }
-    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym) {
+    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym ||
+             head == aliasscope_sym || head == popaliasscope_sym) {
         return jl_nothing;
     }
     else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {
@@ -649,6 +661,42 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->mi = mi;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
+    JL_GC_POP();
+    return r;
+}
+
+jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+{
+    jl_method_t *source = oc->source;
+    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_array_t*)source->source);
+    interpreter_state *s;
+    unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
+    jl_value_t **locals = NULL;
+    JL_GC_PUSHFRAME(s, locals, nroots);
+    locals[0] = (jl_value_t*)oc;
+    // The analyzer has some trouble with this
+    locals[1] = (jl_value_t*)code;
+    JL_GC_PROMISE_ROOTED(code);
+    locals[2] = (jl_value_t*)oc->captures;
+    s->locals = locals + 2;
+    s->src = code;
+    s->module = source->module;
+    s->sparam_vals = NULL;
+    s->preevaluation = 0;
+    s->continue_at = 0;
+    s->mi = NULL;
+
+    size_t defargs = source->nargs;
+    int isva = !!oc->isva;
+    assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
+    for (size_t i = 1; i < defargs - isva; i++)
+        s->locals[i] = args[i - 1];
+    if (isva) {
+        assert(defargs >= 2);
+        s->locals[defargs - 1] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
+    }
+    JL_GC_ENABLEFRAME(s);
+    jl_value_t *r = eval_body(code->code, s, 0, 0);
     JL_GC_POP();
     return r;
 }

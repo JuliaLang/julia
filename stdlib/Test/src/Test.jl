@@ -60,7 +60,7 @@ function scrub_backtrace(bt)
 end
 
 function scrub_exc_stack(stack)
-    return Any[ (x[1], scrub_backtrace(x[2])) for x in stack ]
+    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}})) for x in stack ]
 end
 
 # define most of the test infrastructure without type specialization
@@ -259,7 +259,7 @@ end
 
 struct Threw <: ExecutionResult
     exception
-    backtrace
+    backtrace::Union{Nothing,Vector{Any}}
     source::LineNumberNode
 end
 
@@ -284,14 +284,14 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     elseif evaluated.head === :call
         op = evaled_args[1]
-        kwargs = evaled_args[2].args  # Keyword arguments from `Expr(:parameters, ...)`
+        kwargs = (evaled_args[2]::Expr).args  # Keyword arguments from `Expr(:parameters, ...)`
         args = evaled_args[3:n]
 
         res = op(args...; kwargs...)
 
         # Create "Evaluated" expression which looks like the original call but has all of
         # the arguments evaluated
-        func_sym = quoted_args[1]
+        func_sym = quoted_args[1]::Union{Symbol,Expr}
         if isempty(kwargs)
             quoted = Expr(:call, func_sym, args...)
         elseif func_sym === :≈ && !res
@@ -312,7 +312,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(io->print(IOContext(io, :limit => true), quoted))*kw_suffix,
+             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
              source)
 end
 
@@ -342,6 +342,8 @@ end
 """
     @test ex
     @test f(args...) key=val ...
+    @test ex broken=true
+    @test ex skip=true
 
 Tests that the expression `ex` evaluates to `true`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
@@ -368,12 +370,71 @@ Test Passed
 This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
 It is an error to supply more than one expression unless the first
 is a call expression and the rest are assignments (`k=v`).
+
+You can use any key for the `key=val` arguments, except for `broken` and `skip`,
+which have special meanings in the context of `@test`:
+
+* `broken=cond` indicates a test that should pass but currently consistently
+  fails when `cond==true`.  Tests that the expression `ex` evaluates to `false`
+  or causes an exception.  Returns a `Broken` `Result` if it does, or an `Error`
+  `Result` if the expression evaluates to `true`.  Regular `@test ex` is
+  evaluated when `cond==false`.
+* `skip=cond` marks a test that should not be executed but should be included in
+  test summary reporting as `Broken`, when `cond==true`.  This can be useful for
+  tests that intermittently fail, or tests of not-yet-implemented functionality.
+  Regular `@test ex` is evaluated when `cond==false`.
+
+# Examples
+
+```jldoctest
+julia> @test 2 + 2 ≈ 6 atol=1 broken=true
+Test Broken
+  Expression: ≈(2 + 2, 6, atol = 1)
+
+julia> @test 2 + 2 ≈ 5 atol=1 broken=false
+Test Passed
+
+julia> @test 2 + 2 == 5 skip=true
+Test Broken
+  Skipped: 2 + 2 == 5
+
+julia> @test 2 + 2 == 4 skip=false
+Test Passed
+```
+
+!!! compat "Julia 1.7"
+     The `broken` and `skip` keyword arguments require at least Julia 1.7.
 """
 macro test(ex, kws...)
+    # Collect the broken/skip keywords and remove them from the rest of keywords
+    broken = [kw.args[2] for kw in kws if kw.args[1] === :broken]
+    skip = [kw.args[2] for kw in kws if kw.args[1] === :skip]
+    kws = filter(kw -> kw.args[1] ∉ (:skip, :broken), kws)
+    # Validation of broken/skip keywords
+    for (kw, name) in ((broken, :broken), (skip, :skip))
+        if length(kw) > 1
+            error("invalid test macro call: cannot set $(name) keyword multiple times")
+        end
+    end
+    if length(skip) > 0 && length(broken) > 0
+        error("invalid test macro call: cannot set both skip and broken keywords")
+    end
+
+    # Build the test expression
     test_expr!("@test", ex, kws...)
     orig_ex = Expr(:inert, ex)
+
     result = get_test_result(ex, __source__)
-    :(do_test($result, $orig_ex))
+
+    return quote
+        if $(length(skip) > 0 && esc(skip[1]))
+            record(get_testset(), Broken(:skipped, $orig_ex))
+        else
+            let _do = $(length(broken) > 0 && esc(broken[1])) ? do_broken_test : do_test
+                _do($result, $orig_ex)
+            end
+        end
+    end
 end
 
 """
@@ -383,7 +444,8 @@ end
 Indicates a test that should pass but currently consistently fails.
 Tests that the expression `ex` evaluates to `false` or causes an
 exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
-if the expression evaluates to `true`.
+if the expression evaluates to `true`.  This is equivalent to
+[`@test ex broken=true`](@ref @test).
 
 The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
 
@@ -412,7 +474,8 @@ end
 
 Marks a test that should not be executed but should be included in test
 summary reporting as `Broken`. This can be useful for tests that intermittently
-fail, or tests of not-yet-implemented functionality.
+fail, or tests of not-yet-implemented functionality.  This is equivalent to
+[`@test ex skip=true`](@ref @test).
 
 The `@test_skip f(args...) key=val...` form works as for the `@test` macro.
 
@@ -487,6 +550,10 @@ function get_test_result(ex, source)
                     push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
                 elseif isa(a, Expr) && a.head === :...
                     push!(escaped_kwargs, Expr(:..., esc(a.args[1])))
+                elseif isa(a, Expr) && a.head === :.
+                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[2].value), esc(Expr(:., a.args[1], QuoteNode(a.args[2].value)))))
+                elseif isa(a, Symbol)
+                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a), esc(a)))
                 end
             end
         end
@@ -547,8 +614,9 @@ function do_test(result::ExecutionResult, orig_expr)
         # The predicate couldn't be evaluated without throwing an
         # exception, so that is an Error and not a Fail
         @assert isa(result, Threw)
-        testres = Error(:test_error, orig_expr, result.exception, result.backtrace, result.source)
+        testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source)
     end
+    isa(testres, Pass) || ccall(:jl_breakpoint, Cvoid, (Any,), result)
     record(get_testset(), testres)
 end
 
@@ -601,6 +669,8 @@ macro test_throws(extype, ex)
     :(do_test_throws($result, $orig_ex, $(esc(extype))))
 end
 
+const MACROEXPAND_LIKE = Symbol.(("@macroexpand", "@macroexpand1", "macroexpand"))
+
 # An internal function, called by the code generated by @test_throws
 # to evaluate and catch the thrown exception - if it exists
 function do_test_throws(result::ExecutionResult, orig_expr, extype)
@@ -608,9 +678,24 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         # Check that the right type of exception was thrown
         success = false
         exc = result.exception
+        # NB: Throwing LoadError from macroexpands is deprecated, but in order to limit
+        # the breakage in package tests we add extra logic here.
+        from_macroexpand =
+            orig_expr isa Expr &&
+            orig_expr.head in (:call, :macrocall) &&
+            orig_expr.args[1] in MACROEXPAND_LIKE
         if isa(extype, Type)
-            success = isa(exc, extype)
+            success =
+                if from_macroexpand && extype == LoadError && exc isa Exception
+                    Base.depwarn("macroexpand no longer throw a LoadError so `@test_throws LoadError ...` is deprecated and passed without checking the error type!", :do_test_throws)
+                    true
+                else
+                    isa(exc, extype)
+                end
         else
+            if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
+                extype = extype.error # deprecated
+            end
             if isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
@@ -685,7 +770,26 @@ with this macro. Use [`@test_logs`](@ref) instead.
 """
 macro test_nowarn(expr)
     quote
-        @test_warn r"^(?!.)"s $(esc(expr))
+        # Duplicate some code from `@test_warn` to allow printing the content of
+        # `stderr` again to `stderr` here while suppressing it for `@test_warn`.
+        # If that shouldn't be used, it would be possible to just use
+        #     @test_warn isempty $(esc(expr))
+        # here.
+        let fname = tempname()
+            try
+                ret = open(fname, "w") do f
+                    redirect_stderr(f) do
+                        $(esc(expr))
+                    end
+                end
+                stderr_content = read(fname, String)
+                print(stderr, stderr_content) # this is helpful for debugging
+                @test isempty(stderr_content)
+                ret
+            finally
+                rm(fname, force=true)
+            end
+        end
     end
 end
 
@@ -754,7 +858,7 @@ struct FallbackTestSet <: AbstractTestSet end
 fallback_testset = FallbackTestSet()
 
 struct FallbackTestSetException <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
@@ -781,13 +885,13 @@ are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
 mutable struct DefaultTestSet <: AbstractTestSet
-    description::AbstractString
-    results::Vector
+    description::String
+    results::Vector{Any}
     n_passed::Int
     anynonpass::Bool
     verbose::Bool
 end
-DefaultTestSet(desc; verbose = false) = DefaultTestSet(desc, [], 0, false, verbose)
+DefaultTestSet(desc::AbstractString; verbose::Bool = false) = DefaultTestSet(String(desc)::String, [], 0, false, verbose)
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -1298,7 +1402,7 @@ end
 """
     push_testset(ts::AbstractTestSet)
 
-Adds the test set to the task_local_storage.
+Adds the test set to the `task_local_storage`.
 """
 function push_testset(ts::AbstractTestSet)
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
@@ -1309,7 +1413,7 @@ end
 """
     pop_testset()
 
-Pops the last test set added to the task_local_storage. If there are no
+Pops the last test set added to the `task_local_storage`. If there are no
 active test sets, returns the fallback default test set.
 """
 function pop_testset()
@@ -1354,10 +1458,11 @@ julia> typeof(f(2))
 Int64
 
 julia> @code_warntype f(2)
-Variables
+MethodInstance for f(::Int64)
+  from f(a) in Main at none:1
+Arguments
   #self#::Core.Const(f)
   a::Int64
-
 Body::UNION{FLOAT64, INT64}
 1 ─ %1 = (a > 1)::Bool
 └──      goto #3 if not %1
@@ -1401,7 +1506,7 @@ function _inferred(ex, mod, allow = :(Union{}))
     end
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
     farg = ex.args[1]
-    if isa(farg, Symbol) && first(string(farg)) == '.'
+    if isa(farg, Symbol) && farg !== :.. && first(string(farg)) == '.'
         farg = Symbol(string(farg)[2:end])
         ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
             farg, ex.args[2:end]...)
@@ -1455,10 +1560,10 @@ Use `recursive=true` to test in all submodules.
 `Union{}` type parameters are included; in most cases you probably
 want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
-function detect_ambiguities(mods...;
+function detect_ambiguities(mods::Module...;
                             recursive::Bool = false,
                             ambiguous_bottom::Bool = false)
-    @nospecialize mods
+    @nospecialize
     ambs = Set{Tuple{Method,Method}}()
     mods = collect(mods)::Vector{Module}
     function sortdefs(m1::Method, m2::Method)
@@ -1474,7 +1579,9 @@ function detect_ambiguities(mods...;
             ambig = Int32[0]
             ms = Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
             ambig[1] == 0 && continue
+            isa(ms, Bool) && continue
             for match2 in ms
+                match2 = match2::Core.MethodMatch
                 m2 = match2.method
                  if !(m === m2 || Base.morespecific(m2.sig, m.sig))
                     if Base.isambiguous(m, m2; ambiguous_bottom)

@@ -2,17 +2,17 @@
 
 Extended documentation for mathematical symbols & functions is [here](@ref math-ops).
 
-| symbol      | meaning                                                                                                                                         |
-|:----------- |:----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@m`        | the at-symbol invokes [macro](@ref man-macros) `m`; followed by space-separated expressions or a function-call-like argument list |
+| symbol      | meaning                                                                                     |
+|:----------- |:--------------------------------------------------------------------------------------------|
+| `@`         | the at-sign marks a [macro](@ref man-macros) invocation; optionally followed by an argument list |
 | [`!`](@ref) | an exclamation mark is a prefix operator for logical negation ("not")                       |
 | `a!`        | function names that end with an exclamation mark modify one or more of their arguments by convention |
 | `#`         | the number sign (or hash or pound) character begins single line comments                    |
-| `#=`        | when followed by an equals sign, it begins a multi-line comment (these are nestable)          |
+| `#=`        | when followed by an equals sign, it begins a multi-line comment (these are nestable)        |
 | `=#`        | end a multi-line comment by immediately preceding the number sign with an equals sign       |
 | `$`         | the dollar sign is used for [string](@ref string-interpolation) and [expression](@ref man-expression-interpolation) interpolation |
 | [`%`](@ref rem) | the percent symbol is the remainder operator                                            |
-| [`^`](@ref) | the caret is the exponentiation operator                                                  |
+| [`^`](@ref) | the caret is the exponentiation operator                                                    |
 | [`&`](@ref) | single ampersand is bitwise and                                                             |
 | [`&&`](@ref)| double ampersands is short-circuiting boolean and                                           |
 | [`\|`](@ref)| single pipe character is bitwise or                                                         |
@@ -31,7 +31,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `[,]`       | [vector literal constructor](@ref man-array-literals) (calling [`vect`](@ref Base.vect))    |
 | `[;]`       | [vertical concatenation](@ref man-array-concatenation) (calling [`vcat`](@ref) or [`hvcat`](@ref)) |
 | `[    ]`    | with space-separated expressions, [horizontal concatenation](@ref man-concatenation) (calling [`hcat`](@ref) or [`hvcat`](@ref)) |
-| `T{ }`      | curly braces following a type list that type's [parameters](@ref Parametric-Types)      |
+| `T{ }`      | curly braces following a type list that type's [parameters](@ref Parametric-Types)          |
 | `{}`        | curly braces can also be used to group multiple [`where`](@ref) expressions in function declarations |
 | `;`         | semicolons separate statements, begin a list of keyword arguments in function declarations or calls, or are used to separate array literals for vertical concatenation |
 | `,`         | commas separate function arguments or tuple or array components                             |
@@ -55,6 +55,6 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | [`==`](@ref)| double equals sign is value equality comparison                                             |
 | [`===`](@ref) | triple equals sign is programmatically identical equality comparison                      |
 | [`=>`](@ref Pair) | right arrow using an equals sign defines a [`Pair`](@ref) typically used to populate [dictionaries](@ref Dictionaries) |
-| `->` | right arrow using a hyphen defines an [anonymous function](@ref man-anonymous-functions) on a single line         |
-| `|>` | pipe operator passes output from the left argument to input of the right argument, usually a [function](@ref Function-composition-and-piping) |
-| `∘` | function composition operator (typed with \circ{tab}) combines two functions as though they are a single larger [function](@ref Function-composition-and-piping) |
+| `->`        | right arrow using a hyphen defines an [anonymous function](@ref man-anonymous-functions) on a single line |
+| `|>`        | pipe operator passes output from the left argument to input of the right argument, usually a [function](@ref Function-composition-and-piping) |
+| `∘`         | function composition operator (typed with \circ{tab}) combines two functions as though they are a single larger [function](@ref Function-composition-and-piping) |

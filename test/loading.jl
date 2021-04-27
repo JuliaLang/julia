@@ -46,7 +46,7 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
 @test !endswith(@__DIR__, Base.Filesystem.path_separator)
-let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
+let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no --color=no`,
     wd = sprint(show, pwd())
     s_dir = sprint(show, realpath(tempdir()))
     @test wd != s_dir
@@ -195,12 +195,11 @@ saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
 saved_active_project = Base.ACTIVE_PROJECT[]
 
-push!(empty!(LOAD_PATH), "project")
-append!(empty!(DEPOT_PATH), [mktempdir(), "depot"])
+push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
+append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
 Base.ACTIVE_PROJECT[] = nothing
 
-@test load_path() == [abspath("project","Project.toml")]
-
+@test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
 
 # locate `tail(names)` package by following the search path graph through `names` starting from `where`
 function recurse_package(where::PkgId, name::String, names::String...)

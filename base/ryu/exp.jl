@@ -1,4 +1,4 @@
-@inline function writeexp(buf, pos, v::T,
+function writeexp(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     @assert 0 < pos <= length(buf)
@@ -213,7 +213,7 @@
         roundPos = pos
         while true
             roundPos -= 1
-            if roundPos == (startpos - 1) || buf[roundPos] == UInt8('-')
+            if roundPos == (startpos - 1) || buf[roundPos] == UInt8('-') || (plus && buf[roundPos] == UInt8('+')) || (space && buf[roundPos] == UInt8(' '))
                 buf[roundPos + 1] = UInt8('1')
                 e += 1
                 break

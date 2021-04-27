@@ -30,7 +30,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    145
+#define NUM_TAGS    147
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -68,6 +68,8 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_returnnode_type);
         INSERT_TAG(jl_const_type);
         INSERT_TAG(jl_partial_struct_type);
+        INSERT_TAG(jl_partial_opaque_type);
+        INSERT_TAG(jl_interconditional_type);
         INSERT_TAG(jl_method_match_type);
         INSERT_TAG(jl_pinode_type);
         INSERT_TAG(jl_phinode_type);
@@ -88,6 +90,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_typename_type);
         INSERT_TAG(jl_builtin_type);
         INSERT_TAG(jl_code_info_type);
+        INSERT_TAG(jl_opaque_closure_type);
         INSERT_TAG(jl_task_type);
         INSERT_TAG(jl_uniontype_type);
         INSERT_TAG(jl_abstractstring_type);
@@ -133,6 +136,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_type_typename);
         INSERT_TAG(jl_namedtuple_typename);
         INSERT_TAG(jl_vecelement_typename);
+        INSERT_TAG(jl_opaque_closure_typename);
 
         // special exceptions
         INSERT_TAG(jl_errorexception_type);
@@ -175,7 +179,6 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_issubtype);
         INSERT_TAG(jl_builtin_isa);
         INSERT_TAG(jl_builtin_typeassert);
-        INSERT_TAG(jl_builtin__apply);
         INSERT_TAG(jl_builtin__apply_iterate);
         INSERT_TAG(jl_builtin_isdefined);
         INSERT_TAG(jl_builtin_nfields);
@@ -235,14 +238,14 @@ void *native_functions;
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
 static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_throw, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
-    &jl_f_typeassert, &jl_f__apply, &jl_f__apply_iterate, &jl_f__apply_pure,
+    &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
     &jl_f__call_latest, &jl_f__call_in_world, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call, &jl_f_invoke_kwsorter,
     &jl_f_getfield, &jl_f_setfield, &jl_f_fieldtype, &jl_f_nfields,
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
-    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_opaque_closure_call,
     NULL };
 
 typedef struct {
@@ -386,9 +389,10 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     jl_serialize_value(s, m->parent);
     size_t i;
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_serialize_value(s, (jl_value_t*)table[i]);
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
             jl_serialize_value(s, b->name);
             jl_serialize_value(s, b->value);
             jl_serialize_value(s, b->globalref);
@@ -628,9 +632,11 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     size_t count = 0;
     size_t i;
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
+            write_pointerfield(s, (jl_value_t*)table[i]);
+            tot += sizeof(void*);
             write_gctaggedfield(s, (uintptr_t)BindingRef << RELOC_TAG_OFFSET);
             tot += sizeof(void*);
             size_t binding_reloc_offset = ios_pos(s->s);
@@ -1382,12 +1388,13 @@ static void jl_reinit_item(jl_value_t *v, int how) JL_GC_DISABLED
             size_t nbindings = mod->bindings.size;
             htable_new(&mod->bindings, nbindings);
             struct binding {
+                jl_sym_t *asname;
                 uintptr_t tag;
                 jl_binding_t b;
             } *b;
             b = (struct binding*)&mod[1];
             while (nbindings > 0) {
-                ptrhash_put(&mod->bindings, (char*)b->b.name, &b->b);
+                ptrhash_put(&mod->bindings, b->asname, &b->b);
                 b += 1;
                 nbindings -= 1;
             }
@@ -1426,22 +1433,25 @@ static void jl_finalize_deserializer(jl_serializer_state *s) JL_GC_DISABLED
 
 
 
-// --- helper functions ---
-
-// remove cached types not referenced in the stream
-static int keep_type_cache_entry(jl_value_t *ti)
+static void jl_scan_type_cache_gv(jl_serializer_state *s, jl_svec_t *cache)
 {
-    if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(native_functions, ti) != 0)
-        return 1;
-    if (jl_is_datatype(ti)) {
-        jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
-        if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND ||
-                    jl_get_llvm_gv(native_functions, singleton) != 0))
-            return 1;
+    size_t l = jl_svec_len(cache), i;
+    for (i = 0; i < l; i++) {
+        jl_value_t *ti = jl_svecref(cache, i);
+        if (ti == NULL || ti == jl_nothing)
+            continue;
+        if (jl_get_llvm_gv(native_functions, ti)) {
+            jl_serialize_value(s, ti);
+        }
+        else if (jl_is_datatype(ti)) {
+            jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
+            if (singleton && jl_get_llvm_gv(native_functions, singleton))
+                jl_serialize_value(s, ti);
+        }
     }
-    return 0;
 }
 
+// remove cached types not referenced in the stream
 static void jl_prune_type_cache_hash(jl_svec_t *cache)
 {
     size_t l = jl_svec_len(cache), i;
@@ -1449,7 +1459,7 @@ static void jl_prune_type_cache_hash(jl_svec_t *cache)
         jl_value_t *ti = jl_svecref(cache, i);
         if (ti == NULL || ti == jl_nothing)
             continue;
-        if (!keep_type_cache_entry(ti))
+        if (ptrhash_get(&backref_table, ti) == HT_NOTFOUND)
             jl_svecset(cache, i, jl_nothing);
     }
 }
@@ -1461,7 +1471,7 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
         jl_value_t *ti = jl_svecref(cache, i);
         if (ti == NULL)
             break;
-        if (keep_type_cache_entry(ti))
+        if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND)
             jl_svecset(cache, ins++, ti);
     }
     if (i > ins) {
@@ -1527,14 +1537,28 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
             jl_value_t *tag = *tags[i];
             jl_serialize_value(&s, tag);
         }
-        // prune unused entries from built-in type caches
+        // step 1.1: check for values only found in the generated code
+        arraylist_t typenames;
+        arraylist_new(&typenames, 0);
         for (i = 0; i < backref_table.size; i += 2) {
             jl_typename_t *tn = (jl_typename_t*)backref_table.table[i];
             if (tn == HT_NOTFOUND || !jl_is_typename(tn))
                 continue;
+            arraylist_push(&typenames, tn);
+        }
+        for (i = 0; i < typenames.len; i++) {
+            jl_typename_t *tn = (jl_typename_t*)typenames.items[i];
+            jl_scan_type_cache_gv(&s, tn->cache);
+            jl_scan_type_cache_gv(&s, tn->linearcache);
+        }
+        // step 1.2: prune (garbage collect) some special weak references from
+        // built-in type caches
+        for (i = 0; i < typenames.len; i++) {
+            jl_typename_t *tn = (jl_typename_t*)typenames.items[i];
             jl_prune_type_cache_hash(tn->cache);
             jl_prune_type_cache_linear(tn->linearcache);
         }
+        arraylist_free(&typenames);
     }
 
     { // step 2: build all the sysimg sections

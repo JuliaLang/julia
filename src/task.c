@@ -584,6 +584,9 @@ static void JL_NORETURN throw_internal(jl_value_t *exception JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->io_wait = 0;
+    // @time needs its compile timer disabled on error,
+    // and cannot use a try-finally as it would break scope for assignments
+    jl_measure_compile_time[ptls->tid] = 0;
     if (ptls->safe_restore)
         jl_longjmp(*ptls->safe_restore, 1);
     // During startup
@@ -641,8 +644,9 @@ JL_DLLEXPORT void jl_rethrow(void)
 // Special case throw for errors detected inside signal handlers.  This is not
 // (cannot be) called directly in the signal handler itself, but is returned to
 // after the signal handler exits.
-JL_DLLEXPORT void jl_sig_throw(void)
+JL_DLLEXPORT void JL_NORETURN jl_sig_throw(void)
 {
+CFI_NORETURN
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *e = ptls->sig_exception;
     ptls->sig_exception = NULL;
@@ -676,6 +680,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
         else {
             t->bufsz = JL_STACK_SIZE;
         }
+        t->stkbuf = NULL;
     }
     else {
         // user requested dedicated stack of a certain size
@@ -701,7 +706,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->sticky = 1;
     t->gcstack = NULL;
     t->excstack = NULL;
-    t->stkbuf = NULL;
     t->started = 0;
     t->prio = -1;
     t->tid = -1;
@@ -802,14 +806,7 @@ void jl_init_tasks(void) JL_GC_DISABLED
 
 STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 {
-#ifdef _OS_WINDOWS_
-#if defined(_CPU_X86_64_)
-    // install the unhandled exception hanlder at the top of our stack
-    // to call directly into our personality handler
-    asm volatile ("\t.seh_handler __julia_personality, @except\n\t.text");
-#endif
-#endif
-
+CFI_NORETURN
     // this runs the first time we switch to a task
     sanitizer_finish_switch_fiber();
     jl_ptls_t ptls = jl_get_ptls_states();

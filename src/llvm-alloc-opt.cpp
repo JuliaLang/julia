@@ -66,7 +66,7 @@ static bool hasObjref(Type *ty)
         return ptrty->getAddressSpace() == AddressSpace::Tracked;
 #if JL_LLVM_VERSION >= 110000
     if (isa<ArrayType>(ty) || isa<VectorType>(ty))
-        return GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0);
+        return hasObjref(GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0));
 #else
     if (auto seqty = dyn_cast<SequentialType>(ty))
         return hasObjref(seqty->getElementType());
@@ -350,7 +350,8 @@ void Optimizer::optimizeAll()
             if (field.hasobjref) {
                 has_ref = true;
                 // This can be relaxed a little based on hasload
-                if (field.hasaggr || field.multiloc) {
+                // TODO: add support for hasaggr load/store
+                if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
                     has_refaggr = true;
                     break;
                 }
@@ -361,15 +362,12 @@ void Optimizer::optimizeAll()
             splitOnStack(orig);
             continue;
         }
-        if (has_ref) {
-            if (use_info.memops.size() != 1 || has_refaggr ||
-                use_info.memops.begin()->second.size != sz) {
-                if (use_info.hastypeof)
-                    optimizeTag(orig);
-                continue;
-            }
-            // The object only has a single field that's a reference with only one kind of access.
+        if (has_refaggr) {
+            if (use_info.hastypeof)
+                optimizeTag(orig);
+            continue;
         }
+        // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref);
     }
 }
@@ -444,6 +442,7 @@ Optimizer::AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
         if (it->first + it->second.size >= offset + size) {
             if (it->second.elty != elty)
                 it->second.elty = nullptr;
+            assert(it->second.elty == nullptr || (it->first == offset && it->second.size == size));
             return *it;
         }
         if (it->first + it->second.size > offset) {
@@ -454,7 +453,7 @@ Optimizer::AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
     else {
         it = memops.begin();
     }
-    // Now fine the last slot that overlaps with the current memory location.
+    // Now find the last slot that overlaps with the current memory location.
     // Also set `lb` if we didn't find any above.
     for (; it != end && it->first < offset + size; ++it) {
         if (lb == end)
@@ -493,8 +492,8 @@ bool Optimizer::AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_
     memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
     auto &field = getField(offset, size, elty);
-    if (field.first != offset || field.second.size != size)
-        field.second.multiloc = true;
+    if (field.second.hasobjref != memop.isobjref)
+        field.second.multiloc = true; // can't split this field, since it contains a mix of references and bits
     if (!isstore)
         field.second.hasload = true;
     if (memop.isobjref) {
@@ -936,7 +935,12 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
     else {
-        buff = prolog_builder.CreateAlloca(Type::getIntNTy(pass.getLLVMContext(), sz * 8));
+        Type *buffty;
+        if (pass.DL->isLegalInteger(sz * 8))
+            buffty = Type::getIntNTy(pass.getLLVMContext(), sz * 8);
+        else
+            buffty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), sz);
+        buff = prolog_builder.CreateAlloca(buffty);
         buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
@@ -1193,8 +1197,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         else if (field.elty && !field.multiloc) {
             allocty = field.elty;
         }
-        else {
+        else if (pass.DL->isLegalInteger(field.size * 8)) {
             allocty = Type::getIntNTy(pass.getLLVMContext(), field.size * 8);
+        } else {
+            allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
         insertLifetime(prolog_builder.CreateBitCast(slot.slot, pass.T_pint8),
