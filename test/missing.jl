@@ -164,9 +164,11 @@ end
     @test ismissing(⊽(1, missing))
 end
 
-@testset "* string concatenation" begin
+@testset "* string/char concatenation" begin
     @test ismissing("a" * missing)
+    @test ismissing('a' * missing)
     @test ismissing(missing * "a")
+    @test ismissing(missing * 'a')
 end
 
 # Emulate a unitful type such as Dates.Minute
