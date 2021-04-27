@@ -367,8 +367,9 @@ When parsing a time with a `p` specifier, any hour (either `H` or `I`) is interp
 as a 12-hour clock, so the `I` code is mainly useful for output.
 
 Creating a DateFormat object is expensive. Whenever possible, create it once and use it many times
-or try the `dateformat""` string macro. Using this macro creates the DateFormat object once at
-macro expansion time and reuses it later. see [`@dateformat_str`](@ref).
+or try the [`dateformat""`](@ref @dateformat_str) string macro. Using this macro creates the DateFormat
+object once at macro expansion time and reuses it later. There are also several [pre-defined formatters](@ref
+Common-Date-Formatters), listed later.
 
 See [`DateTime`](@ref) and [`format`](@ref) for how to use a DateFormat object to parse and write Date strings
 respectively.
@@ -443,14 +444,63 @@ macro dateformat_str(str)
 end
 
 # Standard formats
+
+"""
+    Dates.ISODateTimeFormat
+
+Describes the ISO8601 formatting for a date and time. This is the default value for `Dates.format`
+of a `DateTime`.
+
+# Example
+```jldoctest
+julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), ISODateTimeFormat)
+"2018-08-08T12:00:43.001"
+```
+"""
 const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
+default_format(::Type{DateTime}) = ISODateTimeFormat
+
+"""
+    Dates.ISODateFormat
+
+Describes the ISO8601 formatting for a date. This is the default value for `Dates.format` of a `Date`.
+
+# Example
+```jldoctest
+julia> Dates.format(Date(2018, 8, 8), ISODateFormat)
+"2018-08-08"
+```
+"""
 const ISODateFormat = DateFormat("yyyy-mm-dd")
+default_format(::Type{Date}) = ISODateFormat
+
+"""
+    Dates.ISOTimeFormat
+
+Describes the ISO8601 formatting for a time. This is the default value for `Dates.format` of a `Time`.
+
+# Example
+```jldoctest
+julia> Dates.format(Time(12, 0, 43, 1), ISOTimeFormat)
+"12:00:43.001"
+```
+"""
 const ISOTimeFormat = DateFormat("HH:MM:SS.s")
+default_format(::Type{Time}) = ISOTimeFormat
+
+"""
+    Dates.RFC1123Format
+
+Describes the RFC1123 formatting for a date and time.
+
+# Example
+```jldoctest
+julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), RFC1123Format)
+"Wed, 08 Aug 2018 12:00:43"
+```
+"""
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
-default_format(::Type{DateTime}) = ISODateTimeFormat
-default_format(::Type{Date}) = ISODateFormat
-default_format(::Type{Time}) = ISOTimeFormat
 
 ### API
 

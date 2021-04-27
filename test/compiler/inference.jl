@@ -44,6 +44,13 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
     @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
 end
 
+let # 40336
+    t = Type{Type{Int}}
+    c = Type{Int}
+    r = Core.Compiler.limit_type_size(t, c, c, 100, 100)
+    @test t !== r && t <: r
+end
+
 @test Core.Compiler.unionlen(Union{}) == 1
 @test Core.Compiler.unionlen(Int8) == 1
 @test Core.Compiler.unionlen(Union{Int8, Int16}) == 2
@@ -103,10 +110,16 @@ tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{Comple
 tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
 @test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Nothing, Tuple{}, Tuple{ComplexF32, ComplexF32}}
+@test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}}
+@test Core.Compiler.tmerge(Union{Nothing, Tuple{}, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
-@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) == Vector
+@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) ==
+    Union{Vector{Bool}, Vector{Int}, Vector{String}}
+@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
@@ -1795,6 +1808,31 @@ end
     end == Any[Union{Nothing,Expr}]
 end
 
+@testset "branching on conditional object" begin
+    # simple
+    @test Base.return_types((Union{Nothing,Int},)) do a
+        b = a === nothing
+        return b ? 0 : a # ::Int
+    end == Any[Int]
+
+    # can use multiple times (as far as the subject of condition hasn't changed)
+    @test Base.return_types((Union{Nothing,Int},)) do a
+        b = a === nothing
+        c = b ? 0 : a # c::Int
+        d = !b ? a : 0 # d::Int
+        return c, d # ::Tuple{Int,Int}
+    end == Any[Tuple{Int,Int}]
+
+    # shouldn't use the old constraint when the subject of condition has changed
+    @test Base.return_types((Union{Nothing,Int},)) do a
+        b = a === nothing
+        c = b ? 0 : a # c::Int
+        a = 0
+        d = b ? a : 1 # d::Int, not d::Union{Nothing,Int}
+        return c, d # ::Tuple{Int,Int}
+    end == Any[Tuple{Int,Int}]
+end
+
 function f25579(g)
     h = g[]
     t = (h === nothing)
@@ -3095,7 +3133,7 @@ end
 @test Base.return_types(f_bare_argument, (Int,))[1] == Int
 
 # issue #39611
-Base.return_types((Union{Int,Nothing},)) do x
+@test Base.return_types((Union{Int,Nothing},)) do x
     if x === nothing || x < 0
         return 0
     end
@@ -3105,4 +3143,130 @@ end == [Int]
 # issue #29100
 let f() = Val(fieldnames(Complex{Int}))
     @test @inferred(f()) === Val((:re,:im))
+end
+
+@testset "switchtupleunion" begin
+    # signature tuple
+    let
+        tunion = Core.Compiler.switchtupleunion(Tuple{Union{Int32,Int64}, Nothing})
+        @test Tuple{Int32, Nothing} in tunion
+        @test Tuple{Int64, Nothing} in tunion
+    end
+    let
+        tunion = Core.Compiler.switchtupleunion(Tuple{Union{Int32,Int64}, Union{Float32,Float64}, Nothing})
+        @test Tuple{Int32, Float32, Nothing} in tunion
+        @test Tuple{Int32, Float64, Nothing} in tunion
+        @test Tuple{Int64, Float32, Nothing} in tunion
+        @test Tuple{Int64, Float64, Nothing} in tunion
+    end
+
+    # argtypes
+    let
+        tunion = Core.Compiler.switchtupleunion(Any[Union{Int32,Int64}, Core.Const(nothing)])
+        @test length(tunion) == 2
+        @test Any[Int32, Core.Const(nothing)] in tunion
+        @test Any[Int64, Core.Const(nothing)] in tunion
+    end
+    let
+        tunion = Core.Compiler.switchtupleunion(Any[Union{Int32,Int64}, Union{Float32,Float64}, Core.Const(nothing)])
+        @test length(tunion) == 4
+        @test Any[Int32, Float32, Core.Const(nothing)] in tunion
+        @test Any[Int32, Float64, Core.Const(nothing)] in tunion
+        @test Any[Int64, Float32, Core.Const(nothing)] in tunion
+        @test Any[Int64, Float64, Core.Const(nothing)] in tunion
+    end
+end
+
+@testset "constant prop' for union split signature" begin
+    # indexing into tuples really relies on constant prop', and we will get looser result
+    # (`Union{Int,String,Char}`) if constant prop' doesn't happen for splitunion signatures
+    tt = (Union{Tuple{Int,String},Tuple{Int,Char}},)
+    @test Base.return_types(tt) do t
+        getindex(t, 1)
+    end == Any[Int]
+    @test Base.return_types(tt) do t
+        getindex(t, 2)
+    end == Any[Union{String,Char}]
+    @test Base.return_types(tt) do t
+        a, b = t
+        a
+    end == Any[Int]
+    @test Base.return_types(tt) do t
+        a, b = t
+        b
+    end == Any[Union{String,Char}]
+
+    @test (@eval Module() begin
+        struct F32
+            val::Float32
+            _v::Int
+        end
+        struct F64
+            val::Float64
+            _v::Int
+        end
+        Base.return_types((Union{F32,F64},)) do f
+            f.val
+        end
+    end) == Any[Union{Float32,Float64}]
+
+    @test (@eval Module() begin
+        struct F32
+            val::Float32
+            _v
+        end
+        struct F64
+            val::Float64
+            _v
+        end
+        Base.return_types((Union{F32,F64},)) do f
+            f.val
+        end
+    end) == Any[Union{Float32,Float64}]
+
+    @test Base.return_types((Union{Tuple{Nothing,Any,Any},Tuple{Nothing,Any}},)) do t
+        getindex(t, 1)
+    end == Any[Nothing]
+
+    # issue #37610
+    @test Base.return_types((typeof(("foo" => "bar", "baz" => nothing)), Int)) do a, i
+        y = iterate(a, i)
+        if y !== nothing
+            (k, v), st = y
+            return k, v
+        end
+        return y
+    end == Any[Union{Nothing, Tuple{String, Union{Nothing, String}}}]
+end
+
+@test Base.return_types((Int,)) do x
+    if x === 0
+        Some(0.0)
+    elseif x == 1
+        Some(1)
+    else
+        Some(0x2)
+    end
+end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
+
+# https://github.com/JuliaLang/julia/issues/40336
+@testset "make sure a call with signatures with recursively nested Types terminates" begin
+    @test @eval Module() begin
+        f(@nospecialize(t)) = f(Type{t})
+
+        code_typed() do
+            f(Int)
+        end
+        true
+    end
+
+    @test @eval Module() begin
+        f(@nospecialize(t)) = tdepth(t) == 10 ? t : f(Type{t})
+        tdepth(@nospecialize(t)) = isempty(t.parameters) ? 1 : 1+tdepth(t.parameters[1])
+
+        code_typed() do
+            f(Int)
+        end
+        true
+    end
 end

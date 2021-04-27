@@ -237,7 +237,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return mapreduce_first(f, op, a1)
-    elseif ifirst + blksize > ilast
+    elseif ilast - ifirst < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
@@ -249,7 +249,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
         return v
     else
         # pairwise portion
-        imid = (ifirst + ilast) >> 1
+        imid = ifirst + (ilast - ifirst) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
         v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
         return op(v1, v2)
@@ -518,6 +518,8 @@ for non-empty collections.
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
 
+See also: [`reduce`](@ref), [`mapreduce`](@ref), [`count`](@ref), [`union`](@ref).
+
 # Examples
 ```jldoctest
 julia> sum(1:20)
@@ -529,7 +531,7 @@ julia> sum(1:20; init = 0.0)
 """
 sum(a; kw...) = sum(identity, a; kw...)
 sum(a::AbstractArray{Bool}; kw...) =
-    kw.data === NamedTuple() ? count(a) : reduce(add_sum, a; kw...)
+    isempty(kw) ? count(a) : reduce(add_sum, a; kw...)
 
 ## prod
 """
@@ -571,6 +573,8 @@ for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
+
+See also: [`reduce`](@ref), [`cumprod`](@ref), [`any`](@ref).
 
 # Examples
 ```jldoctest
@@ -806,6 +810,8 @@ Return the maximal element of the collection `itr` and its index or key.
 If there are multiple maximal elements, then the first one will be returned.
 Values are compared with `isless`.
 
+See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
+
 # Examples
 
 ```jldoctest
@@ -863,6 +869,8 @@ Return the minimal element of the collection `itr` and its index or key.
 If there are multiple minimal elements, then the first one will be returned.
 `NaN` is treated as less than all other values except `missing`.
 
+See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
+
 # Examples
 
 ```jldoctest
@@ -913,6 +921,8 @@ The collection must not be empty.
 
 Values are compared with `isless`.
 
+See also: [`argmin`](@ref), [`findmax`](@ref).
+
 # Examples
 ```jldoctest
 julia> argmax([8, 0.1, -9, pi])
@@ -950,7 +960,6 @@ julia> argmin(x -> -x^3 + x^2 - 10, -5:5)
 
 julia> argmin(acos, 0:0.1:1)
 1.0
-
 ```
 """
 argmin(f, domain) = findmin(f, domain)[2]
@@ -964,6 +973,8 @@ If there are multiple minimal elements, then the first one will be returned.
 The collection must not be empty.
 
 `NaN` is treated as less than all other values except `missing`.
+
+See also: [`argmax`](@ref), [`findmin`](@ref).
 
 # Examples
 ```jldoctest
@@ -991,6 +1002,8 @@ short-circuit on `false`, use [`all`](@ref).
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
+
+See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), , [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -1027,6 +1040,8 @@ short-circuit on `true`, use [`any`](@ref).
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
+
+See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), , [`&&`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest
@@ -1166,6 +1181,8 @@ to start counting from and therefore also determines the output type.
 
 !!! compat "Julia 1.6"
     `init` keyword was added in Julia 1.6.
+
+See also: [`any`](@ref), [`sum`](@ref).
 
 # Examples
 ```jldoctest

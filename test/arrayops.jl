@@ -701,6 +701,10 @@ end
         perm = randperm(4)
         @test isequal(A,permutedims(permutedims(A,perm),invperm(perm)))
         @test isequal(A,permutedims(permutedims(A,invperm(perm)),perm))
+
+        @test sum(permutedims(A,perm)) ≈ sum(PermutedDimsArray(A,perm))
+        @test sum(permutedims(A,perm), dims=2) ≈ sum(PermutedDimsArray(A,perm), dims=2)
+        @test sum(permutedims(A,perm), dims=(2,4)) ≈ sum(PermutedDimsArray(A,perm), dims=(2,4))
     end
 
     m = [1 2; 3 4]
@@ -1153,17 +1157,17 @@ end
     # issue #5177
 
     c = fill(1,2,3,4)
-    m1 = mapslices(x-> fill(1,2,3), c, dims=[1,2])
-    m2 = mapslices(x-> fill(1,2,4), c, dims=[1,3])
-    m3 = mapslices(x-> fill(1,3,4), c, dims=[2,3])
+    m1 = mapslices(_ -> fill(1,2,3), c, dims=[1,2])
+    m2 = mapslices(_ -> fill(1,2,4), c, dims=[1,3])
+    m3 = mapslices(_ -> fill(1,3,4), c, dims=[2,3])
     @test size(m1) == size(m2) == size(m3) == size(c)
 
-    n1 = mapslices(x-> fill(1,6), c, dims=[1,2])
-    n2 = mapslices(x-> fill(1,6), c, dims=[1,3])
-    n3 = mapslices(x-> fill(1,6), c, dims=[2,3])
-    n1a = mapslices(x-> fill(1,1,6), c, dims=[1,2])
-    n2a = mapslices(x-> fill(1,1,6), c, dims=[1,3])
-    n3a = mapslices(x-> fill(1,1,6), c, dims=[2,3])
+    n1 =  mapslices(_ -> fill(1,6)  , c, dims=[1,2])
+    n2 =  mapslices(_ -> fill(1,6)  , c, dims=[1,3])
+    n3 =  mapslices(_ -> fill(1,6)  , c, dims=[2,3])
+    n1a = mapslices(_ -> fill(1,1,6), c, dims=[1,2])
+    n2a = mapslices(_ -> fill(1,1,6), c, dims=[1,3])
+    n3a = mapslices(_ -> fill(1,1,6), c, dims=[2,3])
     @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)
     @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
 
@@ -1659,7 +1663,7 @@ end
 Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
     #indexing with (UnitRange, UnitRange, UnitRange)
-    args = ntuple(d->UnitRange{Int}, N)
+    args = ntuple(Returns(UnitRange{Int}), N)
     @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N}]
     @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == Any[BitArray{N}]
     @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
@@ -1786,7 +1790,7 @@ end
         @test mdsum(A) == 15
         @test mdsum2(A) == 15
         AA = reshape(aa, tuple(2, shp...))
-        B = view(AA, 1:1, ntuple(i->Colon(), i)...)
+        B = view(AA, 1:1, ntuple(Returns(:), i)...)
         @test isa(Base.IndexStyle(B), Base.IteratorsMD.IndexCartesian)
         @test mdsum(B) == 15
         @test mdsum2(B) == 15
@@ -1799,7 +1803,7 @@ end
         A = reshape(a, tuple(shp...))
         @test mdsum(A) == 55
         @test mdsum2(A) == 55
-        B = view(A, ntuple(i->Colon(), i)...)
+        B = view(A, ntuple(Returns(:), i)...)
         @test mdsum(B) == 55
         @test mdsum2(B) == 55
         insert!(shp, 2, 1)

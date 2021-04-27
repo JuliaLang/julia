@@ -91,7 +91,7 @@ function isperm(P::Tuple)
     end
 end
 
-isperm(P::Any16) = _isperm(P)
+isperm(P::Any32) = _isperm(P)
 
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
@@ -228,8 +228,15 @@ invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
 Return the inverse permutation of `v`.
 If `B = A[v]`, then `A == B[invperm(v)]`.
 
+See also [`sortperm`](@ref), [`invpermute!`](@ref), [`isperm`](@ref), [`permutedims`](@ref).
+
 # Examples
 ```jldoctest
+julia> p = (2, 3, 1);
+
+julia> invperm(p)
+(3, 1, 2)
+
 julia> v = [2; 4; 3; 1];
 
 julia> invperm(v)
@@ -286,7 +293,7 @@ function invperm(P::Tuple)
     end
 end
 
-invperm(P::Any16) = Tuple(invperm(collect(P)))
+invperm(P::Any32) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """

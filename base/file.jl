@@ -34,6 +34,8 @@ export
 
 Get the current working directory.
 
+See also: [`cd`](@ref), [`tempdir`](@ref).
+
 # Examples
 ```julia-repl
 julia> pwd()
@@ -66,6 +68,8 @@ end
     cd(dir::AbstractString=homedir())
 
 Set the current working directory.
+
+See also: [`pwd`](@ref), [`mkdir`](@ref), [`mkpath`](@ref), [`mktempdir`](@ref).
 
 # Examples
 ```julia-repl
@@ -673,6 +677,8 @@ the temporary directory is automatically deleted when the process exits.
     The `cleanup` keyword argument was added in Julia 1.3. Relatedly, starting from 1.3,
     Julia will remove the temporary paths created by `mktempdir` when the Julia process
     exits, unless `cleanup` is explicitly set to `false`.
+
+See also: [`mktemp`](@ref), [`mkdir`](@ref).
 """
 function mktempdir(parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix, cleanup::Bool=true)
@@ -707,6 +713,8 @@ end
 
 Apply the function `f` to the result of [`mktemp(parent)`](@ref) and remove the
 temporary file upon completion.
+
+See also: [`mktempdir`](@ref).
 """
 function mktemp(fn::Function, parent::AbstractString=tempdir())
     (tmp_path, tmp_io) = mktemp(parent, cleanup=false)
@@ -729,6 +737,8 @@ end
 
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
 temporary directory all of its contents upon completion.
+
+See also: [`mktemp`](@ref), [`mkdir`](@ref).
 
 !!! compat "Julia 1.2"
     The `prefix` keyword argument was added in Julia 1.2.
@@ -1053,7 +1063,7 @@ function symlink(target::AbstractString, link::AbstractString;
         @static if Sys.iswindows()
             # creating file/directory symlinks requires Administrator privileges
             # while junction points apparently do not
-            if !(flags & UV_FS_SYMLINK_JUNCTION) && err == UV__EPERM
+            if flags & UV_FS_SYMLINK_JUNCTION == 0 && err == UV__EPERM
                 msg = "On Windows, creating symlinks requires Administrator privileges.\n$msg"
             end
         end

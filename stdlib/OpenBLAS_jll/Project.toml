@@ -1,6 +1,6 @@
 name = "OpenBLAS_jll"
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.13+3"
+version = "0.3.13+5"
 
 [deps]
 CompilerSupportLibraries_jll = "e66e0078-7015-5450-92f7-15fbd957f2ae"

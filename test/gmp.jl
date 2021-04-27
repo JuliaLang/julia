@@ -69,6 +69,18 @@ ee = typemax(Int64)
             @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
         end
     end
+    @testset "division" begin
+        oz = big(1 // 0)
+        zo = big(0 // 1)
+
+        @test_throws DivideError() oz / oz
+        @test oz == oz / one(oz)
+        @test -oz == oz / (-one(oz))
+        @test zero(oz) == one(oz) / oz
+        @test_throws DivideError() zo / zo
+        @test one(zo) / zo == big(1//0)
+        @test -one(zo) / zo == big(-1//0)
+    end
 end
 @testset "div, fld, mod, rem" begin
     for i = -10:10, j = [-10:-1; 1:10]
@@ -240,6 +252,12 @@ end
     @test xor(a, b, c, d) == parse(BigInt,"-3426495623485906178489610")
     @test xor(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
     @test xor(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
+
+    @test nand(a, b) == parse(BigInt,"-125")
+    @test ⊼(a, b) == parse(BigInt,"-125")
+
+    @test nor(a, b) == parse(BigInt,"-327424")
+    @test ⊽(a, b) == parse(BigInt,"-327424")
 
     @test (&)(a, b) == parse(BigInt,"124")
     @test (&)(a, b, c) == parse(BigInt,"72")

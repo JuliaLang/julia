@@ -466,7 +466,7 @@ julia> eval(ex)
 
 ## [Macros](@id man-macros)
 
-Macros provide a method to include generated code in the final body of a program. A macro maps
+Macros provide a mechanism to include generated code in the final body of a program. A macro maps
 a tuple of arguments to a returned *expression*, and the resulting expression is compiled directly
 rather than requiring a runtime [`eval`](@ref) call. Macro arguments may include expressions,
 literal values, and symbols.
@@ -981,13 +981,13 @@ block:
 end
 ```
 
-## Non-Standard String Literals
+## [Non-Standard String Literals](@id meta-non-standard-string-literals)
 
 Recall from [Strings](@ref non-standard-string-literals) that string literals prefixed by an identifier are called non-standard
 string literals, and can have different semantics than un-prefixed string literals. For example:
 
-  * `r"^\s*(?:#|$)"` produces a regular expression object rather than a string
-  * `b"DATA\xff\u2200"` is a byte array literal for `[68,65,84,65,255,226,136,128]`.
+  * `r"^\s*(?:#|$)"` produces a [regular expression object](@ref man-regex-literals) rather than a string
+  * `b"DATA\xff\u2200"` is a [byte array literal](@ref man-byte-array-literals) for `[68,65,84,65,255,226,136,128]`.
 
 Perhaps surprisingly, these behaviors are not hard-coded into the Julia parser or compiler. Instead,
 they are custom behaviors provided by a general mechanism that anyone can use: prefixed string
@@ -1051,20 +1051,9 @@ constructed on each iteration. In the vast majority of use cases, however, regul
 are not constructed based on run-time data. In this majority of cases, the ability to write regular
 expressions as compile-time values is invaluable.
 
-Like non-standard string literals, non-standard command literals exist using a prefixed variant
-of the command literal syntax. The command literal ```custom`literal` ``` is parsed as `@custom_cmd "literal"`.
-Julia itself does not contain any non-standard command literals, but packages can make use of
-this syntax. Aside from the different syntax and the `_cmd` suffix instead of the `_str` suffix,
-non-standard command literals behave exactly like non-standard string literals.
-
-In the event that two modules provide non-standard string or command literals with the same name,
-it is possible to qualify the string or command literal with a module name. For instance, if both
-`Foo` and `Bar` provide non-standard string literal `@x_str`, then one can write `Foo.x"literal"`
-or `Bar.x"literal"` to disambiguate between the two.
-
 The mechanism for user-defined string literals is deeply, profoundly powerful. Not only are Julia's
-non-standard literals implemented using it, but also the command literal syntax (``` `echo "Hello, $person"` ```)
-is implemented with the following innocuous-looking macro:
+non-standard literals implemented using it, but the command literal syntax (``` `echo "Hello, $person"` ```)
+is also implemented using the following innocuous-looking macro:
 
 ```julia
 macro cmd(str)
@@ -1076,6 +1065,20 @@ Of course, a large amount of complexity is hidden in the functions used in this 
 but they are just functions, written entirely in Julia. You can read their source and see precisely
 what they do -- and all they do is construct expression objects to be inserted into your program's
 syntax tree.
+
+Like string literals, command literals can also be prefixed by an identifier
+to form what are called non-standard command literals. These command literals are parsed
+as calls to specially-named macros. For example, the syntax ```custom`literal` ``` is parsed
+as `@custom_cmd "literal"`.
+Julia itself does not contain any non-standard command literals, but packages can make use of
+this syntax. Aside from the different syntax and the `_cmd` suffix instead of the `_str` suffix,
+non-standard command literals behave exactly like non-standard string literals.
+
+In the event that two modules provide non-standard string or command literals with the same name,
+it is possible to qualify the string or command literal with a module name. For instance, if both
+`Foo` and `Bar` provide non-standard string literal `@x_str`, then one can write `Foo.x"literal"`
+or `Bar.x"literal"` to disambiguate between the two.
+
 
 Another way to define a macro would be like this:
 

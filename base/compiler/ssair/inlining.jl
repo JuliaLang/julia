@@ -103,7 +103,7 @@ function CFGInliningState(ir::IRCode)
 end
 
 # Tells the inliner that we're now inlining into block `block`, meaning
-# all previous blocks have been proceesed and can be added to the new cfg
+# all previous blocks have been processed and can be added to the new cfg
 function inline_into_block!(state::CFGInliningState, block::Int)
     if state.first_bb != block
         new_range = state.first_bb+1:block
@@ -319,6 +319,14 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         vararg = mk_tuplecall!(compact, argexprs[nargs_def:end], compact.result[idx][:line])
         argexprs = Any[argexprs[1:(nargs_def - 1)]..., vararg]
     end
+    mi = item.mi
+    is_opaque = isa(mi.def, Method) && mi.def.is_for_opaque_closure
+    if is_opaque
+        # Replace the first argument by a load of the capture environment
+        argexprs[1] = insert_node_here!(compact,
+            NewInstruction(Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
+            spec.ir.argtypes[1], compact.result[idx][:line]))
+    end
     flag = compact.result[idx][:flag]
     boundscheck_idx = boundscheck
     if boundscheck_idx === :default || boundscheck_idx === :propagate
@@ -378,8 +386,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                         inline_compact.result[idx′][:type] = (isa(val, Argument) || isa(val, Expr)) ?
                             compact_exprtype(compact, val) :
                             compact_exprtype(inline_compact, val)
-                        insert_node_here!(inline_compact, GotoNode(post_bb_id),
-                                          Any, compact.result[idx′][:line],
+                        insert_node_here!(inline_compact, NewInstruction(GotoNode(post_bb_id),
+                                          Any, compact.result[idx′][:line]),
                                           true)
                         push!(pn.values, SSAValue(idx′))
                     else
@@ -411,7 +419,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         if length(pn.edges) == 1
             return_value = pn.values[1]
         else
-            return_value = insert_node_here!(compact, pn, compact_exprtype(compact, SSAValue(idx)), compact.result[idx][:line])
+            return_value = insert_node_here!(compact,
+                NewInstruction(pn, compact_exprtype(compact, SSAValue(idx)), compact.result[idx][:line]))
         end
     end
     return_value
@@ -440,15 +449,15 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
             a <: m && continue
             # Generate isa check
             isa_expr = Expr(:call, isa, argexprs[i], m)
-            ssa = insert_node_here!(compact, isa_expr, Bool, line)
+            ssa = insert_node_here!(compact, NewInstruction(isa_expr, Bool, line))
             if cond === true
                 cond = ssa
             else
                 and_expr = Expr(:call, and_int, cond, ssa)
-                cond = insert_node_here!(compact, and_expr, Bool, line)
+                cond = insert_node_here!(compact, NewInstruction(and_expr, Bool, line))
             end
         end
-        insert_node_here!(compact, GotoIfNot(cond, next_cond_bb), Union{}, line)
+        insert_node_here!(compact, NewInstruction(GotoIfNot(cond, next_cond_bb), Union{}, line))
         bb = next_cond_bb - 1
         finish_current_bb!(compact, 0)
         argexprs′ = argexprs
@@ -458,15 +467,16 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
                 a, m = atype.parameters[i], metharg.parameters[i]
                 (isa(argexprs[i], SSAValue) || isa(argexprs[i], Argument)) || continue
                 if !(a <: m)
-                    argexprs′[i] = insert_node_here!(compact, PiNode(argexprs′[i], m),
-                                                     m, line)
+                    argexprs′[i] = insert_node_here!(compact,
+                        NewInstruction(PiNode(argexprs′[i], m), m, line))
                 end
             end
         end
         if isa(case, InliningTodo)
             val = ir_inline_item!(compact, idx, argexprs′, linetable, case, boundscheck, todo_bbs)
         elseif isa(case, MethodInstance)
-            val = insert_node_here!(compact, Expr(:invoke, case, argexprs′...), typ, line)
+            val = insert_node_here!(compact,
+                NewInstruction(Expr(:invoke, case, argexprs′...), typ, line))
         else
             case = case::ConstantCase
             val = case.val
@@ -474,9 +484,11 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         if !isempty(compact.result_bbs[bb].preds)
             push!(pn.edges, bb)
             push!(pn.values, val)
-            insert_node_here!(compact, GotoNode(join_bb), Union{}, line)
+            insert_node_here!(compact,
+                NewInstruction(GotoNode(join_bb), Union{}, line))
         else
-            insert_node_here!(compact, ReturnNode(), Union{}, line)
+            insert_node_here!(compact,
+                NewInstruction(ReturnNode(), Union{}, line))
         end
         finish_current_bb!(compact, 0)
     end
@@ -484,19 +496,20 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     # We're now in the fall through block, decide what to do
     if item.fully_covered
         e = Expr(:call, GlobalRef(Core, :throw), fatal_type_bound_error)
-        insert_node_here!(compact, e, Union{}, line)
-        insert_node_here!(compact, ReturnNode(), Union{}, line)
+        insert_node_here!(compact, NewInstruction(e, Union{}, line))
+        insert_node_here!(compact, NewInstruction(ReturnNode(), Union{}, line))
         finish_current_bb!(compact, 0)
     else
-        ssa = insert_node_here!(compact, stmt, typ, line)
+        ssa = insert_node_here!(compact, NewInstruction(stmt, typ, line))
         push!(pn.edges, bb)
         push!(pn.values, ssa)
-        insert_node_here!(compact, GotoNode(join_bb), Union{}, line)
+        insert_node_here!(compact, NewInstruction(GotoNode(join_bb), Union{}, line))
         finish_current_bb!(compact, 0)
     end
 
     # We're now in the join block.
-    compact.ssa_rename[compact.idx-1] = insert_node_here!(compact, pn, typ, line)
+    compact.ssa_rename[compact.idx-1] = insert_node_here!(compact,
+        NewInstruction(pn, typ, line))
     nothing
 end
 
@@ -542,11 +555,16 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
                     compact.active_result_bb -= 1
                     refinish = true
                 end
-                # At the moment we will allow globalrefs in argument position, turn those into ssa values
+                # It is possible for GlobalRefs and Exprs to be in argument position
+                # at this point in the IR, though in that case they are required
+                # to be effect-free. However, we must still move them out of argument
+                # position, since `Argument` is allowed in PhiNodes, but `GlobalRef`
+                # and `Expr` are not, so a substitution could anger the verifier.
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
-                    if isa(aexpr, GlobalRef) || isa(aexpr, Expr)
-                        argexprs[aidx] = insert_node_here!(compact, aexpr, compact_exprtype(compact, aexpr), compact.result[idx][:line])
+                    if isa(aexpr, Expr) || isa(aexpr, GlobalRef)
+                        ninst = effect_free(NewInstruction(aexpr, compact_exprtype(compact, aexpr), compact.result[idx][:line]))
+                        argexprs[aidx] = insert_node_here!(compact, ninst)
                     end
                 end
                 if isa(item, InliningTodo)
@@ -622,7 +640,7 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                     new_argexpr = quoted(def_atype.val)
                 else
                     new_call = Expr(:call, GlobalRef(Core, :getfield), def, j)
-                    new_argexpr = insert_node!(ir, idx, def_atype, new_call)
+                    new_argexpr = insert_node!(ir, idx, NewInstruction(new_call, def_atype))
                 end
                 push!(new_argexprs, new_argexpr)
                 push!(new_atypes, def_atype)
@@ -632,26 +650,35 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
             for i = 1:length(thisarginfo.each)
                 call = thisarginfo.each[i]
                 new_stmt = Expr(:call, argexprs[2], def, state...)
-                state1 = insert_node!(ir, idx, call.rt, new_stmt)
+                state1 = insert_node!(ir, idx, NewInstruction(new_stmt, call.rt))
                 new_sig = with_atype(call_sig(ir, new_stmt)::Signature)
-                if isa(call.info, ConstCallInfo)
-                    handle_const_call!(ir, state1.id, new_stmt, call.info, new_sig,
+                info = call.info
+                handled = false
+                if isa(info, ConstCallInfo)
+                    if maybe_handle_const_call!(ir, state1.id, new_stmt, info, new_sig,
                         call.rt, istate, false, todo)
-                elseif isa(call.info, MethodMatchInfo) || isa(call.info, UnionSplitInfo)
-                    info = isa(call.info, MethodMatchInfo) ?
-                        MethodMatchInfo[call.info] : call.info.matches
+                        handled = true
+                    else
+                        info = info.call
+                    end
+                end
+                if !handled && (isa(info, MethodMatchInfo) || isa(info, UnionSplitInfo))
+                    info = isa(info, MethodMatchInfo) ?
+                        MethodMatchInfo[info] : info.matches
                     # See if we can inline this call to `iterate`
                     analyze_single_call!(ir, todo, state1.id, new_stmt,
                         new_sig, call.rt, info, istate)
                 end
                 if i != length(thisarginfo.each)
                     valT = getfield_tfunc(call.rt, Const(1))
-                    val_extracted = insert_node!(ir, idx, valT,
-                        Expr(:call, GlobalRef(Core, :getfield), state1, 1))
+                    val_extracted = insert_node!(ir, idx, NewInstruction(
+                        Expr(:call, GlobalRef(Core, :getfield), state1, 1),
+                        valT))
                     push!(new_argexprs, val_extracted)
                     push!(new_atypes, valT)
-                    state_extracted = insert_node!(ir, idx, getfield_tfunc(call.rt, Const(2)),
-                        Expr(:call, GlobalRef(Core, :getfield), state1, 2))
+                    state_extracted = insert_node!(ir, idx, NewInstruction(
+                        Expr(:call, GlobalRef(Core, :getfield), state1, 2),
+                        getfield_tfunc(call.rt, Const(2))))
                     state = Core.svec(state_extracted)
                 end
             end
@@ -683,7 +710,7 @@ function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::Meth
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult)
-    mi = specialize_method(result.linfo.def, result.linfo.specTypes,
+    mi = specialize_method(result.linfo.def::Method, result.linfo.specTypes,
         result.linfo.sparam_vals, false, true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     return mi
@@ -719,8 +746,10 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
         end
     end
 
-    if isconst && state.et !== nothing
-        push!(state.et, todo.mi)
+    et = state.et
+
+    if isconst && et !== nothing
+        push!(et, todo.mi)
         return ConstantCase(src)
     end
 
@@ -729,14 +758,14 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
     end
 
     if src === nothing
-        return compileable_specialization(state.et, spec.match)
+        return compileable_specialization(et, spec.match)
     end
 
     if isa(src, IRCode)
         src = copy(src)
     end
 
-    state.et !== nothing && push!(state.et, todo.mi)
+    et !== nothing && push!(et, todo.mi)
     return InliningTodo(todo.mi, src)
 end
 
@@ -917,7 +946,7 @@ function inline_splatnew!(ir::IRCode, idx::Int)
             for j = 1:n
                 atype = getfield_tfunc(tt, Const(j))
                 new_call = Expr(:call, Core.getfield, tup, j)
-                new_argexpr = insert_node!(ir, idx, atype, new_call)
+                new_argexpr = insert_node!(ir, idx, NewInstruction(new_call, atype))
                 push!(new_argexprs, new_argexpr)
             end
             stmt.head = :new
@@ -1040,14 +1069,57 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, info::InvokeCallIn
     return nothing
 end
 
+function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
+    if isa(info, OpaqueClosureCreateInfo)
+        unspec_call_info = info.unspec.info
+        if isa(unspec_call_info, ConstCallInfo)
+            unspec_call_info = unspec_call_info.call
+        end
+        isa(unspec_call_info, OpaqueClosureCallInfo) || return
+        lbt = argextype(stmt.args[3], ir, ir.sptypes)
+        lb, exact = instanceof_tfunc(lbt)
+        exact || return
+        ubt = argextype(stmt.args[4], ir, ir.sptypes)
+        ub, exact = instanceof_tfunc(ubt)
+        exact || return
+        # Narrow opaque closure type
+
+        newT = widenconst(tmeet(tmerge(lb, info.unspec.rt), ub))
+        if newT != ub
+            # N.B.: Narrowing the ub requires a backdge on the mi whose type
+            # information we're using, since a change in that function may
+            # invalidate ub result.
+            stmt.args[4] = newT
+        end
+    end
+end
+
+# As a matter of convenience, this pass also computes effect-freenes.
+# For primitives, we do that right here. For proper calls, we will
+# discover this when we consult the caches.
+function check_effect_free!(ir::IRCode, @nospecialize(stmt), @nospecialize(calltype), idx::Int)
+    if stmt_effect_free(stmt, calltype, ir, ir.sptypes)
+        ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
+    end
+end
+
 # Handles all analysis and inlining of intrinsics and builtins. In particular,
 # this method does not access the method table or otherwise process generic
 # functions.
 function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, state::InliningState)
     stmt = ir.stmts[idx][:inst]
-    stmt isa Expr || return nothing
-    if stmt.head === :splatnew
-        inline_splatnew!(ir, idx)
+    calltype = ir.stmts[idx][:type]
+    if !(stmt isa Expr)
+        check_effect_free!(ir, stmt, calltype, idx)
+        return nothing
+    end
+    if stmt.head !== :call
+        if stmt.head === :splatnew
+            inline_splatnew!(ir, idx)
+        elseif stmt.head === :new_opaque_closure
+            narrow_opaque_closure!(ir, stmt, ir.stmts[idx][:info], state)
+        end
+        check_effect_free!(ir, stmt, calltype, idx)
         return nothing
     end
 
@@ -1061,12 +1133,13 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
     sig === nothing && return nothing
 
     # Check if we match any of the early inliners
-    calltype = ir.stmts[idx][:type]
     res = early_inline_special_case(ir, sig, stmt, state.params, calltype)
     if res !== nothing
         ir.stmts[idx][:inst] = res
         return nothing
     end
+
+    check_effect_free!(ir, stmt, calltype, idx)
 
     if sig.f !== Core.invoke && is_builtin(sig)
         # No inlining for builtins (other invoke/apply)
@@ -1077,8 +1150,10 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
 
     # Special case inliners for regular functions
     if late_inline_special_case!(ir, sig, idx, stmt, state.params) || is_return_type(sig.f)
+        check_effect_free!(ir, ir.stmts[idx][:inst], calltype, idx)
         return nothing
     end
+
     return sig
 end
 
@@ -1164,25 +1239,33 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
     return nothing
 end
 
-function handle_const_call!(ir::IRCode, idx::Int, stmt::Expr,
+function maybe_handle_const_call!(ir::IRCode, idx::Int, stmt::Expr,
         info::ConstCallInfo, sig::Signature, @nospecialize(calltype),
         state::InliningState,
         isinvoke::Bool, todo::Vector{Pair{Int, Any}})
-    item = InliningTodo(info.result, sig.atypes, calltype)
-    validate_sparams(item.mi.sparam_vals) || return
+    # when multiple matches are found, bail out and later inliner will union-split this signature
+    # TODO effectively use multiple constant analysis results here
+    length(info.results) == 1 || return false
+    result = info.results[1]
+    isa(result, InferenceResult) || return false
+
+    item = InliningTodo(result, sig.atypes, calltype)
+    validate_sparams(item.mi.sparam_vals) || return true
     mthd_sig = item.mi.def.sig
     mistypes = item.mi.specTypes
     state.mi_cache !== nothing && (item = resolve_todo(item, state))
     if sig.atype <: mthd_sig
-        return handle_single_case!(ir, stmt, idx, item, isinvoke, todo)
+        handle_single_case!(ir, stmt, idx, item, isinvoke, todo)
+        return true
     else
-        item === nothing && return
+        item === nothing && return true
         # Union split out the error case
         item = UnionSplit(false, sig.atype, Pair{Any, Any}[mistypes => item])
         if isinvoke
             stmt.args = rewrite_invoke_exprargs!(stmt.args)
         end
         push!(todo, idx=>item)
+        return true
     end
 end
 
@@ -1204,6 +1287,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
                 ir.stmts[idx][:inst] = quoted(calltype.val)
                 continue
             end
+            ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
             info = info.info
         end
 
@@ -1216,8 +1300,16 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # it'll have performed a specialized analysis for just this case. Use its
         # result.
         if isa(info, ConstCallInfo)
-            handle_const_call!(ir, idx, stmt, info, sig, calltype, state,
-                sig.f === Core.invoke, todo)
+            if maybe_handle_const_call!(ir, idx, stmt, info, sig, calltype, state, sig.f === Core.invoke, todo)
+                continue
+            else
+                info = info.call
+            end
+        end
+
+        if isa(info, OpaqueClosureCallInfo)
+            result = analyze_method!(info.match, sig.atypes, state, calltype)
+            handle_single_case!(ir, stmt, idx, result, false, todo)
             continue
         end
 
@@ -1246,7 +1338,7 @@ end
 function mk_tuplecall!(compact::IncrementalCompact, args::Vector{Any}, line_idx::Int32)
     e = Expr(:call, TOP_TUPLE, args...)
     etyp = tuple_tfunc(Any[compact_exprtype(compact, args[i]) for i in 1:length(args)])
-    return insert_node_here!(compact, e, etyp, line_idx)
+    return insert_node_here!(compact, NewInstruction(e, etyp, line_idx))
 end
 
 function linear_inline_eligible(ir::IRCode)
@@ -1311,7 +1403,7 @@ function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::E
             return true
         end
         cmp_call = Expr(:call, GlobalRef(Core, :(===)), stmt.args[2], stmt.args[3])
-        cmp_call_ssa = insert_node!(ir, idx, Bool, cmp_call)
+        cmp_call_ssa = insert_node!(ir, idx, effect_free(NewInstruction(cmp_call, Bool)))
         not_call = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), cmp_call_ssa)
         ir[SSAValue(idx)] = not_call
         return true

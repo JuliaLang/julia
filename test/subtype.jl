@@ -140,7 +140,7 @@ function test_diagonal()
     @test !issub(Type{Tuple{T,Any} where T},   Type{Tuple{T,T}} where T)
     @test !issub(Type{Tuple{T,Any,T} where T}, Type{Tuple{T,T,T}} where T)
     @test_broken issub(Type{Tuple{T} where T},       Type{Tuple{T}} where T)
-    @test_broken issub(Ref{Tuple{T} where T},        Ref{Tuple{T}} where T)
+    @test  issub(Ref{Tuple{T} where T},        Ref{Tuple{T}} where T)
     @test !issub(Type{Tuple{T,T} where T},     Type{Tuple{T,T}} where T)
     @test !issub(Type{Tuple{T,T,T} where T},   Type{Tuple{T,T,T}} where T)
     @test  isequal_type(Ref{Tuple{T, T} where Int<:T<:Int},
@@ -1894,3 +1894,23 @@ let T = Type{T} where T<:(AbstractArray{I}) where I<:(Base.IteratorsMD.Cartesian
     @test I <: S
     @test_broken I == typeintersect(S, T)
 end
+
+# issue #39948
+let A = Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1} where T, Vector},
+    I = typeintersect(A, Tuple{Vararg{Vector{T}}} where T)
+    @test_broken I <: A
+    @test_broken !Base.has_free_typevars(I)
+end
+
+# issue #8915
+struct D8915{T<:Union{Float32,Float64}}
+    D8915{T}(a) where {T} = 1
+    D8915{T}(a::Int) where {T} = 2
+end
+@test D8915{Float64}(1) == 2
+@test D8915{Float64}(1.0) == 1
+
+# issue #18985
+f18985(x::T, y...) where {T<:Union{Int32,Int64}} = (length(y), f18985(y[1], y[2:end]...)...)
+f18985(x::T) where {T<:Union{Int32,Int64}} = 100
+@test f18985(1, 2, 3) == (2, 1, 100)

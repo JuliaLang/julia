@@ -73,11 +73,13 @@ function test_jl_dump_compiles_toplevel_thunks()
     # Make sure to cause compilation of the eval function
     # before calling it below.
     Core.eval(Main, Any[:(nothing)][1])
+    GC.enable(false)  # avoid finalizers to be compiled
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
     close(io)
+    GC.enable(true)
     tstats = stat(tfile)
     tempty = tstats.size == 0
     rm(tfile)
@@ -551,3 +553,11 @@ end
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
 end
+
+# issue #32843
+function f32843(vals0, v)
+    (length(vals0) > 1) && (vals = v[1])
+    (length(vals0) == 1 && vals0[1]==1) && (vals = 1:2)
+    vals
+end
+@test_throws UndefVarError f32843([6], Vector[[1]])

@@ -110,9 +110,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # ~ expansion in --project and JULIA_PROJECT
     if !Sys.iswindows()
-        expanded = abspath(expanduser("~/foo"))
-        @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
-        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir())))
+        let expanded = abspath(expanduser("~/foo/Project.toml"))
+            @test expanded == readchomp(`$exename --project='~/foo' -e 'println(Base.active_project())'`)
+            @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir()))
+        end
+    end
+
+    # handling of @projectname in --project and JULIA_PROJECT
+    let expanded = abspath(Base.load_path_expand("@foo"))
+        @test expanded == readchomp(`$exename --project='@foo' -e 'println(Base.active_project())'`)
+        @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
     # --quiet, --banner
@@ -342,6 +349,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O`) == "3"
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" --optimize`) == "3"
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O0`) == "0"
+
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level_min"`) == "0"
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level_min" --min-optlevel=2`) == "2"
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"

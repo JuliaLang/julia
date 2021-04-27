@@ -5,53 +5,53 @@ using Test, Mmap, Random
 file = tempname()
 write(file, "Hello World\n")
 t = b"Hello World"
-@test Mmap.mmap(file, Array{UInt8,3}, (11,1,1)) == reshape(t,(11,1,1))
+@test mmap(file, Array{UInt8,3}, (11,1,1)) == reshape(t,(11,1,1))
 GC.gc(); GC.gc()
-@test Mmap.mmap(file, Array{UInt8,3}, (1,11,1)) == reshape(t,(1,11,1))
+@test mmap(file, Array{UInt8,3}, (1,11,1)) == reshape(t,(1,11,1))
 GC.gc(); GC.gc()
-@test Mmap.mmap(file, Array{UInt8,3}, (1,1,11)) == reshape(t,(1,1,11))
+@test mmap(file, Array{UInt8,3}, (1,1,11)) == reshape(t,(1,1,11))
 GC.gc(); GC.gc()
-@test Mmap.mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(undef, (0,0,0))
-@test Mmap.mmap(file, Vector{UInt8}, (11,)) == t
+@test mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(undef, (0,0,0))
+@test mmap(file, Vector{UInt8}, (11,)) == t
 GC.gc(); GC.gc()
-@test Mmap.mmap(file, Array{UInt8,2}, (1,11)) == t'
+@test mmap(file, Array{UInt8,2}, (1,11)) == t'
 GC.gc(); GC.gc()
-@test Mmap.mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(undef, (0,0))
-m = Mmap.mmap(file, Array{UInt8,3}, (1,2,1))
+@test mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(undef, (0,0))
+m = mmap(file, Array{UInt8,3}, (1,2,1))
 @test m == reshape(b"He",(1,2,1))
 finalize(m); m=nothing; GC.gc()
 
 # constructors
-@test length(@inferred Mmap.mmap(file)) == 12
-@test length(@inferred Mmap.mmap(file, Vector{Int8})) == 12
-@test length(@inferred Mmap.mmap(file, Matrix{Int8}, (12,1))) == 12
-@test length(@inferred Mmap.mmap(file, Matrix{Int8}, (12,1), 0)) == 12
-@test length(@inferred Mmap.mmap(file, Matrix{Int8}, (12,1), 0; grow=false)) == 12
-@test length(@inferred Mmap.mmap(file, Matrix{Int8}, (12,1), 0; shared=false)) == 12
-@test length(@inferred Mmap.mmap(file, Vector{Int8}, 12)) == 12
-@test length(@inferred Mmap.mmap(file, Vector{Int8}, 12, 0)) == 12
-@test length(@inferred Mmap.mmap(file, Vector{Int8}, 12, 0; grow=false)) == 12
-@test length(@inferred Mmap.mmap(file, Vector{Int8}, 12, 0; shared=false)) == 12
+@test length(@inferred mmap(file)) == 12
+@test length(@inferred mmap(file, Vector{Int8})) == 12
+@test length(@inferred mmap(file, Matrix{Int8}, (12,1))) == 12
+@test length(@inferred mmap(file, Matrix{Int8}, (12,1), 0)) == 12
+@test length(@inferred mmap(file, Matrix{Int8}, (12,1), 0; grow=false)) == 12
+@test length(@inferred mmap(file, Matrix{Int8}, (12,1), 0; shared=false)) == 12
+@test length(@inferred mmap(file, Vector{Int8}, 12)) == 12
+@test length(@inferred mmap(file, Vector{Int8}, 12, 0)) == 12
+@test length(@inferred mmap(file, Vector{Int8}, 12, 0; grow=false)) == 12
+@test length(@inferred mmap(file, Vector{Int8}, 12, 0; shared=false)) == 12
 s = open(file)
-@test length(@inferred Mmap.mmap(s)) == 12
-@test length(@inferred Mmap.mmap(s, Vector{Int8})) == 12
-@test length(@inferred Mmap.mmap(s, Matrix{Int8}, (12,1))) == 12
-@test length(@inferred Mmap.mmap(s, Matrix{Int8}, (12,1), 0)) == 12
-@test length(@inferred Mmap.mmap(s, Matrix{Int8}, (12,1), 0; grow=false)) == 12
-@test length(@inferred Mmap.mmap(s, Matrix{Int8}, (12,1), 0; shared=false)) == 12
-@test length(@inferred Mmap.mmap(s, Vector{Int8}, 12)) == 12
-@test length(@inferred Mmap.mmap(s, Vector{Int8}, 12, 0)) == 12
-@test length(@inferred Mmap.mmap(s, Vector{Int8}, 12, 0; grow=false)) == 12
-@test length(@inferred Mmap.mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
+@test length(@inferred mmap(s)) == 12
+@test length(@inferred mmap(s, Vector{Int8})) == 12
+@test length(@inferred mmap(s, Matrix{Int8}, (12,1))) == 12
+@test length(@inferred mmap(s, Matrix{Int8}, (12,1), 0)) == 12
+@test length(@inferred mmap(s, Matrix{Int8}, (12,1), 0; grow=false)) == 12
+@test length(@inferred mmap(s, Matrix{Int8}, (12,1), 0; shared=false)) == 12
+@test length(@inferred mmap(s, Vector{Int8}, 12)) == 12
+@test length(@inferred mmap(s, Vector{Int8}, 12, 0)) == 12
+@test length(@inferred mmap(s, Vector{Int8}, 12, 0; grow=false)) == 12
+@test length(@inferred mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
 close(s)
-@test_throws ErrorException Mmap.mmap(file, Vector{Ref}) # must be bit-type
+@test_throws ErrorException mmap(file, Vector{Ref}) # must be bit-type
 GC.gc(); GC.gc()
 
 s = open(f->f,file,"w")
-@test Mmap.mmap(file) == Vector{UInt8}() # requested len=0 on empty file
-@test Mmap.mmap(file,Vector{UInt8},0) == Vector{UInt8}()
+@test mmap(file) == Vector{UInt8}() # requested len=0 on empty file
+@test mmap(file,Vector{UInt8},0) == Vector{UInt8}()
 s = open(file, "r+")
-m = Mmap.mmap(s,Vector{UInt8},12)
+m = mmap(s,Vector{UInt8},12)
 m[:] = b"Hello World\n"
 Mmap.sync!(m)
 close(s); finalize(m); m=nothing; GC.gc()
@@ -59,36 +59,36 @@ close(s); finalize(m); m=nothing; GC.gc()
 
 s = open(file, "r")
 close(s)
-@test_throws Base.IOError Mmap.mmap(s) # closed IOStream
-@test_throws ArgumentError Mmap.mmap(s,Vector{UInt8},12,0) # closed IOStream
-@test_throws SystemError Mmap.mmap("")
+@test_throws Base.IOError mmap(s) # closed IOStream
+@test_throws ArgumentError mmap(s,Vector{UInt8},12,0) # closed IOStream
+@test_throws SystemError mmap("")
 
 # negative length
-@test_throws ArgumentError Mmap.mmap(file, Vector{UInt8}, -1)
+@test_throws ArgumentError mmap(file, Vector{UInt8}, -1)
 # negative offset
-@test_throws ArgumentError Mmap.mmap(file, Vector{UInt8}, 1, -1)
+@test_throws ArgumentError mmap(file, Vector{UInt8}, 1, -1)
 
 for i = 0x01:0x0c
-    @test length(Mmap.mmap(file, Vector{UInt8}, i)) == Int(i)
+    @test length(mmap(file, Vector{UInt8}, i)) == Int(i)
 end
 GC.gc(); GC.gc()
 
 sz = filesize(file)
 s = open(file, "r+")
-m = Mmap.mmap(s, Vector{UInt8}, sz+1)
+m = mmap(s, Vector{UInt8}, sz+1)
 @test length(m) == sz+1 # test growing
 @test m[end] == 0x00
 close(s); finalize(m); m=nothing; GC.gc()
 sz = filesize(file)
 s = open(file, "r+")
-m = Mmap.mmap(s, Vector{UInt8}, 1, sz)
+m = mmap(s, Vector{UInt8}, 1, sz)
 @test length(m) == 1
 @test m[1] == 0x00
 close(s); finalize(m); m=nothing; GC.gc()
 sz = filesize(file)
 # test where offset is actually > than size of file; file is grown with zeroed bytes
 s = open(file, "r+")
-m = Mmap.mmap(s, Vector{UInt8}, 1, sz+1)
+m = mmap(s, Vector{UInt8}, 1, sz+1)
 @test length(m) == 1
 @test m[1] == 0x00
 close(s); finalize(m); m=nothing; GC.gc()
@@ -98,7 +98,7 @@ close(s); finalize(m); m=nothing; GC.gc()
 # can thus not turn the segmentation fault into an exception.
 if !(Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le)
     s = open(file, "r")
-    m = Mmap.mmap(s)
+    m = mmap(s)
     @test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
     finalize(m); m=nothing; GC.gc()
 end
@@ -106,13 +106,13 @@ end
 write(file, "Hello World\n")
 
 s = open(file, "r")
-m = Mmap.mmap(s)
+m = mmap(s)
 close(s)
 finalize(m); m=nothing; GC.gc()
-m = Mmap.mmap(file)
+m = mmap(file)
 s = open(file, "r+")
-c = Mmap.mmap(s)
-d = Mmap.mmap(s)
+c = mmap(s)
+d = mmap(s)
 c[1] = UInt8('J')
 Mmap.sync!(c)
 close(s)
@@ -125,18 +125,18 @@ write(file, "Hello World\n")
 
 s = open(file, "r")
 @test isreadonly(s) == true
-c = Mmap.mmap(s, Vector{UInt8}, (11,))
+c = mmap(s, Vector{UInt8}, (11,))
 @test c == b"Hello World"
 finalize(c); c=nothing; GC.gc()
-c = Mmap.mmap(s, Vector{UInt8}, (UInt16(11),))
+c = mmap(s, Vector{UInt8}, (UInt16(11),))
 @test c == b"Hello World"
 finalize(c); c=nothing; GC.gc()
-@test_throws ArgumentError Mmap.mmap(s, Vector{UInt8}, (Int16(-11),))
-@test_throws ArgumentError Mmap.mmap(s, Vector{UInt8}, (typemax(UInt),))
+@test_throws ArgumentError mmap(s, Vector{UInt8}, (Int16(-11),))
+@test_throws ArgumentError mmap(s, Vector{UInt8}, (typemax(UInt),))
 close(s)
 s = open(file, "r+")
 @test isreadonly(s) == false
-c = Mmap.mmap(s, Vector{UInt8}, (11,))
+c = mmap(s, Vector{UInt8}, (11,))
 c[5] = UInt8('x')
 Mmap.sync!(c)
 close(s)
@@ -146,18 +146,18 @@ close(s)
 @test startswith(str, "Hellx World")
 finalize(c); c=nothing; GC.gc()
 
-c = Mmap.mmap(file)
+c = mmap(file)
 @test c == b"Hellx World\n"
 finalize(c); c=nothing; GC.gc()
-c = Mmap.mmap(file, Vector{UInt8}, 3)
+c = mmap(file, Vector{UInt8}, 3)
 @test c == b"Hel"
 finalize(c); c=nothing; GC.gc()
 s = open(file, "r")
-c = Mmap.mmap(s, Vector{UInt8}, 6)
+c = mmap(s, Vector{UInt8}, 6)
 @test c == b"Hellx "
 close(s)
 finalize(c); c=nothing; GC.gc()
-c = Mmap.mmap(file, Vector{UInt8}, 5, 6)
+c = mmap(file, Vector{UInt8}, 5, 6)
 @test c == b"World"
 finalize(c); c=nothing; GC.gc()
 
@@ -165,8 +165,8 @@ s = open(file, "w")
 write(s, "Hello World\n")
 close(s)
 
-# test Mmap.mmap
-m = Mmap.mmap(file)
+# test mmap
+m = mmap(file)
 tdata = b"Hello World\n"
 for i = 1:12
     @test m[i] == tdata[i]
@@ -174,7 +174,7 @@ end
 @test_throws BoundsError m[13]
 finalize(m); m=nothing; GC.gc()
 
-m = Mmap.mmap(file,Vector{UInt8},6)
+m = mmap(file,Vector{UInt8},6)
 @test m[1] == b"H"[1]
 @test m[2] == b"e"[1]
 @test m[3] == b"l"[1]
@@ -184,7 +184,7 @@ m = Mmap.mmap(file,Vector{UInt8},6)
 @test_throws BoundsError m[7]
 finalize(m); m=nothing; GC.gc()
 
-m = Mmap.mmap(file,Vector{UInt8},2,6)
+m = mmap(file,Vector{UInt8},2,6)
 @test m[1] == b"W"[1]
 @test m[2] == b"o"[1]
 @test_throws BoundsError m[3]
@@ -198,13 +198,13 @@ write(s, [0xffffffffffffffff,
 close(s)
 s = open(file, "r")
 @test isreadonly(s)
-b = @inferred Mmap.mmap(s, BitArray, (17,13))
+b = @inferred mmap(s, BitArray, (17,13))
 @test Test._check_bitarray_consistency(b)
 @test b == trues(17,13)
-@test_throws ArgumentError Mmap.mmap(s, BitArray, (7,3))
+@test_throws ArgumentError mmap(s, BitArray, (7,3))
 close(s)
 s = open(file, "r+")
-b = Mmap.mmap(s, BitArray, (17,19))
+b = mmap(s, BitArray, (17,19))
 @test Test._check_bitarray_consistency(b)
 rand!(b)
 Mmap.sync!(b)
@@ -213,7 +213,7 @@ b0 = copy(b)
 close(s)
 s = open(file, "r")
 @test isreadonly(s)
-b = Mmap.mmap(s, BitArray, (17,19))
+b = mmap(s, BitArray, (17,19))
 @test Test._check_bitarray_consistency(b)
 @test b == b0
 close(s)
@@ -227,29 +227,29 @@ open(file,"w") do f
 end
 @test filesize(file) == 9
 s = open(file, "r+")
-m = Mmap.mmap(s, BitArray, (72,))
+m = mmap(s, BitArray, (72,))
 @test Test._check_bitarray_consistency(m)
 @test length(m) == 72
 close(s); finalize(m); m = nothing; GC.gc()
 
-m = Mmap.mmap(file, BitArray, (72,))
+m = mmap(file, BitArray, (72,))
 @test Test._check_bitarray_consistency(m)
 @test length(m) == 72
 finalize(m); m = nothing; GC.gc()
 
 s = open(file, "r+")
-m = Mmap.mmap(s, BitArray, 72) # len integer instead of dims
+m = mmap(s, BitArray, 72) # len integer instead of dims
 @test Test._check_bitarray_consistency(m)
 @test length(m) == 72
 close(s); finalize(m); m = nothing; GC.gc()
 
-m = Mmap.mmap(file, BitArray, 72) # len integer instead of dims
+m = mmap(file, BitArray, 72) # len integer instead of dims
 @test Test._check_bitarray_consistency(m)
 @test length(m) == 72
 finalize(m); m = nothing; GC.gc()
 rm(file)
 
-# Mmap.mmap with an offset
+# mmap with an offset
 A = rand(1:20, 500, 300)
 fname = tempname()
 s = open(fname, "w+")
@@ -260,12 +260,12 @@ close(s)
 s = open(fname)
 m = read(s, Int)
 n = read(s, Int)
-A2 = Mmap.mmap(s, Matrix{Int}, (m,n))
+A2 = mmap(s, Matrix{Int}, (m,n))
 @test A == A2
 seek(s, 0)
-A3 = Mmap.mmap(s, Matrix{Int}, (m,n), convert(Int64, 2*sizeof(Int)))
+A3 = mmap(s, Matrix{Int}, (m,n), convert(Int64, 2*sizeof(Int)))
 @test A == A3
-A4 = Mmap.mmap(s, Matrix{Int}, (m,150), convert(Int64, (2+150*m)*sizeof(Int)))
+A4 = mmap(s, Matrix{Int}, (m,150), convert(Int64, (2+150*m)*sizeof(Int)))
 @test A[:, 151:end] == A4
 close(s)
 finalize(A2); finalize(A3); finalize(A4)
@@ -282,7 +282,7 @@ m = Mmap.Anonymous()
 @test isreadable(m)
 @test iswritable(m)
 
-m = Mmap.mmap(Vector{UInt8}, 12)
+m = mmap(Vector{UInt8}, 12)
 @test length(m) == 12
 @test all(m .== 0x00)
 @test m[1] === 0x00
@@ -290,16 +290,16 @@ m = Mmap.mmap(Vector{UInt8}, 12)
 m[1] = 0x0a
 Mmap.sync!(m)
 @test m[1] === 0x0a
-m = Mmap.mmap(Vector{UInt8}, 12; shared=false)
-m = Mmap.mmap(Vector{Int}, 12)
+m = mmap(Vector{UInt8}, 12; shared=false)
+m = mmap(Vector{Int}, 12)
 @test length(m) == 12
 @test all(m .== 0)
 @test m[1] === 0
 @test m[end] === 0
-m = Mmap.mmap(Vector{Float64}, 12)
+m = mmap(Vector{Float64}, 12)
 @test length(m) == 12
 @test all(m .== 0.0)
-m = Mmap.mmap(Matrix{Int8}, (12,12))
+m = mmap(Matrix{Int8}, (12,12))
 @test size(m) == (12,12)
 @test all(m == zeros(Int8, (12,12)))
 @test sizeof(m) == prod((12,12))
@@ -315,12 +315,12 @@ finalize(m); m = nothing; GC.gc()
 if Sys.isunix()
     file = tempname()
     write(file, rand(Float64, 20))
-    A = Mmap.mmap(file, Vector{Float64}, 20)
+    A = mmap(file, Vector{Float64}, 20)
     @test Mmap.madvise!(A, Mmap.MADV_WILLNEED) === nothing # checking for no error
     finalize(A); A = nothing; GC.gc()
 
     write(file, BitArray(rand(Bool, 20)))
-    b = Mmap.mmap(file, BitArray, 20)
+    b = mmap(file, BitArray, 20)
     @test Mmap.madvise!(b, Mmap.MADV_WILLNEED) === nothing
     finalize(b); b = nothing; GC.gc()
     rm(file)
@@ -330,10 +330,10 @@ end
 file = tempname()
 touch(file)
 open(file, "r+") do s
-    A = Mmap.mmap(s, Vector{UInt8}, (10,), 0)
+    A = mmap(s, Vector{UInt8}, (10,), 0)
     Mmap.sync!(A)
     finalize(A); A = nothing; GC.gc()
-    A = Mmap.mmap(s, Vector{UInt8}, (10,), 1)
+    A = mmap(s, Vector{UInt8}, (10,), 1)
     Mmap.sync!(A)
     finalize(A); A = nothing; GC.gc()
 end

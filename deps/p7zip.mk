@@ -9,7 +9,7 @@ $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@)
 	cd $(dir $@) && $(TAR) --strip-components 1 -jxf $<
-	echo $1 > $@
+	echo 1 > $@
 
 checksum-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
 	$(JLCHECKSUM) $<
