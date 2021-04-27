@@ -179,8 +179,8 @@ xor(b::Bool, a::Missing) = missing
 xor(::Missing, ::Integer) = missing
 xor(::Integer, ::Missing) = missing
 
-*(d::Missing, x::AbstractString) = missing
-*(d::AbstractString, x::Missing) = missing
+*(d::Missing, x::Union{AbstractString,AbstractChar}) = missing
+*(d::Union{AbstractString,AbstractChar}, x::Missing) = missing
 
 function float(A::AbstractArray{Union{T, Missing}}) where {T}
     U = typeof(float(zero(T)))
