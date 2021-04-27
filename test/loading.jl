@@ -718,3 +718,9 @@ import .Foo.Libdl; import Libdl
         end
     end
 end
+
+@testset "`Base.project_names` and friends" begin
+    n = length(Base.project_names)
+    @test length(Base.manifest_names) == n
+    @test length(Base.preferences_names) == n
+end
