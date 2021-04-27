@@ -804,7 +804,9 @@ function modules_to_be_loaded(ast, mods = Symbol[])
     if ast.head in [:using, :import]
         for arg in ast.args
             if first(arg.args) isa Symbol # i.e. `Foo`
-                push!(mods, first(arg.args))
+                if first(arg.args) != :.
+                    push!(mods, first(arg.args))
+                end
             else # i.e. `Foo: bar`
                 push!(mods, first(first(arg.args).args))
             end
