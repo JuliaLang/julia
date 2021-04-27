@@ -1077,6 +1077,12 @@ function setup_interface(
                         isprompt_paste = true
                         oldpos += pkg_prompt_len
                         Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
+                    # Check if input line starts with "(xxx) pkg> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), Regex("\\(.+\\) $(PKG_PROMPT)"))
+                        env_pkg_prompt = match(Regex("\\(.+\\) $(PKG_PROMPT)"), SubString(input, oldpos)).match
+                        isprompt_paste = true
+                        oldpos += length(env_pkg_prompt)
+                        Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
                     # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), SHELL_PROMPT)
                         isprompt_paste = true

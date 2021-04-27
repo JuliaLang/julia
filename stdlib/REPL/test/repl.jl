@@ -764,6 +764,9 @@ fake_repl() do stdin_write, stdout_read, repl
             pkg> st
             Dummy pkg info
 
+            (Foo) pkg> st
+            Dummy pkg info
+
             julia> B = 2
             2\e[201~
              """)
