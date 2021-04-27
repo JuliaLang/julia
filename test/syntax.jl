@@ -1863,7 +1863,7 @@ end
 @test_throws UndefVarError eval(:(1+$(Symbol(""))))
 
 # issue #31404
-f31404(a, b; kws...) = (a, b, kws.data)
+f31404(a, b; kws...) = (a, b, values(kws))
 @test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))
 
 # issue #28992
