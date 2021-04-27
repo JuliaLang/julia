@@ -48,7 +48,7 @@ end
     S = sparse(I, 3, 3)
     fill!(S, 0)
     @test iszero(S)  # test success with stored zeros via fill!
-    @test iszero(SparseMatrixCSC(2, 2, [1,2,3], [1,2], [0,0,1])) # test success with nonzeros beyond data range
+    @test_throws ArgumentError iszero(SparseMatrixCSC(2, 2, [1,2,3], [1,2], [0,0,1])) # test failure with nonzeros beyond data range
 end
 @testset "isone specialization for SparseMatrixCSC" begin
     @test isone(sparse(I, 3, 3))    # test success
@@ -673,8 +673,6 @@ end
     @testset "common error checking of [c]transpose! methods (ftranspose!)" begin
         @test_throws DimensionMismatch transpose!(A[:, 1:(smalldim - 1)], A)
         @test_throws DimensionMismatch transpose!(A[1:(smalldim - 1), 1], A)
-        @test_throws ArgumentError transpose!((B = similar(A); resize!(rowvals(B), nnz(A) - 1); B), A)
-        @test_throws ArgumentError transpose!((B = similar(A); resize!(nonzeros(B), nnz(A) - 1); B), A)
     end
     @testset "common error checking of permute[!] methods / source-perm compat" begin
         @test_throws DimensionMismatch permute(A, p[1:(end - 1)], q)
@@ -2416,19 +2414,6 @@ end
     @test String(take!(io)) == "⠛⠛"
 end
 
-@testset "check buffers" for n in 1:3
-    local A
-    rowval = [1,2,3]
-    nzval1  = Int[]
-    nzval2  = [1,1,1]
-    A = SparseMatrixCSC(n, n, [1:n+1;], rowval, nzval1)
-    @test nnz(A) == n
-    @test_throws BoundsError A[n,n]
-    A = SparseMatrixCSC(n, n, [1:n+1;], rowval, nzval2)
-    @test nnz(A) == n
-    @test A      == Matrix(I, n, n)
-end
-
 @testset "reverse search direction if step < 0 #21986" begin
     local A, B
     A = guardseed(1234) do
@@ -2487,22 +2472,22 @@ end
     @test typeof(simA) == typeof(A)
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(rowvals(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
-    # test similar with entry type and Dims{2} specification (preserves storage space only)
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
+    # test similar with entry type and Dims{2} specification (empty storage space)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(getcolptr(A))}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(rowvals(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(rowvals(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test similar with Dims{1} specification (preserves nothing)
     simA = similar(A, (6,))
     @test typeof(simA) == SparseVector{eltype(nonzeros(A)),eltype(getcolptr(A))}
@@ -2530,8 +2515,6 @@ end
     # count should throw for sparse arrays for which zero(eltype) does not exist
     @test_throws MethodError count(SparseMatrixCSC(2, 2, Int[1, 2, 3], Int[1, 2], Any[true, true]))
     @test_throws MethodError count(SparseVector(2, Int[1], Any[true]))
-    # count should run only over nonzeros(S)[1:nnz(S)], not nonzeros(S) in full
-    @test count(SparseMatrixCSC(2, 2, Int[1, 2, 3], Int[1, 2], Bool[true, true, true])) == 2
 end
 
 @testset "sparse findprev/findnext operations" begin
@@ -2597,15 +2580,6 @@ end
 @testset "operations on Integer subtypes" begin
     s = sparse(UInt8[1, 2, 3], UInt8[1, 2, 3], UInt8[1, 2, 3])
     @test sum(s, dims=2) == reshape([1, 2, 3], 3, 1)
-end
-
-@testset "mapreduce of sparse matrices with trailing elements in nzval #26534" begin
-    B = SparseMatrixCSC{Int,Int}(2, 3,
-        [1, 3, 4, 5],
-        [1, 2, 1, 2, 999, 999, 999, 999],
-        [1, 2, 3, 6, 999, 999, 999, 999]
-    )
-    @test maximum(B) == 6
 end
 
 _length_or_count_or_five(::Colon) = 5
@@ -2883,19 +2857,6 @@ end
     @test sparse(deepwrap(A)) == Matrix(deepwrap(B))
 end
 
-@testset "unary operations on matrices where length(nzval)>nnz" begin
-    # this should create a sparse matrix with length(nzval)>nnz
-    A = SparseMatrixCSC(Complex{BigInt}[1+im 2+2im]')'[1:1, 2:2]
-    # ...ensure it does! If necessary, the test needs to be updated to use
-    # another mechanism to create a suitable A.
-    resize!(nonzeros(A), 2)
-    @assert length(nonzeros(A)) > nnz(A)
-    @test -A == fill(-2-2im, 1, 1)
-    @test conj(A) == fill(2-2im, 1, 1)
-    conj!(A)
-    @test A == fill(2-2im, 1, 1)
-end
-
 @testset "issue #31453" for T in [UInt8, Int8, UInt16, Int16, UInt32, Int32]
     i = Int[1, 2]
     j = Int[2, 1]
@@ -2945,14 +2906,8 @@ end
     @test_throws ArgumentError SparseMatrixCSC(10, 3, [1,2,1,2], Int[], Float64[])
     # rowwal (and nzval) short
     @test_throws ArgumentError SparseMatrixCSC(10, 3, [1,2,2,4], [1,2], Float64[])
-    # nzval short
-    @test SparseMatrixCSC(10, 3, [1,2,2,4], [1,2,3], Float64[]) !== nothing
-    # length(rowval) >= typemax
-    @test_throws ArgumentError SparseMatrixCSC(5, 1, Int8[1,2], fill(Int8(1),127), Int[1,2,3])
-    @test SparseMatrixCSC{Int,Int8}(5, 1, Int8[1,2], fill(Int8(1),127), Int[1,2,3]) != 0
     # length(nzval) >= typemax
-    @test_throws ArgumentError SparseMatrixCSC(5, 1, Int8[1,2], Int8[1], fill(7, 127))
-    @test SparseMatrixCSC{Int,Int8}(5, 1, Int8[1,2], Int8[1], fill(7, 127)) != 0
+    @test_throws ArgumentError SparseMatrixCSC(5, 1, Int8[1,2], fill(Int8(1), 127), fill(7, 127))
 
     # length(I) >= typemax
     @test_throws ArgumentError sparse(UInt8.(1:255), fill(UInt8(1), 255), fill(1, 255))

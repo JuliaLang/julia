@@ -15,6 +15,8 @@ New language features
 Language changes
 ----------------
 
+* `macroexpand`, `@macroexpand`, and `@macroexpand1` no longer wrap errors in a `LoadError`. To reduce breakage, `@test_throws` has been modified so that many affected tests will still pass ([#38379]].
+* The middle dot `·` (`\cdotp` U+00b7) and the Greek interpunct `·` (U+0387) are now treated as equivalent to the dot operator `⋅` (`\cdot` U+22c5) (#25157).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -111,6 +113,7 @@ Standard library changes
 
 #### SparseArrays
 
+* new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
 
 #### Dates
 
@@ -132,6 +135,9 @@ Standard library changes
 
 * `mmap` is now exported ([#39816]).
 
+#### DelimitedFiles
+
+* `readdlm` now defaults to `use_mmap=false` on all OSes for consistent reliability in abnormal filesystem situations ([#40415]).
 
 Deprecated or removed
 ---------------------

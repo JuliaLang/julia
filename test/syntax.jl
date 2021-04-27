@@ -618,15 +618,12 @@ end
 @test A15838.@f() === nothing
 @test A15838.@f(1) === :b
 let ex = :(A15838.@f(1, 2)), __source__ = LineNumberNode(@__LINE__, Symbol(@__FILE__))
-    nometh = try
+    e = try
         macroexpand(@__MODULE__, ex)
         false
     catch ex
         ex
-    end::LoadError
-    @test nometh.file === string(__source__.file)
-    @test nometh.line === __source__.line
-    e = nometh.error::MethodError
+    end::MethodError
     @test e.f === getfield(A15838, Symbol("@f"))
     @test e.args === (__source__, @__MODULE__, 1, 2)
 end
@@ -822,7 +819,7 @@ let f = function (x; kw...)
 end
 
 # normalization of Unicode symbols (#19464)
-let ε=1, μ=2, x=3, î=4
+let ε=1, μ=2, x=3, î=4, ⋅=5
     # issue #5434 (mu vs micro):
     @test Meta.parse("\u00b5") === Meta.parse("\u03bc")
     @test µ == μ == 2
@@ -832,6 +829,9 @@ let ε=1, μ=2, x=3, î=4
     # latin vs greek ε (#14751)
     @test Meta.parse("\u025B") === Meta.parse("\u03B5")
     @test ɛ == ε == 1
+    # middot char · or · vs math dot operator ⋅ (#25098)
+    @test Meta.parse("\u00b7") === Meta.parse("\u0387") === Meta.parse("\u22c5")
+    @test (·) == (·) == (⋅) == 5
 end
 
 # issue #8925

@@ -276,6 +276,8 @@ the `zip` iterator is a tuple of values of its subiterators.
     `zip` orders the calls to its subiterators in such a way that stateful iterators will
     not advance when another iterator finishes in the current iteration.
 
+See also: [`enumerate`](@ref), [`splat`](@ref Base.splat).
+
 # Examples
 ```jldoctest
 julia> a = 1:5
@@ -429,6 +431,12 @@ julia> foreach(println, f)
 1
 3
 5
+
+julia> [x for x in [1, 2, 3, 4, 5] if isodd(x)]  # collects a generator over Iterators.filter
+3-element Vector{Int64}:
+ 1
+ 3
+ 5
 ```
 """
 filter(flt, itr) = Filter(flt, itr)
@@ -526,6 +534,8 @@ end
 
 An iterator that yields the same elements as `iter`, but starting at the given `state`.
 
+See also: [`Iterators.drop`](@ref), [`Iterators.peel`](@ref), [`Base.rest`](@ref).
+
 # Examples
 ```jldoctest
 julia> collect(Iterators.rest([1,2,3,4], 2))
@@ -543,6 +553,8 @@ rest(itr) = itr
     peel(iter)
 
 Returns the first element and an iterator over the remaining elements.
+
+See also: [`Iterators.drop`](@ref), [`Iterators.take`](@ref).
 
 # Examples
 ```jldoctest
@@ -621,6 +633,8 @@ end
     take(iter, n)
 
 An iterator that generates at most the first `n` elements of `iter`.
+
+See also: [`drop`](@ref Iterators.drop), [`peel`](@ref Iterators.peel), [`first`](@ref), [`take!`](@ref).
 
 # Examples
 ```jldoctest
@@ -833,6 +847,8 @@ end
 An iterator that cycles through `iter` forever.
 If `iter` is empty, so is `cycle(iter)`.
 
+See also: [`Iterators.repeated`](@ref), [`repeat`](@ref).
+
 # Examples
 ```jldoctest
 julia> for (i, v) in enumerate(Iterators.cycle("hello"))
@@ -872,6 +888,8 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
+See also: [`Iterators.cycle`](@ref), [`repeat`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = Iterators.repeated([1 2], 4);
@@ -907,12 +925,17 @@ Return an iterator over the product of several iterators. Each generated element
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
 changes the fastest.
 
+See also: [`zip`](@ref), [`Iterators.flatten`](@ref).
+
 # Examples
 ```jldoctest
 julia> collect(Iterators.product(1:2, 3:5))
 2×3 Matrix{Tuple{Int64, Int64}}:
  (1, 3)  (1, 4)  (1, 5)
  (2, 3)  (2, 4)  (2, 5)
+
+julia> ans == [(x,y) for x in 1:2, y in 3:5]  # collects a generator involving Iterators.product
+true
 ```
 """
 product(iters...) = ProductIterator(iters)
@@ -1042,6 +1065,15 @@ julia> collect(Iterators.flatten((1:2, 8:9)))
  2
  8
  9
+
+julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving Iterators.flatten
+6-element Vector{Tuple{Int64, Char}}:
+ (0, 'a')
+ (0, 'b')
+ (0, 'c')
+ (1, 'a')
+ (1, 'b')
+ (1, 'c')
 ```
 """
 flatten(itr) = Flatten(itr)
@@ -1316,7 +1348,7 @@ See also: [`first`](@ref), [`last`](@ref).
     @boundscheck if i === nothing
         throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
     end
-    (ret, state) = i
+    (ret, state) = i::NTuple{2,Any}
     @boundscheck if iterate(x, state) !== nothing
         throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
     end

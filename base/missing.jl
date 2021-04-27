@@ -12,7 +12,7 @@ where it is not supported. The error message, in the `msg` field
 may provide more specific details.
 """
 struct MissingException <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 showerror(io::IO, ex::MissingException) =
@@ -200,6 +200,8 @@ Use [`collect`](@ref) to obtain an `Array` containing the non-`missing` values i
 `itr`. Note that even if `itr` is a multidimensional array, the result will always
 be a `Vector` since it is not possible to remove missings while preserving dimensions
 of the input.
+
+See also [`coalesce`](@ref), [`ismissing`](@ref), [`something`](@ref).
 
 # Examples
 ```jldoctest
@@ -404,7 +406,7 @@ end
 Return the first value in the arguments which is not equal to [`missing`](@ref),
 if any. Otherwise return `missing`.
 
-See also [`something`](@ref).
+See also [`skipmissing`](@ref), [`something`](@ref).
 
 # Examples
 

@@ -224,7 +224,7 @@ function lookup_doc(ex)
             op = str[1:end-1]
             eq = isdotted ? ".=" : "="
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
-        elseif isdotted
+        elseif isdotted && ex !== :(..)
             op = str[2:end]
             return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
         end

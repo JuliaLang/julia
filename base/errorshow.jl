@@ -9,7 +9,7 @@ This method is used to display the exception after a call to [`throw`](@ref).
 # Examples
 ```jldoctest
 julia> struct MyException <: Exception
-           msg::AbstractString
+           msg::String
        end
 
 julia> function Base.showerror(io::IO, err::MyException)
@@ -313,7 +313,6 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
@@ -885,3 +884,5 @@ function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
         print(io, "?")
     end
 end
+
+Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
