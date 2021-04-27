@@ -387,14 +387,17 @@ get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.val
 get_value(sym::GlobalRef, fn) = get_value(sym.name, sym.mod)
 get_value(sym, fn) = (sym, true)
 
-# Return the value of a getfield call expression
-function get_value_getfield(ex::Expr, fn)
-    # Example :((top(getfield))(Base,:max))
-    val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
-    (found && length(ex.args) >= 3) || return (nothing, false)
-    return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
+# Return the type of a getfield call expression
+function get_type_getfield(ex::Expr, fn::Module)
+    length(ex.args) == 3 || return Any, false # should never happen, but just for safety
+    obj, x = ex.args[2:3]
+    objt, found = get_type_getfield(obj, fn)
+    found || return Any, false
+    fld = isa(x, QuoteNode) ? x.value : x
+    isdefined(objt, fld) || return Any, false
+    return fieldtype(objt, fld), true
 end
-get_value_getfield(sym, fn) = get_value(sym, fn)
+get_type_getfield(@nospecialize(sym), fn) = get_type(sym, fn)
 
 # Determines the return type with Base.return_types of a function call using the type information of the arguments.
 function get_type_call(expr::Expr)
@@ -424,7 +427,7 @@ function get_type_call(expr::Expr)
     return (return_type, true)
 end
 
-# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
+# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (SubString{String}, true)
 function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
     found && return Core.Typeof(val), found
@@ -432,10 +435,8 @@ function try_get_type(sym::Expr, fn::Module)
         # getfield call is special cased as the evaluation of getfield provides good type information,
         # is inexpensive and it is also performed in the complete_symbol function.
         a1 = sym.args[1]
-        if isa(a1,GlobalRef) && isconst(a1.mod,a1.name) && isdefined(a1.mod,a1.name) &&
-            eval(a1) === Core.getfield
-            val, found = get_value_getfield(sym, Main)
-            return found ? Core.Typeof(val) : Any, found
+        if a1 === :getfield || a1 === GlobalRef(Core, :getfield)
+            return get_type_getfield(sym, fn)
         end
         return get_type_call(sym)
     elseif sym.head === :thunk
