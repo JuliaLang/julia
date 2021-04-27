@@ -49,7 +49,6 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
             a_1 = size(a, 1)
             @testset "QR decomposition (without pivoting)" begin
                 qra   = @inferred qr(a)
-                @inferred qr(a)
                 q, r  = qra.Q, qra.R
                 @test_throws ErrorException qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)

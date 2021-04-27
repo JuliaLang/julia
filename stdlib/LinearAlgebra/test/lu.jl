@@ -61,7 +61,7 @@ dimg  = randn(n)/2
         lua   = factorize(a)
         @test_throws ErrorException lua.Z
         l,u,p = lua.L, lua.U, lua.p
-        ll,ul,pl = lu(a)
+        ll,ul,pl = @inferred lu(a)
         @test ll * ul ≈ a[pl,:]
         @test l*u ≈ a[p,:]
         @test (l*u)[invperm(p),:] ≈ a
@@ -85,9 +85,9 @@ dimg  = randn(n)/2
     end
     κd    = cond(Array(d),1)
     @testset "Tridiagonal LU" begin
-        lud   = lu(d)
+        lud   = @inferred lu(d)
         @test LinearAlgebra.issuccess(lud)
-        @test lu(lud) == lud
+        @test @inferred(lu(lud)) == lud
         @test_throws ErrorException lud.Z
         @test lud.L*lud.U ≈ lud.P*Array(d)
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
@@ -199,14 +199,14 @@ dimg  = randn(n)/2
             @test lua.L*lua.U ≈ lua.P*a[:,1:n1]
         end
         @testset "Fat LU" begin
-            lua   = lu(a[1:n1,:])
+            lua   = @inferred lu(a[1:n1,:])
             @test lua.L*lua.U ≈ lua.P*a[1:n1,:]
         end
     end
 
     @testset "LU of Symmetric/Hermitian" begin
         for HS in (Hermitian(a'a), Symmetric(a'a))
-            luhs = lu(HS)
+            luhs = @inferred lu(HS)
             @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
