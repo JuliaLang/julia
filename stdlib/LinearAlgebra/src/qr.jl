@@ -246,7 +246,7 @@ function qrfactPivotedUnblocked!(A::AbstractMatrix)
 end
 
 # LAPACK version
-@inline function qr!(A::StridedMatrix{<:BlasFloat}, pivot::Symbol = :none; blocksize=36)
+Base.@aggressive_constprop function qr!(A::StridedMatrix{<:BlasFloat}, pivot::Symbol = :none; blocksize=36)
     if pivot === :none
         return QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), blocksize))...)
     elseif pivot === :colnorm
@@ -298,7 +298,7 @@ Stacktrace:
 [...]
 ```
 """
-@inline function qr!(A::AbstractMatrix, pivot::Symbol = :none)
+Base.@aggressive_constprop function qr!(A::AbstractMatrix, pivot::Symbol = :none)
     if pivot === :none
         return qrfactUnblocked!(A)
     elseif pivot === :colnorm
@@ -308,8 +308,8 @@ Stacktrace:
     end
 end
 # TODO: Remove/deprecate towards Julia v2.0
-@inline qr!(A::AbstractMatrix, ::Val{true}) = qr!(A, :colnorm)
-@inline qr!(A::AbstractMatrix, ::Val{false}) = qr!(A, :none)
+qr!(A::AbstractMatrix, ::Val{true}) = qr!(A, :colnorm)
+qr!(A::AbstractMatrix, ::Val{false}) = qr!(A, :none)
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
@@ -391,14 +391,14 @@ true
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
 """
-@inline function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
+Base.@aggressive_constprop function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
     return qr!(AA, arg...; kwargs...)
 end
-@inline qr(A::AbstractMatrix, ::Val{false}; kwargs...) = qr(A, :none; kwargs...)
-@inline qr(A::AbstractMatrix, ::Val{true}; kwargs...) = qr(A, :colnorm; kwargs...)
+qr(A::AbstractMatrix, ::Val{false}; kwargs...) = qr(A, :none; kwargs...)
+qr(A::AbstractMatrix, ::Val{true}; kwargs...) = qr(A, :colnorm; kwargs...)
 
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)
