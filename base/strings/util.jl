@@ -414,6 +414,7 @@ struct SplitIterator{S<:AbstractString,F}
     str::S
     splitter::F
     limit::Int
+    keepempty::Bool
 end
 
 eltype(::Type{<:SplitIterator}) = SubString
@@ -426,30 +427,34 @@ IteratorSize(::Type{<:SplitIterator}) = SizeUnknown()
 function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstindex(iter.str), 0))
     i - 1 > ncodeunits(iter.str)::Int && return nothing
     r = findnext(iter.splitter, iter.str, k)::Union{Nothing,Int,UnitRange{Int}}
-    while r !== nothing && n != iter.limit - 1 && first(r) <= lastindex(iter.str)
+    while r !== nothing && n != iter.limit - 1 && first(r) <= ncodeunits(iter.str)
         j, k = first(r), nextind(iter.str, last(r))::Int
         k_ = k <= j ? nextind(iter.str, j) : k
         if i < k
             substr = @inbounds SubString(iter.str, i, prevind(iter.str, j)::Int)
-            return (substr, (max(i, k), k_, n + Int(i < j)))
+            (iter.keepempty || i < j) && return (substr, (k, k_, n + 1))
+            i = k
         end
         k = k_
         r = findnext(iter.splitter, iter.str, k)::Union{Nothing,Int,UnitRange{Int}}
     end
+    iter.keepempty || i <= ncodeunits(iter.str) || return nothing
     @inbounds SubString(iter.str, i), (ncodeunits(iter.str) + 2, k, n + 1)
 end
 
-eachsplit(str::T, splitter; limit::Integer=0) where {T<:AbstractString} =
-    SplitIterator(str, splitter, limit)
+eachsplit(str::T, splitter; limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString} =
+    SplitIterator(str, splitter, limit, keepempty)
 
-eachsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}; limit::Integer=0) where {T<:AbstractString} =
-    eachsplit(str, in(splitter); limit)
+eachsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+          limit::Integer=0, keepempty=true) where {T<:AbstractString} =
+    eachsplit(str, in(splitter); limit, keepempty)
 
-eachsplit(str::T, splitter::AbstractChar; limit::Integer=0) where {T<:AbstractString} =
-    eachsplit(str, isequal(splitter); limit)
+eachsplit(str::T, splitter::AbstractChar; limit::Integer=0, keepempty=true) where {T<:AbstractString} =
+    eachsplit(str, isequal(splitter); limit, keepempty)
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
-eachsplit(str::AbstractString; limit::Integer=0) = eachsplit(str, isspace; limit)
+eachsplit(str::AbstractString; limit::Integer=0, keepempty=false) =
+    eachsplit(str, isspace; limit, keepempty)
 
 """
     split(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
@@ -482,15 +487,14 @@ julia> split(a, ".")
 """
 function split(str::T, splitter;
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    itr = eachsplit(str, splitter; limit)
-    keepempty || (itr = Iterators.filter(!isempty, itr))
+    itr = eachsplit(str, splitter; limit, keepempty)
     collect(T <: SubString ? T : SubString{T}, itr)
 end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    split(str, isspace; limit=limit, keepempty=keepempty)
+    split(str, isspace; limit, keepempty)
 
 """
     rsplit(s::AbstractString; limit::Integer=0, keepempty::Bool=false)
