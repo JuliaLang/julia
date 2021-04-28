@@ -85,6 +85,7 @@ Standard library changes
   @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T))) broken=(T == Float64)
   ```
   ([#39322])
+* `@lock` and `@lock_nofail` are now exported from Base ([#39588]).
 
 #### Package Manager
 
