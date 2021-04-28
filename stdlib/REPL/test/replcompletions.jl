@@ -1109,3 +1109,10 @@ let s = "test_dict[\"ab"
     c, r = test_complete_context(s)
     @test c == Any["\"abc\"", "\"abcd\""]
 end
+
+# https://github.com/JuliaLang/julia/issues/27184
+let
+    (test_complete("@noexist."); @test true)
+    (test_complete("Main.@noexist."); @test true)
+    (test_complete("@Main.noexist."); @test true)
+end
