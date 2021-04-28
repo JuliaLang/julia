@@ -1667,6 +1667,11 @@ end
     @test summary(p) == "2-element reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32}) with eltype Tuple{Float32, Float32}"
     @test Base.showarg(io, p, false) === nothing
     @test String(take!(io)) == "reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32})"
+
+    r = Base.IdentityUnitRange(2:2)
+    B = @view ones(2)[r]
+    Base.showarg(io, B, false)
+    @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
 end
 
 @testset "Methods" begin
