@@ -676,6 +676,7 @@ export
     istaskfailed,
     lock,
     @lock,
+    @lock_nofail,
     notify,
     ReentrantLock,
     schedule,
