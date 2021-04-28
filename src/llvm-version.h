@@ -9,11 +9,8 @@
 #define JL_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 \
                         + LLVM_VERSION_PATCH)
 
-#if JL_LLVM_VERSION < 90000
-    #error Only LLVM versions >= 9.0.0 are supported by Julia
-#endif
-#if JL_LLVM_VERSION < 100000
-#define Align(a) (a)
+#if JL_LLVM_VERSION < 110000
+    #error Only LLVM versions >= 11.0.0 are supported by Julia
 #endif
 
 #ifndef LLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING

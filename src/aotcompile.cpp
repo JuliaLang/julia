@@ -47,9 +47,7 @@
 #include <llvm/MC/MCStreamer.h>
 #include <llvm/MC/MCAsmBackend.h>
 #include <llvm/MC/MCCodeEmitter.h>
-#if JL_LLVM_VERSION >= 100000
 #include <llvm/Support/CodeGen.h>
-#endif
 
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -61,12 +59,6 @@ using namespace llvm;
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
 }
-
-#if JL_LLVM_VERSION < 100000
-static const TargetMachine::CodeGenFileType CGFT_ObjectFile = TargetMachine::CGFT_ObjectFile;
-static const TargetMachine::CodeGenFileType CGFT_AssemblyFile = TargetMachine::CGFT_AssemblyFile;
-#endif
-
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -946,23 +938,14 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
     TargetPassConfig *PassConfig = TM->createPassConfig(PM);
     PassConfig->setDisableVerify(false);
     PM.add(PassConfig);
-#if JL_LLVM_VERSION >= 100000
     MachineModuleInfoWrapperPass *MMIWP =
         new MachineModuleInfoWrapperPass(TM);
     PM.add(MMIWP);
-#else
-    MachineModuleInfo *MMI = new MachineModuleInfo(TM);
-    PM.add(MMI);
-#endif
     if (PassConfig->addISelPasses())
         return NULL;
     PassConfig->addMachinePasses();
     PassConfig->setInitialized();
-#if JL_LLVM_VERSION >= 100000
     return &MMIWP->getMMI().getContext();
-#else
-    return &MMI->getContext();
-#endif
 }
 
 void jl_strip_llvm_debug(Module *m);
@@ -1003,11 +986,7 @@ jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, const char *debug
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
-#if JL_LLVM_VERSION >= 100000
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
-#else
-            auto FOut = llvm::make_unique<formatted_raw_ostream>(asmfile);
-#endif
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
                 *Context, std::move(FOut), true,
                 true, InstPrinter,
