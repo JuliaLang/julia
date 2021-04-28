@@ -53,7 +53,7 @@ JL_CALLABLE(jl_new_opaque_closure_jlcall)
 
 
 // check whether the specified number of arguments is compatible with the
-// specified number of paramters of the tuple type
+// specified number of parameters of the tuple type
 STATIC_INLINE int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTSAFEPOINT
 {
     v = jl_unwrap_unionall(v);
