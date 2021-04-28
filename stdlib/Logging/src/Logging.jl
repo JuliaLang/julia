@@ -29,6 +29,9 @@ for sym in [
     @eval const $sym = Base.CoreLogging.$sym
 end
 
+using Base.CoreLogging:
+    closed_stream
+
 export
     AbstractLogger,
     LogLevel,
@@ -56,7 +59,7 @@ include("ConsoleLogger.jl")
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
 
 function __init__()
-    global_logger(ConsoleLogger(stderr))
+    global_logger(ConsoleLogger())
 end
 
 end

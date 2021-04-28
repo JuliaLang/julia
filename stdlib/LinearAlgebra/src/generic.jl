@@ -1109,6 +1109,8 @@ When `A` is sparse, a similar polyalgorithm is used. For indefinite matrices, th
 factorization does not use pivoting during the numerical factorization and therefore the
 procedure can fail even for invertible matrices.
 
+See also: [`factorize`](@ref), [`pinv`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 0; 1 -2]; B = [32; -4];
@@ -1528,6 +1530,8 @@ end
     det(M)
 
 Matrix determinant.
+
+See also: [`logdet`](@ref) and [`logabsdet`](@ref).
 
 # Examples
 ```jldoctest

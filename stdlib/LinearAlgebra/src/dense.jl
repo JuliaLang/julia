@@ -75,7 +75,8 @@ isposdef!(A::AbstractMatrix) =
 
 Test whether a matrix is positive definite (and Hermitian) by trying to perform a
 Cholesky factorization of `A`.
-See also [`isposdef!`](@ref)
+
+See also [`isposdef!`](@ref), [`cholesky`](@ref).
 
 # Examples
 ```jldoctest
@@ -205,6 +206,8 @@ diagind(m::Integer, n::Integer, k::Integer=0) =
 
 An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 
+See also: [`diag`](@ref), [`diagm`](@ref), [`Diagonal`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
@@ -227,7 +230,7 @@ end
 
 The `k`th diagonal of a matrix, as a vector.
 
-See also: [`diagm`](@ref)
+See also: [`diagm`](@ref), [`diagind`](@ref), [`Diagonal`](@ref), [`isdiag`](@ref).
 
 # Examples
 ```jldoctest
@@ -556,6 +559,8 @@ julia> exp(A)
 """
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
+exp(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(exp(parent(A)))
+exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
 
 """
     cis(A::AbstractMatrix)
@@ -759,6 +764,9 @@ function log(A::StridedMatrix)
     end
 end
 
+log(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(log(parent(A)))
+log(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(log(parent(A)))
+
 """
     sqrt(A::AbstractMatrix)
 
@@ -833,6 +841,9 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
         return SchurF.vectors * sqrt(UpperTriangular(SchurF.T)) * SchurF.vectors'
     end
 end
+
+sqrt(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(sqrt(parent(A)))
+sqrt(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)

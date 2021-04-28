@@ -9,7 +9,7 @@ This method is used to display the exception after a call to [`throw`](@ref).
 # Examples
 ```jldoctest
 julia> struct MyException <: Exception
-           msg::AbstractString
+           msg::String
        end
 
 julia> function Base.showerror(io::IO, err::MyException)
@@ -92,7 +92,7 @@ function showerror(io::IO, ex, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
-    print(io, "LoadError: ")
+    !isa(ex.error, LoadError) && print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
     print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
@@ -313,7 +313,6 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
@@ -876,7 +875,7 @@ function show(io::IO, ip::InterpreterIP)
 end
 
 # handler for displaying a hint in case the user tries to call
-# the instance of a number(misses out hte operator)
+# the instance of a number (probably missing the operator)
 # eg: (1 + 2)(3 + 4)
 function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
     if ex.f isa Number
@@ -885,3 +884,5 @@ function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
         print(io, "?")
     end
 end
+
+Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)

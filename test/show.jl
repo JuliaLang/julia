@@ -1667,6 +1667,11 @@ end
     @test summary(p) == "2-element reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32}) with eltype Tuple{Float32, Float32}"
     @test Base.showarg(io, p, false) === nothing
     @test String(take!(io)) == "reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32})"
+
+    r = Base.IdentityUnitRange(2:2)
+    B = @view ones(2)[r]
+    Base.showarg(io, B, false)
+    @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
 end
 
 @testset "Methods" begin
@@ -1904,7 +1909,7 @@ h_line() = f_line()
 @test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
 
 
-eval(Meta.parse("""function my_fun28173(x)
+eval(Meta._parse_string("""function my_fun28173(x)
     y = if x == 1
             "HI"
         elseif x == 2
@@ -1921,7 +1926,7 @@ eval(Meta.parse("""function my_fun28173(x)
             "three"
         end
     return y
-end""")) # use parse to control the line numbers
+end""", "a"^80, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
@@ -1931,13 +1936,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
         @test repr(src) == repr_ir
     end
     lines1 = split(repr(ir), '\n')
-    @test isempty(pop!(lines1))
+    @test all(isspace, pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(1), Val{1}), false)
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(2), Val{2}), true)
     Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
     Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
     lines2 = split(repr(ir), '\n')
-    @test isempty(pop!(lines2))
+    @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
     @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
     let line1 = popfirst!(lines1)
@@ -1958,9 +1963,9 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
 
     # verbose linetable
     io = IOBuffer()
-    Base.IRShow.show_ir(io, ir; verbose_linetable=true)
+    Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
-    @test count(contains(r"my_fun28173 at none:\d+"), eachline(io)) == 9
+    @test count(contains(r"my_fun28173 at a{80}:\d+"), eachline(io)) == 9
 end
 
 # Verify that extra instructions at the end of the IR
@@ -1970,7 +1975,7 @@ let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     push!(ir.stmts.inst, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
-    @test isempty(pop!(lines))
+    @test all(isspace, pop!(lines))
     @test pop!(lines) == "   !!! ──       unreachable::#UNDEF"
 end
 

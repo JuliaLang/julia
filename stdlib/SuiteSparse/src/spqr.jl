@@ -52,7 +52,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
          Ptr{CHOLMOD.C_Sparse{Tv}}, Ptr{CHOLMOD.C_Sparse{Tv}}, Ptr{CHOLMOD.C_Dense{Tv}},
          Ptr{Ptr{CHOLMOD.C_Sparse{Tv}}}, Ptr{Ptr{CHOLMOD.C_Dense{Tv}}}, Ptr{Ptr{CHOLMOD.C_Sparse{Tv}}},
          Ptr{Ptr{CHOLMOD.SuiteSparse_long}}, Ptr{Ptr{CHOLMOD.C_Sparse{Tv}}}, Ptr{Ptr{CHOLMOD.SuiteSparse_long}},
-         Ptr{Ptr{CHOLMOD.C_Dense{Tv}}}, Ptr{Cvoid}),
+         Ptr{Ptr{CHOLMOD.C_Dense{Tv}}}, Ptr{CHOLMOD.Common}),
         ordering,       # all, except 3:given treated as 0:fixed
         tol,            # columns with 2-norm <= tol treated as 0
         econ,           # e = max(min(m,econ),rank(A))
@@ -68,7 +68,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         H,              # m-by-nh Householder vectors
         HPinv,          # size m row permutation
         HTau,           # 1-by-nh Householder coefficients
-        CHOLMOD.common_struct[Threads.threadid()]) # /* workspace and parameters */
+        CHOLMOD.common[Threads.threadid()]) # /* workspace and parameters */
 
     if rnk < 0
         error("Sparse QR factorization failed")
@@ -86,8 +86,8 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # correct deallocator function is called and that the memory count in
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Cvoid,
-            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
-            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common_struct[Threads.threadid()])
+            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{CHOLMOD.Common}),
+            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common[Threads.threadid()])
     end
     hpinv = HPinv[]
     if hpinv == C_NULL
@@ -101,8 +101,8 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # correct deallocator function is called and that the memory count in
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Cvoid,
-            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Cvoid}),
-            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common_struct[Threads.threadid()])
+            (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{CHOLMOD.Common}),
+            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common[Threads.threadid()])
     end
 
     return rnk, _E, _HPinv

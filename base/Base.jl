@@ -213,12 +213,11 @@ include("methodshow.jl")
 include("cartesian.jl")
 using .Cartesian
 include("multidimensional.jl")
-include("permuteddimsarray.jl")
-using .PermutedDimsArrays
 
 include("broadcast.jl")
 using .Broadcast
-using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!
+using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!,
+                  broadcast_preserving_zero_d, andand, oror
 
 # missing values
 include("missing.jl")
@@ -292,6 +291,9 @@ end
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
 include("accumulate.jl")
+
+include("permuteddimsarray.jl")
+using .PermutedDimsArrays
 
 # basic data structures
 include("ordering.jl")

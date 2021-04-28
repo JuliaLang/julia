@@ -793,14 +793,7 @@ end
 
 # Issue #13905.
 let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
-    __source__ = LineNumberNode(@__LINE__() -  1, Symbol(@__FILE__))
-    err::LoadError
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    err = err.error::LoadError
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    err = err.error::UndefVarError
+    err::UndefVarError
     @test err.var == Symbol("@x")
  end
 
@@ -863,11 +856,9 @@ undocumented(x,y) = 3
 end # module
 
 doc_str = Markdown.parse("""
-No documentation found.
+No docstring or readme file found for module `$(curmod_prefix)Undocumented`.
 
-No docstring found for module `$(curmod_prefix)Undocumented`.
-
-# Exported names:
+# Exported names
 
 `A`, `B`, `C`, `at0`, `pt2`
 """)
