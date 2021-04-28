@@ -198,7 +198,7 @@ function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
 end
 
 # Find index for columns with largest two norm
-function indmaxcolumn(A::StridedMatrix)
+function indmaxcolumn(A::AbstractMatrix)
     mm = norm(view(A, :, 1))
     ii = 1
     for i = 2:size(A, 2)
@@ -211,7 +211,7 @@ function indmaxcolumn(A::StridedMatrix)
     return ii
 end
 
-function qrfactPivotedUnblocked!(A::StridedMatrix)
+function qrfactPivotedUnblocked!(A::AbstractMatrix)
     m, n = size(A)
     piv = Vector(UnitRange{BlasInt}(1,n))
     τ = Vector{eltype(A)}(undef, min(m,n))
@@ -287,14 +287,14 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> qr!(a)
-ERROR: InexactError: Int64(-3.1622776601683795)
+ERROR: InexactError: Int64(3.1622776601683795)
 Stacktrace:
 [...]
 ```
 """
-qr!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
-qr!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
-qr!(A::StridedMatrix) = qr!(A, Val(false))
+qr!(A::AbstractMatrix, ::Val{false}) = qrfactUnblocked!(A)
+qr!(A::AbstractMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
+qr!(A::AbstractMatrix) = qr!(A, Val(false))
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
@@ -533,6 +533,31 @@ function getindex(Q::AbstractQ, i::Integer, j::Integer)
     return dot(x, lmul!(Q, y))
 end
 
+# specialization avoiding the fallback using slow `getindex`
+function copyto!(dest::AbstractMatrix, src::AbstractQ)
+    copyto!(dest, I)
+    lmul!(src, dest)
+end
+# needed to resolve method ambiguities
+function copyto!(dest::PermutedDimsArray{T,2,perm}, src::AbstractQ) where {T,perm}
+    if perm == (1, 2)
+        copyto!(parent(dest), src)
+    else
+        @assert perm == (2, 1) # there are no other permutations of two indices
+        if T <: Real
+            copyto!(parent(dest), I)
+            lmul!(src', parent(dest))
+        else
+            # LAPACK does not offer inplace lmul!(transpose(Q), B) for complex Q
+            tmp = similar(parent(dest))
+            copyto!(tmp, I)
+            rmul!(tmp, src)
+            permutedims!(parent(dest), tmp, (2, 1))
+        end
+    end
+    return dest
+end
+
 ## Multiplication by Q
 ### QB
 lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
@@ -588,6 +613,13 @@ function (*)(A::AbstractQ, B::StridedMatrix)
         throw(DimensionMismatch("first dimension of matrix must have size either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
     end
     lmul!(Anew, Bnew)
+end
+
+function (*)(A::AbstractQ, b::Number)
+    TAb = promote_type(eltype(A), typeof(b))
+    dest = similar(A, TAb)
+    copyto!(dest, b*I)
+    lmul!(A, dest)
 end
 
 ### QcB
@@ -681,6 +713,13 @@ function (*)(A::StridedMatrix, Q::AbstractQ)
     TAQ = promote_type(eltype(A), eltype(Q))
 
     return rmul!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
+end
+
+function (*)(a::Number, B::AbstractQ)
+    TaB = promote_type(typeof(a), eltype(B))
+    dest = similar(B, TaB)
+    copyto!(dest, a*I)
+    rmul!(dest, B)
 end
 
 ### AQc

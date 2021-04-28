@@ -384,6 +384,7 @@ function get_value(sym::Expr, fn)
 end
 get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (getfield(fn, sym), true) : (nothing, false)
 get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.value), true) : (nothing, false)
+get_value(sym::GlobalRef, fn) = get_value(sym.name, sym.mod)
 get_value(sym, fn) = (sym, true)
 
 # Return the value of a getfield call expression
@@ -413,9 +414,9 @@ function get_type_call(expr::Expr)
     end
     # use _methods_by_ftype as the function is supplied as a type
     world = Base.get_world_counter()
-    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
+    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)::Vector
     length(matches) == 1 || return (Any, false)
-    match = first(matches)
+    match = first(matches)::Core.MethodMatch
     # Typeinference
     interp = Core.Compiler.NativeInterpreter()
     return_type = Core.Compiler.typeinf_type(interp, match.method, match.spec_types, match.sparams)
@@ -456,6 +457,11 @@ function get_type(sym::Expr, fn::Module)
     # try to analyze nests of calls. if this fails, try using the expanded form.
     val, found = try_get_type(sym, fn)
     found && return val, found
+    # https://github.com/JuliaLang/julia/issues/27184
+    if isexpr(sym, :macrocall)
+        _, found = get_type(first(sym.args), fn)
+        found || return Any, false
+    end
     return try_get_type(Meta.lower(fn, sym), fn)
 end
 

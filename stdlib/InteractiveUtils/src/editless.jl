@@ -62,6 +62,8 @@ already work:
 - vim
 - nvim
 - nano
+- micro
+- kak
 - textmate
 - mate
 - kate
@@ -119,7 +121,7 @@ function define_default_editors()
     end
     # Must check that emacs not running in -t/-nw before regex match for general emacs
     define_editor(Any[
-        "vim", "vi", "nvim", "mvim", "nano", "micro",
+        "vim", "vi", "nvim", "mvim", "nano", "micro", "kak",
         r"\bemacs\b.*\s(-nw|--no-window-system)\b",
         r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b",
     ], wait=true) do cmd, path, line

@@ -6,12 +6,6 @@ include $(JULIAHOME)/Make.inc
 
 TAGGED_RELEASE_BANNER := ""
 
-ifneq ($(USEMSVC), 1)
-CPP_STDOUT := $(CPP) -P
-else
-CPP_STDOUT := $(CPP) -E
-endif
-
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony features_h.jl file_constants.jl uv_constants.jl version_git.jl.phony)
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
@@ -169,53 +163,69 @@ endif
 #	echo "$$P"
 
 define symlink_system_library
-symlink_$1: $$(build_private_libdir)/$1.$$(SHLIB_EXT)
-$$(build_private_libdir)/$1.$$(SHLIB_EXT):
-	REALPATH=`$$(call spawn,$$(build_depsbindir)/libwhich) -p $$(notdir $$@)` && \
-	$$(call resolve_path,REALPATH) && \
-	[ -e "$$$$REALPATH" ] && \
-	([ ! -e "$$@" ] || rm "$$@") && \
-	echo ln -sf "$$$$REALPATH" "$$@" && \
-	ln -sf "$$$$REALPATH" "$$@"
-ifneq ($2,)
-ifneq ($$(USE_SYSTEM_$2),0)
-SYMLINK_SYSTEM_LIBRARIES += symlink_$1
-endif
+libname_$2 := $$(notdir $(call versioned_libname,$2,$3))
+libpath_$2 := $$(shell $$(call spawn,$$(build_depsbindir)/libwhich) -p $$(libname_$2) 2>/dev/null)
+symlink_$2: $$(build_private_libdir)/$$(libname_$2)
+$$(build_private_libdir)/$$(libname_$2):
+	@if [ -e "$$(libpath_$2)" ]; then \
+		REALPATH=$$(libpath_$2); \
+		$$(call resolve_path,REALPATH) && \
+		[ -e "$$$$REALPATH" ] && \
+		([ ! -e "$$@" ] || rm "$$@") && \
+		echo ln -sf "$$$$REALPATH" "$$@" && \
+		ln -sf "$$$$REALPATH" "$$@"; \
+	else \
+		if [ "$4" != "ALLOW_FAILURE" ]; then \
+			echo "System library symlink failure: Unable to locate $$(libname_$2) on your system!" >&2; \
+			false; \
+		fi; \
+	fi
+ifneq ($$(USE_SYSTEM_$1),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_$2
 endif
 endef
 
 # the following excludes: libuv.a, libutf8proc.a
 
-$(eval $(call symlink_system_library,$(LIBMNAME)))
 ifneq ($(USE_SYSTEM_LIBM),0)
-SYMLINK_SYSTEM_LIBRARIES += symlink_$(LIBMNAME)
+$(eval $(call symlink_system_library,LIBM,$(LIBMNAME)))
 else ifneq ($(USE_SYSTEM_OPENLIBM),0)
-SYMLINK_SYSTEM_LIBRARIES += symlink_$(LIBMNAME)
+$(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
-$(eval $(call symlink_system_library,libpcre2-8,PCRE))
-$(eval $(call symlink_system_library,libdSFMT,DSFMT))
-$(eval $(call symlink_system_library,$(LIBBLASNAME),BLAS))
-ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
-$(eval $(call symlink_system_library,$(LIBLAPACKNAME),LAPACK))
+$(eval $(call symlink_system_library,CSL,libgcc_s,1))
+ifneq (,$(LIBGFORTRAN_VERSION))
+$(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
 endif
-$(eval $(call symlink_system_library,libgmp,GMP))
-$(eval $(call symlink_system_library,libmpfr,MPFR))
-$(eval $(call symlink_system_library,libmbedtls,MBEDTLS))
-$(eval $(call symlink_system_library,libmbedcrypto,MBEDTLS))
-$(eval $(call symlink_system_library,libmbedx509,MBEDTLS))
-$(eval $(call symlink_system_library,libssh2,LIBSSH2))
-$(eval $(call symlink_system_library,libnghttp2,NGHTTP2))
-$(eval $(call symlink_system_library,libcurl,CURL))
-$(eval $(call symlink_system_library,libgit2,LIBGIT2))
-$(eval $(call symlink_system_library,libamd,SUITESPARSE))
-$(eval $(call symlink_system_library,libcamd,SUITESPARSE))
-$(eval $(call symlink_system_library,libccolamd,SUITESPARSE))
-$(eval $(call symlink_system_library,libcholmod,SUITESPARSE))
-$(eval $(call symlink_system_library,libcolamd,SUITESPARSE))
-$(eval $(call symlink_system_library,libumfpack,SUITESPARSE))
-$(eval $(call symlink_system_library,libspqr,SUITESPARSE))
-$(eval $(call symlink_system_library,libsuitesparseconfig,SUITESPARSE))
+$(eval $(call symlink_system_library,CSL,libquadmath,0))
+$(eval $(call symlink_system_library,CSL,libstdc++,6))
+# We allow libssp, libatomic and libgomp to fail as they are not available on all systems
+$(eval $(call symlink_system_library,CSL,libssp,0,ALLOW_FAILURE))
+$(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
+$(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
+$(eval $(call symlink_system_library,PCRE,libpcre2-8))
+$(eval $(call symlink_system_library,DSFMT,libdSFMT))
+$(eval $(call symlink_system_library,BLAS,$(LIBBLASNAME)))
+ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
+$(eval $(call symlink_system_library,LAPACK,$(LIBLAPACKNAME)))
+endif
+$(eval $(call symlink_system_library,GMP,libgmp))
+$(eval $(call symlink_system_library,MPFR,libmpfr))
+$(eval $(call symlink_system_library,MBEDTLS,libmbedtls))
+$(eval $(call symlink_system_library,MBEDTLS,libmbedcrypto))
+$(eval $(call symlink_system_library,MBEDTLS,libmbedx509))
+$(eval $(call symlink_system_library,LIBSSH2,libssh2))
+$(eval $(call symlink_system_library,NGHTTP2,libnghttp2))
+$(eval $(call symlink_system_library,CURL,libcurl))
+$(eval $(call symlink_system_library,LIBGIT2,libgit2))
+$(eval $(call symlink_system_library,SUITESPARSE,libamd))
+$(eval $(call symlink_system_library,SUITESPARSE,libcamd))
+$(eval $(call symlink_system_library,SUITESPARSE,libccolamd))
+$(eval $(call symlink_system_library,SUITESPARSE,libcholmod))
+$(eval $(call symlink_system_library,SUITESPARSE,libcolamd))
+$(eval $(call symlink_system_library,SUITESPARSE,libumfpack))
+$(eval $(call symlink_system_library,SUITESPARSE,libspqr))
+$(eval $(call symlink_system_library,SUITESPARSE,libsuitesparseconfig))
 # EXCLUDED LIBRARIES (installed/used, but not vendored for use with dlopen):
 # libunwind
 endif # WINNT

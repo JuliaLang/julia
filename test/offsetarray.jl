@@ -110,6 +110,15 @@ let a1 = [11,12,13], a2 = [1 2; 3 4]
     @test_throws BoundsError i2[1:2:5]
 end
 
+# issue #37274
+let a = 1:3
+    oa = OffsetArray(a, 0:2)
+    b = @view oa[0]
+    @test b[] == b[1] == b[1,1] == 1
+    @test_throws BoundsError b[0]
+    @test_throws BoundsError b[2]
+end
+
 # logical indexing
 @test A[A .> 2] == [3,4]
 @test_throws BoundsError h[trues(2)]
@@ -226,7 +235,7 @@ targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
             "([1.0], [1.0])"]
 @testset "printing of OffsetArray with n=$n" for n = 0:4
-    a = OffsetArray(fill(1.,ntuple(d->1,n)), ntuple(identity,n))
+    a = OffsetArray(fill(1.,ntuple(Returns(1),n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
     show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))
@@ -747,4 +756,23 @@ end
     for i in axes(ax,1)
         @test a[ax[i]] == a[ax][i]
     end
+end
+
+@testset "show OffsetMatrix" begin
+    Y = reshape(1:25, 5, 5)
+    X = OffsetArray(Y, -2:2, -4:0)
+
+    io = IOBuffer()
+    show(io, X)
+    strX = String(take!(io))
+    show(io, Y)
+    strY = String(take!(io))
+    @test strX == strY
+
+    io_limit = IOContext(io, :limit => true)
+    show(io_limit, X)
+    strX = String(take!(io))
+    show(io_limit, Y)
+    strY = String(take!(io))
+    @test strX == strY
 end

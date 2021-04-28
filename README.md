@@ -45,7 +45,6 @@ helpful to start contributing to the Julia codebase.
 
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
-- [**Meetup**](https://julia.meetup.com/)
 - [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
@@ -80,7 +79,7 @@ Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.5.3
+    git checkout v1.6.1
 
 Now run `make` to build the `julia` executable.
 

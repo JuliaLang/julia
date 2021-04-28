@@ -198,7 +198,7 @@ end
     @test collect(takewhile(<(4),1:10)) == [1,2,3]
     @test collect(takewhile(<(4),Iterators.countfrom(1))) == [1,2,3]
     @test collect(takewhile(<(4),5:10)) == []
-    @test collect(takewhile(_->true,5:10)) == 5:10
+    @test collect(takewhile(Returns(true),5:10)) == 5:10
     @test collect(takewhile(isodd,[1,1,2,3])) == [1,1]
     @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
 end
@@ -209,8 +209,8 @@ end
     @test collect(dropwhile(<(4), 1:10)) == 4:10
     @test collect(dropwhile(<(4), 1:10)) isa Vector{Int}
     @test isempty(dropwhile(<(4), []))
-    @test collect(dropwhile(_->false,1:3)) == 1:3
-    @test isempty(dropwhile(_->true, 1:3))
+    @test collect(dropwhile(Returns(false),1:3)) == 1:3
+    @test isempty(dropwhile(Returns(true), 1:3))
     @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
     @test collect(dropwhile(iseven,dropwhile(isodd,[1,1,2,3]))) == [3]
 end
@@ -381,7 +381,7 @@ let a = 1:2,
     end
 
     # size infinite or unknown raises an error
-    for itr in Any[countfrom(1), Iterators.filter(i->0, 1:10)]
+    for itr in Any[countfrom(1), Iterators.filter(Returns(0), 1:10)]
         @test_throws ArgumentError length(product(itr))
         @test_throws ArgumentError   size(product(itr))
         @test_throws ArgumentError  ndims(product(itr))
@@ -592,7 +592,7 @@ end
 end
 
 @testset "filter empty iterable #16704" begin
-    arr = filter(n -> true, 1:0)
+    arr = filter(Returns(true), 1:0)
     @test length(arr) == 0
     @test eltype(arr) == Int
 end
@@ -618,7 +618,7 @@ end
         @test isempty(d) || haskey(d, first(keys(d)))
         @test collect(v for (k, v) in d) == collect(A)
         if A isa NamedTuple
-            K = isempty(d) ? Union{} : Symbol
+            K = Symbol
             V = isempty(d) ? Union{} : Float64
             @test isempty(d) || haskey(d, :a)
             @test !haskey(d, :abc)
@@ -691,10 +691,10 @@ end
     @test eltype(Iterators.Stateful("a")) == Char
     # Interaction of zip/Stateful
     let a = Iterators.Stateful("a"), b = ""
-	@test isempty(collect(zip(a,b)))
-	@test !isempty(a)
-	@test isempty(collect(zip(b,a)))
-	@test !isempty(a)
+    @test isempty(collect(zip(a,b)))
+    @test !isempty(a)
+    @test isempty(collect(zip(b,a)))
+    @test !isempty(a)
     end
     let a = Iterators.Stateful("a"), b = "", c = Iterators.Stateful("c")
         @test isempty(collect(zip(a,b,c)))

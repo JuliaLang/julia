@@ -322,4 +322,53 @@ end
     end
 end
 
+@testset "QR factorization of Q" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        Q1, R1 = qr(randn(T,5,5))
+        Q2, R2 = qr(Q1)
+        @test Q1 ≈ Q2
+        @test R2 ≈ I
+    end
+end
+
+@testset "Generation of orthogonal matrices" begin
+    for T in (Float32, Float64)
+        n = 5
+        Q, R = qr(randn(T,n,n))
+        O = Q * Diagonal(sign.(diag(R)))
+        @test O' * O ≈ I
+    end
+end
+
+@testset "Multiplication of Q by special matrices" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        n = 5
+        Q, R = qr(randn(T,n,n))
+        Qmat = Matrix(Q)
+        D = Diagonal(randn(T,n))
+        @test Q * D ≈ Qmat * D
+        @test D * Q ≈ D * Qmat
+        J = 2*I
+        @test Q * J ≈ Qmat * J
+        @test J * Q ≈ J * Qmat
+    end
+end
+
+@testset "copyto! for Q" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        n = 5
+        Q, R = qr(randn(T,n,n))
+        Qmat = Matrix(Q)
+        dest1 = similar(Q)
+        copyto!(dest1, Q)
+        @test dest1 ≈ Qmat
+        dest2 = PermutedDimsArray(similar(Q), (1, 2))
+        copyto!(dest2, Q)
+        @test dest2 ≈ Qmat
+        dest3 = PermutedDimsArray(similar(Q), (2, 1))
+        copyto!(dest3, Q)
+        @test dest3 ≈ Qmat
+    end
+end
+
 end # module TestQR

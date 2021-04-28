@@ -11,8 +11,8 @@ const LIBPATH_list = String[]
 export p7zip
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 p7zip_path = ""
 if Sys.iswindows()
@@ -58,9 +58,9 @@ end
 
 function p7zip(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
     env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)
-	withenv(env...) do
-	    return f(p7zip_path)
-	end
+    withenv(env...) do
+        return f(p7zip_path)
+    end
 end
 function p7zip(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
     env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)
@@ -77,13 +77,16 @@ function init_p7zip_path()
             return
         end
     end
-    global p7zip_path = Sys.which(p7zip_exe)
+    global p7zip_path = something(Sys.which(p7zip_exe), p7zip_exe)
 end
 
 function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     init_p7zip_path()
+    PATH[] = dirname(p7zip_path)
+    push!(PATH_list, PATH[])
+    append!(LIBPATH_list, [joinpath(Sys.BINDIR, Base.LIBDIR, "julia"), joinpath(Sys.BINDIR, Base.LIBDIR)])
+    LIBPATH[] = join(LIBPATH_list, pathsep)
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

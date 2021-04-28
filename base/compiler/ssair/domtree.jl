@@ -244,7 +244,7 @@ function update_level!(nodes::Vector{DomTreeNode}, node::BBNumber, level::Int)
 end
 
 """
-The main Semi-NCA algrithm. Matches Figure 2.8 in [LG05]. Note that the
+The main Semi-NCA algorithm. Matches Figure 2.8 in [LG05]. Note that the
 pseudocode in [LG05] is not entirely accurate. The best way to understand
 what's happening is to read [LT79], then the description of SLT in [LG05]
 (warning: inconsistent notation), then the description of Semi-NCA.

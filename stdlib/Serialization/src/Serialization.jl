@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 14 # do not make changes without bumping the version #!
+const ser_version = 15 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -425,7 +425,12 @@ function serialize(s::AbstractSerializer, meth::Method)
         serialize(s, nothing)
     end
     if isdefined(meth, :generator)
-        serialize(s, Base._uncompressed_ast(meth, meth.generator.inferred)) # XXX: what was this supposed to do?
+        serialize(s, meth.generator)
+    else
+        serialize(s, nothing)
+    end
+    if isdefined(meth, :recursion_relation)
+        serialize(s, method.recursion_relation)
     else
         serialize(s, nothing)
     end
@@ -434,9 +439,12 @@ end
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
-    isa(linfo.def, Module) || error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
-    serialize(s, linfo.uninferred)
+    if isdefined(linfo, :uninferred)
+        serialize(s, linfo.uninferred)
+    else
+        writetag(s.io, UNDEFREF_TAG)
+    end
     serialize(s, nothing)  # for backwards compat
     serialize(s, linfo.sparam_vals)
     serialize(s, Any)  # for backwards compat
@@ -450,11 +458,19 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    state = [t.code, t.storage, t.state, t.result, t._isexception]
     writetag(s.io, TASK_TAG)
-    for fld in state
-        serialize(s, fld)
+    serialize(s, t.code)
+    serialize(s, t.storage)
+    serialize(s, t.state)
+    if t._isexception && (stk = Base.catch_stack(t); !isempty(stk))
+        # the exception stack field is hidden inside the task, so if there
+        # is any information there make a CapturedException from it instead.
+        # TODO: Handle full exception chain, not just the first one.
+        serialize(s, CapturedException(stk[1][1], stk[1][2]))
+    else
+        serialize(s, t.result)
     end
+    serialize(s, t._isexception)
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
@@ -1007,6 +1023,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         template = template_or_is_opaque
     end
     generator = deserialize(s)
+    recursion_relation = nothing
+    if format_version(s) >= 15
+        recursion_relation = deserialize(s)
+    end
     if makenew
         meth.module = mod
         meth.name = name
@@ -1027,11 +1047,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         end
         meth.slot_syms = slot_syms
         if generator !== nothing
-            linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
-            linfo.specTypes = Tuple
-            linfo.inferred = generator
-            linfo.def = meth
-            meth.generator = linfo
+            meth.generator = generator
+        end
+        if recursion_relation !== nothing
+            meth.recursion_relation = recursion_relation
         end
         if !is_for_opaque_closure
             mt = ccall(:jl_method_table_for, Any, (Any,), sig)
@@ -1047,7 +1066,10 @@ end
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
-    linfo.uninferred = deserialize(s)::CodeInfo
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        linfo.uninferred = handle_deserialize(s, tag)::CodeInfo
+    end
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
         # for reading files prior to v1.2
@@ -1056,7 +1078,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo.sparam_vals = deserialize(s)::SimpleVector
     _rettype = deserialize(s)  # for backwards compat
     linfo.specTypes = deserialize(s)
-    linfo.def = deserialize(s)::Module
+    linfo.def = deserialize(s)
     return linfo
 end
 
@@ -1289,6 +1311,8 @@ function deserialize_typename(s::AbstractSerializer, number)
                 tn.mt.kwsorter = kws
             end
         end
+    elseif makenew
+        tn.mt = Symbol.name.mt
     end
     return tn::Core.TypeName
 end

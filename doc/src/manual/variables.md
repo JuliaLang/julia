@@ -90,7 +90,7 @@ julia> sqrt = 4
 ERROR: cannot assign a value to variable Base.sqrt from module Main
 ```
 
-## Allowed Variable Names
+## [Allowed Variable Names](@id man-allowed-variable-names)
 
 Variable names must begin with a letter (A-Z or a-z), underscore, or a subset of Unicode code
 points greater than 00A0; in particular, [Unicode character categories](http://www.fileformat.info/info/unicode/category/index.htm)
@@ -110,6 +110,19 @@ A space is required between an operator that ends with a subscript/superscript l
 variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
 it from `+ ᵃx` where `ᵃx` is the variable name.
 
+
+A particular class of variable names is one that contains only underscores. These identifiers can only be assigned values but cannot be used to assign values to other variables.
+More technically, they can only be used as an [L-value](https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue), but not as an
+ [R-value](https://en.wikipedia.org/wiki/R-value):
+
+```julia-repl
+julia> x, ___ = size([2 2; 1 1])
+(2, 2)
+
+julia> y = ___
+ERROR: syntax: all-underscore identifier used as rvalue
+```
+
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
 
 ```julia-repl
@@ -123,9 +136,13 @@ ERROR: syntax: unexpected "="
 Some Unicode characters are considered to be equivalent in identifiers.
 Different ways of entering Unicode combining characters (e.g., accents)
 are treated as equivalent (specifically, Julia identifiers are [NFC](http://www.macchiato.com/unicode/nfc-faq)-normalized).
-The Unicode characters `ɛ` (U+025B: Latin small letter open e)
-and `µ` (U+00B5: micro sign) are treated as equivalent to the corresponding
-Greek letters, because the former are easily accessible via some input methods.
+Julia also includes a few non-standard equivalences for characters that are
+visually similar and are easily entered by some input methods. The Unicode
+characters `ɛ` (U+025B: Latin small letter open e) and `µ` (U+00B5: micro sign)
+are treated as equivalent to the corresponding Greek letters. The middle dot
+`·` (U+00B7) and the Greek
+[interpunct](https://en.wikipedia.org/wiki/Interpunct) `·` (U+0387) are both
+treated as the mathematical dot operator `⋅` (U+22C5).
 
 ## Stylistic Conventions
 

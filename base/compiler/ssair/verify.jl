@@ -14,13 +14,13 @@ end
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
-            def_bb = block_for_inst(ir.cfg, ir.new_nodes[op.id - length(ir.stmts)].pos)
+            def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
         else
             def_bb = block_for_inst(ir.cfg, op.id)
         end
         if (def_bb == use_bb)
             if op.id > length(ir.stmts)
-                @assert ir.new_nodes[op.id - length(ir.stmts)].pos <= use_idx
+                @assert ir.new_nodes.info[op.id - length(ir.stmts)].pos <= use_idx
             else
                 if op.id >= use_idx
                     @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"
@@ -36,7 +36,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             end
         end
     elseif isa(op, GlobalRef)
-        if !isdefined(op.mod, op.name)
+        if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
             @verify_error "Unbound GlobalRef not allowed in value position"
             error("")
         end
@@ -111,7 +111,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
             end
         elseif isexpr(terminator, :enter)
             @label enter_check
-            if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
+            if length(block.succs) != 2 || (block.succs != Int[terminator.args[1], idx+1] && block.succs != Int[idx+1, terminator.args[1]])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error("")
             end

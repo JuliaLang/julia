@@ -1244,7 +1244,7 @@ extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p) JL_NOTSAFEPOINT
     return jl_jit_events->lookupLinfo((size_t)p);
 }
 
-#if (defined(_OS_LINUX_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
 extern "C" void __register_frame(void*);
 extern "C" void __deregister_frame(void*);
 
@@ -1315,7 +1315,7 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
     });
 }
 
-#elif defined(_OS_LINUX_) && \
+#elif (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && \
     defined(JL_UNW_HAS_FORMAT_IP) && \
     !defined(_CPU_ARM_) // ARM does not have/use .eh_frame, so we handle this elsewhere
 #include <type_traits>

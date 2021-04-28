@@ -105,7 +105,7 @@ end
         @test searchsorted(fill(R(1), 15), T(1), 6, 10, Forward) == 6:10
     end
 
-    for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
+    for (rg,I) in Any[(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
         rg_r = reverse(rg)
         rgv, rgv_r = [rg;], [rg_r;]
         for i = I
@@ -144,7 +144,7 @@ end
 
     @testset "issue 32568" begin
         for R in numTypes, T in numTypes
-            for arr in [R[1:5;], R(1):R(5), R(1):2:R(5)]
+            for arr in Any[R[1:5;], R(1):R(5), R(1):2:R(5)]
                 @test eltype(searchsorted(arr, T(2))) == keytype(arr)
                 @test eltype(searchsorted(arr, T(2), big(1), big(4), Forward)) == keytype(arr)
                 @test searchsortedfirst(arr, T(2)) isa keytype(arr)
@@ -164,35 +164,46 @@ end
         @test searchsorted([1,2], Inf) === 3:2
         @test searchsorted(1:2,   Inf) === 3:2
 
-        for coll in [
+        for coll in Any[
                 Base.OneTo(10),
                 1:2,
+                0x01:0x02,
                 -4:6,
                 5:2:10,
                 [1,2],
                 1.0:4,
                 [10.0,20.0],
             ]
-            for huge in [Inf, 1e300]
+            for huge in Any[Inf, 1e300, typemax(Int64), typemax(UInt64)]
                 @test searchsortedfirst(coll, huge) === lastindex(coll) + 1
-                @test searchsortedfirst(coll, -huge)=== firstindex(coll)
                 @test searchsortedlast(coll, huge)  === lastindex(coll)
-                @test searchsortedlast(coll, -huge) === firstindex(coll) - 1
                 @test searchsorted(coll, huge)      === lastindex(coll)+1 : lastindex(coll)
-                @test searchsorted(coll, -huge)     === firstindex(coll) : firstindex(coll) - 1
+                if !(eltype(coll) <: Unsigned)
+                    @test searchsortedfirst(reverse(coll), huge, rev=true) === firstindex(coll)
+                    @test searchsortedlast(reverse(coll), huge, rev=true) === firstindex(coll) - 1
+                    @test searchsorted(reverse(coll), huge, rev=true) === firstindex(coll):firstindex(coll) - 1
+                end
 
-                @test searchsortedfirst(reverse(coll), huge, rev=true) === firstindex(coll)
-                @test searchsortedfirst(reverse(coll), -huge, rev=true) === lastindex(coll) + 1
-                @test searchsortedlast(reverse(coll), huge, rev=true) === firstindex(coll) - 1
-                @test searchsortedlast(reverse(coll), -huge, rev=true) === lastindex(coll)
-                @test searchsorted(reverse(coll), huge, rev=true) === firstindex(coll):firstindex(coll) - 1
-                @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
+                if !(huge isa Unsigned)
+                    @test searchsortedfirst(coll, -huge)=== firstindex(coll)
+                    @test searchsortedlast(coll, -huge) === firstindex(coll) - 1
+                    @test searchsorted(coll, -huge)     === firstindex(coll) : firstindex(coll) - 1
+                    if !(eltype(coll) <: Unsigned)
+                        @test searchsortedfirst(reverse(coll), -huge, rev=true) === lastindex(coll) + 1
+                        @test searchsortedlast(reverse(coll), -huge, rev=true) === lastindex(coll)
+                        @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
+                    end
+                end
             end
         end
-        @testset "issue ##34408" begin
+
+        @test_broken length(reverse(0x1:0x2)) == 2
+        @testset "issue #34408" begin
             r = 1f8-10:1f8
             # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
-            @test_broken searchsorted(collect(r)) == searchsorted(r)
+            for i in r
+                @test_broken searchsorted(collect(r), i) == searchsorted(r, i)
+            end
         end
     end
     @testset "issue #35272" begin
@@ -329,7 +340,7 @@ end
         @test insorted(T(10), R.(collect(1:10)), by=(>=(5)))
     end
 
-    for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
+    for (rg,I) in Any[(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
         rg_r = reverse(rg)
         rgv, rgv_r = collect(rg), collect(rg_r)
         for i = I

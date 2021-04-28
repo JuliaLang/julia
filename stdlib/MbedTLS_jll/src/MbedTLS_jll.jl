@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libmbedcrypto, libmbedtls, libmbedx509
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libmbedcrypto_handle = C_NULL
 libmbedcrypto_path = ""
@@ -37,14 +37,15 @@ else
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libmbedcrypto_handle = dlopen(libmbedcrypto)
     global libmbedcrypto_path = dlpath(libmbedcrypto_handle)
     global libmbedtls_handle = dlopen(libmbedtls)
     global libmbedtls_path = dlpath(libmbedtls_handle)
     global libmbedx509_handle = dlopen(libmbedx509)
     global libmbedx509_path = dlpath(libmbedx509_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    LIBPATH[] = dirname(libmbedtls_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

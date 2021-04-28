@@ -65,11 +65,11 @@ static int bits_equal(void *a, void *b, int sz) JL_NOTSAFEPOINT
 // NOINLINE.
 static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
 {
-    size_t l = jl_svec_len(a);
+    size_t i, l = jl_svec_len(a);
     if (l != jl_svec_len(b))
         return 0;
-    for(size_t i=0; i < l; i++) {
-        if (!jl_egal(jl_svecref(a,i),jl_svecref(b,i)))
+    for (i = 0; i < l; i++) {
+        if (!jl_egal(jl_svecref(a, i), jl_svecref(b, i)))
             return 0;
     }
     return 1;
@@ -126,36 +126,13 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
     return 1;
 }
 
-static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env) JL_NOTSAFEPOINT
+static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env, int tvar_names) JL_NOTSAFEPOINT
 {
     if (a == b)
         return 1;
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
     if (dt != (jl_datatype_t*)jl_typeof(b))
         return 0;
-    if (dt == jl_tvar_type) {
-        jl_typeenv_t *pe = env;
-        while (pe != NULL) {
-            if (pe->var == (jl_tvar_t*)a)
-                return pe->val == b;
-            pe = pe->prev;
-        }
-        return 0;
-    }
-    if (dt == jl_uniontype_type) {
-        return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env) &&
-            egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env);
-    }
-    if (dt == jl_unionall_type) {
-        jl_unionall_t *ua = (jl_unionall_t*)a;
-        jl_unionall_t *ub = (jl_unionall_t*)b;
-        if (ua->var->name != ub->var->name)
-            return 0;
-        if (!(egal_types(ua->var->lb, ub->var->lb, env) && egal_types(ua->var->ub, ub->var->ub, env)))
-            return 0;
-        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
-        return egal_types(ua->body, ub->body, &e);
-    }
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
@@ -165,34 +142,64 @@ static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env) JL_NOTSAF
         if (jl_nparams(dtb) != l)
             return 0;
         for (i = 0; i < l; i++) {
-            if (!egal_types(jl_tparam(dta, i), jl_tparam(dtb, i), env))
+            if (!egal_types(jl_tparam(dta, i), jl_tparam(dtb, i), env, tvar_names))
                 return 0;
         }
         return 1;
     }
-    if (dt == jl_vararg_type)
-    {
+    if (dt == jl_tvar_type) {
+        jl_typeenv_t *pe = env;
+        while (pe != NULL) {
+            if (pe->var == (jl_tvar_t*)a)
+                return pe->val == b;
+            pe = pe->prev;
+        }
+        return 0;
+    }
+    if (dt == jl_unionall_type) {
+        jl_unionall_t *ua = (jl_unionall_t*)a;
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        if (tvar_names && ua->var->name != ub->var->name)
+            return 0;
+        if (!(egal_types(ua->var->lb, ub->var->lb, env, tvar_names) && egal_types(ua->var->ub, ub->var->ub, env, tvar_names)))
+            return 0;
+        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
+        return egal_types(ua->body, ub->body, &e, tvar_names);
+    }
+    if (dt == jl_uniontype_type) {
+        return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
+            egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
+    }
+    if (dt == jl_vararg_type) {
         jl_vararg_t *vma = (jl_vararg_t*)a;
         jl_vararg_t *vmb = (jl_vararg_t*)b;
         jl_value_t *vmaT = vma->T ? vma->T : (jl_value_t*)jl_any_type;
         jl_value_t *vmbT = vmb->T ? vmb->T : (jl_value_t*)jl_any_type;
-        if (!egal_types(vmaT, vmbT, env))
+        if (!egal_types(vmaT, vmbT, env, tvar_names))
             return 0;
         if (vma->N && vmb->N)
-            return egal_types(vma->N, vmb->N, env);
+            return egal_types(vma->N, vmb->N, env, tvar_names);
         return !vma->N && !vmb->N;
     }
+    if (dt == jl_symbol_type)
+        return 0;
+    assert(!dt->mutabl);
+    return jl_egal__bits(a, b, dt);
+}
+
+JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b)
+{
+    return egal_types(a, b, NULL, 0);
+}
+
+JL_DLLEXPORT int (jl_egal)(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
+{
+    // warning: a,b may NOT have been gc-rooted by the caller
     return jl_egal(a, b);
 }
 
-JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
+int jl_egal__special(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    // warning: a,b may NOT have been gc-rooted by the caller
-    if (a == b)
-        return 1;
-    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
-    if (dt != (jl_datatype_t*)jl_typeof(b))
-        return 0;
     if (dt == jl_simplevector_type)
         return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
     if (dt == jl_datatype_type) {
@@ -210,8 +217,12 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE
             return 0;
         return !memcmp(jl_string_data(a), jl_string_data(b), l);
     }
-    if (dt->mutabl)
-        return 0;
+    assert(0 && "unreachable");
+    return 0;
+}
+
+int jl_egal__bits(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
     size_t sz = jl_datatype_size(dt);
     if (sz == 0)
         return 1;
@@ -219,7 +230,7 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE
     if (nf == 0 || !dt->layout->haspadding)
         return bits_equal(a, b, sz);
     if (dt == jl_unionall_type)
-        return egal_types(a, b, NULL);
+        return egal_types(a, b, NULL, 1);
     return compare_fields(a, b, dt);
 }
 
@@ -256,6 +267,8 @@ static uintptr_t NOINLINE hash_svec(jl_svec_t *v) JL_NOTSAFEPOINT
     }
     return h;
 }
+
+static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOTSAFEPOINT;
 
 typedef struct _varidx {
     jl_tvar_t *var;
@@ -309,7 +322,10 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         return bitmix(type_object_id_(t, env),
             type_object_id_(n, env));
     }
-    return jl_object_id_((jl_value_t*)tv, v);
+    if (tv == jl_symbol_type)
+        return ((jl_sym_t*)v)->hash;
+    assert(!tv->mutabl);
+    return immut_id_(tv, v, tv->hash);
 }
 
 static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOTSAFEPOINT
@@ -359,22 +375,15 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
     return h;
 }
 
-JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT
+static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    if (tv == (jl_value_t*)jl_symbol_type)
-        return ((jl_sym_t*)v)->hash;
-    if (tv == (jl_value_t*)jl_simplevector_type)
+    if (dt == jl_simplevector_type)
         return hash_svec((jl_svec_t*)v);
-    jl_datatype_t *dt = (jl_datatype_t*)tv;
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
-        if (dtv->isconcretetype)
-            return dtv->hash;
         uintptr_t h = ~dtv->name->hash;
         return bitmix(h, hash_svec(dtv->parameters));
     }
-    if (dt == jl_typename_type)
-        return ((jl_typename_t*)v)->hash;
     if (dt == jl_string_type) {
 #ifdef _P64
         return memhash_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
@@ -384,8 +393,24 @@ JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPO
     }
     if (dt->mutabl)
         return inthash((uintptr_t)v);
-    return immut_id_(dt, v, ((jl_datatype_t*)tv)->hash);
+    return immut_id_(dt, v, dt->hash);
 }
+
+JL_DLLEXPORT inline uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *dt = (jl_datatype_t*)tv;
+    if (dt == jl_symbol_type)
+        return ((jl_sym_t*)v)->hash;
+    if (dt == jl_typename_type)
+        return ((jl_typename_t*)v)->hash;
+    if (dt == jl_datatype_type) {
+        jl_datatype_t *dtv = (jl_datatype_t*)v;
+        if (dtv->isconcretetype)
+            return dtv->hash;
+    }
+    return jl_object_id__cold(dt, v);
+}
+
 
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 {
@@ -401,8 +426,6 @@ JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 JL_CALLABLE(jl_f_is)
 {
     JL_NARGS(===, 2, 2);
-    if (args[0] == args[1])
-        return jl_true;
     return jl_egal(args[0], args[1]) ? jl_true : jl_false;
 }
 
@@ -1391,7 +1414,7 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     while (jl_is_unionall(a)) {
         jl_unionall_t *ua = (jl_unionall_t*)a;
         jl_unionall_t *ub = (jl_unionall_t*)b;
-        if (!jl_egal(ua->var->lb, ub->var->lb) || !jl_egal(ua->var->ub, ub->var->ub) ||
+        if (!jl_types_egal(ua->var->lb, ub->var->lb) || !jl_types_egal(ua->var->ub, ub->var->ub) ||
             ua->var->name != ub->var->name)
             goto no;
         a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
@@ -1611,6 +1634,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Argument", (jl_value_t*)jl_argument_type);
     add_builtin("Const", (jl_value_t*)jl_const_type);
     add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);
+    add_builtin("PartialOpaque", (jl_value_t*)jl_partial_opaque_type);
+    add_builtin("InterConditional", (jl_value_t*)jl_interconditional_type);
     add_builtin("MethodMatch", (jl_value_t*)jl_method_match_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);

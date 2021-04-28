@@ -64,10 +64,10 @@ Hello, world
 
 julia> io = IOBuffer();
 
-julia> println(io, "Hello, world")
+julia> println(io, "Hello", ',', " world.")
 
 julia> String(take!(io))
-"Hello, world\\n"
+"Hello, world.\\n"
 ```
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
@@ -79,14 +79,19 @@ println(io::IO, xs...) = print(io, xs..., "\n")
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
-`context` can be either an [`IOContext`](@ref) whose properties will be used,
-or a `Pair` specifying a property and its value. `sizehint` suggests the capacity
-of the buffer (in bytes).
+`context` can be an [`IOContext`](@ref) whose properties will be used, a `Pair`
+specifying a property and its value, or a tuple of `Pair` specifying multiple
+properties and their values. `sizehint` suggests the capacity of the buffer (in
+bytes).
 
-The optional keyword argument `context` can be set to `:key=>value` pair
-or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
-stream passed to `f`.  The optional `sizehint` is a suggested size (in bytes)
-to allocate for the buffer used to write the string.
+The optional keyword argument `context` can be set to a `:key=>value` pair, a
+tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
+attributes are used for the I/O stream passed to `f`.  The optional `sizehint`
+is a suggested size (in bytes) to allocate for the buffer used to write the
+string.
+
+!!! compat "Julia 1.7"
+    Passing a tuple to keyword `context` requires Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -99,7 +104,9 @@ julia> sprint(showerror, BoundsError([1], 100))
 """
 function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     s = IOBuffer(sizehint=sizehint)
-    if context !== nothing
+    if context isa Tuple
+        f(IOContext(s, context...), args...)
+    elseif context !== nothing
         f(IOContext(s, context), args...)
     else
         f(s, args...)
@@ -164,6 +171,8 @@ Create a string from any values using the [`print`](@ref) function.
 highly efficient, then it may make sense to add a method to `string` and
 define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
 functions are consistent.
+
+See also: [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
 
 # Examples
 ```jldoctest
@@ -533,7 +542,7 @@ macro raw_str(s); s; end
 
 Escape a string in the manner used for parsing raw string literals.
 For each double-quote (`"`) character in input string `s`, this
-function counts the number _n_ of preceeding backslash (`\\`) characters,
+function counts the number _n_ of preceding backslash (`\\`) characters,
 and then increases there the number of backslashes from _n_ to 2_n_+1
 (even for _n_ = 0). It also doubles a sequence of backslashes at the end
 of the string.
