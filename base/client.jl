@@ -86,7 +86,7 @@ struct ExceptionInfo
     errors::Vector{Tuple{Any, Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}}}
 end
 
-show(io::IO, exs::ExceptionInfo) = display_error(io, exs.errors)
+show(io::IO, ::MIME"text/plain", exs::ExceptionInfo) = display_error(io, exs.errors)
 
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
