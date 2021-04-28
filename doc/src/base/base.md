@@ -243,6 +243,7 @@ Core.Module
 Core.Function
 Base.hasmethod
 Core.applicable
+Base.isambiguous
 Core.invoke
 Base.@invoke
 Base.invokelatest
