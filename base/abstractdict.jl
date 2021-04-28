@@ -158,10 +158,13 @@ copy(a::AbstractDict) = merge!(empty(a), a)
 copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
 
 """
-    merge!(d::AbstractDict, others::AbstractDict...)
+    merge!(d::AbstractDict, others...)
 
-Update collection with pairs from the other collections.
+Update collection with pairs from the `others` collections.
 See also [`merge`](@ref).
+
+!!! compat "Julia 1.7"
+    Prior to Julia 1.7, `others` collections must be of type `AbstractDict`.
 
 # Examples
 ```jldoctest
@@ -176,21 +179,28 @@ Dict{Int64, Int64} with 3 entries:
   4 => 5
   3 => 4
   1 => 4
+
+julia> merge!(d1, [1 => 2, 2 => 1])
+Dict{Int64, Int64} with 4 entries:
+  4 => 5
+  2 => 1
+  3 => 4
+  1 => 2
 ```
 """
-function merge!(d::AbstractDict, others::AbstractDict...)
+function merge!(d::AbstractDict, others...)
     for other in others
-        for (k,v) in other
-            d[k] = v
+        for kv::Pair in other
+            d[first(kv)] = last(kv)
         end
     end
     return d
 end
 
 """
-    mergewith!(combine, d::AbstractDict, others::AbstractDict...) -> d
+    mergewith!(combine, d::AbstractDict, others...) -> d
     mergewith!(combine)
-    merge!(combine, d::AbstractDict, others::AbstractDict...) -> d
+    merge!(combine, d::AbstractDict, others...) -> d
 
 Update collection with pairs from the other collections.
 Values with the same key will be combined using the
@@ -203,6 +213,9 @@ compatibility.
 
 !!! compat "Julia 1.5"
     `mergewith!` requires Julia 1.5 or later.
+
+!!! compat "Julia 1.7"
+    Prior to Julia 1.7, `others` collections must be of type `AbstractDict`.
 
 # Examples
 ```jldoctest
@@ -233,9 +246,10 @@ Dict{Int64, Int64} with 3 entries:
   1 => 4
 ```
 """
-function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
+function mergewith!(combine, d::AbstractDict, others...)
     for other in others
-        for (k,v) in other
+        for kv::Pair in other
+            k, v = kv
             d[k] = haskey(d, k) ? combine(d[k], v) : v
         end
     end
@@ -275,13 +289,16 @@ valtype(::Type{<:AbstractDict{K,V}}) where {K,V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 
 """
-    merge(d::AbstractDict, others::AbstractDict...)
+    merge(d::AbstractDict, others...)
 
 Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
 the merged collections. If the same key is present in another collection, the
 value for that key will be the value it has in the last collection listed.
 See also [`mergewith`](@ref) for custom handling of values with the same key.
+
+!!! compat "Julia 1.7"
+    Prior to Julia 1.7, `others` collections must be of type `AbstractDict`.
 
 # Examples
 ```jldoctest
@@ -308,13 +325,13 @@ Dict{String, Float64} with 3 entries:
   "foo" => 0.0
 ```
 """
-merge(d::AbstractDict, others::AbstractDict...) =
+merge(d::AbstractDict, others...) =
     merge!(_typeddict(d, others...), others...)
 
 """
-    mergewith(combine, d::AbstractDict, others::AbstractDict...)
+    mergewith(combine, d::AbstractDict, others...)
     mergewith(combine)
-    merge(combine, d::AbstractDict, others::AbstractDict...)
+    merge(combine, d::AbstractDict, others...)
 
 Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
@@ -327,6 +344,9 @@ Method `merge(combine::Union{Function,Type}, args...)` as an alias of
 
 !!! compat "Julia 1.5"
     `mergewith` requires Julia 1.5 or later.
+
+!!! compat "Julia 1.7"
+    Prior to Julia 1.7, `others` collections must be of type `AbstractDict`.
 
 # Examples
 ```jldoctest
@@ -350,17 +370,24 @@ julia> ans == mergewith(+)(a, b)
 true
 ```
 """
-mergewith(combine, d::AbstractDict, others::AbstractDict...) =
+mergewith(combine, d::AbstractDict, others...) =
     mergewith!(combine, _typeddict(d, others...), others...)
 mergewith(combine) = (args...) -> mergewith(combine, args...)
-merge(combine::Callable, d::AbstractDict, others::AbstractDict...) =
+merge(combine::Callable, d::AbstractDict, others...) =
     merge!(combine, _typeddict(d, others...), others...)
 
 promoteK(K) = K
 promoteV(V) = V
-promoteK(K, d, ds...) = promoteK(promote_type(K, keytype(d)), ds...)
-promoteV(V, d, ds...) = promoteV(promote_type(V, valtype(d)), ds...)
-function _typeddict(d::AbstractDict, others::AbstractDict...)
+promoteK(K, d, ds...) = promoteK(promote_type(K, _keytype(d)), ds...)
+promoteV(V, d, ds...) = promoteV(promote_type(V, _valtype(d)), ds...)
+
+_keytype(d::AbstractDict) = keytype(d)
+_valtype(d::AbstractDict) = valtype(d)
+
+_keytype(d) = (p = eltype(d); p <: Pair ? fieldtype(p, 1) : Any)
+_valtype(d) = (p = eltype(d); p <: Pair ? fieldtype(p, 2) : Any)
+
+function _typeddict(d::AbstractDict, others...)
     K = promoteK(keytype(d), others...)
     V = promoteV(valtype(d), others...)
     Dict{K,V}(d)
