@@ -68,7 +68,8 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
 {
     return (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LL ||
             cat == UTF8PROC_CATEGORY_LT || cat == UTF8PROC_CATEGORY_LM ||
-            cat == UTF8PROC_CATEGORY_LO || cat == UTF8PROC_CATEGORY_NL ||
+            cat == UTF8PROC_CATEGORY_LO ||
+            cat == UTF8PROC_CATEGORY_NL || cat == UTF8PROC_CATEGORY_NO ||
             cat == UTF8PROC_CATEGORY_SC ||  // allow currency symbols
             // other symbols, but not arrows or replacement characters
             (cat == UTF8PROC_CATEGORY_SO && !(wc >= 0x2190 && wc <= 0x21FF) &&
@@ -144,7 +145,6 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
     if (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||
         cat == UTF8PROC_CATEGORY_ND || cat == UTF8PROC_CATEGORY_PC ||
         cat == UTF8PROC_CATEGORY_SK || cat == UTF8PROC_CATEGORY_ME ||
-        cat == UTF8PROC_CATEGORY_NO ||
         // primes (single, double, triple, their reverses, and quadruple)
         (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057))
         return 1;
@@ -329,10 +329,11 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
         type_error(fl_ctx, "accum-julia-symbol", "wchar", args[0]);
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
     ios_t str;
-    int allascii = 1;
+    int allascii = 1, allNo = 1;
     ios_mem(&str, 0);
     do {
         allascii &= (wc <= 0x7f);
+        allNo = allNo && UTF8PROC_CATEGORY_NO == utf8proc_category((utf8proc_int32_t) wc);
         ios_getutf8(s, &wc);
         if (wc == '!') {
             uint32_t nwc = 0;
@@ -348,6 +349,8 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
             break;
     } while (jl_id_char(wc));
     ios_pututf8(&str, 0);
+    if (allNo) /* identifiers cannot consist only of category-No */
+        lerrorf(fl_ctx, symbol(fl_ctx, "error"), "invalid identifier %s", str.buf);
     return symbol(fl_ctx, allascii ? str.buf : normalize(fl_ctx, str.buf));
 }
 

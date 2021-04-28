@@ -12,6 +12,10 @@ New language features
 * `⫪` (U+2AEA, `\Top`, `\downvDash`) and `⫫` (U+2AEB, `\Bot`, `\upvDash`, `\indep`)
   may now be used as binary operators with comparison precedence. ([#39403])
 
+  * Identifiers can now start with numeric symbols in category
+    [No: Number, other](http://www.fileformat.info/info/unicode/category/No/list.htm),
+    allowing you to have variables with names like `⅓x` or `¹x₂` ([#20278]).
+
 Language changes
 ----------------
 

@@ -281,6 +281,21 @@ end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
 end
 
+# identifiers starting with category No:
+let ½x = 1/2, ¹x = 12
+    @test ½x === 1/2
+    @test ¹x === 12
+    Meta.parse("½ = 0.5",raise=false) == Expr(:error, "invalid identifier ½")
+end
+
+# added ⟂ to operator precedence (#24404)
+@test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
+@test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)
+
+# only allow certain characters after interpolated vars (#25231)
+@test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
+@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
+
 @testset "parse and tryparse type inference" begin
     @inferred parse(Int, "12")
     @inferred parse(Float64, "12")
