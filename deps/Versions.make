@@ -51,6 +51,7 @@ LLVM_JLL_NAME := libLLVM
 # LLVM_tools (downloads LLVM_jll to get things like `lit` and `opt`)
 LLVM_TOOLS_JLL_NAME := LLVM
 LLVM_TOOLS_JLL_VER := 11.0.1+3
+LLVM_TOOLS_ASSERT_JLL_VER := 11.0.1+3
 
 # LLVM libunwind
 LLVMUNWIND_VER := 11.0.1
@@ -74,7 +75,7 @@ OBJCONV_JLL_NAME := Objconv
 OBJCONV_JLL_VER  := 2.49.1+0
 
 # blastrampoline
-BLASTRAMPOLINE_VER := 3.0.2
+BLASTRAMPOLINE_VER := 3.0.4
 BLASTRAMPOLINE_JLL_NAME := libblastrampoline
 
 # OpenBLAS

@@ -123,6 +123,12 @@ const softscope! = softscope
 
 const repl_ast_transforms = Any[softscope] # defaults for new REPL backends
 
+# Allows an external package to add hooks into the code loading.
+# The hook should take a Vector{Symbol} of package names and
+# return true if all packages could be installed, false if not
+# to e.g. install packages on demand
+const install_packages_hooks = Any[]
+
 function eval_user_input(@nospecialize(ast), backend::REPLBackend)
     lasterr = nothing
     Base.sigatomic_begin()
@@ -133,6 +139,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
             else
                 backend.in_eval = true
+                if !isempty(install_packages_hooks)
+                    check_for_missing_packages_and_run_hooks(ast)
+                end
                 for xf in backend.ast_transforms
                     ast = Base.invokelatest(xf, ast)
                 end
@@ -153,6 +162,34 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
     end
     Base.sigatomic_end()
     nothing
+end
+
+function check_for_missing_packages_and_run_hooks(ast)
+    mods = modules_to_be_loaded(ast)
+    filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
+    if !isempty(mods)
+        for f in install_packages_hooks
+            Base.invokelatest(f, mods) && return
+        end
+    end
+end
+
+function modules_to_be_loaded(ast, mods = Symbol[])
+    if ast.head in [:using, :import]
+        for arg in ast.args
+            if first(arg.args) isa Symbol # i.e. `Foo`
+                if first(arg.args) != :. # don't include local imports
+                    push!(mods, first(arg.args))
+                end
+            else # i.e. `Foo: bar`
+                push!(mods, first(first(arg.args).args))
+            end
+        end
+    end
+    for arg in ast.args
+        arg isa Expr && modules_to_be_loaded(arg, mods)
+    end
+    return mods
 end
 
 """
@@ -313,10 +350,12 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
         end
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
+        errormonitor(t)
         Base._wait2(t, cleanup)
         start_repl_backend(backend, consumer)
     else
         t = @async start_repl_backend(backend, consumer)
+        errormonitor(t)
         Base._wait2(t, cleanup)
         run_frontend(repl, backend_ref)
     end

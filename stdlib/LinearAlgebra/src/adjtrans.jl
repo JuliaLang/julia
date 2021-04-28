@@ -136,7 +136,6 @@ julia> x'x
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
 
 """
-    A'ᵀ
     transpose(A)
 
 Lazy transpose. Mutating the returned object should appropriately mutate `A`. Often,
@@ -145,9 +144,6 @@ that this operation is recursive.
 
 This operation is intended for linear algebra usage - for general data manipulation see
 [`permutedims`](@ref Base.permutedims), which is non-recursive.
-
-!!! compat "Julia 1.6"
-    The postfix operator `'ᵀ` requires Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -160,14 +156,6 @@ julia> transpose(A)
 2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3+2im  8+7im
  9+2im  4+6im
-
-julia> x = [3, 4im]
-2-element Vector{Complex{Int64}}:
- 3 + 0im
- 0 + 4im
-
-julia> x'ᵀx
--7 + 0im
 ```
 """
 transpose(A::AbstractVecOrMat) = Transpose(A)
@@ -197,7 +185,9 @@ end
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
 const AdjointAbsVec{T} = Adjoint{T,<:AbstractVector}
+const AdjointAbsMat{T} = Adjoint{T,<:AbstractMatrix}
 const TransposeAbsVec{T} = Transpose{T,<:AbstractVector}
+const TransposeAbsMat{T} = Transpose{T,<:AbstractMatrix}
 const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
 const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
@@ -250,7 +240,7 @@ similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent,
 
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
-vec(v::TransposeAbsVec) = parent(v)
+vec(v::TransposeAbsVec{<:Number}) = parent(v)
 vec(v::AdjointAbsVec{<:Real}) = parent(v)
 
 ### concatenation
@@ -286,6 +276,25 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 Broadcast.broadcast_preserving_zero_d(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
 # TODO unify and allow mixed combinations with a broadcast style
+
+
+### reductions
+# faster to sum the Array than to work through the wrapper
+Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Transpose, dims::Colon) =
+    transpose(Base._mapreduce_dim(_sandwich(transpose, f), _sandwich(transpose, op), init, parent(A), dims))
+Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Adjoint, dims::Colon) =
+    adjoint(Base._mapreduce_dim(_sandwich(adjoint, f), _sandwich(adjoint, op), init, parent(A), dims))
+# sum(A'; dims)
+Base.mapreducedim!(f, op, B::AbstractArray, A::TransposeAbsMat) =
+    transpose(Base.mapreducedim!(_sandwich(transpose, f), _sandwich(transpose, op), transpose(B), parent(A)))
+Base.mapreducedim!(f, op, B::AbstractArray, A::AdjointAbsMat) =
+    adjoint(Base.mapreducedim!(_sandwich(adjoint, f), _sandwich(adjoint, op), adjoint(B), parent(A)))
+
+_sandwich(adj::Function, fun) = (xs...,) -> adj(fun(map(adj, xs)...))
+for fun in [:identity, :add_sum, :mul_prod] #, :max, :min]
+    @eval _sandwich(::Function, ::typeof(Base.$fun)) = Base.$fun
+end
+
 
 ### linear algebra
 

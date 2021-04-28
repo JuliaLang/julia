@@ -125,6 +125,17 @@ julia> dt2 = Date("2015-01-02",df)
 2015-01-02
 ```
 
+Alternatively, use broadcasting:
+
+```jldoctest
+julia> years = ["2015", "2016"];
+
+julia> Date.(years, DateFormat("yyyy"))
+2-element Vector{Date}:
+ 2015-01-01
+ 2016-01-01
+```
+
 You can also use the `dateformat""` string macro. This macro creates the `DateFormat` object once when the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
 
 ```jldoctest
@@ -846,6 +857,15 @@ Months of the Year:
 | `October`   | `Oct` | 10          |
 | `November`  | `Nov` | 11          |
 | `December`  | `Dec` | 12          |
+
+#### Common Date Formatters
+
+```@docs
+ISODateTimeFormat
+ISODateFormat
+ISOTimeFormat
+RFC1123Format
+```
 
 ```@meta
 DocTestSetup = nothing

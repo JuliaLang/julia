@@ -646,7 +646,7 @@ function _ldiv!(L::LowerTriangularPlain, B::StridedVecOrMat)
     for k = 1:ncolB
         for j = 1:nrowB
             i1 = ia[j]
-            i2 = ia[j + 1] - 1
+            i2 = ia[j + 1] - one(eltype(ia))
 
             # find diagonal element
             ii = searchsortedfirst(ja, j, i1, i2, Base.Order.Forward)
@@ -688,7 +688,7 @@ function _ldiv!(U::UpperTriangularPlain, B::StridedVecOrMat)
     for k = 1:ncolB
         for j = nrowB:-1:1
             i1 = ia[j]
-            i2 = ia[j + 1] - 1
+            i2 = ia[j + 1] - one(eltype(ia))
 
             # find diagonal element
             ii = searchsortedlast(ja, j, i1, i2, Base.Order.Forward)
@@ -935,16 +935,15 @@ function triu(S::AbstractSparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     end
     rowval = Vector{Ti}(undef, nnz)
     nzval = Vector{Tv}(undef, nnz)
-    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
         c1 = getcolptr(S)[col]
-        for c2 in nzrange(A, col)
-            rowvals(A)[c2] = rowvals(S)[c1]
-            nonzeros(A)[c2] = nonzeros(S)[c1]
+        for c2 in colptr[col]:colptr[col+1]-1
+            rowval[c2] = rowvals(S)[c1]
+            nzval[c2] = nonzeros(S)[c1]
             c1 += 1
         end
     end
-    A
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 function tril(S::AbstractSparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
@@ -965,17 +964,16 @@ function tril(S::AbstractSparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     end
     rowval = Vector{Ti}(undef, nnz)
     nzval = Vector{Tv}(undef, nnz)
-    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
         c1 = getcolptr(S)[col+1]-1
-        l2 = getcolptr(A)[col+1]-1
-        for c2 = 0 : l2 - getcolptr(A)[col]
-            rowvals(A)[l2 - c2] = rowvals(S)[c1]
-            nonzeros(A)[l2 - c2] = nonzeros(S)[c1]
+        l2 = colptr[col+1]-1
+        for c2 = 0 : l2 - colptr[col]
+            rowval[l2 - c2] = rowvals(S)[c1]
+            nzval[l2 - c2] = nonzeros(S)[c1]
             c1 -= 1
         end
     end
-    A
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 ## diff
@@ -1340,7 +1338,6 @@ end
 
 ## kron
 @inline function kron!(C::SparseMatrixCSC, A::AbstractSparseMatrixCSC, B::AbstractSparseMatrixCSC)
-    nnzC = nnz(A)*nnz(B)
     mA, nA = size(A); mB, nB = size(B)
     mC, nC = mA*mB, nA*nB
 
@@ -1348,11 +1345,9 @@ end
     nzvalC = nonzeros(C)
     colptrC = getcolptr(C)
 
-    @boundscheck begin
-        length(colptrC) == nC+1 || throw(DimensionMismatch("expect C to be preallocated with $(nC+1) colptrs "))
-        length(rowvalC) == nnzC || throw(DimensionMismatch("expect C to be preallocated with $(nnzC) rowvals"))
-        length(nzvalC) == nnzC || throw(DimensionMismatch("expect C to be preallocated with $(nnzC) nzvals"))
-    end
+    nnzC = nnz(A)*nnz(B)
+    resize!(nzvalC, nnzC)
+    resize!(rowvalC, nnzC)
 
     col = 1
     @inbounds for j = 1:nA
@@ -1381,16 +1376,13 @@ end
 end
 
 @inline function kron!(z::SparseVector, x::SparseVector, y::SparseVector)
-    nnzx = nnz(x); nnzy = nnz(y); nnzz = nnz(z);
+    nnzx = nnz(x); nnzy = nnz(y);
     nzind = nonzeroinds(z)
     nzval = nonzeros(z)
 
-    @boundscheck begin
-        nnzval = length(nzval); nnzind = length(nzind)
-        nnzz = nnzx*nnzy
-        nnzval == nnzz || throw(DimensionMismatch("expect z to be preallocated with $nnzz nonzeros"))
-        nnzind == nnzz || throw(DimensionMismatch("expect z to be preallocated with $nnzz nonzeros"))
-    end
+    nnzz = nnzx*nnzy
+    resize!(nzind, nnzz)
+    resize!(nzval, nnzz)
 
     @inbounds for i = 1:nnzx, j = 1:nnzy
         this_ind = (i-1)*nnzy+j
@@ -1402,17 +1394,12 @@ end
 
 # sparse matrix ⊗ sparse matrix
 function kron(A::AbstractSparseMatrixCSC{T1,S1}, B::AbstractSparseMatrixCSC{T2,S2}) where {T1,S1,T2,S2}
-    nnzC = nnz(A)*nnz(B)
     mA, nA = size(A); mB, nB = size(B)
     mC, nC = mA*mB, nA*nB
     Tv = typeof(one(T1)*one(T2))
     Ti = promote_type(S1,S2)
-    colptrC = Vector{Ti}(undef, nC+1)
-    rowvalC = Vector{Ti}(undef, nnzC)
-    nzvalC  = Vector{Tv}(undef, nnzC)
-    colptrC[1] = 1
-    # skip sparse_check
-    C = SparseMatrixCSC{Tv, Ti}(mC, nC, colptrC, rowvalC, nzvalC)
+    C = spzeros(Tv, Ti, mC, nC)
+    sizehint!(C, nnz(A)*nnz(B))
     return @inbounds kron!(C, A, B)
 end
 

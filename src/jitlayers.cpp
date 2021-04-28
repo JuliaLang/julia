@@ -586,11 +586,13 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
     JL_TIMING(LLVM_OPT);
 
     int optlevel;
+    int optlevel_min;
     if (jl_generating_output()) {
         optlevel = 0;
     }
     else {
         optlevel = jl_options.opt_level;
+        optlevel_min = jl_options.opt_level_min;
         for (auto &F : M.functions()) {
             if (!F.getBasicBlockList().empty()) {
                 Attribute attr = F.getFnAttribute("julia-optimization-level");
@@ -602,6 +604,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
                 }
             }
         }
+        optlevel = std::max(optlevel, optlevel_min);
     }
     if (optlevel == 0)
         jit.PM0.run(M);
@@ -944,8 +947,7 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
             //    continue;
             //}
             else {
-                assert(dG->isDeclaration() || (dG->getInitializer() == sG->getInitializer() &&
-                            dG->isConstant() && sG->isConstant()));
+                assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
                 dG->replaceAllUsesWith(sG);
                 dG->eraseFromParent();
             }

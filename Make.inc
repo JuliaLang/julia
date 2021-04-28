@@ -472,13 +472,13 @@ USEGCC := 0
 USECLANG := 1
 endif
 
-# Note: Supporting only macOS Mavericks and above
+# Note: Supporting only macOS Yosemite and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 USEGCC := 0
 USECLANG := 1
 ifneq ($(APPLE_ARCH),arm64)
-MACOSX_VERSION_MIN := 10.9
+MACOSX_VERSION_MIN := 10.10
 else
 MACOSX_VERSION_MIN := 11.0
 endif
@@ -587,6 +587,12 @@ endif #USEMSVC
 RANLIB := $(CROSS_COMPILE)ranlib
 OBJCOPY := $(CROSS_COMPILE)objcopy
 
+ifneq ($(USEMSVC), 1)
+CPP_STDOUT := $(CPP) -P
+else
+CPP_STDOUT := $(CPP) -E
+endif
+
 # file extensions
 ifeq ($(OS), WINNT)
   SHLIB_EXT := dll
@@ -595,6 +601,21 @@ else ifeq ($(OS), Darwin)
 else
   SHLIB_EXT := so
 endif
+
+ifeq ($(OS),WINNT)
+define versioned_libname
+$$(if $(2),$(1)-$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+endef
+else ifeq ($(OS),Darwin)
+define versioned_libname
+$$(if $(2),$(1).$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+endef
+else
+define versioned_libname
+$$(if $(2),$(1).$(SHLIB_EXT).$(2),$(1).$(SHLIB_EXT))
+endef
+endif
+
 
 ifeq ($(SHLIB_EXT), so)
 define SONAME_FLAGS
@@ -898,6 +919,7 @@ ifneq (,$(findstring aarch64,$(ARCH)))
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
 USE_BLAS64:=1
+BINARY:=64
 ifeq ($(OS),Darwin)
 # Apple Chips are all at least A12Z
 MCPU:=apple-a12
@@ -1008,22 +1030,18 @@ JCPPFLAGS+=-DSYSTEM_LLVM
 endif # SYSTEM_LLVM
 
 # Windows builds need a little help finding the LLVM libraries for llvm-config
-LLVM_CONFIG_PATH_FIX :=
+# use delayed expansion (= not :=) because spawn isn't defined until later
+# WINEPATH is only needed for a wine-based cross compile
+LLVM_CONFIG_PATH_FIX =
 ifeq ($(OS),WINNT)
-LLVM_CONFIG_PATH_FIX := PATH="$(build_bindir):$(PATH)"
+LLVM_CONFIG_PATH_FIX = PATH="$(build_bindir):$(PATH)" WINEPATH="$(call cygpath_w,$(build_bindir));$(WINEPATH)"
 endif
 
 ifeq ($(BUILD_OS),$(OS))
-LLVM_CONFIG_HOST := $(LLVM_CONFIG)
+LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_FIX) $(LLVM_CONFIG)
 else
 LLVM_CONFIG_HOST := $(basename $(LLVM_CONFIG))-host$(BUILD_EXE)
-ifeq (exists, $(shell [ -f '$(LLVM_CONFIG_HOST)' ] && echo exists ))
-ifeq ($(shell $(LLVM_CONFIG_PATH_FIX) $(LLVM_CONFIG_HOST) --version),3.3)
-# llvm-config-host <= 3.3 is broken, use llvm-config instead (in an emulator)
-# use delayed expansion (= not :=) because spawn isn't defined until later
-LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_FIX) $(call spawn,$(LLVM_CONFIG))
-endif
-else
+ifneq (exists, $(shell [ -f '$(LLVM_CONFIG_HOST)' ] && echo exists ))
 # llvm-config-host does not exist (cmake build)
 LLVM_CONFIG_HOST = $(LLVM_CONFIG_PATH_FIX) $(call spawn,$(LLVM_CONFIG))
 endif
@@ -1146,6 +1164,8 @@ BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contr
 BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI)))))
+
+LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
 BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
@@ -1479,8 +1499,12 @@ ifneq ($(findstring $(OS),Linux FreeBSD),)
 LIBGCC_NAME := libgcc_s.$(SHLIB_EXT).1
 endif
 
-
+# USE_SYSTEM_CSL causes it to get symlinked into build_private_shlibdir
+ifeq ($(USE_SYSTEM_CSL),1)
+LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBGCC_NAME))
+else
 LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBGCC_NAME))
+endif
 LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBGCC_NAME))
 
 # USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir
@@ -1548,6 +1572,7 @@ PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
+
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable
 # (hardened against any special characters appearing in the output)

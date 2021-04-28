@@ -213,12 +213,11 @@ include("methodshow.jl")
 include("cartesian.jl")
 using .Cartesian
 include("multidimensional.jl")
-include("permuteddimsarray.jl")
-using .PermutedDimsArrays
 
 include("broadcast.jl")
 using .Broadcast
-using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!
+using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!,
+                  broadcast_preserving_zero_d, andand, oror
 
 # missing values
 include("missing.jl")
@@ -231,7 +230,9 @@ include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 
-include("env.jl")
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 # Concurrency
 include("linked_list.jl")
@@ -243,9 +244,7 @@ include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
 
-# Logging
-include("logging.jl")
-using .CoreLogging
+include("env.jl")
 
 # BinaryPlatforms, used by Artifacts
 include("binaryplatforms.jl")
@@ -293,6 +292,9 @@ end
 include("reducedim.jl")  # macros in this file relies on string.jl
 include("accumulate.jl")
 
+include("permuteddimsarray.jl")
+using .PermutedDimsArrays
+
 # basic data structures
 include("ordering.jl")
 using .Order
@@ -337,6 +339,9 @@ include("meta.jl")
 include("stacktraces.jl")
 using .StackTraces
 
+# experimental API's
+include("experimental.jl")
+
 # utilities
 include("deepcopy.jl")
 include("download.jl")
@@ -359,9 +364,6 @@ include("timing.jl")
 include("util.jl")
 
 include("asyncmap.jl")
-
-# experimental API's
-include("experimental.jl")
 
 # deprecated functions
 include("deprecated.jl")

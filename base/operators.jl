@@ -79,6 +79,9 @@ handle comparison to other types via promotion rules where possible.
 [`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
 [`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
 should therefore also implement [`hash`](@ref).
+
+If some type defines `==`, [`isequal`](@ref), and [`isless`](@ref) then it should
+also implement [`<`](@ref) to ensure consistency of comparisons.
 """
 ==
 
@@ -90,6 +93,10 @@ and of missing values. `isequal` treats all floating-point `NaN` values as equal
 to each other, treats `-0.0` as unequal to `0.0`, and [`missing`](@ref) as equal
 to `missing`. Always returns a `Bool` value.
 
+`isequal` is an equivalence relation - it is reflexive (`===` implies `isequal`), symmetric
+(`isequal(a, b)` implies `isequal(b, a)`) and transitive (`isequal(a, b)` and
+`isequal(b, c)` implies `isequal(a, c)`).
+
 # Implementation
 The default implementation of `isequal` calls `==`, so a type that does not involve
 floating-point values generally only needs to define `==`.
@@ -98,8 +105,12 @@ floating-point values generally only needs to define `==`.
 that `hash(x) == hash(y)`.
 
 This typically means that types for which a custom `==` or `isequal` method exists must
-implement a corresponding `hash` method (and vice versa). Collections typically implement
-`isequal` by calling `isequal` recursively on all contents.
+implement a corresponding [`hash`](@ref) method (and vice versa). Collections typically
+implement `isequal` by calling `isequal` recursively on all contents.
+
+Furthermore, `isequal` is linked with [`isless`](@ref), and they work together to
+define a fixed total ordering, where exactly one of `isequal(x, y)`, `isless(x, y)`, or
+`isless(y, x)` must be `true` (and the other two `false`).
 
 Scalar types generally do not need to implement `isequal` separate from `==`, unless they
 represent floating-point numbers amenable to a more efficient implementation than that
@@ -118,6 +129,12 @@ true
 
 julia> isequal(0.0, -0.0)
 false
+
+julia> missing == missing
+missing
+
+julia> isequal(missing, missing)
+true
 ```
 """
 isequal(x, y) = x == y
@@ -132,8 +149,8 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
 """
     isless(x, y)
 
-Test whether `x` is less than `y`, according to a fixed total order.
-`isless` is not defined on all pairs of values `(x, y)`. However, if it
+Test whether `x` is less than `y`, according to a fixed total order (defined together with
+[`isequal`](@ref)). `isless` is not defined on all pairs of values `(x, y)`. However, if it
 is defined, it is expected to satisfy the following:
 - If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
   and exactly one of those three yields `true`.
@@ -319,7 +336,6 @@ a partial order.
 New numeric types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
-(x < y) | (x == y)
 
 # Examples
 ```jldoctest
@@ -561,6 +577,8 @@ extrema(f, x::Real) = (y = f(x); (y, y))
 
 The identity function. Returns its argument.
 
+See also: [`one`](@ref), [`oneunit`](@ref), and [`LinearAlgebra`](@ref man-linalg)'s `I`.
+
 # Examples
 ```jldoctest
 julia> identity("Well, what did you expect?")
@@ -576,6 +594,8 @@ identity(x) = x
 xor(x::Integer) = x
 
 const ⊻ = xor
+const ⊼ = nand
+const ⊽ = nor
 
 # foldl for argument lists. expand fully up to a point, then
 # switch to a loop. this allows small cases like `a+b+c+d` to be managed
@@ -586,7 +606,7 @@ afoldl(op, a) = a
 function afoldl(op, a, bs...)
     l = length(bs)
     i =  0; y = a;            l == i && return y
-    #@nexprs 15 i -> (y = op(y, bs[i]); l == i && return y)
+    #@nexprs 31 i -> (y = op(y, bs[i]); l == i && return y)
     i =  1; y = op(y, bs[i]); l == i && return y
     i =  2; y = op(y, bs[i]); l == i && return y
     i =  3; y = op(y, bs[i]); l == i && return y
@@ -602,12 +622,28 @@ function afoldl(op, a, bs...)
     i = 13; y = op(y, bs[i]); l == i && return y
     i = 14; y = op(y, bs[i]); l == i && return y
     i = 15; y = op(y, bs[i]); l == i && return y
+    i = 16; y = op(y, bs[i]); l == i && return y
+    i = 17; y = op(y, bs[i]); l == i && return y
+    i = 18; y = op(y, bs[i]); l == i && return y
+    i = 19; y = op(y, bs[i]); l == i && return y
+    i = 20; y = op(y, bs[i]); l == i && return y
+    i = 21; y = op(y, bs[i]); l == i && return y
+    i = 22; y = op(y, bs[i]); l == i && return y
+    i = 23; y = op(y, bs[i]); l == i && return y
+    i = 24; y = op(y, bs[i]); l == i && return y
+    i = 25; y = op(y, bs[i]); l == i && return y
+    i = 26; y = op(y, bs[i]); l == i && return y
+    i = 27; y = op(y, bs[i]); l == i && return y
+    i = 28; y = op(y, bs[i]); l == i && return y
+    i = 29; y = op(y, bs[i]); l == i && return y
+    i = 30; y = op(y, bs[i]); l == i && return y
+    i = 31; y = op(y, bs[i]); l == i && return y
     for i in (i + 1):l
         y = op(y, bs[i])
     end
     return y
 end
-typeof(afoldl).name.mt.max_args = 18
+typeof(afoldl).name.mt.max_args = 34
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
@@ -624,7 +660,6 @@ end
 function kron! end
 
 const var"'" = adjoint
-const var"'ᵀ" = transpose
 
 """
     \\(x, y)
@@ -677,7 +712,7 @@ julia> bitstring(Int8(3))
 julia> bitstring(Int8(12))
 "00001100"
 ```
-See also [`>>`](@ref), [`>>>`](@ref).
+See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 """
 function <<(x::Integer, c::Integer)
     @_inline_meta
@@ -784,6 +819,8 @@ end
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
+See also: [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
+
 # Examples
 ```jldoctest
 julia> x = 15; y = 4;
@@ -793,6 +830,10 @@ julia> x % y
 
 julia> x == div(x, y) * y + rem(x, y)
 true
+
+julia> rem.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -2  -1  0  -2  -1  0  1  2  0  1  2
 ```
 """
 rem
@@ -802,7 +843,10 @@ const % = rem
     div(x, y)
     ÷(x, y)
 
-The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
+The quotient from Euclidean (integer) division. Generally equivalent
+to a mathematical operation x/y without a fractional part.
+
+See also: [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -814,6 +858,10 @@ julia> -5 ÷ 3
 
 julia> 5.0 ÷ 2
 2.0
+
+julia> div.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -1  -1  -1  0  0  0  0  0  1  1  1
 ```
 """
 div
@@ -915,6 +963,42 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 """
 |>(x, f) = f(x)
 
+"""
+    f = Returns(value)
+
+Create a callable `f` such that `f(args...; kw...) === value` holds.
+
+# Examples
+
+```jldoctest
+julia> f = Returns(42);
+
+julia> f(1)
+42
+
+julia> f("hello", x=32)
+42
+
+julia> f.value
+42
+```
+
+!!! compat "Julia 1.7"
+    Returns requires at least Julia 1.7.
+"""
+struct Returns{V} <: Function
+    value::V
+    Returns{V}(value) where {V} = new{V}(value)
+    Returns(value) = new{Core.Typeof(value)}(value)
+end
+
+(obj::Returns)(args...; kw...) = obj.value
+function show(io::IO, obj::Returns)
+    show(io, typeof(obj))
+    print(io, "(")
+    show(io, obj.value)
+    print(io, ")")
+end
 # function composition
 
 """
@@ -954,7 +1038,7 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 ```
-See also [`ComposedFunction`](@ref).
+See also [`ComposedFunction`](@ref), [`!f::Function`](@ref).
 """
 function ∘ end
 
@@ -1014,6 +1098,8 @@ end
 Predicate function negation: when the argument of `!` is a function, it returns a
 function which computes the boolean negation of `f`.
 
+See also [`∘`](@ref).
+
 # Examples
 ```jldoctest
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
@@ -1034,6 +1120,8 @@ julia> filter(!isletter, str)
 A type representing a partially-applied version of the two-argument function
 `f`, with the first argument fixed to the value "x". In other words,
 `Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+
+See also [`Fix2`](@ref Base.Fix2).
 """
 struct Fix1{F,T} <: Function
     f::F
@@ -1294,6 +1382,8 @@ julia> [1, 2] .∈ ([2, 3],)
  0
  1
 ```
+
+See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 """
 in
 

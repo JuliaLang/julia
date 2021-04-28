@@ -514,6 +514,11 @@ end
         BLAS.axpby!(elty(2), x, elty(3), y)
         @test y == WrappedArray(elty[19, 50, 30, 56])
         @test BLAS.iamax(x) == 2
+
+        M = fill(elty(1.0), 3, 3)
+        BLAS.scal!(elty(2), view(M,:,2))
+        BLAS.scal!(elty(3), view(M,3,:))
+        @test M == elty[1. 2. 1.; 1. 2. 1.; 3. 6. 3.]
     # Level 2
         A = WrappedArray(elty[1 2; 3 4])
         x = WrappedArray(elty[1, 2])
@@ -599,5 +604,9 @@ end
     BLAS.set_num_threads(default)
     @test BLAS.get_num_threads() === default
 end
+
+# https://github.com/JuliaLang/julia/pull/39845
+@test LinearAlgebra.BLAS.libblas == "libblastrampoline"
+@test LinearAlgebra.BLAS.liblapack == "libblastrampoline"
 
 end # module TestBLAS

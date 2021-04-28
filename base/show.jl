@@ -45,6 +45,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
 end
 
 show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
+show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
 
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     isempty(iter) && get(io, :compact, false) && return show(io, iter)
@@ -583,6 +584,69 @@ function make_typealias(@nospecialize(x::Type))
     end
 end
 
+isgensym(s::Symbol) = '#' in string(s)
+
+function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVector, skip::Int)
+    elide == 0 && return false
+    wheres[elide] === p || return false
+    for i = (elide + 1):length(wheres)
+        v = wheres[i]::TypeVar
+        has_typevar(v.lb, p) && return false
+        has_typevar(v.ub, p) && return false
+    end
+    for i = 1:length(env)
+        i == skip && continue
+        has_typevar(env[i], p) && return false
+    end
+    return true
+end
+
+function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector)
+    n = length(env)
+    elide = length(wheres)
+    function egal_var(p::TypeVar, @nospecialize o)
+        return o isa TypeVar &&
+            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
+            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
+    end
+    for i = n:-1:1
+        p = env[i]
+        if p isa TypeVar
+            if i == n && egal_var(p, orig[i]) && show_can_elide(p, wheres, elide, env, i)
+                n -= 1
+                elide -= 1
+            elseif p.lb === Union{} && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
+                elide -= 1
+            elseif p.ub === Any && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
+                elide -= 1
+            end
+        end
+    end
+    if n > 0
+        print(io, "{")
+        for i = 1:n
+            p = env[i]
+            if p isa TypeVar
+                if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
+                    print(io, "<:")
+                    show(io, p.ub)
+                elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
+                    print(io, ">:")
+                    show(io, p.lb)
+                else
+                    show(io, p)
+                end
+            else
+                show(io, p)
+            end
+            i < n && print(io, ", ")
+        end
+        print(io, "}")
+    end
+    resize!(wheres, elide)
+    nothing
+end
+
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
@@ -595,21 +659,19 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
         end
     end
     print(io, name.name)
-    n = length(env)
-    n == 0 && return
-
-    print(io, "{")
-    param_io = IOContext(io)
-    for i = 1:length(wheres)
-        p = wheres[i]::TypeVar
-        param_io = IOContext(param_io, :unionall_env => p)
+    isempty(env) && return
+    io = IOContext(io)
+    for p in wheres
+        io = IOContext(io, :unionall_env => p)
     end
-    for i = 1:n
-        p = env[i]
-        show(param_io, p)
-        i < n && print(io, ", ")
+    orig = getfield(name.mod, name.name)
+    vars = TypeVar[]
+    while orig isa UnionAll
+        push!(vars, orig.var)
+        orig = orig.body
     end
-    print(io, "}")
+    show_typeparams(io, env, Core.svec(vars...), wheres)
+    nothing
 end
 
 function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
@@ -642,12 +704,12 @@ function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
     return wheres
 end
 
-function show_wheres(io::IO, env::Vector)
-    isempty(env) && return
+function show_wheres(io::IO, wheres::Vector)
+    isempty(wheres) && return
     io = IOContext(io)
-    n = length(env)
+    n = length(wheres)
     for i = 1:n
-        p = env[i]::TypeVar
+        p = wheres[i]::TypeVar
         print(io, n == 1 ? " where " : i == 1 ? " where {" : ", ")
         show(io, p)
         io = IOContext(io, :unionall_env => p)
@@ -857,7 +919,11 @@ function _show_type(io::IO, @nospecialize(x::Type))
             push!(wheres, var)
             io = IOContext(io, :unionall_env => var)
         end
-        show(io, x)
+        if x isa DataType
+            show_datatype(io, x, wheres)
+        else
+            show(io, x)
+        end
     end
     show_wheres(io, wheres)
 end
@@ -919,29 +985,23 @@ function show_type_name(io::IO, tn::Core.TypeName)
     nothing
 end
 
-function show_datatype(io::IO, @nospecialize(x::DataType))
+function show_datatype(io::IO, @nospecialize(x::DataType), wheres::Vector=TypeVar[])
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
     n = length(parameters)
 
     # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
-    if istuple && n > 3 && all(i -> (parameters[1] === i), parameters)
-        print(io, "NTuple{", n, ", ", parameters[1], "}")
+    if istuple
+        if n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
+            print(io, "NTuple{", n, ", ", parameters[1], "}")
+        else
+            print(io, "Tuple{")
+            join(io, parameters, ", ")
+            print(io, "}")
+        end
     else
         show_type_name(io, x.name)
-        if (n > 0 || istuple) && x !== Tuple
-            # Do not print the type parameters for the primary type if we are
-            # printing a method signature or type parameter.
-            # Always print the type parameter if we are printing the type directly
-            # since this information is still useful.
-            print(io, '{')
-            for i = 1:n
-                p = parameters[i]
-                show(io, p)
-                i < n && print(io, ", ")
-            end
-            print(io, '}')
-        end
+        show_typeparams(io, parameters, unwrap_unionall(x.name.wrapper).parameters, wheres)
     end
 end
 
@@ -956,9 +1016,22 @@ end
 show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 """
-    @show
+    @show exs...
 
-Show an expression and result, returning the result. See also [`show`](@ref).
+Prints one or more expressions, and their results, to `stdout`, and returns the last result.
+
+See also: [`show`](@ref), [`@info`](@ref Logging), [`println`](@ref).
+
+# Examples
+```jldoctest
+julia> x = @show 1+2
+1 + 2 = 3
+3
+
+julia> @show x^2 x/2;
+x ^ 2 = 9
+x / 2 = 1.5
+```
 """
 macro show(exs...)
     blk = Expr(:block)
@@ -1204,7 +1277,7 @@ const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode, SSAValue,
 # IOContext(io, :unquote_fallback => false) tells show_unquoted to treat any
 # Expr whose head is :$ as if it is inside a quote, preventing fallback to the
 # "unhandled" case: this is used by print/string to be lawful to Rule 1 above.
-# On the countrary, show/repr have to follow Rule 2, requiring any Expr whose
+# On the contrary, show/repr have to follow Rule 2, requiring any Expr whose
 # head is :$ and which is not inside a quote to fallback to the "unhandled" case:
 # this is behavior is triggered by IOContext(io, :unquote_fallback => true)
 print(        io::IO, ex::ExprNode)    = (show_unquoted(IOContext(io, :unquote_fallback => false), ex, 0, -1); nothing)
@@ -2226,7 +2299,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
-        show(io, f)
+        print_within_stacktrace(io, f, bold=true)
         parens && print(io, ")")
     else
         if html
@@ -2416,7 +2489,7 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
         # TODO: static parameter values?
         # only accepts :source or :none, we can't have a fallback for default since
         # that would break code_typed(, debuginfo=:source) iff IRShow.default_debuginfo[] = :none
-        IRShow.show_ir(lambda_io, src, IRShow.__debuginfo[debuginfo](src))
+        IRShow.show_ir(lambda_io, src, IRShow.IRShowConfig(IRShow.__debuginfo[debuginfo](src)))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)
@@ -2709,6 +2782,9 @@ function array_summary(io::IO, a, inds)
     print(io, " with indices ", inds2string(inds))
 end
 
+## `summary` for Function
+summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
+
 """
     showarg(io::IO, x, toplevel)
 
@@ -2772,7 +2848,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     toplevel && print(io, " with eltype ", eltype(v))
     return nothing
 end
-showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
+showindices(io, ::Slice, inds...) =
     (print(io, ", :"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))

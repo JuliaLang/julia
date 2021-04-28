@@ -44,6 +44,13 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
     @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
 end
 
+let # 40336
+    t = Type{Type{Int}}
+    c = Type{Int}
+    r = Core.Compiler.limit_type_size(t, c, c, 100, 100)
+    @test t !== r && t <: r
+end
+
 @test Core.Compiler.unionlen(Union{}) == 1
 @test Core.Compiler.unionlen(Int8) == 1
 @test Core.Compiler.unionlen(Union{Int8, Int16}) == 2
@@ -103,10 +110,16 @@ tmerge_test(Tuple{ComplexF64, ComplexF64, ComplexF32}, Tuple{Vararg{Union{Comple
 tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
     Tuple{Vararg{Complex}})
 @test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Nothing, Tuple{}, Tuple{ComplexF32, ComplexF32}}
+@test Core.Compiler.tmerge(Tuple{}, Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
+    Union{Nothing, Tuple{ComplexF32}, Tuple{ComplexF32, ComplexF32}}
+@test Core.Compiler.tmerge(Union{Nothing, Tuple{}, Tuple{ComplexF32}}, Union{Nothing, Tuple{ComplexF32, ComplexF32}}) ==
     Union{Nothing, Tuple{Vararg{ComplexF32}}}
-@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) == Vector
+@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Vector{Bool})) ==
+    Union{Vector{Bool}, Vector{Int}, Vector{String}}
+@test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
@@ -3165,8 +3178,6 @@ end
 end
 
 @testset "constant prop' for union split signature" begin
-    anonymous_module() = Core.eval(@__MODULE__, :(module $(gensym()) end))::Module
-
     # indexing into tuples really relies on constant prop', and we will get looser result
     # (`Union{Int,String,Char}`) if constant prop' doesn't happen for splitunion signatures
     tt = (Union{Tuple{Int,String},Tuple{Int,Char}},)
@@ -3185,7 +3196,7 @@ end
         b
     end == Any[Union{String,Char}]
 
-    @test (@eval anonymous_module() begin
+    @test (@eval Module() begin
         struct F32
             val::Float32
             _v::Int
@@ -3199,7 +3210,7 @@ end
         end
     end) == Any[Union{Float32,Float64}]
 
-    @test (@eval anonymous_module() begin
+    @test (@eval Module() begin
         struct F32
             val::Float32
             _v
@@ -3226,4 +3237,36 @@ end
         end
         return y
     end == Any[Union{Nothing, Tuple{String, Union{Nothing, String}}}]
+end
+
+@test Base.return_types((Int,)) do x
+    if x === 0
+        Some(0.0)
+    elseif x == 1
+        Some(1)
+    else
+        Some(0x2)
+    end
+end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
+
+# https://github.com/JuliaLang/julia/issues/40336
+@testset "make sure a call with signatures with recursively nested Types terminates" begin
+    @test @eval Module() begin
+        f(@nospecialize(t)) = f(Type{t})
+
+        code_typed() do
+            f(Int)
+        end
+        true
+    end
+
+    @test @eval Module() begin
+        f(@nospecialize(t)) = tdepth(t) == 10 ? t : f(Type{t})
+        tdepth(@nospecialize(t)) = isempty(t.parameters) ? 1 : 1+tdepth(t.parameters[1])
+
+        code_typed() do
+            f(Int)
+        end
+        true
+    end
 end

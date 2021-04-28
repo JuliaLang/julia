@@ -235,7 +235,7 @@ function init_active_project()
     ACTIVE_PROJECT[] =
         project === nothing ? nothing :
         project == "" ? nothing :
-        project == "@." ? current_project() : abspath(expanduser(project))
+        startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
@@ -307,6 +307,12 @@ function active_project(search_load_path::Bool=true)
     end
 end
 
+"""
+    load_path()
+
+Return the fully expanded value of [`LOAD_PATH`](@ref) that is searched for projects and
+packages.
+"""
 function load_path()
     paths = String[]
     for env in LOAD_PATH
