@@ -239,6 +239,8 @@ The default behaviour is to remove leading whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
+See also [`strip`](@ref) and [`rstrip`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = lpad("March", 20)
@@ -271,6 +273,8 @@ The default behaviour is to remove trailing whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
+See also [`strip`](@ref) and [`lstrip`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = rpad("March", 20)
@@ -301,6 +305,8 @@ The default behaviour is to remove leading and trailing whitespace and delimiter
 
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, vector or set of characters.
+
+See also [`lstrip`](@ref) and [`rstrip`](@ref).
 
 !!! compat "Julia 1.2"
     The method which accepts a predicate function requires Julia 1.2 or later.
