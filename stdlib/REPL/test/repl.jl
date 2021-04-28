@@ -1366,3 +1366,19 @@ end
         @test isempty(mods)
     end
 end
+
+# errs should reprint error
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "foobar\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
+    @test readline(stdout_read) == ""
+    readuntil(stdout_read, "julia> ", keep=true)
+    write(stdin_write, "errs\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
+    @test readline(stdout_read) == ""
+end
