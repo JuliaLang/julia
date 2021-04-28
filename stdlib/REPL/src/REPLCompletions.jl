@@ -384,6 +384,7 @@ function get_value(sym::Expr, fn)
 end
 get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (getfield(fn, sym), true) : (nothing, false)
 get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.value), true) : (nothing, false)
+get_value(sym::GlobalRef, fn) = get_value(sym.name, sym.mod)
 get_value(sym, fn) = (sym, true)
 
 # Return the value of a getfield call expression
@@ -456,6 +457,11 @@ function get_type(sym::Expr, fn::Module)
     # try to analyze nests of calls. if this fails, try using the expanded form.
     val, found = try_get_type(sym, fn)
     found && return val, found
+    # https://github.com/JuliaLang/julia/issues/27184
+    if isexpr(sym, :macrocall)
+        _, found = get_type(first(sym.args), fn)
+        found || return Any, false
+    end
     return try_get_type(Meta.lower(fn, sym), fn)
 end
 
