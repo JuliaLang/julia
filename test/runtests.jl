@@ -91,6 +91,16 @@ prepend!(tests, linalg_tests)
 
 import LinearAlgebra
 cd(@__DIR__) do
+    # `net_on` implies that we have access to the loopback interface which is
+    # necessary for Distributed multi-processing. There are some test
+    # environments that do not allow access to loopback, so we must disable
+    # addprocs when `net_on` is false. Note that there exist build environments,
+    # including Nix, where `net_on` is false but we still have access to the
+    # loopback interface. It would be great to make this check more specific to
+    # identify those situations somehow. See
+    #   * https://github.com/JuliaLang/julia/issues/6722
+    #   * https://github.com/JuliaLang/julia/pull/29384
+    #   * https://github.com/JuliaLang/julia/pull/40348
     n = 1
     if net_on
         n = min(Sys.CPU_THREADS, length(tests))

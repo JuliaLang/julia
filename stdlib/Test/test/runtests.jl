@@ -25,6 +25,18 @@ import Logging: Debug, Info, Warn
     @test isapprox(1, 2; atol)
     @test isapprox(1, 3; a.atol)
 end
+@testset "@test with skip/broken kwargs" begin
+    # Make sure the local variables can be used in conditions
+    a = 1
+    @test 2 + 2 == 4 broken=false
+    @test error() broken=true
+    @test !Sys.iswindows() broken=Sys.iswindows()
+    @test 1 ≈ 2 atol=1 broken=a==2
+    @test false skip=true
+    @test true skip=false
+    @test Grogu skip=isone(a)
+    @test 41 ≈ 42 rtol=1 skip=false
+end
 @testset "@test keyword precedence" begin
     atol = 2
     # post-semicolon keyword, suffix keyword, pre-semicolon keyword
@@ -491,7 +503,7 @@ import Test: record, finish
 using Test: get_testset_depth, get_testset
 using Test: AbstractTestSet, Result, Pass, Fail, Error
 struct CustomTestSet <: Test.AbstractTestSet
-    description::AbstractString
+    description::String
     foo::Int
     results::Vector
     # constructor takes a description string and options keyword arguments
@@ -1137,4 +1149,24 @@ let errors = @testset NoThrowTestSet begin
         @test occursin("TypeError: non-boolean (Missing) used in boolean context", str)
         @test occursin("Expression: !(1 < 2 < missing < 4)", str)
     end
+end
+
+macro test_macro_throw_1()
+    throw(ErrorException("Real error"))
+end
+macro test_macro_throw_2()
+    throw(LoadError("file", 111, ErrorException("Real error")))
+end
+
+@testset "Soft deprecation of @test_throws LoadError [@]macroexpand[1]" begin
+    # If a macroexpand was detected, undecorated LoadErrors can stand in for any error.
+    # This will throw a deprecation warning.
+    @test_deprecated (@test_throws LoadError macroexpand(@__MODULE__, :(@test_macro_throw_1)))
+    @test_deprecated (@test_throws LoadError @macroexpand @test_macro_throw_1)
+    # Decorated LoadErrors are unwrapped if the actual exception matches the inner, but not the outer, exception, regardless of whether or not a macroexpand is detected.
+    # This will not throw a deprecation warning.
+    @test_throws LoadError("file", 111, ErrorException("Real error")) macroexpand(@__MODULE__, :(@test_macro_throw_1))
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_1
+    # Decorated LoadErrors are not unwrapped if a LoadError was thrown.
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
 end

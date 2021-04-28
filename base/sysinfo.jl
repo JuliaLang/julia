@@ -516,7 +516,7 @@ function which(program_name::String)
             program_path = joinpath(path_dir, pname)
             # If we find something that matches our name and we can execute
             if isfile(program_path) && isexecutable(program_path)
-                return realpath(program_path)
+                return program_path
             end
         end
     end

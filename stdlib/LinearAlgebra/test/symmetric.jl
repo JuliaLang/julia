@@ -11,13 +11,19 @@ Random.seed!(1010)
     @test ishermitian(σ)
 end
 
+@testset "Two-dimensional Euler formula for Hermitian" begin
+    @test cis(Hermitian([π 0; 0 π])) ≈ -I
+end
+
 @testset "Hermitian matrix exponential/log" begin
     A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
     @test exp(A2) ≈ exp(Hermitian(A2))
+    @test cis(A2) ≈ cis(Hermitian(A2))
     @test log(A2) ≈ log(Hermitian(A2))
     A3 = A1 * A1' # posdef
     @test exp(A3) ≈ exp(Hermitian(A3))
+    @test cis(A3) ≈ cis(Hermitian(A3))
     @test log(A3) ≈ log(Hermitian(A3))
 
     A1 = randn(4,4)
@@ -724,6 +730,31 @@ end
         @test Acs * Ahcs ≈ Acs * parent(Ahcs)
         @test Ahcs * Ahrs ≈ parent(Ahcs) * Ahrs
         @test Ahcs * Acs ≈ parent(Ahcs) * Acs
+    end
+end
+
+@testset "Addition/subtraction with SymTridiagonal" begin
+    TR = SymTridiagonal(randn(Float64,5), randn(Float64,4))
+    TC = SymTridiagonal(randn(ComplexF64,5), randn(ComplexF64,4))
+    SR = Symmetric(randn(Float64,5,5))
+    SC = Symmetric(randn(ComplexF64,5,5))
+    HR = Hermitian(randn(Float64,5,5))
+    HC = Hermitian(randn(ComplexF64,5,5))
+    for op = (+,-)
+        for T = (TR, TC), S = (SR, SC)
+            @test op(T, S) == op(Array(T), S)
+            @test op(S, T) == op(S, Array(T))
+            @test op(T, S) isa Symmetric
+            @test op(S, T) isa Symmetric
+        end
+        for H = (HR, HC)
+            for T = (TR, TC)
+                @test op(T, H) == op(Array(T), H)
+                @test op(H, T) == op(H, Array(T))
+            end
+            @test op(TR, H) isa Hermitian
+            @test op(H, TR) isa Hermitian
+        end
     end
 end
 

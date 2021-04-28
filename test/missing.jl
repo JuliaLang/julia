@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "MissingException" begin
     @test sprint(showerror, MissingException("test")) == "MissingException: test"
 end
@@ -83,7 +86,7 @@ end
     arithmetic_operators = [+, -, *, /, ^, Base.div, Base.mod, Base.fld, Base.rem]
 
     # All unary operators return missing when evaluating missing
-    for f in [!, ~, +, -, *, &, |, xor]
+    for f in [!, ~, +, -, *, &, |, xor, nand, nor]
         @test ismissing(f(missing))
     end
 
@@ -128,6 +131,22 @@ end
     @test ismissing(xor(true, missing))
     @test ismissing(xor(missing, false))
     @test ismissing(xor(false, missing))
+    @test ismissing(nand(missing, true))
+    @test ismissing(nand(true, missing))
+    @test nand(missing, false) == true
+    @test nand(false, missing) == true
+    @test ismissing(⊼(missing, true))
+    @test ismissing(⊼(true, missing))
+    @test ⊼(missing, false) == true
+    @test ⊼(false, missing) == true
+    @test nor(missing, true) == false
+    @test nor(true, missing) == false
+    @test ismissing(nor(missing, false))
+    @test ismissing(nor(false, missing))
+    @test ⊽(missing, true) == false
+    @test ⊽(true, missing) == false
+    @test ismissing(⊽(missing, false))
+    @test ismissing(⊽(false, missing))
 
     @test ismissing(missing & 1)
     @test ismissing(1 & missing)
@@ -135,11 +154,21 @@ end
     @test ismissing(1 | missing)
     @test ismissing(xor(missing, 1))
     @test ismissing(xor(1, missing))
+    @test ismissing(nand(missing, 1))
+    @test ismissing(nand(1, missing))
+    @test ismissing(⊼(missing, 1))
+    @test ismissing(⊼(1, missing))
+    @test ismissing(nor(missing, 1))
+    @test ismissing(nor(1, missing))
+    @test ismissing(⊽(missing, 1))
+    @test ismissing(⊽(1, missing))
 end
 
-@testset "* string concatenation" begin
+@testset "* string/char concatenation" begin
     @test ismissing("a" * missing)
+    @test ismissing('a' * missing)
     @test ismissing(missing * "a")
+    @test ismissing(missing * 'a')
 end
 
 # Emulate a unitful type such as Dates.Minute
@@ -504,6 +533,19 @@ end
         nt = NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
             (missing, missing))
         @test sum(skipmissing(nt)) === 0
+
+        # issues #38627 and #124
+        @testset for len in [1, 2, 15, 16, 1024, 1025]
+            v = repeat(Union{Int,Missing}[1], len)
+            oa = OffsetArray(v, typemax(Int)-length(v))
+            sm = skipmissing(oa)
+            @test sum(sm) == len
+
+            v = repeat(Union{Int,Missing}[missing], len)
+            oa = OffsetArray(v, typemax(Int)-length(v))
+            sm = skipmissing(oa)
+            @test sum(sm) == 0
+        end
     end
 
     @testset "filter" begin
@@ -552,3 +594,29 @@ end
     me = try missing(1) catch e e end
     @test sprint(showerror, me) == "MethodError: objects of type Missing are not callable"
 end
+
+@testset "sort and sortperm with $(eltype(X))" for (X, P, RP) in
+    (([2, missing, -2, 5, missing], [3, 1, 4, 2, 5], [2, 5, 4, 1, 3]),
+     ([NaN, missing, 5, -0.0, NaN, missing, Inf, 0.0, -Inf],
+      [9, 4, 8, 3, 7, 1, 5, 2, 6], [2, 6, 1, 5, 7, 3, 8, 4, 9]),
+     ([missing, "a", "c", missing, "b"], [2, 5, 3, 1, 4], [1, 4, 3, 5, 2]))
+    @test sortperm(X) == P
+    @test sortperm(X, alg=QuickSort) == P
+    @test sortperm(X, alg=MergeSort) == P
+
+    XP = X[P]
+    @test isequal(sort(X), XP)
+    @test isequal(sort(X, alg=QuickSort), XP)
+    @test isequal(sort(X, alg=MergeSort), XP)
+
+    @test sortperm(X, rev=true) == RP
+    @test sortperm(X, alg=QuickSort, rev=true) == RP
+    @test sortperm(X, alg=MergeSort, rev=true) == RP
+
+    XRP = X[RP]
+    @test isequal(sort(X, rev=true), XRP)
+    @test isequal(sort(X, alg=QuickSort, rev=true), XRP)
+    @test isequal(sort(X, alg=MergeSort, rev=true), XRP)
+end
+
+sortperm(reverse([NaN, missing, NaN, missing]))

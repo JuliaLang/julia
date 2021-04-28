@@ -19,11 +19,17 @@ using Test, Printf
         @test (@sprintf "%-20p" C_NULL) == "0x00000000          "
     end
 
+    #40318
+    @test @sprintf("%p", 0xfffffffffffe0000) == "0xfffffffffffe0000"
+
 end
 
 @testset "%a" begin
 
     # hex float
+    @test (Printf.@sprintf "%a" 0.0) == "0x0p+0"
+    @test (Printf.@sprintf "%a" -0.0) == "-0x0p+0"
+    @test (Printf.@sprintf "%.3a" 0.0) == "0x0.000p+0"
     @test (Printf.@sprintf "%a" 1.5) == "0x1.8p+0"
     @test (Printf.@sprintf "%a" 1.5f0) == "0x1.8p+0"
     @test (Printf.@sprintf "%a" big"1.5") == "0x1.8p+0"
@@ -141,6 +147,10 @@ end
     @test Printf.@sprintf("%+ 09.1f", 1.234) == "+000001.2"
     @test Printf.@sprintf("%+ 09.0f", 1.234) == "+00000001"
     @test Printf.@sprintf("%+ #09.0f", 1.234) == "+0000001."
+
+    #40303
+    @test Printf.@sprintf("%+7.1f", 9.96) == "  +10.0"
+    @test Printf.@sprintf("% 7.1f", 9.96) == "   10.0"
 end
 
 @testset "%e" begin
@@ -202,6 +212,10 @@ end
     @test Printf.@sprintf("%+ 09.1e", 1.234) == "+01.2e+00"
     @test Printf.@sprintf("%+ 09.0e", 1.234) == "+0001e+00"
     @test Printf.@sprintf("%+ #09.0e", 1.234) == "+001.e+00"
+
+    #40303
+    @test Printf.@sprintf("%+9.1e", 9.96) == " +1.0e+01"
+    @test Printf.@sprintf("% 9.1e", 9.96) == "  1.0e+01"
 end
 
 @testset "strings" begin

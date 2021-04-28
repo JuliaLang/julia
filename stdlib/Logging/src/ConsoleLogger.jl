@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    ConsoleLogger(stream=stderr, min_level=Info; meta_formatter=default_metafmt,
+    ConsoleLogger([stream,] min_level=Info; meta_formatter=default_metafmt,
                   show_limited=true, right_justify=0)
 
 Logger with formatting optimized for readability in a text console, for example
@@ -30,12 +30,19 @@ struct ConsoleLogger <: AbstractLogger
     right_justify::Int
     message_limits::Dict{Any,Int}
 end
-function ConsoleLogger(stream::IO=stderr, min_level=Info;
+function ConsoleLogger(stream::IO, min_level=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
     ConsoleLogger(stream, min_level, meta_formatter,
                   show_limited, right_justify, Dict{Any,Int}())
 end
+function ConsoleLogger(min_level=Info;
+                       meta_formatter=default_metafmt, show_limited=true,
+                       right_justify=0)
+    ConsoleLogger(closed_stream, min_level, meta_formatter,
+                  show_limited, right_justify, Dict{Any,Int}())
+end
+
 
 shouldlog(logger::ConsoleLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
@@ -110,12 +117,16 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # Generate a text representation of the message and all key value pairs,
     # split into lines.
     msglines = [(indent=0, msg=l) for l in split(chomp(string(message)::String), '\n')]
-    dsize = displaysize(logger.stream)::Tuple{Int,Int}
+    stream = logger.stream
+    if !isopen(stream)
+        stream = level < Warn ? stdout : stderr
+    end
+    dsize = displaysize(stream)::Tuple{Int,Int}
     nkwargs = length(kwargs)::Int
     if nkwargs > hasmaxlog
         valbuf = IOBuffer()
         rows_per_value = max(1, dsize[1] ÷ (nkwargs + 1 - hasmaxlog))
-        valio = IOContext(IOContext(valbuf, logger.stream),
+        valio = IOContext(IOContext(valbuf, stream),
                           :displaysize => (rows_per_value, dsize[2] - 5),
                           :limit => logger.show_limited)
         for (key, val) in kwargs
@@ -136,7 +147,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     color, prefix, suffix = logger.meta_formatter(level, _module, group, id, filepath, line)::Tuple{Union{Symbol,Int},String,String}
     minsuffixpad = 2
     buf = IOBuffer()
-    iob = IOContext(buf, logger.stream)
+    iob = IOContext(buf, stream)
     nonpadwidth = 2 + (isempty(prefix) || length(msglines) > 1 ? 0 : length(prefix)+1) +
                   msglines[end].indent + termlength(msglines[end].msg) +
                   (isempty(suffix) ? 0 : length(suffix)+minsuffixpad)
@@ -164,6 +175,6 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
         println(iob)
     end
 
-    write(logger.stream, take!(buf))
+    write(stream, take!(buf))
     nothing
 end

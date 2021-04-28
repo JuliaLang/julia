@@ -618,15 +618,12 @@ end
 @test A15838.@f() === nothing
 @test A15838.@f(1) === :b
 let ex = :(A15838.@f(1, 2)), __source__ = LineNumberNode(@__LINE__, Symbol(@__FILE__))
-    nometh = try
+    e = try
         macroexpand(@__MODULE__, ex)
         false
     catch ex
         ex
-    end::LoadError
-    @test nometh.file === string(__source__.file)
-    @test nometh.line === __source__.line
-    e = nometh.error::MethodError
+    end::MethodError
     @test e.f === getfield(A15838, Symbol("@f"))
     @test e.args === (__source__, @__MODULE__, 1, 2)
 end
@@ -822,16 +819,19 @@ let f = function (x; kw...)
 end
 
 # normalization of Unicode symbols (#19464)
-let ε=1, μ=2, x=3, î=4
+let ε=1, μ=2, x=3, î=4, ⋅=5
     # issue #5434 (mu vs micro):
     @test Meta.parse("\u00b5") === Meta.parse("\u03bc")
     @test µ == μ == 2
     # NFC normalization of identifiers:
     @test Meta.parse("\u0069\u0302") === Meta.parse("\u00ee")
-    @test î == 4
+    @test î == 4
     # latin vs greek ε (#14751)
     @test Meta.parse("\u025B") === Meta.parse("\u03B5")
     @test ɛ == ε == 1
+    # middot char · or · vs math dot operator ⋅ (#25098)
+    @test Meta.parse("\u00b7") === Meta.parse("\u0387") === Meta.parse("\u22c5")
+    @test (·) == (·) == (⋅) == 5
 end
 
 # issue #8925
@@ -1357,7 +1357,6 @@ end
 @test Meta.parse("√3x^2") == Expr(:call, :*, Expr(:call, :√, 3), Expr(:call, :^, :x, 2))
 @test Meta.parse("-3x^2") == Expr(:call, :*, -3, Expr(:call, :^, :x, 2))
 @test_throws ParseError Meta.parse("2!3")
-@test_throws ParseError Meta.parse("2√3")
 
 # issue #27914
 @test Meta.parse("2f(x)")        == Expr(:call, :*, 2, Expr(:call, :f, :x))
@@ -1864,7 +1863,7 @@ end
 @test_throws UndefVarError eval(:(1+$(Symbol(""))))
 
 # issue #31404
-f31404(a, b; kws...) = (a, b, kws.data)
+f31404(a, b; kws...) = (a, b, values(kws))
 @test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))
 
 # issue #28992
@@ -2157,6 +2156,12 @@ end
 # added ⟂ to operator precedence (#24404)
 @test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
 @test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)
+
+# issue 39350
+@testset "binary ⫪ and ⫫" begin
+    @test Meta.parse("a ⫪ b") == Expr(:call, :⫪, :a, :b)
+    @test Meta.parse("a ⫫ b") == Expr(:call, :⫫, :a, :b)
+end
 
 # only allow certain characters after interpolated vars (#25231)
 @test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
@@ -2727,6 +2732,58 @@ end
 @eval f39705(x) = $(Expr(:||)) && x
 @test f39705(1) === false
 
+
+struct A x end
+Base.dotgetproperty(::A, ::Symbol) = [0, 0, 0]
+
+@testset "dotgetproperty" begin
+    a = (x = [1, 2, 3],)
+    @test @inferred((a -> a.x .+= 1)(a)) == [2, 3, 4]
+
+    b = [1, 2, 3]
+    @test A(b).x === b
+    @test begin A(b).x .= 1 end == [1, 1, 1]
+    @test begin A(b).x .+= 1 end == [2, 3, 4]
+    @test b == [1, 2, 3]
+end
+
 @test Meta.@lower((::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
 @test Meta.@lower((::T,) = x) == Expr(:error, "invalid assignment location \"::T\"")
 @test Meta.@lower((; ::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
+
+# flisp conversion for quoted SSAValues
+@test eval(:(x = $(QuoteNode(Core.SSAValue(1))))) == Core.SSAValue(1)
+@test eval(:(x = $(QuoteNode(Core.SlotNumber(1))))) == Core.SlotNumber(1)
+@test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
+@test_throws ErrorException("syntax: Slot objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
+
+# juxtaposition of radical symbols (#40094)
+@test Meta.parse("2√3") == Expr(:call, :*, 2, Expr(:call, :√, 3))
+@test Meta.parse("2∛3") == Expr(:call, :*, 2, Expr(:call, :∛, 3))
+@test Meta.parse("2∜3") == Expr(:call, :*, 2, Expr(:call, :∜, 3))
+
+macro m_underscore_hygiene()
+    return :(_ = 1)
+end
+
+@test @macroexpand(@m_underscore_hygiene()) == :(_ = 1)
+
+macro m_begin_hygiene(a)
+    return :($(esc(a))[begin])
+end
+
+@test @m_begin_hygiene([1, 2, 3]) == 1
+
+# issue 40258
+@test "a $("b $("c")")" == "a b c"
+
+@test "$(([[:a, :b], [:c, :d]]...)...)" == "abcd"
+
+@test eval(Expr(:string, "a", Expr(:string, "b", "c"))) == "abc"
+@test eval(Expr(:string, "a", Expr(:string, "b", Expr(:string, "c")))) == "abc"
+
+macro m_nospecialize_unnamed_hygiene()
+    return :(f(@nospecialize(::Any)) = Any)
+end
+
+@test @m_nospecialize_unnamed_hygiene()(1) === Any
