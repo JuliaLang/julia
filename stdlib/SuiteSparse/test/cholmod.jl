@@ -911,3 +911,35 @@ end
     @test C * C' == Sparse(spzeros(3, 3))
     @test C' * C == Sparse(spzeros(0, 0))
 end
+
+@testset "permutation handling" begin
+    @testset "default permutation" begin
+        # Assemble arrow matrix
+        A = sparse(5I,3,3)
+        A[:,1] .= 1; A[1,:] .= A[:,1]
+
+        # Ensure cholesky eliminates the fill-in
+        @test cholesky(A).p[1] != 1
+    end
+
+    @testset "user-specified permutation" begin
+        n = 100
+        A = sprand(n,n,5/n) |> t -> t't + I
+        @test cholesky(A, perm=1:n).p == 1:n
+    end
+end
+
+@testset "Check common is still in default state" begin
+    # This test intentially depends on all the above tests!
+    current_common = CHOLMOD.common[Threads.threadid()]
+    default_common = CHOLMOD.Common()
+    @test current_common.print == 0
+    for name in (
+        :nmethods,
+        :postorder,
+        :final_ll,
+        :supernodal,
+    )
+        @test getproperty(current_common, name) == getproperty(default_common, name)
+    end
+end
