@@ -1461,6 +1461,11 @@ extern "C" JL_DLLEXPORT float __gnu_h2f_ieee(uint16_t param)
     return half_to_float(param);
 }
 
+extern "C" JL_DLLEXPORT float __aeabi_h2f(uint16_t param)
+{
+    return half_to_float(param);
+}
+
 extern "C" JL_DLLEXPORT float __extendhfsf2(uint16_t param)
 {
     return half_to_float(param);
@@ -1471,9 +1476,25 @@ extern "C" JL_DLLEXPORT uint16_t __gnu_f2h_ieee(float param)
     return float_to_half(param);
 }
 
+extern "C" JL_DLLEXPORT uint16_t __aeabi_f2h(float param)
+{
+    return float_to_half(param);
+}
+
 extern "C" JL_DLLEXPORT uint16_t __truncdfhf2(double param)
 {
     return float_to_half((float)param);
+}
+
+extern "C" JL_DLLEXPORT uint16_t __aeabi_d2h(double param)
+{
+    return float_to_half((float)param);
+}
+
+// Not yet used, https://reviews.llvm.org/D84877
+extern "C" JL_DLLEXPORT double __aeabi_h2d(uint16_t param)
+{
+    return (double)half_to_float(param);
 }
 
 #endif
