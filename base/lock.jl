@@ -205,7 +205,7 @@ end
     @lock l expr
 
 Macro version for `lock(f, l::AbstractLock)`. It wraps an arbitrary `expr` with a pair of
-`lock(l)` and `unlock(l)` functions. It is often more performant than function form 
+`lock(l)` and `unlock(l)` functions. It is often more performant than function form
 `lock(f, l)`, because it don't capture variables into a lambda.
 See [`lock`](@ref).
 """
@@ -224,7 +224,7 @@ end
 """
     @lock_nofail l expr
 
-Equivalent to `@lock l expr` for cases in which we can guarantee that the function 
+Equivalent to `@lock l expr` for cases in which we can guarantee that the function
 will not throw any error. In this case, avoiding try-catch can improve the performance.
 See [`@lock`](@ref).
 """
