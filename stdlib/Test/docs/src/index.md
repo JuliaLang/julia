@@ -102,6 +102,7 @@ or could not be evaluated due to an error, the test set will then throw a `TestS
 
 ```@docs
 Test.@testset
+Test.TestSetException
 ```
 
 We can put our tests for the `foo(x)` function in a test set:
@@ -293,6 +294,18 @@ And using that testset looks like:
         @test true
     end
 end
+```
+
+## Test utilities
+
+```@docs
+Test.GenericArray
+Test.GenericDict
+Test.GenericOrder
+Test.GenericSet
+Test.GenericString
+Test.detect_ambiguities
+Test.detect_unbound_args
 ```
 
 ```@meta
