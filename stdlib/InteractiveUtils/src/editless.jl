@@ -237,21 +237,37 @@ edit(m::Module) = edit(pathof(m))
 # terminal pager
 
 if Sys.iswindows()
-    function less(file::AbstractString, line::Integer)
-        pager = shell_split(get(ENV, "PAGER", "more"))
+    function pager_skipto!(pager::Vector{String}, line::Integer)
         if pager[1] == "more"
-            g = ""
+            goto = ""
             line -= 1
         else
-            g = "g"
+            goto = "g"
         end
-        run(Cmd(`$pager +$(line)$(g) \"$file\"`, windows_verbatim = true))
-        nothing
+        return push!(pager, "+$(line)$(goto)")
     end
+    
+    function less(file::AbstractString, line::Integer)
+        pager = shell_split(get(ENV, "PAGER", "more"))
+        if pager[1] == "bat"
+            batpager = shell_split(get(ENV, "BATPAGER", "less"))
+            pager_skipto!(batpager, line)
+            run(addenv(Cmd(`$pager \"$file\"`; windows_verbatim=true), "BATPAGER"=>join(batpager, ' ')))
+        else
+            pager_skipto!(pager, line)
+            run(Cmd(`$pager \"$file\"`; windows_verbatim=true))
+        end
+        nothing
+    end 
 else
     function less(file::AbstractString, line::Integer)
         pager = shell_split(get(ENV, "PAGER", "less"))
-        run(`$pager +$(line)g $file`)
+        if pager[1] == "bat"
+            batpager = "$(get(ENV, "BATPAGER", "less")) +$(line)g"
+            run(addenv(`$pager $file`, "BATPAGER"=>batpager))
+        else
+            run(`$pager +$(line)g $file`)
+        end
         nothing
     end
 end
