@@ -338,23 +338,6 @@ end
     @test *(a, b, c, d, f) == parse(BigFloat,"5.214588134765625e+04")
     @test *(a, b, c, d, f, g) == parse(BigFloat,"1.6295587921142578125e+03")
 end
-@testset "< / > / <= / >=" begin
-    x = BigFloat(12)
-    y = BigFloat(42)
-    z = BigFloat(30)
-    @test y > x
-    @test y >= x
-    @test y > z
-    @test y >= z
-    @test x < y
-    @test x <= y
-    @test z < y
-    @test z <= y
-    @test y - x >= z
-    @test y - x <= z
-    @test !(x >= z)
-    @test !(y <= z)
-end
 @testset "rounding modes" begin
     setprecision(4) do
         # default mode is round to nearest
@@ -371,7 +354,6 @@ end
         end
     end
 end
-
 @testset "copysign / sign" begin
     x = BigFloat(1)
     y = BigFloat(-1)
@@ -473,10 +455,11 @@ end
     @test isnan(nextfloat(BigFloat(NaN), 1))
     @test isnan(prevfloat(BigFloat(NaN), 1))
 end
+
 # sqrt DomainError
 @test_throws DomainError sqrt(BigFloat(-1))
 
-@testset "precision" begin
+@testset "setprecision" begin
     old_precision = precision(BigFloat)
     x = BigFloat(0)
     @test precision(x) == old_precision
@@ -512,7 +495,6 @@ end
     @test !isinteger(-BigFloat(Inf))
     @test !isinteger(BigFloat(NaN))
 end
-
 @testset "comparisons" begin
     x = BigFloat(1)
     y = BigFloat(-1)
@@ -521,9 +503,11 @@ end
     imi = BigFloat(-Inf)
     @test x > y
     @test x >= y
+    @test !(y >= x)
     @test x >= x
     @test y < x
     @test y <= x
+    @test !(x <= y)
     @test y <= y
     @test x < ipl
     @test x <= ipl
@@ -675,14 +659,17 @@ end
     end
     setprecision(21) do
         @test string(parse(BigFloat, "0.1")) == "0.10000002"
+        @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
     end
     setprecision(40) do
         @test string(parse(BigFloat, "0.1")) == "0.10000000000002"
+        @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
     end
     setprecision(123) do
         @test string(parse(BigFloat, "0.1")) == "0.0999999999999999999999999999999999999953"
+        @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
     end
 end
@@ -927,6 +914,7 @@ end
     @test i3+1 > f
     @test i3+1 >= f
 end
+
 # issue #8318
 @test convert(Int64,big(500_000_000_000_000.)) == 500_000_000_000_000
 
@@ -935,6 +923,7 @@ end
     @test MPFR.get_emin() == MPFR.get_emin_min()
     @test MPFR.get_emax() == MPFR.get_emax_max()
 end
+
 # issue #10994: handle embedded NUL chars for string parsing
 @test_throws ArgumentError parse(BigFloat, "1\0")
 
@@ -1025,7 +1014,6 @@ end
         @test to_string(big"-1.0") == "-1.0"
     end
 end
-
 @testset "big(::Type)" begin
     for x in (2f0, pi, 7.8, big(ℯ))
         @test big(typeof(x)) == typeof(big(x))

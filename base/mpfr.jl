@@ -982,7 +982,7 @@ function _prettify_bigfloat(s::String)::String
             neg = startswith(int, '-')
             neg == true && (int = lstrip(int, '-'))
             @assert length(int) == 1
-            string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac)
+            string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
         end
     else
         string(mantissa, 'e', exponent)
