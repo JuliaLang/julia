@@ -628,11 +628,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
                 // We may need to insert padding first to get to the right offset
                 if (al > MAX_ALIGN) {
                     Type *AlignmentType;
-#if JL_LLVM_VERSION >= 110000
                     AlignmentType = ArrayType::get(FixedVectorType::get(T_int8, al), 0);
-#else
-                    AlignmentType = ArrayType::get(VectorType::get(T_int8, al), 0);
-#endif
                     latypes.push_back(AlignmentType);
                     al = MAX_ALIGN;
                 }
@@ -672,11 +668,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
         }
         else if (isarray && !type_is_ghost(lasttype)) {
             if (isTuple && isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
-#if JL_LLVM_VERSION >= 110000
                 struct_decl = FixedVectorType::get(lasttype, ntypes);
-#else
-                struct_decl = VectorType::get(lasttype, ntypes);
-#endif
             else if (isTuple || !llvmcall)
                 struct_decl = ArrayType::get(lasttype, ntypes);
             else
@@ -1580,11 +1572,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
     // for the load part (x.tbaa) and the store part (tbaa_stack).
     // since the tbaa lattice has to be a tree we have unfortunately
     // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
-#if JL_LLVM_VERSION >= 100000
     ctx.builder.CreateMemCpy(dst, MaybeAlign(align), src, MaybeAlign(0), sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
-#else
-    ctx.builder.CreateMemCpy(dst, align, src, 0, sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
-#endif
 }
 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Value *src, MDNode *tbaa_src,
@@ -1594,11 +1582,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
         emit_memcpy_llvm(ctx, dst, tbaa_dst, src, tbaa_src, const_sz->getZExtValue(), align, is_volatile);
         return;
     }
-#if JL_LLVM_VERSION >= 100000
     ctx.builder.CreateMemCpy(dst, MaybeAlign(align), src, MaybeAlign(0), sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
-#else
-    ctx.builder.CreateMemCpy(dst, align, src, 0, sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
-#endif
 }
 
 template<typename T1>
@@ -2676,13 +2660,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
 {
     if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
         // TODO: make this a lifetime_end & dereferencable annotation?
-        ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai,
-#if JL_LLVM_VERSION >= 110000
-                ai->getAlign()
-#else
-                ai->getAlignment()
-#endif
-                );
+        ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai, ai->getAlign());
     if (jl_is_concrete_type(src.typ) || src.constant) {
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
         Type *store_ty = julia_type_to_llvm(ctx, typ);

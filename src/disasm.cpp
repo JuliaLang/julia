@@ -763,11 +763,8 @@ static void jl_dump_asm_internal(
     SourceMgr SrcMgr;
 
     MCTargetOptions Options;
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()
-#if JL_LLVM_VERSION >= 100000
-            , Options
-#endif
-        ));
+    std::unique_ptr<MCAsmInfo> MAI(
+        TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str(), Options));
     assert(MAI && "Unable to create target asm info!");
 
     std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
@@ -878,11 +875,7 @@ static void jl_dump_asm_internal(
                     std::string buf;
                     dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     if (!buf.empty()) {
-#if JL_LLVM_VERSION >= 110000
                         Streamer->emitRawText(buf);
-#else
-                        Streamer->EmitRawText(buf);
-#endif
                     }
                 }
             }
@@ -898,11 +891,7 @@ static void jl_dump_asm_internal(
                 if (di_ctx) {
                     std::string buf;
                     DILineInfoSpecifier infoSpec(
-#if JL_LLVM_VERSION >= 110000
                         DILineInfoSpecifier::FileLineInfoKind::RawValue,
-#else
-                        DILineInfoSpecifier::FileLineInfoKind::Default,
-#endif
                         DILineInfoSpecifier::FunctionNameKind::ShortName);
                     DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Section, Index + Fptr + slide), infoSpec);
                     if (dbg.getNumberOfFrames()) {
@@ -912,11 +901,7 @@ static void jl_dump_asm_internal(
                         dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     }
                     if (!buf.empty()) {
-#if JL_LLVM_VERSION >= 110000
                         Streamer->emitRawText(buf);
-#else
-                        Streamer->EmitRawText(buf);
-#endif
                     }
                     nextLineAddr = (++di_lineIter)->first;
                 }
@@ -928,11 +913,7 @@ static void jl_dump_asm_internal(
                 // stream << Index << ": ";
                 MCSymbol *symbol = DisInfo.lookupSymbol(Fptr+Index);
                 if (symbol) {
-#if JL_LLVM_VERSION >= 110000
                     Streamer->emitLabel(symbol);
-#else
-                    Streamer->EmitLabel(symbol);
-#endif
                 }
             }
 
@@ -940,9 +921,6 @@ static void jl_dump_asm_internal(
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
-#if JL_LLVM_VERSION < 100000
-                                      /*VStream*/ nulls(),
-#endif
                                       /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
             if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
                 Streamer->GetCommentOS() << '\n';
@@ -967,21 +945,13 @@ static void jl_dump_asm_internal(
                             llvm::write_hex(buf, *(uint8_t*)(Fptr + Index + i), HexPrintStyle::PrefixLower, 2);
                         }
                     }
-#if JL_LLVM_VERSION >= 110000
                     Streamer->emitRawText(StringRef(buf.str()));
-#else
-                    Streamer->EmitRawText(StringRef(buf.str()));
-#endif
                 }
                 break;
 
             case MCDisassembler::SoftFail:
                 if (pass != 0) {
-#if JL_LLVM_VERSION >= 110000
                     Streamer->emitRawText(StringRef("potentially undefined instruction encoding:"));
-#else
-                    Streamer->EmitRawText(StringRef("potentially undefined instruction encoding:"));
-#endif
                 }
                 // Fall through
 
@@ -1014,11 +984,7 @@ static void jl_dump_asm_internal(
                             }
                         }
                     }
-#if JL_LLVM_VERSION >= 110000
                     Streamer->emitInstruction(Inst, *STI);
-#else
-                    Streamer->EmitInstruction(Inst, *STI);
-#endif
                 }
                 break;
             }
@@ -1032,11 +998,7 @@ static void jl_dump_asm_internal(
             std::string buf;
             dbgctx.emit_finish(buf);
             if (!buf.empty()) {
-#if JL_LLVM_VERSION >= 110000
                 Streamer->emitRawText(buf);
-#else
-                Streamer->EmitRawText(buf);
-#endif
             }
         }
     }

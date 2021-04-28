@@ -144,11 +144,7 @@ typedef JITSymbol JL_SymbolInfo;
 using RTDyldObjHandleT = orc::VModuleKey;
 #endif
 
-#if JL_LLVM_VERSION >= 100000
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
-#else
-using CompilerResultT = std::unique_ptr<llvm::MemoryBuffer>;
-#endif
 
 class JuliaOJIT {
     struct CompilerT : public orc::IRCompileLayer::IRCompiler {
