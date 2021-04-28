@@ -114,6 +114,8 @@ Standard library changes
 #### SparseArrays
 
 * new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
+* `cholesky()` now fully preserves the user-specified permutation. ([#40560])
+
 
 #### Dates
 
