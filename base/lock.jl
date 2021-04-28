@@ -204,10 +204,9 @@ end
 """
     @lock l expr
 
-Macro version for `lock(f, l::AbstractLock)`. It wraps an arbitrary `expr` with a pair of
-`lock(l)` and `unlock(l)` functions. It is often more performant than function form
-`lock(f, l)`, because it don't capture variables into a lambda.
-See [`lock`](@ref).
+Macro version for `lock(f, l::AbstractLock)`, but with `expr` instead of `f` function.
+This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a closure
+and thus can improve the performance.
 """
 macro lock(l, expr)
     quote
