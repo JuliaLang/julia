@@ -45,9 +45,30 @@ macro cholmod_name(nm)
     string("cholmod_l_", nm)
 end
 
+# Set a `common` field, execute some code and then safely reset the field to
+# its initial value
+macro cholmod_param(kwarg, code)
+    @assert kwarg.head == :(=)
+    param = kwarg.args[1]
+    value = kwarg.args[2]
+
+    common_param = # Read `common.param`
+        Expr(:., :(common[Threads.threadid()]), QuoteNode(param))
+
+    return quote
+        default_value = $common_param
+        try
+            $common_param = $(esc(value))
+            $(esc(code))
+        finally
+            $common_param = default_value
+        end
+    end
+end
+
 # Julia copy of the cholmod_method_struct
 # https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/CHOLMOD/Include/cholmod_core.h#L655
-# Keep this synchronized with __init__() below and jl_cholmod_method_offsets in
+# Keep this synchronized with `jl_cholmod_method_offsets` in
 # https://github.com/JuliaLang/julia/blob/master/deps/SuiteSparse_wrapper.c
 struct Method
     lnz::Cdouble
@@ -69,7 +90,7 @@ end
 
 # Julia copy of the cholmod_common_struct
 # https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/CHOLMOD/Include/cholmod_core.h#L414
-# Keep this synchronized with __init__() below and jl_cholmod_common_offsets in
+# Keep this synchronized with `jl_cholmod_method_offsets` in
 # https://github.com/JuliaLang/julia/blob/master/deps/SuiteSparse_wrapper.c
 mutable struct Common
     dbound::Cdouble
@@ -703,17 +724,19 @@ end
 ### cholmod_check.h ###
 function print_sparse(A::Sparse{Tv}, name::String) where Tv<:VTypes
     isascii(name) || error("non-ASCII name: $name")
-    common[Threads.threadid()] = 3
-    ccall((@cholmod_name("print_sparse"),:libcholmod), Cint,
-          (Ptr{C_Sparse{Tv}}, Ptr{UInt8}, Ptr{Common}),
-          A, name, common[Threads.threadid()])
+    @cholmod_param print = 3 begin
+        ccall((@cholmod_name("print_sparse"),:libcholmod), Cint,
+            (Ptr{C_Sparse{Tv}}, Ptr{UInt8}, Ptr{Common}),
+                    A, name, common[Threads.threadid()])
+    end
     nothing
 end
 function print_factor(F::Factor{Tv}, name::String) where Tv<:VTypes
-    common[Threads.threadid()] = 3
-    ccall((@cholmod_name("print_factor"),:libcholmod), Cint,
-          (Ptr{C_Factor{Tv}}, Ptr{UInt8}, Ptr{Common}),
-          F, name, common[Threads.threadid()])
+    @cholmod_param print = 3 begin
+        ccall((@cholmod_name("print_factor"),:libcholmod), Cint,
+            (Ptr{C_Factor{Tv}}, Ptr{UInt8}, Ptr{Common}),
+                F, name, common[Threads.threadid()])
+    end
     nothing
 end
 
@@ -1359,34 +1382,34 @@ end
 ## Factorization methods
 
 ## Compute that symbolic factorization only
-function fact_(A::Sparse{<:VTypes};
+function symbolic(A::Sparse{<:VTypes};
     perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing,
-    postorder::Bool=true, userperm_only::Bool=true)
+    postorder::Bool=isnothing(perm)||isempty(perm), userperm_only::Bool=true)
 
     sA = unsafe_load(pointer(A))
     sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
 
-    common[Threads.threadid()].postorder = postorder
-
-    if perm === nothing || isempty(perm) # TODO: deprecate empty perm
-        F = analyze(A)
-    else # user permutation provided
-        if userperm_only # use perm even if it is worse than AMD
-            common[Threads.threadid()].nmethods = 1
+    @cholmod_param postorder = postorder begin
+        if perm === nothing || isempty(perm) # TODO: deprecate empty perm
+            return analyze(A)
+        else # user permutation provided
+            if userperm_only # use perm even if it is worse than AMD
+                @cholmod_param nmethods = 1 begin
+                    return analyze_p(A, SuiteSparse_long[p-1 for p in perm])
+                end
+            else
+                return analyze_p(A, SuiteSparse_long[p-1 for p in perm])
+            end
         end
-        F = analyze_p(A, SuiteSparse_long[p-1 for p in perm])
     end
-
-    return F
 end
 
 function cholesky!(F::Factor{Tv}, A::Sparse{Tv};
                    shift::Real=0.0, check::Bool = true) where Tv
-    # Makes it an LLt
-    common[Threads.threadid()].final_ll = true
-
     # Compute the numerical factorization
-    factorize_p!(A, shift, F)
+    @cholmod_param final_ll = true begin
+        factorize_p!(A, shift, F)
+    end
 
     check && (issuccess(F) || throw(LinearAlgebra.PosDefException(1)))
     return F
@@ -1419,11 +1442,8 @@ cholesky!(F::Factor, A::Union{SparseMatrixCSC{T},
 function cholesky(A::Sparse; shift::Real=0.0, check::Bool = true,
     perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing)
 
-    cm = defaults!(common[Threads.threadid()])
-    cm.print = 0
-
     # Compute the symbolic factorization
-    F = fact_(A; perm = perm)
+    F = symbolic(A; perm = perm)
 
     # Compute the numerical factorization
     cholesky!(F, A; shift = shift, check = check)
@@ -1543,9 +1563,6 @@ cholesky(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
 
 function ldlt!(F::Factor{Tv}, A::Sparse{Tv};
                shift::Real=0.0, check::Bool = true) where Tv
-    cm = defaults!(common[Threads.threadid()])
-    cm.print = 0
-
     # Makes it an LDLt
     change_factor!(F, false, false, true, false)
 
@@ -1583,21 +1600,19 @@ ldlt!(F::Factor, A::Union{SparseMatrixCSC{T},
 function ldlt(A::Sparse; shift::Real=0.0, check::Bool = true,
     perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing)
 
-    cm = defaults!(common[Threads.threadid()])
-    cm.print = 0
-
     # Makes it an LDLt
-    cm.final_ll = false
-    # Really make sure it's an LDLt by avoiding supernodal factorization
-    cm.supernodal = 0
+    @cholmod_param final_ll = false begin
+        # Really make sure it's an LDLt by avoiding supernodal factorization
+        @cholmod_param supernodal = 0 begin
+            # Compute the symbolic factorization
+            F = symbolic(A; perm = perm)
 
-    # Compute the symbolic factorization
-    F = fact_(A; perm = perm)
+            # Compute the numerical factorization
+            ldlt!(F, A; shift = shift, check = check)
 
-    # Compute the numerical factorization
-    ldlt!(F, A; shift = shift, check = check)
-
-    return F
+            return F
+        end
+    end
 end
 
 """
