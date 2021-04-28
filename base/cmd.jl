@@ -63,7 +63,7 @@ while changing the settings of the optional keyword arguments:
   array or tuple of `"var"=>val` pairs. In order to modify (rather than replace) the
   existing environment, initialize `env` with `copy(ENV)` and then set `env["var"]=val` as
   desired.  To add to an environment block within a `Cmd` object without replacing all
-  elements, use `addenv()` which will return a `Cmd` object with the updated environment.
+  elements, use [`addenv()`](@ref) which will return a `Cmd` object with the updated environment.
 * `dir::AbstractString`: Specify a working directory for the command (instead
   of the current directory).
 
@@ -236,9 +236,11 @@ Set environment variables to use when running the given `command`. `env` is eith
 dictionary mapping strings to strings, an array of strings of the form `"var=val"`, or
 zero or more `"var"=>val` pair arguments. In order to modify (rather than replace) the
 existing environment, create `env` through `copy(ENV)` and then setting `env["var"]=val`
-as desired, or use `addenv`.
+as desired, or use [`addenv`](@ref).
 
 The `dir` keyword argument can be used to specify a working directory for the command.
+
+See also [`Cmd`](@ref), [`addenv`](@ref), [`ENV`](@ref), [`pwd`](@ref).
 """
 setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
 setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir="") =
@@ -248,9 +250,11 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 """
     addenv(command::Cmd, env...; inherit::Bool = true)
 
-Merge new environment mappings into the given `Cmd` object, returning a new `Cmd` object.
+Merge new environment mappings into the given [`Cmd`](@ref) object, returning a new `Cmd` object.
 Duplicate keys are replaced.  If `command` does not contain any environment values set already,
 it inherits the current environment at time of `addenv()` call if `inherit` is `true`.
+
+See also [`Cmd`](@ref), [`setenv`](@ref), [`ENV`](@ref).
 
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
