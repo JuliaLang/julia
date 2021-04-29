@@ -1312,6 +1312,15 @@ end
     end
 end
 
+@testset "indexing involving IdentityUnitRange" begin
+    r1 = 1:4
+    r2 = Base.IdentityUnitRange(2:3)
+    r3 = UnitRange(r2)
+    @test r1[r2] === r2
+    @test Base.IdentityUnitRange(r1)[r2] === r2
+    @test r2[r3] === r3
+end
+
 @testset "reduce(vcat, ...) inferrence #40277" begin
     x_vecs = ([5, ], [1.0, 2.0, 3.0])
     @test @inferred(reduce(vcat, x_vecs)) == [5.0, 1.0, 2.0, 3.0]
