@@ -263,10 +263,7 @@ Possible fix, define
   g(::Float64, ::Float64)
 ```
 
-Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
-method, and neither is more specific than the other. In such cases, Julia raises a [`MethodError`](@ref)
-rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate
-method for the intersection case:
+The order in which the methods are executed does not matter and neither is more specific than the other.  Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)` method. In such cases, Julia raises a [`MethodError`](@ref) rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate method for the intersection case:
 
 ```jldoctest gofxy
 julia> g(x::Float64, y::Float64) = 2x + 2y
@@ -367,9 +364,9 @@ Stacktrace:
 [...]
 ```
 
-As you can see, the type of the appended element must match the element type of the vector it
-is appended to, or else a [`MethodError`](@ref) is raised. In the following example, the method type parameter
-`T` is used as the return value:
+The type parameter `T` in the signature of the function ensures that appending element `x` to `v` preserves the type of the new `v`. In the function signature, `[v..., x]`, the three dots `...` stand for the regular splatting operator, while the square brackets stand for the vector with all the elements of `v` unpacked and `x` appended to it. The meaning of `{T} = [v..., x]` is that all the elements of the vector are constrained to be of the same type. Note that `{T} = v` has a different meaning as `v` refers to the container and not its elements. Note also that `{T} = [v...]` would not quite work as intended because the method constructor does not yet know that `x` is to become an element of the new vector `v`.
+
+If the type of the appended element does not match the element type of the vector it is appended to, a [`MethodError`](@ref) is raised. In the following example, the method type parameter `T` is used as the return value:
 
 ```jldoctest
 julia> mytypeof(x::T) where {T} = T
