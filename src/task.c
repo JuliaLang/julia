@@ -312,11 +312,6 @@ NOINLINE static void record_backtrace(jl_ptls_t ptls, int skip) JL_NOTSAFEPOINT
     ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, skip + 1);
 }
 
-JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
-{
-    _julia_init(rel);
-}
-
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT
 {
     jl_get_ptls_states()->next_task = task;

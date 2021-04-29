@@ -628,7 +628,7 @@ static void restore_fp_env(void)
     }
 }
 
-void _julia_init(JL_IMAGE_SEARCH rel)
+JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
     // Make sure we finalize the tls callback before starting any threads.

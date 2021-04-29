@@ -774,6 +774,11 @@ JL_DLLEXPORT void jlbacktracet(jl_task_t *t)
     }
 }
 
+JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
+{
+    jlbacktrace();
+}
+
 #ifdef __cplusplus
 }
 #endif
