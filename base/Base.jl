@@ -426,6 +426,9 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
     Core.svec(1, 2) == Core.svec(3, 4)
     any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
 
+    # Code loading uses this
+    sortperm(mtime.(readdir(".")), rev=true)
+
     break   # only actually need to do this once
 end
 
