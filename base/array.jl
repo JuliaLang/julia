@@ -838,9 +838,9 @@ function getindex(A::Array, I::AbstractUnitRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
-    X = similar(A, lI)
+    X = similar(A, axes(I))
     if lI > 0
-        unsafe_copyto!(X, 1, A, first(I), lI)
+        copyto!(X, firstindex(X), A, first(I), lI)
     end
     return X
 end
