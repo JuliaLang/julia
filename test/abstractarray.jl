@@ -1325,10 +1325,26 @@ end
 
 @testset "issue #39896, modified getindex " begin
     for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
-        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3),
+            Base.IdentityUnitRange(Base.OneTo(4)), Base.IdentityUnitRange(2:4))
             @test arr[inds] == arr[collect(inds)]
             @test arr[inds] isa AbstractVector{eltype(arr)}
         end
+    end
+    # Test that ranges and arrays behave identically for indices with 1-based axes
+    for r in (1:10, 1:1:10, Base.OneTo(10),
+        Base.IdentityUnitRange(Base.OneTo(10)), Base.IdentityUnitRange(1:10))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3),
+            Base.IdentityUnitRange(Base.OneTo(4)))
+            @test r[inds] == r[collect(inds)] == collect(r)[inds] == collect(r)[collect(inds)]
+        end
+    end
+    # indexing with offset indices should use the axes of the indices
+    # this may not be implemented in Base for all types, so we just check the values here
+    for r in (1:10, 1:1:10, Base.OneTo(10),
+        Base.IdentityUnitRange(Base.OneTo(10)), Base.IdentityUnitRange(1:10))
+        inds = Base.IdentityUnitRange(2:5)
+        @test range(first(r[inds]), last(r[inds])) == r[UnitRange(inds)]
     end
     for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
         @test arr[true:true] == [arr[1]]
