@@ -1749,7 +1749,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         # now check if this file is fresh relative to its source files
         if !skip_timecheck
             if !samefile(includes[1].filename, modpath)
-                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename)) not file $modpath"
+                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                 return true # cache file was compiled from a different path
             end
             for (modkey, req_modkey) in requires
