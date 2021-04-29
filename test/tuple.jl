@@ -522,7 +522,7 @@ end
 
     @test Base.setindex((1, 2, 4), 4, true) === (4, 2, 4)
     @test_throws BoundsError Base.setindex((1, 2), 2, false)
-    
+
     f() = Base._setindex(9, 1, (1:1, 2:2, 3:3)...)
     @test @inferred(f()) == (9, 2:2, 3:3)
 end
