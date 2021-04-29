@@ -1339,13 +1339,6 @@ end
             @test r[inds] == r[collect(inds)] == collect(r)[inds] == collect(r)[collect(inds)]
         end
     end
-    # indexing with offset indices should use the axes of the indices
-    # this may not be implemented in Base for all types, so we just check the values here
-    for r in (1:10, 1:1:10, Base.OneTo(10),
-        Base.IdentityUnitRange(Base.OneTo(10)), Base.IdentityUnitRange(1:10))
-        inds = Base.IdentityUnitRange(2:5)
-        @test range(first(r[inds]), last(r[inds])) == r[UnitRange(inds)]
-    end
     for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
         @test arr[true:true] == [arr[1]]
         @test arr[true:true] isa AbstractVector{eltype(arr)}
