@@ -196,9 +196,9 @@ JL_DLLEXPORT int jl_load_repl(int argc, char * argv[]) {
 #endif
 
     // Load the repl entrypoint symbol and jump into it!
-    int (*entrypoint)(int, char **) = (int (*)(int, char **))lookup_symbol(libjulia_internal, "repl_entrypoint");
+    int (*entrypoint)(int, char **) = (int (*)(int, char **))lookup_symbol(libjulia_internal, "jl_repl_entrypoint");
     if (entrypoint == NULL) {
-        jl_loader_print_stderr("ERROR: Unable to find `repl_entrypoint()` within libjulia-internal!\n");
+        jl_loader_print_stderr("ERROR: Unable to find `jl_repl_entrypoint()` within libjulia-internal!\n");
         exit(1);
     }
     return entrypoint(argc, (char **)argv);
