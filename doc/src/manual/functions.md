@@ -189,7 +189,7 @@ There are three possible points of return from this function, returning the valu
 expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
-### Return type
+### [Return type](@id man-functions-return-type)
 
 A return type can be specified in the function declaration using the `::` operator. This converts
 the return value to the specified type.
