@@ -1317,6 +1317,7 @@ end
     r2 = Base.IdentityUnitRange(2:3)
     r3 = UnitRange(r2)
     @test r1[r2] === r2
+    @test Base.OneTo(r1)[r2] === r2
     @test Base.IdentityUnitRange(r1)[r2] === r2
     @test r2[r3] === r3
 end
