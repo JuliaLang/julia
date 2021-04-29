@@ -246,7 +246,7 @@ if Sys.iswindows()
         end
         return push!(pager, "+$(line)$(goto)")
     end
-    
+
     function less(file::AbstractString, line::Integer)
         pager = shell_split(get(ENV, "PAGER", "more"))
         if pager[1] == "bat"
@@ -258,7 +258,7 @@ if Sys.iswindows()
             run(Cmd(`$pager \"$file\"`; windows_verbatim=true))
         end
         nothing
-    end 
+    end
 else
     function less(file::AbstractString, line::Integer)
         pager = shell_split(get(ENV, "PAGER", "less"))
