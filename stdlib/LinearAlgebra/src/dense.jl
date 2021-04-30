@@ -634,17 +634,21 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
             C = T[120.,60.,12.,1.]
         end
         A2 = A * A
-        P  = copy(Inn)
-        U  = C[2] * P
-        V  = C[1] * P
-        for k in 1:(div(size(C, 1), 2) - 1)
+        # Compute U and V: Even/odd terms in Padé numerator & denom
+        # Expansion of k=1 in for loop
+        P = A2
+        U = C[2]*I + C[4]*P
+        V = C[1]*I + C[3]*P
+        for k in 2:(div(size(C, 1), 2) - 1)
             k2 = 2 * k
             P *= A2
             U += C[k2 + 2] * P
             V += C[k2 + 1] * P
         end
+
         U = A * U
         X = V + U
+        # Padé approximant:  (V-U)\(V+U)
         LAPACK.gesv!(V-U, X)
     else
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
