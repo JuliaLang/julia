@@ -416,6 +416,39 @@ end
                     "44642116066", "19000000000", "1xIpcEe"]
     end
 end
+                            
+@testset "sumdigits/base" begin
+    @test sumdigits(5, base = 3) == 3
+    # The following have bases powers of 2, but don't enter the fast path
+    @test sumdigits(-3, base = 2) == -2
+    @test sumdigits(-42, base = 4) == -6
+
+    @testset "sumdigits/base with bases powers of 2" begin
+        @test sumdigits(4, base = 2) == 1
+        @test sumdigits(5, base = Int32(2)) == 2
+        @test sumdigits(42, base = 4) == 6
+        @test sumdigits(321, base = 8) == 6
+        @test sumdigits(0x123456789abcdef, base = 16) == 120
+        @test sumdigits(0x2b1a210a750, base = 64) == 142
+        @test sumdigits(0x02a01407, base = Int128(1024)) == 54
+    end
+
+    @testset "sumdigits/base with negative bases" begin
+        @testset "sumdigits(n::$T, base = b)" for T in (Int, UInt, BigInt, Int32, UInt32)
+            @test sumdigits(T(8163), base = -10) == 12
+            if !(T<:Unsigned)
+                @test sumdigits(T(-8163), base = -10) == 32
+            end
+            if T !== BigInt
+                b = rand(-32:-2)
+                for n = T[rand(T), typemax(T), typemin(T)]
+                    # issue #29183
+                    @test sumdigits(n, base=b) == sumdigits(signed(widen(n)), base=b)
+                end
+            end
+        end
+    end
+end
 
 @testset "leading_ones and count_zeros" begin
     @test leading_ones(UInt32(Int64(2) ^ 32 - 2)) == 31
