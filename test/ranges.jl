@@ -1899,10 +1899,5 @@ end
 @testset "PR 40320 nanosoldier" begin
     @test 0.2 * (-2:2) == -0.4:0.2:0.4  # from tests of AbstractFFTs, needs Base.TwicePrecision
     @test 0.2f0 * (-2:2) == Float32.(-0.4:0.2:0.4)  # likewise needs Float64
-
     @test 0.2 * (-2:1:2) == -0.4:0.2:0.4
-    @test 0.0 * (-2:2) == fill(0.0, 5)
-    @test 0.0 * (-2:1:2) == fill(0.0, 5)
-    @test 0 * (-2:2) == fill(0.0, 5)
-    @test 0 * (-2:1:2) == fill(0.0, 5)
 end
