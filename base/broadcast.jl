@@ -1156,10 +1156,12 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r1::AbstractRange, r2::Abstract
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::AbstractRange) = StepRangeLen(x*first(r), x*step(r), length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::AbstractFloat, r::AbstractRange) = Base.range_start_step_length(x*first(r), x*step(r), length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::LinRange) = LinRange(x * r.start, x * r.stop, r.len)
+broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::AbstractFloat, r::LinRange) = LinRange(x * r.start, x * r.stop, r.len) # to solve an ambiguity
 # separate in case of noncommutative multiplication:
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::AbstractRange, x::Number) = StepRangeLen(first(r)*x, step(r)*x, length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::AbstractRange, x::AbstractFloat) = Base.range_start_step_length(first(r)*x, step(r)*x, length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::LinRange, x::Number) = LinRange(r.start * x, r.stop * x, r.len)
+broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::LinRange, x::AbstractFloat) = LinRange(r.start * x, r.stop * x, r.len)
 
 broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::AbstractRange, x::Number) = range(first(r)/x, step=step(r)/x, length=length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::StepRangeLen{T}, x::Number) where {T} =
