@@ -611,6 +611,7 @@ export
     split,
     string,
     strip,
+    sumdigits,
     textwidth,
     thisind,
     titlecase,
