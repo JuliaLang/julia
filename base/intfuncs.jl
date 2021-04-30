@@ -906,6 +906,55 @@ function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:
 end
 
 """
+    sumdigits(n::Integer; base::T = 10)
+
+Compute the sum of the digits of `n` in the given base. This produces the same result as
+`sum(digits(...))`, but does not allocate any memory.
+                    
+# Examples
+```jldoctest
+julia> sumdigits(10, base = 10)
+1
+
+julia> digits(9241, base = 2)
+5
+```
+"""
+function sumdigits(n::Integer; base::Integer = 10)
+    2 <= abs(base) || throw(DomainError(base, "base must be ≥ 2 or ≤ -2"))
+
+    sum = 0
+    nd = ndigits(n, base=base, pad=1)
+
+    if base > 0
+        if ispow2(base) && n >= 0 && n isa Base.BitInteger && base <= typemax(Int)
+            base = Int(base)
+            k = trailing_zeros(base)
+            c = base - 1
+            for i in 1:nd
+                sum += (n >> (k * (i - 1))) & c
+            end
+        else
+            for i in 1:nd
+                n, d = divrem(n, base)
+                sum += d
+            end
+        end
+    else
+        # manually peel one loop iteration for type stability
+        n, d = fldmod(n, -base)
+        sum += d
+        n = -signed(n)
+        for i in 2:nd
+            n, d = fldmod(n, -base)
+            sum += d
+            n = -n
+        end
+    end
+    return sum
+end
+             
+"""
     isqrt(n::Integer)
 
 Integer square root: the largest integer `m` such that `m*m <= n`.
