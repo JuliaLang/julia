@@ -1082,7 +1082,7 @@ end
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
 end
 
-@testset "Issue 11049 and related" begin
+@testset "Issue 11049, and related" begin
     @test promote(range(0f0, stop=1f0, length=3), range(0., stop=5., length=2)) ===
         (range(0., stop=1., length=3), range(0., stop=5., length=2))
     @test convert(LinRange{Float64}, range(0., stop=1., length=3)) === LinRange(0., 1., 3)
@@ -1144,6 +1144,7 @@ end
     @test [reverse(range(1.0, stop=27.0, length=1275));] ==
         reverse([range(1.0, stop=27.0, length=1275);])
 end
+
 @testset "PR 12200 and related" begin
     for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
                range(1, stop=100, length=10), range(1f0, stop=100f0, length=10))
@@ -1893,4 +1894,15 @@ end
     @test r2 isa LinRange && r2 == 2:2
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
+end
+
+@testset "PR 40320 nanosoldier" begin
+    @test 0.2 * (-2:2) == -0.4:0.2:0.4  # from tests of AbstractFFTs, needs Base.TwicePrecision
+    @test 0.2f0 * (-2:2) == Float32.(-0.4:0.2:0.4)  # likewise needs Float64
+
+    @test 0.2 * (-2:1:2) == -0.4:0.2:0.4
+    @test 0.0 * (-2:2) == fill(0.0, 5)
+    @test 0.0 * (-2:1:2) == fill(0.0, 5)
+    @test 0 * (-2:2) == fill(0.0, 5)
+    @test 0 * (-2:1:2) == fill(0.0, 5)
 end
