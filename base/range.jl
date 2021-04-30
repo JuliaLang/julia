@@ -924,12 +924,14 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     end
 end
 
+show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
-function show(io::IO, r::AbstractRange)
+function show(io::IO, r::StepRangeLen)
     if step(r) != 0
         print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
     else
+        # ugly temporary printing, to avoid 0:0:0 etc.
         print(io, "StepRangeLen(", repr(first(r)), ", ", repr(step(r)), ", ", repr(length(r)), ")")
     end
 end
