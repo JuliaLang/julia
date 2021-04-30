@@ -910,7 +910,7 @@ end
 
 Compute the sum of the digits of `n` in the given base. This produces the same result as
 `sum(digits(...))`, but does not allocate any memory.
-                    
+
 # Examples
 ```jldoctest
 julia> sumdigits(10, base = 10)
@@ -953,7 +953,7 @@ function sumdigits(n::Integer; base::Integer = 10)
     end
     return sum
 end
-             
+
 """
     isqrt(n::Integer)
 
