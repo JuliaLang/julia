@@ -416,7 +416,7 @@ end
                     "44642116066", "19000000000", "1xIpcEe"]
     end
 end
-                            
+
 @testset "sumdigits/base" begin
     @test sumdigits(5, base = 3) == 3
     # The following have bases powers of 2, but don't enter the fast path
