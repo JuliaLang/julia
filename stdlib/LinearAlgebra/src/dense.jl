@@ -617,7 +617,6 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = opnorm(A, 1)
-    Inn    = Matrix{T}(I, n, n)
     ## For sufficiently small nA, use lower order Padé-Approximations
     if (nA <= 2.1)
         if nA > 0.95
@@ -664,10 +663,14 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
+        Ut = CC[4]*A2
+        Ut[diagind(Ut)] .+=  CC[2]
         U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
-                  CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2 .+ CC[2].*Inn)
+                  CC[8].*A6 .+ CC[6].*A4 .+ Ut)
+        Vt = CC[3]*A2
+        Vt[diagind(Vt)] .+=  CC[1]
         V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
-                   CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2 .+ CC[1].*Inn
+                   CC[7].*A6 .+ CC[5].*A4 .+ Vt
 
         X = V + U
         LAPACK.gesv!(V-U, X)
