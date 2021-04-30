@@ -7,10 +7,10 @@ import LinearAlgebra: AbstractTriangular
 
 `Symmetric` or `Hermitian` of a `SparseMatrixCSC` or `SparseMatrixCSCView`.
 """
-const SparseMatrixCSCSymmHerm{Tv,Ti} = Union{Symmetric{Tv,<:SparseMatrixCSCUnion{Tv,Ti}},
+SparseMatrixCSCSymmHerm{Tv,Ti} = Union{Symmetric{Tv,<:SparseMatrixCSCUnion{Tv,Ti}},
                                             Hermitian{Tv,<:SparseMatrixCSCUnion{Tv,Ti}}}
 
-const AbstractTriangularSparse{Tv,Ti} = AbstractTriangular{Tv,<:SparseMatrixCSCUnion{Tv,Ti}}
+AbstractTriangularSparse{Tv,Ti} = AbstractTriangular{Tv,<:SparseMatrixCSCUnion{Tv,Ti}}
 
 # converting Symmetric/Hermitian/AbstractTriangular/SubArray of SparseMatrixCSC
 # and Transpose/Adjoint of AbstractTriangular of SparseMatrixCSC to SparseMatrixCSC

@@ -20,7 +20,7 @@ DimensionMismatch() = DimensionMismatch("")
 Supertype for one-dimensional arrays (or array-like types) with
 elements of type `T`. Alias for [`AbstractArray{T,1}`](@ref).
 """
-const AbstractVector{T} = AbstractArray{T,1}
+AbstractVector{T} = AbstractArray{T,1}
 
 """
     AbstractMatrix{T}
@@ -28,18 +28,18 @@ const AbstractVector{T} = AbstractArray{T,1}
 Supertype for two-dimensional arrays (or array-like types) with
 elements of type `T`. Alias for [`AbstractArray{T,2}`](@ref).
 """
-const AbstractMatrix{T} = AbstractArray{T,2}
+AbstractMatrix{T} = AbstractArray{T,2}
 
 """
     AbstractVecOrMat{T}
 
 Union type of [`AbstractVector{T}`](@ref) and [`AbstractMatrix{T}`](@ref).
 """
-const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
+AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
 const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
 const IntOrInd = Union{Int, AbstractUnitRange}
-const DimsOrInds{N} = NTuple{N,DimOrInd}
+DimsOrInds{N} = NTuple{N,DimOrInd}
 const NeedsShaping = Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
 
 """
@@ -57,7 +57,7 @@ a mathematical vector. Alias for [`Array{T,1}`](@ref).
 
 See also [`empty`](@ref), [`similar`](@ref) and [`zero`](@ref) for creating vectors.
 """
-const Vector{T} = Array{T,1}
+Vector{T} = Array{T,1}
 
 """
     Matrix{T} <: AbstractMatrix{T}
@@ -68,7 +68,7 @@ a mathematical matrix. Alias for [`Array{T,2}`](@ref).
 See also [`fill`](@ref), [`zeros`](@ref), [`undef`](@ref) and [`similar`](@ref)
 for creating matrices.
 """
-const Matrix{T} = Array{T,2}
+Matrix{T} = Array{T,2}
 
 """
     VecOrMat{T}
@@ -87,7 +87,7 @@ julia> Array{Float64, 3} <: VecOrMat{Float64}
 false
 ```
 """
-const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
+VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
 """
     DenseArray{T, N} <: AbstractArray{T,N}
@@ -102,21 +102,21 @@ DenseArray
 
 One-dimensional [`DenseArray`](@ref) with elements of type `T`. Alias for `DenseArray{T,1}`.
 """
-const DenseVector{T} = DenseArray{T,1}
+DenseVector{T} = DenseArray{T,1}
 
 """
     DenseMatrix{T}
 
 Two-dimensional [`DenseArray`](@ref) with elements of type `T`. Alias for `DenseArray{T,2}`.
 """
-const DenseMatrix{T} = DenseArray{T,2}
+DenseMatrix{T} = DenseArray{T,2}
 
 """
     DenseVecOrMat{T}
 
 Union type of [`DenseVector{T}`](@ref) and [`DenseMatrix{T}`](@ref).
 """
-const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
+DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
 
@@ -1626,7 +1626,7 @@ function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
+BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
 # use memcmp for == on bit integer types
 ==(a::Arr, b::Arr) where {Arr <: BitIntegerArray} =
     size(a) == size(b) && 0 == _memcmp(a, b, sizeof(eltype(Arr)) * length(a))

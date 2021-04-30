@@ -183,13 +183,13 @@ function Base.showarg(io::IO, v::Transpose, toplevel)
 end
 
 # some aliases for internal convenience use
-const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
-const AdjointAbsVec{T} = Adjoint{T,<:AbstractVector}
-const AdjointAbsMat{T} = Adjoint{T,<:AbstractMatrix}
-const TransposeAbsVec{T} = Transpose{T,<:AbstractVector}
-const TransposeAbsMat{T} = Transpose{T,<:AbstractMatrix}
-const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
-const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
+AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
+AdjointAbsVec{T} = Adjoint{T,<:AbstractVector}
+AdjointAbsMat{T} = Adjoint{T,<:AbstractMatrix}
+TransposeAbsVec{T} = Transpose{T,<:AbstractVector}
+TransposeAbsMat{T} = Transpose{T,<:AbstractMatrix}
+AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
+AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
 # for internal use below
 wrapperop(A::Adjoint) = adjoint

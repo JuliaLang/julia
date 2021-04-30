@@ -845,7 +845,7 @@ const ut7 = Union{st5, mt6}
 
 const ut8 = Union{at1, pt2, st3, st4}
 
-const ut9{T} = Union{at1{T}, pt2{T}, st3{T}, st4{T}}
+ut9{T} = Union{at1{T}, pt2{T}, st3{T}, st4{T}}
 
 f = () -> nothing
 

@@ -129,7 +129,7 @@ mutable struct LinkedListItem{T}
     value::T
     LinkedListItem{T}(value::T) where {T} = new{T}(nothing, nothing, value)
 end
-const LinkedList{T} = InvasiveLinkedList{LinkedListItem{T}}
+LinkedList{T} = InvasiveLinkedList{LinkedListItem{T}}
 
 # delegate methods, as needed
 eltype(::Type{<:LinkedList{T}}) where {T} = @isdefined(T) ? T : Any

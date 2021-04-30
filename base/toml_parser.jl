@@ -275,7 +275,7 @@ ParserError(type) = ParserError(type, nothing)
 #ParserError(type, data) = error(type,data)
 
 # Many functions return either a T or a ParserError
-const Err{T} = Union{T, ParserError}
+Err{T} = Union{T, ParserError}
 
 function format_error_message_for_err_type(error::ParserError)
     msg = err_message[error.type]

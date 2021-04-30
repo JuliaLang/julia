@@ -2164,9 +2164,9 @@ module M37012
 export AValue, B2, SimpleU
 struct AnInteger{S<:Integer} end
 struct AStruct{N} end
-const AValue{S} = Union{AStruct{S}, AnInteger{S}}
+AValue{S} = Union{AStruct{S}, AnInteger{S}}
 struct BStruct{T,S} end
-const B2{S,T} = BStruct{T,S}
+B2{S,T} = BStruct{T,S}
 const SimpleU = Union{AnInteger, AStruct, BStruct}
 end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing

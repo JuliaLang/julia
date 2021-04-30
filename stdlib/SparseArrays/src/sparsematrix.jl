@@ -93,10 +93,10 @@ end
 # this union by extracting the fields via the get function: getcolptr, getrowval, and getnzval. The key
 # insight is that getcolptr on a SparseMatrixCSCView returns an offset view of the colptr of the
 # underlying SparseMatrixCSC
-const SparseMatrixCSCView{Tv,Ti} =
+SparseMatrixCSCView{Tv,Ti} =
     SubArray{Tv,2,<:AbstractSparseMatrixCSC{Tv,Ti},
         Tuple{Base.Slice{Base.OneTo{Int}},I}} where {I<:AbstractUnitRange}
-const SparseMatrixCSCUnion{Tv,Ti} = Union{AbstractSparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
+SparseMatrixCSCUnion{Tv,Ti} = Union{AbstractSparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
 
 getcolptr(S::SparseMatrixCSC)     = getfield(S, :colptr)
 getcolptr(S::SparseMatrixCSCView) = view(getcolptr(parent(S)), first(axes(S, 2)):(last(axes(S, 2)) + 1))

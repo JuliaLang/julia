@@ -1614,7 +1614,7 @@ end
 
 logdet(A) = log(det(A))
 
-const NumberArray{T<:Number} = AbstractArray{T}
+NumberArray{T<:Number} = AbstractArray{T}
 
 """
     promote_leaf_eltypes(itr)

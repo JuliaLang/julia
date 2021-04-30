@@ -15,14 +15,14 @@ abstract type AbstractSparseArray{Tv,Ti,N} <: AbstractArray{Tv,N} end
 Supertype for one-dimensional sparse arrays (or array-like types) with elements
 of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,1}`.
 """
-const AbstractSparseVector{Tv,Ti} = AbstractSparseArray{Tv,Ti,1}
+AbstractSparseVector{Tv,Ti} = AbstractSparseArray{Tv,Ti,1}
 """
     AbstractSparseMatrix{Tv,Ti}
 
 Supertype for two-dimensional sparse arrays (or array-like types) with elements
 of type `Tv` and index type `Ti`. Alias for `AbstractSparseArray{Tv,Ti,2}`.
 """
-const AbstractSparseMatrix{Tv,Ti} = AbstractSparseArray{Tv,Ti,2}
+AbstractSparseMatrix{Tv,Ti} = AbstractSparseArray{Tv,Ti,2}
 
 """
     AbstractSparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}

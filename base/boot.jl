@@ -443,7 +443,7 @@ convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
 
-const NTuple{N,T} = Tuple{Vararg{T,N}}
+NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
 ## primitive Array constructors

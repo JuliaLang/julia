@@ -280,13 +280,13 @@ end
 
 A one-dimensional [`SharedArray`](@ref).
 """
-const SharedVector{T} = SharedArray{T,1}
+SharedVector{T} = SharedArray{T,1}
 """
     SharedMatrix
 
 A two-dimensional [`SharedArray`](@ref).
 """
-const SharedMatrix{T} = SharedArray{T,2}
+SharedMatrix{T} = SharedArray{T,2}
 
 SharedVector(A::Vector) = SharedArray(A)
 SharedMatrix(A::Matrix) = SharedArray(A)

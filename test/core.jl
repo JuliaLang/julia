@@ -6676,7 +6676,7 @@ let a = Foo17149()
 end
 
 # issue #21004
-const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
+PTuple_21004{N,T} = NTuple{N,VecElement{T}}
 @test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
 @test_throws UndefVarError(:T) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
 
@@ -7539,8 +7539,8 @@ end
 
 # Redefining types with Vararg
 abstract type RedefineVararg; end
-const RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
-const RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
+RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
+RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
 
 # NTuples with non-types
 @test NTuple{3, 2} == Tuple{2, 2, 2}

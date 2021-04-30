@@ -3,7 +3,7 @@
 make_value(::Type{T}, i::Integer) where {T<:Integer} = 3*i%T
 make_value(::Type{T},i::Integer) where {T<:AbstractFloat} = T(3*i)
 
-const Vec{N,T} = NTuple{N,Base.VecElement{T}}
+Vec{N,T} = NTuple{N,Base.VecElement{T}}
 
 # Crash report for #15244 motivated this test.
 @generated function thrice_iota(::Type{Vec{N,T}}) where {N,T}

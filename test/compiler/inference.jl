@@ -388,8 +388,8 @@ let g() = Int <: Real ? 1 : ""
     @test Base.return_types(g, Tuple{}) == [Int]
 end
 
-const NInt{N} = Tuple{Vararg{Int, N}}
-const NInt1{N} = Tuple{Int, Vararg{Int, N}}
+NInt{N} = Tuple{Vararg{Int, N}}
+NInt1{N} = Tuple{Int, Vararg{Int, N}}
 @test Base.eltype(NInt) === Int
 @test Base.eltype(NInt1) === Int
 @test Base.eltype(NInt{0}) === Union{}

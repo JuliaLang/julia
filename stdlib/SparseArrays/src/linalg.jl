@@ -157,8 +157,8 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
 
-const SparseTriangular{Tv,Ti} = Union{UpperTriangular{Tv,<:SparseMatrixCSCUnion{Tv,Ti}},LowerTriangular{Tv,<:SparseMatrixCSCUnion{Tv,Ti}}}
-const SparseOrTri{Tv,Ti} = Union{SparseMatrixCSCUnion{Tv,Ti},SparseTriangular{Tv,Ti}}
+SparseTriangular{Tv,Ti} = Union{UpperTriangular{Tv,<:SparseMatrixCSCUnion{Tv,Ti}},LowerTriangular{Tv,<:SparseMatrixCSCUnion{Tv,Ti}}}
+SparseOrTri{Tv,Ti} = Union{SparseMatrixCSCUnion{Tv,Ti},SparseTriangular{Tv,Ti}}
 
 *(A::SparseOrTri, B::AbstractSparseVector) = spmatmulv(A, B)
 *(A::SparseOrTri, B::SparseColumnView) = spmatmulv(A, B)
@@ -376,7 +376,7 @@ function dot(x::SparseVector, A::AbstractSparseMatrixCSC, y::SparseVector)
     r
 end
 
-const WrapperMatrixTypes{T,MT} = Union{
+WrapperMatrixTypes{T,MT} = Union{
     SubArray{T,2,MT},
     Adjoint{T,MT},
     Transpose{T,MT},
@@ -419,33 +419,33 @@ possible_adjoint(adj::Bool, a) = adj ? adjoint(a) : a
 
 const UnitDiagonalTriangular = Union{UnitUpperTriangular,UnitLowerTriangular}
 
-const LowerTriangularPlain{T} = Union{
+LowerTriangularPlain{T} = Union{
             LowerTriangular{T,<:SparseMatrixCSCUnion{T}},
             UnitLowerTriangular{T,<:SparseMatrixCSCUnion{T}}}
 
-const LowerTriangularWrapped{T} = Union{
+LowerTriangularWrapped{T} = Union{
             Adjoint{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}},
             Adjoint{T,<:UnitUpperTriangular{T,<:SparseMatrixCSCUnion{T}}},
             Transpose{T,<:UpperTriangular{T,<:SparseMatrixCSCUnion{T}}},
             Transpose{T,<:UnitUpperTriangular{T,<:SparseMatrixCSCUnion{T}}}} where T
 
-const UpperTriangularPlain{T} = Union{
+UpperTriangularPlain{T} = Union{
             UpperTriangular{T,<:SparseMatrixCSCUnion{T}},
             UnitUpperTriangular{T,<:SparseMatrixCSCUnion{T}}}
 
-const UpperTriangularWrapped{T} = Union{
+UpperTriangularWrapped{T} = Union{
             Adjoint{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}},
             Adjoint{T,<:UnitLowerTriangular{T,<:SparseMatrixCSCUnion{T}}},
             Transpose{T,<:LowerTriangular{T,<:SparseMatrixCSCUnion{T}}},
             Transpose{T,<:UnitLowerTriangular{T,<:SparseMatrixCSCUnion{T}}}} where T
 
-const UpperTriangularSparse{T} = Union{
+UpperTriangularSparse{T} = Union{
             UpperTriangularWrapped{T}, UpperTriangularPlain{T}} where T
 
-const LowerTriangularSparse{T} = Union{
+LowerTriangularSparse{T} = Union{
             LowerTriangularWrapped{T}, LowerTriangularPlain{T}} where T
 
-const TriangularSparse{T} = Union{
+TriangularSparse{T} = Union{
             LowerTriangularSparse{T}, UpperTriangularSparse{T}} where T
 
 ## triangular multipliers

@@ -98,11 +98,11 @@ can_skip_sparsification(f, rest...) = false
 can_skip_sparsification(::typeof(*), ::SparseVectorUnion, ::AdjOrTransSparseVectorUnion) = true
 
 # Dispatch on broadcast operations by number of arguments
-const Broadcasted0{Style<:Union{Nothing,BroadcastStyle},Axes,F} =
+Broadcasted0{Style<:Union{Nothing,BroadcastStyle},Axes,F} =
     Broadcasted{Style,Axes,F,Tuple{}}
-const SpBroadcasted1{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat}} =
+SpBroadcasted1{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat}} =
     Broadcasted{Style,Axes,F,Args}
-const SpBroadcasted2{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat,SparseVecOrMat}} =
+SpBroadcasted2{Style<:SPVM,Axes,F,Args<:Tuple{SparseVecOrMat,SparseVecOrMat}} =
     Broadcasted{Style,Axes,F,Args}
 
 # (1) The definitions below provide a common interface to sparse vectors and matrices

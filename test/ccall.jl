@@ -1073,7 +1073,7 @@ end
 
 # SIMD Registers
 
-const VecReg{N,T} = NTuple{N,VecElement{T}}
+VecReg{N,T} = NTuple{N,VecElement{T}}
 const V2xF32 = VecReg{2,Float32}
 const V4xF32 = VecReg{4,Float32}
 const V2xF64 = VecReg{2,Float64}

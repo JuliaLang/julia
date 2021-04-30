@@ -176,9 +176,9 @@ struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
     end
 end
 
-const OffsetVector{T,AA <: AbstractArray} = OffsetArray{T,1,AA}
+OffsetVector{T,AA <: AbstractArray} = OffsetArray{T,1,AA}
 
-const OffsetMatrix{T,AA <: AbstractArray} = OffsetArray{T,2,AA}
+OffsetMatrix{T,AA <: AbstractArray} = OffsetArray{T,2,AA}
 
 function overflow_check(r, offset::T) where T
     # This gives some performance boost https://github.com/JuliaLang/julia/issues/33273
@@ -361,7 +361,7 @@ Broadcast.broadcast_unalias(dest::OffsetArray, src::OffsetArray) = parent(dest) 
 
 ### Special handling for AbstractRange
 
-const OffsetRange{T} = OffsetArray{T,1,<:AbstractRange{T}}
+OffsetRange{T} = OffsetArray{T,1,<:AbstractRange{T}}
 const IIUR = IdentityUnitRange{S} where S<:AbstractUnitRange{T} where T<:Integer
 
 Base.step(a::OffsetRange) = step(parent(a))

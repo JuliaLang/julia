@@ -220,12 +220,12 @@ map(f, t::Tuple{Any, Any})      = (@_inline_meta; (f(t[1]), f(t[2])))
 map(f, t::Tuple{Any, Any, Any}) = (@_inline_meta; (f(t[1]), f(t[2]), f(t[3])))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-const Any32{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+Any32{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                        Any,Any,Any,Any,Any,Any,Any,Any,
                        Any,Any,Any,Any,Any,Any,Any,Any,
                        Any,Any,Any,Any,Any,Any,Any,Any,
                        Vararg{Any,N}}
-const All32{T,N} = Tuple{T,T,T,T,T,T,T,T,
+All32{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
