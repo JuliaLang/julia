@@ -360,7 +360,10 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
     if isa(x, Expr)
         head = x.head
         if head === :static_parameter
-            return QuoteNode(static_param_values[x.args[1]])
+            if isassigned(static_param_values, x.args[1])
+                return QuoteNode(static_param_values[x.args[1]])
+            end
+            return x
         elseif head === :cfunction
             @assert !isa(type_signature, UnionAll) || !isempty(spvals)
             if !isa(x.args[2], QuoteNode) # very common no-op
@@ -419,7 +422,10 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 end
                 return Expr(:isdefined, Core.SlotNumber(id + slot_offset))
             elseif isexpr(arg, :static_parameter)
-                return true
+                if isassigned(static_param_values, arg.args[1])
+                    return true
+                end
+                return x
             else
                 @assert isa(arg, Union{GlobalRef, Symbol})
                 return x
