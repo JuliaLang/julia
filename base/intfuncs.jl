@@ -916,7 +916,7 @@ Compute the sum of the digits of `n` in the given base. This produces the same r
 julia> sumdigits(10, base = 10)
 1
 
-julia> digits(9241, base = 2)
+julia> sumdigits(9241, base = 2)
 5
 ```
 """
