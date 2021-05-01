@@ -375,3 +375,7 @@ function merge_adjacent_dim(apsz::Dims{N}, apst::Dims{N}, n::Int = 1) where {N}
     end
     return sz, st, n
 end
+
+## ReshapedArray eltype conversion
+
+map(::Type{T}, R::ReshapedArray) where {T} = ReshapedArray(map(T, parent(R)), R.dims, R.mi)
