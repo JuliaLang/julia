@@ -100,7 +100,11 @@ LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
 
 ifeq ($(JULIACODEGEN),LLVM)
 ifneq ($(USE_SYSTEM_LLVM),0)
+ifeq ($(OS), Darwin)
+LLVMLINK += $(LLVM_LDFLAGS) -lLLVM $(shell $(LLVM_CONFIG_HOST) --system-libs)
+else
 LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
+endif
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms
 #       https://github.com/JuliaLang/julia/issues/29981
 else
