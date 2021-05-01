@@ -51,9 +51,6 @@ Literal integers are represented in the standard manner:
 ```jldoctest
 julia> 1
 1
-
-julia> 1234
-1234
 ```
 
 The default type for an integer literal depends on whether the target system has a 32-bit architecture
@@ -337,8 +334,8 @@ Float16(8.0)
 The underscore `_` can be used as digit separator:
 
 ```jldoctest
-julia> 10_000, 0.000_000_005, 0xdead_beef, 0b1011_0010
-(10000, 5.0e-9, 0xdeadbeef, 0xb2)
+julia> 10_000, 0.000_000_005, 0xbad_face, 0b1011_0010
+(10000, 5.0e-9, 0xbadface, 0xb2)
 ```
 
 ### Floating-point zero
