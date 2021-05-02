@@ -544,6 +544,11 @@ end # Float16
         @test Ryu.writefixed(7.018232e-82, 6) == "0.000000"
     end
 
+    @testset "Consistency of trimtrailingzeros" begin
+        Ryu.writefixed(0.0, 1, false, false, false, UInt8('.'), true) == "0"
+        Ryu.writefixed(1.0, 1, false, false, false, UInt8('.'), true) == "1"
+        Ryu.writefixed(2.0, 1, false, false, false, UInt8('.'), true) == "2"
+    end
 end # fixed
 
 @testset "Ryu.writeexp" begin
