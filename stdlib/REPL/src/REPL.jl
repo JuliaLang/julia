@@ -1141,7 +1141,8 @@ function setup_interface(
                         end
                     end
                 else
-                    pos = oldpos + findfirst('\n', input[oldpos:end]) + 1
+                    nl_pos = findfirst('\n', input[oldpos:end])
+                    pos = isnothing(nl_pos) ? oldpos : oldpos + nl_pos
                 end
                 # get the line and strip leading and trailing whitespace
                 line = strip(input[oldpos:prevind(input, pos)])
