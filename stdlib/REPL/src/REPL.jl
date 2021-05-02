@@ -1060,11 +1060,13 @@ function setup_interface(
             shell_prompt_len = length(SHELL_PROMPT)
             help_prompt_len = length(HELP_PROMPT)
             curr_prompt_len = 0
+            pasting_help = false
             while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
-                    # Check if the next statement starts with "julia> ", in that case
-                    # skip it. But first skip whitespace
-                    while input[oldpos] in ('\n', ' ', '\t')
+                    # Check if the next statement starts with a prompt i.e. "julia> ", in that case
+                    # skip it. But first skip whitespace unless pasting in a docstring which may have
+                    # indented prompt examples that we don't want to execute
+                    while input[oldpos] in (pasting_help ? ('\n') : ('\n', ' ', '\t'))
                         oldpos = nextind(input, oldpos)
                         oldpos >= sizeof(input) && return
                     end
@@ -1074,12 +1076,14 @@ function setup_interface(
                         oldpos += jl_prompt_len
                         curr_prompt_len = jl_prompt_len
                         transition(s, julia_prompt)
+                        pasting_help = false
                     # Check if input line starts with "pkg> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), PKG_PROMPT)
                         isprompt_paste = true
                         oldpos += pkg_prompt_len
                         curr_prompt_len = pkg_prompt_len
                         Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
+                        pasting_help = false
                     # Check if input line starts with "(...) pkg> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), Regex("\\(.+\\) $(PKG_PROMPT)"))
                         env_pkg_prompt = match(Regex("\\(.+\\) $(PKG_PROMPT)"), SubString(input, oldpos)).match
@@ -1087,18 +1091,21 @@ function setup_interface(
                         curr_prompt_len = length(env_pkg_prompt)
                         oldpos += curr_prompt_len
                         Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
+                        pasting_help = false
                     # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), SHELL_PROMPT)
                         isprompt_paste = true
                         oldpos += shell_prompt_len
                         curr_prompt_len = shell_prompt_len
                         transition(s, shell_mode)
+                        pasting_help = false
                     # Check if input line starts with "help?> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), HELP_PROMPT)
                         isprompt_paste = true
                         oldpos += help_prompt_len
                         curr_prompt_len = help_prompt_len
                         transition(s, help_mode)
+                        pasting_help = true
                     # If we are prompt pasting and current statement does not begin with a mode prefix, skip to next line
                     elseif isprompt_paste
                         while input[oldpos] != '\n'
