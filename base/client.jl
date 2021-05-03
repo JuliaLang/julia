@@ -82,11 +82,7 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
-struct ExceptionInfo
-    errors::Vector{Tuple{Any, Vector{Union{Ptr{Nothing}, Base.InterpreterIP}}}}
-end
-
-show(io::IO, ::MIME"text/plain", exs::ExceptionInfo) = display_error(io, exs.errors)
+show(io::IO, ::MIME"text/plain", exs::ExceptionStack) = display_error(io, exs.errors)
 
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
@@ -123,7 +119,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 print(color_normal)
             end
             if lasterr !== nothing
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :errs, ExceptionInfo(lasterr))
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :errs, ExceptionStack(lasterr))
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
