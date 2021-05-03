@@ -27,6 +27,11 @@ using SparseArrays: nnz, sparse, sprand, sprandn, SparseMatrixCSC
             @test nnz(lua) == 18
             @test_throws ErrorException lua.Z
             L,U,p,q,Rs = lua.:(:)
+            @test L == lua.L
+            @test U == lua.U
+            @test p == lua.p
+            @test q == lua.q
+            @test Rs == lua.Rs
             @test (Diagonal(Rs) * A)[p,q] ≈ L * U
 
             det(lua) ≈ det(Array(A))
