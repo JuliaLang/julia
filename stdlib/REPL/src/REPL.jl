@@ -468,6 +468,7 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
     )
 
 mutable struct REPLCompletionProvider <: CompletionProvider end
+# XXX: DEAD CODE?
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
@@ -480,6 +481,7 @@ function complete_line(c::REPLCompletionProvider, s::PromptState)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
+# XXX: DEAD CODE?
 function complete_line(c::ShellCompletionProvider, s::PromptState)
     # First parse everything up to the current position
     partial = beforecursor(s.input_buffer)
@@ -488,6 +490,7 @@ function complete_line(c::ShellCompletionProvider, s::PromptState)
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
+# XXX: DEAD CODE?
 function complete_line(c::LatexCompletions, s)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)::String
