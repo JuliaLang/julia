@@ -3,7 +3,7 @@
 ## Functions to compute the reduced shape
 
 # for reductions that expand 0 dims to 1
-reduced_index(i::OneTo) = OneTo(1)
+reduced_index(i::OneTo{T}) where {T} = OneTo(one(T))
 reduced_index(i::Union{Slice, IdentityUnitRange}) = oftype(i, first(i):first(i))
 reduced_index(i::AbstractUnitRange) =
     throw(ArgumentError(

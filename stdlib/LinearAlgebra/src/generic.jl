@@ -702,9 +702,10 @@ end
 function opnorm2(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
     m,n = size(A)
-    if m == 1 || n == 1 return norm2(A) end
     Tnorm = typeof(float(real(zero(T))))
-    (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
+    if m == 0 || n == 0 return zero(Tnorm) end
+    if m == 1 || n == 1 return norm2(A) end
+    return svdvals(A)[1]
 end
 
 function opnormInf(A::AbstractMatrix{T}) where T

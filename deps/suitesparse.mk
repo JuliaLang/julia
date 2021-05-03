@@ -73,17 +73,15 @@ $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSpars
 	done
 	echo 1 > $@
 
+UNINSTALL_suitesparse := $(SUITESPARSE_VER) manual_suitesparse $(SUITESPARSE_LIBS)
+
 $(build_prefix)/manifest/suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest $(build_shlibdir)
 	for lib in $(SUITESPARSE_LIBS); do \
 		cp -a $(dir $<)lib/lib$${lib} $(build_shlibdir) || exit 1; \
 	done
 	#cp -a $(dir $<)lib/* $(build_shlibdir)
 	#cp -a $(dir $<)include/* $(build_includedir)
-	echo $(SUITESPARSE_VER) > $@
-
-uninstall-suitesparse:
-	-rm $(build_prefix)/manifest/suitesparse
-	-rm $(addprefix $(build_shlibdir)/lib, $(SUITESPARSE_LIBS))
+	echo $(UNINSTALL_suitesparse) > $@
 
 clean-suitesparse: clean-suitesparse-wrapper uninstall-suitesparse
 	-rm $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
@@ -150,3 +148,9 @@ install-suitesparse-wrapper: install-suitesparse
 # suitesparse depends on blastrampoline
 compile-suitesparse: | $(build_prefix)/manifest/blastrampoline
 endif
+
+define manual_suitesparse
+uninstall-suitesparse:
+	-rm $(build_prefix)/manifest/suitesparse
+	-rm $(addprefix $(build_shlibdir)/lib,$3)
+endef

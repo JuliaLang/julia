@@ -718,3 +718,10 @@ import .Foo.Libdl; import Libdl
         end
     end
 end
+
+@testset "`Base.project_names` and friends" begin
+    # Some functions in Pkg assumes that these tuples have the same length
+    n = length(Base.project_names)
+    @test length(Base.manifest_names) == n
+    @test length(Base.preferences_names) == n
+end

@@ -85,6 +85,7 @@ Standard library changes
   @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T))) broken=(T == Float64)
   ```
   ([#39322])
+* `@lock` is now exported from Base ([#39588]).
 
 #### Package Manager
 
@@ -114,6 +115,8 @@ Standard library changes
 #### SparseArrays
 
 * new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
+* `cholesky()` now fully preserves the user-specified permutation. ([#40560])
+
 
 #### Dates
 
