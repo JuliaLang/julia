@@ -82,7 +82,7 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
-show(io::IO, ::MIME"text/plain", exs::ExceptionStack) = display_error(io, exs.errors)
+show(io::IO, ::MIME"text/plain", exs::ExceptionStack) = display_error(io, exs.stack)
 
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
