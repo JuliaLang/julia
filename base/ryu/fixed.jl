@@ -4,19 +4,10 @@ function writefixed(buf, pos, v::T,
     @assert 0 < pos <= length(buf)
     startpos = pos
     x = Float64(v)
-    neg = signbit(x)
+    pos = append_sign(x, plus, space, buf, pos)
+
     # special cases
     if x == 0
-        if neg
-            buf[pos] = UInt8('-')
-            pos += 1
-        elseif plus
-            buf[pos] = UInt8('+')
-            pos += 1
-        elseif space
-            buf[pos] = UInt8(' ')
-            pos += 1
-        end
         buf[pos] = UInt8('0')
         pos += 1
         if precision > 0
@@ -40,16 +31,6 @@ function writefixed(buf, pos, v::T,
         buf[pos + 2] = UInt8('N')
         return pos + 3
     elseif !isfinite(x)
-        if neg
-            buf[pos] = UInt8('-')
-            pos += 1
-        elseif plus
-            buf[pos] = UInt8('+')
-            pos += 1
-        elseif space
-            buf[pos] = UInt8(' ')
-            pos += 1
-        end
         buf[pos] = UInt8('I')
         buf[pos + 1] = UInt8('n')
         buf[pos + 2] = UInt8('f')
@@ -68,16 +49,6 @@ function writefixed(buf, pos, v::T,
         m2 = (Int64(1) << 52) | mant
     end
     nonzero = false
-    if neg
-        buf[pos] = UInt8('-')
-        pos += 1
-    elseif plus
-        buf[pos] = UInt8('+')
-        pos += 1
-    elseif space
-        buf[pos] = UInt8(' ')
-        pos += 1
-    end
     if e2 >= -52
         idx = e2 < 0 ? 0 : indexforexp(e2)
         p10bits = pow10bitsforindex(idx)
