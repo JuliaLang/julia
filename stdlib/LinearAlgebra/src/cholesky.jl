@@ -284,7 +284,7 @@ Stacktrace:
 [...]
 ```
 """
-function cholesky!(A:: Matrix, ::Val{false}=Val(false); check::Bool = true)
+function cholesky!(A::AbstractMatrix, ::Val{false}=Val(false); check::Bool = true)
     checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         check && checkpositivedefinite(-1)
