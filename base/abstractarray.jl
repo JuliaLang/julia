@@ -234,7 +234,7 @@ julia> ndims(A)
 ```
 """
 ndims(::AbstractArray{T,N}) where {T,N} = N
-ndims(::Type{<:AbstractArray{T,N}}) where {T,N} = N
+ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N
 
 """
     length(collection) -> Integer
