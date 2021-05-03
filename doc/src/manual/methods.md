@@ -332,7 +332,17 @@ Here's an example where the method type parameter `T` is used as the type parame
 type `Vector{T}` in the method signature:
 
 ```jldoctest
-julia> myappend(v::Vector{T}, x::T) where {T} = [v..., x]
+julia> function myappend(v::Vector{T}, x::T) where {T}
+           return [v..., x]
+       end
+myappend (generic function with 1 method)
+```
+
+The type parameter `T` in the function's signature ensures that the type of the new `v` is preserved after element `x` is appended to it. 
+The function's signature is preceded by the keyword `where` and is placed immediately after the method arguments. When only one type parameter is used, the curly braces are optional. An equivalent one-line definition is:
+
+```jldoctest
+julia> myappend(v::Vector{T}, x::T) where T = [v..., x]
 myappend (generic function with 1 method)
 
 julia> myappend([1,2,3],4)
@@ -364,8 +374,7 @@ Stacktrace:
 [...]
 ```
 
-The type parameter `T` in the signature of the function ensures that appending element `x` to `v` preserves the type of the new `v`. In the function signature, `[v..., x]`, the three dots `...` stand for the regular splatting operator, while the square brackets stand for the vector with all the elements of `v` unpacked and `x` appended to it. The meaning of `{T} = [v..., x]` is that all the elements of the vector are constrained to be of the same type. Note that `{T} = v` has a different meaning as `v` refers to the container and not its elements. Note also that `{T} = [v...]` would not quite work as intended because the method constructor does not yet know that `x` is to become an element of the new vector `v`.
-
+In the short-form definition, the equal sign in `where T =` marks the end of the function's signature and the start of the function's body. 
 If the type of the appended element does not match the element type of the vector it is appended to, a [`MethodError`](@ref) is raised. In the following example, the method type parameter `T` is used as the return value:
 
 ```jldoctest
