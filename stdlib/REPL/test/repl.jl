@@ -1367,7 +1367,7 @@ end
     end
 end
 
-# errs should reprint error
+# err should reprint error
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin
         REPL.run_repl(repl)
@@ -1377,7 +1377,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
     @test readline(stdout_read) == ""
     readuntil(stdout_read, "julia> ", keep=true)
-    write(stdin_write, "errs\n")
+    write(stdin_write, "err\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
     @test readline(stdout_read) == ""
