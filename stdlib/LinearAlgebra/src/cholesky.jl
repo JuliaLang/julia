@@ -262,9 +262,9 @@ function cholesky!(A::RealHermSymComplexHerm, ::Val{false}=Val(false); check::Bo
     return Cholesky(C.data, A.uplo, info)
 end
 
-### for StridedMatrices, check that matrix is symmetric/Hermitian
+### for AbstractMatrices, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A::StridedMatrix, Val(false); check = true) -> Cholesky
+    cholesky!(A::AbstractMatrix, Val(false); check = true) -> Cholesky
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if
@@ -284,7 +284,7 @@ Stacktrace:
 [...]
 ```
 """
-function cholesky!(A::StridedMatrix, ::Val{false}=Val(false); check::Bool = true)
+function cholesky!(A:: Matrix, ::Val{false}=Val(false); check::Bool = true)
     checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         check && checkpositivedefinite(-1)
@@ -309,16 +309,16 @@ end
 cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0, check::Bool = true) =
     throw(ArgumentError("generic pivoted Cholesky factorization is not implemented yet"))
 
-### for StridedMatrices, check that matrix is symmetric/Hermitian
+### for AbstractMatrices, check that matrix is symmetric/Hermitian
 """
-    cholesky!(A::StridedMatrix, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
+    cholesky!(A::AbstractMatrix, Val(true); tol = 0.0, check = true) -> CholeskyPivoted
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if the
 factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
-function cholesky!(A::StridedMatrix, ::Val{true}; tol = 0.0, check::Bool = true)
+function cholesky!(A::AbstractMatrix, ::Val{true}; tol = 0.0, check::Bool = true)
     checksquare(A)
     if !ishermitian(A)
         C = CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
@@ -338,7 +338,7 @@ end
 
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
 and return a [`Cholesky`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref) or [`Hermitian`](@ref)
-[`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
+[`AbstractMatrix`](@ref) or a *perfectly* symmetric or Hermitian `AbstractMatrix`.
 
 The triangular Cholesky factor can be obtained from the factorization `F` via `F.L` and `F.U`,
 where `A ≈ F.U' * F.U ≈ F.L * F.L'`.
@@ -385,8 +385,7 @@ julia> C.L * C.U == A
 true
 ```
 """
-cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
-    ::Val{false}=Val(false); check::Bool = true) = cholesky!(cholcopy(A); check = check)
+cholesky(A::AbstractMatrix, ::Val{false}=Val(false); check::Bool = true) = cholesky!(cholcopy(A); check = check)
 
 
 ## With pivoting
@@ -395,7 +394,7 @@ cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
 
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
 and return a [`CholeskyPivoted`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref)
-or [`Hermitian`](@ref) [`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
+or [`Hermitian`](@ref) [`AbstractMatrix`](@ref) or a *perfectly* symmetric or Hermitian `AbstractMatrix`.
 
 The triangular Cholesky factor can be obtained from the factorization `F` via `F.L` and `F.U`,
 and the permutation via `F.p`, where `A[F.p, F.p] ≈ F.U' * F.U ≈ F.L * F.L'`, or alternatively
@@ -444,8 +443,7 @@ julia> l == C.L && u == C.U
 true
 ```
 """
-cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
-    ::Val{true}; tol = 0.0, check::Bool = true) =
+cholesky(A::AbstractMatrix, ::Val{true}; tol = 0.0, check::Bool = true) =
     cholesky!(cholcopy(A), Val(true); tol = tol, check = check)
 
 ## Number
@@ -573,7 +571,7 @@ function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
     B
 end
 
-function ldiv!(C::CholeskyPivoted, B::StridedVector)
+function ldiv!(C::CholeskyPivoted, B::AbstractVector)
     if C.uplo == 'L'
         ldiv!(adjoint(LowerTriangular(C.factors)),
             ldiv!(LowerTriangular(C.factors), permute!(B, C.piv)))
@@ -584,7 +582,7 @@ function ldiv!(C::CholeskyPivoted, B::StridedVector)
     invpermute!(B, C.piv)
 end
 
-function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
+function ldiv!(C::CholeskyPivoted, B::AbstractMatrix)
     n = size(C, 1)
     for i in 1:size(B, 2)
         permute!(view(B, 1:n, i), C.piv)
@@ -602,7 +600,7 @@ function ldiv!(C::CholeskyPivoted, B::StridedMatrix)
     B
 end
 
-function rdiv!(B::StridedMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
+function rdiv!(B::AbstractMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
     if C.uplo == 'L'
         return rdiv!(rdiv!(B, adjoint(LowerTriangular(C.factors))), LowerTriangular(C.factors))
     else
@@ -610,7 +608,7 @@ function rdiv!(B::StridedMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
     end
 end
 
-function LinearAlgebra.rdiv!(B::StridedMatrix, C::CholeskyPivoted)
+function LinearAlgebra.rdiv!(B::AbstractMatrix, C::CholeskyPivoted)
     n = size(C, 2)
     for i in 1:size(B, 1)
         permute!(view(B, i, 1:n), C.piv)
@@ -673,7 +671,7 @@ end
 inv!(C::Cholesky{<:BlasFloat,<:StridedMatrix}) =
     copytri!(LAPACK.potri!(C.uplo, C.factors), C.uplo, true)
 
-inv(C::Cholesky{<:BlasFloat,<:StridedMatrix}) = inv!(copy(C))
+inv(C::Cholesky) = inv!(copy(C))
 
 function inv(C::CholeskyPivoted)
     ipiv = invperm(C.piv)
