@@ -2388,7 +2388,7 @@ end
 # in-place recursive sqrt of upper quasi-triangular matrix A from
 # Deadman E., Higham N.J., Ralha R. (2013) Blocked Schur Algorithms for Computing the Matrix
 # Square Root. Applied Parallel and Scientific Computing. PARA 2012. Lecture Notes in
-# Computer Science, vol 7782.
+# Computer Science, vol 7782. https://doi.org/10.1007/978-3-642-36803-5_12
 function _sqrt_quasitriu!(R, A; blockwidth=64, n=checksquare(A))
     if n ≤ blockwidth || !(eltype(R) <: BlasFloat) # base case, perform "point" algorithm
         _sqrt_quasitriu_block!(R, A)
