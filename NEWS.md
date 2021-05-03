@@ -57,7 +57,7 @@ Standard library changes
 
 #### REPL
 
-* New `err` global variable in `Main` that is set when an expression throws an exception, akin to `ans`. Typing `err` reprints the exception information.
+* New `err` global variable in `Main` set when an expression throws an exception, akin to `ans`. Typing `err` reprints the exception information.
 
 #### SparseArrays
 
