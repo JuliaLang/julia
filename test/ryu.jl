@@ -545,9 +545,9 @@ end # Float16
     end
 
     @testset "Consistency of trimtrailingzeros" begin
-        Ryu.writefixed(0.0, 1, false, false, false, UInt8('.'), true) == "0"
-        Ryu.writefixed(1.0, 1, false, false, false, UInt8('.'), true) == "1"
-        Ryu.writefixed(2.0, 1, false, false, false, UInt8('.'), true) == "2"
+        @test Ryu.writefixed(0.0, 1, false, false, false, UInt8('.'), true) == "0"
+        @test Ryu.writefixed(1.0, 1, false, false, false, UInt8('.'), true) == "1"
+        @test Ryu.writefixed(2.0, 1, false, false, false, UInt8('.'), true) == "2"
     end
 end # fixed
 
@@ -739,6 +739,12 @@ end
     @test Ryu.writeexp(1e-63, 1) == "1.0e-63"
     @test Ryu.writeexp(1e+83, 0) == "1e+83"
     @test Ryu.writeexp(1e+83, 1) == "1.0e+83"
+end
+
+@testset "Consistency of trimtrailingzeros" begin
+    @test Ryu.writeexp(0.0, 1, false, false, false, UInt8('e'), UInt8('.'), true) == "0e+00"
+    @test Ryu.writeexp(1.0, 1, false, false, false, UInt8('e'), UInt8('.'), true) == "1e+00"
+    @test Ryu.writeexp(2.0, 1, false, false, false, UInt8('e'), UInt8('.'), true) == "2e+00"
 end
 
 end # exp
