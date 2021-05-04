@@ -671,7 +671,7 @@ end
 inv!(C::Cholesky{<:BlasFloat,<:StridedMatrix}) =
     copytri!(LAPACK.potri!(C.uplo, C.factors), C.uplo, true)
 
-inv(C::Cholesky) = inv!(copy(C))
+inv(C::Cholesky{<:BlasFloat,<:StridedMatrix}) = inv!(copy(C))
 
 function inv(C::CholeskyPivoted)
     ipiv = invperm(C.piv)
