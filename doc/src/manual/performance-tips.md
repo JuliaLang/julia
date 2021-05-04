@@ -3,13 +3,20 @@
 In the following sections, we briefly go through a few techniques that can help make your Julia
 code run as fast as possible.
 
+## Performance critical code should be inside a function
+
+Any code that is performance critical should be inside a function. Code inside functions tends to run much faster than top level code, due to how Julia's compiler works.
+
+The use of functions is not only important for performance: functions are more reusable and testable, and clarify what steps are being done and what their inputs and outputs are, [Write functions, not just scripts](@ref) is also a recommendation of Julia's Styleguide.
+
+The functions should take arguments, instead of operating directly on global variables, see the next point.
+
 ## Avoid global variables
 
 A global variable might have its value, and therefore its type, change at any point. This makes
 it difficult for the compiler to optimize code using global variables. Variables should be local,
 or passed as arguments to functions, whenever possible.
 
-Any code that is performance critical or being benchmarked should be inside a function.
 
 We find that global names are frequently constants, and declaring them as such greatly improves
 performance:
@@ -70,7 +77,7 @@ julia> function sum_global()
        end;
 
 julia> @time sum_global()
-  0.017705 seconds (15.28 k allocations: 694.484 KiB)
+  0.009639 seconds (7.36 k allocations: 300.310 KiB, 98.32% compilation time)
 496.84883432553846
 
 julia> @time sum_global()
@@ -106,15 +113,15 @@ julia> function sum_arg(x)
        end;
 
 julia> @time sum_arg(x)
-  0.007701 seconds (821 allocations: 43.059 KiB)
+  0.006202 seconds (4.18 k allocations: 217.860 KiB, 99.72% compilation time)
 496.84883432553846
 
 julia> @time sum_arg(x)
-  0.000006 seconds (5 allocations: 176 bytes)
+  0.000005 seconds (1 allocation: 16 bytes)
 496.84883432553846
 ```
 
-The 5 allocations seen are from running the `@time` macro itself in global scope. If we instead run
+The 1 allocation seen is from running the `@time` macro itself in global scope. If we instead run
 the timing in a function, we can see that indeed no allocations are performed:
 
 ```jldoctest sumarg; filter = r"[0-9\.]+ seconds"
@@ -169,7 +176,7 @@ julia> push!(a, 1); push!(a, 2.0); push!(a, π)
  π = 3.1415926535897...
 ```
 
-Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
+Because `a` is an array of abstract type [`Real`](@ref), it must be able to hold any
 `Real` value. Since `Real` objects can be of arbitrary size and structure, `a` must be
 represented as an array of pointers to individually allocated `Real` objects. However, if we instead
 only allow numbers of the same type, e.g. [`Float64`](@ref), to be stored in `a` these can be stored more
@@ -188,6 +195,10 @@ julia> push!(a, 1); push!(a, 2.0); push!(a,  π)
 
 Assigning numbers into `a` will now convert them to `Float64` and `a` will be stored as
 a contiguous block of 64-bit floating-point values that can be manipulated efficiently.
+
+If you cannot avoid containers with abstract value types, it is sometimes better to
+parametrize with `Any` to avoid runtime type checking. E.g. `IdDict{Any, Any}` performs
+better than `IdDict{Type, Vector}`
 
 See also the discussion under [Parametric Types](@ref).
 
@@ -453,9 +464,9 @@ annotation in this context in order to achieve type stability. This is because t
 cannot deduce the type of the return value of a function, even `convert`, unless the types of
 all the function's arguments are known.
 
-Type annotation will not enhance (and can actually hinder) performance if the type is constructed
-at run-time. This is because the compiler cannot use the annotation to specialize the subsequent
-code, and the type-check itself takes time. For example, in the code:
+Type annotation will not enhance (and can actually hinder) performance if the type is abstract,
+or constructed at run-time. This is because the compiler cannot use the annotation to specialize
+the subsequent code, and the type-check itself takes time. For example, in the code:
 
 ```julia
 function nr(a, prec)
@@ -1047,10 +1058,10 @@ julia> @views fview(x) = sum(x[2:end-1]);
 julia> x = rand(10^6);
 
 julia> @time fcopy(x);
-  0.003051 seconds (7 allocations: 7.630 MB)
+  0.003051 seconds (3 allocations: 7.629 MB)
 
 julia> @time fview(x);
-  0.001020 seconds (6 allocations: 224 bytes)
+  0.001020 seconds (1 allocation: 16 bytes)
 ```
 
 Notice both the 3× speedup and the decreased memory allocation
@@ -1096,6 +1107,17 @@ julia> @time begin
 
 Provided there is enough memory for the copies, the cost of copying the view to an array is
 far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
+
+## Consider StaticArrays.jl for small fixed-size vector/matrix operations
+
+If your application involves many small (`< 100` element) arrays of fixed sizes (i.e. the size is
+known prior to execution), then you might want to consider using the [StaticArrays.jl package](https://github.com/JuliaArrays/StaticArrays.jl).
+This package allows you to represent such arrays in a way that avoids unnecessary heap allocations and allows the compiler to
+specialize code for the *size* of the array, e.g. by completely unrolling vector operations (eliminating the loops) and storing elements in CPU registers.
+
+For example, if you are doing computations with 2d geometries, you might have many computations with 2-component vectors.  By
+using the `SVector` type from StaticArrays.jl, you can use convenient vector notation and operations like `norm(3v - w)` on
+vectors `v` and `w`, while allowing the compiler to unroll the code to a minimal computation equivalent to `@inbounds hypot(3v[1]-w[1], 3v[2]-w[2])`.
 
 ## Avoid string interpolation for I/O
 
@@ -1432,7 +1454,7 @@ julia> function f(x)
 
 julia> @code_warntype f(3.2)
 Variables
-  #self#::Core.Compiler.Const(f, false)
+  #self#::Core.Const(f)
   x::Float64
   y::UNION{FLOAT64, INT64}
 
@@ -1492,7 +1514,7 @@ The following examples may help you interpret expressions marked as containing n
         element accesses
 
   * `Base.getfield(%%x, :(:data))::ARRAY{FLOAT64,N} WHERE N`
-      * Interpretation: getting a field that is of non-leaf type. In this case, `ArrayContainer` had a
+      * Interpretation: getting a field that is of non-leaf type. In this case, the type of `x`, say `ArrayContainer`, had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
@@ -1578,11 +1600,3 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
-
-# Checking for equality with a singleton
-
-When checking if a value is equal to some singleton it can be
-better for performance to check for identicality (`===`) instead of
-equality (`==`). The same advice applies to using `!==` over `!=`.
-These type of checks frequently occur e.g. when implementing the iteration
-protocol and checking if `nothing` is returned from [`iterate`](@ref).

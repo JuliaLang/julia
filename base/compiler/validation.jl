@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Expr head => argument count bounds
-const VALID_EXPR_HEADS = IdDict{Any,Any}(
+const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange}(
     :call => 1:typemax(Int),
     :invoke => 2:typemax(Int),
     :static_parameter => 1:1,
@@ -28,7 +28,10 @@ const VALID_EXPR_HEADS = IdDict{Any,Any}(
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
     :thunk => 1:1,
-    :throw_undef_if_not => 2:2
+    :throw_undef_if_not => 2:2,
+    :aliasscope => 0:0,
+    :popaliasscope => 0:0,
+    :new_opaque_closure => 4:typemax(Int)
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
@@ -48,7 +51,7 @@ const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of meth
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 
 struct InvalidCodeError <: Exception
-    kind::AbstractString
+    kind::String
     meta::Any
 end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
@@ -71,36 +74,42 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
     end
 end
 
+function _validate_val!(@nospecialize(x), errors, ssavals::BitSet)
+    if isa(x, Expr)
+        if x.head === :call || x.head === :invoke
+            f = x.args[1]
+            if f isa GlobalRef && (f.name === :cglobal) && x.head === :call
+                # TODO: these are not yet linearized
+            else
+                for arg in x.args
+                    if !is_valid_argument(arg)
+                        push!(errors, InvalidCodeError(INVALID_CALL_ARG, arg))
+                    else
+                        _validate_val!(arg, errors, ssavals)
+                    end
+                end
+            end
+        end
+    elseif isa(x, SSAValue)
+        id = x.id
+        !in(id, ssavals) && push!(ssavals, id)
+    end
+    return
+end
+
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
 
 Validate `c`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 """
 function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_level::Bool = false)
-    function validate_val!(@nospecialize(x))
-        if isa(x, Expr)
-            if x.head === :call || x.head === :invoke
-                f = x.args[1]
-                if f isa GlobalRef && (f.name === :cglobal) && x.head === :call
-                    # TODO: these are not yet linearized
-                else
-                    for arg in x.args
-                        if !is_valid_argument(arg)
-                            push!(errors, InvalidCodeError(INVALID_CALL_ARG, arg))
-                        else
-                            validate_val!(arg)
-                        end
-                    end
-                end
-            end
-        elseif isa(x, SSAValue)
-            id = x.id
-            !in(id, ssavals) && push!(ssavals, id)
-        end
-    end
-
     ssavals = BitSet()
     lhs_slotnums = BitSet()
+
+    # Do not define recursive function as closure to work around
+    # boxing of the function itself as `Core.Box`.
+    validate_val!(@nospecialize(x)) = _validate_val!(x, errors, ssavals)
+
     for x in c.code
         if isa(x, Expr)
             head = x.head

@@ -190,13 +190,13 @@ end
 
 function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     if isa(ntasks, Function)
-        nt = ntasks()
+        nt = ntasks()::Int
         # start at least one worker task.
         if nt == 0
             nt = 1
         end
     else
-        nt = ntasks
+        nt = ntasks::Int
     end
 
     # Use an unbuffered channel for communicating with the worker tasks. In the event

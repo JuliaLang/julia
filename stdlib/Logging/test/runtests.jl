@@ -193,6 +193,9 @@ end
     └ SUFFIX
     """
 
+    # Execute backtrace once before checking formatting, see #3885
+    backtrace()
+
     # Attaching backtraces
     bt = func1()
     @test startswith(genmsg("msg", exception=(DivideError(),bt)),
@@ -201,7 +204,7 @@ end
     │   exception =
     │    DivideError: integer division error
     │    Stacktrace:
-    │     [1] func1() at""")
+    │      [1] func1()""")
 
 
     @testset "Limiting large data structures" begin

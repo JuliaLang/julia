@@ -46,19 +46,20 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetRegistry.h>
-#include "llvm/Support/TargetSelect.h"
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
-#include "llvm/Support/FormattedStream.h"
+#include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/NativeFormatting.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/DebugInfo/DIContext.h>
-#include "llvm/DebugInfo/DWARF/DWARFContext.h"
+#include <llvm/DebugInfo/DWARF/DWARFContext.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
-#include "llvm/IR/AssemblyAnnotationWriter.h"
-#include "llvm/IR/LegacyPassManager.h"
+#include <llvm/IR/AssemblyAnnotationWriter.h>
+#include <llvm/IR/LegacyPassManager.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -165,7 +166,6 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
 {
     if (verbosity == output_none)
         return;
-    bool update_line_only = false;
     uint32_t nframes = DI.size();
     if (nframes == 0)
         return; // just skip over lines with no debug info at all
@@ -178,21 +178,36 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
             break;
         }
     }
-    if (collapse_recursive && 0 < nctx) {
-        // check if we're adding more frames with the same method name,
-        // if so, drop all existing calls to it from the top of the context
-        // AND check if instead the context was previously printed that way
-        // but now has removed the recursive frames
-        StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';');
-        if ((nctx < nframes && StringRef(DI.at(nframes - nctx - 1).FunctionName).rtrim(';') == method) ||
-            (nctx < context.size() && StringRef(context.at(nctx).FunctionName).rtrim(';') == method)) {
-            update_line_only = true;
-            while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method) {
-                nctx -= 1;
+    bool update_line_only = false;
+    if (collapse_recursive) {
+        if (nctx > 0) {
+            // check if we're adding more frames with the same method name,
+            // if so, drop all existing calls to it from the top of the context
+            // AND check if instead the context was previously printed that way
+            // but now has removed the recursive frames
+            StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';');
+            if ((nctx < nframes && StringRef(DI.at(nframes - nctx - 1).FunctionName).rtrim(';') == method) ||
+                (nctx < context.size() && StringRef(context.at(nctx).FunctionName).rtrim(';') == method)) {
+                update_line_only = true;
+                while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method) {
+                    nctx -= 1;
+                }
             }
         }
+        else if (context.size() > 0) {
+            update_line_only = true;
+        }
     }
-    // examine what frames we're returning from
+    else if (nctx < context.size() && nctx < nframes) {
+        // look at the first non-matching element to see if we are only changing the line number
+        const DILineInfo &CtxLine = context.at(nctx);
+        const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+        if (CtxLine.FileName == FrameLine.FileName &&
+                StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';')) {
+            update_line_only = true;
+        }
+    }
+    // examine how many frames we're returning from
     if (nctx < context.size()) {
         // compute the new inlining depth
         uint32_t npops;
@@ -209,15 +224,6 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
         else {
             npops = context.size() - nctx;
         }
-        // look at the first non-matching element to see if we are only changing the line number
-        if (!update_line_only && nctx < nframes) {
-            const DILineInfo &CtxLine = context.at(nctx);
-            const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
-            if (CtxLine.FileName == FrameLine.FileName &&
-                    StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';')) {
-                update_line_only = true;
-            }
-        }
         context.resize(nctx);
         update_line_only && (npops -= 1);
         if (npops > 0) {
@@ -225,46 +231,26 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
             Out << LineStart << inlining_indent("│") << repeat{npops, "└"} << '\n';
         }
     }
-    // see what change we made to the outermost line number
-    if (update_line_only) {
-        const DILineInfo &frame = DI.at(nframes - 1 - nctx);
-        nctx += 1;
-        context.push_back(frame);
-        if (frame.Line != UINT_MAX && frame.Line != 0) {
-            StringRef method = StringRef(frame.FunctionName).rtrim(';');
-            Out << LineStart << inlining_indent("│")
-                << " @ " << frame.FileName
-                << ":" << frame.Line
-                << " within `" << method << "'";
-            if (collapse_recursive) {
-                while (nctx < nframes) {
-                    const DILineInfo &frame = DI.at(nframes - 1 - nctx);
-                    if (StringRef(frame.FunctionName).rtrim(';') != method)
-                        break;
-                    nctx += 1;
-                    context.push_back(frame);
-                    Out << " @ " << frame.FileName
-                        << ":" << frame.Line;
-                }
-            }
-            Out << "\n";
-        }
-    }
-    // now print the rest of the new frames
+    // print the new frames
     while (nctx < nframes) {
         const DILineInfo &frame = DI.at(nframes - 1 - nctx);
         Out << LineStart << inlining_indent("│");
         nctx += 1;
         context.push_back(frame);
-        this->inline_depth += 1;
-        if (bracket_outer || nctx != 1)
-            Out << "┌";
+        if (update_line_only) {
+            update_line_only = false;
+        }
+        else {
+            this->inline_depth += 1;
+            if (bracket_outer || nctx != 1)
+                Out << "┌";
+        }
         Out << " @ " << frame.FileName;
         if (frame.Line != UINT_MAX && frame.Line != 0)
             Out << ":" << frame.Line;
-        Out << " within `" << StringRef(frame.FunctionName).rtrim(';') << "'";
+        StringRef method = StringRef(frame.FunctionName).rtrim(';');
+        Out << " within `" << method << "'";
         if (collapse_recursive) {
-            StringRef method = StringRef(frame.FunctionName).rtrim(';');
             while (nctx < nframes) {
                 const DILineInfo &frame = DI.at(nframes - 1 - nctx);
                 if (StringRef(frame.FunctionName).rtrim(';') != method)
@@ -443,35 +429,37 @@ jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_modul
     std::string code;
     raw_string_ostream stream(code);
 
-    Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
-    if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
-        jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
+    {
+        Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
+        if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
+            jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
-    JL_LOCK(&codegen_lock); // Might GC
-    LineNumberAnnotatedWriter AAW{debuginfo};
-    if (!llvmf->getParent()) {
-        // print the function declaration as-is
-        llvmf->print(stream, &AAW);
-        delete llvmf;
-    }
-    else {
-        Module *m = llvmf->getParent();
-        if (strip_ir_metadata) {
-            std::string llvmfn = llvmf->getName();
-            jl_strip_llvm_debug(m, true, &AAW);
-            jl_strip_llvm_addrspaces(m);
-            // rewriting the function type creates a new function, so look it up again
-            llvmf = m->getFunction(llvmfn);
-        }
-        if (dump_module) {
-            m->print(stream, &AAW);
+        JL_LOCK(&codegen_lock); // Might GC
+        LineNumberAnnotatedWriter AAW{debuginfo};
+        if (!llvmf->getParent()) {
+            // print the function declaration as-is
+            llvmf->print(stream, &AAW);
+            delete llvmf;
         }
         else {
-            llvmf->print(stream, &AAW);
+            Module *m = llvmf->getParent();
+            if (strip_ir_metadata) {
+                std::string llvmfn(llvmf->getName());
+                jl_strip_llvm_addrspaces(m);
+                jl_strip_llvm_debug(m, true, &AAW);
+                // rewriting the function type creates a new function, so look it up again
+                llvmf = m->getFunction(llvmfn);
+            }
+            if (dump_module) {
+                m->print(stream, &AAW);
+            }
+            else {
+                llvmf->print(stream, &AAW);
+            }
+            delete m;
         }
-        delete m;
+        JL_UNLOCK(&codegen_lock); // Might GC
     }
-    JL_UNLOCK(&codegen_lock); // Might GC
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
 }
@@ -775,11 +763,8 @@ static void jl_dump_asm_internal(
     SourceMgr SrcMgr;
 
     MCTargetOptions Options;
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str()
-#if JL_LLVM_VERSION >= 100000
-            , Options
-#endif
-        ));
+    std::unique_ptr<MCAsmInfo> MAI(
+        TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str(), Options));
     assert(MAI && "Unable to create target asm info!");
 
     std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TheTriple.str()));
@@ -890,11 +875,7 @@ static void jl_dump_asm_internal(
                     std::string buf;
                     dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     if (!buf.empty()) {
-#if JL_LLVM_VERSION >= 110000
                         Streamer->emitRawText(buf);
-#else
-                        Streamer->EmitRawText(buf);
-#endif
                     }
                 }
             }
@@ -910,11 +891,7 @@ static void jl_dump_asm_internal(
                 if (di_ctx) {
                     std::string buf;
                     DILineInfoSpecifier infoSpec(
-#if JL_LLVM_VERSION >= 110000
                         DILineInfoSpecifier::FileLineInfoKind::RawValue,
-#else
-                        DILineInfoSpecifier::FileLineInfoKind::Default,
-#endif
                         DILineInfoSpecifier::FunctionNameKind::ShortName);
                     DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(makeAddress(Section, Index + Fptr + slide), infoSpec);
                     if (dbg.getNumberOfFrames()) {
@@ -924,11 +901,7 @@ static void jl_dump_asm_internal(
                         dbgctx.emit_lineinfo(buf, di_lineIter->second);
                     }
                     if (!buf.empty()) {
-#if JL_LLVM_VERSION >= 110000
                         Streamer->emitRawText(buf);
-#else
-                        Streamer->EmitRawText(buf);
-#endif
                     }
                     nextLineAddr = (++di_lineIter)->first;
                 }
@@ -940,11 +913,7 @@ static void jl_dump_asm_internal(
                 // stream << Index << ": ";
                 MCSymbol *symbol = DisInfo.lookupSymbol(Fptr+Index);
                 if (symbol) {
-#if JL_LLVM_VERSION >= 110000
                     Streamer->emitLabel(symbol);
-#else
-                    Streamer->EmitLabel(symbol);
-#endif
                 }
             }
 
@@ -952,9 +921,6 @@ static void jl_dump_asm_internal(
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
-#if JL_LLVM_VERSION < 100000
-                                      /*VStream*/ nulls(),
-#endif
                                       /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
             if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
                 Streamer->GetCommentOS() << '\n';
@@ -979,21 +945,13 @@ static void jl_dump_asm_internal(
                             llvm::write_hex(buf, *(uint8_t*)(Fptr + Index + i), HexPrintStyle::PrefixLower, 2);
                         }
                     }
-#if JL_LLVM_VERSION >= 110000
                     Streamer->emitRawText(StringRef(buf.str()));
-#else
-                    Streamer->EmitRawText(StringRef(buf.str()));
-#endif
                 }
                 break;
 
             case MCDisassembler::SoftFail:
                 if (pass != 0) {
-#if JL_LLVM_VERSION >= 110000
                     Streamer->emitRawText(StringRef("potentially undefined instruction encoding:"));
-#else
-                    Streamer->EmitRawText(StringRef("potentially undefined instruction encoding:"));
-#endif
                 }
                 // Fall through
 
@@ -1026,11 +984,7 @@ static void jl_dump_asm_internal(
                             }
                         }
                     }
-#if JL_LLVM_VERSION >= 110000
                     Streamer->emitInstruction(Inst, *STI);
-#else
-                    Streamer->EmitInstruction(Inst, *STI);
-#endif
                 }
                 break;
             }
@@ -1044,11 +998,7 @@ static void jl_dump_asm_internal(
             std::string buf;
             dbgctx.emit_finish(buf);
             if (!buf.empty()) {
-#if JL_LLVM_VERSION >= 110000
                 Streamer->emitRawText(buf);
-#else
-                Streamer->EmitRawText(buf);
-#endif
             }
         }
     }

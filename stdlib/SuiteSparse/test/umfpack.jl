@@ -1,8 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using SuiteSparse.UMFPACK
+using SuiteSparse
 using SuiteSparse: increment!
 using Serialization
-using LinearAlgebra: Adjoint, Transpose, SingularException
+using LinearAlgebra:
+    I, det, issuccess, ldiv!, lu, lu!, Adjoint, Transpose, SingularException, Diagonal
+using SparseArrays: nnz, sparse, sprand, sprandn, SparseMatrixCSC
 
 @testset "UMFPACK wrappers" begin
     se33 = sparse(1.0I, 3, 3)
@@ -23,6 +27,11 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
             @test nnz(lua) == 18
             @test_throws ErrorException lua.Z
             L,U,p,q,Rs = lua.:(:)
+            @test L == lua.L
+            @test U == lua.U
+            @test p == lua.p
+            @test q == lua.q
+            @test Rs == lua.Rs
             @test (Diagonal(Rs) * A)[p,q] ≈ L * U
 
             det(lua) ≈ det(Array(A))
@@ -33,11 +42,11 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
 
             @test A*x ≈ b
             z = complex.(b)
-            x = LinearAlgebra.ldiv!(lua, z)
+            x = ldiv!(lua, z)
             @test x ≈ float([1:5;])
             @test z === x
             y = similar(z)
-            LinearAlgebra.ldiv!(y, lua, complex.(b))
+            ldiv!(y, lua, complex.(b))
             @test y ≈ x
 
             @test A*x ≈ b
@@ -48,11 +57,11 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
 
             @test A'*x ≈ b
             z = complex.(b)
-            x = LinearAlgebra.ldiv!(adjoint(lua), z)
+            x = ldiv!(adjoint(lua), z)
             @test x ≈ float([1:5;])
             @test x === z
             y = similar(x)
-            LinearAlgebra.ldiv!(y, adjoint(lua), complex.(b))
+            ldiv!(y, adjoint(lua), complex.(b))
             @test y ≈ x
 
             @test A'*x ≈ b
@@ -60,10 +69,10 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
             @test x ≈ float([1:5;])
 
             @test transpose(A) * x ≈ b
-            x = LinearAlgebra.ldiv!(transpose(lua), complex.(b))
+            x = ldiv!(transpose(lua), complex.(b))
             @test x ≈ float([1:5;])
             y = similar(x)
-            LinearAlgebra.ldiv!(y, transpose(lua), complex.(b))
+            ldiv!(y, transpose(lua), complex.(b))
             @test y ≈ x
 
             @test transpose(A) * x ≈ b
@@ -165,9 +174,9 @@ using LinearAlgebra: Adjoint, Transpose, SingularException
         X = zeros(ComplexF64, N, N)
         B = complex.(rand(N, N), rand(N, N))
         luA, lufA = lu(A), lu(Array(A))
-        @test LinearAlgebra.ldiv!(copy(X), luA, B) ≈ LinearAlgebra.ldiv!(copy(X), lufA, B)
-        @test LinearAlgebra.ldiv!(copy(X), adjoint(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), adjoint(lufA), B)
-        @test LinearAlgebra.ldiv!(copy(X), transpose(luA), B) ≈ LinearAlgebra.ldiv!(copy(X), transpose(lufA), B)
+        @test ldiv!(copy(X), luA, B) ≈ ldiv!(copy(X), lufA, B)
+        @test ldiv!(copy(X), adjoint(luA), B) ≈ ldiv!(copy(X), adjoint(lufA), B)
+        @test ldiv!(copy(X), transpose(luA), B) ≈ ldiv!(copy(X), transpose(lufA), B)
     end
 
     @testset "singular matrix" begin

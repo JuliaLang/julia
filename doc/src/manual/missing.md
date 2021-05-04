@@ -259,6 +259,11 @@ julia> Array{Union{Missing, String}}(missing, 2, 3)
  missing  missing  missing
 ```
 
+!!! note
+    Using `undef` or `similar` may currently give an array filled with
+    `missing`, but this is not the correct way to obtain such an array.
+    Use a `missing` constructor as shown above instead.
+
 An array allowing for `missing` values but which does not contain any such value
 can be converted back to an array which does not allow for missing values using
 [`convert`](@ref). If the array contains `missing` values, a `MethodError` is thrown

@@ -28,7 +28,7 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lu(A)
-LU{Float64,Matrix{Float64}}
+LU{Float64, Matrix{Float64}}
 L factor:
 2×2 Matrix{Float64}:
  1.0       0.0
@@ -106,7 +106,7 @@ julia> A = [4. 3.; 6. 3.]
  6.0  3.0
 
 julia> F = lu!(A)
-LU{Float64,Matrix{Float64}}
+LU{Float64, Matrix{Float64}}
 L factor:
 2×2 Matrix{Float64}:
  1.0       0.0
@@ -139,9 +139,9 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
         for k = 1:minmn
             # find index max
             kp = k
-            if Pivot
-                amax = abs(zero(T))
-                for i = k:m
+            if Pivot && k < m
+                amax = abs(A[k, k])
+                for i = k+1:m
                     absi = abs(A[i,k])
                     if absi > amax
                         kp = i
@@ -248,7 +248,7 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lu(A)
-LU{Float64,Matrix{Float64}}
+LU{Float64, Matrix{Float64}}
 L factor:
 2×2 Matrix{Float64}:
  1.0       0.0
@@ -432,11 +432,11 @@ end
 (/)(adjA::Adjoint{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
 function (/)(trA::Transpose{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, convert(AbstractVector{T}, conj(trA.parent))))
+    return adjoint(ldiv!(F.parent, conj!(copy_oftype(trA.parent, T))))
 end
 function (/)(trA::Transpose{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, convert(AbstractMatrix{T}, conj(trA.parent))))
+    return adjoint(ldiv!(F.parent, conj!(copy_oftype(trA.parent, T))))
 end
 
 function det(F::LU{T}) where T

@@ -60,13 +60,20 @@ viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 
 # Simple utilities
-size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), axes(V)))
+size(V::SubArray) = (@_inline_meta; map(unsafe_length, axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
-sizeof(V::SubArray) = length(V) * elsize(V.parent)
+sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
+sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
 
-copy(V::SubArray) = V.parent[V.indices...]
+function Base.copy(V::SubArray)
+    v = V.parent[V.indices...]
+    ndims(V) == 0 || return v
+    x = similar(V) # ensure proper type of x
+    x[] = v
+    return x
+end
 
 parent(V::SubArray) = V.parent
 parentindices(V::SubArray) = V.indices
@@ -89,7 +96,7 @@ julia> parentindices(V)
 (1, Base.Slice(Base.OneTo(2)))
 ```
 """
-parentindices(a::AbstractArray) = map(OneTo, size(a))
+parentindices(a::AbstractArray) = map(oneto, size(a))
 
 ## Aliasing detection
 dataids(A::SubArray) = (dataids(A.parent)..., _splatmap(dataids, A.indices)...)
@@ -106,7 +113,7 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
 end
 # Transform indices to be "dense"
 _trimmedindex(i::Real) = oftype(i, 1)
-_trimmedindex(i::AbstractUnitRange) = oftype(i, OneTo(length(i)))
+_trimmedindex(i::AbstractUnitRange) = oftype(i, oneto(length(i)))
 _trimmedindex(i::AbstractArray) = oftype(i, reshape(eachindex(IndexLinear(), i), axes(i)))
 
 ## SubArray creation
@@ -121,10 +128,22 @@ _maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A
 """
     view(A, inds...)
 
-Like [`getindex`](@ref), but returns a view into the parent array `A` with the
-given indices instead of making a copy.  Calling [`getindex`](@ref) or
-[`setindex!`](@ref) on the returned `SubArray` computes the
-indices to the parent array on the fly without checking bounds.
+Like [`getindex`](@ref), but returns a lightweight array that lazily references
+(or is effectively a _view_ into) the parent array `A` at the given index or indices
+`inds` instead of eagerly extracting elements or constructing a copied subset.
+Calling [`getindex`](@ref) or [`setindex!`](@ref) on the returned value
+(often a [`SubArray`](@ref)) computes the indices to access or modify the
+parent array on the fly.  The behavior is undefined if the shape of the parent array is
+changed after `view` is called because there is no bound check for the parent array; e.g.,
+it may cause a segmentation fault.
+
+Some immutable parent arrays (like ranges) may choose to simply
+recompute a new array in some circumstances instead of returning
+a `SubArray` if doing so is efficient and provides compatible semantics.
+
+!!! compat "Julia 1.6"
+    In Julia 1.6 or later, `view` can be called on an `AbstractString`, returning a
+    `SubString`.
 
 # Examples
 ```jldoctest
@@ -147,6 +166,9 @@ julia> A # Note A has changed even though we modified b
 2×2 Matrix{Int64}:
  0  2
  0  4
+
+julia> view(2:5, 2:3) # returns a range as type is immutable
+3:4
 ```
 """
 function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
@@ -363,21 +385,24 @@ end
 # The running sum is `f`; the cumulative stride product is `s`.
 # If the parent is a vector, then we offset the parent's own indices with parameters of I
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange}) =
-    (@_inline_meta; first(I[1]) - first(axes1(I[1]))*stride1)
+    (@_inline_meta; first(I[1]) - stride1*first(axes1(I[1])))
 # If the result is one-dimensional and it's a Colon, then linear
-# indexing uses the indices along the given dimension. Otherwise
-# linear indexing always starts with 1.
+# indexing uses the indices along the given dimension.
+# If the result is one-dimensional and it's a range, then linear
+# indexing might be offset if the index itself is offset
+# Otherwise linear indexing always matches the parent.
 compute_offset1(parent, stride1::Integer, I::Tuple) =
     (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
-compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Union{Slice, IdentityUnitRange}}, I::Tuple) =
+compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes(parent, dims[1])))  # index-preserving case
+compute_offset1(parent, stride1::Integer, dims, inds::Tuple{AbstractRange}, I::Tuple) =
+    (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes1(inds[1]))) # potentially index-offsetting case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
-    (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
-
+    (@_inline_meta; compute_linindex(parent, I) - stride1)
 function compute_linindex(parent, I::NTuple{N,Any}) where N
     @_inline_meta
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
-    compute_linindex(1, 1, IP, I)
+    compute_linindex(first(LinearIndices(parent)), 1, IP, I)
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
     @_inline_meta
@@ -404,6 +429,15 @@ end
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
+
+function pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::AbstractCartesianIndex{N}) where {N}
+    index = first_index(V)
+    strds = strides(V)
+    for d = 1:N
+        index += (is[d]-1)*strds[d]
+    end
+    return pointer(V.parent, index)
+end
 
 # indices are taken from the range/vector
 # Since bounds-checking is performance-critical and uses
