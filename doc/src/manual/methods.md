@@ -263,9 +263,9 @@ Possible fix, define
   g(::Float64, ::Float64)
 ```
 
-The order in which the methods are defined does not matter and neither is more specific
-than the other. Here the call `g(2.0, 3.0)` could be handled by either the
-`g(Float64, Any)` or the `g(Any, Float64)` method. In such cases, Julia raises a
+Here the call `g(2.0, 3.0)` could be handled by either the `g(::Float64, ::Any)` or the
+`g(::Any, ::Float64)` method. The order in which the methods are defined does not matter and
+neither is more specific than the other. In such cases, Julia raises a
 [`MethodError`](@ref) rather than arbitrarily picking a method. You can avoid method
 ambiguities by specifying an appropriate method for the intersection case: 
 
