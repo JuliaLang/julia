@@ -293,7 +293,7 @@ macro locals()
 end
 
 """
-    objectid(x)
+    objectid(x) -> UInt
 
 Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
 
