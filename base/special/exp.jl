@@ -9,7 +9,7 @@ MAGIC_ROUND_CONST(::Type{Float32}) = 1.048576f7
 MAX_EXP(n::Val{2}, ::Type{Float32}) = 128.0f0
 MAX_EXP(n::Val{2}, ::Type{Float64}) = 1024.0
 MAX_EXP(n::Val{:ℯ}, ::Type{Float32}) = 88.72284f0
-MAX_EXP(n::Val{:ℯ}, ::Type{Float64}) = 709.782712893384
+MAX_EXP(n::Val{:ℯ}, ::Type{Float64}) = 709.7827128933841
 MAX_EXP(n::Val{10}, ::Type{Float32}) = 38.53184f0
 MAX_EXP(n::Val{10}, ::Type{Float64}) = 308.25471555991675
 
@@ -198,78 +198,116 @@ end
 #
 # 2. Approximate b^r by 7th-degree minimax polynomial p_b(r) on the interval [-log(b,2)/2, log(b,2)/2].
 # 3. Scale back: b^x = 2^N * p_b(r)
-
 # For both, a little extra care needs to be taken if b^r is subnormal.
 # The solution is to do the scaling back in 2 steps as just messing with the exponent wouldn't work.
-for (func, base) in (:exp2=>Val(2), :exp=>Val(:ℯ), :exp10=>Val(10))
+
+@inline function exp_impl(x::Float64, base)
+    T = Float64
+    N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
+    N = reinterpret(UInt64, N_float) % Int32
+    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
+    r = muladd(N_float, LogBo256U(base, T), x)
+    r = muladd(N_float, LogBo256L(base, T), r)
+    k = N >> 8
+    jU, jL = table_unpack(N&255 + 1)
+    small_part =  muladd(jU, expm1b_kernel(base, r), jL) + jU
+
+    if !(abs(x) <= SUBNORM_EXP(base, T))
+        x >= MAX_EXP(base, T) && return Inf
+        x <= MIN_EXP(base, T) && return 0.0
+        if k <= -53
+            # The UInt64 forces promotion. (Only matters for 32 bit systems.)
+            twopk = (k + UInt64(53)) << 52
+            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*(2.0^-53)
+        end
+        #k == 1024 && return (small_part * 2.0) * 2.0^1023
+    end
+    twopk = Int64(k) << 52
+    return reinterpret(T, twopk + reinterpret(Int64, small_part))
+end
+@inline function exp_impl_fast(x::Float64, base)
+    T = Float64
+    N_float = muladd(x, LogBo256INV(base, T), MAGIC_ROUND_CONST(T))
+    N = reinterpret(UInt64, N_float) % Int32
+    N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV(base, T))
+    r = muladd(N_float, LogBo256U(base, T), x)
+    r = muladd(N_float, LogBo256L(base, T), r)
+    k = N >> 8
+    jU = reinterpret(Float64, JU_CONST | (@inbounds J_TABLE[N&255 + 1] & JU_MASK))
+    small_part =  muladd(jU, expm1b_kernel(base, r), jU)
+    twopk = Int64(k) << 52
+    return reinterpret(T, twopk + reinterpret(Int64, small_part))
+end
+
+@inline function exp_impl(x::Float32, base)
+    T = Float32
+    N_float = round(x*LogBINV(base, T))
+    N = unsafe_trunc(Int32, N_float)
+    r = muladd(N_float, LogBU(base, T), x)
+    r = muladd(N_float, LogBL(base, T), r)
+    small_part = expb_kernel(base, r)
+    if !(abs(x) <= SUBNORM_EXP(base, T))
+        x > MAX_EXP(base, T) && return Inf32
+        x < MIN_EXP(base, T) && return 0.0f0
+        if N <= Int32(-24)
+            twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
+            return (twopk*small_part)*(2f0^(-24))
+        end
+        N == 128 && return small_part * T(2.0) * T(2.0)^127
+    end
+    twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
+    return twopk*small_part
+end
+
+@inline function exp_impl_fast(x::Float32, base)
+    T = Float32
+    N_float = round(x*LogBINV(base, T))
+    N = unsafe_trunc(Int32, N_float)
+    r = muladd(N_float, LogBU(base, T), x)
+    r = muladd(N_float, LogBL(base, T), r)
+    small_part = expb_kernel(base, r)
+    twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
+    return twopk*small_part
+end
+
+@inline function exp_impl(a::Float16, base)
+    T = Float32
+    x = T(a)
+    N_float = round(x*LogBINV(base, T))
+    N = unsafe_trunc(Int32, N_float)
+    r = muladd(N_float, LogB(base, Float16), x)
+    small_part = expb_kernel(base, r)
+    if !(abs(x) <= SUBNORM_EXP(base, T))
+        x > MAX_EXP(base, T) && return Inf16
+        N<=Int32(-24) && return zero(Float16)
+    end
+    twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
+    return Float16(twopk*small_part)
+end
+
+for (func, fast_func, base) in ((:exp2,  :exp2_fast,  Val(2)),
+                                (:exp,   :exp_fast,   Val(:ℯ)),
+                                (:exp10, :exp10_fast, Val(10)))
     @eval begin
-        function ($func)(x::T) where T<:Float64
-            N_float = muladd(x, LogBo256INV($base, T), MAGIC_ROUND_CONST(T))
-            N = reinterpret(UInt64, N_float) % Int32
-            N_float -=  MAGIC_ROUND_CONST(T) #N_float now equals round(x*LogBo256INV($base, T))
-            r = muladd(N_float, LogBo256U($base, T), x)
-            r = muladd(N_float, LogBo256L($base, T), r)
-            k = N >> 8
-            jU, jL = table_unpack(N&255 +1)
-            small_part =  muladd(jU, expm1b_kernel($base, r), jL) + jU
-
-            if !(abs(x) <= SUBNORM_EXP($base, T))
-                x >= MAX_EXP($base, T) && return Inf
-                x <= MIN_EXP($base, T) && return 0.0
-                if k <= -53
-                    # The UInt64 forces promotion. (Only matters for 32 bit systems.)
-                    twopk = (k + UInt64(53)) << 52
-                    return reinterpret(T, twopk + reinterpret(UInt64, small_part))*(2.0^-53)
-                end
-            end
-            twopk = Int64(k) << 52
-            return reinterpret(T, twopk + reinterpret(Int64, small_part))
-        end
-
-        function ($func)(x::T) where T<:Float32
-            N_float = round(x*LogBINV($base, T))
-            N = unsafe_trunc(Int32, N_float)
-            r = muladd(N_float, LogBU($base, T), x)
-            r = muladd(N_float, LogBL($base, T), r)
-            small_part = expb_kernel($base, r)
-            if !(abs(x) <= SUBNORM_EXP($base, T))
-                x > MAX_EXP($base, T) && return Inf32
-                x < MIN_EXP($base, T) && return 0.0f0
-                if N<=Int32(-24)
-                    twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
-                    return (twopk*small_part)*(2f0^(-24))
-                end
-                N == (exponent_max(T)+1) && return small_part * T(2.0) * T(2.0)^exponent_max(T)
-            end
-            twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
-            return twopk*small_part
-        end
-
-        function ($func)(a::Float16)
-            T = Float32
-            x = T(a)
-            N_float = round(x*LogBINV($base, T))
-            N = unsafe_trunc(Int32, N_float)
-            r = muladd(N_float, LogB($base, Float16), x)
-            small_part = expb_kernel($base, r)
-            if !(abs(x) <= SUBNORM_EXP($base, T))
-                x > MAX_EXP($base, T) && return Inf16
-                N<=Int32(-24) && return zero(Float16)
-            end
-            twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
-            return Float16(twopk*small_part)
-        end
+        $func(x::Union{Float16,Float32,Float64}) = exp_impl(x, $base)
+        $fast_func(x::Union{Float32,Float64}) = exp_impl_fast(x, $base)
     end
 end
+
 @doc """
     exp(x)
 
-Compute the natural base exponential of `x`, in other words ``e^x``.
+Compute the natural base exponential of `x`, in other words ``ℯ^x``.
+
+See also [`exp2`](@ref), [`exp10`](@ref) and [`cis`](@ref).
 
 # Examples
 ```jldoctest
 julia> exp(1.0)
 2.718281828459045
+
+julia> exp(im * pi) == cis(pi)
+true
 ```
 """ exp(x::Real)
 
@@ -278,10 +316,18 @@ julia> exp(1.0)
 
 Compute the base 2 exponential of `x`, in other words ``2^x``.
 
+See also [`ldexp`](@ref), [`<<`](@ref).
+
 # Examples
 ```jldoctest
 julia> exp2(5)
 32.0
+
+julia> 2^5
+32
+
+julia> exp2(63) > typemax(Int)
+true
 ```
 """
 exp2(x)
@@ -295,6 +341,9 @@ Compute the base 10 exponential of `x`, in other words ``10^x``.
 ```jldoctest
 julia> exp10(2)
 100.0
+
+julia> 10^2
+100
 ```
 """
 exp10(x)
@@ -339,7 +388,7 @@ end
 end
 
 @inline function expm1(x::Float64)
-    T=Float64
+    T = Float64
     if -0.2876820724517809 <= x <= 0.22314355131420976
         return expm1_small(x)
     elseif !(abs(x)<=MIN_EXP(Float64))

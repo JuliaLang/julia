@@ -27,6 +27,9 @@ end
 @testset "%a" begin
 
     # hex float
+    @test (Printf.@sprintf "%a" 0.0) == "0x0p+0"
+    @test (Printf.@sprintf "%a" -0.0) == "-0x0p+0"
+    @test (Printf.@sprintf "%.3a" 0.0) == "0x0.000p+0"
     @test (Printf.@sprintf "%a" 1.5) == "0x1.8p+0"
     @test (Printf.@sprintf "%a" 1.5f0) == "0x1.8p+0"
     @test (Printf.@sprintf "%a" big"1.5") == "0x1.8p+0"
@@ -107,9 +110,9 @@ end
     @test (Printf.@sprintf "%f" -Inf) == "-Inf"
     @test (Printf.@sprintf "%+f" -Inf) == "-Inf"
     @test (Printf.@sprintf "%f" NaN) == "NaN"
-    @test (Printf.@sprintf "%+f" NaN) == "NaN"
-    @test (Printf.@sprintf "% f" NaN) == "NaN"
-    @test (Printf.@sprintf "% #f" NaN) == "NaN"
+    @test (Printf.@sprintf "%+f" NaN) == "+NaN"
+    @test (Printf.@sprintf "% f" NaN) == " NaN"
+    @test (Printf.@sprintf "% #f" NaN) == " NaN"
     @test (Printf.@sprintf "%e" big"Inf") == "Inf"
     @test (Printf.@sprintf "%e" big"NaN") == "NaN"
 
@@ -160,9 +163,9 @@ end
     @test (Printf.@sprintf "%e" -Inf) == "-Inf"
     @test (Printf.@sprintf "%+e" -Inf) == "-Inf"
     @test (Printf.@sprintf "%e" NaN) == "NaN"
-    @test (Printf.@sprintf "%+e" NaN) == "NaN"
-    @test (Printf.@sprintf "% e" NaN) == "NaN"
-    @test (Printf.@sprintf "% #e" NaN) == "NaN"
+    @test (Printf.@sprintf "%+e" NaN) == "+NaN"
+    @test (Printf.@sprintf "% e" NaN) == " NaN"
+    @test (Printf.@sprintf "% #e" NaN) == " NaN"
     @test (Printf.@sprintf "%e" big"Inf") == "Inf"
     @test (Printf.@sprintf "%e" big"NaN") == "NaN"
 

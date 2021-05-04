@@ -702,9 +702,10 @@ end
 function opnorm2(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
     m,n = size(A)
-    if m == 1 || n == 1 return norm2(A) end
     Tnorm = typeof(float(real(zero(T))))
-    (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
+    if m == 0 || n == 0 return zero(Tnorm) end
+    if m == 1 || n == 1 return norm2(A) end
+    return svdvals(A)[1]
 end
 
 function opnormInf(A::AbstractMatrix{T}) where T
@@ -1108,6 +1109,8 @@ pivoted QR factorization of `A` and a rank estimate of `A` based on the R factor
 When `A` is sparse, a similar polyalgorithm is used. For indefinite matrices, the `LDLt`
 factorization does not use pivoting during the numerical factorization and therefore the
 procedure can fail even for invertible matrices.
+
+See also: [`factorize`](@ref), [`pinv`](@ref).
 
 # Examples
 ```jldoctest
@@ -1528,6 +1531,8 @@ end
     det(M)
 
 Matrix determinant.
+
+See also: [`logdet`](@ref) and [`logabsdet`](@ref).
 
 # Examples
 ```jldoctest

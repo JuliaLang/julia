@@ -608,7 +608,10 @@ static const auto jlegal_func = new JuliaFunction{
     [](LLVMContext &C) {
         Type *T = PointerType::get(T_jlvalue, AddressSpace::CalleeRooted);
         return FunctionType::get(T_int32, {T, T}, false); },
-    nullptr,
+    [](LLVMContext &C) { return AttributeList::get(C,
+            Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind, Attribute::ArgMemOnly}),
+            AttributeSet(),
+            None); },
 };
 static const auto jl_alloc_obj_func = new JuliaFunction{
     "julia.gc_alloc_obj",
@@ -1504,11 +1507,13 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
             // actually need it.
             Value *union_box_dt = NULL;
             BasicBlock *union_isaBB = NULL;
+            BasicBlock *post_union_isaBB = NULL;
             auto maybe_setup_union_isa = [&]() {
                 if (!union_isaBB) {
                     union_isaBB = BasicBlock::Create(jl_LLVMContext, "union_isa", ctx.f);
                     ctx.builder.SetInsertPoint(union_isaBB);
-                    union_box_dt = emit_typeof(ctx, v.Vboxed);
+                    union_box_dt = emit_typeof_or_null(ctx, v.Vboxed);
+                    post_union_isaBB = ctx.builder.GetInsertBlock();
                 }
             };
 
@@ -1540,7 +1545,7 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 ctx.builder.SetInsertPoint(postBB);
                 PHINode *tindex_phi = ctx.builder.CreatePHI(T_int8, 2);
                 tindex_phi->addIncoming(new_tindex, currBB);
-                tindex_phi->addIncoming(union_box_tindex, union_isaBB);
+                tindex_phi->addIncoming(union_box_tindex, post_union_isaBB);
                 new_tindex = tindex_phi;
             }
         }
@@ -1713,13 +1718,9 @@ static void jl_init_function(Function *F)
     F->setHasUWTable(); // force NeedsWinEH
 #endif
 #ifdef JL_DISABLE_FPO
-#if LLVM_VERSION_MAJOR >= 8
     F->addFnAttr("frame-pointer", "all");
-#else
-    F->addFnAttr("no-frame-pointer-elim", "true");
 #endif
-#endif
-#if JL_LLVM_VERSION >= 110000 && !defined(JL_ASAN_ENABLED) && !defined(_OS_WINDOWS_)
+#if !defined(JL_ASAN_ENABLED) && !defined(_OS_WINDOWS_)
     // ASAN won't like us accessing undefined memory causing spurious issues,
     // and Windows has platform-specific handling which causes it to mishandle
     // this annotation. Other platforms should just ignore this if they don't
@@ -3797,30 +3798,14 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             ssaslot->insertAfter(varslot);
             if (vi.isVolatile) {
                 Value *unbox = ctx.builder.CreateAlignedLoad(ssaslot->getAllocatedType(), varslot,
-#if JL_LLVM_VERSION >= 110000
                         varslot->getAlign(),
-#else
-                        varslot->getAlignment(),
-#endif
                         true);
-                ctx.builder.CreateAlignedStore(unbox, ssaslot,
-#if JL_LLVM_VERSION >= 110000
-                        ssaslot->getAlign()
-#else
-                        ssaslot->getAlignment()
-#endif
-                        );
+                ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign());
             }
             else {
                 const DataLayout &DL = jl_data_layout;
                 uint64_t sz = DL.getTypeStoreSize(T);
-                emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz,
-#if JL_LLVM_VERSION >= 110000
-                        ssaslot->getAlign().value()
-#else
-                        ssaslot->getAlignment()
-#endif
-                        );
+                emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz, ssaslot->getAlign().value());
             }
             Value *tindex = NULL;
             if (vi.pTIndex)
@@ -3971,11 +3956,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
                     ConstantInt::get(T_int8, 0));
-#if JL_LLVM_VERSION >= 100000
             ctx.builder.CreateMemCpy(phi, MaybeAlign(min_align), dest, MaybeAlign(0), nbytes, false);
-#else
-            ctx.builder.CreateMemCpy(phi, min_align, dest, 0, nbytes, false);
-#endif
             ctx.builder.CreateLifetimeEnd(dest);
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ctx, ptr_phi), T_pint8),
@@ -4015,15 +3996,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         // here it's moved into phi in the successor (from dest)
         dest = emit_static_alloca(ctx, vtype);
         Value *phi = emit_static_alloca(ctx, vtype);
-#if JL_LLVM_VERSION >= 100000
         ctx.builder.CreateMemCpy(phi, MaybeAlign(julia_alignment(phiType)),
              dest, MaybeAlign(0),
              jl_datatype_size(phiType), false);
-#else
-        ctx.builder.CreateMemCpy(phi, julia_alignment(phiType),
-             dest, 0,
-             jl_datatype_size(phiType), false);
-#endif
         ctx.builder.CreateLifetimeEnd(dest);
         slot = mark_julia_slot(phi, phiType, NULL, tbaa_stack);
     }

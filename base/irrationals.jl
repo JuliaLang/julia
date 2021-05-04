@@ -22,7 +22,9 @@ abstract type AbstractIrrational <: Real end
     Irrational{sym} <: AbstractIrrational
 
 Number type representing an exact irrational value denoted by the
-symbol `sym`.
+symbol `sym`, such as [`π`](@ref pi), [`ℯ`](@ref) and [`γ`](@ref Base.MathConstants.eulergamma).
+
+See also [`@irrational`], [`AbstractIrrational`](@ref).
 """
 struct Irrational{sym} <: AbstractIrrational end
 

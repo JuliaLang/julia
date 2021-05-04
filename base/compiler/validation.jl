@@ -51,7 +51,7 @@ const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of meth
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 
 struct InvalidCodeError <: Exception
-    kind::AbstractString
+    kind::String
     meta::Any
 end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)

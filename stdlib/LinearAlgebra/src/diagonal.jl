@@ -63,6 +63,13 @@ AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal) = diagm(0 => D.diag)
 Array(D::Diagonal) = Matrix(D)
 
+"""
+    Diagonal{T}(undef, n)
+
+Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
+"""
+Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
+
 # For D<:Diagonal, similar(D[, neweltype]) should yield a Diagonal matrix.
 # On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
 # The first method below effects the former, and the second the latter.
@@ -472,14 +479,13 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     invoke(\, Tuple{Union{QR,QRCompactWY,QRPivoted}, AbstractVecOrMat}, A, B)
 
 
-@inline function kron!(C::AbstractMatrix{T}, A::Diagonal, B::Diagonal) where T
-    fill!(C, zero(T))
+@inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
     valA = A.diag; nA = length(valA)
     valB = B.diag; nB = length(valB)
     nC = checksquare(C)
     @boundscheck nC == nA*nB ||
         throw(DimensionMismatch("expect C to be a $(nA*nB)x$(nA*nB) matrix, got size $(nC)x$(nC)"))
-
+    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
     @inbounds for i = 1:nA, j = 1:nB
         idx = (i-1)*nB+j
         C[idx, idx] = valA[i] * valB[j]
@@ -487,19 +493,16 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     return C
 end
 
-function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
-    valA = A.diag; nA = length(valA)
-    valB = B.diag; nB = length(valB)
-    valC = Vector{typeof(zero(T1)*zero(T2))}(undef,nA*nB)
-    C = Diagonal(valC)
-    return @inbounds kron!(C, A, B)
-end
+kron(A::Diagonal{<:Number}, B::Diagonal{<:Number}) = Diagonal(kron(A.diag, B.diag))
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     Base.require_one_based_indexing(B)
-    (mA, nA) = size(A); (mB, nB) = size(B); (mC, nC) = size(C);
+    (mA, nA) = size(A)
+    (mB, nB) = size(B)
+    (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch("expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
+    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
     m = 1
     @inbounds for j = 1:nA
         A_jj = A[j,j]
@@ -517,9 +520,12 @@ end
 
 @inline function kron!(C::AbstractMatrix, A::AbstractMatrix, B::Diagonal)
     require_one_based_indexing(A)
-    (mA, nA) = size(A); (mB, nB) = size(B); (mC, nC) = size(C);
+    (mA, nA) = size(A)
+    (mB, nB) = size(B)
+    (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch("expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
+    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
     m = 1
     @inbounds for j = 1:nA
         for l = 1:mB
@@ -535,23 +541,13 @@ end
     return C
 end
 
-function kron(A::Diagonal{T}, B::AbstractMatrix{S}) where {T<:Number, S<:Number}
-    (mA, nA) = size(A); (mB, nB) = size(B)
-    R = zeros(Base.promote_op(*, T, S), mA * mB, nA * nB)
-    return @inbounds kron!(R, A, B)
-end
-
-function kron(A::AbstractMatrix{T}, B::Diagonal{S}) where {T<:Number, S<:Number}
-    (mA, nA) = size(A); (mB, nB) = size(B)
-    R = zeros(promote_op(*, T, S), mA * mB, nA * nB)
-    return @inbounds kron!(R, A, B)
-end
-
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
 adjoint(D::Diagonal{<:Number}) = conj(D)
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
+Base.permutedims(D::Diagonal) = D
+Base.permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
 function diag(D::Diagonal, k::Integer=0)
     # every branch call similar(..., ::Int) to make sure the

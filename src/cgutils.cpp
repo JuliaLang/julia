@@ -628,11 +628,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
                 // We may need to insert padding first to get to the right offset
                 if (al > MAX_ALIGN) {
                     Type *AlignmentType;
-#if JL_LLVM_VERSION >= 110000
                     AlignmentType = ArrayType::get(FixedVectorType::get(T_int8, al), 0);
-#else
-                    AlignmentType = ArrayType::get(VectorType::get(T_int8, al), 0);
-#endif
                     latypes.push_back(AlignmentType);
                     al = MAX_ALIGN;
                 }
@@ -672,11 +668,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
         }
         else if (isarray && !type_is_ghost(lasttype)) {
             if (isTuple && isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
-#if JL_LLVM_VERSION >= 110000
                 struct_decl = FixedVectorType::get(lasttype, ntypes);
-#else
-                struct_decl = VectorType::get(lasttype, ntypes);
-#endif
             else if (isTuple || !llvmcall)
                 struct_decl = ArrayType::get(lasttype, ntypes);
             else
@@ -1580,11 +1572,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
     // for the load part (x.tbaa) and the store part (tbaa_stack).
     // since the tbaa lattice has to be a tree we have unfortunately
     // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
-#if JL_LLVM_VERSION >= 100000
     ctx.builder.CreateMemCpy(dst, MaybeAlign(align), src, MaybeAlign(0), sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
-#else
-    ctx.builder.CreateMemCpy(dst, align, src, 0, sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
-#endif
 }
 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Value *src, MDNode *tbaa_src,
@@ -1594,11 +1582,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
         emit_memcpy_llvm(ctx, dst, tbaa_dst, src, tbaa_src, const_sz->getZExtValue(), align, is_volatile);
         return;
     }
-#if JL_LLVM_VERSION >= 100000
     ctx.builder.CreateMemCpy(dst, MaybeAlign(align), src, MaybeAlign(0), sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
-#else
-    ctx.builder.CreateMemCpy(dst, align, src, 0, sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
-#endif
 }
 
 template<typename T1>
@@ -2472,6 +2456,27 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, Value *datatype, jl_value_t 
     return tindex;
 }
 
+// Returns typeof(v), or null if v is a null pointer at run time.
+// This is used when the value might have come from an undefined variable,
+// yet we try to read its type to compute a union index when moving the value.
+static Value *emit_typeof_or_null(jl_codectx_t &ctx, Value *v)
+{
+    BasicBlock *nonnull = BasicBlock::Create(jl_LLVMContext, "nonnull", ctx.f);
+    BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "postnull", ctx.f);
+    Value *isnull = ctx.builder.CreateICmpEQ(v, Constant::getNullValue(v->getType()));
+    ctx.builder.CreateCondBr(isnull, postBB, nonnull);
+    BasicBlock *entry = ctx.builder.GetInsertBlock();
+    ctx.builder.SetInsertPoint(nonnull);
+    Value *typof = emit_typeof(ctx, v);
+    ctx.builder.CreateBr(postBB);
+    nonnull = ctx.builder.GetInsertBlock(); // could have changed
+    ctx.builder.SetInsertPoint(postBB);
+    PHINode *ti = ctx.builder.CreatePHI(typof->getType(), 2);
+    ti->addIncoming(Constant::getNullValue(typof->getType()), entry);
+    ti->addIncoming(typof, nonnull);
+    return ti;
+}
+
 // get the runtime tindex value, assuming val is already converted to type typ if it has a TIndex
 static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
 {
@@ -2482,9 +2487,12 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
 
     if (val.TIndex)
         return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
-    if (val.isboxed)
-        return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
-    return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
+    Value *typof;
+    if (val.isboxed && !jl_is_concrete_type(val.typ) && !jl_is_type_type(val.typ))
+        typof = emit_typeof_or_null(ctx, val.V);
+    else
+        typof = emit_typeof_boxed(ctx, val);
+    return compute_box_tindex(ctx, typof, val.typ, typ);
 }
 
 static void union_alloca_type(jl_uniontype_t *ut,
@@ -2652,13 +2660,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
 {
     if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
         // TODO: make this a lifetime_end & dereferencable annotation?
-        ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai,
-#if JL_LLVM_VERSION >= 110000
-                ai->getAlign()
-#else
-                ai->getAlignment()
-#endif
-                );
+        ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai, ai->getAlign());
     if (jl_is_concrete_type(src.typ) || src.constant) {
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
         Type *store_ty = julia_type_to_llvm(ctx, typ);

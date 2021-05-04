@@ -1514,7 +1514,7 @@ The following examples may help you interpret expressions marked as containing n
         element accesses
 
   * `Base.getfield(%%x, :(:data))::ARRAY{FLOAT64,N} WHERE N`
-      * Interpretation: getting a field that is of non-leaf type. In this case, `ArrayContainer` had a
+      * Interpretation: getting a field that is of non-leaf type. In this case, the type of `x`, say `ArrayContainer`, had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
@@ -1600,11 +1600,3 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
-
-## Checking for equality with a singleton
-
-When checking if a value is equal to some singleton it can be
-better for performance to check for identicality (`===`) instead of
-equality (`==`). The same advice applies to using `!==` over `!=`.
-These type of checks frequently occur e.g. when implementing the iteration
-protocol and checking if `nothing` is returned from [`iterate`](@ref).

@@ -835,6 +835,11 @@ end
 @testset "ndims and friends" begin
     @test ndims(Diagonal(rand(1:5,5))) == 2
     @test ndims(Diagonal{Float64}) == 2
+    @test ndims(Diagonal) == 2
+    @test ndims(Vector) == 1
+    @test ndims(Matrix) == 2
+    @test ndims(Array{<:Any, 0}) == 0
+    @test_throws MethodError ndims(Array)
 end
 
 @testset "Issue #17811" begin
@@ -1291,6 +1296,25 @@ end
     @test Int[t...; 3 4] == [1 2; 3 4]
     @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
     @test_throws ArgumentError Int[t...; 3 4 5]
+end
+
+@testset "issue #39896, modified getindex " begin
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3))
+            @test arr[inds] == arr[collect(inds)]
+            @test arr[inds] isa AbstractVector{eltype(arr)}
+        end
+    end
+    for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
+        @test arr[true:true] == [arr[1]]
+        @test arr[true:true] isa AbstractVector{eltype(arr)}
+        @test arr[false:false] == []
+        @test arr[false:false] isa AbstractVector{eltype(arr)}
+    end
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        @test_throws BoundsError arr[true:true]
+        @test_throws BoundsError arr[false:false]
+    end
 end
 
 @testset "reduce(vcat, ...) inferrence #40277" begin

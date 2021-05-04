@@ -1,10 +1,8 @@
-From f11f45a45ce8b90c798dd939d2782205e4291360 Mon Sep 17 00:00:00 2001
+From 4827d22b3e297b82c7689f0fb06b38e67d92b578 Mon Sep 17 00:00:00 2001
 From: Keno Fischer <keno@juliacomputing.com>
-Date: Fri, 6 Mar 2020 10:29:20 -0500
+Date: Wed, 21 Apr 2021 12:25:07 -0400
 Subject: [PATCH] [SCEV] Record NI types in add exprs
 
-Summary:
-(Rebased to LLVM 8 from the original LLVM 9 patch)
 This fixes a case where loop-reduce introduces ptrtoint/inttoptr for
 non-integral address space pointers. Over the past several years, we
 have gradually improved the SCEVExpander to actually do something
@@ -70,28 +68,22 @@ However, given the practical considerations above, that's a project
 for another time. For now, simply allowing the existing pointer-diff
 pattern for non-integral pointers seems to work ok.
 
-Reviewers: sanjoy, reames, vtjnash, vchuravy
-
-Subscribers: hiraditya, javed.absar, llvm-commits
-
-Tags: #llvm, #julialang
-
 Differential Revision: https://reviews.llvm.org/D75072
 ---
- llvm/include/llvm/Analysis/ScalarEvolution.h  | 26 +++++--
- .../Analysis/ScalarEvolutionExpressions.h     | 70 ++++++++++++++++---
- llvm/lib/Analysis/ScalarEvolution.cpp         | 44 +++++++++---
- .../LoopStrengthReduce/nonintegral.ll         | 35 +++++++++-
- 4 files changed, 150 insertions(+), 25 deletions(-)
+ llvm/include/llvm/Analysis/ScalarEvolution.h  | 21 ++++-
+ .../Analysis/ScalarEvolutionExpressions.h     | 81 ++++++++++++++++---
+ llvm/lib/Analysis/ScalarEvolution.cpp         | 41 +++++++---
+ .../LoopStrengthReduce/nonintegral.ll         | 35 +++++++-
+ 4 files changed, 155 insertions(+), 23 deletions(-)
 
 diff --git llvm/include/llvm/Analysis/ScalarEvolution.h llvm/include/llvm/Analysis/ScalarEvolution.h
-index 5286f6a220e..f27fceb70d2 100644
+index b3f199de2cfa..d98fbeb5dcf7 100644
 --- llvm/include/llvm/Analysis/ScalarEvolution.h
 +++ llvm/include/llvm/Analysis/ScalarEvolution.h
-@@ -116,6 +116,19 @@ public:
+@@ -120,6 +120,19 @@ public:
      NoWrapMask = (1 << 3) - 1
    };
-
+ 
 +  /// HasNonIntegralPointerFlag are bitfield indices into SubclassData.
 +  ///
 +  /// When constructing SCEV expressions for LLVM expressions with non-integral
@@ -105,12 +97,12 @@ index 5286f6a220e..f27fceb70d2 100644
 +    FlagHasNIPointers = (1 << 3)
 +  };
 +
-   explicit SCEV(const FoldingSetNodeIDRef ID, unsigned SCEVTy)
-       : FastID(ID), SCEVType(SCEVTy) {}
-   SCEV(const SCEV &) = delete;
-@@ -138,6 +138,10 @@ public:
-   /// Return true if the specified scev is negated, but not a constant.
-   bool isNonConstantNegative() const;
+   explicit SCEV(const FoldingSetNodeIDRef ID, SCEVTypes SCEVTy,
+                 unsigned short ExpressionSize)
+       : FastID(ID), SCEVType(SCEVTy), ExpressionSize(ExpressionSize) {}
+@@ -156,6 +169,10 @@ public:
+     return ExpressionSize;
+   }
  
 +  bool hasNonIntegralPointers() const {
 +    return SubclassData & FlagHasNIPointers;
@@ -119,11 +111,29 @@ index 5286f6a220e..f27fceb70d2 100644
    /// Print out the internal representation of this scalar to the specified
    /// stream.  This should really only be used for debugging purposes.
    void print(raw_ostream &OS) const;
+@@ -745,7 +762,7 @@ public:
+                                         const BasicBlock *ExitingBlock);
+ 
+   /// The terms "backedge taken count" and "exit count" are used
+-  /// interchangeably to refer to the number of times the backedge of a loop 
++  /// interchangeably to refer to the number of times the backedge of a loop
+   /// has executed before the loop is exited.
+   enum ExitCountKind {
+     /// An expression exactly describing the number of times the backedge has
+@@ -758,7 +775,7 @@ public:
+   };
+ 
+   /// Return the number of times the backedge executes before the given exit
+-  /// would be taken; if not exactly computable, return SCEVCouldNotCompute. 
++  /// would be taken; if not exactly computable, return SCEVCouldNotCompute.
+   /// For a single exit loop, this value is equivelent to the result of
+   /// getBackedgeTakenCount.  The loop is guaranteed to exit (via *some* exit)
+   /// before the backedge is executed (ExitCount + 1) times.  Note that there
 diff --git llvm/include/llvm/Analysis/ScalarEvolutionExpressions.h llvm/include/llvm/Analysis/ScalarEvolutionExpressions.h
-index 876d68438ef..b9ea23c0086 100644
+index 37e675f08afc..6e532b22f5b3 100644
 --- llvm/include/llvm/Analysis/ScalarEvolutionExpressions.h
 +++ llvm/include/llvm/Analysis/ScalarEvolutionExpressions.h
-@@ -181,6 +184,13 @@ class Type;
+@@ -228,6 +228,13 @@ class Type;
        return getNoWrapFlags(FlagNW) != FlagAnyWrap;
      }
  
@@ -137,30 +147,35 @@ index 876d68438ef..b9ea23c0086 100644
      /// Methods for support type inquiry through isa, cast, and dyn_cast:
      static bool classof(const SCEV *S) {
        return S->getSCEVType() == scAddExpr || S->getSCEVType() == scMulExpr ||
-@@ -215,24 +220,54 @@ class Type;
-   class SCEVAddExpr : public SCEVCommutativeExpr {
-     friend class ScalarEvolution;
+@@ -264,19 +271,16 @@ class Type;
+ 
+     Type *Ty;
  
 +  protected:
-     SCEVAddExpr(const FoldingSetNodeIDRef ID,
-                 const SCEV *const *O, size_t N)
-       : SCEVCommutativeExpr(ID, scAddExpr, O, N) {}
+     SCEVAddExpr(const FoldingSetNodeIDRef ID, const SCEV *const *O, size_t N)
+         : SCEVCommutativeExpr(ID, scAddExpr, O, N) {
+-      auto *FirstPointerTypedOp = find_if(operands(), [](const SCEV *Op) {
+-        return Op->getType()->isPointerTy();
+-      });
+-      if (FirstPointerTypedOp != operands().end())
+-        Ty = (*FirstPointerTypedOp)->getType();
+-      else
+-        Ty = getOperand(0)->getType();
++
+     }
  
    public:
--    Type *getType() const {
--      // Use the type of the last operand, which is likely to be a pointer
--      // type, if there is one. This doesn't usually matter, but it can help
--      // reduce casts when the expressions are expanded.
--      return getOperand(getNumOperands() - 1)->getType();
-+    /// Returns the type of the add expression, by looking either at the last
-+    /// operand or deferring to the SCEVAddNIExpr subclass for non-integral
-+    /// pointers.
+-    Type *getType() const { return Ty; }
++    // Returns the type of the add expression, by looking either at the last operand
++    // or deferring to the SCEVAddNIExpr subclass.
 +    Type *getType() const;
-+
-+    /// Methods for support type inquiry through isa, cast, and dyn_cast:
-+    static bool classof(const SCEV *S) { return S->getSCEVType() == scAddExpr; }
-+  };
-+
+ 
+     /// Methods for support type inquiry through isa, cast, and dyn_cast:
+     static bool classof(const SCEV *S) {
+@@ -284,6 +288,46 @@ class Type;
+     }
+   };
+ 
 +  /// This node represents an addition of some number of SCEVs, one which
 +  /// is a non-integral pointer type, requiring us to know the type exactly for
 +  /// correctness.
@@ -172,18 +187,17 @@ index 876d68438ef..b9ea23c0086 100644
 +                  PointerType *NIType)
 +        : SCEVAddExpr(ID, O, N), NIType(NIType) {
 +      SubclassData |= FlagHasNIPointers;
-     }
- 
++    }
++
 +  public:
 +    Type *getType() const { return NIType; }
 +
-     /// Methods for support type inquiry through isa, cast, and dyn_cast:
-     static bool classof(const SCEV *S) {
--      return S->getSCEVType() == scAddExpr;
++    /// Methods for support type inquiry through isa, cast, and dyn_cast:
++    static bool classof(const SCEV *S) {
 +      return S->getSCEVType() == scAddExpr && S->hasNonIntegralPointers();
-     }
-   };
- 
++    }
++  };
++
 +  inline Type *SCEVAddExpr::getType() const {
 +    // In general, use the type of the last operand, which is likely to be a
 +    // pointer type, if there is one. This doesn't usually matter, but it can
@@ -192,13 +206,20 @@ index 876d68438ef..b9ea23c0086 100644
 +    // that stores that type explicitly.
 +    if (hasNonIntegralPointers())
 +      return cast<SCEVAddNIExpr>(this)->getType();
-+    return getOperand(getNumOperands() - 1)->getType();
++
++    auto *FirstPointerTypedOp = find_if(operands(), [](const SCEV *Op) {
++      return Op->getType()->isPointerTy();
++    });
++    if (FirstPointerTypedOp != operands().end())
++      return (*FirstPointerTypedOp)->getType();
++    else
++      return  getOperand(0)->getType();
 +  }
 +
    /// This node represents multiplication of some number of SCEVs.
    class SCEVMulExpr : public SCEVCommutativeExpr {
      friend class ScalarEvolution;
-@@ -242,6 +273,18 @@ class Type;
+@@ -293,6 +337,18 @@ class Type;
        : SCEVCommutativeExpr(ID, scMulExpr, O, N) {}
  
    public:
@@ -217,16 +238,16 @@ index 876d68438ef..b9ea23c0086 100644
      /// Methods for support type inquiry through isa, cast, and dyn_cast:
      static bool classof(const SCEV *S) {
        return S->getSCEVType() == scMulExpr;
-@@ -467,9 +690,12 @@ class Type;
+@@ -531,9 +587,12 @@ class Type;
      /// instances owned by a ScalarEvolution.
      SCEVUnknown *Next;
  
 -    SCEVUnknown(const FoldingSetNodeIDRef ID, Value *V,
 -                ScalarEvolution *se, SCEVUnknown *next) :
--      SCEV(ID, scUnknown), CallbackVH(V), SE(se), Next(next) {}
+-      SCEV(ID, scUnknown, 1), CallbackVH(V), SE(se), Next(next) {}
 +    SCEVUnknown(const FoldingSetNodeIDRef ID, Value *V, ScalarEvolution *se,
 +                SCEVUnknown *next, bool ValueIsNIPtr)
-+        : SCEV(ID, scUnknown), CallbackVH(V), SE(se), Next(next) {
++        : SCEV(ID, scUnknown, 1), CallbackVH(V), SE(se), Next(next) {
 +      if (ValueIsNIPtr)
 +        SubclassData |= FlagHasNIPointers;
 +    }
@@ -234,10 +255,10 @@ index 876d68438ef..b9ea23c0086 100644
      // Implement CallbackVH.
      void deleted() override;
 diff --git llvm/lib/Analysis/ScalarEvolution.cpp llvm/lib/Analysis/ScalarEvolution.cpp
-index cd74815a895..09e98345d0f 100644
+index fe9d8297d679..1fa7b8ce1451 100644
 --- llvm/lib/Analysis/ScalarEvolution.cpp
 +++ llvm/lib/Analysis/ScalarEvolution.cpp
-@@ -354,12 +354,13 @@ Type *SCEV::getType() const {
+@@ -389,12 +389,13 @@ Type *SCEV::getType() const {
    case scSignExtend:
      return cast<SCEVCastExpr>(this)->getType();
    case scAddRecExpr:
@@ -252,18 +273,7 @@ index cd74815a895..09e98345d0f 100644
    case scAddExpr:
      return cast<SCEVAddExpr>(this)->getType();
    case scUDivExpr:
-@@ -2419,8 +2420,9 @@ const SCEV *ScalarEvolution::getAddExpr(SmallVectorImpl<const SCEV *> &Ops,
-   }
- 
-   // Limit recursion calls depth.
--  if (Depth > MaxArithDepth)
-+  if (Depth > MaxArithDepth) {
-     return getOrCreateAddExpr(Ops, Flags);
-+  }
- 
-   // Okay, check to see if the same value occurs in the operand list more than
-   // once.  If so, merge them together into an multiply expression.  Since we
-@@ -2761,16 +2763,27 @@ ScalarEvolution::getOrCreateAddExpr(ArrayRef<const SCEV *> Ops,
+@@ -2679,16 +2680,27 @@ ScalarEvolution::getOrCreateAddExpr(ArrayRef<const SCEV *> Ops,
                                      SCEV::NoWrapFlags Flags) {
    FoldingSetNodeID ID;
    ID.AddInteger(scAddExpr);
@@ -295,7 +305,7 @@ index cd74815a895..09e98345d0f 100644
      UniqueSCEVs.InsertNode(S, IP);
      addToLoopUseLists(S);
    }
-@@ -2783,8 +2763,10 @@ ScalarEvolution::getOrCreateAddRecExpr(ArrayRef<const SCEV *> Ops,
+@@ -2701,8 +2713,10 @@ ScalarEvolution::getOrCreateAddRecExpr(ArrayRef<const SCEV *> Ops,
                                         const Loop *L, SCEV::NoWrapFlags Flags) {
    FoldingSetNodeID ID;
    ID.AddInteger(scAddRecExpr);
@@ -307,15 +317,15 @@ index cd74815a895..09e98345d0f 100644
    ID.AddPointer(L);
    void *IP = nullptr;
    SCEVAddRecExpr *S =
-@@ -2798,6 +2813,7 @@ ScalarEvolution::getOrCreateAddRecExpr(ArrayRef<const SCEV *> Ops,
+@@ -2716,6 +2730,7 @@ ScalarEvolution::getOrCreateAddRecExpr(ArrayRef<const SCEV *> Ops,
      addToLoopUseLists(S);
    }
-   S->setNoWrapFlags(Flags);
+   setNoWrapFlags(S, Flags);
 +  S->setHasNIPtr(Ops[0]->hasNonIntegralPointers());
    return S;
  }
  
-@@ -2806,8 +2822,11 @@ ScalarEvolution::getOrCreateMulExpr(ArrayRef<const SCEV *> Ops,
+@@ -2724,8 +2739,11 @@ ScalarEvolution::getOrCreateMulExpr(ArrayRef<const SCEV *> Ops,
                                      SCEV::NoWrapFlags Flags) {
    FoldingSetNodeID ID;
    ID.AddInteger(scMulExpr);
@@ -328,7 +338,7 @@ index cd74815a895..09e98345d0f 100644
    void *IP = nullptr;
    SCEVMulExpr *S =
      static_cast<SCEVMulExpr *>(UniqueSCEVs.FindNodeOrInsertPos(ID, IP));
-@@ -2820,6 +2839,7 @@ ScalarEvolution::getOrCreateMulExpr(ArrayRef<const SCEV *> Ops,
+@@ -2738,6 +2756,7 @@ ScalarEvolution::getOrCreateMulExpr(ArrayRef<const SCEV *> Ops,
      addToLoopUseLists(S);
    }
    S->setNoWrapFlags(Flags);
@@ -336,20 +346,20 @@ index cd74815a895..09e98345d0f 100644
    return S;
  }
  
-@@ -3631,8 +3591,11 @@ const SCEV *ScalarEvolution::getMinMaxExpr(unsigned Kind,
-   if (const SCEV *S = UniqueSCEVs.FindNodeOrInsertPos(ID, IP)) return S;
+@@ -3615,8 +3634,11 @@ const SCEV *ScalarEvolution::getMinMaxExpr(SCEVTypes Kind,
+     return ExistingSCEV;
    const SCEV **O = SCEVAllocator.Allocate<const SCEV *>(Ops.size());
    std::uninitialized_copy(Ops.begin(), Ops.end(), O);
--  SCEV *S = new (SCEVAllocator) SCEVMinMaxExpr(
-+  SCEVMinMaxExpr *S = new (SCEVAllocator) SCEVMinMaxExpr(
-       ID.Intern(SCEVAllocator), static_cast<SCEVTypes>(Kind), O, Ops.size());
+-  SCEV *S = new (SCEVAllocator)
++  SCEVMinMaxExpr *S = new (SCEVAllocator)
+       SCEVMinMaxExpr(ID.Intern(SCEVAllocator), Kind, O, Ops.size());
 +  // For MinMaxExprs it's sufficient to see if the first Op has NI data, as the
 +  // operands all need to be of the same type.
 +  S->setHasNIPtr(Ops[0]->hasNonIntegralPointers());
+ 
    UniqueSCEVs.InsertNode(S, IP);
    addToLoopUseLists(S);
-   return S;
-@@ -3708,8 +3731,9 @@ const SCEV *ScalarEvolution::getUnknown(Value *V) {
+@@ -3716,8 +3738,9 @@ const SCEV *ScalarEvolution::getUnknown(Value *V) {
             "Stale SCEVUnknown in uniquing map!");
      return S;
    }
@@ -361,7 +371,7 @@ index cd74815a895..09e98345d0f 100644
    UniqueSCEVs.InsertNode(S, IP);
    return S;
 diff --git llvm/test/Transforms/LoopStrengthReduce/nonintegral.ll llvm/test/Transforms/LoopStrengthReduce/nonintegral.ll
-index 5648e3aa74a..6936521f3a6 100644
+index 5648e3aa74af..6936521f3a64 100644
 --- llvm/test/Transforms/LoopStrengthReduce/nonintegral.ll
 +++ llvm/test/Transforms/LoopStrengthReduce/nonintegral.ll
 @@ -2,7 +2,7 @@
@@ -411,5 +421,5 @@ index 5648e3aa74a..6936521f3a6 100644
 +!1 = distinct !{!1, !2}
 +!2 = !{!"llvm.loop.isvectorized", i32 1}
 -- 
-2.25.1
+2.31.1
 

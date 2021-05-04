@@ -15,6 +15,11 @@ Some general notes:
   * By convention, function names ending with an exclamation point (`!`) modify their arguments.
     Some functions have both modifying (e.g., `sort!`) and non-modifying (`sort`) versions.
 
+The behaviors of `Base` and standard libraries are stable as defined in
+[SemVer](https://semver.org/) only if they are documented; i.e., included in the
+[Julia documentation](https://docs.julialang.org/) and not marked as unstable.
+See [API FAQ](@ref man-api) for more information.
+
 ## Getting Around
 
 ```@docs
@@ -158,6 +163,7 @@ Base.typejoin
 Base.typeintersect
 Base.promote_type
 Base.promote_rule
+Base.promote_typejoin
 Base.isdispatchtuple
 ```
 
@@ -213,12 +219,14 @@ Core.Union
 Union{}
 Core.UnionAll
 Core.Tuple
+Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
 Base.isnothing
+Base.notnothing
 Base.Some
 Base.something
 Base.Enums.Enum
@@ -235,6 +243,7 @@ Core.Module
 Core.Function
 Base.hasmethod
 Core.applicable
+Base.isambiguous
 Core.invoke
 Base.@invoke
 Base.invokelatest
@@ -243,6 +252,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
+Base.splat
 ```
 
 ## Syntax
@@ -297,6 +307,7 @@ Base.ignorestatus
 Base.detach
 Base.Cmd
 Base.setenv
+Base.addenv
 Base.withenv
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
@@ -406,6 +417,7 @@ Base.isconst
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
+Base.@locals
 ```
 
 ## Internals

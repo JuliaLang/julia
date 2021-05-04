@@ -265,7 +265,8 @@ end
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
 
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
-/(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
+/(J::UniformScaling, A::AbstractMatrix) =
+    (invA = inv(A); lmul!(J.λ, convert(AbstractMatrix{promote_type(eltype(J),eltype(invA))}, invA)))
 /(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
 /(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) / J
 
@@ -273,7 +274,8 @@ end
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
-\(A::AbstractMatrix, J::UniformScaling) = rmul!(inv(A), J.λ)
+\(A::AbstractMatrix, J::UniformScaling) =
+    (invA = inv(A); rmul!(convert(AbstractMatrix{promote_type(eltype(invA),eltype(J))}, invA), J.λ))
 \(F::Factorization, J::UniformScaling) = F \ J(size(F,1))
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
@@ -479,6 +481,9 @@ Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 ## Diagonal construction from UniformScaling
 Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
 Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
+
+dot(A::AbstractMatrix, J::UniformScaling) = dot(tr(A), J.λ)
+dot(J::UniformScaling, A::AbstractMatrix) = dot(J.λ, tr(A))
 
 dot(x::AbstractVector, J::UniformScaling, y::AbstractVector) = dot(x, J.λ, y)
 dot(x::AbstractVector, a::Number, y::AbstractVector) = sum(t -> dot(t[1], a, t[2]), zip(x, y))
