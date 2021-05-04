@@ -238,7 +238,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     else
         m = n==1 ? "method" : "methods"
         print(io, "# $n $m")
-        sname = string(name)
+        sname = string(mt.module, ".", name)
         namedisplay = namefmt(sname)
         if hasname
             what = startswith(sname, '@') ? "macro" : "generic function"
