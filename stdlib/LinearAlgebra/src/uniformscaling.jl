@@ -284,6 +284,22 @@ end
     mul!(C, A, J.λ, alpha, beta)
 @inline mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat, alpha::Number, beta::Number) =
     mul!(C, J.λ, B, alpha, beta)
+
+function mul!(out::AbstractMatrix{T},a::Bool,B::UniformScaling{T},α::Bool,β::Bool) where {T}
+    if !β  # zero contribution of the out matrix
+        fill!(out,zero(T));
+    end
+    if (a*α)
+        # Add B.λ*I
+        m = min(size(out)...)
+        s = B.λ
+        @inbounds for i = 1:m;
+            out[i,i] += s;
+        end
+    end
+    return out
+end
+
 rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
