@@ -657,7 +657,7 @@ For translating a C argument list to Julia:
       * `Ref{Any}`
       * argument list must be a valid Julia object (or `C_NULL`)
       * cannot be used for an output parameter, unless the user is able to
-        manage to separately arrange for the object to be GC-preserved
+        separately arrange for the object to be GC-preserved
   * `T*`
 
       * `Ref{T}`, where `T` is the Julia type corresponding to `T`
