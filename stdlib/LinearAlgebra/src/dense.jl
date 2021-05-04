@@ -641,8 +641,8 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         for k in 2:(div(size(C, 1), 2) - 1)
             k2 = 2 * k
             P *= A2
-            U += C[k2 + 2] * P
-            V += C[k2 + 1] * P
+            mul!(U, C[k2 + 2], P, true, true) # U += C[k2+2]*P
+            mul!(V, C[k2 + 1], P, true, true) # V += C[k2+1]*P
         end
 
         U = A * U
