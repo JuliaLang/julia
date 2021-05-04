@@ -1003,6 +1003,12 @@ function setup_interface(
     search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
     search_prompt.complete = LatexCompletions()
 
+    jl_prompt_len = length(JULIA_PROMPT)
+    pkg_prompt_len = length(PKG_PROMPT)
+    shell_prompt_len = length(SHELL_PROMPT)
+    help_prompt_len = length(HELP_PROMPT)
+    pkg_prompt_regex = r"^(?:\(.+\) )?pkg>"
+
     # Canonicalize user keymap input
     if isa(extra_repl_keymap, Dict)
         extra_repl_keymap = AnyDict[extra_repl_keymap]
@@ -1055,12 +1061,9 @@ function setup_interface(
             oldpos = firstindex(input)
             firstline = true
             isprompt_paste = false
-            jl_prompt_len = length(JULIA_PROMPT)
-            pkg_prompt_len = length(PKG_PROMPT)
-            shell_prompt_len = length(SHELL_PROMPT)
-            help_prompt_len = length(HELP_PROMPT)
             curr_prompt_len = 0
             pasting_help = false
+
             while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
                     # Check if the next statement starts with a prompt i.e. "julia> ", in that case
@@ -1077,18 +1080,11 @@ function setup_interface(
                         curr_prompt_len = jl_prompt_len
                         transition(s, julia_prompt)
                         pasting_help = false
-                    # Check if input line starts with "pkg> ", remove it if we are in prompt paste mode and switch mode
-                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), PKG_PROMPT)
+                    # Check if input line starts with "pkg> " or "(...) pkg> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), pkg_prompt_regex)
+                        detected_pkg_prompt = match(pkg_prompt_regex, SubString(input, oldpos)).match
                         isprompt_paste = true
-                        oldpos += pkg_prompt_len
-                        curr_prompt_len = pkg_prompt_len
-                        Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
-                        pasting_help = false
-                    # Check if input line starts with "(...) pkg> ", remove it if we are in prompt paste mode and switch mode
-                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), Regex("\\(.+\\) $(PKG_PROMPT)"))
-                        env_pkg_prompt = match(Regex("\\(.+\\) $(PKG_PROMPT)"), SubString(input, oldpos)).match
-                        isprompt_paste = true
-                        curr_prompt_len = length(env_pkg_prompt)
+                        curr_prompt_len = length(detected_pkg_prompt)
                         oldpos += curr_prompt_len
                         Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
                         pasting_help = false
