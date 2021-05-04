@@ -132,6 +132,17 @@ aimg  = randn(n,n)/2
         @test Z == A
         @test λ == zeros(0)
     end
+    @testset "0x0 $eltya matrices" begin
+        A = zeros(eltya, 0, 0)
+        B = zeros(eltya, 0, 0)
+        S = LinearAlgebra.schur(A, B)
+        @test S.S == A
+        @test S.T == A
+        @test S.Q == A
+        @test S.Z == A
+        @test S.alpha == zeros(0)
+        @test S.beta == zeros(0)
+    end
 end
 
 @testset "Generalized Schur convergence" begin
