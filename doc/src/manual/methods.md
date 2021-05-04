@@ -343,7 +343,10 @@ myappend (generic function with 1 method)
 ```
 
 The type parameter `T` in the function's signature ensures that the type of the new `v` is preserved after element `x` is appended to it. 
-The function's signature is preceded by the keyword `where` and is placed immediately after the method arguments. When only one type parameter is used, the curly braces are optional. An equivalent one-line definition is:
+The function's signature is preceded by the keyword `where` and is placed immediately after the method arguments. 
+When only one type parameter is used, the curly braces are optional. 
+Parametric method definition also works with the short-form syntax.
+An equivalent one-line definition would be:
 
 ```jldoctest
 julia> myappend(v::Vector{T}, x::T) where T = [v..., x]
@@ -378,7 +381,6 @@ Stacktrace:
 [...]
 ```
 
-In the short-form definition, the equal sign in `where T =` marks the end of the function's signature and the start of the function's body. 
 If the type of the appended element does not match the element type of the vector it is appended to, a [`MethodError`](@ref) is raised. In the following example, the method's type parameter `T` is used as the return value:
 
 ```jldoctest
