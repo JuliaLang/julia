@@ -10,7 +10,7 @@ function writeexp(buf, pos, v::T,
     if x == 0
         buf[pos] = UInt8('0')
         pos += 1
-        if precision > 0
+        if precision > 0 && !trimtrailingzeros
             buf[pos] = decchar
             pos += 1
             for _ = 1:precision
