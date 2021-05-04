@@ -204,7 +204,7 @@ end
     parse(str, start; greedy=true, raise=true, depwarn=true)
 
 Parse the expression string and return an expression (which could later be passed to eval
-for execution). `start` is the index of the first character to start parsing. If `greedy` is
+for execution). `start` is the index of the first byte to start parsing. If `greedy` is
 `true` (default), `parse` will try to consume as much input as it can; otherwise, it will
 stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically
 valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is `true`
@@ -218,6 +218,9 @@ julia> Meta.parse("x = 3, y = 5", 7)
 
 julia> Meta.parse("x = 3, y = 5", 5)
 (:((3, y) = 5), 13)
+
+julia> text = "α\nβ"; i = 1; while i <= sizeof(text); ex, i = Meta.parse(text, i); end; i
+6
 ```
 """
 function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
