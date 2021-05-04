@@ -72,7 +72,7 @@ First, make sure you have all the [required
 dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
-    git clone git://github.com/JuliaLang/julia.git
+    git clone https://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
 Julia. However, most users should use the most recent stable version
