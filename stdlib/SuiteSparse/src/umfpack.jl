@@ -410,7 +410,10 @@ for itype in UmfpackIndexTypes
         function logabsdet(F::UmfpackLU{Float64, $itype})  # return log(abs(det)) and sign(det)
             n = checksquare(F)
             issuccess(F) || return log(zero(real(T))), log(one(T))
-            L, U, p, q, Rs = SuiteSparse.UMFPACK.umf_extract(F)
+            U = F.U
+            Rs = F.Rs
+            p = F.p
+            q = F.q
             c = 0
             P = one(T)
             abs_det = zero(real(T))
