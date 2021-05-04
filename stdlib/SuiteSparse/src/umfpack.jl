@@ -406,8 +406,7 @@ for itype in UmfpackIndexTypes
                         mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[], mz[])
         end
-
-        function logabsdet(F::UmfpackLU{Float64, $itype})  # return log(abs(det)) and sign(det)
+        function logabsdet(F::UmfpackLU{T, $itype}) where T # return log(abs(det)) and sign(det)
             n = checksquare(F)
             issuccess(F) || return log(zero(real(T))), log(one(T))
             U = diag(F.U)
@@ -431,7 +430,6 @@ for itype in UmfpackIndexTypes
             s = ifelse(isodd(c), -one(real(T)), one(real(T))) * P
             return abs_det, s
         end
-
         function umf_lunz(lu::UmfpackLU{Float64,$itype})
             lnz = Ref{$itype}()
             unz = Ref{$itype}()
