@@ -10,12 +10,9 @@ function writefixed(buf, pos, v::T,
     if x == 0
         buf[pos] = UInt8('0')
         pos += 1
-        if precision > 0
+        if precision > 0 && !trimtrailingzeros
             buf[pos] = decchar
             pos += 1
-            if trimtrailingzeros
-                precision = 1
-            end
             for _ = 1:precision
                 buf[pos] = UInt8('0')
                 pos += 1
