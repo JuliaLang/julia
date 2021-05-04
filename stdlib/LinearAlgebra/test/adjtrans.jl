@@ -7,15 +7,15 @@ using Test, LinearAlgebra, SparseArrays
 @testset "Adjoint and Transpose inner constructor basics" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
     # Adjoint/Transpose eltype must match the type of the Adjoint/Transpose of the input eltype
-    @test_throws ErrorException Adjoint{Float64,Vector{Int}}(intvec)
-    @test_throws ErrorException Adjoint{Float64,Matrix{Int}}(intmat)
-    @test_throws ErrorException Transpose{Float64,Vector{Int}}(intvec)
-    @test_throws ErrorException Transpose{Float64,Matrix{Int}}(intmat)
+    @test_throws TypeError Adjoint{Float64,Vector{Int}}(intvec)[1,1]
+    @test_throws TypeError Adjoint{Float64,Matrix{Int}}(intmat)[1,1]
+    @test_throws TypeError Transpose{Float64,Vector{Int}}(intvec)[1,1]
+    @test_throws TypeError Transpose{Float64,Matrix{Int}}(intmat)[1,1]
     # Adjoint/Transpose wrapped array type must match the input array type
-    @test_throws MethodError Adjoint{Int,Vector{Float64}}(intvec)
-    @test_throws MethodError Adjoint{Int,Matrix{Float64}}(intmat)
-    @test_throws MethodError Transpose{Int,Vector{Float64}}(intvec)
-    @test_throws MethodError Transpose{Int,Matrix{Float64}}(intmat)
+    @test_throws TypeError Adjoint{Int,Vector{Float64}}(intvec)[1,1]
+    @test_throws TypeError Adjoint{Int,Matrix{Float64}}(intmat)[1,1]
+    @test_throws TypeError Transpose{Int,Vector{Float64}}(intvec)[1,1]
+    @test_throws TypeError Transpose{Int,Matrix{Float64}}(intmat)[1,1]
     # Adjoint/Transpose inner constructor basic functionality, concrete scalar eltype
     @test (Adjoint{Int,Vector{Int}}(intvec)::Adjoint{Int,Vector{Int}}).parent === intvec
     @test (Adjoint{Int,Matrix{Int}}(intmat)::Adjoint{Int,Matrix{Int}}).parent === intmat
