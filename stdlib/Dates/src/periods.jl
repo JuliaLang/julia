@@ -377,7 +377,7 @@ Base.one(::Union{CompoundPeriod,Type{CompoundPeriod}}) = 1
 (*)(A::CompoundPeriod, B::AbstractArray) = Broadcast.broadcast_preserving_zero_d(*, A, B)
 (*)(A::AbstractArray, B::CompoundPeriod) = Broadcast.broadcast_preserving_zero_d(*, A, B)
 
-(/)(x::CompoundPeriod, y::Real) = isfinite(y) ? CompoundPeriod(x.periods / y) : CompoundPeriod()
+(/)(x::CompoundPeriod, y::Real) = isinf(y) ? CompoundPeriod() : CompoundPeriod(x.periods / y)
 
 GeneralPeriod = Union{Period, CompoundPeriod}
 (+)(x::GeneralPeriod) = x

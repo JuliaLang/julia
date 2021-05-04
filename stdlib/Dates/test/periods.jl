@@ -217,6 +217,8 @@ end
     @test emptyperiod * 2 == emptyperiod
     @test 0.5 * emptyperiod == emptyperiod
     @test_throws InexactError p3 * 0.5
+    @test_throws InexactError p2 * NaN
+    @test_throws InexactError p2 * Inf
     @test_throws InexactError (3//2) * p1
     @test p2 / 2 == p1
     @test p3 / 3.0 == p1
@@ -226,6 +228,7 @@ end
     @test p2 / (1//0) == emptyperiod
     @test emptyperiod / 3 == emptyperiod
     @test_throws InexactError p1 / 2
+    @test_throws InexactError p1 / NaN
     @test (1:3) * p1 == [p1, p2, p3]
     @test p1 * (3:-1:1) == [p3, p2, p1]
 end
