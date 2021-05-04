@@ -1689,7 +1689,7 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", dwarf_version);
     }
     if (!m->getModuleFlag("Debug Info Version"))
-        m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
+        m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(jl_data_layout);
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
