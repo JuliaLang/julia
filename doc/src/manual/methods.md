@@ -375,7 +375,7 @@ Stacktrace:
 ```
 
 In the short-form definition, the equal sign in `where T =` marks the end of the function's signature and the start of the function's body. 
-If the type of the appended element does not match the element type of the vector it is appended to, a [`MethodError`](@ref) is raised. In the following example, the method type parameter `T` is used as the return value:
+If the type of the appended element does not match the element type of the vector it is appended to, a [`MethodError`](@ref) is raised. In the following example, the method's type parameter `T` is used as the return value:
 
 ```jldoctest
 julia> mytypeof(x::T) where {T} = T
