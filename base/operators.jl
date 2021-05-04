@@ -202,7 +202,7 @@ largest values and `isgreater` defines a descending total order with `NaN` and
 !!! note
 
     Like `min`, `isgreater` orders containers (tuples, vectors, etc)
-    lexigraphically with `isless(y, x)` rather than recursively with itself:
+    lexicographically with `isless(y, x)` rather than recursively with itself:
 
     ```jldoctest
     julia> Base.isgreater(1, NaN) # 1 is greater than NaN
