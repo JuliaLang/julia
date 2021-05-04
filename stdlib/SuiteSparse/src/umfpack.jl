@@ -6,7 +6,7 @@ export UmfpackLU
 
 import Base: (\), getproperty, show, size
 using LinearAlgebra
-import LinearAlgebra: Factorization, det, lu, lu!, ldiv!
+import LinearAlgebra: Factorization, checksquare, det, logabsdet, lu, lu!, ldiv!
 
 using SparseArrays
 using SparseArrays: getcolptr
