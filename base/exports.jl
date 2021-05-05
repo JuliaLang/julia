@@ -695,6 +695,8 @@ export
     take!,
     put!,
     isready,
+    willblockput,
+    willblocktake,
     fetch,
     bind,
 
