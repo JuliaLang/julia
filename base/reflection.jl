@@ -1162,6 +1162,17 @@ generic function and type signature.
 possible options are `:source` or `:none`.
 - `world=Base.get_world_counter()`: controls the world age to use when looking up methods.
 - `interp=Core.Compiler.NativeInterpreter(world)`: controls the interpreter to use.
+
+# Example
+
+```julia
+julia> code_typed(+, (Float64, Float64))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 = Base.add_float(x, y)::Float64
+└──      return %1
+) => Float64
+```
 """
 function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
                     optimize=true,
