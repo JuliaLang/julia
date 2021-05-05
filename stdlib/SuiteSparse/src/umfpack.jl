@@ -419,11 +419,13 @@ for itype in UmfpackIndexTypes
             @inbounds for i in 1:n
                 dg_ii = U[i] / Rs[i]
                 P *= sign(dg_ii)
-                if p[i] != i
-                    c += 1
-                end
-                if q[i] != i
-                    c += 1
+                for j in i+1:n
+                    if p[i] > p[j]
+                        c += 1
+                    end
+                    if q[i] > q[j]
+                        c += 1
+                    end
                 end
                 abs_det += log(abs(dg_ii))
             end
