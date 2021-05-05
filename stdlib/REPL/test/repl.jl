@@ -755,11 +755,19 @@ fake_repl() do stdin_write, stdout_read, repl
             julia> A = 1
             1
 
-            shell> pwd
-            /home/usr
+            shell> echo foo
+            foo
+
+            shell> echo foo
+                   foo
+            foo foo
 
             help?> Int
             Dummy docstring
+
+                Some text
+
+                julia> error("If this error throws, the paste handler has failed to ignore this docstring example")
 
             julia> B = 2
             2\e[201~
