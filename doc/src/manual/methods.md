@@ -267,7 +267,7 @@ Here the call `g(2.0, 3.0)` could be handled by either the `g(::Float64, ::Any)`
 `g(::Any, ::Float64)` method. The order in which the methods are defined does not matter and
 neither is more specific than the other. In such cases, Julia raises a
 [`MethodError`](@ref) rather than arbitrarily picking a method. You can avoid method
-ambiguities by specifying an appropriate method for the intersection case: 
+ambiguities by specifying an appropriate method for the intersection case:
 
 ```jldoctest gofxy
 julia> g(x::Float64, y::Float64) = 2x + 2y
