@@ -515,6 +515,11 @@ end
     @test String(take!(io)) == "transpose(::Matrix{Float64})"
 end
 
+@testset "show" begin
+    @test repr(adjoint([1,2,3])) == "adjoint([1, 2, 3])"
+    @test repr(transpose([1f0,2f0])) == "transpose(Float32[1.0, 2.0])"
+end
+
 @testset "strided transposes" begin
     for t in (Adjoint, Transpose)
         @test strides(t(rand(3))) == (3, 1)

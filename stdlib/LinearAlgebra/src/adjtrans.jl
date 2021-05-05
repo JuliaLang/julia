@@ -276,6 +276,16 @@ function Base.showarg(io::IO, v::Transpose, toplevel)
     toplevel && print(io, " with eltype ", eltype(v))
     return nothing
 end
+function Base.show(io::IO, v::Adjoint{<:Real, <:AbstractVector})
+    print(io, "adjoint(")
+    show(io, parent(v))
+    print(io, ")")
+end
+function Base.show(io::IO, v::Transpose{<:Number, <:AbstractVector})
+    print(io, "transpose(")
+    show(io, parent(v))
+    print(io, ")")
+end
 
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
