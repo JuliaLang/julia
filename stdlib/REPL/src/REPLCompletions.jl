@@ -397,7 +397,6 @@ function get_type_getfield(ex::Expr, fn::Module)
     isdefined(objt, fld) || return Any, false
     return fieldtype(objt, fld), true
 end
-get_type_getfield(@nospecialize(sym), fn) = get_type(sym, fn)
 
 # Determines the return type with Base.return_types of a function call using the type information of the arguments.
 function get_type_call(expr::Expr)
