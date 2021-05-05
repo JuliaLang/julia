@@ -2700,7 +2700,7 @@ mark: {
             goto obj8_loaded;
         }
         else if (vt == jl_string_type) {
-            size_t dtsz = jl_string_len(new_obj) + sizeof(size_t) + 1;
+            size_t dtsz = jl_string_obj_size(new_obj);
             if (update_meta)
                 gc_setmark(ptls, o, bits, dtsz);
             else if (foreign_alloc)
@@ -3530,7 +3530,7 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
     size_t len = jl_string_len(s);
     if (sz <= len) return s;
     jl_taggedvalue_t *v = jl_astaggedvalue(s);
-    size_t strsz = len + sizeof(size_t) + 1;
+    size_t strsz = jl_string_obj_size(s);
     if (strsz <= GC_MAX_SZCLASS ||
         // TODO: because of issue #17971 we can't resize old objects
         gc_marked(v->bits.gc)) {
@@ -3558,7 +3558,8 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
     newbig->age = 0;
     gc_big_object_link(newbig, &ptls->heap.big_objects);
     jl_value_t *snew = jl_valueof(&newbig->header);
-    *(size_t*)snew = sz;
+    assert(sz >= 128);
+    *(size_t*)snew = (sz << 1) | 0x1;
     return snew;
 }
 

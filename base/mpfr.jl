@@ -104,7 +104,11 @@ mutable struct BigFloat <: AbstractFloat
         #NAN_KIND = Cint(0)
         #ccall((:mpfr_custom_init_set,:libmpfr), Cvoid, (Ref{BigFloat}, Cint, Clong, Ptr{Limb}), z, NAN_KIND, prec, d)
         #return z
-        return new(prec, sign, exp, pointer(d), d)
+        p = pointer(d)
+        if UInt(p) & 1 == 1
+            p += (sizeof(Int) - 1)
+        end
+        return new(prec, sign, exp, p, d)
     end
 
     function BigFloat(; precision::Integer=DEFAULT_PRECISION[])
@@ -112,7 +116,11 @@ mutable struct BigFloat <: AbstractFloat
         nb = ccall((:mpfr_custom_get_size,:libmpfr), Csize_t, (Clong,), precision)
         nb = (nb + Core.sizeof(Limb) - 1) ÷ Core.sizeof(Limb) # align to number of Limb allocations required for this
         #d = Vector{Limb}(undef, nb)
-        d = _string_n(nb * Core.sizeof(Limb))
+        sz = nb * Core.sizeof(Limb)
+        if sz < 128
+            sz = min(sz+sizeof(Int)-1, 128)
+        end
+        d = _string_n(sz)
         EXP_NAN = Clong(1) - Clong(typemax(Culong) >> 1)
         return _BigFloat(Clong(precision), one(Cint), EXP_NAN, d) # +NAN
     end
@@ -131,7 +139,11 @@ Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = x
 @inline function Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ref{BigFloat})
     x = x[]
     if x.d == C_NULL
-        x.d = pointer(x._d)
+        p = pointer(x._d)
+        if UInt(p) & 1 == 1
+            p += (sizeof(Int) - 1)
+        end
+        x.d = p
     end
     return convert(Ptr{BigFloat}, Base.pointer_from_objref(x))
 end

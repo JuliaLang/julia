@@ -1352,7 +1352,6 @@ let r = Ref{Any}("123456789")
         @test Ptr{Cvoid}(pa) != pv
         @test unsafe_load(pa) === r[]
         @test unsafe_load(Ptr{Ptr{Cvoid}}(pa)) === pv
-        @test unsafe_load(Ptr{Int}(pv)) === length(r[])
     end
 end
 

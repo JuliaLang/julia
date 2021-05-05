@@ -91,7 +91,7 @@ end
 function (ss::SummarySize)(obj::String)
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    return Core.sizeof(Int) + Core.sizeof(obj)
+    return Int(pointer(obj) - key) + Core.sizeof(obj)
 end
 
 function (ss::SummarySize)(obj::DataType)

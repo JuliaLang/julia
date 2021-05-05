@@ -495,7 +495,13 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
         jl_value_t *o = jl_array_data_owner(a);
         if (jl_is_string(o)) {
             a->flags.isshared = 1;
-            *(size_t*)o = len;
+            if (*(size_t*)o & 0x1) {
+                *(size_t*)o = (len << 1) | 0x1;
+            }
+            else {
+                assert(len < 128);
+                *(int8_t*)o = len << 1;
+            }
             a->nrows = 0;
 #ifdef STORE_ARRAY_LEN
             a->length = 0;
@@ -512,30 +518,26 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
     return jl_pchar_to_string((const char*)jl_array_data(a), len);
 }
 
-JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
+JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
 {
-    size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
-    if (sz < len) // overflow
-        jl_throw(jl_memory_exception);
     if (len == 0)
         return jl_an_empty_string;
+    // add space for trailing \nul protector and size
+    size_t sz = len + 1 + (len < 128 ? 1 : sizeof(size_t));
+    if (sz < len) // overflow
+        jl_throw(jl_memory_exception);
     jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining
-    *(size_t*)s = len;
-    memcpy((char*)s + sizeof(size_t), str, len);
-    ((char*)s + sizeof(size_t))[len] = 0;
+    // store `len >= 128` in the low bit so we know how big the length field is
+    *(size_t*)s = (len << 1) | (len >= 128);
+    jl_string_data(s)[len] = 0;
     return s;
 }
 
-JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
+JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
-    size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
-    if (sz < len) // overflow
-        jl_throw(jl_memory_exception);
-    if (len == 0)
-        return jl_an_empty_string;
-    jl_value_t *s = jl_gc_alloc_(jl_get_ptls_states(), sz, jl_string_type); // force inlining
-    *(size_t*)s = len;
-    ((char*)s + sizeof(size_t))[len] = 0;
+    jl_value_t *s = jl_alloc_string(len);
+    if (len > 0)
+        memcpy(jl_string_data(s), str, len);
     return s;
 }
 

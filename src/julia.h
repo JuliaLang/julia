@@ -1013,8 +1013,23 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 // get a pointer to the data in a datatype
 #define jl_data_ptr(v)  ((jl_value_t**)v)
 
-#define jl_string_data(s) ((char*)s + sizeof(void*))
-#define jl_string_len(s)  (*(size_t*)s)
+STATIC_INLINE char *jl_string_data(jl_value_t *s) JL_NOTSAFEPOINT
+{
+    int8_t b = *(int8_t*)s;
+    if (b & 0x1)
+        return (char*)s + sizeof(void*);
+    else
+        return (char*)s + 1;
+}
+STATIC_INLINE size_t jl_string_len(jl_value_t *s) JL_NOTSAFEPOINT
+{
+    size_t sz = *(size_t*)s;
+    if (sz & 0x1)
+        return sz >> 1;
+    else
+        return (sz & 0xff) >> 1;
+}
+#define jl_string_obj_size(s) (jl_string_len(s) + ((*(int8_t*)s & 0x1) ? sizeof(size_t) : 1) + 1)
 
 #define jl_gf_mtable(f) (((jl_datatype_t*)jl_typeof(f))->name->mt)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)

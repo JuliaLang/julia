@@ -91,7 +91,7 @@ if opt_level > 0
     @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
     # Make sure `Core.sizeof` call is inlined
     s = "aaa"
-    @test jl_string_ptr(s) == pointer_from_objref(s) + sizeof(Int)
+    @test jl_string_ptr(s) == pointer_from_objref(s) + 1
     # String
     test_loads_no_call(get_llvm(core_sizeof, Tuple{String}), [Iptr])
     # String
