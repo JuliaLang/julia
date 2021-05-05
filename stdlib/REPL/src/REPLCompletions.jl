@@ -391,7 +391,7 @@ get_value(sym, fn) = (sym, true)
 function get_type_getfield(ex::Expr, fn::Module)
     length(ex.args) == 3 || return Any, false # should never happen, but just for safety
     obj, x = ex.args[2:3]
-    objt, found = get_type_getfield(obj, fn)
+    objt, found = get_type(obj, fn)
     found || return Any, false
     fld = isa(x, QuoteNode) ? x.value : x
     isdefined(objt, fld) || return Any, false
