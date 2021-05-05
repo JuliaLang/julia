@@ -393,7 +393,14 @@ function get_type_getfield(ex::Expr, fn::Module)
     obj, x = ex.args[2:3]
     objt, found = get_type(obj, fn)
     found || return Any, false
-    fld = isa(x, QuoteNode) ? x.value : x
+    if x isa QuoteNode
+        fld = x.value
+    elseif isexpr(x, :quote) || isexpr(x, :inert)
+        fld = x.args[1]
+    else
+        fld = nothing # we don't know how to get the value of variable `x` here
+    end
+    fld isa Symbol || return Any, false
     isdefined(objt, fld) || return Any, false
     return fieldtype(objt, fld), true
 end
