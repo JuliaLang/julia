@@ -123,6 +123,10 @@ function _str_sizehint(x)
         return sizeof(x)
     elseif x isa Char
         return ncodeunits(x)
+    elseif x isa UInt || x isa Int
+        return 20
+    elseif x isa UInt32 || x isa Int32
+        return 10
     else
         return 8
     end
