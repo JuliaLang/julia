@@ -136,6 +136,11 @@ end
 function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::AbstractString)
     i==j ? s : Base.replace_with_centered_mark(s)
 end
+function Base.show(io::IO, A::Diagonal)
+    print(io, "Diagonal(")
+    show(io, A.diag)
+    print(io, ")")
+end
 
 parent(D::Diagonal) = D.diag
 
