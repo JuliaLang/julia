@@ -344,7 +344,6 @@ myappend (generic function with 1 method)
 
 The type parameter `T` in the function's signature ensures that the type of the new `v` is preserved after element `x` is appended to it. 
 The function's signature is preceded by the keyword `where` and is placed immediately after the method arguments. 
-When only one type parameter is used, the curly braces are optional. 
 Parametric method definition also works with the short-form syntax.
 An equivalent one-line definition would be:
 
