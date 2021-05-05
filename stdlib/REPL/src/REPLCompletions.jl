@@ -392,6 +392,7 @@ function get_type_getfield(ex::Expr, fn::Module)
     length(ex.args) == 3 || return Any, false # should never happen, but just for safety
     obj, x = ex.args[2:3]
     objt, found = get_type(obj, fn)
+    objt isa DataType || return Any, false
     found || return Any, false
     if x isa QuoteNode
         fld = x.value
@@ -401,6 +402,7 @@ function get_type_getfield(ex::Expr, fn::Module)
         fld = nothing # we don't know how to get the value of variable `x` here
     end
     fld isa Symbol || return Any, false
+    hasfield(objt, fld) || return Any, false
     return fieldtype(objt, fld), true
 end
 
