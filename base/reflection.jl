@@ -1150,13 +1150,18 @@ function func_for_method_checked(m::Method, @nospecialize(types), sparams::Simpl
 end
 
 """
-    code_typed(f, types; optimize=true, debuginfo=:default)
+    code_typed(f, types; kw...)
 
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
-generic function and type signature. The keyword argument `optimize` controls whether
-additional optimizations, such as inlining, are also applied.
-The keyword `debuginfo` controls the amount of code metadata present in the output,
+generic function and type signature.
+
+# Keyword Arguments
+
+- `optimize=true`: controls whether additional optimizations, such as inlining, are also applied.
+- `debuginfo=:default`: controls the amount of code metadata present in the output,
 possible options are `:source` or `:none`.
+- `world=Base.get_world_counter()`: controls the world age to use when looking up methods.
+- `interp=Core.Compiler.NativeInterpreter(world)`: controls the interpreter to use.
 """
 function code_typed(@nospecialize(f), @nospecialize(types=Tuple);
                     optimize=true,
