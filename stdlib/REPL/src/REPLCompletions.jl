@@ -401,7 +401,6 @@ function get_type_getfield(ex::Expr, fn::Module)
         fld = nothing # we don't know how to get the value of variable `x` here
     end
     fld isa Symbol || return Any, false
-    isdefined(objt, fld) || return Any, false
     return fieldtype(objt, fld), true
 end
 
