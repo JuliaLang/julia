@@ -679,13 +679,15 @@ end
     @test yt*D*y == (yt*D)*y == (yt*A)*y
 end
 
-@testset "Multiplication of single element Diagonal (#36746)" begin
+@testset "Multiplication of single element Diagonal (#36746, #40726)" begin
     @test_throws DimensionMismatch Diagonal(randn(1)) * randn(5)
     @test_throws DimensionMismatch Diagonal(randn(1)) * Diagonal(randn(3, 3))
     A = [1 0; 0 2]
     v = [3, 4]
     @test Diagonal(A) * v == A * v
     @test Diagonal(A) * Diagonal(A) == A * A
+    @test_throws DimensionMismatch [1 0;0 1] * Diagonal([2 3])   # Issue #40726
+    @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
 end
 
 @testset "Triangular division by Diagonal #27989" begin
