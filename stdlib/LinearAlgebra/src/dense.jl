@@ -636,8 +636,8 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         # Compute U and V: Even/odd terms in Padé numerator & denom
         # Expansion of k=1 in for loop
         P = A2
-        U = C[2]*I + C[4]*P
-        V = C[1]*I + C[3]*P
+        U = mul!(C[4]*P, true, C[2]*I, true, true) #U = C[2]*I + C[4]*P
+        V = mul!(C[3]*P, true, C[1]*I, true, true) #V = C[1]*I + C[3]*P
         for k in 2:(div(size(C, 1), 2) - 1)
             k2 = 2 * k
             P *= A2
@@ -664,7 +664,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A4 = A2 * A2
         A6 = A2 * A4
         Ut = CC[4]*A2
-        Ut[diagind(Ut)] .+=  CC[2]
+        Ut = mul!(CC[4]*A2,true,CC[2]*I,true,true); # Ut = CC[4]*A2+CC[2]*I
         # Allocation economical version of:
         #U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
         #          CC[8].*A6 .+ CC[6].*A4 .+ Ut)
@@ -676,7 +676,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
 
         # Allocation economical version of: Vt = CC[3]*A2 (recycle Ut)
         Vt = mul!(Ut, CC[3], A2, true, false)
-        Vt[diagind(Vt)] .+=  CC[1]
+        mul!(Vt,true,CC[1]*I,true,true); # Vt += CC[1]*I
         # Allocation economical version of:
         #V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
         #           CC[7].*A6 .+ CC[5].*A4 .+ Vt
