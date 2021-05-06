@@ -663,8 +663,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
-        Ut = CC[4]*A2
-        Ut = mul!(CC[4]*A2,true,CC[2]*I,true,true); # Ut = CC[4]*A2+CC[2]*I
+        Ut = mul!(CC[4]*A2, true,CC[2]*I, true, true); # Ut = CC[4]*A2+CC[2]*I
         # Allocation economical version of:
         #U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
         #          CC[8].*A6 .+ CC[6].*A4 .+ Ut)
@@ -676,7 +675,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
 
         # Allocation economical version of: Vt = CC[3]*A2 (recycle Ut)
         Vt = mul!(Ut, CC[3], A2, true, false)
-        mul!(Vt,true,CC[1]*I,true,true); # Vt += CC[1]*I
+        mul!(Vt, true, CC[1]*I, true, true); # Vt += CC[1]*I
         # Allocation economical version of:
         #V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
         #           CC[7].*A6 .+ CC[5].*A4 .+ Vt

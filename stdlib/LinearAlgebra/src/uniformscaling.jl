@@ -285,7 +285,7 @@ end
 @inline mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat, alpha::Number, beta::Number) =
     mul!(C, J.λ, B, alpha, beta)
 
-function mul!(out::AbstractMatrix{T},a::Bool,B::UniformScaling{T},α::Bool,β::Bool) where {T}
+function mul!(out::AbstractMatrix{T}, a::Bool, B::UniformScaling{T}, α::Bool, β::Bool) where {T}
     if !β  # zero contribution of the out matrix
         fill!(out,zero(T));
     end
