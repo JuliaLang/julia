@@ -565,7 +565,7 @@ end
     D = Diagonal(randn(5))
     Q = qr(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
-    Q = qr(randn(5, 5), Val(true)).Q
+    Q = qr(randn(5, 5), :colnorm).Q
     @test_throws ArgumentError lmul!(Q, D)
 end
 

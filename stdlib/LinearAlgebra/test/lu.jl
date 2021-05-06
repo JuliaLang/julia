@@ -229,12 +229,12 @@ end
     @test_throws SingularException lu!(copy(A); check = true)
     @test !issuccess(lu(A; check = false))
     @test !issuccess(lu!(copy(A); check = false))
-    @test_throws ZeroPivotException lu(A, Val(false))
-    @test_throws ZeroPivotException lu!(copy(A), Val(false))
-    @test_throws ZeroPivotException lu(A, Val(false); check = true)
-    @test_throws ZeroPivotException lu!(copy(A), Val(false); check = true)
-    @test !issuccess(lu(A, Val(false); check = false))
-    @test !issuccess(lu!(copy(A), Val(false); check = false))
+    @test_throws ZeroPivotException lu(A, :none)
+    @test_throws ZeroPivotException lu!(copy(A), :none)
+    @test_throws ZeroPivotException lu(A, :none; check = true)
+    @test_throws ZeroPivotException lu!(copy(A), :none; check = true)
+    @test !issuccess(lu(A, :none; check = false))
+    @test !issuccess(lu!(copy(A), :none; check = false))
     F = lu(A; check = false)
     @test sprint((io, x) -> show(io, "text/plain", x), F) ==
         "Failed factorization of type $(typeof(F))"
@@ -320,7 +320,7 @@ include("trickyarithmetic.jl")
 @testset "lu with type whose sum is another type" begin
     A = TrickyArithmetic.A[1 2; 3 4]
     ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
-    B = lu(A, Val(false))
+    B = lu(A, :none)
     @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
 end
 
