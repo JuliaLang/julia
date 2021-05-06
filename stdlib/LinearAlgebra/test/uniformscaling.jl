@@ -454,6 +454,11 @@ end
     target = J * A * alpha + C * beta
     @test mul!(copy(C), J, A, alpha, beta) ≈ target
     @test mul!(copy(C), A, J, alpha, beta) ≈ target
+
+    a = randn();
+    target_5mul = a*alpha*J+beta*C;
+    @test mul!(copy(C), a, J, alpha, beta) ≈ target_5mul
+
 end
 
 @testset "Construct Diagonal from UniformScaling" begin
