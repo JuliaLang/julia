@@ -14,46 +14,55 @@ Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
 
 """
+    Diagonal(V::AbstractVector)
+
+Construct a matrix with `V` as its diagonal.
+
+See also [`diag`](@ref), [`diagm`](@ref).
+
+# Examples
+```jldoctest
+julia> Diagonal([1, 10, 100])
+3×3 Diagonal{$Int, Vector{$Int}}:
+ 1   ⋅    ⋅
+ ⋅  10    ⋅
+ ⋅   ⋅  100
+
+julia> diagm([7, 13])
+2×2 Matrix{$Int}:
+ 7   0
+ 0  13
+```
+"""
+Diagonal(V::AbstractVector)
+
+"""
     Diagonal(A::AbstractMatrix)
 
 Construct a matrix from the diagonal of `A`.
 
 # Examples
 ```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Matrix{Int64}:
- 1  2  3
- 4  5  6
- 7  8  9
+julia> A = permutedims(reshape(1:15, 5, 3))
+3×5 Matrix{Int64}:
+  1   2   3   4   5
+  6   7   8   9  10
+ 11  12  13  14  15
 
 julia> Diagonal(A)
-3×3 Diagonal{Int64, Vector{Int64}}:
- 1  ⋅  ⋅
- ⋅  5  ⋅
- ⋅  ⋅  9
+3×3 Diagonal{$Int, Vector{$Int}}:
+ 1  ⋅   ⋅
+ ⋅  7   ⋅
+ ⋅  ⋅  13
+
+julia> diag(A, 2)
+3-element Vector{$Int}:
+  3
+  9
+ 15
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
-
-"""
-    Diagonal(V::AbstractVector)
-
-Construct a matrix with `V` as its diagonal.
-
-# Examples
-```jldoctest
-julia> V = [1, 2]
-2-element Vector{Int64}:
- 1
- 2
-
-julia> Diagonal(V)
-2×2 Diagonal{Int64, Vector{Int64}}:
- 1  ⋅
- ⋅  2
-```
-"""
-Diagonal(V::AbstractVector)
 
 Diagonal(D::Diagonal) = D
 Diagonal{T}(D::Diagonal{T}) where {T} = D
