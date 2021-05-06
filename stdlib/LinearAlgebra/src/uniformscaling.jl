@@ -300,7 +300,8 @@ function mul!(out::AbstractMatrix{T}, a::Number, B::UniformScaling, α::Number, 
     end
     return out
 end
-
+@inline mul!(out::AbstractMatrix, A::UniformScaling, b::Number, α::Number, β::Number)=
+    mul!(out, b, A, α, β)
 rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)

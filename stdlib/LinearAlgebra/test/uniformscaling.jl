@@ -459,6 +459,7 @@ end
     C = randn(3, 3)
     target_5mul = a*alpha*J + beta*C
     @test mul!(copy(C), a, J, alpha, beta) ≈ target_5mul
+    @test mul!(copy(C), J, a, alpha, beta) ≈ target_5mul
     target_5mul = beta*C # alpha = 0
     @test mul!(copy(C), a, J, 0, beta) ≈ target_5mul
     target_5mul = a*alpha*Matrix(J,n,n) # beta = 0
