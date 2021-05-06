@@ -455,8 +455,9 @@ end
     @test mul!(copy(C), J, A, alpha, beta) ≈ target
     @test mul!(copy(C), A, J, alpha, beta) ≈ target
 
-    a = randn();
-    target_5mul = a*alpha*J+beta*C;
+    a = randn()
+    C = randn(3, 3)
+    target_5mul = a*alpha*J + beta*C
     @test mul!(copy(C), a, J, alpha, beta) ≈ target_5mul
 
 end
