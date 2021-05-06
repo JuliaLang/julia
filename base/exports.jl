@@ -702,6 +702,7 @@ export
     ismissing,
     missing,
     skipmissing,
+    @something,
     something,
     isnothing,
     nonmissingtype,

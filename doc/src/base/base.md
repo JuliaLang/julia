@@ -229,6 +229,7 @@ Base.isnothing
 Base.notnothing
 Base.Some
 Base.something
+Base.@something
 Base.Enums.Enum
 Base.Enums.@enum
 Core.Expr
