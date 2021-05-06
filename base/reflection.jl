@@ -154,7 +154,7 @@ function fieldname(t::DataType, i::Integer)
     end
     throw_need_pos_int(i) = throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
 
-    t.abstract && throw_not_def_field()
+    t.name.abstract && throw_not_def_field()
     names = _fieldnames(t)
     n_fields = length(names)::Int
     i > n_fields && throw_field_access(t, i, n_fields)
@@ -471,7 +471,7 @@ true
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
 """
-ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
+ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).name.mutable)
 
 
 """
@@ -486,7 +486,7 @@ Determine whether type `T` was declared as a mutable type
 function ismutabletype(@nospecialize(t::Type))
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.mutable
+    return isa(t, DataType) && t.name.mutable
 end
 
 
@@ -502,7 +502,7 @@ function isstructtype(@nospecialize(t::Type))
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
     hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return hasfield || (t.size == 0 && !t.abstract)
+    return hasfield || (t.size == 0 && !t.name.abstract)
 end
 
 """
@@ -517,7 +517,7 @@ function isprimitivetype(@nospecialize(t::Type))
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
     hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return !hasfield && t.size != 0 && !t.abstract
+    return !hasfield && t.size != 0 && !t.name.abstract
 end
 
 """
@@ -623,7 +623,7 @@ function isabstracttype(@nospecialize(t))
     @_pure_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.abstract
+    return isa(t, DataType) && t.name.abstract
 end
 
 """
@@ -757,7 +757,7 @@ function fieldcount(@nospecialize t)
         end
         abstr = true
     else
-        abstr = t.abstract || (t.name === Tuple.name && isvatuple(t))
+        abstr = t.name.abstract || (t.name === Tuple.name && isvatuple(t))
     end
     if abstr
         throw(ArgumentError("type does not have a definite number of fields"))

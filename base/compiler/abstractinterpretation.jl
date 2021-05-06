@@ -1410,7 +1410,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         end
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
-        if isconcretetype(t) && !t.mutable
+        if isconcretetype(t) && !t.name.mutable
             args = Vector{Any}(undef, length(e.args)-1)
             ats = Vector{Any}(undef, length(e.args)-1)
             anyconst = false
@@ -1447,7 +1447,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         end
     elseif e.head === :splatnew
         t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
-        if length(e.args) == 2 && isconcretetype(t) && !t.mutable
+        if length(e.args) == 2 && isconcretetype(t) && !t.name.mutable
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
             if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val) &&
