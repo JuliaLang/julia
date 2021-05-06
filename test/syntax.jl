@@ -2787,3 +2787,13 @@ macro m_nospecialize_unnamed_hygiene()
 end
 
 @test @m_nospecialize_unnamed_hygiene()(1) === Any
+
+@testset "slurping into function def" begin
+    x, f()... = [1, 2, 3]
+    @test x == 1
+    @test f() == [2, 3]
+
+    x, f()... = 1, 2, 3
+    @test x == 1
+    @test f() == (2, 3)
+end
