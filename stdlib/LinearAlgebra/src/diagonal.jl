@@ -211,12 +211,20 @@ end
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
+    nA, nD = size(A, 2), length(D.diag)
+    if nA != nD
+        throw(DimensionMismatch("second dimension of A, $nA, does not match the first of D, $nD"))
+    end
     A .= A .* permutedims(D.diag)
     return A
 end
 
 function lmul!(D::Diagonal, B::AbstractVecOrMat)
     require_one_based_indexing(B)
+    nB, nD = size(B, 1), length(D.diag)
+    if nB != nD
+        throw(DimensionMismatch("second dimension of D, $nD, does not match the first of B, $nB"))
+    end
     B .= D.diag .* B
     return B
 end
