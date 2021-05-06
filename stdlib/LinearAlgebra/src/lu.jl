@@ -92,9 +92,9 @@ function lu!(A::HermOrSym, pivot::Symbol = :rowmax; check::Bool = true)
     lu!(A.data, pivot; check = check)
 end
 # for backward compatibility
-# TODO: remove/deprecate towards Julia v2
-lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{true}; check::Bool = true) = lu!(A, :rowmax; check=check)
-lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{false}; check::Bool = true) = lu!(A, :none; check=check)
+# TODO: remove towards Julia v2
+@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{true}; check::Bool = true) lu!(A, :rowmax; check=check)
+@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{false}; check::Bool = true) lu!(A, :none; check=check)
 
 """
     lu!(A, pivot = :rowmax; check = true) -> LU
@@ -284,9 +284,9 @@ function lu(A::AbstractMatrix{T}, pivot::Symbol = :rowmax; check::Bool = true) w
     S = lutype(T)
     lu!(copy_oftype(A, S), pivot; check = check)
 end
-# TODO: remove/deprecate for Julia v2.0
-lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) = lu(A, :rowmax; check=check)
-lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) = lu(A, :none; check=check)
+# TODO: remove for Julia v2.0
+@deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, :rowmax; check=check)
+@deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, :none; check=check)
 
 
 lu(S::LU) = S

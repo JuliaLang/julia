@@ -307,9 +307,9 @@ Base.@aggressive_constprop function qr!(A::AbstractMatrix, pivot::Symbol = :none
         throw(ArgumentError("only `:colnorm` and `:none` are supported as `pivot` argument but you supplied `$pivot`"))
     end
 end
-# TODO: Remove/deprecate towards Julia v2.0
-qr!(A::AbstractMatrix, ::Val{true}) = qr!(A, :colnorm)
-qr!(A::AbstractMatrix, ::Val{false}) = qr!(A, :none)
+# TODO: Remove in Julia v2.0
+@deprecate qr!(A::AbstractMatrix, ::Val{true})  qr!(A, :colnorm)
+@deprecate qr!(A::AbstractMatrix, ::Val{false}) qr!(A, :none)
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
@@ -397,8 +397,9 @@ Base.@aggressive_constprop function qr(A::AbstractMatrix{T}, arg...; kwargs...) 
     copyto!(AA, A)
     return qr!(AA, arg...; kwargs...)
 end
-qr(A::AbstractMatrix, ::Val{false}; kwargs...) = qr(A, :none; kwargs...)
-qr(A::AbstractMatrix, ::Val{true}; kwargs...) = qr(A, :colnorm; kwargs...)
+# TODO: remove in Julia v2.0
+@deprecate qr(A::AbstractMatrix, ::Val{false}; kwargs...) qr(A, :none; kwargs...)
+@deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, :colnorm; kwargs...)
 
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)
