@@ -413,7 +413,7 @@ for itype in UmfpackIndexTypes
             Rs = F.Rs
             p = F.p
             q = F.q
-            c = 0
+            c = false
             P = one(T)
             abs_det = zero(real(T))
             @inbounds for i in 1:n
@@ -421,15 +421,15 @@ for itype in UmfpackIndexTypes
                 P *= sign(dg_ii)
                 for j in i+1:n
                     if p[i] > p[j]
-                        c += 1
+                        c = ! c
                     end
                     if q[i] > q[j]
-                        c += 1
+                        c = ! c
                     end
                 end
                 abs_det += log(abs(dg_ii))
             end
-            s = ifelse(isodd(c), -one(real(T)), one(real(T))) * P
+            s = ifelse(c, -one(real(T)), one(real(T))) * P
             return abs_det, s
         end
         function umf_lunz(lu::UmfpackLU{Float64,$itype})
