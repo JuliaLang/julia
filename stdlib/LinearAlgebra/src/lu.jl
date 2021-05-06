@@ -97,7 +97,7 @@ lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{true}; check::Bool = tr
 lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{false}; check::Bool = true) = lu!(A, :none; check=check)
 
 """
-    lu!(A; pivot= :rowmax, check = true) -> LU
+    lu!(A, pivot = :rowmax; check = true) -> LU
 
 `lu!` is the same as [`lu`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
@@ -224,7 +224,7 @@ validity (via [`issuccess`](@ref)) lies with the user.
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
 type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
 pivoting is chosen (default) the element type should also support [`abs`](@ref) and
-[`<`](@ref).
+[`<`](@ref). Pivoting can be turned off by passing `pivot = :none`.
 
 The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
 
