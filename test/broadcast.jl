@@ -1048,3 +1048,60 @@ end
 # issue 40309
 @test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
 @test Broadcast.BroadcastFunction(+)(2:3, 2:3) === 4:2:6
+
+@testset "broadcast ranges to a different eltype" begin
+    for r = Any[1:5, Base.OneTo(3), UnitRange(1.0, 4.0), 1:1:5]
+        for T in [Int32, Int64, BigInt]
+            r2 = T.(r)
+            if r isa AbstractUnitRange
+                @test r2 isa AbstractUnitRange
+            else
+                @test r2 isa AbstractRange
+            end
+            @test r2 == r
+        end
+        for T in [Float32, Float64, BigFloat]
+            r2 = T.(r)
+            @test r2 isa AbstractRange
+            @test r2 == r
+        end
+    end
+    for r = Any[Base.IdentityUnitRange(2:4), Base.IdentityUnitRange(Base.OneTo(3))]
+        r2 = Int.(r)
+        @test r2 === r
+    end
+
+    for r in Any[LinRange{Int}(1, 4, 4), LinRange(1, 4, 4), range(float(1), stop = float(4), step = float(1))]
+        for T in [Float32, Float64, BigFloat]
+            r2 = T.(r)
+            @test r2 isa AbstractRange
+            @test r2 == r
+        end
+    end
+
+    @testset "broadcast to Bool" begin
+        for fn = 0:1
+            for r in Any[1:fn, Base.OneTo(fn), 1:1:1, range(float(1), stop = float(fn), step = float(1)),
+                    LinRange{Int}(1, fn, fn), LinRange(1, fn, fn)]
+                r2 = Bool.(r)
+                @test eltype(r2) == Bool
+                @test r2 == r
+                @test r2 == map(Bool, r)
+            end
+        end
+        for fn = 0:1
+            for r in Any[0:fn, 0:1:fn, range(float(0), stop = float(fn), step = float(1)),
+                    LinRange{Int}(0, fn, fn + 1), LinRange(0, fn, fn + 1)]
+                r2 = Bool.(r)
+                @test eltype(r2) == Bool
+                @test r2 == r
+                @test r2 == map(Bool, r)
+            end
+        end
+    end
+    # test with a type that is not a subtype of Number
+    R = range(CartesianIndex(1), step = CartesianIndex(1), length = 4)
+    @test CartesianIndex.(1:4) == CartesianIndices((1:4,)) == R
+    R = range(CartesianIndex(1,1), step = CartesianIndex(2,2), length = 4)
+    @test CartesianIndex.(1:2:7, 1:2:7) == R
+end

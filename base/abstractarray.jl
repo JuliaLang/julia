@@ -1152,7 +1152,11 @@ isempty(a::AbstractArray) = (length(a) == 0)
 
 ## range conversions ##
 
+map(::Type{T}, r::AbstractRange{T}) where {T} = r
 map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
+map(::Type{T}, r::Base.OneTo) where {T<:Integer} = oneto(T(last(r)))
+map(::Type{Bool}, r::Base.OneTo) = map(Bool, UnitRange(r))
+map(::Type{T}, r::Base.OneTo) where {T<:Real} = map(T, UnitRange(r))
 map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(last(r))
 map(::Type{T}, r::StepRangeLen) where {T<:AbstractFloat} = convert(StepRangeLen{T}, r)
 function map(::Type{T}, r::LinRange) where T<:AbstractFloat
