@@ -1846,7 +1846,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 end
 
 function conditional_changes(changes::VarTable, @nospecialize(typ), var::Slot)
-    if typ ⊑ (changes[slot_id(var)]::VarState).typ
+    newtyp = (changes[slot_id(var)]::VarState).typ
+    newtyp = ignorelimited(newtyp)
+    if typ ⊑ newtyp
         return StateUpdate(var, VarState(typ, false), changes, true)
     end
     return changes
