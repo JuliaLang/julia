@@ -877,11 +877,8 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     end
 end
 
-function isgenerator(m::Core.MethodInstance)
-    def = m.def
-    isa(def, Method) || return false
-    return isdefined(def, :generator)
-end
+hasgenerator(m::Method) = isdefined(m, :generator)
+hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
 
 # low-level method lookup functions used by the compiler
 
