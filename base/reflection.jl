@@ -862,7 +862,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
-        if generated && isgenerator(m)
+        if generated && hasgenerator(m)
             if may_invoke_generator(m)
                 return ccall(:jl_code_for_staged, Any, (Any,), m)::CodeInfo
             else

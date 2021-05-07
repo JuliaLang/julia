@@ -182,6 +182,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 conditionals = Any[Bottom for _ in 1:length(argtypes)],
                                Any[Bottom for _ in 1:length(argtypes)]
             end
+            condval = maybe_extract_const_bool(this_conditional)
             for i = 1:length(argtypes)
                 fargs[i] isa Slot || continue
                 if this_conditional isa InterConditional && this_conditional.slot == i
@@ -189,7 +190,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     elsetype = this_conditional.elsetype
                 else
                     elsetype = vtype = tmeet(argtypes[i], fieldtype(sig, i))
-                    condval = maybe_extract_const_bool(this_conditional)
                     condval === true && (elsetype = Union{})
                     condval === false && (vtype = Union{})
                 end
