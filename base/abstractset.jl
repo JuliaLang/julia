@@ -13,23 +13,25 @@ copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
 
 Construct the union of sets. Maintain order with arrays.
 
+See also: [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
+
 # Examples
 ```jldoctest
 julia> union([1, 2], [3, 4])
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
  4
 
 julia> union([1, 2], [2, 4])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  4
 
 julia> union([4, 2], 1:2)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  4
  2
  1
@@ -64,10 +66,10 @@ julia> union!(a, 1:2:8);
 
 julia> a
 Set{Int64} with 5 elements:
-  7
-  4
-  3
   5
+  4
+  7
+  3
   1
 ```
 """
@@ -86,7 +88,7 @@ max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
 
 function union!(s::AbstractSet{T}, itr) where T
-    haslength(itr) && sizehint!(s, length(s) + length(itr))
+    haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int)
     for x in itr
         push!(s, x)
         length(s) == max_values(T) && break
@@ -101,14 +103,16 @@ end
 Construct the intersection of sets.
 Maintain order with arrays.
 
+See also: [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref Base.issubset), [`issetequal`](@ref).
+
 # Examples
 ```jldoctest
 julia> intersect([1, 2, 3], [3, 4, 5])
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  3
 
 julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  4
  6
 
@@ -145,10 +149,12 @@ intersect!(s::AbstractSet, itr) =
 Construct the set of elements in `s` but not in any of the iterables in `itrs`.
 Maintain order with arrays.
 
+See also [`setdiff!`](@ref), [`union`](@ref) and [`intersect`](@ref).
+
 # Examples
 ```jldoctest
 julia> setdiff([1,2,3], [3,4,5])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 ```
@@ -194,16 +200,18 @@ Construct the symmetric difference of elements in the passed in sets.
 When `s` is not an `AbstractSet`, the order is maintained.
 Note that in this case the multiplicity of elements matters.
 
+See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref) and [`intersect`](@ref).
+
 # Examples
 ```jldoctest
 julia> symdiff([1,2,3], [3,4,5], [4,5,6])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  6
 
 julia> symdiff([1,2,1], [2, 1, 2])
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
@@ -245,6 +253,8 @@ function ⊇ end
     ⊇(b, a) -> Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
+
+See also [`⊊`](@ref), [`⊈`](@ref), [`∩`](@ref intersect), [`∪`](@ref union), [`contains`](@ref).
 
 # Examples
 ```jldoctest
@@ -306,6 +316,8 @@ function ⊋ end
 
 Determines if `a` is a subset of, but not equal to, `b`.
 
+See also [`issubset`](@ref) (`⊆`), [`⊈`](@ref).
+
 # Examples
 ```jldoctest
 julia> (1, 2) ⊊ (1, 2, 3)
@@ -329,6 +341,8 @@ function ⊉ end
 
 Negation of `⊆` and `⊇`, i.e. checks that `a` is not a subset of `b`.
 
+See also [`issubset`](@ref) (`⊆`), [`⊊`](@ref).
+
 # Examples
 ```jldoctest
 julia> (1, 2) ⊈ (2, 3)
@@ -350,6 +364,8 @@ false
 
 Determine whether `a` and `b` have the same elements. Equivalent
 to `a ⊆ b && b ⊆ a` but more efficient when possible.
+
+See also: [`isdisjoint`](@ref), [`union`](@ref).
 
 # Examples
 ```jldoctest
@@ -383,6 +399,8 @@ end
 
 Return whether the collections `v1` and `v2` are disjoint, i.e. whether
 their intersection is empty.
+
+See also: [`issetequal`](@ref), [`intersect`](@ref).
 
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.

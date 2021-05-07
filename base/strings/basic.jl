@@ -72,7 +72,7 @@ ncodeunits(s::AbstractString)
 
 Return the code unit type of the given string object. For ASCII, Latin-1, or
 UTF-8 encoded strings, this would be `UInt8`; for UCS-2 and UTF-16 it would be
-`UInt16`; for UTF-32 it would be `UInt32`. The unit code type need not be
+`UInt16`; for UTF-32 it would be `UInt32`. The code unit type need not be
 limited to these three types, but it's hard to think of widely used string
 encodings that don't use one of these units. `codeunit(s)` is the same as
 `typeof(codeunit(s,1))` when `s` is a non-empty string.
@@ -80,6 +80,8 @@ encodings that don't use one of these units. `codeunit(s)` is the same as
 See also: [`ncodeunits`](@ref)
 """
 codeunit(s::AbstractString)
+
+const CodeunitType = Union{Type{UInt8},Type{UInt16},Type{UInt32}}
 
 """
     codeunit(s::AbstractString, i::Integer) -> Union{UInt8, UInt16, UInt32}
@@ -90,6 +92,15 @@ Return the code unit value in the string `s` at index `i`. Note that
 
 I.e. the value returned by `codeunit(s, i)` is of the type returned by
 `codeunit(s)`.
+
+# Examples
+```jldoctest
+julia> a = codeunit("Hello", 2)
+0x65
+
+julia> typeof(a)
+UInt8
+```
 
 See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
 """
@@ -104,7 +115,7 @@ character in `s` or not. If `isvalid(s, i)` is true then `s[i]` will return the
 character whose encoding starts at that index, if it's false, then `s[i]` will
 raise an invalid index error or a bounds error depending on if `i` is in bounds.
 In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must be
-[self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code) this
+[self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code). This
 is a basic assumption of Julia's generic string support.
 
 See also: [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
@@ -124,7 +135,7 @@ julia> isvalid(str, 2)
 false
 
 julia> str[2]
-ERROR: StringIndexError("αβγdef", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'β'
 Stacktrace:
 [...]
 ```
@@ -165,14 +176,14 @@ julia> sizeof("∀")
 3
 ```
 """
-sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
+sizeof(s::AbstractString) = ncodeunits(s)::Int * sizeof(codeunit(s)::CodeunitType)
 firstindex(s::AbstractString) = 1
-lastindex(s::AbstractString) = thisind(s, ncodeunits(s))
-isempty(s::AbstractString) = iszero(ncodeunits(s))
+lastindex(s::AbstractString) = thisind(s, ncodeunits(s)::Int)
+isempty(s::AbstractString) = iszero(ncodeunits(s)::Int)
 
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
-    @inbounds return isvalid(s, i) ? iterate(s, i)[1] : string_index_err(s, i)
+    @inbounds return isvalid(s, i) ? (iterate(s, i)::NTuple{2,Any})[1] : string_index_err(s, i)
 end
 
 getindex(s::AbstractString, i::Colon) = s
@@ -195,9 +206,9 @@ end
 ## bounds checking ##
 
 checkbounds(::Type{Bool}, s::AbstractString, i::Integer) =
-    1 ≤ i ≤ ncodeunits(s)
+    1 ≤ i ≤ ncodeunits(s)::Int
 checkbounds(::Type{Bool}, s::AbstractString, r::AbstractRange{<:Integer}) =
-    isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s))
+    isempty(r) || (1 ≤ minimum(r) && maximum(r) ≤ ncodeunits(s)::Int)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Real}) =
     all(i -> checkbounds(Bool, s, i), I)
 checkbounds(::Type{Bool}, s::AbstractString, I::AbstractArray{<:Integer}) =
@@ -210,15 +221,22 @@ checkbounds(s::AbstractString, I::Union{Integer,AbstractArray}) =
 string() = ""
 string(s::AbstractString) = s
 
-(::Type{Vector{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
-(::Type{Array{UInt8}})(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
-(::Type{Vector{T}})(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
+Vector{UInt8}(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
+Array{UInt8}(s::AbstractString) = unsafe_wrap(Vector{UInt8}, String(s))
+Vector{T}(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
 Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
+
+## summary ##
+
+function summary(io::IO, s::AbstractString)
+    prefix = isempty(s) ? "empty" : string(ncodeunits(s), "-codeunit")
+    print(io, prefix, " ", typeof(s))
+end
 
 ## string & character concatenation ##
 
@@ -281,7 +299,7 @@ julia> cmp("b", "β")
 function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
     a, b = Iterators.Stateful(a), Iterators.Stateful(b)
-    for (c, d) in zip(a, b)
+    for (c::AbstractChar, d::AbstractChar) in zip(a, b)
         c ≠ d && return ifelse(c < d, -1, 1)
     end
     isempty(a) && return ifelse(isempty(b), 0, -1)
@@ -331,20 +349,31 @@ cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a
 
 isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
+# hashing
+
+hash(s::AbstractString, h::UInt) = hash(String(s), h)
+
 ## character index arithmetic ##
 
 """
     length(s::AbstractString) -> Int
     length(s::AbstractString, i::Integer, j::Integer) -> Int
 
-The number of characters in string `s` from indices `i` through `j`. This is
-computed as the number of code unit indices from `i` to `j` which are valid
-character indices. With only a single string argument, this computes the
-number of characters in the entire string. With `i` and `j` arguments it
+Return the number of characters in string `s` from indices `i` through `j`.
+
+This is computed as the number of code unit indices from `i` to `j` which are
+valid character indices. With only a single string argument, this computes
+the number of characters in the entire string. With `i` and `j` arguments it
 computes the number of indices between `i` and `j` inclusive that are valid
 indices in the string `s`. In addition to in-bounds values, `i` may take the
 out-of-bounds value `ncodeunits(s) + 1` and `j` may take the out-of-bounds
 value `0`.
+
+!!! note
+    The time complexity of this operation is linear in general. That is, it
+    will take the time proportional to the number of bytes or characters in
+    the string because it counts the value on the fly. This is in contrast to
+    the method for arrays, which is a constant-time operation.
 
 See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
 [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
@@ -355,12 +384,12 @@ julia> length("jμΛIα")
 5
 ```
 """
-length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s))
+length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s)::Int)
 
 function length(s::AbstractString, i::Int, j::Int)
     @boundscheck begin
-        0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
+        0 < i ≤ ncodeunits(s)::Int+1 || throw(BoundsError(s, i))
+        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
     end
     n = 0
     for k = i:j
@@ -396,23 +425,21 @@ julia> thisind("α", 3)
 3
 
 julia> thisind("α", 4)
-ERROR: BoundsError: attempt to access String
-  at index [4]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [4]
 [...]
 
 julia> thisind("α", -1)
-ERROR: BoundsError: attempt to access String
-  at index [-1]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [-1]
 [...]
 ```
 """
 thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
 
 function thisind(s::AbstractString, i::Int)
-    z = ncodeunits(s) + 1
+    z = ncodeunits(s)::Int + 1
     i == z && return i
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds while 1 < i && !isvalid(s, i)
+    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
         i -= 1
     end
     return i
@@ -452,8 +479,7 @@ julia> prevind("α", 1)
 0
 
 julia> prevind("α", 0)
-ERROR: BoundsError: attempt to access String
-  at index [0]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [0]
 [...]
 
 julia> prevind("α", 2, 2)
@@ -512,8 +538,7 @@ julia> nextind("α", 1)
 3
 
 julia> nextind("α", 3)
-ERROR: BoundsError: attempt to access String
-  at index [3]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [3]
 [...]
 
 julia> nextind("α", 0, 2)
@@ -579,9 +604,9 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
 ## string map, filter ##
 
 function map(f, s::AbstractString)
-    out = StringVector(max(4, sizeof(s)÷sizeof(codeunit(s))))
+    out = StringVector(max(4, sizeof(s)::Int÷sizeof(codeunit(s)::CodeunitType)))
     index = UInt(1)
-    for c in s
+    for c::AbstractChar in s
         c′ = f(c)
         isa(c′, AbstractChar) || throw(ArgumentError(
             "map(f, s::AbstractString) requires f to return AbstractChar; " *
@@ -651,13 +676,16 @@ cases where `v` contains non-ASCII characters.)
 
 # Examples
 ```jldoctest
-julia> r = reverse("Julia")
-"ailuJ"
+julia> s = "Julia🚀"
+"Julia🚀"
 
-julia> for i in 1:length(r)
-           print(r[reverseind("Julia", i)])
+julia> r = reverse(s)
+"🚀ailuJ"
+
+julia> for i in eachindex(s)
+           print(r[reverseind(r, i)])
        end
-Julia
+Julia🚀
 ```
 """
 reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
@@ -667,7 +695,7 @@ reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
 
 Repeat a string `r` times. This can be written as `s^r`.
 
-See also: [`^`](@ref)
+See also: [`^`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer))
 
 # Examples
 ```jldoctest
@@ -712,10 +740,11 @@ end
 length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
 size(s::CodeUnits) = (length(s),)
-elsize(s::CodeUnits{T}) where {T} = sizeof(T)
+elsize(s::Type{<:CodeUnits{T}}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
-iterate(s::CodeUnits, i=1) = (@_propagate_inbounds_meta; i == length(s)+1 ? nothing : (s[i], i+1))
+@inline iterate(s::CodeUnits, i=1) = (i % UInt) - 1 < length(s) ? (@inbounds s[i], i + 1) : nothing
+
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 
@@ -732,7 +761,7 @@ for new string types if necessary.
 # Examples
 ```jldoctest
 julia> codeunits("Juλia")
-6-element Base.CodeUnits{UInt8,String}:
+6-element Base.CodeUnits{UInt8, String}:
  0x4a
  0x75
  0xce

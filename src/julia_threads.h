@@ -16,8 +16,9 @@
 
 //  Options for task switching algorithm (in order of preference):
 // JL_HAVE_ASM -- mostly setjmp
-// JL_HAVE_ASYNCIFY -- task switching based on the binaryen asyncify transform
-// JL_HAVE_UNW_CONTEXT -- hybrid of libunwind for start, setjmp for resume
+// JL_HAVE_ASM && JL_HAVE_UNW_CONTEXT -- libunwind-based
+// JL_HAVE_UNW_CONTEXT -- libunwind-based
+// JL_HAVE_ASYNCIFY -- task switching based on the binary asyncify transform
 // JL_HAVE_UCONTEXT -- posix standard API, requires syscall for resume
 // JL_HAVE_SIGALTSTACK -- requires several syscall for start, setjmp for resume
 
@@ -33,23 +34,32 @@ typedef win32_ucontext_t jl_ucontext_t;
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
      defined(_CPU_ARM_) || defined(_CPU_PPC64_))
 #define JL_HAVE_ASM
-#elif defined(_OS_DARWIN_)
-#define JL_HAVE_UNW_CONTEXT
-#elif defined(_OS_LINUX_)
-#define JL_HAVE_UCONTEXT
+#endif
+#if 0
+// very slow, but more debugging
+//#elif defined(_OS_DARWIN_)
+//#define JL_HAVE_UNW_CONTEXT
+//#elif defined(_OS_LINUX_)
+//#define JL_HAVE_UNW_CONTEXT
 #elif defined(_OS_EMSCRIPTEN_)
 #define JL_HAVE_ASYNCIFY
-#else
-#define JL_HAVE_UNW_CONTEXT
+#elif !defined(JL_HAVE_ASM)
+#define JL_HAVE_UNW_CONTEXT // optimistically?
 #endif
 #endif
 
-#if defined(JL_HAVE_ASM) || defined(JL_HAVE_SIGALTSTACK)
-typedef struct {
+
+struct jl_stack_context_t {
     jl_jmp_buf uc_mcontext;
-} jl_ucontext_t;
+};
+
+#if (!defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)) || defined(JL_HAVE_SIGALTSTACK)
+typedef struct jl_stack_context_t jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_ASYNCIFY)
+#if defined(JL_TSAN_ENABLED)
+#error TSAN not currently supported with asyncify
+#endif
 typedef struct {
     // This is the extent of the asyncify stack, but because the top of the
     // asyncify stack (stacktop) is also the bottom of the C stack, we can
@@ -59,17 +69,27 @@ typedef struct {
     void *stacktop;
 } jl_ucontext_t;
 #endif
-#if defined(JL_HAVE_UCONTEXT) || defined(JL_HAVE_UNW_CONTEXT)
+#if defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+typedef unw_context_t jl_ucontext_t;
+#endif
+#if defined(JL_HAVE_UCONTEXT)
+#include <ucontext.h>
 typedef ucontext_t jl_ucontext_t;
 #endif
 #endif
 
+// handle to reference an OS thread
+#ifdef _OS_WINDOWS_
+typedef DWORD jl_thread_t;
+#else
+typedef pthread_t jl_thread_t;
+#endif
 
 // Recursive spin lock
 typedef struct {
-    volatile unsigned long owner;
+    volatile jl_thread_t owner;
     uint32_t count;
 } jl_mutex_t;
 
@@ -168,7 +188,7 @@ struct _jl_tls_states_t {
     int16_t tid;
     uint64_t rngseed;
     volatile size_t *safepoint;
-    volatile int8_t sleep_check_state;
+    int8_t sleep_check_state; // read/write from foreign threads
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to
@@ -176,8 +196,8 @@ struct _jl_tls_states_t {
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
-    volatile int8_t gc_state;
-    volatile int8_t in_finalizer;
+    int8_t gc_state; // read from foreign threads
+    int8_t in_finalizer;
     int8_t disable_gc;
     jl_thread_heap_t heap;
     jl_thread_gc_num_t gc_num;
@@ -185,13 +205,23 @@ struct _jl_tls_states_t {
     uv_cond_t wake_signal;
     volatile sig_atomic_t defer_signal;
     struct _jl_task_t *current_task;
+    struct _jl_task_t *next_task;
 #ifdef MIGRATE_TASKS
     struct _jl_task_t *previous_task;
 #endif
     struct _jl_task_t *root_task;
+    struct _jl_timing_block_t *timing_stack;
     void *stackbase;
     size_t stacksize;
-    jl_ucontext_t base_ctx; // base context of stack
+    union {
+        jl_ucontext_t base_ctx; // base context of stack
+        // This hack is needed to support always_copy_stacks:
+#ifdef _OS_WINDOWS_
+        jl_ucontext_t copy_stack_ctx;
+#else
+        struct jl_stack_context_t copy_stack_ctx;
+#endif
+    };
     jl_jmp_buf *safe_restore;
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
@@ -209,7 +239,7 @@ struct _jl_tls_states_t {
 #else
     void *signal_stack;
 #endif
-    unsigned long system_id;
+    jl_thread_t system_id;
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
@@ -224,6 +254,9 @@ struct _jl_tls_states_t {
     // Saved exception for previous external API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
+
+    // currently-held locks, to be released when an exception is thrown
+    small_arraylist_t locks;
 
     JULIA_DEBUG_SLEEPWAKE(
         uint64_t uv_run_enter;
@@ -259,6 +292,11 @@ extern "C" {
 JL_DLLEXPORT void (jl_cpu_pause)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
+#ifdef __clang_analyzer__
+// Note that the sigint safepoint can also trigger GC, albeit less likely
+void jl_gc_safepoint_(jl_ptls_t tls);
+void jl_sigint_safepoint(jl_ptls_t tls);
+#else
 // gc safepoint and gc states
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
@@ -269,11 +307,6 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
         jl_signal_fence();                              \
         (void)safepoint_load;                           \
     } while (0)
-#ifdef __clang_analyzer__
-// This is a sigint safepoint, not a GC safepoint (which
-// JL_NOTSAFEPOINT refers to)
-void jl_sigint_safepoint(jl_ptls_t tls) JL_NOTSAFEPOINT;
-#else
 #define jl_sigint_safepoint(ptls) do {                  \
         jl_signal_fence();                              \
         size_t safepoint_load = ptls->safepoint[-1];    \
@@ -281,12 +314,10 @@ void jl_sigint_safepoint(jl_ptls_t tls) JL_NOTSAFEPOINT;
         (void)safepoint_load;                           \
     } while (0)
 #endif
-// Make sure jl_gc_state() is always a rvalue
-#define jl_gc_state(ptls) ((int8_t)ptls->gc_state)
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
                                      int8_t old_state)
 {
-    ptls->gc_state = state;
+    jl_atomic_store_release(&ptls->gc_state, state);
     // A safe point is required if we transition from GC-safe region to
     // non GC-safe region.
     if (old_state && !state)
@@ -296,7 +327,7 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
 STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
                                               int8_t state)
 {
-    return jl_gc_state_set(ptls, state, jl_gc_state(ptls));
+    return jl_gc_state_set(ptls, state, ptls->gc_state);
 }
 #ifdef __clang_analyzer__
 int8_t jl_gc_unsafe_enter(jl_ptls_t ptls); // Can be a safepoint
@@ -312,8 +343,23 @@ int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
 JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
+JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
+JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
+JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_ptls_t ptls);
+extern JL_DLLEXPORT int jl_gc_have_pending_finalizers;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
+
+// Copied from libuv. Add `JL_CONST_FUNC` so that the compiler
+// can optimize this better.
+static inline jl_thread_t JL_CONST_FUNC jl_thread_self(void)
+{
+#ifdef _OS_WINDOWS_
+    return GetCurrentThreadId();
+#else
+    return pthread_self();
+#endif
+}
 
 #ifdef __cplusplus
 }

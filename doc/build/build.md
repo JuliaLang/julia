@@ -17,8 +17,8 @@ variables.
 When compiled the first time, the build will automatically download
 pre-built [external
 dependencies](#required-build-tools-and-external-libraries). If you
-prefer to build all the dependencies on your own, add the following in
-`Make.user`
+prefer to build all the dependencies on your own, or are building on a system that cannot
+access the network during the build process, add the following in `Make.user`:
 
 ```
 USE_BINARYBUILDER=0
@@ -144,7 +144,7 @@ Notes for various architectures:
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on macOS) — compiling and linking C, C++.
+- **[gcc & g++][gcc]** (>= 5.1) or **[Clang][clang]** (>= 3.5, >= 6.0 for Apple Clang) — compiling and linking C, C++.
 - **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python]** (>=2.7)          — needed to build LLVM.
 - **[gfortran]**                — compiling and linking Fortran libraries.
@@ -155,35 +155,38 @@ Building Julia requires that the following software be installed:
 - **[patch]**                   — for modifying source code.
 - **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
 - **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
+- **[powershell]** (>= 3.0)     — necessary only on Windows.
+- **[which]**                   — needed for checking build dependencies.
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
-sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config
+sudo apt-get install build-essential libatomic1 python gfortran perl wget m4 cmake pkg-config curl
 ```
 
 Julia uses the following external libraries, which are automatically
 downloaded (or in a few cases, included in the Julia source
 repository) and then compiled from source the first time you run
-`make`:
+`make`. The specific version numbers of these libraries that Julia
+uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blob/master/deps/Versions.make):
 
 - **[LLVM]** (9.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
 - **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
-- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](https://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2) (see [note below](#blas-and-lapack)).
-- **[LAPACK]** (>= 3.5)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)]
+- **[LAPACK]**               — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
-- **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
-- **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
-- **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
-- **[MPFR]** (>= 4.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
-- **[libgit2]** (>= 0.23)    — Git linkable library, used by Julia's package manager.
-- **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager.
-- **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes.
-- **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
-- **[utf8proc]** (>= 2.1)    — a library for processing UTF-8 encoded Unicode strings.
-- **[libosxunwind]**         — fork of [libunwind], a library that determines the call-chain of a program.
+- **[SuiteSparse]**          — library of linear algebra routines for sparse matrices.
+- **[PCRE]**                 — Perl-compatible regular expressions library.
+- **[GMP]**                  — GNU multiple precision arithmetic library, needed for `BigInt` support.
+- **[MPFR]**                 — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
+- **[libgit2]**              — Git linkable library, used by Julia's package manager.
+- **[curl]**                 — libcurl provides download and proxy support.
+- **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
+- **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
+- **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
+- **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
 
 [GNU make]:     https://www.gnu.org/software/make
 [patch]:        https://www.gnu.org/software/patch
@@ -206,17 +209,19 @@ repository) and then compiled from source the first time you run
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
 [PCRE]:         https://www.pcre.org
 [LLVM]:         https://www.llvm.org
+[LLVM libunwind]: https://github.com/llvm/llvm-project/tree/main/libunwind
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
 [GMP]:          https://gmplib.org
 [MPFR]:         https://www.mpfr.org
 [libuv]:        https://github.com/JuliaLang/libuv
 [libgit2]:      https://libgit2.org/
 [utf8proc]:     https://julialang.org/utf8proc/
-[libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    https://www.nongnu.org/libunwind
 [libssh2]:      https://www.libssh2.org
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
+[powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
+[which]:        https://carlowood.github.io/which/
 
 ## Build dependencies
 
@@ -247,6 +252,8 @@ As a high-performance numerical language, Julia should be linked to a multi-thre
 
 ### Intel MKL
 
+**Note:** If you are building Julia for the sole purpose of incorporating Intel MKL, it may be beneficial to first try [MKL.jl](https://github.com/JuliaComputing/MKL.jl). This package will automatically download MKL and rebuild Julia's system image against it, sidestepping the need to set up a working build environment just to add MKL functionality. MKL.jl replaces OpenBLAS with MKL for dense linear algebra functions called directly from Julia, but SuiteSparse and other C/Fortran libraries will continue to use the BLAS they were linked against at build time. If you want SuiteSparse to use MKL, you will need to build from source.
+
 For a 64-bit architecture, the environment should be set up as follows:
 ```sh
 # bash
@@ -269,3 +276,11 @@ distribution does not include the source code of dependencies.
 
 For example, `julia-1.0.0.tar.gz` is the light source distribution for the `v1.0.0` release
 of Julia, while `julia-1.0.0-full.tar.gz` is the full source distribution.
+
+## Building Julia from source with a Git checkout of a stdlib
+
+If you need to build Julia from source with a Git checkout of a stdlib, then use `make DEPS_GIT=NAME_OF_STDLIB` when building Julia.
+
+For example, if you need to build Julia from source with a Git checkout of Pkg, then use `make DEPS_GIT=Pkg` when building Julia. The `Pkg` repo is in `stdlib/Pkg`, and created initially with a detached `HEAD`. If you're doing this from a pre-existing Julia repository, you may need to `make clean` beforehand.
+
+If you need to build Julia from source with Git checkouts of more than one stdlib, then `DEPS_GIT` should be a space-separated list of the stdlib names. For example, if you need to build Julia from source with a Git checkout of Pkg, Tar, and Downloads, then use `make DEPS_GIT='Pkg Tar Downloads'` when building Julia.

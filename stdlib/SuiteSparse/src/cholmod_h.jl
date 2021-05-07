@@ -71,9 +71,10 @@ const VTypes = Union{ComplexF64, Float64}
 const VRealTypes = Union{Float64}
 
 struct CHOLMODException <: Exception
-    msg::AbstractString
+    msg::String
 end
 
-macro isok(A)
-    :($(esc(A)) == TRUE || throw(CHOLMODException("")))
+function error_handler(status::Cint, file::Cstring, line::Cint, message::Cstring)::Cvoid
+    status < 0 && throw(CHOLMODException(unsafe_string(message)))
+    nothing
 end

@@ -90,6 +90,14 @@ periods; so `"y-m-d"` lets the parser know that between the first and second slo
 like `"2014-07-16"`, it should find the `-` character. The `y`, `m`, and `d` characters let the
 parser know which periods to parse in each slot.
 
+As in the case of constructors above such as `Date(2013)`, delimited `DateFormat`s allow for
+missing parts of dates and times so long as the preceding parts are given. The other parts are given the usual
+default values.  For example, `Date("1981-03", "y-m-d")` returns `1981-03-01`, whilst
+`Date("31/12", "d/m/y")` gives `0001-12-31`.  (Note that the default year is
+1 AD/CE.)
+Consequently, an empty string will always return `0001-01-01` for `Date`s,
+and `0001-01-01T00:00:00.000` for `DateTime`s.
+
 Fixed-width slots are specified by repeating the period character the number of times corresponding
 to the width with no delimiter between characters. So `"yyyymmdd"` would correspond to a date
 string like `"20140716"`. The parser distinguishes a fixed-width slot by the absence of a delimiter,
@@ -117,6 +125,17 @@ julia> dt2 = Date("2015-01-02",df)
 2015-01-02
 ```
 
+Alternatively, use broadcasting:
+
+```jldoctest
+julia> years = ["2015", "2016"];
+
+julia> Date.(years, DateFormat("yyyy"))
+2-element Vector{Date}:
+ 2015-01-01
+ 2016-01-01
+```
+
 You can also use the `dateformat""` string macro. This macro creates the `DateFormat` object once when the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
 
 ```jldoctest
@@ -124,6 +143,21 @@ julia> for i = 1:10^5
            Date("2015-01-01", dateformat"y-m-d")
        end
 ```
+
+As well as via the constructors, a `Date` or `DateTime` can be constructed from
+strings using the [`parse`](@ref) and [`tryparse`](@ref) functions, but with
+an optional third argument of type `DateFormat` specifying the format; for example,
+`parse(Date, "06.23.2013", dateformat"m.d.y")`, or
+`tryparse(DateTime, "1999-12-31T23:59:59")` which uses the default format.
+The notable difference between the functions is that with [`tryparse`](@ref),
+an error is not thrown if the string is in an invalid format;
+instead `nothing` is returned.  Note however that as with the constructors
+above, empty date and time parts assume
+default values and consequently an empty string (`""`) is valid
+for _any_ `DateFormat`, giving for example a `Date` of `0001-01-01`.  Code
+relying on `parse` or `tryparse` for `Date` and `DateTime` parsing should
+therefore also check whether parsed strings are empty before using the
+result.
 
 A full suite of parsing and formatting tests and examples is available in [`stdlib/Dates/test/io.jl`](https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/test/io.jl).
 
@@ -220,8 +254,7 @@ julia> Dates.Day(t)
 31 days
 ```
 
-Compound methods are provided, as they provide a measure of efficiency if multiple fields are
-needed at the same time:
+Compound methods are provided because it is more efficient to access multiple fields at the same time than individually:
 
 ```jldoctest tdate
 julia> Dates.yearmonth(t)
@@ -331,7 +364,7 @@ function `dayabbr` will error.
 
 ```jldoctest tdate2
 julia> Dates.dayabbr(t;locale="french")
-ERROR: BoundsError: attempt to access 1-element Array{String,1} at index [5]
+ERROR: BoundsError: attempt to access 1-element Vector{String} at index [5]
 Stacktrace:
 [...]
 ```
@@ -350,7 +383,7 @@ calculation in a conversation. Why all the fuss about this? Let's take a classic
 1 month to January 31st, 2014. What's the answer? Javascript will say [March 3](https://markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/)
 (assumes 31 days). PHP says [March 2](https://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month)
 (assumes 30 days). The fact is, there is no right answer. In the `Dates` module, it gives
-the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7
+the result of February 28th. How does it figure that out? Consider the classic 7-7-7
 gambling game in casinos.
 
 Now just imagine that instead of 7-7-7, the slots are Year-Month-Day, or in our example, 2014-01-31.
@@ -403,7 +436,7 @@ julia> dr = Date(2014,1,29):Day(1):Date(2014,2,3)
 Date("2014-01-29"):Day(1):Date("2014-02-03")
 
 julia> collect(dr)
-6-element Array{Date,1}:
+6-element Vector{Date}:
  2014-01-29
  2014-01-30
  2014-01-31
@@ -415,7 +448,7 @@ julia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)
 Date("2014-01-29"):Month(1):Date("2014-07-29")
 
 julia> collect(dr)
-7-element Array{Date,1}:
+7-element Vector{Date}:
  2014-01-29
  2014-02-28
  2014-03-29
@@ -491,7 +524,7 @@ julia> filter(dr) do x
            Dates.April <= Dates.month(x) <= Dates.Nov &&
            Dates.dayofweekofmonth(x) == 2
        end
-8-element Array{Date,1}:
+8-element Vector{Date}:
  2014-04-08
  2014-05-13
  2014-06-10
@@ -643,6 +676,8 @@ Dates.TimeType
 Dates.DateTime
 Dates.Date
 Dates.Time
+Dates.TimeZone
+Dates.UTC
 ```
 
 ## Dates Functions
@@ -667,9 +702,11 @@ Dates.Time(::Int64::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
 Dates.Time(::Dates.TimePeriod)
 Dates.Time(::Function, ::Any...)
 Dates.Time(::Dates.DateTime)
+Dates.Time(::AbstractString, ::AbstractString)
+Dates.Time(::AbstractString, ::Dates.DateFormat)
 Dates.now()
 Dates.now(::Type{Dates.UTC})
-Base.eps
+Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, TimeType})
 ```
 
 ### Accessor Functions
@@ -746,6 +783,7 @@ Dates.Period(::Any)
 Dates.CompoundPeriod(::Vector{<:Dates.Period})
 Dates.value
 Dates.default
+Dates.periods
 ```
 
 ### Rounding Functions
@@ -819,6 +857,15 @@ Months of the Year:
 | `October`   | `Oct` | 10          |
 | `November`  | `Nov` | 11          |
 | `December`  | `Dec` | 12          |
+
+#### Common Date Formatters
+
+```@docs
+ISODateTimeFormat
+ISODateFormat
+ISOTimeFormat
+RFC1123Format
+```
 
 ```@meta
 DocTestSetup = nothing

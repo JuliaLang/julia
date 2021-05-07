@@ -17,17 +17,17 @@ Iterating the decomposition produces the components `S.L` and `S.Q`.
 # Examples
 ```jldoctest
 julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64,Array{Float64,2}} with factors L and Q:
+LQ{Float64, Matrix{Float64}} with factors L and Q:
 [-8.60233 0.0; 4.41741 -0.697486]
 [-0.581238 -0.813733; -0.813733 0.581238]
 
 julia> S.L * S.Q
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
@@ -56,12 +56,10 @@ Base.iterate(S::LQ) = (S.L, Val(:Q))
 Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
 Base.iterate(S::LQ, ::Val{:done}) = nothing
 
-struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
-    factors::Matrix{T}
+struct LQPackedQ{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+    factors::S
     τ::Vector{T}
-    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
-LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
 
 """
@@ -87,17 +85,17 @@ system of equations (`A` has more columns than rows, but has full row rank).
 # Examples
 ```jldoctest
 julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64,Array{Float64,2}} with factors L and Q:
+LQ{Float64, Matrix{Float64}} with factors L and Q:
 [-8.60233 0.0; 4.41741 -0.697486]
 [-0.581238 -0.813733; -0.813733 0.581238]
 
 julia> S.L * S.Q
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
@@ -107,8 +105,10 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::StridedMatrix{<:BlasFloat})  = lq!(copy(A))
-lq(x::Number) = lq(fill(x,1,1))
+lq(A::AbstractMatrix{T}) where {T}  = lq!(copy_oftype(A, lq_eltype(T)))
+lq(x::Number) = lq!(fill(convert(lq_eltype(typeof(x)), x), 1, 1))
+
+lq_eltype(::Type{T}) where {T} = typeof(zero(T) / sqrt(abs2(one(T))))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 

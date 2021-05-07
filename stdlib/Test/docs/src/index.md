@@ -93,12 +93,16 @@ of inputs. In the event a test fails, the default behavior is to throw an except
 However, it is normally preferable to run the rest of the tests first to get a better picture
 of how many errors there are in the code being tested.
 
+!!! note
+    The `@testset` will create a local scope of its own when running the tests in it.
+
 The `@testset` macro can be used to group tests into *sets*. All the tests in a test set will
 be run, and at the end of the test set a summary will be printed. If any of the tests failed,
 or could not be evaluated due to an error, the test set will then throw a `TestSetException`.
 
 ```@docs
 Test.@testset
+Test.TestSetException
 ```
 
 We can put our tests for the `foo(x)` function in a test set:
@@ -131,7 +135,28 @@ Foo Tests     |    8      8
 ```
 
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
-summary. If we do have a test failure, only the details for the failed test sets will be shown:
+summary, unless the `verbose=true` option is passed:
+
+```jldoctest testfoo
+julia> @testset verbose = true "Foo Tests" begin
+           @testset "Animals" begin
+               @test foo("cat") == 9
+               @test foo("dog") == foo("cat")
+           end
+           @testset "Arrays $i" for i in 1:3
+               @test foo(zeros(i)) == i^2
+               @test foo(fill(1.0, i)) == i^2
+           end
+       end;
+Test Summary: | Pass  Total
+Foo Tests     |    8      8
+  Animals     |    2      2
+  Arrays 1    |    2      2
+  Arrays 2    |    2      2
+  Arrays 3    |    2      2
+```
+
+If we do have a test failure, only the details for the failed test sets will be shown:
 
 ```julia-repl
 julia> @testset "Foo Tests" begin
@@ -176,6 +201,13 @@ Test Failed at none:1
    Evaluated: 1 ≈ 0.999999
 ERROR: There was an error during testing
 ```
+You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
+after the `≈` comparison:
+```jldoctest
+julia> @test 1 ≈ 0.999999  rtol=1e-5
+Test Passed
+```
+Note that this is not a specific feature of the `≈` but rather a general feature of the `@test` macro: `@test a <op> b key=val` is transformed by the macro into `@test op(a, b, key=val)`. It is, however, particularly useful for `≈` tests.
 
 ```@docs
 Test.@inferred
@@ -231,7 +263,7 @@ that `Test` provides.
 Defining a basic `AbstractTestSet` subtype might look like:
 
 ```julia
-import Test: record, finish
+import Test: Test, record, finish
 using Test: AbstractTestSet, Result, Pass, Fail, Error
 using Test: get_testset_depth, get_testset
 struct CustomTestSet <: Test.AbstractTestSet
@@ -262,6 +294,18 @@ And using that testset looks like:
         @test true
     end
 end
+```
+
+## Test utilities
+
+```@docs
+Test.GenericArray
+Test.GenericDict
+Test.GenericOrder
+Test.GenericSet
+Test.GenericString
+Test.detect_ambiguities
+Test.detect_unbound_args
 ```
 
 ```@meta

@@ -37,14 +37,15 @@
 ;; parser entry points
 
 ;; parse one expression (if greedy) or atom, returning end position
-(define (jl-parse-one s pos0 greedy)
-  (let ((inp (open-input-string s)))
+(define (jl-parse-one str filename pos0 greedy)
+  (let ((inp (open-input-string str)))
     (io.seek inp pos0)
-    (let ((expr (error-wrap (lambda ()
-                              (if greedy
-                                  (julia-parse inp)
-                                  (julia-parse inp parse-atom))))))
-      (cons expr (io.pos inp)))))
+    (with-bindings ((current-filename (symbol filename)))
+     (let ((expr (error-wrap (lambda ()
+                               (if greedy
+                                   (julia-parse inp parse-stmts)
+                                   (julia-parse inp parse-atom))))))
+       (cons expr (io.pos inp))))))
 
 (define (parse-all- io filename)
   (unwind-protect
@@ -190,11 +191,11 @@
        (= (call include ,x)
           (block
            ,@loc
-           (call (top include) ,name ,x)))
+           (call (core _call_latest) (top include) ,name ,x)))
        (= (call include (:: ,mex (top Function)) ,x)
           (block
            ,@loc
-           (call (top include) ,mex ,name ,x)))))
+           (call (core _call_latest) (top include) ,mex ,name ,x)))))
    'none 0))
 
 ; run whole frontend on a string. useful for testing.

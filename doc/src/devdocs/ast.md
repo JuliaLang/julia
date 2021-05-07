@@ -247,16 +247,21 @@ types exist in lowered form:
     Has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
     subexpressions.
     While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
-    limited number of `Expr`s, mostly for calls, conditional branches (`gotoifnot`), and returns.
+    limited number of `Expr`s, mostly for calls and some top-level-only forms.
 
   * `Slot`
 
     Identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
     with subtypes `SlotNumber` and `TypedSlot`. Both types have an integer-valued `id` field giving
     the slot index. Most slots have the same type at all uses, and so are represented with `SlotNumber`.
-    The types of these slots are found in the `slottypes` field of their `MethodInstance` object.
+    The types of these slots are found in the `slottypes` field of their `CodeInfo` object.
     Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
     field.
+
+  * `Argument`
+
+    The same as `SlotNumber`, but appears only post-optimization. Indicates that the
+    referenced slot is an argument of the enclosing function.
 
   * `CodeInfo`
 
@@ -266,6 +271,16 @@ types exist in lowered form:
 
     Unconditional branch. The argument is the branch target, represented as an index in
     the code array to jump to.
+
+  * `GotoIfNot`
+
+    Conditional branch. If the `cond` field evaluates to false, goes to the index identified
+    by the `dest` field.
+
+  * `ReturnNode`
+
+    Returns its argument (the `val` field) as the value of the enclosing function.
+    If the `val` field is undefined, then this represents an unreachable statement.
 
   * `QuoteNode`
 
@@ -305,10 +320,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Reference a static parameter by index.
 
-  * `gotoifnot`
-
-    Conditional branch. If `args[1]` is false, goes to the index identified in `args[2]`.
-
   * `=`
 
     Assignment. In the IR, the first argument is always a Slot or a GlobalRef.
@@ -330,9 +341,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[1]`
 
-        A function name, or `false` if unknown. If a symbol, then the expression first
-        behaves like the 1-argument form above. This argument is ignored from then on. When
-        this is `false`, it means a method is being added strictly by type, `(::T)(x) = x`.
+        A function name, or `nothing` if unknown or unneeded. If a symbol, then the expression
+        first behaves like the 1-argument form above. This argument is ignored from then on.
+        It can be `nothing` when methods are added strictly by type, `(::T)(x) = x`,
+        or when a method is being added to an existing function, `MyModule.f(x) = x`.
 
       * `args[2]`
 
@@ -392,6 +404,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     A 4-argument expression that defines a new primitive type. Arguments 1, 2, and 4
     are the same as `struct_type`. Argument 3 is the number of bits.
 
+    !!! compat "Julia 1.5"
+        `struct_type`, `abstract_type`, and `primitive_type` were removed in Julia 1.5
+        and replaced by calls to new builtins.
+
   * `global`
 
     Declares a global binding.
@@ -410,10 +426,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
     `Base.splat(new)` if `new` were a first-class function, hence the name.
-
-  * `return`
-
-    Returns its argument as the value of the enclosing function.
 
   * `isdefined`
 
@@ -575,7 +587,7 @@ for important details on how to modify these fields safely.
     We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after a new method definitions.
     This works by keeping a list of the other `MethodInstance` that have been inferred or optimized to contain a possible call to this `MethodInstance`.
     Those optimization results might be stored somewhere in the `cache`, or it might have been the result of something we didn't want to cache, such as constant propagation.
-    Thus we merge all of those backedges to various cache entries here (there's almost always only the one applicable cache entry with a sentinal value for max_world anyways).
+    Thus we merge all of those backedges to various cache entries here (there's almost always only the one applicable cache entry with a sentinel value for max_world anyways).
 
   * `cache`
 

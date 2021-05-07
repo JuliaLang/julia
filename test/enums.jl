@@ -200,3 +200,13 @@ end
     alphabet_z = 26
 end
 @test alphabet_z == Alphabet(26)
+
+let b = IOBuffer()
+    show(b, MIME"text/plain"(), Enum)
+    @test String(take!(b)) == "Enum"
+    b = IOBuffer()
+    show(b, MIME"text/plain"(), Union{Alphabet, BritishFood})
+    str = String(take!(b))
+    p = string(@__MODULE__)
+    @test str == "Union{$p.Alphabet, $p.BritishFood}" || str == "Union{$p.BritishFood, $p.Alphabet}"
+end

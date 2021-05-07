@@ -207,14 +207,15 @@ JL_DLLEXPORT int jl_process_events(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     uv_loop_t *loop = jl_io_loop;
+    jl_gc_safepoint_(ptls);
     if (loop && (_threadedregion || ptls->tid == 0)) {
-        jl_gc_safepoint_(ptls);
         if (jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             loop->stop_flag = 0;
             int r = uv_run(loop, UV_RUN_NOWAIT);
             JL_UV_UNLOCK();
             return r;
         }
+        jl_gc_safepoint_(ptls);
     }
     return 0;
 }
@@ -388,6 +389,14 @@ JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
 {
     uv_fs_t req;
     int ret = uv_fs_chown(unused_uv_loop_arg, &req, path, uid, gid, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
+JL_DLLEXPORT int jl_fs_access(char *path, int mode)
+{
+    uv_fs_t req;
+    int ret = uv_fs_access(unused_uv_loop_arg, &req, path, mode, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -625,7 +634,7 @@ JL_DLLEXPORT void jl_exit(int exitcode)
     exit(exitcode);
 }
 
-JL_DLLEXPORT int jl_getpid(void)
+JL_DLLEXPORT int jl_getpid(void) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     return GetCurrentProcessId();
@@ -853,7 +862,7 @@ JL_DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
 
 JL_DLLEXPORT int jl_has_so_reuseport(void)
 {
-#if defined(SO_REUSEPORT)
+#if defined(SO_REUSEPORT) && !defined(_OS_DARWIN_)
     return 1;
 #else
     return 0;

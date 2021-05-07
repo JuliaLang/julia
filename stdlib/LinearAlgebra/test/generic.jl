@@ -17,7 +17,7 @@ Random.seed!(123)
 
 n = 5 # should be odd
 
-@testset for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat})
+@testset for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
     # In the long run, these tests should step through Strang's
     #  axiomatic definition of determinants.
     # If all axioms are satisfied and all the composition rules work,
@@ -152,11 +152,11 @@ end
 
 @testset "scale real matrix by complex type" begin
     @test_throws InexactError rmul!([1.0], 2.0im)
-    @test isequal([1.0] * 2.0im,             Complex{Float64}[2.0im])
-    @test isequal(2.0im * [1.0],             Complex{Float64}[2.0im])
-    @test isequal(Float32[1.0] * 2.0f0im,    Complex{Float32}[2.0im])
-    @test isequal(Float32[1.0] * 2.0im,      Complex{Float64}[2.0im])
-    @test isequal(Float64[1.0] * 2.0f0im,    Complex{Float64}[2.0im])
+    @test isequal([1.0] * 2.0im,             ComplexF64[2.0im])
+    @test isequal(2.0im * [1.0],             ComplexF64[2.0im])
+    @test isequal(Float32[1.0] * 2.0f0im,    ComplexF32[2.0im])
+    @test isequal(Float32[1.0] * 2.0im,      ComplexF64[2.0im])
+    @test isequal(Float64[1.0] * 2.0f0im,    ComplexF64[2.0im])
     @test isequal(Float32[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
     @test isequal(Float64[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
     @test isequal(BigFloat[1.0] * 2.0im,     Complex{BigFloat}[2.0im])
@@ -208,6 +208,19 @@ end
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
 @test_throws ArgumentError opnorm(Matrix{Float64}(undef,5,5),5)
+
+# operator norm for zero-dimensional domain is zero (see #40370)
+@testset "opnorm" begin
+    for m in (0, 1, 2)
+        @test @inferred(opnorm(fill(1,0,m))) == 0.0
+        @test @inferred(opnorm(fill(1,m,0))) == 0.0
+    end
+    for m in (1, 2)
+        @test @inferred(opnorm(fill(1im,1,m))) ≈ sqrt(m)
+        @test @inferred(opnorm(fill(1im,m,1))) ≈ sqrt(m)
+    end
+    @test @inferred(opnorm(fill(1,2,2))) ≈ 2
+end
 
 @testset "generic norm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
@@ -365,8 +378,6 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
-    LinearAlgebra.norm(a::ModInt{n}) where {n} = a
-
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
     @test A*(lu(A, Val(true))\b) == b
@@ -455,8 +466,26 @@ end
     @test all(!isnan, lmul!(false, Any[NaN]))
 end
 
+@testset "adjtrans dot" begin
+    for t in (transpose, adjoint)
+        x, y = t(rand(ComplexF64, 10)), t(rand(ComplexF64, 10))
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+        x, y = t([rand(ComplexF64, 2, 2) for _ in 1:5]), t([rand(ComplexF64, 2, 2) for _ in 1:5])
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+        x, y = t(rand(ComplexF64, 10, 5)), t(rand(ComplexF64, 10, 5))
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+        x = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
+        y = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+    end
+end
+
 @testset "generalized dot #32739" begin
-    for elty in (Int, Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat})
+    for elty in (Int, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
         n = 10
         if elty <: Int
             A = rand(-n:n, n, n)

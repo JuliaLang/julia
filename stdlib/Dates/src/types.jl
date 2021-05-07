@@ -5,6 +5,7 @@ abstract type AbstractTime end
 """
     Period
     Year
+    Quarter
     Month
     Week
     Day
@@ -18,10 +19,37 @@ abstract type AbstractTime end
 `Period` types represent discrete, human representations of time.
 """
 abstract type Period     <: AbstractTime end
+
+"""
+    DatePeriod
+    Year
+    Quarter
+    Month
+    Week
+    Day
+
+Intervals of time greater than or equal to a day.
+Conventional comparisons between `DatePeriod`s are not all valid.
+(eg `Week(1) == Day(7)`, but `Year(1) != Day(365)`)
+"""
 abstract type DatePeriod <: Period end
+
+"""
+    TimePeriod
+    Hour
+    Minute
+    Second
+    Millisecond
+    Microsecond
+    Nanosecond
+
+Intervals of time less than a day.
+Conversions between all `TimePeriod`s are permissible.
+(eg `Hour(1) == Minute(60) == Second(3600)`)
+"""
 abstract type TimePeriod <: Period end
 
-for T in (:Year, :Month, :Week, :Day)
+for T in (:Year, :Quarter, :Month, :Week, :Day)
     @eval struct $T <: DatePeriod
         value::Int64
         $T(v::Number) = new(v)
@@ -36,6 +64,7 @@ end
 
 """
     Year(v)
+    Quarter(v)
     Month(v)
     Week(v)
     Day(v)
@@ -83,7 +112,21 @@ abstract type Calendar <: AbstractTime end
 # ISOCalendar provides interpretation rules for UTInstants to civil date and time parts
 struct ISOCalendar <: Calendar end
 
+"""
+    TimeZone
+
+Geographic zone generally based on longitude determining what the time is at a certain location.
+Some time zones observe daylight savings (eg EST -> EDT).
+For implementations and more support, see the [`TimeZones.jl`](https://github.com/JuliaTime/TimeZones.jl) package
+"""
 abstract type TimeZone end
+
+"""
+    UTC
+
+`UTC`, or Coordinated Universal Time, is the [`TimeZone`](@ref) from which all others are measured.
+It is associated with the time at 0° longitude. It is not adjusted for daylight savings.
+"""
 struct UTC <: TimeZone end
 
 """
@@ -140,7 +183,7 @@ function totaldays(y, m, d)
 end
 
 # If the year is divisible by 4, except for every 100 years, except for every 400 years
-isleapyear(y) = ((y % 4 == 0) && (y % 100 != 0)) || (y % 400 == 0)
+isleapyear(y) = (y % 4 == 0) && ((y % 100 != 0) || (y % 400 == 0))
 
 # Number of days in month
 const DAYSINMONTH = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)

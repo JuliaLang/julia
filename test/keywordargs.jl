@@ -287,9 +287,17 @@ end
     @test g21147(((1,),), 2) === Int
 end
 @testset "issue #21510" begin
-    f21510(; Base.@nospecialize a = 2) = a
+    f21510(; @nospecialize a = 2) = a
     @test f21510(a=:b) == :b
     @test f21510() == 2
+end
+@testset "issue #34516" begin
+    f34516(; @nospecialize(x)) = 0
+    f34516(y; @nospecialize(x::Any)) = 1
+    @test_throws UndefKeywordError f34516()
+    @test_throws UndefKeywordError f34516(1)
+    g34516(@nospecialize(x); k=0) = 0
+    @test first(methods(Core.kwfunc(g34516))).nospecialize != 0
 end
 @testset "issue #21518" begin
     a = 0

@@ -264,4 +264,7 @@
 (assert (not (equal? (hash (iota 41))
 		     (hash (iota 42)))))
 
+(assert (equal? `(a `(b c)) '(a (quasiquote (b c)))))
+(assert (equal? ````x '```x))
+
 #t

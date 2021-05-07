@@ -1,7 +1,7 @@
-# Documentation
+# [Documentation](@id man-documentation)
 
 Julia enables package developers and users to document functions, types and other objects easily
-via a built-in documentation system since Julia 0.4.
+via a built-in documentation system.
 
 The basic syntax is simple: any string appearing at the toplevel right before an object
 (function, macro, type or instance) will be interpreted as documenting it (these are called
@@ -29,8 +29,9 @@ Here is a more complex example, still using Markdown:
 """
     bar(x[, y])
 
-Compute the Bar index between `x` and `y`. If `y` is missing, compute
-the Bar index between all pairs of columns of `x`.
+Compute the Bar index between `x` and `y`.
+
+If `y` is unspecified, compute the Bar index between all pairs of columns of `x`.
 
 # Examples
 ```julia-repl
@@ -317,6 +318,23 @@ end
 will add documentation to `f(x)` when `condition()` is `true`. Note that even if `f(x)` goes
 out of scope at the end of the block, its documentation will remain.
 
+It is possible to make use of metaprogramming to assist in the creation of documentation.
+When using string-interpolation within the docstring you will need to use an extra `$` as
+shown with `$($name)`:
+
+```julia
+for func in (:day, :dayofmonth)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(dt::TimeType) -> Int64
+
+        The day of month of a `Date` or `DateTime` as an `Int64`.
+        """ $func(dt::Dates.TimeType)
+    end
+end
+```
+
 ### Dynamic documentation
 
 Sometimes the appropriate documentation for an instance of a type depends on the field values of that
@@ -478,7 +496,7 @@ end
 
 Documenting a `baremodule` by placing a docstring above the expression automatically imports
 `@doc` into the module. These imports must be done manually when the module expression is not
-documented. Empty `baremodule`s cannot be documented.
+documented.
 
 ### Global Variables
 

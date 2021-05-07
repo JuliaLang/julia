@@ -19,10 +19,11 @@ help:
 	@echo "To run linkcheck, use 'make <target> linkcheck=true'"
 	@echo "To run doctests, use 'make <target> doctest=true'"
 	@echo "To fix outdated doctests, use 'make <target> doctest=fix'"
+	@echo "To run doctests using Revise (to test changes without rebuilding the sysimage), use 'make <target> doctest=true revise=true'"
 
 
 DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call cygpath_w,$(BUILDROOT)) \
-    texplatform=$(texplatform)
+    texplatform=$(texplatform) revise=$(revise)
 
 UNICODE_DATA_VERSION=13.0.0
 $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt:
@@ -32,6 +33,9 @@ $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt:
 deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
 	cp "$<" UnicodeData.txt
+
+checksum-unicodedata: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
+	$(JLCHECKSUM) "$<"
 
 clean:
 	-rm -rf _build/* deps/* docbuild.log UnicodeData.txt
@@ -48,7 +52,7 @@ pdf: deps
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- pdf $(DOCUMENTER_OPTIONS)
 	@echo "Build finished."
 
-# The deploy target should only be called in Travis builds
+# The deploy target should only be called in CI builds
 deploy: deps
 	@echo "Deploying HTML documentation."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy $(DOCUMENTER_OPTIONS)
