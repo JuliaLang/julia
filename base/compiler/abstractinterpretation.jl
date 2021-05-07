@@ -182,7 +182,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 conditionals = Any[Bottom for _ in 1:length(argtypes)],
                                Any[Bottom for _ in 1:length(argtypes)]
             end
-            condval = maybe_extract_const_bool(this_conditional)
             for i = 1:length(argtypes)
                 fargs[i] isa Slot || continue
                 if this_conditional isa InterConditional && this_conditional.slot == i
@@ -190,6 +189,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     elsetype = this_conditional.elsetype
                 else
                     elsetype = vtype = tmeet(argtypes[i], fieldtype(sig, i))
+                    condval = maybe_extract_const_bool(this_conditional)
                     condval === true && (elsetype = Union{})
                     condval === false && (vtype = Union{})
                 end
@@ -283,9 +283,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     #print("=> ", rettype, "\n")
     return CallMeta(rettype, info)
 end
-
-widenwrappedconditional(@nospecialize(typ))   = widenconditional(typ)
-widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
 
 function add_call_backedges!(interp::AbstractInterpreter,
                              @nospecialize(rettype),
@@ -1128,7 +1125,7 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     end
     method, valid_worlds = result
     update_valid_age!(sv, valid_worlds)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     rt, edge = typeinf_edge(interp, method, ti, env, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     return CallMeta(rt, InvokeCallInfo(MethodMatch(ti, env, method, argtype <: method.sig)))

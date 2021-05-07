@@ -862,7 +862,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
-        if generated && isgenerated(m)
+        if generated && isgenerator(m)
             if may_invoke_generator(m)
                 return ccall(:jl_code_for_staged, Any, (Any,), m)::CodeInfo
             else
@@ -877,8 +877,11 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     end
 end
 
-isgenerated(m::Method) = isdefined(m, :generator)
-isgenerated(m::Core.MethodInstance) = isgenerated(m.def)
+function isgenerator(m::Core.MethodInstance)
+    def = m.def
+    isa(def, Method) || return false
+    return isdefined(def, :generator)
+end
 
 # low-level method lookup functions used by the compiler
 
