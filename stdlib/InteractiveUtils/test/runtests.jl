@@ -456,20 +456,20 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     output = String(take!(buf))
     @test occursin(rgx, output)
 
-    @testset "rawcode" begin
+    @testset "binary" begin
         # check the RET instruction (opcode: C3)
         ret = r"^; [0-9a-f]{4}: c3$"m
 
-        # without rawcode flag (default)
+        # without binary flag (default)
         code_native(buf, linear_foo, ())
         output = String(take!(buf))
         @test !occursin(ret, output)
 
-        # with rawcode flag
-        for rawcode in false:true
-            code_native(buf, linear_foo, (), rawcode = rawcode)
+        # with binary flag
+        for binary in false:true
+            code_native(buf, linear_foo, (), binary = binary)
             output = String(take!(buf))
-            @test occursin(ret, output) == rawcode
+            @test occursin(ret, output) == binary
         end
     end
 end
