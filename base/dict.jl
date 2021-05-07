@@ -128,7 +128,13 @@ function Dict(kv)
     try
         dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
     catch
-        if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+        valid_iterator = try
+            isiterable(typeof(kv)) && all(x->isa(x,Union{Tuple,Pair}),kv)
+        catch
+            true  # An exception has occurred during iteration. Rethrow the original error
+        end
+
+        if !valid_iterator
             throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow()
