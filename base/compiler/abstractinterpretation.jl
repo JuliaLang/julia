@@ -1847,8 +1847,11 @@ end
 
 function conditional_changes(changes::VarTable, @nospecialize(typ), var::Slot)
     newtyp = (changes[slot_id(var)]::VarState).typ
-    newtyp = ignorelimited(newtyp)
-    if typ ⊑ newtyp
+    # approximate test for `typ ∩ newtyp` being better than `newtyp`
+    # since we probably formed these types with `typesubstract`, the comparison is likely simple
+    if ignorelimited(typ) ⊑ ignorelimited(newtyp)
+        # typ is better unlimited, but we may still need to compute the tmeet with the limit "causes" since we ignored those in the comparison
+        newtyp isa LimitedAccuracy && (typ = tmerge(typ, LimitedAccuracy(Bottom, newtype.causes)))
         return StateUpdate(var, VarState(typ, false), changes, true)
     end
     return changes
