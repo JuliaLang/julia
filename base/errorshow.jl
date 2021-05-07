@@ -42,11 +42,22 @@ function showerror(io::IO, ex::BoundsError)
         print(io, ": attempt to access ")
         summary(io, ex.a)
         if isdefined(ex, :i)
-            print(io, " at index [")
+            print(io, " at index ")
+            badi = [setdiff(x, eachindex(ex.a)) for x ∈ ex.i]
+            if any(length.(badi) .< length.(ex.i))
+                for (i, x) in enumerate(badi)
+                    i > 1 && print(io, ", ")
+                    show_index(io, x)
+                end
+                print(io, " in ")
+            end
+            print(io, "[")
             if ex.i isa AbstractRange
                 print(io, ex.i)
             elseif ex.i isa AbstractString
                 show(io, ex.i)
+            elseif ex.i isa Number
+                print(io, ex.i)
             else
                 for (i, x) in enumerate(ex.i)
                     i > 1 && print(io, ", ")
