@@ -284,6 +284,24 @@ end
     mul!(C, A, J.λ, alpha, beta)
 @inline mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat, alpha::Number, beta::Number) =
     mul!(C, J.λ, B, alpha, beta)
+
+function mul!(out::AbstractMatrix{T}, a::Number, B::UniformScaling, α::Number, β::Number) where {T}
+    checksquare(out)
+    if iszero(β)  # zero contribution of the out matrix
+        fill!(out, zero(T))
+    elseif !isone(β)
+        rmul!(out, β)
+    end
+    s = convert(T, a*B.λ*α)
+    if !iszero(s)
+        @inbounds for i in diagind(out)
+            out[i] += s
+        end
+    end
+    return out
+end
+@inline mul!(out::AbstractMatrix, A::UniformScaling, b::Number, α::Number, β::Number)=
+    mul!(out, A.λ, UniformScaling(b), α, β)
 rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)
