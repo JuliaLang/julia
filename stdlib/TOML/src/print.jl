@@ -4,13 +4,13 @@ import Dates
 
 import ..isvalid_barekey_char
 
-function printkey(io::IO, keys::Vector{String})
+function printkey(io::IO, keys::Vector{String}; allow_unquoted_dotted::Bool = false)
     for (i, k) in enumerate(keys)
         i != 1 && Base.print(io, ".")
         if length(k) == 0
             # empty key
             Base.print(io, "\"\"")
-        elseif any(!isvalid_barekey_char, k)
+        elseif any(!isvalid_barekey_char, k) && (!allow_unquoted_dotted || !occursin('.', k))
             # quoted key
             Base.print(io, "\"", escape_string(k) ,"\"")
         else
@@ -115,7 +115,7 @@ function _print(f::MbyFunc, io::IO, a::AbstractDict,
             for v in value
                 Base.print(io, ' '^4indent)
                 Base.print(io,"[[")
-                printkey(io, ks)
+                printkey(io, ks, allow_unquoted_dotted = true)
                 Base.print(io,"]]\n")
                 # TODO, nicer error here
                 !isa(v, AbstractDict) && error("array should contain only tables")
