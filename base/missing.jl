@@ -401,7 +401,7 @@ function filter(f, itr::SkipMissing{<:AbstractArray})
 end
 
 """
-    coalesce(x, y...)
+    coalesce(x...)
 
 Return the first value in the arguments which is not equal to [`missing`](@ref),
 if any. Otherwise return `missing`.
@@ -431,7 +431,7 @@ coalesce(x::Any, y...) = x
 
 
 """
-    @coalesce(x, y...)
+    @coalesce(x...)
 
 Short-circuiting version of [`coalesce`](@ref).
 

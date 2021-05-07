@@ -71,7 +71,7 @@ isnothing(x) = x === nothing
 
 
 """
-    something(x, y...)
+    something(x...)
 
 Return the first value in the arguments which is not equal to [`nothing`](@ref),
 if any. Otherwise throw an error.
@@ -103,7 +103,7 @@ something(x::Any, y...) = x
 
 
 """
-    @something(x, y...)
+    @something(x...)
 
 Short-circuiting version of [`something`](@ref).
 
