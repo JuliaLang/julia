@@ -462,7 +462,7 @@ end
     @test mul!(copy(C), J, a, alpha, beta) ≈ target_5mul
     target_5mul = beta*C # alpha = 0
     @test mul!(copy(C), a, J, 0, beta) ≈ target_5mul
-    target_5mul = a*alpha*Matrix(J,n,n) # beta = 0
+    target_5mul = a*alpha*Matrix(J, 3, 3) # beta = 0
     @test mul!(copy(C), a, J, alpha, 0) ≈ target_5mul
 
 end
