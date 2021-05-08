@@ -279,6 +279,26 @@ function deserialize(s::AbstractSerializer, t::Type{UmfpackLU{Tv,Ti}}) where {Tv
     return obj
 end
 
+# compute the sign/parity of a permutation
+function _signperm(p)
+    n = length(p)
+    result = 0
+    todo = trues(n)
+    while any(todo)
+        k = findfirst(todo)
+        todo[k] = false
+        result += 1 # increment element count
+        j = p[k]
+        while j != k
+            result += 1 # increment element count
+            todo[j] = false
+            j = p[j]
+        end
+        result += 1 # increment cycle count
+    end
+    return ifelse(isodd(result), -1, 1)
+end
+
 ## Wrappers for UMFPACK functions
 
 # generate the name of the C function according to the value and integer types
@@ -406,31 +426,22 @@ for itype in UmfpackIndexTypes
                         mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[], mz[])
         end
-        function logabsdet(F::UmfpackLU{T, $itype}) where T # return log(abs(det)) and sign(det)
+        function logabsdet(F::UmfpackLU{T, $itype}) where {T} # return log(abs(det)) and sign(det)
             n = checksquare(F)
             issuccess(F) || return log(zero(real(T))), log(one(T))
             U = diag(F.U)
             Rs = F.Rs
             p = F.p
             q = F.q
-            c = false
+            s = _signperm(p)*_signperm(q)*one(real(T))
             P = one(T)
             abs_det = zero(real(T))
             @inbounds for i in 1:n
                 dg_ii = U[i] / Rs[i]
                 P *= sign(dg_ii)
-                for j in i+1:n
-                    if p[i] > p[j]
-                        c = ! c
-                    end
-                    if q[i] > q[j]
-                        c = ! c
-                    end
-                end
                 abs_det += log(abs(dg_ii))
             end
-            s = ifelse(c, -one(real(T)), one(real(T))) * P
-            return abs_det, s
+            return abs_det, s * P
         end
         function umf_lunz(lu::UmfpackLU{Float64,$itype})
             lnz = Ref{$itype}()
