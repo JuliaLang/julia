@@ -35,6 +35,8 @@ show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
+_bounds_setdiff(r, s) = setdiff(r, s)
+_bounds_setdiff(r::AbstractUnitRange, s::AbstractUnitRange) = last(r) ≥ last(s) ? (last(s) + 1:last(r)) : setdiff(r, s)
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
@@ -44,23 +46,30 @@ function showerror(io::IO, ex::BoundsError)
         if isdefined(ex, :i)
             print(io, " at index ")
             if !all(isa.(ex.i, Number))
-                print(io, "[")
+                oobis = [] # out of bounds indexes
                 for (i, x) in enumerate(ex.i)
-                    i > 1 && print(io, ", ")
                     if ndims(ex.a) > 1 && length(ex.i) > 1
-                        badi = setdiff(x, 1:size(ex.a, i))
+                        oobi = _bounds_setdiff(x, 1:size(ex.a, i))
                     else
-                        badi = setdiff(x, eachindex(ex.a))
+                        oobi = _bounds_setdiff(x, eachindex(ex.a))
                     end
-                    if isempty(badi)
-                        show_index(io, x)
-                    elseif x isa AbstractUnitRange
-                        show(io, minimum(badi):maximum(badi))
-                    else
-                        length(badi) > 1 ? show_index(io, badi) : show_index(io, badi[1])
-                    end
+                    length(oobi) == 1 && (oobi = oobi[1])
+                    push!(oobis, oobi)
                 end
-                print(io, "] in ")
+                if any(oobis .!= ex.i)
+                    print(io, "[")
+                    for (i, x) in enumerate(oobis)
+                        i > 1 && print(io, ", ")
+                        if isempty(x)
+                            show_index(io, ex.i[i])
+                        elseif ex.i[i] isa AbstractUnitRange
+                            show(io, minimum(x):maximum(x))
+                        else
+                            length(x) > 1 ? show_index(io, x) : show_index(io, x[1])
+                        end
+                    end
+                    print(io, "] in ")
+                end
             end
             print(io, "[")
             if ex.i isa AbstractRange
