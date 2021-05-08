@@ -47,7 +47,7 @@ function showerror(io::IO, ex::BoundsError)
             print(io, " at index ")
             if !(ex.i isa AbstractString) && any(.!isa.(ex.i, Number)) && all(.!isa.(ex.i, LogicalIndex))
                 oobis = [] # out of bounds indexes
-                carteseanindexes = ndims(ex.a) > 1 && length(ex.i) > 1
+                carteseanindexes = length(ex.i) > 1
                 for (i, x) in enumerate(ex.i)
                     if x isa AbstractString
                         oobi = x
@@ -55,7 +55,7 @@ function showerror(io::IO, ex::BoundsError)
                         oobi = []
                     else
                         if carteseanindexes
-                            oobi = _bounds_setdiff(x, 1:size(ex.a, i))
+                            oobi = _bounds_setdiff(x, Base.OneTo(size(ex.a, i)))
                         else
                             oobi = _bounds_setdiff(x, eachindex(ex.a))
                         end
