@@ -68,7 +68,7 @@ function showerror(io::IO, ex::BoundsError)
                     for (i, x) in enumerate(oobis)
                         i > 1 && print(io, ", ")
                         if isempty(x)
-                            show_index(io, ex.i[i])
+                            print(io, "…")
                         else
                             length(x) > 1 ? show_index(io, x) : show_index(io, x[1])
                         end
