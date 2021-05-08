@@ -36,7 +36,7 @@ show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
 _bounds_setdiff(r, s) = setdiff(r, s)
-_bounds_setdiff(r::AbstractUnitRange, s::AbstractUnitRange) = last(r) ≥ last(s) ? first(r) == first(s) ? Int[] : (last(s) + 1:last(r)) : setdiff(r, s)
+_bounds_setdiff(r::AbstractUnitRange, s::OneTo) = last(r) ≤ last(s) ? Int[] : (max(last(s) + 1, first(r)) : last(r))
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
