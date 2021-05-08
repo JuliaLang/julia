@@ -1428,31 +1428,23 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
-        return Matrix{Tout}(undef, n, m)
+        return similar(A, Tout, (n, m))
     end
-    if istril(A)
-        if istriu(A)
-            maxabsA = maximum(abs.(diag(A)))
-            tol = max(rtol*maxabsA, atol)
-            B = zeros(Tout, n, m)
-            for i = 1:min(m, n)
-                if abs(A[i,i]) > tol
-                    Aii = inv(A[i,i])
-                    if isfinite(Aii)
-                        B[i,i] = Aii
-                    end
-                end
-            end
-            return B
-        end
+    if isdiag(A)
+        ind = diagind(A)
+        dA = view(A, ind)
+        maxabsA = maximum(abs, dA)
+        tol = max(rtol * maxabsA, atol)
+        B = fill!(similar(A, Tout, (n, m)), 0)
+        B[ind] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
+        return B
     end
     SVD         = svd(A, full = false)
     tol         = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
-    Sinv        = zeros(Stype, length(SVD.S))
+    Sinv        = fill!(similar(A, Stype, length(SVD.S)), 0)
     index       = SVD.S .> tol
-    Sinv[index] = one(Stype) ./ SVD.S[index]
-    Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
+    Sinv[index] .= pinv.(view(SVD.S, index))
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(x::Number)
