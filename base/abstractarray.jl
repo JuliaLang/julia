@@ -1162,6 +1162,20 @@ map(::Type{T}, r::StepRangeLen) where {T<:AbstractFloat} = convert(StepRangeLen{
 function map(::Type{T}, r::LinRange) where T<:AbstractFloat
     LinRange(T(r.start), T(r.stop), length(r))
 end
+# Special conversions for IdentityUnitRange
+# Since IdentityUnitRange is defined as <: AbstractUnitRange{Int},
+# its eltype may not be converted in Base,
+# nor is it possible in general to map a type over it preserving its axes.
+# We define the `Int` case here so that OffsetArrays may define the conversion
+# for other eltypes through type-piracy.
+# In the future this type-piracy may not be necessary if IdentityUnitRange is
+# defined to be <: AbstractUnitRange{<:Integer}
+map(::Type{Int}, r::IdentityUnitRange) = r
+# For IdentityUnitRange{<:OneTo}, the map may be evaluated correctly in Base
+# We pop the parent range as the result may not always be representable as an IdentityUnitRange
+map(::Type{T}, r::IdentityUnitRange{<:OneTo}) where {T<:Real} = map(T, axes1(r))
+# this method is for ambiguity resolution
+map(::Type{Int}, r::IdentityUnitRange{<:OneTo}) = r
 
 ## unsafe/pointer conversions ##
 
