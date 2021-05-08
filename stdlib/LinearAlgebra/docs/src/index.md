@@ -404,6 +404,8 @@ LinearAlgebra.tr
 LinearAlgebra.det
 LinearAlgebra.logdet
 LinearAlgebra.logabsdet
+LinearAlgebra.det_bareiss!
+LinearAlgebra.det_bareiss
 Base.inv(::AbstractMatrix)
 LinearAlgebra.pinv
 LinearAlgebra.nullspace
