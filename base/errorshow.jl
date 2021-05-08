@@ -45,7 +45,7 @@ function showerror(io::IO, ex::BoundsError)
         summary(io, ex.a)
         if isdefined(ex, :i)
             print(io, " at index ")
-            if !(ex.i isa AbstractString) && !all(isa.(ex.i, Number))
+            if !(ex.i isa AbstractString) && any(.!isa.(ex.i, Number)) && all(.!isa.(ex.i, LogicalIndex))
                 oobis = [] # out of bounds indexes
                 carteseanindexes = ndims(ex.a) > 1 && length(ex.i) > 1
                 for (i, x) in enumerate(ex.i)
