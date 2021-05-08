@@ -51,7 +51,7 @@ The *direct* subtypes of any `DataType` may be listed using [`subtypes`](@ref). 
 the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
 ```jldoctest; setup = :(using InteractiveUtils)
-julia> subtypes(AbstractFloat)
+julia> InteractiveUtils.subtypes(AbstractFloat)
 5-element Vector{Any}:
  BigFloat
  Core.BFloat16
@@ -86,7 +86,7 @@ the unquoted and interpolated expression ([`Expr`](@ref)) form for a given macro
 be passed instead!). For example:
 
 ```jldoctest; setup = :(using InteractiveUtils)
-julia> macroexpand(@__MODULE__, :(@edit println("")) )
+julia> InteractiveUtils.macroexpand(@__MODULE__, :(@edit println("")) )
 :(InteractiveUtils.edit(println, (Base.typesof)("")))
 ```
 
@@ -143,8 +143,8 @@ For more information see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code
 The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
 debug information printed.
 
-```julia-repl
-julia> @code_typed debuginfo=:source +(1,1)
+```jldoctest; setup = :(using InteractiveUtils)
+julia> InteractiveUtils.@code_typed debuginfo=:source +(1,1)
 CodeInfo(
     @ int.jl:53 within `+'
 1 ─ %1 = Base.add_int(x, y)::Int64
