@@ -79,6 +79,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     renumber_ir_elements!(code, changemap, labelmap)
 
     inbounds_depth = 0 # Number of stacked inbounds
+    disable_inline = false # whether or not to disable inline optimization
     meta = Any[]
     flags = fill(0x00, length(code))
     for i = 1:length(code)
@@ -93,6 +94,9 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
                 inbounds_depth -= 1
             end
             stmt = nothing
+        elseif isexpr(stmt, :noinline)
+            disable_inline = true
+            stmt = nothing
         else
             stmt = normalize(stmt, meta)
         end
@@ -100,6 +104,10 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
         if !(stmt === nothing)
             if inbounds_depth > 0
                 flags[i] |= IR_FLAG_INBOUNDS
+            end
+            if disable_inline
+                flags[i] |= IR_FLAG_NOINLINE
+                disable_inline = false;
             end
         end
     end

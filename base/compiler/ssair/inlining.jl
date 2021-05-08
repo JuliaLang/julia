@@ -790,7 +790,7 @@ function validate_sparams(sparams::SimpleVector)
 end
 
 function analyze_method!(match::MethodMatch, atypes::Vector{Any},
-                         state::InliningState, @nospecialize(stmttyp))
+                         state::InliningState, @nospecialize(stmttyp), dont_inline::Bool)
     method = match.method
     methsig = method.sig
 
@@ -810,7 +810,7 @@ function analyze_method!(match::MethodMatch, atypes::Vector{Any},
     validate_sparams(match.sparams) || return nothing
 
 
-    if !state.params.inlining
+    if !state.params.inlining || dont_inline
         return compileable_specialization(state.et, match)
     end
 
@@ -1049,10 +1049,20 @@ is_builtin(s::Signature) =
     isa(s.f, Builtin) ||
     s.ft ⊑ Builtin
 
+function check_noinline_flag(ir::IRCode, idx::Int)
+    try
+        (ir.stmts[idx][:flag] & IR_FLAG_NOINLINE) != 0
+    catch BoundsError
+        false
+    end
+
+end
+
 function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, info::InvokeCallInfo,
         state::InliningState, todo::Vector{Pair{Int, Any}})
     stmt = ir.stmts[idx][:inst]
     calltype = ir.stmts[idx][:type]
+    dont_inline = check_noinline_flag(ir, idx)
 
     if !info.match.fully_covers
         # TODO: We could union split out the signature check and continue on
@@ -1064,7 +1074,7 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, info::InvokeCallIn
     atypes = atypes[4:end]
     pushfirst!(atypes, atype0)
 
-    result = analyze_method!(info.match, atypes, state, calltype)
+    result = analyze_method!(info.match, atypes, state, calltype, dont_inline)
     handle_single_case!(ir, stmt, idx, result, true, todo)
     return nothing
 end
@@ -1164,6 +1174,7 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
     signature_union = Union{}
     only_method = nothing  # keep track of whether there is one matching method
     too_many = false
+    dont_inline = check_noinline_flag(ir, idx)
     local meth
     local fully_covered = true
     for i in 1:length(infos)
@@ -1192,7 +1203,7 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
                 fully_covered = false
                 continue
             end
-            case = analyze_method!(match, sig.atypes, state, calltype)
+            case = analyze_method!(match, sig.atypes, state, calltype, dont_inline)
             if case === nothing
                 fully_covered = false
                 continue
@@ -1219,7 +1230,7 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
             match = meth[1]
         end
         fully_covered = true
-        case = analyze_method!(match, sig.atypes, state, calltype)
+        case = analyze_method!(match, sig.atypes, state, calltype, dont_inline)
         case === nothing && return
         push!(cases, Pair{Any,Any}(match.spec_types, case))
     end
@@ -1280,6 +1291,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         stmt = ir.stmts[idx][:inst]
         calltype = ir.stmts[idx][:type]
         info = ir.stmts[idx][:info]
+        dont_inline = check_noinline_flag(ir, idx)
 
         # Check whether this call was @pure and evaluates to a constant
         if info isa MethodResultPure
@@ -1308,7 +1320,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         if isa(info, OpaqueClosureCallInfo)
-            result = analyze_method!(info.match, sig.atypes, state, calltype)
+            result = analyze_method!(info.match, sig.atypes, state, calltype, dont_inline)
             handle_single_case!(ir, stmt, idx, result, false, todo)
             continue
         end

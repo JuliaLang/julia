@@ -319,6 +319,25 @@ function f37555(x::Int; kwargs...)
 end
 @test f37555(1) == 1
 
+# Issue #18773 - Specifying `@noinline` at callsite
+# Ensure `@noinline` in caller overrides `@inline` in callee
+@inline f18773(x) = x
+g18773(x) = @noinline f18773(x)
+let ci = code_typed(g18773, Tuple{Int})[1].first
+    @test length(ci.code) == 2 &&
+        isexpr(ci.code[1], :invoke) &&
+        ci.code[1].args[1].def.name == :f18773
+end
+# Test that `@noinline` only binds to the next call
+h18773(x) = @noinline f18773(x) + f18773(x)
+let ci = code_typed(h18773, Tuple{Int})[1].first
+    @test length(ci.code) == 3 &&
+        isexpr(ci.code[1], :invoke) &&
+        ci.code[1].args[1].def.name == :f18773 &&
+        isexpr(ci.code[2], :call) &&
+        ci.code[2].args[1] == GlobalRef(Base, :add_int)
+end
+
 # Test that we can inline small constants even if they are not isbits
 struct NonIsBitsDims
     dims::NTuple{N, Int} where N

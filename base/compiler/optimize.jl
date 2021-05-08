@@ -135,6 +135,8 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # This statement was marked as @inbounds by the user. If replaced by inlining,
 # any contained boundschecks may be removed
 const IR_FLAG_INBOUNDS       = 0x01
+# This statement was marked as @noinline by the user
+const IR_FLAG_NOINLINE       = 0x01 << 7
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
 const IR_FLAG_EFFECT_FREE    = 0x01 << 4
