@@ -17,12 +17,18 @@ end
     c = Channel()
     @test eltype(c) == Any
     @test c.sz_max == 0
+    @test putwillblock(c) == true
+    @test takewillblock(c) == true
 
     c = Channel(1)
     @test eltype(c) == Any
     @test put!(c, 1) == 1
+    @test putwillblock(c) == true
+    @test takewillblock(c) == false
     @test isready(c) == true
     @test take!(c) == 1
+    @test putwillblock(c) == false
+    @test takewillblock(c) == true
     @test isready(c) == false
     @test eltype(Channel(1.0)) == Any
 
