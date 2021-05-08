@@ -43,21 +43,30 @@ function showerror(io::IO, ex::BoundsError)
         summary(io, ex.a)
         if isdefined(ex, :i)
             print(io, " at index ")
-            badi = [setdiff(x, eachindex(ex.a)) for x ∈ ex.i]
-            if any(length.(badi) .< length.(ex.i))
-                for (i, x) in enumerate(badi)
+            if !all(isa.(ex.i, Number))
+                print(io, "[")
+                for (i, x) in enumerate(ex.i)
                     i > 1 && print(io, ", ")
-                    show_index(io, x)
+                    if ndims(ex.a) > 1 && length(ex.i) > 1
+                        badi = setdiff(x, 1:size(ex.a, i))
+                    else
+                        badi = setdiff(x, eachindex(ex.a))
+                    end
+                    if isempty(badi)
+                        show_index(io, x)
+                    elseif x isa AbstractUnitRange
+                        show(io, minimum(badi):maximum(badi))
+                    else
+                        length(badi) > 1 ? show_index(io, badi) : show_index(io, badi[1])
+                    end
                 end
-                print(io, " in ")
+                print(io, "] in ")
             end
             print(io, "[")
             if ex.i isa AbstractRange
                 print(io, ex.i)
             elseif ex.i isa AbstractString
                 show(io, ex.i)
-            elseif ex.i isa Number
-                print(io, ex.i)
             else
                 for (i, x) in enumerate(ex.i)
                     i > 1 && print(io, ", ")
