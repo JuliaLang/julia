@@ -285,23 +285,11 @@ end
 
 function istril(A::Union{LowerTriangular,UnitLowerTriangular}, k::Integer=0)
     k >= 0 && return true
-    m, n = size(A)
-    for j in max(1, k + 2):n
-        for i in 1:min(j - k - 1, m)
-            iszero(A[i, j]) || return false
-        end
-    end
-    return true
+    return _istril(A, k)
 end
 function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
     k <= 0 && return true
-    m, n = size(A)
-    for j in 1:min(n, m + k - 1)
-        for i in max(1, j - k + 1):m
-            iszero(A[i, j]) || return false
-        end
-    end
-    return true
+    return _istriu(A, k)
 end
 istril(A::Adjoint) = istriu(A.parent)
 istril(A::Transpose) = istriu(A.parent)
