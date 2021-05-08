@@ -311,6 +311,9 @@
 (define (numchk n s)
   (or n (error (string "invalid numeric constant \"" s "\""))))
 
+(define (string-lastchar s)
+  (string.char s (string.dec s (length s))))
+
 (define (read-number port leadingdot neg)
   (let ((str  (open-output-string))
         (pred char-numeric?)
@@ -412,7 +415,7 @@
                    (string.sub s 1)
                    s)
                r is-float32-literal)))
-      (if (and (eqv? #\. (string.char s (string.dec s (length s))))
+      (if (and (eqv? #\. (string-lastchar s))
                (let ((nxt (peek-char port)))
                  (and (not (eof-object? nxt))
                       (or (identifier-start-char? nxt)
@@ -2185,13 +2188,32 @@
 (define (parse-string-literal s delim raw)
   (let ((p (ts:port s)))
     ((if raw identity unescape-parsed-string-literal)
-     (if (eqv? (peek-char p) delim)
-         (if (eqv? (peek-char (take-char p)) delim)
-             (map-first strip-leading-newline
-                        (dedent-triplequoted-string
-                         (parse-string-literal- 2 (take-char p) s delim raw)))
-             (list ""))
-         (parse-string-literal- 0 p s delim raw)))))
+     (map (lambda (s)
+            (if (and (not raw) (string? s))
+                ;; remove `\` followed by a newline
+                (let ((spl (string-split s "\\\n")))
+                  (foldl (lambda (line s)
+                           ;; if there is an odd number of backslashes before the backslash
+                           ;; preceding the newline, keep the backslash and newline since
+                           ;; the backslash is actually escaped
+                           (define (odd-backslashes? (i (length s)))
+                             (and (> i 0)
+                                  (let ((i (string.dec s i)))
+                                    (and (eqv? (string.char s i) #\\)
+                                         (not (odd-backslashes? i))))))
+                           (if (odd-backslashes?)
+                               (string s "\\\n" line)
+                               (string s line)))
+                         ""
+                         spl))
+                s))
+          (if (eqv? (peek-char p) delim)
+              (if (eqv? (peek-char (take-char p)) delim)
+                  (map-first strip-leading-newline
+                             (dedent-triplequoted-string
+                               (parse-string-literal- 2 (take-char p) s delim raw)))
+                  (list ""))
+              (parse-string-literal- 0 p s delim raw))))))
 
 (define (strip-leading-newline s)
   (let ((n (sizeof s)))

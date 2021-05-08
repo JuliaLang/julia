@@ -88,7 +88,10 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 in_double_quotes = !in_double_quotes
                 i = consume_upto!(arg, s, i, j)
             elseif c == '\\'
-                if in_double_quotes
+                if !isempty(st) && peek(st)[2] == '\n'
+                    i = consume_upto!(arg, s, i, j) + 1
+                    _ = popfirst!(st)
+                elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
                     k, c′ = peek(st)
                     if c′ == '"' || c′ == '$' || c′ == '\\'
