@@ -429,7 +429,7 @@ for itype in UmfpackIndexTypes
         function logabsdet(F::UmfpackLU{T, $itype}) where {T} # return log(abs(det)) and sign(det)
             n = checksquare(F)
             issuccess(F) || return log(zero(real(T))), log(one(T))
-            U = diag(F.U)
+            U = F.U
             Rs = F.Rs
             p = F.p
             q = F.q
@@ -437,7 +437,7 @@ for itype in UmfpackIndexTypes
             P = one(T)
             abs_det = zero(real(T))
             @inbounds for i in 1:n
-                dg_ii = U[i] / Rs[i]
+                dg_ii = U[i, 1] / Rs[i]
                 P *= sign(dg_ii)
                 abs_det += log(abs(dg_ii))
             end
