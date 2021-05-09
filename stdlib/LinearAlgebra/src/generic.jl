@@ -1661,16 +1661,19 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
-    (a, b, c...) ≈ (a′, b′, c′...)
+    isapprox(xs::Tuple, ys::Tuple; kwargs...)
+    (x, x2, x3...) ≈ (y, y2, y3...)
+
+Check that each element `x` of the first tuple is approximately equal to
+the corresponding element `y` of the second: `all(x ≈ y for (x,y) in zip(xs,ys))`.
+
+Any keyword arguments apply to every comparison.
 
 !!! compat "Julia 1.7"
     Applying `isapprox` to tuples requires Julia 1.7 or later.
 
 ```jldoctest
 julia> (1, [2,3]) ≈ (1.0, [2.0, 3+10eps()])
-true
-
-julia> (a=1, b=2) ≈ (b=2.0, a=nextfloat(1.0))
 true
 ```
 """
@@ -1679,7 +1682,7 @@ function isapprox(xs::Union{Tuple,NamedTuple}, ys::Union{Tuple,NamedTuple}; kwar
     all(xy -> (xy[1], xy[2]; kwargs...), zip(xs, ys))
 end
 
-function isapprox(xs::NamedTuple, ys::NamedTuple; kwargs...)
+function isapprox(xs::NamedTuple, ys::NamedTuple; kwargs...) # not sure this is a good idea!
     sort(collect(keys(xs))) == sort(collect(keys(ys))) || throw(ArgumentError("keys must match"))
     all(isapprox(xs[k], ys[k]; kwargs...) for k in keys(xs))
 end
