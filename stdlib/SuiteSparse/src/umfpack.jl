@@ -437,7 +437,7 @@ for itype in UmfpackIndexTypes
             P = one(T)
             abs_det = zero(real(T))
             @inbounds for i in 1:n
-                dg_ii = U[i, 1] / Rs[i]
+                dg_ii = U[i, i] / Rs[i]
                 P *= sign(dg_ii)
                 abs_det += log(abs(dg_ii))
             end
