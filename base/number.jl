@@ -25,6 +25,8 @@ isinteger(x::Integer) = true
 Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
 
+See also: [`isone`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+
 # Examples
 ```jldoctest
 julia> iszero(0.0)
@@ -110,6 +112,8 @@ copy(x::Number) = x # some code treats numbers as collection-like
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 
+See also [`sign`](@ref) and [`copysign`](@ref).
+
 # Examples
 ```jldoctest
 julia> signbit(-4)
@@ -131,6 +135,23 @@ signbit(x::Real) = x < 0
     sign(x)
 
 Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).
+
+See also [`signbit`](@ref), [`zero`](@ref), [`copysign`](@ref), [`flipsign`](@ref).
+
+# Examples
+```jldoctest
+julia> sign(-4.0)
+-1.0
+
+julia> sign(99)
+1
+
+julia> sign(-0.0)
+-0.0
+
+julia> sign(0 + im)
+0.0 + 1.0im
+```
 """
 sign(x::Number) = iszero(x) ? x/abs(oneunit(x)) : x/abs(x)
 sign(x::Real) = ifelse(x < zero(x), oftype(one(x),-1), ifelse(x > zero(x), one(x), typeof(one(x))(x)))
@@ -222,10 +243,18 @@ inv(x::Number) = one(x)/x
 
 Multiply `x` and `y`, giving the result as a larger type.
 
+See also [`promote`](@ref), [`Base.add_sum`](@ref).
+
 # Examples
 ```jldoctest
-julia> widemul(Float32(3.), 4.)
-12.0
+julia> widemul(Float32(3.0), 4.0) isa BigFloat
+true
+
+julia> typemax(Int8) * typemax(Int8)
+1
+
+julia> widemul(typemax(Int8), typemax(Int8))  # == 127^2
+16129
 ```
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
@@ -242,6 +271,8 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
     zero(::Type)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+
+See also [`iszero`](@ref), [`one`](@ref), [`oneunit`](@ref), [`oftype`](@ref).
 
 # Examples
 ```jldoctest
@@ -279,6 +310,9 @@ should return an identity value of the same precision
 
 If you want a quantity that is of the same type as `x`, or of type `T`,
 even if `x` is dimensionful, use [`oneunit`](@ref) instead.
+
+See also the [`identity`](@ref) function,
+and `I` in [`LinearAlgebra`](@ref man-linalg) for the identity matrix.
 
 # Examples
 ```jldoctest

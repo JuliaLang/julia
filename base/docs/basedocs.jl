@@ -277,6 +277,19 @@ julia> z
 kw"global"
 
 """
+    ' '
+
+A pair of single-quote characters delimit a [`Char`](@ref) (that is, character) literal.
+
+# Examples
+```jldoctest
+julia> 'j'
+'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
+```
+"""
+kw"''"
+
+"""
     =
 
 `=` is the assignment operator.
@@ -453,6 +466,18 @@ For other purposes, `:( ... )` and `quote .. end` blocks are treated identically
 kw"quote"
 
 """
+    @
+
+The at sign followed by a macro name marks a macro call. Macros provide the
+ability to include generated code in the final body of a program. A macro maps
+a tuple of arguments, expressed as space-separated expressions or a
+function-call-like argument list, to a returned *expression*. The resulting
+expression is compiled directly into the surrounding code. See
+[Metaprogramming](@ref man-macros) for more details and examples.
+"""
+kw"@"
+
+"""
     {}
 
 Curly braces are used to specify [type parameters](@ref man-parametric-types).
@@ -603,6 +628,32 @@ the last expression in the function body.
 kw"function"
 
 """
+    x -> y
+
+Create an anonymous function mapping argument(s) `x` to the function body `y`.
+
+```jldoctest
+julia> f = x -> x^2 + 2x - 1
+#1 (generic function with 1 method)
+
+julia> f(2)
+7
+```
+
+Anonymous functions can also be defined for multiple argumets.
+```jldoctest
+julia> g = (x,y) -> x^2 + y^2
+#2 (generic function with 1 method)
+
+julia> g(2,3)
+13
+```
+
+See the manual section on [anonymous functions](@ref man-anonymous-functions) for more details.
+"""
+kw"->"
+
+"""
     return
 
 `return x` causes the enclosing function to exit early, passing the given value `x`
@@ -692,7 +743,7 @@ See the manual section on [control flow](@ref man-conditional-evaluation) for mo
 ```
 julia> x = 1; y = 2;
 
-julia> println(x > y ? "x is larger" : "y is larger")
+julia> x > y ? println("x is larger") : println("y is larger")
 y is larger
 ```
 """
@@ -950,6 +1001,19 @@ kw";"
     x && y
 
 Short-circuiting boolean AND.
+
+See also [`&`](@ref), the ternary operator `? :`, and the manual section on [control flow](@ref man-conditional-evaluation).
+
+# Examples
+```jldoctest
+julia> x = 3;
+
+julia> x > 1 && x < 10 && x isa Int
+true
+
+julia> x < 0 && error("expected positive x")
+false
+```
 """
 kw"&&"
 
@@ -957,6 +1021,17 @@ kw"&&"
     x || y
 
 Short-circuiting boolean OR.
+
+See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
+
+# Examples
+```jldoctest
+julia> pi < 3 || ℯ < 3
+true
+
+julia> false || true || println("neither is true!")
+true
+```
 """
 kw"||"
 
@@ -1180,6 +1255,8 @@ devnull
     Nothing
 
 A type with no fields that is the type of [`nothing`](@ref).
+
+See also: [`isnothing`](@ref), [`Some`](@ref), [`Missing`](@ref).
 """
 Nothing
 
@@ -1188,6 +1265,8 @@ Nothing
 
 The singleton instance of type [`Nothing`](@ref), used by convention when there is no value to return
 (as in a C `void` function) or when a variable or field holds no value.
+
+See also: [`isnothing`](@ref), [`something`](@ref), [`missing`](@ref).
 """
 nothing
 
@@ -1730,6 +1809,8 @@ NaN
 julia> false * NaN
 0.0
 ```
+
+See also: [`digits`](@ref), [`iszero`](@ref), [`NaN`](@ref).
 """
 Bool
 
@@ -1816,10 +1897,18 @@ Symbol(x...)
 
 Construct a tuple of the given objects.
 
+See also [`Tuple`](@ref), [`NamedTuple`](@ref).
+
 # Examples
 ```jldoctest
-julia> tuple(1, 'a', pi)
-(1, 'a', π)
+julia> tuple(1, 'b', pi)
+(1, 'b', π)
+
+julia> ans === (1, 'b', π)
+true
+
+julia> Tuple(Real[1, 2, pi])  # takes a collection
+(1, 2, π)
 ```
 """
 tuple
@@ -1882,6 +1971,8 @@ setfield!
 
 Get the concrete type of `x`.
 
+See also [`eltype`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = 1//2;
@@ -1938,7 +2029,7 @@ isdefined
 """
     Vector{T}(undef, n)
 
-Construct an uninitialized [`Vector{T}`](@ref) of length `n`. See [`undef`](@ref).
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
 
 # Examples
 ```julia-repl
@@ -1988,14 +2079,19 @@ Vector{T}(::Missing, n)
 """
     Matrix{T}(undef, m, n)
 
-Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`. See [`undef`](@ref).
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
 
 # Examples
 ```julia-repl
 julia> Matrix{Float64}(undef, 2, 3)
 2×3 Array{Float64, 2}:
- 6.93517e-310  6.93517e-310  6.93517e-310
- 6.93517e-310  6.93517e-310  1.29396e-320
+ 2.36365e-314  2.28473e-314    5.0e-324
+ 2.26704e-314  2.26711e-314  NaN
+
+julia> similar(ans, Int32, 2, 2)
+2×2 Matrix{Int32}:
+ 490537216  1277177453
+         1  1936748399
 ```
 """
 Matrix{T}(::UndefInitializer, m, n)
@@ -2043,19 +2139,28 @@ containing elements of type `T`. `N` can either be supplied explicitly,
 as in `Array{T,N}(undef, dims)`, or be determined by the length or number of `dims`.
 `dims` may be a tuple or a series of integer arguments corresponding to the lengths
 in each dimension. If the rank `N` is supplied explicitly, then it must
-match the length or number of `dims`. See [`undef`](@ref).
+match the length or number of `dims`. Here [`undef`](@ref) is
+the [`UndefInitializer`](@ref).
 
 # Examples
 ```julia-repl
 julia> A = Array{Float64, 2}(undef, 2, 3) # N given explicitly
-2×3 Array{Float64, 2}:
+2×3 Matrix{Float64}:
  6.90198e-310  6.90198e-310  6.90198e-310
  6.90198e-310  6.90198e-310  0.0
 
-julia> B = Array{Float64}(undef, 2) # N determined by the input
-2-element Array{Float64, 1}:
- 1.87103e-320
- 0.0
+julia> B = Array{Float64}(undef, 4) # N determined by the input
+4-element Vector{Float64}:
+   2.360075077e-314
+ NaN
+   2.2671131793e-314
+   2.299821756e-314
+
+julia> similar(B, 2, 4, 1) # use typeof(B), and the given size
+2×4×1 Array{Float64, 3}:
+[:, :, 1] =
+ 2.26703e-314  2.26708e-314  0.0           2.80997e-314
+ 0.0           2.26703e-314  2.26708e-314  0.0
 ```
 """
 Array{T,N}(::UndefInitializer, dims)
@@ -2132,10 +2237,12 @@ Alias for `UndefInitializer()`, which constructs an instance of the singleton ty
 [`UndefInitializer`](@ref), used in array initialization to indicate the
 array-constructor-caller would like an uninitialized array.
 
+See also: [`missing`](@ref), [`similar`](@ref).
+
 # Examples
 ```julia-repl
 julia> Array{Float64, 1}(undef, 3)
-3-element Array{Float64, 1}:
+3-element Vector{Float64}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
@@ -2170,6 +2277,8 @@ julia> +(1, 20, 4)
     -(x)
 
 Unary minus operator.
+
+See also: [`abs`](@ref), [`flipsign`](@ref).
 
 # Examples
 ```jldoctest
@@ -2276,6 +2385,9 @@ AssertionError
 
 An error occurred while [`include`](@ref Base.include)ing, [`require`](@ref Base.require)ing, or [`using`](@ref) a file. The error specifics
 should be available in the `.error` field.
+
+!!! compat "Julia 1.7"
+    LoadErrors are no longer emitted by `@macroexpand`, `@macroexpand1`, and `macroexpand` as of Julia 1.7.
 """
 LoadError
 
@@ -2379,6 +2491,8 @@ number of trailing elements. `Vararg{T,N}` corresponds to exactly `N` elements o
 `Vararg{T}` corresponds to zero or more elements of type `T`. `Vararg` tuple types are used to represent the
 arguments accepted by varargs methods (see the section on [Varargs Functions](@ref) in the manual.)
 
+See also [`NTuple`](@ref).
+
 # Examples
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString, Vararg{Int}}
@@ -2411,6 +2525,8 @@ is considered an abstract type, and tuple types are only concrete if their param
 field names; fields are only accessed by index.
 
 See the manual section on [Tuple Types](@ref).
+
+See also [`Vararg`](@ref), [`NTuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
 """
 Tuple
 

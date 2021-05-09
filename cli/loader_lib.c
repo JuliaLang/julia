@@ -130,7 +130,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
 
 void * libjulia_internal = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
-    // Only initalize this once
+    // Only initialize this once
     if (libjulia_internal != NULL) {
         return;
     }
@@ -160,7 +160,12 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 
     // Once we have libjulia-internal loaded, re-export its symbols:
     for (unsigned int symbol_idx=0; jl_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
-        (*jl_exported_func_addrs[symbol_idx]) = lookup_symbol(libjulia_internal, jl_exported_func_names[symbol_idx]);
+        void *addr = lookup_symbol(libjulia_internal, jl_exported_func_names[symbol_idx]);
+        if (addr == NULL) {
+            jl_loader_print_stderr3("ERROR: Unable to load ", jl_exported_func_names[symbol_idx], " from libjulia-internal");
+            exit(1);
+        }
+        (*jl_exported_func_addrs[symbol_idx]) = addr;
     }
 }
 
@@ -191,9 +196,9 @@ JL_DLLEXPORT int jl_load_repl(int argc, char * argv[]) {
 #endif
 
     // Load the repl entrypoint symbol and jump into it!
-    int (*entrypoint)(int, char **) = (int (*)(int, char **))lookup_symbol(libjulia_internal, "repl_entrypoint");
+    int (*entrypoint)(int, char **) = (int (*)(int, char **))lookup_symbol(libjulia_internal, "jl_repl_entrypoint");
     if (entrypoint == NULL) {
-        jl_loader_print_stderr("ERROR: Unable to find `repl_entrypoint()` within libjulia-internal!\n");
+        jl_loader_print_stderr("ERROR: Unable to find `jl_repl_entrypoint()` within libjulia-internal!\n");
         exit(1);
     }
     return entrypoint(argc, (char **)argv);

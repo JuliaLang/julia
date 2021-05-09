@@ -15,6 +15,8 @@ New language features
 Language changes
 ----------------
 
+* `macroexpand`, `@macroexpand`, and `@macroexpand1` no longer wrap errors in a `LoadError`. To reduce breakage, `@test_throws` has been modified so that many affected tests will still pass ([#38379]].
+* The middle dot `·` (`\cdotp` U+00b7) and the Greek interpunct `·` (U+0387) are now treated as equivalent to the dot operator `⋅` (`\cdot` U+22c5) (#25157).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -40,7 +42,6 @@ New library functions
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
 * `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
-* New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}; kwargs...)` ([#38438])
 * Two arguments method `lock(f, lck)` now accepts a `Channel` as the second argument. ([#39312])
 * New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
@@ -83,6 +84,7 @@ Standard library changes
   @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T))) broken=(T == Float64)
   ```
   ([#39322])
+* `@lock` is now exported from Base ([#39588]).
 * Some degree trigonometric functions, `sind`, `cosd`, `tand`, `asind`, `acosd`, `asecd`, `acsd`, `acotd` now accept an square matrix ([#39758]).
 
 #### Package Manager
@@ -94,7 +96,9 @@ Standard library changes
 * On aarch64, OpenBLAS now uses an ILP64 BLAS like all other 64-bit platforms. ([#39436])
 * OpenBLAS is updated to 0.3.13. ([#39216])
 * SuiteSparse is updated to 5.8.1. ([#39455])
+* The shape of an `UpperHessenberg` matrix is preserved under certain arithmetic operations, e.g. when multiplying or dividing by an `UpperTriangular` matrix. ([#40039])
 * `cis(A)` now supports matrix arguments ([#40194]).
+* `dot` now supports `UniformScaling` with `AbstractMatrix` ([#40250]).
 
 #### Markdown
 
@@ -109,6 +113,9 @@ Standard library changes
 
 
 #### SparseArrays
+
+* new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
+* `cholesky()` now fully preserves the user-specified permutation. ([#40560])
 
 
 #### Dates
@@ -131,6 +138,9 @@ Standard library changes
 
 * `mmap` is now exported ([#39816]).
 
+#### DelimitedFiles
+
+* `readdlm` now defaults to `use_mmap=false` on all OSes for consistent reliability in abnormal filesystem situations ([#40415]).
 
 Deprecated or removed
 ---------------------

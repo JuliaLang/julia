@@ -16,6 +16,21 @@ using SparseArrays: getcolptr
 # CHOLMOD tests
 Random.seed!(123)
 
+@testset "Check that the Common and Method Julia structs are consistent with their C counterparts" begin
+    common_size = ccall((:jl_cholmod_common_size, :libsuitesparse_wrapper), Csize_t, ())
+    @test common_size == sizeof(CHOLMOD.Common)
+
+    method_offsets = Vector{Csize_t}(undef,15)
+    ccall((:jl_cholmod_method_offsets, :libsuitesparse_wrapper),
+        Nothing, (Ptr{Csize_t},), method_offsets)
+    @test method_offsets == fieldoffset.(CHOLMOD.Method,1:length(method_offsets))
+
+    common_offsets = Vector{Csize_t}(undef,107)
+    ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
+        Nothing, (Ptr{Csize_t},), common_offsets)
+    @test common_offsets == fieldoffset.(CHOLMOD.Common,1:length(common_offsets))
+end
+
 @testset "based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/" begin
 
 # chm_rdsp(joinpath(Sys.BINDIR, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
@@ -223,8 +238,9 @@ end
         @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
         rm(testfile)
 
+        # this also tests that the error message is correctly retrieved from the library
         writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-        @test_throws ArgumentError sparse(CHOLMOD.Sparse(testfile))
+        @test_throws CHOLMOD.CHOLMODException("indices out of range") sparse(CHOLMOD.Sparse(testfile))
         rm(testfile)
     end
 end
@@ -237,8 +253,8 @@ end
 ## The struct pointer must be constructed by the library constructor and then modified afterwards to checks that the method throws
 @testset "illegal dtype (for now but should be supported at some point)" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 4)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -246,8 +262,8 @@ end
 
 @testset "illegal dtype" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 4)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -255,8 +271,8 @@ end
 
 @testset "illegal xtype" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 3)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -264,8 +280,8 @@ end
 
 @testset "illegal itype I" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 2)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -273,8 +289,8 @@ end
 
 @testset "illegal itype II" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Cvoid}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     puint = convert(Ptr{UInt32}, p)
     unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Cvoid}), 4) + 2)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -324,8 +340,8 @@ end
 # Test Sparse and Factor
 @testset "test free!" begin
     p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64}},
-        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Cvoid}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct[Threads.threadid()])
+        (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{CHOLMOD.Common}),
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common[Threads.threadid()])
     @test CHOLMOD.free!(p)
 end
 
@@ -779,12 +795,13 @@ end
     end
 end
 
-@testset "Check inputs to Sparse. Related to #20024" for A_ in (
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[]),
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[1.0]))
-    args = (size(A_)..., getcolptr(A_) .- 1, rowvals(A_) .- 1, nonzeros(A_))
-    @test_throws ArgumentError CHOLMOD.Sparse(args...)
-    @test_throws ArgumentError CHOLMOD.Sparse(A_)
+@testset "Check inputs to Sparse. Related to #20024" for t_ in (
+    (2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
+    (2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
+    (2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
+    (2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+    @test_throws ArgumentError SparseMatrixCSC(t_...)
+    @test_throws ArgumentError CHOLMOD.Sparse(t_[1], t_[2], t_[3] .- 1, t_[4] .- 1, t_[5])
 end
 
 @testset "sparse right multiplication of Symmetric and Hermitian matrices #21431" begin
@@ -893,4 +910,36 @@ end
     C = Sparse(spzeros(3, 0))
     @test C * C' == Sparse(spzeros(3, 3))
     @test C' * C == Sparse(spzeros(0, 0))
+end
+
+@testset "permutation handling" begin
+    @testset "default permutation" begin
+        # Assemble arrow matrix
+        A = sparse(5I,3,3)
+        A[:,1] .= 1; A[1,:] .= A[:,1]
+
+        # Ensure cholesky eliminates the fill-in
+        @test cholesky(A).p[1] != 1
+    end
+
+    @testset "user-specified permutation" begin
+        n = 100
+        A = sprand(n,n,5/n) |> t -> t't + I
+        @test cholesky(A, perm=1:n).p == 1:n
+    end
+end
+
+@testset "Check common is still in default state" begin
+    # This test intentially depends on all the above tests!
+    current_common = CHOLMOD.common[Threads.threadid()]
+    default_common = CHOLMOD.Common()
+    @test current_common.print == 0
+    for name in (
+        :nmethods,
+        :postorder,
+        :final_ll,
+        :supernodal,
+    )
+        @test getproperty(current_common, name) == getproperty(default_common, name)
+    end
 end

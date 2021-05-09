@@ -45,7 +45,6 @@ helpful to start contributing to the Julia codebase.
 
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
-- [**Meetup**](https://julia.meetup.com/)
 - [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
@@ -73,14 +72,14 @@ First, make sure you have all the [required
 dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
-    git clone git://github.com/JuliaLang/julia.git
+    git clone https://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
 Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.6.0
+    git checkout v1.6.1
 
 Now run `make` to build the `julia` executable.
 

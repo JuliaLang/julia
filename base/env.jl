@@ -32,7 +32,7 @@ if Sys.iswindows()
     function _unsetenv(svar::AbstractString)
         var = cwstring(svar)
         ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
-        windowserror(:setenv, ret == 0)
+        windowserror(:setenv, ret == 0 && Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND)
     end
 else # !windows
     _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)

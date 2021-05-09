@@ -500,8 +500,7 @@ static int exec_program(char *program)
         jl_load(jl_main_module, program);
     }
     JL_CATCH {
-        // TODO: It is possible for this output
-        //       to be mangled due to `jlbacktrace`
+        // TODO: It is possible for this output to be mangled due to `jl_print_backtrace`
         //       printing directly to STDERR_FILENO.
         int shown_err = 0;
         jl_printf(JL_STDERR, "error during bootstrap:\n");
@@ -520,31 +519,12 @@ static int exec_program(char *program)
             jl_static_show((JL_STREAM*)STDERR_FILENO, exc);
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         }
-        jlbacktrace(); // written to STDERR_FILENO
+        jl_print_backtrace(); // written to STDERR_FILENO
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         return 1;
     }
     return 0;
 }
-
-#ifdef JL_GF_PROFILE
-static void print_profile(void)
-{
-    size_t i;
-    void **table = jl_base_module->bindings.table;
-    for(i=1; i < jl_base_module->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->value != NULL && jl_is_function(b->value) &&
-                jl_is_gf(b->value)) {
-                jl_printf(JL_STDERR, "%d\t%s\n",
-                           jl_gf_mtable(b->value)->ncalls,
-                           jl_gf_name(b->value)->name);
-            }
-        }
-    }
-}
-#endif
 
 static NOINLINE int true_main(int argc, char *argv[])
 {
@@ -573,9 +553,9 @@ static NOINLINE int true_main(int argc, char *argv[])
         }
     }
 
-    ios_puts("WARNING: Base._start not defined, falling back to economy mode repl.\n", ios_stdout);
+    jl_printf(JL_STDOUT, "WARNING: Base._start not defined, falling back to economy mode repl.\n");
     if (!jl_errorexception_type)
-        ios_puts("WARNING: jl_errorexception_type not defined; any errors will be fatal.\n", ios_stdout);
+        jl_printf(JL_STDOUT, "WARNING: jl_errorexception_type not defined; any errors will be fatal.\n");
 
     while (!ios_eof(ios_stdin)) {
         char *volatile line = NULL;
@@ -597,7 +577,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_printf(JL_STDOUT, "\n");
             free(line);
             line = NULL;
-            uv_run(jl_global_event_loop(),UV_RUN_NOWAIT);
+            jl_process_events();
         }
         JL_CATCH {
             if (line) {
@@ -607,7 +587,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_printf((JL_STREAM*)STDERR_FILENO, "\nparser error:\n");
             jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-            jlbacktrace(); // written to STDERR_FILENO
+            jl_print_backtrace(); // written to STDERR_FILENO
         }
     }
     return 0;
@@ -665,7 +645,7 @@ static void rr_detach_teleport(void) {
 #endif
 }
 
-JL_DLLEXPORT int repl_entrypoint(int argc, char *argv[])
+JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 {
     // no-op on Windows, note that the caller must have already converted
     // from `wchar_t` to `UTF-8` already if we're running on Windows.
