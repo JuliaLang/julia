@@ -1661,6 +1661,30 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
+    (a, b, c...) ≈ (a′, b′, c′...)
+
+!!! compat "Julia 1.7"
+    Applying `isapprox` to tuples requires Julia 1.7 or later.
+
+```jldoctest
+julia> (1, [2,3]) ≈ (1.0, [2.0, 3+10eps()])
+true
+
+julia> (a=1, b=2) ≈ (b=2.0, a=nextfloat(1.0))
+true
+```
+"""
+function isapprox(xs::Union{Tuple,NamedTuple}, ys::Union{Tuple,NamedTuple}; kwargs...)
+    length(xs) == length(ys) || throw(ArgumentError("lengths must match"))
+    all(xy -> (xy[1], xy[2]; kwargs...), zip(xs, ys))
+end
+
+function isapprox(xs::NamedTuple, ys::NamedTuple; kwargs...)
+    sort(collect(keys(xs))) == sort(collect(keys(ys))) || throw(ArgumentError("keys must match"))
+    all(isapprox(xs[k], ys[k]; kwargs...) for k in keys(xs))
+end
+
+"""
     normalize!(a::AbstractArray, p::Real=2)
 
 Normalize the array `a` in-place so that its `p`-norm equals unity,
