@@ -428,7 +428,7 @@ for itype in UmfpackIndexTypes
         end
         function logabsdet(F::UmfpackLU{T, $itype}) where {T} # return log(abs(det)) and sign(det)
             n = checksquare(F)
-            issuccess(F) || return log(zero(real(T))), log(one(T))
+            issuccess(F) || return log(zero(real(T))), zero(T)
             U = F.U
             Rs = F.Rs
             p = F.p
