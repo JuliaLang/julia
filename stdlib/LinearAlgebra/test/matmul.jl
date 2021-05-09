@@ -766,4 +766,15 @@ end
     @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
 end
 
+struct BrokenInt <: Number
+   i::Int
+end
+Base.:*(::BrokenInt, ::BrokenInt) = BrokenInt(42)
+Base.:+(::BrokenInt, ::BrokenInt) = BrokenInt(42)
+Base.zero(::BrokenInt) = BrokenInt(0)
+Base.conj(b::BrokenInt) = b.i == 42 ? b : error()
+@testset "matmul uninit memory #40481" begin
+    @test fill(BrokenInt(42), 10,100)' * fill(BrokenInt(42), 100,10)' == fill(BrokenInt(42), 100, 100)
+end
+
 end # module TestMatmul
