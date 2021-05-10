@@ -23,7 +23,7 @@ if Sys.iswindows()
 elseif Sys.isapple()
     const libLLVM = "@rpath/libLLVM.dylib"
 else
-    const libLLVM = "libLLVM-11jl.so"
+    const libLLVM = "libLLVM-12jl.so"
 end
 
 function __init__()
