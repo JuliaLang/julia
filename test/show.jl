@@ -808,13 +808,20 @@ Base.methodloc_callback[] = nothing
     # test that no spurious visual lines are added when one element spans multiple lines
     v = fill!(Array{Any}(undef, 9), 0)
     v[1] = "look I'm wide! --- " ^ 9
-    @test replstr(v) == "9-element Vector{Any}:\n  \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0"
-    @test replstr([fill(0, 9) v]) == "9×2 Matrix{Any}:\n 0  …   \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0"
+    r = replstr(v)
+    @test startswith(r, "9-element Vector{Any}:\n  \"look I'm wide! ---")
+    @test endswith(r, "look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0")
+
     # test vertical/diagonal ellipsis
     v = fill!(Array{Any}(undef, 50), 0)
     v[1] = "look I'm wide! --- " ^ 9
-    @test replstr(v) == "50-element Vector{Any}:\n  \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n ⋮\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0"
-    @test replstr([fill(0, 50) v]) == "50×2 Matrix{Any}:\n 0  …   \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0\n ⋮  ⋱  \n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0"
+    r = replstr(v)
+    @test startswith(r, "50-element Vector{Any}:\n  \"look I'm wide! ---")
+    @test endswith(r, "look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n ⋮\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0")
+
+    r = replstr([fill(0, 50) v])
+    @test startswith(r, "50×2 Matrix{Any}:\n 0  …   \"look I'm wide! ---")
+    @test endswith(r, "look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0\n ⋮  ⋱  \n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0")
 
     # issue #34659
     @test replstr(Int32[]) == "Int32[]"
@@ -823,6 +830,45 @@ Base.methodloc_callback[] = nothing
     @test replstr(permutedims([Dict(),Dict()])) == "1×2 Matrix{Dict{Any, Any}}:\n Dict()  Dict()"
     @test replstr(permutedims([undef,undef])) == "1×2 Matrix{UndefInitializer}:\n UndefInitializer()  UndefInitializer()"
     @test replstr([zeros(3,0),zeros(2,0)]) == "2-element Vector{Matrix{Float64}}:\n 3×0 Matrix{Float64}\n 2×0 Matrix{Float64}"
+end
+
+# string show with elision
+@testset "string show with elision" begin
+    @testset "elision logic" begin
+        strs = ["A", "∀", "∀A", "A∀", "😃"]
+        for limit = 0:100, len = 0:100, str in strs
+            str = str^len
+            str = str[1:nextind(str, 0, len)]
+            out = sprint() do io
+                show(io, MIME"text/plain"(), str; limit)
+            end
+            lower = length("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
+            limit = max(limit, lower)
+            if length(str) + 2 ≤ limit
+                @test eval(Meta.parse(out)) == str
+            else
+                @test limit-!isascii(str) <= length(out) <= limit
+                re = r"(\"[^\"]*\") ⋯ (\d+) bytes ⋯ (\"[^\"]*\")"
+                m = match(re, out)
+                head = eval(Meta.parse(m.captures[1]))
+                tail = eval(Meta.parse(m.captures[3]))
+                skip = parse(Int, m.captures[2])
+                @test startswith(str, head)
+                @test endswith(str, tail)
+                @test ncodeunits(str) ==
+                    ncodeunits(head) + skip + ncodeunits(tail)
+            end
+        end
+    end
+
+    @testset "default elision limit" begin
+        r = replstr("x"^1000)
+        @test length(r) == 7*80
+        @test r == repr("x"^271) * " ⋯ 459 bytes ⋯ " * repr("x"^270)
+        r = replstr(["x"^1000])
+        @test length(r) < 120
+        @test r == "1-element Vector{String}:\n " * repr("x"^31) * " ⋯ 939 bytes ⋯ " * repr("x"^30)
+    end
 end
 
 # Issue 14121
