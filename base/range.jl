@@ -940,7 +940,7 @@ function ==(r::OrdinalRange, s::OrdinalRange)
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
-==(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
+==(r::AbstractUnitRange, s::AbstractUnitRange) =
     (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (last(r) == last(s)))
 
 ==(r::OneTo, s::OneTo) = last(r) == last(s)
