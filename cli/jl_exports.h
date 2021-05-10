@@ -10,13 +10,19 @@
 JL_EXPORTED_DATA_POINTERS(XX)
 #undef XX
 
-// Define symbol data as `$type) $(name);`
+// Define symbol data as `$(type) $(name);`
 #define XX(name, type)    JL_DLLEXPORT type name;
 JL_EXPORTED_DATA_SYMBOLS(XX)
 #undef XX
 
-// Define holder locations for function addresses as `const void * $(name)_addr`
-#define XX(name)    JL_HIDDEN const void * name##_addr;
+// Declare list of exported functions (sans type)
+#define XX(name)    JL_DLLEXPORT void name(void);
+typedef void (anonfunc)(void);
+JL_EXPORTED_FUNCS(XX)
+#undef XX
+
+// Define holder locations for function addresses as `const void * $(name)_addr = & $(name);`
+#define XX(name)    JL_HIDDEN anonfunc * name##_addr = (anonfunc*)&name;
 JL_EXPORTED_FUNCS(XX)
 #undef XX
 
@@ -29,7 +35,7 @@ static const char *const jl_exported_func_names[] = {
 #undef XX
 
 #define XX(name)    &name##_addr,
-static const void ** jl_exported_func_addrs[] = {
+static anonfunc **const jl_exported_func_addrs[] = {
     JL_EXPORTED_FUNCS(XX)
     NULL
 };
