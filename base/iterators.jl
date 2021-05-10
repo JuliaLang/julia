@@ -158,7 +158,7 @@ size(e::Enumerate) = size(e.itr)
 @propagate_inbounds function iterate(e::Enumerate, state=(1,))
     i, rest = state[1], tail(state)
     n = iterate(e.itr, rest...)
-    n === nothing && return N
+    n === nothing && return n
     (i, n[1]), (i+1, n[2])
 end
 
