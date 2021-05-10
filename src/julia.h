@@ -829,6 +829,9 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_gc_enable(int on);
 JL_DLLEXPORT int jl_gc_is_enabled(void);
+JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
+JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT;
 
 typedef enum {
     JL_GC_AUTO = 0,         // use heuristics to determine the collection type
