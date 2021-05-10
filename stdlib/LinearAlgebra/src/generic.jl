@@ -903,6 +903,9 @@ function dot(x, y) # arbitrary iterables
 end
 
 dot(x::Number, y::Number) = conj(x) * y
+dot(::Any, ::Missing) = missing
+dot(::Missing, ::Any) = missing
+dot(::Missing, ::Missing) = missing
 
 function dot(x::AbstractArray, y::AbstractArray)
     lx = length(x)
