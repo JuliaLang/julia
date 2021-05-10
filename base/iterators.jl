@@ -151,13 +151,14 @@ julia> for (index, value) in enumerate(a)
 ```
 """
 enumerate(iter) = Enumerate(iter)
+
 firstindex(e::Enumerate) = firstindex(e.itr)
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
 @propagate_inbounds function iterate(e::Enumerate, state=(1,))
     i, rest = state[1], tail(state)
     n = iterate(e.itr, rest...)
-    n === nothing && return n
+    n === nothing && return N
     (i, n[1]), (i+1, n[2])
 end
 
