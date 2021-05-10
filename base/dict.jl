@@ -45,10 +45,6 @@ end
 
 # Dict
 
-# These can be changed, to trade off better performance for space
-const global maxallowedprobe = 16
-const global maxprobeshift   = 6
-
 """
     Dict([itr])
 
@@ -336,7 +332,11 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
 
     avail < 0 && return avail
 
+    # These can be changed, to trade off better performance for space
+    maxallowedprobe = 16
+    maxprobeshift = 6
     maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
+
     # Check if key is not present, may need to keep searching to find slot
     @inbounds while iter < maxallowed
         if !isslotfilled(h,index)
