@@ -85,7 +85,7 @@ Standard library changes
   ```
   ([#39322])
 * `@lock` is now exported from Base ([#39588]).
-* Some degree trigonometric functions, `sind`, `cosd`, `tand`, `asind`, `acosd`, `asecd`, `acsd`, `acotd` now accept an square matrix ([#39758]).
+* Some degree trigonometric functions, `sind`, `cosd`, `tand`, `asind`, `acosd`, `asecd`, `acscd`, `acotd` now accept an square matrix ([#39758]).
 
 #### Package Manager
 
