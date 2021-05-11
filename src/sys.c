@@ -13,6 +13,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "llvm-version.h"
 
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
@@ -668,7 +669,13 @@ JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT {
     HMODULE mod;
     // FIXME: GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS on LLVMContextCreate,
     //        but that just points to libjulia.dll
-    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, "LLVM", &mod))
+#if JL_LLVM_VERSION <= 110000
+    const char* libLLVM = "LLVM";
+#else
+    const char* libLLVM = "libLLVM";
+#endif
+
+    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, libLLVM, &mod))
         return jl_nothing;
 
     char path[MAX_PATH];
