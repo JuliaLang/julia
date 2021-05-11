@@ -449,6 +449,14 @@ end
     @test Printf.@sprintf("%e", 1) == "1.000000e+00"
     @test Printf.@sprintf("%g", 1) == "1"
 
+    # issue #39748
+    @test Printf.@sprintf("%.16g", 194.4778127560983) == "194.4778127560983"
+    @test Printf.@sprintf("%.17g", 194.4778127560983) == "194.4778127560983"
+    @test Printf.@sprintf("%.18g", 194.4778127560983) == "194.477812756098302"
+    @test Printf.@sprintf("%.1g", 1.7976931348623157e308) == "2e+308"
+    @test Printf.@sprintf("%.2g", 1.7976931348623157e308) == "1.8e+308"
+    @test Printf.@sprintf("%.3g", 1.7976931348623157e308) == "1.8e+308"
+
     # escaped '%'
     @test_throws ArgumentError @sprintf("%s%%%s", "a")
     @test @sprintf("%s%%%s", "a", "b") == "a%b"
