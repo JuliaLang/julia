@@ -191,6 +191,7 @@ function modules_to_be_loaded(ast, mods = Symbol[])
     end
     return mods
 end
+modules_to_be_loaded(::Nothing) = Symbol[] # comments are parsed as nothing
 
 """
     start_repl_backend(repl_channel::Channel, response_channel::Channel)
