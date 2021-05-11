@@ -153,6 +153,8 @@ julia> for (index, value) in enumerate(a)
 enumerate(iter) = Enumerate(iter)
 
 firstindex(e::Enumerate) = firstindex(e.itr)
+getindex(e::Enumerate,i::Int) = (i,getindex(e.itr,i))
+
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
 @propagate_inbounds function iterate(e::Enumerate, state=(1,))
