@@ -221,6 +221,9 @@ end
 ```
 !!! note
     If the function is trivial (for example returning a constant) it might get inlined anyway.
+
+!!! compat "Julia 1.7"
+    Callsite usage requires at least Julia 1.7
 """
 macro noinline(ex)
     if isa(ex, Expr)
