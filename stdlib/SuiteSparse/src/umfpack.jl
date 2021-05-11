@@ -426,7 +426,7 @@ for itype in UmfpackIndexTypes
                         mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[], mz[])
         end
-        function logabsdet(F::UmfpackLU{T, $itype}) where {T} # return log(abs(det)) and sign(det)
+        function logabsdet(F::UmfpackLU{T, $itype}) where {T<:Union{Float64,ComplexF64}} # return log(abs(det)) and sign(det)
             n = checksquare(F)
             issuccess(F) || return log(zero(real(T))), zero(T)
             U = F.U
