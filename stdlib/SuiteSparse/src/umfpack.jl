@@ -6,7 +6,7 @@ export UmfpackLU
 
 import Base: (\), getproperty, show, size
 using LinearAlgebra
-import LinearAlgebra: Factorization, det, lu, lu!, ldiv!
+import LinearAlgebra: Factorization, checksquare, det, logabsdet, lu, lu!, ldiv!
 
 using SparseArrays
 using SparseArrays: getcolptr
@@ -279,6 +279,26 @@ function deserialize(s::AbstractSerializer, t::Type{UmfpackLU{Tv,Ti}}) where {Tv
     return obj
 end
 
+# compute the sign/parity of a permutation
+function _signperm(p)
+    n = length(p)
+    result = 0
+    todo = trues(n)
+    while any(todo)
+        k = findfirst(todo)
+        todo[k] = false
+        result += 1 # increment element count
+        j = p[k]
+        while j != k
+            result += 1 # increment element count
+            todo[j] = false
+            j = p[j]
+        end
+        result += 1 # increment cycle count
+    end
+    return ifelse(isodd(result), -1, 1)
+end
+
 ## Wrappers for UMFPACK functions
 
 # generate the name of the C function according to the value and integer types
@@ -405,6 +425,23 @@ for itype in UmfpackIndexTypes
                         (Ptr{Float64},Ptr{Float64},Ptr{Float64},Ptr{Cvoid},Ptr{Float64}),
                         mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[], mz[])
+        end
+        function logabsdet(F::UmfpackLU{T, $itype}) where {T<:Union{Float64,ComplexF64}} # return log(abs(det)) and sign(det)
+            n = checksquare(F)
+            issuccess(F) || return log(zero(real(T))), zero(T)
+            U = F.U
+            Rs = F.Rs
+            p = F.p
+            q = F.q
+            s = _signperm(p)*_signperm(q)*one(real(T))
+            P = one(T)
+            abs_det = zero(real(T))
+            @inbounds for i in 1:n
+                dg_ii = U[i, i] / Rs[i]
+                P *= sign(dg_ii)
+                abs_det += log(abs(dg_ii))
+            end
+            return abs_det, s * P
         end
         function umf_lunz(lu::UmfpackLU{Float64,$itype})
             lnz = Ref{$itype}()
