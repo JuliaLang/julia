@@ -1298,27 +1298,32 @@ end
 
 @testset "Install missing packages via hooks" begin
     @testset "Parse AST for packages" begin
-        mods = REPL.modules_to_be_loaded(Meta.parse("using Foo"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("import Foo"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("using Foo, Bar"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo, Bar"))
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Meta.parse("import Foo, Bar"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
         @test mods == [:Foo, :Bar]
 
-        mods = REPL.modules_to_be_loaded(Meta.parse("if false using Foo end"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("if false if false using Foo end end"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false if false using Foo end end"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("if false using Foo, Bar end"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo, Bar end"))
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Meta.parse("if false using Foo: bar end"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo: bar end"))
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Meta.parse("import Foo.bar as baz"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo.bar as baz"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("using .Foo"))
-        @test mods == []
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("# comment"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
+        @test isempty(mods)
     end
 end
