@@ -67,21 +67,10 @@ function _threadsfor(iter, lbody, schedule)
                 len, rem = 1, 0
             end
             # compute this thread's iterations
-            f = firstindex(r) + ((tid-1) * len)
-            l = f + len - 1
-            # distribute remaining iterations evenly
-            if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
-                else
-                    f = f + rem
-                    l = l + rem
-                end
-            end
+            dropvals = (tid-1)*len + min(rem, tid-1)
+            chunklen = len + (tid <= rem)
             # run this thread's iterations
-            for i = f:l
-                local $(esc(lidx)) = @inbounds r[i]
+            for $(esc(lidx)) = Iterators.take(Iterators.drop(r, dropvals), chunklen)
                 $(esc(lbody))
             end
         end

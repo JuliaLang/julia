@@ -5,6 +5,8 @@ Multithreading support.
 """
 module Threads
 
+import ..Iterators
+
 global Condition # we'll define this later, make sure we don't import Base.Condition
 
 include("threadingconstructs.jl")

@@ -874,3 +874,11 @@ end
     end
     @test sort!(collect(ys)) == 1:3
 end
+
+# issue 40704
+@test begin
+    @threads for (i,j) = enumerate(2:5)
+        @assert i + 1 == j
+    end
+    true
+end
