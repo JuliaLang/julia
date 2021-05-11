@@ -229,6 +229,7 @@ Base.isnothing
 Base.notnothing
 Base.Some
 Base.something
+Base.@something
 Base.Enums.Enum
 Base.Enums.@enum
 Core.Expr
@@ -287,6 +288,7 @@ Base.@deprecate
 Base.Missing
 Base.missing
 Base.coalesce
+Base.@coalesce
 Base.ismissing
 Base.skipmissing
 Base.nonmissingtype
