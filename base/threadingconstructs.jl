@@ -42,6 +42,18 @@ function threading_run(func)
     end
 end
 
+function _threadpart(A::AbstractArray, len, rem, threadid)
+    start = firstindex(A) + (threadid-1)*len + min(rem, threadid-1)
+    stop = start + len - (threadid > rem)
+    view(A, start:stop)
+end
+
+function _threadpart(itr, len, rem, threadid)
+    dropvals = (threadid-1)*len + min(rem, threadid-1)
+    chunklen = len + (threadid <= rem)
+    Iterators.take(Iterators.drop(itr, dropvals), chunklen)
+end
+
 function _threadsfor(iter, lbody, schedule)
     lidx = iter.args[1]         # index
     range = iter.args[2]
@@ -66,11 +78,8 @@ function _threadsfor(iter, lbody, schedule)
                 end
                 len, rem = 1, 0
             end
-            # compute this thread's iterations
-            dropvals = (tid-1)*len + min(rem, tid-1)
-            chunklen = len + (tid <= rem)
             # run this thread's iterations
-            for $(esc(lidx)) = Iterators.take(Iterators.drop(r, dropvals), chunklen)
+            for $(esc(lidx)) = _threadpart(r, len, rem, tid)
                 $(esc(lbody))
             end
         end
