@@ -692,6 +692,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createJumpThreadingPass());
+    PM->add(createCorrelatedValuePropagationPass());
 
     PM->add(createReassociatePass());
 
@@ -743,6 +744,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // loops over Union-typed arrays to vectorize.
     PM->add(createInstructionCombiningPass());
     PM->add(createJumpThreadingPass());
+    PM->add(createCorrelatedValuePropagationPass());
     PM->add(createDeadStoreEliminationPass());
 
     // More dead allocation (store) deletion before loop optimization
