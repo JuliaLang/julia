@@ -320,10 +320,10 @@ julia> join([1,2,3,4,5])
 "12345"
 ```
 """
-function join(io::IO, strings, delim, last)
+function join(io::IO, string_iterator, delim, last)
     first = true
     local prev
-    for str in strings
+    for str in string_iterator
         if @isdefined prev
             first ? (first = false) : print(io, delim)
             print(io, prev)
@@ -336,19 +336,19 @@ function join(io::IO, strings, delim, last)
     end
     nothing
 end
-function join(io::IO, strings, delim="")
+function join(io::IO, string_iterator, delim="")
     # Specialization of the above code when delim==last,
     # which lets us emit (compile) less code
     first = true
-    for str in strings
+    for str in string_iterator
         first ? (first = false) : print(io, delim)
         print(io, str)
     end
 end
 
-join(strings) = sprint(join, strings)
-join(strings, delim) = sprint(join, strings, delim)
-join(strings, delim, last) = sprint(join, strings, delim, last)
+join(string_iterator) = sprint(join, string_iterator)
+join(string_iterator, delim) = sprint(join, string_iterator, delim)
+join(string_iterator, delim, last) = sprint(join, string_iterator, delim, last)
 
 ## string escaping & unescaping ##
 
