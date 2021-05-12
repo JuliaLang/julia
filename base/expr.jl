@@ -227,13 +227,16 @@ end
 """
 macro noinline(ex)
     if isa(ex, Expr)
-        if ex.head === :call
+        if ex.head === :function || is_short_function_def(ex) || ex.head === :->
+            # function definition noinline
+            esc(pushmeta!(ex, :noinline))
+        else
             # callsite noinline
             return Expr(:block,
-                        Expr(:noinline),
-                        esc(ex))
-        else
-            esc(pushmeta!(ex, :noinline))
+                        Expr(:noinline, true),
+                        Expr(:local, Expr(:(=), :val, esc(ex))),
+                        Expr(:noinline, false),
+                        :val)
         end
     else
         esc(ex)

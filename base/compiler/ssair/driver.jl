@@ -95,7 +95,8 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             end
             stmt = nothing
         elseif isexpr(stmt, :noinline)
-            disable_inline = true
+            arg1 = stmt.args[1]
+            disable_inline = arg1
             stmt = nothing
         else
             stmt = normalize(stmt, meta)
@@ -107,7 +108,6 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             end
             if disable_inline
                 flags[i] |= IR_FLAG_NOINLINE
-                disable_inline = false;
             end
         end
     end

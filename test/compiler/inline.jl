@@ -328,14 +328,14 @@ let ci = code_typed(g18773, Tuple{Int})[1].first
         isexpr(ci.code[1], :invoke) &&
         ci.code[1].args[1].def.name == :f18773
 end
-# Test that `@noinline` only binds to the next call
+# Test that `@noinline` works across entire expression
 h18773(x) = @noinline f18773(x) + f18773(x)
 let ci = code_typed(h18773, Tuple{Int})[1].first
-    @test length(ci.code) == 3 &&
+    @test length(ci.code) == 4 &&
         isexpr(ci.code[1], :invoke) &&
         ci.code[1].args[1].def.name == :f18773 &&
-        isexpr(ci.code[2], :call) &&
-        ci.code[2].args[1] == GlobalRef(Base, :add_int)
+        isexpr(ci.code[2], :invoke) &&
+        ci.code[2].args[1].def.name == :f18773
 end
 
 # Test that we can inline small constants even if they are not isbits

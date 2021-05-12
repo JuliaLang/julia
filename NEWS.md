@@ -11,6 +11,7 @@ New language features
   as `.&&` and `.||`. ([#39594])
 * `⫪` (U+2AEA, `\Top`, `\downvDash`) and `⫫` (U+2AEB, `\Bot`, `\upvDash`, `\indep`)
   may now be used as binary operators with comparison precedence. ([#39403])
+* `@noinline` can now be used at function callsites ([#40754]).
 
 Language changes
 ----------------
