@@ -1829,6 +1829,21 @@ dimensions for every new input array and putting zero blocks elsewhere. For exam
 `cat(matrices...; dims=(1,2))` builds a block diagonal matrix, i.e. a block matrix with
 `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
 diagonal.
+
+# Examples
+```jldoctest
+julia> cat(dims=[1, 2], fill(1, 1, 1), fill(2, 2, 2))
+3×3 Matrix{Int64}:
+1  0  0
+0  2  2
+0  2  2
+
+
+julia> cat(dims=[1, 2], [1 2], [3 4])
+2×4 Matrix{Int64}:
+1  2  0  0
+0  0  3  4
+```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
 _cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(T, A...; dims=catdims)
