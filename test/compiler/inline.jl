@@ -338,6 +338,43 @@ let ci = code_typed(h18773, Tuple{Int})[1].first
         ci.code[2].args[1].def.name == :f18773
 end
 
+# Test inlining/noinlining of code within `do` blocks
+@inline simple_caller(a) = a()
+function do_inline(x)
+    simple_caller() do
+        @inline
+        # Tests `@inline`'s ability to override the lack of inline
+        # that these `println` statements would have caused
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        x
+    end
+end
+let ci = code_typed(do_inline, Tuple{Int})[1].first
+    # A long body indicates inlining occurred
+    @test length(ci.code) == 25
+end
+function do_noinline(x)
+    simple_caller() do
+        @noinline
+        x
+    end
+end
+let ci = code_typed(do_noinline, Tuple{Int})[1].first
+    @test length(ci.code) == 3 &&
+        isexpr(ci.code[2], :invoke)
+end
+
 # Test that we can inline small constants even if they are not isbits
 struct NonIsBitsDims
     dims::NTuple{N, Int} where N

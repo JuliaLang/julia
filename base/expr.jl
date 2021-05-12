@@ -186,6 +186,10 @@ Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
 an extra nudge can be given to the compiler to inline it. `@inline` can
 only be used at function definitions.
+
+If `@inline` is used at the beginning of a `do` block of a function
+call, the `do` block will be marked for inlining.
+
 This is shown in the following example:
 
 ```julia
@@ -194,11 +198,25 @@ This is shown in the following example:
         Function Definition
     =#
 end
+
+bigfunction2() do
+    @inline
+    #=
+        Do Body
+    #=
 ```
+
+!!! compat "Julia 1.7"
+    Usage in `do` blocks requires at least Julia 1.7
 """
 macro inline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
 end
+
+macro inline()
+    Expr(:meta, :inline)
+end
+
 
 """
     @noinline
@@ -207,8 +225,16 @@ Give a hint to the compiler that it should not inline a function.
 
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
-prevented. `@noinline` can be used both at function definitions and
-at function calls. This is shown in the following examples:
+prevented. `@noinline` can be used at function definitions,
+function calls, and in `do` blocks.
+
+If `@noinline` is used at the beginning of a `do` block of a function
+call, the `do` block won't be inlined but the function itself still
+could be. Similarily, if `@noinline` is specified immediately before a
+function call with a `do` block, that function won't be inlined
+but the `do` block body could possibly be.
+
+This is shown in the following examples:
 
 ```julia
 @noinline function smallfunction(x)
@@ -218,12 +244,22 @@ at function calls. This is shown in the following examples:
 end
 
 @noinline previouslydefinedfunction(x)
+
+f() do
+    @noinline
+    #=
+        Do Body
+    #=
 ```
+
 !!! note
     If the function is trivial (for example returning a constant) it might get inlined anyway.
 
 !!! compat "Julia 1.7"
     Callsite usage requires at least Julia 1.7
+
+!!! compat "Julia 1.7"
+    Usage in `do` blocks requires at least Julia 1.7
 """
 macro noinline(ex)
     if isa(ex, Expr)
@@ -241,6 +277,10 @@ macro noinline(ex)
     else
         esc(ex)
     end
+end
+
+macro noinline()
+    Expr(:meta, :noinline)
 end
 
 """
