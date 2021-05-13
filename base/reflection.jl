@@ -293,7 +293,7 @@ macro locals()
 end
 
 """
-    objectid(x)
+    objectid(x) -> UInt
 
 Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
 
@@ -1292,12 +1292,12 @@ end
 
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
-function _which(@nospecialize(tt::Type), world=typemax(UInt))
+function _which(@nospecialize(tt::Type), world=get_world_counter())
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
     match = ccall(:jl_gf_invoke_lookup_worlds, Any,
         (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
-        tt, typemax(UInt), min_valid, max_valid)
+        tt, world, min_valid, max_valid)
     if match === nothing
         error("no unique matching method found for the specified argument types")
     end

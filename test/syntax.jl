@@ -819,7 +819,7 @@ let f = function (x; kw...)
 end
 
 # normalization of Unicode symbols (#19464)
-let ε=1, μ=2, x=3, î=4
+let ε=1, μ=2, x=3, î=4, ⋅=5
     # issue #5434 (mu vs micro):
     @test Meta.parse("\u00b5") === Meta.parse("\u03bc")
     @test µ == μ == 2
@@ -829,6 +829,9 @@ let ε=1, μ=2, x=3, î=4
     # latin vs greek ε (#14751)
     @test Meta.parse("\u025B") === Meta.parse("\u03B5")
     @test ɛ == ε == 1
+    # middot char · or · vs math dot operator ⋅ (#25098)
+    @test Meta.parse("\u00b7") === Meta.parse("\u0387") === Meta.parse("\u22c5")
+    @test (·) == (·) == (⋅) == 5
 end
 
 # issue #8925
@@ -1860,7 +1863,7 @@ end
 @test_throws UndefVarError eval(:(1+$(Symbol(""))))
 
 # issue #31404
-f31404(a, b; kws...) = (a, b, kws.data)
+f31404(a, b; kws...) = (a, b, values(kws))
 @test f31404(+, (Type{T} where T,); optimize=false) === (+, (Type,), (optimize=false,))
 
 # issue #28992

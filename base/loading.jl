@@ -203,7 +203,6 @@ function get_updated_dict(p::TOML.Parser, f::CachedTOMLDict)
             f.mtime = s.mtime
             f.size = s.size
             f.hash = new_hash
-            @debug "Cache of TOML file $(repr(f.path)) invalid, reparsing..."
             TOML.reinit!(p, String(content); filepath=f.path)
             return f.d = TOML.parse(p)
         end
@@ -222,7 +221,6 @@ parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
         if !haskey(toml_cache.d, project_file)
-            @debug "Creating new cache for $(repr(project_file))"
             d = CachedTOMLDict(toml_cache.p, project_file)
             toml_cache.d[project_file] = d
             return d.d
@@ -1751,7 +1749,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         # now check if this file is fresh relative to its source files
         if !skip_timecheck
             if !samefile(includes[1].filename, modpath)
-                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename)) not file $modpath"
+                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                 return true # cache file was compiled from a different path
             end
             for (modkey, req_modkey) in requires

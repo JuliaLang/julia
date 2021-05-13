@@ -702,9 +702,10 @@ end
 function opnorm2(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
     m,n = size(A)
-    if m == 1 || n == 1 return norm2(A) end
     Tnorm = typeof(float(real(zero(T))))
-    (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
+    if m == 0 || n == 0 return zero(Tnorm) end
+    if m == 1 || n == 1 return norm2(A) end
+    return svdvals(A)[1]
 end
 
 function opnormInf(A::AbstractMatrix{T}) where T
@@ -1291,15 +1292,17 @@ false
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
+    return _istriu(A, k)
+end
+istriu(x::Number) = true
+
+@inline function _istriu(A::AbstractMatrix, k)
     m, n = size(A)
     for j in 1:min(n, m + k - 1)
-        for i in max(1, j - k + 1):m
-            iszero(A[i, j]) || return false
-        end
+        all(iszero, view(A, max(1, j - k + 1):m, j)) || return false
     end
     return true
 end
-istriu(x::Number) = true
 
 """
     istril(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1333,15 +1336,17 @@ false
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
+    return _istril(A, k)
+end
+istril(x::Number) = true
+
+@inline function _istril(A::AbstractMatrix, k)
     m, n = size(A)
     for j in max(1, k + 2):n
-        for i in 1:min(j - k - 1, m)
-            iszero(A[i, j]) || return false
-        end
+        all(iszero, view(A, 1:min(j - k - 1, m), j)) || return false
     end
     return true
 end
-istril(x::Number) = true
 
 """
     isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool

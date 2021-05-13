@@ -58,7 +58,6 @@ static void jl_init_intrinsic_functions_codegen(void)
     float_func[lt_float_fast] = true;
     float_func[le_float_fast] = true;
     float_func[fpiseq] = true;
-    float_func[fpislt] = true;
     float_func[abs_float] = true;
     float_func[copysign_float] = true;
     float_func[ceil_llvm] = true;
@@ -199,11 +198,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(lt, offs) : i;
         while (fields.size() < llvm_idx)
             fields.push_back(
-#if JL_LLVM_VERSION >= 110000
                 UndefValue::get(GetElementPtrInst::getTypeAtIndex(lt, fields.size())));
-#else
-                UndefValue::get(cast<CompositeType>(lt)->getTypeAtIndex(fields.size())));
-#endif
         const uint8_t *ov = (const uint8_t*)ptr + offs;
         if (jl_is_uniontype(ft)) {
             // compute the same type layout as julia_struct_to_llvm
@@ -1163,26 +1158,6 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateOr(ctx.builder.CreateAnd(ctx.builder.CreateFCmpUNO(x, x),
                                                   ctx.builder.CreateFCmpUNO(y, y)),
                                 ctx.builder.CreateICmpEQ(xi, yi));
-    }
-
-    case fpislt: {
-        *newtyp = jl_bool_type;
-        Type *it = INTT(t);
-        Value *xi = ctx.builder.CreateBitCast(x, it);
-        Value *yi = ctx.builder.CreateBitCast(y, it);
-        return ctx.builder.CreateOr(
-            ctx.builder.CreateAnd(
-                ctx.builder.CreateFCmpORD(x, x),
-                ctx.builder.CreateFCmpUNO(y, y)),
-            ctx.builder.CreateAnd(
-                ctx.builder.CreateFCmpORD(x, y),
-                ctx.builder.CreateOr(
-                    ctx.builder.CreateAnd(
-                        ctx.builder.CreateICmpSGE(xi, ConstantInt::get(it, 0)),
-                        ctx.builder.CreateICmpSLT(xi, yi)),
-                    ctx.builder.CreateAnd(
-                        ctx.builder.CreateICmpSLT(xi, ConstantInt::get(it, 0)),
-                        ctx.builder.CreateICmpUGT(xi, yi)))));
     }
 
     case and_int: return ctx.builder.CreateAnd(x, y);

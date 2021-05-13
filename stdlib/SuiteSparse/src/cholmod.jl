@@ -45,9 +45,30 @@ macro cholmod_name(nm)
     string("cholmod_l_", nm)
 end
 
+# Set a `common` field, execute some code and then safely reset the field to
+# its initial value
+macro cholmod_param(kwarg, code)
+    @assert kwarg.head == :(=)
+    param = kwarg.args[1]
+    value = kwarg.args[2]
+
+    common_param = # Read `common.param`
+        Expr(:., :(common[Threads.threadid()]), QuoteNode(param))
+
+    return quote
+        default_value = $common_param
+        try
+            $common_param = $(esc(value))
+            $(esc(code))
+        finally
+            $common_param = default_value
+        end
+    end
+end
+
 # Julia copy of the cholmod_method_struct
 # https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/CHOLMOD/Include/cholmod_core.h#L655
-# Keep this synchronized with __init__() below and jl_cholmod_method_offsets in
+# Keep this synchronized with `jl_cholmod_method_offsets` in
 # https://github.com/JuliaLang/julia/blob/master/deps/SuiteSparse_wrapper.c
 struct Method
     lnz::Cdouble
@@ -69,7 +90,7 @@ end
 
 # Julia copy of the cholmod_common_struct
 # https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/CHOLMOD/Include/cholmod_core.h#L414
-# Keep this synchronized with __init__() below and jl_cholmod_common_offsets in
+# Keep this synchronized with `jl_cholmod_method_offsets` in
 # https://github.com/JuliaLang/julia/blob/master/deps/SuiteSparse_wrapper.c
 mutable struct Common
     dbound::Cdouble
@@ -182,11 +203,11 @@ mutable struct Common
 
     function Common()
         common = new()
-        @isok ccall((@cholmod_name("start"), :libcholmod),
+        ccall((@cholmod_name("start"), :libcholmod),
             Cint, (Ptr{Common},), common)
         finalizer(common) do common
-            @isok ccall((@cholmod_name("finish"), :libcholmod),
-                Cint, (Ptr{Common},), common)
+            ccall((@cholmod_name("finish"), :libcholmod),
+                  Cint, (Ptr{Common},), common) == TRUE
         end
     end
 end
@@ -197,7 +218,7 @@ Base.unsafe_convert(::Type{Ptr{Common}},c::Common) =
 const common = Vector{Common}()
 
 function defaults!(common)
-    @isok ccall((@cholmod_name("defaults"), :libcholmod),
+    ccall((@cholmod_name("defaults"), :libcholmod),
         Cint, (Ptr{Common},), common)
     return common
 end
@@ -274,9 +295,11 @@ function __init__()
         ### to temporary memory. We need to manage a copy for each thread.
         nt = Threads.nthreads()
         resize!(common, nt)
+        errorhandler = @cfunction(error_handler, Cvoid, (Cint, Cstring, Cint, Cstring))
         for i in 1:nt
             common[i] = Common()
             common[i].print = 0  # no printing from CHOLMOD by default
+            common[i].error_handler = errorhandler
         end
 
         # Register gc tracked allocator if CHOLMOD is new enough
@@ -518,9 +541,9 @@ function allocate_dense(m::Integer, n::Integer, d::Integer, ::Type{Tv}) where {T
 end
 
 function free!(p::Ptr{C_Dense{Tv}}) where {Tv<:VTypes}
-    @isok ccall((@cholmod_name("free_dense"), :libcholmod), Cint,
-                (Ref{Ptr{C_Dense{Tv}}}, Ptr{Common}),
-                p, common[Threads.threadid()])
+    ccall((@cholmod_name("free_dense"), :libcholmod), Cint,
+          (Ref{Ptr{C_Dense{Tv}}}, Ptr{Common}),
+          p, common[Threads.threadid()]) == TRUE
 end
 function zeros(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
     Dense(ccall((@cholmod_name("zeros"), :libcholmod), Ptr{C_Dense{Tv}},
@@ -551,9 +574,9 @@ function copy(A::Dense{Tv}) where Tv<:VTypes
 end
 
 function sort!(S::Sparse{Tv}) where Tv<:VTypes
-    @isok ccall((@cholmod_name("sort"), :libcholmod), Cint,
-                (Ptr{C_Sparse{Tv}}, Ptr{Common}),
-                S, common[Threads.threadid()])
+    ccall((@cholmod_name("sort"), :libcholmod), Cint,
+          (Ptr{C_Sparse{Tv}}, Ptr{Common}),
+          S, common[Threads.threadid()])
     return S
 end
 
@@ -592,16 +615,16 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
 end
 
 function free!(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
-    @isok ccall((@cholmod_name("free_sparse"), :libcholmod), Cint,
-            (Ref{Ptr{C_Sparse{Tv}}}, Ptr{Common}),
-                ptr, common[Threads.threadid()])
+    ccall((@cholmod_name("free_sparse"), :libcholmod), Cint,
+          (Ref{Ptr{C_Sparse{Tv}}}, Ptr{Common}),
+          ptr, common[Threads.threadid()]) == TRUE
 end
 
 function free!(ptr::Ptr{C_Factor{Tv}}) where Tv<:VTypes
     # Warning! Important that finalizer doesn't modify the global Common struct.
-    @isok ccall((@cholmod_name("free_factor"), :libcholmod), Cint,
-            (Ref{Ptr{C_Factor{Tv}}}, Ptr{Common}),
-                ptr, common[Threads.threadid()])
+    ccall((@cholmod_name("free_factor"), :libcholmod), Cint,
+          (Ref{Ptr{C_Factor{Tv}}}, Ptr{Common}),
+          ptr, common[Threads.threadid()]) == TRUE
 end
 
 function aat(A::Sparse{Tv}, fset::Vector{SuiteSparse_long}, mode::Integer) where Tv<:VRealTypes
@@ -635,9 +658,9 @@ end
 
 function change_factor!(F::Factor{Tv}, to_ll::Bool, to_super::Bool, to_packed::Bool,
                         to_monotonic::Bool) where Tv<:VTypes
-    @isok ccall((@cholmod_name("change_factor"),:libcholmod), Cint,
-            (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv}}, Ptr{Common}),
-                xtyp(Tv), to_ll, to_super, to_packed, to_monotonic, F, common[Threads.threadid()])
+    ccall((@cholmod_name("change_factor"),:libcholmod), Cint,
+          (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv}}, Ptr{Common}),
+          xtyp(Tv), to_ll, to_super, to_packed, to_monotonic, F, common[Threads.threadid()]) == TRUE
 end
 
 function check_sparse(A::Sparse{Tv}) where Tv<:VTypes
@@ -701,17 +724,19 @@ end
 ### cholmod_check.h ###
 function print_sparse(A::Sparse{Tv}, name::String) where Tv<:VTypes
     isascii(name) || error("non-ASCII name: $name")
-    common[Threads.threadid()] = 3
-    @isok ccall((@cholmod_name("print_sparse"),:libcholmod), Cint,
+    @cholmod_param print = 3 begin
+        ccall((@cholmod_name("print_sparse"),:libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}, Ptr{Common}),
-                 A, name, common[Threads.threadid()])
+                    A, name, common[Threads.threadid()])
+    end
     nothing
 end
 function print_factor(F::Factor{Tv}, name::String) where Tv<:VTypes
-    common[Threads.threadid()] = 3
-    @isok ccall((@cholmod_name("print_factor"),:libcholmod), Cint,
+    @cholmod_param print = 3 begin
+        ccall((@cholmod_name("print_factor"),:libcholmod), Cint,
             (Ptr{C_Factor{Tv}}, Ptr{UInt8}, Ptr{Common}),
                 F, name, common[Threads.threadid()])
+    end
     nothing
 end
 
@@ -771,9 +796,9 @@ function scale!(S::Dense{Tv}, scale::Integer, A::Sparse{Tv}) where Tv<:VRealType
     end
 
     sA = unsafe_load(pointer(A))
-    @isok ccall((@cholmod_name("scale"),:libcholmod), Cint,
-            (Ptr{C_Dense{Tv}}, Cint, Ptr{C_Sparse{Tv}}, Ptr{Common}),
-                S, scale, A, common[Threads.threadid()])
+    ccall((@cholmod_name("scale"),:libcholmod), Cint,
+          (Ptr{C_Dense{Tv}}, Cint, Ptr{C_Sparse{Tv}}, Ptr{Common}),
+          S, scale, A, common[Threads.threadid()])
     A
 end
 
@@ -785,11 +810,11 @@ function sdmult!(A::Sparse{Tv}, transpose::Bool,
     if nc != size(X, 1)
         throw(DimensionMismatch("incompatible dimensions, $nc and $(size(X,1))"))
     end
-    @isok ccall((@cholmod_name("sdmult"),:libcholmod), Cint,
-            (Ptr{C_Sparse{Tv}}, Cint,
-             Ref{ComplexF64}, Ref{ComplexF64},
-             Ptr{C_Dense{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Common}),
-                A, transpose, α, β, X, Y, common[Threads.threadid()])
+    ccall((@cholmod_name("sdmult"),:libcholmod), Cint,
+          (Ptr{C_Sparse{Tv}}, Cint,
+           Ref{ComplexF64}, Ref{ComplexF64},
+           Ptr{C_Dense{Tv}}, Ptr{C_Dense{Tv}}, Ptr{Common}),
+          A, transpose, α, β, X, Y, common[Threads.threadid()])
     Y
 end
 
@@ -831,18 +856,18 @@ function analyze_p(A::Sparse{Tv}, perm::Vector{SuiteSparse_long}) where Tv<:VTyp
                 A, perm, C_NULL, 0, common[Threads.threadid()]))
 end
 function factorize!(A::Sparse{Tv}, F::Factor{Tv}) where Tv<:VTypes
-    @isok ccall((@cholmod_name("factorize"),:libcholmod), Cint,
-        (Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{Common}),
-            A, F, common[Threads.threadid()])
+    ccall((@cholmod_name("factorize"),:libcholmod), Cint,
+          (Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{Common}),
+          A, F, common[Threads.threadid()])
     F
 end
 function factorize_p!(A::Sparse{Tv}, β::Real, F::Factor{Tv}) where Tv<:VTypes
     # note that β is passed as a complex number (double beta[2]),
     # but the CHOLMOD manual says that only beta[0] (real part) is used
-    @isok ccall((@cholmod_name("factorize_p"),:libcholmod), Cint,
-        (Ptr{C_Sparse{Tv}}, Ref{ComplexF64}, Ptr{SuiteSparse_long}, Csize_t,
-         Ptr{C_Factor{Tv}}, Ptr{Common}),
-            A, β, C_NULL, 0, F, common[Threads.threadid()])
+    ccall((@cholmod_name("factorize_p"),:libcholmod), Cint,
+          (Ptr{C_Sparse{Tv}}, Ref{ComplexF64}, Ptr{SuiteSparse_long}, Csize_t,
+           Ptr{C_Factor{Tv}}, Ptr{Common}),
+          A, β, C_NULL, 0, F, common[Threads.threadid()])
     F
 end
 
@@ -877,14 +902,10 @@ end
 
 # Autodetects the types
 function read_sparse(file::Libc.FILE, ::Type{SuiteSparse_long})
-    ptr = ccall((@cholmod_name("read_sparse"), :libcholmod),
-        Ptr{C_Sparse{Cvoid}},
-            (Ptr{Cvoid}, Ptr{Common}),
-                file.ptr, common[Threads.threadid()])
-    if ptr == C_NULL
-        throw(ArgumentError("sparse matrix construction failed. Check that input file is valid."))
-    end
-    Sparse(ptr)
+    Sparse(ccall((@cholmod_name("read_sparse"), :libcholmod),
+                 Ptr{C_Sparse{Cvoid}},
+                 (Ptr{Cvoid}, Ptr{Common}),
+                 file.ptr, common[Threads.threadid()]))
 end
 
 function read_sparse(file::IO, T)
@@ -963,7 +984,7 @@ function Sparse(m::Integer, n::Integer,
     unsafe_copyto!(s.i, pointer(rowval0), colptr0[n + 1])
     unsafe_copyto!(s.x, pointer(nzval) , colptr0[n + 1])
 
-    @isok check_sparse(o)
+    check_sparse(o)
 
     return o
 end
@@ -1022,7 +1043,7 @@ function Sparse{Tv}(A::SparseMatrixCSC, stype::Integer) where Tv<:VTypes
         end
     end
 
-    @isok check_sparse(o)
+    check_sparse(o)
 
     return o
 end
@@ -1096,60 +1117,46 @@ function Vector{T}(D::Dense{T}) where T
 end
 Vector(D::Dense{T}) where {T} = Vector{T}(D)
 
+function _extract_args(s)
+    return (s.nrow, s.ncol, increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), own = false)),
+        increment(unsafe_wrap(Array, s.i, (s.nzmax,), own = false)),
+        copy(unsafe_wrap(Array, s.x, (s.nzmax,), own = false)))
+end
+
+# Trim extra elements in rowval and nzval left around sometimes by CHOLMOD rutines
+function _trim_nz_builder!(m, n, colptr, rowval, nzval)
+    l = colptr[end] - 1
+    resize!(rowval, l)
+    resize!(nzval, l)
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
+end
+
 function SparseMatrixCSC{Tv,SuiteSparse_long}(A::Sparse{Tv}) where Tv
     s = unsafe_load(pointer(A))
     if s.stype != 0
         throw(ArgumentError("matrix has stype != 0. Convert to matrix " *
             "with stype == 0 before converting to SparseMatrixCSC"))
     end
-
-    B = SparseMatrixCSC(s.nrow, s.ncol,
-        increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), own = false)),
-        increment(unsafe_wrap(Array, s.i, (s.nzmax,), own = false)),
-        copy(unsafe_wrap(Array, s.x, (s.nzmax,), own = false)))
-
-    if s.sorted == 0
-        return SparseArrays.sortSparseMatrixCSC!(B)
-    else
-        return B
-    end
+    args = _extract_args(s)
+    s.sorted == 0 && _sort_buffers!(args...);
+    return _trim_nz_builder!(args...)
 end
 
 function Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A::Sparse{Float64})
     s = unsafe_load(pointer(A))
-    if !issymmetric(A)
-        throw(ArgumentError("matrix is not symmetric"))
-    end
-
-    B = Symmetric(SparseMatrixCSC(s.nrow, s.ncol,
-        increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), own = false)),
-        increment(unsafe_wrap(Array, s.i, (s.nzmax,), own = false)),
-        copy(unsafe_wrap(Array, s.x, (s.nzmax,), own = false))), s.stype > 0 ? :U : :L)
-
-    if s.sorted == 0
-        return SparseArrays.sortSparseMatrixCSC!(B.data)
-    else
-        return B
-    end
+    issymmetric(A) || throw(ArgumentError("matrix is not symmetric"))
+    args = _extract_args(s)
+    s.sorted == 0 && _sort_buffers!(args...)
+    Symmetric(_trim_nz_builder!(args...), s.stype > 0 ? :U : :L)
 end
 convert(T::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}}, A::Sparse{Float64}) = T(A)
 
 function Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}(A::Sparse{Tv}) where Tv<:VTypes
     s = unsafe_load(pointer(A))
-    if !ishermitian(A)
-        throw(ArgumentError("matrix is not Hermitian"))
-    end
-
-    B = Hermitian(SparseMatrixCSC(s.nrow, s.ncol,
-        increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), own = false)),
-        increment(unsafe_wrap(Array, s.i, (s.nzmax,), own = false)),
-        copy(unsafe_wrap(Array, s.x, (s.nzmax,), own = false))), s.stype > 0 ? :U : :L)
-
-    if s.sorted == 0
-        return SparseArrays.sortSparseMatrixCSC!(B.data)
-    else
-        return B
-    end
+    ishermitian(A) || throw(ArgumentError("matrix is not Hermitian"))
+    args = _extract_args(s)
+    s.sorted == 0 && _sort_buffers!(args...)
+    Hermitian(_trim_nz_builder!(args...), s.stype > 0 ? :U : :L)
 end
 convert(T::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv}) where {Tv<:VTypes} = T(A)
 
@@ -1158,14 +1165,14 @@ function sparse(A::Sparse{Float64}) # Notice! Cannot be type stable because of s
     if s.stype == 0
         return SparseMatrixCSC{Float64,SuiteSparse_long}(A)
     end
-    return Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A)
+    Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}(A)
 end
 function sparse(A::Sparse{ComplexF64}) # Notice! Cannot be type stable because of stype
     s = unsafe_load(pointer(A))
     if s.stype == 0
         return SparseMatrixCSC{ComplexF64,SuiteSparse_long}(A)
     end
-    return Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long}}(A)
+    Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,SuiteSparse_long}}(A)
 end
 function sparse(F::Factor)
     s = unsafe_load(pointer(F))
@@ -1177,7 +1184,8 @@ function sparse(F::Factor)
         L, d = getLd!(LD)
         A = (L * Diagonal(d)) * L'
     end
-    SparseArrays.sortSparseMatrixCSC!(A)
+    # no need to sort buffers here, as A isa SparseMatrixCSC
+    # and it is taken care in sparse
     p = get_perm(F)
     if p != [1:s.n;]
         pinv = Vector{Int}(undef, length(p))
@@ -1374,34 +1382,34 @@ end
 ## Factorization methods
 
 ## Compute that symbolic factorization only
-function fact_(A::Sparse{<:VTypes};
+function symbolic(A::Sparse{<:VTypes};
     perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing,
-    postorder::Bool=true, userperm_only::Bool=true)
+    postorder::Bool=isnothing(perm)||isempty(perm), userperm_only::Bool=true)
 
     sA = unsafe_load(pointer(A))
     sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
 
-    common[Threads.threadid()].postorder = postorder
-
-    if perm === nothing || isempty(perm) # TODO: deprecate empty perm
-        F = analyze(A)
-    else # user permutation provided
-        if userperm_only # use perm even if it is worse than AMD
-            common[Threads.threadid()].nmethods = 1
+    @cholmod_param postorder = postorder begin
+        if perm === nothing || isempty(perm) # TODO: deprecate empty perm
+            return analyze(A)
+        else # user permutation provided
+            if userperm_only # use perm even if it is worse than AMD
+                @cholmod_param nmethods = 1 begin
+                    return analyze_p(A, SuiteSparse_long[p-1 for p in perm])
+                end
+            else
+                return analyze_p(A, SuiteSparse_long[p-1 for p in perm])
+            end
         end
-        F = analyze_p(A, SuiteSparse_long[p-1 for p in perm])
     end
-
-    return F
 end
 
 function cholesky!(F::Factor{Tv}, A::Sparse{Tv};
                    shift::Real=0.0, check::Bool = true) where Tv
-    # Makes it an LLt
-    common[Threads.threadid()].final_ll = true
-
     # Compute the numerical factorization
-    factorize_p!(A, shift, F)
+    @cholmod_param final_ll = true begin
+        factorize_p!(A, shift, F)
+    end
 
     check && (issuccess(F) || throw(LinearAlgebra.PosDefException(1)))
     return F
@@ -1434,11 +1442,8 @@ cholesky!(F::Factor, A::Union{SparseMatrixCSC{T},
 function cholesky(A::Sparse; shift::Real=0.0, check::Bool = true,
     perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing)
 
-    cm = defaults!(common[Threads.threadid()])
-    cm.print = 0
-
     # Compute the symbolic factorization
-    F = fact_(A; perm = perm)
+    F = symbolic(A; perm = perm)
 
     # Compute the numerical factorization
     cholesky!(F, A; shift = shift, check = check)
@@ -1558,9 +1563,6 @@ cholesky(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
 
 function ldlt!(F::Factor{Tv}, A::Sparse{Tv};
                shift::Real=0.0, check::Bool = true) where Tv
-    cm = defaults!(common[Threads.threadid()])
-    cm.print = 0
-
     # Makes it an LDLt
     change_factor!(F, false, false, true, false)
 
@@ -1598,21 +1600,19 @@ ldlt!(F::Factor, A::Union{SparseMatrixCSC{T},
 function ldlt(A::Sparse; shift::Real=0.0, check::Bool = true,
     perm::Union{Nothing,AbstractVector{SuiteSparse_long}}=nothing)
 
-    cm = defaults!(common[Threads.threadid()])
-    cm.print = 0
-
     # Makes it an LDLt
-    cm.final_ll = false
-    # Really make sure it's an LDLt by avoiding supernodal factorization
-    cm.supernodal = 0
+    @cholmod_param final_ll = false begin
+        # Really make sure it's an LDLt by avoiding supernodal factorization
+        @cholmod_param supernodal = 0 begin
+            # Compute the symbolic factorization
+            F = symbolic(A; perm = perm)
 
-    # Compute the symbolic factorization
-    F = fact_(A; perm = perm)
+            # Compute the numerical factorization
+            ldlt!(F, A; shift = shift, check = check)
 
-    # Compute the numerical factorization
-    ldlt!(F, A; shift = shift, check = check)
-
-    return F
+            return F
+        end
+    end
 end
 
 """
@@ -1677,9 +1677,9 @@ function lowrankupdowndate!(F::Factor{Tv}, C::Sparse{Tv}, update::Cint) where Tv
     if lF.n != lC.nrow
         throw(DimensionMismatch("matrix dimensions do not fit"))
     end
-    @isok ccall((@cholmod_name("updown"), :libcholmod), Cint,
-        (Cint, Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{Common}),
-        update, C, F, common[Threads.threadid()])
+    ccall((@cholmod_name("updown"), :libcholmod), Cint,
+          (Cint, Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{Common}),
+          update, C, F, common[Threads.threadid()])
     F
 end
 
@@ -1969,5 +1969,58 @@ end
     B::Hermitian{ComplexF64,SparseMatrixCSC{ComplexF64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
 (*)(A::SparseVecOrMat{Float64,Ti},
     B::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}) where {Ti} = sparse(Sparse(A)*Sparse(B))
+
+# Sort all the indices in each column for the construction of a CSC sparse matrix
+function _sort_buffers!(m, n, colptr::Vector{Ti}, rowval::Vector{Ti}, nzval::Vector{Tv}) where {Ti <: Integer, Tv}
+    index = Base.zeros(Ti, m)
+    row = Base.zeros(Ti, m)
+    val = Base.zeros(Tv, m)
+
+    perm = Base.Perm(Base.ord(isless, identity, false, Base.Order.Forward), row)
+
+    @inbounds for i = 1:n
+        nzr = colptr[i]:colptr[i+1]-1
+        numrows = length(nzr)
+        if numrows <= 1
+            continue
+        elseif numrows == 2
+            f = first(nzr)
+            s = f+1
+            if rowval[f] > rowval[s]
+                rowval[f], rowval[s] = rowval[s], rowval[f]
+                nzval[f],  nzval[s]  = nzval[s],  nzval[f]
+            end
+            continue
+        end
+        resize!(row, numrows)
+        resize!(index, numrows)
+
+        jj = 1
+        @simd for j = nzr
+            row[jj] = rowval[j]
+            val[jj] = nzval[j]
+            jj += 1
+        end
+
+        if numrows <= 16
+            alg = Base.Sort.InsertionSort
+        else
+            alg = Base.Sort.QuickSort
+        end
+
+        # Reset permutation
+        index .= 1:numrows
+
+        Base.sort!(index, alg, perm)
+
+        jj = 1
+        @simd for j = nzr
+            rowval[j] = row[index[jj]]
+            nzval[j] = val[index[jj]]
+            jj += 1
+        end
+    end
+end
+
 
 end #module

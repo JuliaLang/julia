@@ -776,3 +776,13 @@ end
     strY = String(take!(io))
     @test strX == strY
 end
+
+@testset "vector indexing (issue #39896)" begin
+    a = collect(1:10)
+    r = Base.IdentityUnitRange(2:3)
+    b = a[r]
+    @test axes(b) == axes(r)
+    for i in r
+        @test b[i] == a[r[i]]
+    end
+end

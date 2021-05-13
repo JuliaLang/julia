@@ -74,6 +74,7 @@ struct CHOLMODException <: Exception
     msg::String
 end
 
-macro isok(A)
-    :($(esc(A)) == TRUE || throw(CHOLMODException("")))
+function error_handler(status::Cint, file::Cstring, line::Cint, message::Cstring)::Cvoid
+    status < 0 && throw(CHOLMODException(unsafe_string(message)))
+    nothing
 end

@@ -439,9 +439,19 @@ end
 isequal(x::Float16, y::Float16) = fpiseq(x, y)
 isequal(x::Float32, y::Float32) = fpiseq(x, y)
 isequal(x::Float64, y::Float64) = fpiseq(x, y)
-isless( x::Float16, y::Float16) = fpislt(x, y)
-isless( x::Float32, y::Float32) = fpislt(x, y)
-isless( x::Float64, y::Float64) = fpislt(x, y)
+
+# interpret as sign-magnitude integer
+@inline function _fpint(x)
+    IntT = inttype(typeof(x))
+    ix = reinterpret(IntT, x)
+    return ifelse(ix < zero(IntT), ix ⊻ typemax(IntT), ix)
+end
+
+@inline function isless(a::T, b::T) where T<:IEEEFloat
+    (isnan(a) || isnan(b)) && return !isnan(a)
+
+    return _fpint(a) < _fpint(b)
+end
 
 # Exact Float (Tf) vs Integer (Ti) comparisons
 # Assumes:
@@ -962,6 +972,17 @@ bswap(x::IEEEFloat) = bswap_int(x)
 uinttype(::Type{Float64}) = UInt64
 uinttype(::Type{Float32}) = UInt32
 uinttype(::Type{Float16}) = UInt16
+inttype(::Type{Float64}) = Int64
+inttype(::Type{Float32}) = Int32
+inttype(::Type{Float16}) = Int16
+# float size of integer
+floattype(::Type{UInt64}) = Float64
+floattype(::Type{UInt32}) = Float32
+floattype(::Type{UInt16}) = Float16
+floattype(::Type{Int64}) = Float64
+floattype(::Type{Int32}) = Float32
+floattype(::Type{Int16}) = Float16
+
 
 ## Array operations on floating point numbers ##
 

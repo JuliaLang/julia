@@ -238,8 +238,9 @@ end
         @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
         rm(testfile)
 
+        # this also tests that the error message is correctly retrieved from the library
         writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-        @test_throws ArgumentError sparse(CHOLMOD.Sparse(testfile))
+        @test_throws CHOLMOD.CHOLMODException("indices out of range") sparse(CHOLMOD.Sparse(testfile))
         rm(testfile)
     end
 end
@@ -794,12 +795,13 @@ end
     end
 end
 
-@testset "Check inputs to Sparse. Related to #20024" for A_ in (
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[]),
-    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1,2], Float64[1.0]))
-    args = (size(A_)..., getcolptr(A_) .- 1, rowvals(A_) .- 1, nonzeros(A_))
-    @test_throws ArgumentError CHOLMOD.Sparse(args...)
-    @test_throws ArgumentError CHOLMOD.Sparse(A_)
+@testset "Check inputs to Sparse. Related to #20024" for t_ in (
+    (2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
+    (2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
+    (2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
+    (2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+    @test_throws ArgumentError SparseMatrixCSC(t_...)
+    @test_throws ArgumentError CHOLMOD.Sparse(t_[1], t_[2], t_[3] .- 1, t_[4] .- 1, t_[5])
 end
 
 @testset "sparse right multiplication of Symmetric and Hermitian matrices #21431" begin
@@ -908,4 +910,36 @@ end
     C = Sparse(spzeros(3, 0))
     @test C * C' == Sparse(spzeros(3, 3))
     @test C' * C == Sparse(spzeros(0, 0))
+end
+
+@testset "permutation handling" begin
+    @testset "default permutation" begin
+        # Assemble arrow matrix
+        A = sparse(5I,3,3)
+        A[:,1] .= 1; A[1,:] .= A[:,1]
+
+        # Ensure cholesky eliminates the fill-in
+        @test cholesky(A).p[1] != 1
+    end
+
+    @testset "user-specified permutation" begin
+        n = 100
+        A = sprand(n,n,5/n) |> t -> t't + I
+        @test cholesky(A, perm=1:n).p == 1:n
+    end
+end
+
+@testset "Check common is still in default state" begin
+    # This test intentially depends on all the above tests!
+    current_common = CHOLMOD.common[Threads.threadid()]
+    default_common = CHOLMOD.Common()
+    @test current_common.print == 0
+    for name in (
+        :nmethods,
+        :postorder,
+        :final_ll,
+        :supernodal,
+    )
+        @test getproperty(current_common, name) == getproperty(default_common, name)
+    end
 end

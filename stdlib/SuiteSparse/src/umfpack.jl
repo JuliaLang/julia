@@ -6,7 +6,7 @@ export UmfpackLU
 
 import Base: (\), getproperty, show, size
 using LinearAlgebra
-import LinearAlgebra: Factorization, det, lu, lu!, ldiv!
+import LinearAlgebra: Factorization, checksquare, det, logabsdet, lu, lu!, ldiv!
 
 using SparseArrays
 using SparseArrays: getcolptr
@@ -279,6 +279,26 @@ function deserialize(s::AbstractSerializer, t::Type{UmfpackLU{Tv,Ti}}) where {Tv
     return obj
 end
 
+# compute the sign/parity of a permutation
+function _signperm(p)
+    n = length(p)
+    result = 0
+    todo = trues(n)
+    while any(todo)
+        k = findfirst(todo)
+        todo[k] = false
+        result += 1 # increment element count
+        j = p[k]
+        while j != k
+            result += 1 # increment element count
+            todo[j] = false
+            j = p[j]
+        end
+        result += 1 # increment cycle count
+    end
+    return ifelse(isodd(result), -1, 1)
+end
+
 ## Wrappers for UMFPACK functions
 
 # generate the name of the C function according to the value and integer types
@@ -406,6 +426,23 @@ for itype in UmfpackIndexTypes
                         mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[], mz[])
         end
+        function logabsdet(F::UmfpackLU{T, $itype}) where {T<:Union{Float64,ComplexF64}} # return log(abs(det)) and sign(det)
+            n = checksquare(F)
+            issuccess(F) || return log(zero(real(T))), zero(T)
+            U = F.U
+            Rs = F.Rs
+            p = F.p
+            q = F.q
+            s = _signperm(p)*_signperm(q)*one(real(T))
+            P = one(T)
+            abs_det = zero(real(T))
+            @inbounds for i in 1:n
+                dg_ii = U[i, i] / Rs[i]
+                P *= sign(dg_ii)
+                abs_det += log(abs(dg_ii))
+            end
+            return abs_det, s * P
+        end
         function umf_lunz(lu::UmfpackLU{Float64,$itype})
             lnz = Ref{$itype}()
             unz = Ref{$itype}()
@@ -428,60 +465,236 @@ for itype in UmfpackIndexTypes
                            lnz, unz, n_row, n_col, nz_diag, lu.numeric)
             (lnz[], unz[], n_row[], n_col[], nz_diag[])
         end
-        function umf_extract(lu::UmfpackLU{Float64,$itype})
-            umfpack_numeric!(lu)        # ensure the numeric decomposition exists
-            (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Vector{$itype}(undef, n_row + 1)
-            Lj = Vector{$itype}(undef, lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Vector{Float64}(undef, lnz)
-            Up = Vector{$itype}(undef, n_col + 1)
-            Ui = Vector{$itype}(undef, unz)
-            Ux = Vector{Float64}(undef, unz)
-            P  = Vector{$itype}(undef, n_row)
-            Q  = Vector{$itype}(undef, n_col)
-            Rs = Vector{Float64}(undef, n_row)
-            @isok ccall(($get_num_r,:libumfpack), $itype,
-                        (Ptr{$itype},Ptr{$itype},Ptr{Float64},
-                         Ptr{$itype},Ptr{$itype},Ptr{Float64},
-                         Ptr{$itype},Ptr{$itype},Ptr{Cvoid},
-                         Ref{$itype},Ptr{Float64},Ptr{Cvoid}),
-                        Lp,Lj,Lx,
-                        Up,Ui,Ux,
-                        P, Q, C_NULL,
-                        0, Rs, lu.numeric)
-            (copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx))),
-             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), Ux),
-             increment!(P), increment!(Q), Rs)
+        function getproperty(lu::UmfpackLU{Float64, $itype}, d::Symbol)
+            if d === :L
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Lp = Vector{$itype}(undef, n_row + 1)
+                # L is returned in CSR (compressed sparse row) format
+                Lj = Vector{$itype}(undef, lnz)
+                Lx = Vector{Float64}(undef, lnz)
+                @isok ccall(($get_num_r, :libumfpack), $itype,
+                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                            Lp, Lj, Lx,
+                            C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, lu.numeric)
+                return copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row,
+                                                      increment!(Lp), increment!(Lj), Lx)))
+            elseif d === :U
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Up = Vector{$itype}(undef, n_col + 1)
+                Ui = Vector{$itype}(undef, unz)
+                Ux = Vector{Float64}(undef, unz)
+                @isok ccall(($get_num_r, :libumfpack), $itype,
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                            C_NULL, C_NULL, C_NULL,
+                            Up, Ui, Ux,
+                            C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, lu.numeric)
+                return  SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up),
+                                        increment!(Ui), Ux)
+            elseif d === :p
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                P  = Vector{$itype}(undef, n_row)
+                @isok ccall(($get_num_r, :libumfpack), $itype,
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{$itype}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                            C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL,
+                            P, C_NULL, C_NULL,
+                            C_NULL, C_NULL, lu.numeric)
+                return increment!(P)
+            elseif d === :q
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Q  = Vector{$itype}(undef, n_col)
+                @isok ccall(($get_num_r, :libumfpack), $itype,
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{$itype}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                            C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL,
+                            C_NULL, Q, C_NULL,
+                            C_NULL, C_NULL, lu.numeric)
+                return increment!(Q)
+            elseif d === :Rs
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Rs = Vector{Float64}(undef, n_row)
+                @isok ccall(($get_num_r, :libumfpack), $itype,
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Float64}, Ptr{Cvoid}),
+                            C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL,
+                            C_NULL, Rs, lu.numeric)
+                return Rs
+            elseif d === :(:)
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Lp = Vector{$itype}(undef, n_row + 1)
+                # L is returned in CSR (compressed sparse row) format
+                Lj = Vector{$itype}(undef, lnz)
+                Lx = Vector{Float64}(undef, lnz)
+                Up = Vector{$itype}(undef, n_col + 1)
+                Ui = Vector{$itype}(undef, unz)
+                Ux = Vector{Float64}(undef, unz)
+                P  = Vector{$itype}(undef, n_row)
+                Q  = Vector{$itype}(undef, n_col)
+                Rs = Vector{Float64}(undef, n_row)
+                @isok ccall(($get_num_r, :libumfpack), $itype,
+                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
+                             Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
+                             Ptr{$itype}, Ptr{$itype}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Float64}, Ptr{Cvoid}),
+                            Lp, Lj, Lx,
+                            Up, Ui, Ux,
+                            P, Q, C_NULL,
+                            C_NULL, Rs, lu.numeric)
+                return (copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row,
+                                                       increment!(Lp), increment!(Lj),
+                                                       Lx))),
+                        SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up),
+                                        increment!(Ui), Ux),
+                        increment!(P), increment!(Q), Rs)
+            else
+                return getfield(lu, d)
+            end
         end
-        function umf_extract(lu::UmfpackLU{ComplexF64,$itype})
-            umfpack_numeric!(lu)        # ensure the numeric decomposition exists
-            (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Vector{$itype}(undef, n_row + 1)
-            Lj = Vector{$itype}(undef, lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Vector{Float64}(undef, lnz)
-            Lz = Vector{Float64}(undef, lnz)
-            Up = Vector{$itype}(undef, n_col + 1)
-            Ui = Vector{$itype}(undef, unz)
-            Ux = Vector{Float64}(undef, unz)
-            Uz = Vector{Float64}(undef, unz)
-            P  = Vector{$itype}(undef, n_row)
-            Q  = Vector{$itype}(undef, n_col)
-            Rs = Vector{Float64}(undef, n_row)
-            @isok ccall(($get_num_z,:libumfpack), $itype,
-                        (Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
-                         Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
-                         Ptr{$itype},Ptr{$itype},Ptr{Cvoid}, Ptr{Cvoid},
-                         Ref{$itype},Ptr{Float64},Ptr{Cvoid}),
-                        Lp,Lj,Lx,Lz,
-                        Up,Ui,Ux,Uz,
-                        P, Q, C_NULL, C_NULL,
-                        0, Rs, lu.numeric)
-            (copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz)))),
-             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex.(Ux, Uz)),
-             increment!(P), increment!(Q), Rs)
+        function getproperty(lu::UmfpackLU{ComplexF64, $itype}, d::Symbol)
+            if d === :L
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Lp = Vector{$itype}(undef, n_row + 1)
+                # L is returned in CSR (compressed sparse row) format
+                Lj = Vector{$itype}(undef, lnz)
+                Lx = Vector{Float64}(undef, lnz)
+                Lz = Vector{Float64}(undef, lnz)
+                @isok ccall(($get_num_z, :libumfpack), $itype,
+                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                            Lp, Lj, Lx, Lz,
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, lu.numeric)
+                return copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row,
+                                                      increment!(Lp), increment!(Lj),
+                                                      complex.(Lx, Lz))))
+            elseif d === :U
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Up = Vector{$itype}(undef, n_col + 1)
+                Ui = Vector{$itype}(undef, unz)
+                Ux = Vector{Float64}(undef, unz)
+                Uz = Vector{Float64}(undef, unz)
+                @isok ccall(($get_num_z, :libumfpack), $itype,
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            Up, Ui, Ux, Uz,
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, lu.numeric)
+                return SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up),
+                                       increment!(Ui), complex.(Ux, Uz))
+            elseif d === :p
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                P  = Vector{$itype}(undef, n_row)
+                @isok ccall(($get_num_z, :libumfpack), $itype,
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{$itype}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Float64}, Ptr{Cvoid}),
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            P, C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, lu.numeric)
+                return increment!(P)
+            elseif d === :q
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Q  = Vector{$itype}(undef, n_col)
+                @isok ccall(($get_num_z, :libumfpack), $itype,
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{$itype}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            C_NULL, Q, C_NULL, C_NULL,
+                            C_NULL, C_NULL, lu.numeric)
+                return increment!(Q)
+            elseif d === :Rs
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Rs = Vector{Float64}(undef, n_row)
+                @isok ccall(($get_num_z, :libumfpack), $itype,
+                            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Float64}, Ptr{Cvoid}),
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            C_NULL, C_NULL, C_NULL, C_NULL,
+                            C_NULL, Rs, lu.numeric)
+                return Rs
+            elseif d === :(:)
+                umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+                (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
+                Lp = Vector{$itype}(undef, n_row + 1)
+                # L is returned in CSR (compressed sparse row) format
+                Lj = Vector{$itype}(undef, lnz)
+                Lx = Vector{Float64}(undef, lnz)
+                Lz = Vector{Float64}(undef, lnz)
+                Up = Vector{$itype}(undef, n_col + 1)
+                Ui = Vector{$itype}(undef, unz)
+                Ux = Vector{Float64}(undef, unz)
+                Uz = Vector{Float64}(undef, unz)
+                P  = Vector{$itype}(undef, n_row)
+                Q  = Vector{$itype}(undef, n_col)
+                Rs = Vector{Float64}(undef, n_row)
+                @isok ccall(($get_num_z, :libumfpack), $itype,
+                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
+                             Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
+                             Ptr{$itype}, Ptr{$itype}, Ptr{Cvoid}, Ptr{Cvoid},
+                             Ptr{Cvoid}, Ptr{Float64}, Ptr{Cvoid}),
+                            Lp, Lj, Lx, Lz,
+                            Up, Ui, Ux, Uz,
+                            P, Q, C_NULL, C_NULL,
+                            C_NULL, Rs, lu.numeric)
+                return (copy(transpose(SparseMatrixCSC(min(n_row, n_col), n_row,
+                                                       increment!(Lp), increment!(Lj),
+                                                       complex.(Lx, Lz)))),
+                        SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up),
+                                        increment!(Ui), complex.(Ux, Uz)),
+                        increment!(P), increment!(Q), Rs)
+            else
+                return getfield(lu, d)
+            end
         end
     end
 end
+
+# backward compatibility
+umfpack_extract(lu::UmfpackLU) = getproperty(lu, :(:))
 
 function nnz(lu::UmfpackLU)
     lnz, unz, = umf_lunz(lu)
@@ -552,29 +765,6 @@ function _AqldivB_kernel!(X::StridedMatrix{Tb}, lu::UmfpackLU{Float64},
         solve!(r, lu, Vector{Float64}(real(view(B, :, j))), transposeoptype)
         solve!(i, lu, Vector{Float64}(imag(view(B, :, j))), transposeoptype)
         map!(complex, view(X, :, j), r, i)
-    end
-end
-
-
-@inline function getproperty(lu::UmfpackLU, d::Symbol)
-    if d === :L || d === :U || d === :p || d === :q || d === :Rs || d === :(:)
-        # Guard the call to umf_extract behaind a branch to avoid infinite recursion
-        L, U, p, q, Rs = umf_extract(lu)
-        if d === :L
-            return L
-        elseif d === :U
-            return U
-        elseif d === :p
-            return p
-        elseif d === :q
-            return q
-        elseif d === :Rs
-            return Rs
-        elseif d === :(:)
-            return (L, U, p, q, Rs)
-        end
-    else
-        getfield(lu, d)
     end
 end
 

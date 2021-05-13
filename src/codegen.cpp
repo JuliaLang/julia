@@ -1689,7 +1689,7 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", dwarf_version);
     }
     if (!m->getModuleFlag("Debug Info Version"))
-        m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
+        m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(jl_data_layout);
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
@@ -1718,13 +1718,9 @@ static void jl_init_function(Function *F)
     F->setHasUWTable(); // force NeedsWinEH
 #endif
 #ifdef JL_DISABLE_FPO
-#if LLVM_VERSION_MAJOR >= 8
     F->addFnAttr("frame-pointer", "all");
-#else
-    F->addFnAttr("no-frame-pointer-elim", "true");
 #endif
-#endif
-#if JL_LLVM_VERSION >= 110000 && !defined(JL_ASAN_ENABLED) && !defined(_OS_WINDOWS_)
+#if !defined(JL_ASAN_ENABLED) && !defined(_OS_WINDOWS_)
     // ASAN won't like us accessing undefined memory causing spurious issues,
     // and Windows has platform-specific handling which causes it to mishandle
     // this annotation. Other platforms should just ignore this if they don't
@@ -3802,30 +3798,14 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             ssaslot->insertAfter(varslot);
             if (vi.isVolatile) {
                 Value *unbox = ctx.builder.CreateAlignedLoad(ssaslot->getAllocatedType(), varslot,
-#if JL_LLVM_VERSION >= 110000
                         varslot->getAlign(),
-#else
-                        varslot->getAlignment(),
-#endif
                         true);
-                ctx.builder.CreateAlignedStore(unbox, ssaslot,
-#if JL_LLVM_VERSION >= 110000
-                        ssaslot->getAlign()
-#else
-                        ssaslot->getAlignment()
-#endif
-                        );
+                ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign());
             }
             else {
                 const DataLayout &DL = jl_data_layout;
                 uint64_t sz = DL.getTypeStoreSize(T);
-                emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz,
-#if JL_LLVM_VERSION >= 110000
-                        ssaslot->getAlign().value()
-#else
-                        ssaslot->getAlignment()
-#endif
-                        );
+                emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz, ssaslot->getAlign().value());
             }
             Value *tindex = NULL;
             if (vi.pTIndex)
@@ -3976,11 +3956,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
                     ConstantInt::get(T_int8, 0));
-#if JL_LLVM_VERSION >= 100000
             ctx.builder.CreateMemCpy(phi, MaybeAlign(min_align), dest, MaybeAlign(0), nbytes, false);
-#else
-            ctx.builder.CreateMemCpy(phi, min_align, dest, 0, nbytes, false);
-#endif
             ctx.builder.CreateLifetimeEnd(dest);
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ctx, ptr_phi), T_pint8),
@@ -4020,15 +3996,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         // here it's moved into phi in the successor (from dest)
         dest = emit_static_alloca(ctx, vtype);
         Value *phi = emit_static_alloca(ctx, vtype);
-#if JL_LLVM_VERSION >= 100000
         ctx.builder.CreateMemCpy(phi, MaybeAlign(julia_alignment(phiType)),
              dest, MaybeAlign(0),
              jl_datatype_size(phiType), false);
-#else
-        ctx.builder.CreateMemCpy(phi, julia_alignment(phiType),
-             dest, 0,
-             jl_datatype_size(phiType), false);
-#endif
         ctx.builder.CreateLifetimeEnd(dest);
         slot = mark_julia_slot(phi, phiType, NULL, tbaa_stack);
     }
@@ -8122,12 +8092,12 @@ extern "C" void jl_dump_llvm_mfunction(void *v)
 
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
-    raw_fd_ostream OS(fname, EC, sys::fs::F_None);
+    raw_fd_ostream OS(fname, EC, sys::fs::OF_None);
     llvm::WriteBitcodeToFile(*((llvm::Function*)F)->getParent(), OS);
 }
 
 extern void jl_write_bitcode_module(void *M, char *fname) {
     std::error_code EC;
-    raw_fd_ostream OS(fname, EC, sys::fs::F_None);
+    raw_fd_ostream OS(fname, EC, sys::fs::OF_None);
     llvm::WriteBitcodeToFile(*(llvm::Module*)M, OS);
 }

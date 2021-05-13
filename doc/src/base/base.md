@@ -229,6 +229,7 @@ Base.isnothing
 Base.notnothing
 Base.Some
 Base.something
+Base.@something
 Base.Enums.Enum
 Base.Enums.@enum
 Core.Expr
@@ -243,6 +244,7 @@ Core.Module
 Core.Function
 Base.hasmethod
 Core.applicable
+Base.isambiguous
 Core.invoke
 Base.@invoke
 Base.invokelatest
@@ -286,6 +288,7 @@ Base.@deprecate
 Base.Missing
 Base.missing
 Base.coalesce
+Base.@coalesce
 Base.ismissing
 Base.skipmissing
 Base.nonmissingtype
@@ -306,6 +309,7 @@ Base.ignorestatus
 Base.detach
 Base.Cmd
 Base.setenv
+Base.addenv
 Base.withenv
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)

@@ -676,8 +676,6 @@ void jl_init_int32_int64_cache(void);
 
 void jl_teardown_codegen(void);
 
-void _julia_init(JL_IMAGE_SEARCH rel);
-
 void jl_set_base_ctx(char *__stk);
 
 extern ssize_t jl_tls_offset;
@@ -1114,7 +1112,6 @@ JL_DLLEXPORT jl_value_t *jl_ne_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_lt_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_le_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_fpiseq(jl_value_t *a, jl_value_t *b);
-JL_DLLEXPORT jl_value_t *jl_fpislt(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_not_int(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_and_int(jl_value_t *a, jl_value_t *b);
