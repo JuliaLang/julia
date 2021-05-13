@@ -49,7 +49,7 @@ function showerror(io::IO, ex::CompositeException)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
-            print(io, string("\n\n...and ", remaining, " more exception(s).\n"))
+            print(io, "\n\n...and ", remaining, " more exception", remaining > 1 ? "s" : "", ".\n")
         end
     else
         print(io, "CompositeException()\n")
@@ -79,7 +79,12 @@ end
 function show_task_exception(io::IO, t::Task; indent = true)
     stack = catch_stack(t)
     b = IOBuffer()
-    show_exception_stack(IOContext(b, io), stack)
+    if isempty(stack)
+        # exception stack buffer not available; probably a serialized task
+        showerror(IOContext(b, io), t.result)
+    else
+        show_exception_stack(IOContext(b, io), stack)
+    end
     str = String(take!(b))
     if indent
         str = replace(str, "\n" => "\n    ")
@@ -131,10 +136,21 @@ const task_state_runnable = UInt8(0)
 const task_state_done     = UInt8(1)
 const task_state_failed   = UInt8(2)
 
+const _state_index = findfirst(==(:_state), fieldnames(Task))
+@eval function load_state_acquire(t)
+    # TODO: Replace this by proper atomic operations when available
+    @GC.preserve t llvmcall($("""
+        %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i8*
+        %rv = load atomic i8, i8* %ptr acquire, align 8
+        ret i8 %rv
+        """), UInt8, Tuple{Ptr{UInt8}},
+        Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
+end
+
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
         # TODO: this field name should be deprecated in 2.0
-        st = getfield(t, :_state)
+        st = load_state_acquire(t)
         if st === task_state_runnable
             return :runnable
         elseif st === task_state_done
@@ -147,6 +163,9 @@ const task_state_failed   = UInt8(2)
     elseif field === :backtrace
         # TODO: this field name should be deprecated in 2.0
         return catch_stack(t)[end][2]
+    elseif field === :exception
+        # TODO: this field name should be deprecated in 2.0
+        return t._isexception ? t.result : nothing
     else
         return getfield(t, field)
     end
@@ -174,7 +193,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = t._state !== task_state_runnable
+istaskdone(t::Task) = load_state_acquire(t) !== task_state_runnable
 
 """
     istaskstarted(t::Task) -> Bool
@@ -218,7 +237,7 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = (t._state === task_state_failed)
+istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 
@@ -401,6 +420,43 @@ macro async(expr)
             task
         end
     end
+end
+
+"""
+    errormonitor(t::Task)
+
+Print an error log to `stderr` if task `t` fails.
+"""
+function errormonitor(t::Task)
+    t2 = Task() do
+        if istaskfailed(t)
+            local errs = stderr
+            try # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Unhandled Task ")
+                display_error(errio, catch_stack(t))
+                write(errs, errio)
+            catch
+                try # try to display the secondary error atomically
+                    errio = IOContext(PipeBuffer(), errs::IO)
+                    print(errio, "\nSYSTEM: caught exception while trying to print a failed Task notice: ")
+                    display_error(errio, catch_stack())
+                    write(errs, errio)
+                    flush(errs)
+                    # and then the actual error, as best we can
+                    Core.print(Core.stderr, "while handling: ")
+                    Core.println(Core.stderr, catch_stack(t)[end][1])
+                catch e
+                    # give up
+                    Core.print(Core.stderr, "\nSYSTEM: caught exception of type ", typeof(e).name.name,
+                            " while trying to print a failed Task notice; giving up\n")
+                end
+            end
+        end
+        nothing
+    end
+    _wait2(t, t2)
+    return t
 end
 
 # Capture interpolated variables in $() and move them to let-block
@@ -619,7 +675,8 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
         t.queue === nothing || Base.list_deletefirst!(t.queue, t)
-        setfield!(t, :exception, arg)
+        setfield!(t, :result, arg)
+        setfield!(t, :_isexception, true)
     else
         t.queue === nothing || Base.error("schedule: Task not runnable")
         setfield!(t, :result, arg)
@@ -683,9 +740,10 @@ function try_yieldto(undo)
         rethrow()
     end
     ct = current_task()
-    exc = ct.exception
-    if exc !== nothing
-        ct.exception = nothing
+    if ct._isexception
+        exc = ct.result
+        ct.result = nothing
+        ct._isexception = false
         throw(exc)
     end
     result = ct.result
@@ -695,8 +753,10 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
-    t.exception = exc
-    return yieldto(t)
+    t.result = exc
+    t._isexception = true
+    set_next_task(t)
+    return try_yieldto(identity)
 end
 
 function ensure_rescheduled(othertask::Task)

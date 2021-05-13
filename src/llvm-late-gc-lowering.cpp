@@ -16,9 +16,6 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
-#if JL_LLVM_VERSION < 110000
-#include <llvm/IR/CallSite.h>
-#endif
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
@@ -29,9 +26,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
-#if JL_LLVM_VERSION >= 100000
 #include <llvm/InitializePasses.h>
-#endif
 
 #include "codegen_shared.h"
 #include "julia.h"
@@ -427,11 +422,7 @@ void TrackCompositeType(Type *T, std::vector<unsigned> &Idxs, std::vector<std::v
         unsigned Idx, NumEl = getCompositeNumElements(T);
         for (Idx = 0; Idx < NumEl; Idx++) {
             Idxs.push_back(Idx);
-#if JL_LLVM_VERSION >= 110000
             Type *ElT = GetElementPtrInst::getTypeAtIndex(T, Idx);
-#else
-            Type *ElT = cast<CompositeType>(T)->getTypeAtIndex(Idx);
-#endif
             TrackCompositeType(ElT, Idxs, Numberings);
             Idxs.pop_back();
         }
@@ -576,11 +567,7 @@ Value *LateLowerGCFrame::MaybeExtractScalar(State &S, std::pair<Value*,int> ValE
         Type *FinalT = ExtractValueInst::getIndexedType(V->getType(), IdxsNotVec);
         bool IsVector = isa<VectorType>(FinalT);
         PointerType *T = cast<PointerType>(
-#if JL_LLVM_VERSION >= 110000
             GetElementPtrInst::getTypeAtIndex(FinalT, Idxs.back()));
-#else
-            cast<CompositeType>(FinalT)->getTypeAtIndex(Idxs.back()));
-#endif
         if (T->getAddressSpace() != AddressSpace::Tracked) {
             // if V isn't tracked, get the shadow def
             auto Numbers = NumberAllBase(S, V);
@@ -1446,6 +1433,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
                 }
                 if (CI->hasStructRetAttr()) {
+                    // TODO: get ElT from SRet attribute
                     Type *ElT = (CI->arg_begin()[0])->getType()->getPointerElementType();
                     auto tracked = CountTrackedPointers(ElT);
                     if (tracked.count) {
@@ -1669,11 +1657,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
     return S;
 }
 
-#if JL_LLVM_VERSION >= 110000
 static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> Idxs, IRBuilder<> &irbuilder) {
-#else
-static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> Idxs, IRBuilder<> irbuilder) {
-#endif
     Type *T_int32 = Type::getInt32Ty(V->getContext());
     if (isptr) {
         std::vector<Value*> IdxList{Idxs.size() + 1};
@@ -1716,11 +1700,7 @@ static unsigned getFieldOffset(const DataLayout &DL, Type *STy, ArrayRef<unsigne
     return (unsigned)offset;
 }
 
-#if JL_LLVM_VERSION >= 110000
 std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> &irbuilder, ArrayRef<unsigned> perm_offsets) {
-#else
-std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> irbuilder, ArrayRef<unsigned> perm_offsets) {
-#endif
     auto Tracked = TrackCompositeType(STy);
     std::vector<Value*> Ptrs;
     unsigned perm_idx = 0;
@@ -1753,16 +1733,12 @@ std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBu
     return Ptrs;
 }
 
-#if JL_LLVM_VERSION >= 110000
 unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
-#else
-unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> irbuilder) {
-#endif
     auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
     for (unsigned i = 0; i < Ptrs.size(); ++i) {
         Value *Elem = Ptrs[i];
-        assert(Elem->getType()->isPointerTy());
-        Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(Elem->getType(), Dst, i);
+        Type *ET = Dst->getType()->getPointerElementType(); // Dst has type `[n x {}*]*`
+        Value *Slot = irbuilder.CreateConstInBoundsGEP2_32(ET, Dst, 0, i);
         StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
         shadowStore->setOrdering(AtomicOrdering::NotAtomic);
         // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -1789,7 +1765,7 @@ void LateLowerGCFrame::MaybeTrackDst(State &S, MemTransferInst *MI) {
     //            Src = new BitCastInst(Src, STy->getPointerTo(MI->getSourceAddressSpace()), "", MI);
     //            auto &Shadow = S.ShadowAllocas[AI];
     //            if (!Shadow)
-    //                Shadow = new AllocaInst(T_prjlvalue, 0, ConstantInt::get(T_int32, nroots), "", MI);
+    //                Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, nroots), 0, "", MI);
     //            AI = Shadow;
     //            unsigned count = TrackWithShadow(Src, STy, true, AI, IRBuilder<>(MI));
     //            assert(count == tracked.count); (void)count;
@@ -1825,7 +1801,7 @@ void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
     // track the Store with a Shadow
     //auto &Shadow = S.ShadowAllocas[AI];
     //if (!Shadow)
-    //    Shadow = new AllocaInst(T_prjlvalue, 0, ConstantInt::get(T_int32, tracked.count), "", MI);
+    //    Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, tracked.count), 0, "", MI);
     //AI = Shadow;
     //Value *Src = I->getValueOperand();
     //unsigned count = TrackWithShadow(Src, Src->getType(), false, AI, MI, TODO which slots are we actually clobbering?);
@@ -2274,11 +2250,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 // to remove write barrier because of it.
                 // We pretty much only load using `T_size` so try our best to strip
                 // as many cast as possible.
-#if JL_LLVM_VERSION >= 100000
                 auto tag = CI->getArgOperand(2)->stripPointerCastsAndAliases();
-#else
-                auto tag = CI->getArgOperand(2)->stripPointerCasts();
-#endif
                 if (auto C = dyn_cast<ConstantExpr>(tag)) {
                     if (C->getOpcode() == Instruction::IntToPtr) {
                         tag = C->getOperand(0);
@@ -2304,13 +2276,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 auto tag_type = tag->getType();
                 if (tag_type->isPointerTy()) {
                     auto &DL = CI->getModule()->getDataLayout();
-#if JL_LLVM_VERSION >= 110000
                     auto align = tag->getPointerAlignment(DL).value();
-#elif JL_LLVM_VERSION >= 100000
-                    auto align = tag->getPointerAlignment(DL).valueOrOne().value();
-#else
-                    auto align = tag->getPointerAlignment(DL);
-#endif
                     if (align < 16) {
                         // On 5 <= LLVM < 12, it is illegal to call this on
                         // non-integral pointer. This relies on stripping the

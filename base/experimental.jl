@@ -114,7 +114,8 @@ parent module.
 Supported values are 0, 1, 2, and 3.
 
 The effective optimization level is the minimum of that specified on the
-command line and in per-module settings.
+command line and in per-module settings. If a `--min-optlevel` value is
+set on the command line, that is enforced as a lower bound.
 """
 macro optlevel(n::Int)
     return Expr(:meta, :optlevel, n)
@@ -220,8 +221,8 @@ Closest candidates are:
     To insulate yourself against changes, consider putting any registrations inside an
     `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
 """
-function register_error_hint(handler, exct::Type)
-    list = get!(()->[], _hint_handlers, exct)
+function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
+    list = get!(Vector{Any}, _hint_handlers, exct)
     push!(list, handler)
     return nothing
 end
@@ -251,5 +252,8 @@ function show_error_hints(io, ex, args...)
         end
     end
 end
+
+# OpaqueClosure
+include("opaque_closure.jl")
 
 end

@@ -65,6 +65,7 @@ let ex = quote
         test7() = rand(Bool) ? 1 : 1.0
         test8() = Any[1][1]
         kwtest(; x=1, y=2, w...) = pass
+        kwtest2(a; x=1, y=2, w...) = pass
 
         array = [1, 1]
         varfloat = 0.1
@@ -96,10 +97,11 @@ function map_completion_text(completions)
     return map(completion_text, c), r, res
 end
 
-test_complete(s) = map_completion_text(@inferred(completions(s,lastindex(s))))
-test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s,lastindex(s))))
-test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s,lastindex(s)))[2])
-test_complete_context(s) =  map_completion_text(@inferred(completions(s,lastindex(s),Main.CompletionFoo)))
+test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
+test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
+test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
+test_complete_context(s, m) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
+test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
 
 module M32377 end
 test_complete_32377(s) = map_completion_text(completions(s,lastindex(s), M32377))
@@ -116,6 +118,10 @@ let s = "using REP"
     @test count(isequal("REPL"), c) == 1
     # issue #30234
     @test !Base.isbindingresolved(M32377, :tanh)
+    # check what happens if REPL is already imported
+    M32377.eval(:(using REPL))
+    c, r = test_complete_32377(s)
+    @test count(isequal("REPL"), c) == 1
 end
 
 let s = "Comp"
@@ -292,7 +298,7 @@ end
 
 # test latex symbol completion in getindex expressions (#24705)
 let s = "tuple[\\alpha"
-    c, r, res = test_complete_context(s)
+    c, r, res = test_complete_foo(s)
     @test c[1] == "α"
     @test r == 7:12
     @test length(c) == 1
@@ -483,11 +489,31 @@ let s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
 end
 #################################################################
 
+# method completions with kwargs
 let s = "CompletionFoo.kwtest( "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
     @test occursin("x, y, w...", c[1])
+end
+
+for s in ("CompletionFoo.kwtest(;",
+          "CompletionFoo.kwtest(; x=1, ",
+          "CompletionFoo.kwtest(; kw=1, ",
+          )
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("x, y, w...", c[1])
+end
+
+for s in ("CompletionFoo.kwtest2(1; x=1,",
+          "CompletionFoo.kwtest2(1; kw=1, ",
+          )
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test occursin("a; x, y, w...", c[1])
 end
 
 # Test of inference based getfield completion
@@ -642,11 +668,14 @@ let s, c, r
     @test s[r] == "tmp"
 
     # This should match things that are inside the tmp directory
-    if !isdir("/tmp/tmp")
-        s = "/tmp/"
+    s = tempdir()
+    if !endswith(s, "/")
+        s = string(s, "/")
+    end
+    if !isdir(joinpath(s, "tmp"))
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
-        @test r === 6:5
+        @test r === length(s) + 1:0
         @test s[r] == ""
     end
 
@@ -678,20 +707,22 @@ let s, c, r
     end
 
     # Tests homedir expansion
-    let path, s, c, r
-        path = homedir()
-        dir = joinpath(path, "tmpfoobar")
-        mkdir(dir)
-        s = "\"" * path * "/tmpfoob"
-        c,r = test_complete(s)
-        @test "tmpfoobar/" in c
-        l = 3 + length(path)
-        @test r == l:l+6
-        @test s[r] == "tmpfoob"
-        s = "\"~"
-        @test "tmpfoobar/" in c
-        c,r = test_complete(s)
-        rm(dir)
+    mktempdir() do tmphome
+        withenv("HOME" => tmphome, "USERPROFILE" => tmphome) do
+            path = homedir()
+            dir = joinpath(path, "tmpfoobar")
+            mkdir(dir)
+            s = "\"" * path * "/tmpfoob"
+            c,r = test_complete(s)
+            @test "tmpfoobar/" in c
+            l = 3 + length(path)
+            @test r == l:l+6
+            @test s[r] == "tmpfoob"
+            s = "\"~"
+            @test "tmpfoobar/" in c
+            c,r = test_complete(s)
+            rm(dir)
+        end
     end
 
     # Tests detecting of files in the env path (in shell mode)
@@ -860,6 +891,17 @@ let s = "CompletionFoo.tuple."
     @test isempty(c)
 end
 
+@testset "sub/superscripts" begin
+    @test "⁽¹²³⁾ⁿ" in test_complete("\\^(123)n")[1]
+    @test "ⁿ" in test_complete("\\^n")[1]
+    @test "ᵞ" in test_complete("\\^gamma")[1]
+    @test isempty(test_complete("\\^(123)nq")[1])
+    @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
+    @test "ₙ" in test_complete("\\_n")[1]
+    @test "ᵧ" in test_complete("\\_gamma")[1]
+    @test isempty(test_complete("\\_(123)nq")[1])
+end
+
 # test Dicts
 function test_dict_completion(dict_name)
     s = "$dict_name[\"ab"
@@ -946,13 +988,13 @@ end
 
 # No CompletionFoo.CompletionFoo
 let s = ""
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test !("CompletionFoo" in c)
 end
 
 # Can see `rand()` after `using Random`
 let s = "r"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "rand" in c
     @test r == 1:1
     @test s[r] == "r"
@@ -960,7 +1002,7 @@ end
 
 # Can see `Test.AbstractTestSet` after `import Test`
 let s = "Test.A"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "AbstractTestSet" in c
     @test r == 6:6
     @test s[r] == "A"
@@ -968,21 +1010,21 @@ end
 
 # Can complete relative import
 let s = "import ..M"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test_broken "Main" in c
     @test r == 10:10
     @test s[r] == "M"
 end
 
 let s = ""
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "bar" in c
     @test r === 1:0
     @test s[r] == ""
 end
 
 let s = "f"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "foo" in c
     @test r == 1:1
     @test s[r] == "f"
@@ -990,7 +1032,7 @@ let s = "f"
 end
 
 let s = "@f"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "@foobar" in c
     @test r == 1:2
     @test s[r] == "@f"
@@ -998,48 +1040,48 @@ let s = "@f"
 end
 
 let s = "type_test.x"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "xx" in c
     @test r == 11:11
     @test s[r] == "x"
 end
 
 let s = "bar.no_val_available"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test length(c)==0
 end
 
 let s = "type_test.xx.y"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "yy" in c
     @test r == 14:14
     @test s[r] == "y"
 end
 
 let s = ":(function foo(::Int) end).args[1].args[2]."
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test c == Any[]
 end
 
 let s = "log(log.(x),"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test !isempty(c)
 end
 
 let s = "Base.return_types(getin"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test "getindex" in c
     @test r == 19:23
     @test s[r] == "getin"
 end
 
 let s = "using Test, Random"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test !("RandomDevice" in c)
 end
 
 let s = "test(1,1, "
-    c, r, res = test_complete_context(s)
+    c, r, res = test_complete_foo(s)
     @test !res
     @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
     @test length(c) == 3
@@ -1048,7 +1090,7 @@ let s = "test(1,1, "
 end
 
 let s = "test.(1,1, "
-    c, r, res = test_complete_context(s)
+    c, r, res = test_complete_foo(s)
     @test !res
     @test length(c) == 4
     @test r == 1:4
@@ -1056,7 +1098,7 @@ let s = "test.(1,1, "
 end
 
 let s = "prevind(\"θ\",1,"
-    c, r, res = test_complete_context(s)
+    c, r, res = test_complete_foo(s)
     @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
     @test r == 1:7
     @test s[r] == "prevind"
@@ -1064,11 +1106,59 @@ end
 
 # Issue #32840
 let s = "typeof(+)."
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test length(c) == length(fieldnames(DataType))
 end
 
 let s = "test_dict[\"ab"
-    c, r = test_complete_context(s)
+    c, r = test_complete_foo(s)
     @test c == Any["\"abc\"", "\"abcd\""]
+end
+
+# https://github.com/JuliaLang/julia/issues/27184
+let
+    (test_complete("@noexist."); @test true)
+    (test_complete("Main.@noexist."); @test true)
+    (test_complete("@Main.noexist."); @test true)
+end
+
+@testset "https://github.com/JuliaLang/julia/issues/40247" begin
+    # getfield type completion can work for complicated expression
+
+    let
+        m = Module()
+        @eval m begin
+            struct Rs
+                rs::Vector{Regex}
+            end
+            var = nothing
+            function foo()
+                global var = 1
+                return Rs([r"foo"])
+            end
+        end
+
+        c, r = test_complete_context("foo().rs[1].", m)
+        @test m.var ≠ 1 # getfield type completion should never execute `foo()`
+        @test length(c) == fieldcount(Regex)
+    end
+
+    let
+        m = Module()
+        @eval m begin
+            struct R
+                r::Regex
+            end
+            var = nothing
+            function foo()
+                global var = 1
+                return R(r"foo")
+            end
+        end
+
+        c, r = test_complete_context("foo().r.", m)
+        # the current implementation of `REPL.REPLCompletions.completions(::String, ::Int, ::Module)`
+        # cuts off "foo().r." to `.r.`, and the getfield type completion doesn't work for this simpler case
+        @test_broken length(c) == fieldcount(Regex)
+    end
 end

@@ -896,12 +896,12 @@ signature (when the signature matches).
 
 ### Vararg Tuple Types
 
-The last parameter of a tuple type can be the special type [`Vararg`](@ref), which denotes any number
+The last parameter of a tuple type can be the special value [`Vararg`](@ref), which denotes any number
 of trailing elements:
 
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
-Tuple{AbstractString, Vararg{Int64, N} where N}
+Tuple{AbstractString, Vararg{Int64}}
 
 julia> isa(("1",), mytupletype)
 true
@@ -916,10 +916,11 @@ julia> isa(("1",1,2,3.0), mytupletype)
 false
 ```
 
-Notice that `Vararg{T}` corresponds to zero or more elements of type `T`. Vararg tuple types are
+Moreover `Vararg{T}` corresponds to zero or more elements of type `T`. Vararg tuple types are
 used to represent the arguments accepted by varargs methods (see [Varargs Functions](@ref)).
 
-The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
+The special value `Vararg{T,N}` (when used as the last parameter of a tuple type)
+corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
 alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` elements of type `T`.
 
 ### Named Tuple Types
@@ -1032,8 +1033,8 @@ The `where` keyword itself can be nested inside a more complex declaration. For 
 consider the two types created by the following declarations:
 
 ```jldoctest
-julia> const T1 = Array{Array{T,1} where T, 1}
-Vector{Vector{T} where T} = Array{Array{T, 1} where T, 1}
+julia> const T1 = Array{Array{T, 1} where T, 1}
+Vector{Vector} (alias for Array{Array{T, 1} where T, 1})
 
 julia> const T2 = Array{Array{T, 1}, 1} where T
 Array{Vector{T}, 1} where T

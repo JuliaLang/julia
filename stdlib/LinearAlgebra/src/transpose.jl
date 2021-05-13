@@ -163,7 +163,7 @@ julia> A = [1 2im; -3im 4]
  0-3im  4+0im
 
 julia> T = transpose(A)
-2×2 Transpose{Complex{Int64}, Matrix{Complex{Int64}}}:
+2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  1+0im  0-3im
  0+2im  4+0im
 

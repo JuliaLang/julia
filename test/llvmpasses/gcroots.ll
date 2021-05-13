@@ -1,4 +1,4 @@
-; RUN: opt -load libjulia%shlibext -LateLowerGCFrame -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -load libjulia-internal%shlibext -LateLowerGCFrame -FinalLowerGC -S %s | FileCheck %s
 
 
 declare void @boxed_simple({} addrspace(10)*, {} addrspace(10)*)

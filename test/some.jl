@@ -79,6 +79,16 @@
     @test something(missing, nothing, missing) === missing
 end
 
+@testset "@something" begin
+    @test_throws ArgumentError @something()
+    @test_throws ArgumentError @something(nothing)
+    @test @something(1) === 1
+    @test @something(Some(nothing)) === nothing
+
+    @test @something(1, error("failed")) === 1
+    @test_throws ErrorException @something(nothing, error("failed"))
+end
+
 # issue #26927
 a = [missing, nothing, Some(nothing), Some(missing)]
 @test a isa Vector{Union{Missing, Nothing, Some}}

@@ -49,12 +49,13 @@ function choosetests(choices = [])
         "euler", "show", "client",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs",
-        "misc", "threads", "stress",
+        "misc", "threads", "stress", "binaryplatforms", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
-        "reinterpretarray", "syntax", "logging", "missing", "asyncmap", "atexit"
+        "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
+        "smallarrayshrink", "opaque_closure", "filesystem", "download"
     ]
 
     tests = []
@@ -111,7 +112,8 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    net_required_for = ["Sockets", "LibGit2"]
+    net_required_for = ["download", "Sockets", "LibGit2", "LibCURL", "Downloads",
+                        "Artifacts", "LazyArtifacts"]
     net_on = true
     try
         ipa = getipaddr()

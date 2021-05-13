@@ -73,11 +73,13 @@ function test_jl_dump_compiles_toplevel_thunks()
     # Make sure to cause compilation of the eval function
     # before calling it below.
     Core.eval(Main, Any[:(nothing)][1])
+    GC.enable(false)  # avoid finalizers to be compiled
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
     close(io)
+    GC.enable(true)
     tstats = stat(tfile)
     tempty = tstats.size == 0
     rm(tfile)
@@ -473,3 +475,89 @@ end
     @test contains(llvmstr, str) || llvmstr
     @test f37262(Base.inferencebarrier(true)) === nothing
 end
+
+# issue #37671
+let d = Dict((:a,) => 1, (:a, :b) => 2)
+    @test d[(:a,)] == 1
+    @test d[(:a, :b)] == 2
+end
+
+# issue #37880
+primitive type Has256Bits 256 end
+let x = reinterpret(Has256Bits, [0xfcdac822cac89d82de4f9b3326da8294, 0x6ebac4d5982880ca703c57e37657f1ee])[]
+    shifted = [0xeefcdac822cac89d82de4f9b3326da82, 0x006ebac4d5982880ca703c57e37657f1]
+    f(x) = Base.lshr_int(x, 0x8)
+    @test reinterpret(UInt128, [f(x)]) == shifted
+    @test reinterpret(UInt128, [Base.lshr_int(x, 0x8)]) == shifted
+    g(x) = Base.ashr_int(x, 0x8)
+    @test reinterpret(UInt128, [g(x)]) == shifted
+    @test reinterpret(UInt128, [Base.ashr_int(x, 0x8)]) == shifted
+    lshifted = [0xdac822cac89d82de4f9b3326da829400, 0xbac4d5982880ca703c57e37657f1eefc]
+    h(x) = Base.shl_int(x, 0x8)
+    @test reinterpret(UInt128, [h(x)]) == lshifted
+    @test reinterpret(UInt128, [Base.shl_int(x, 0x8)]) == lshifted
+end
+
+# issue #37872
+let f(@nospecialize(x)) = x===Base.ImmutableDict(Int128=>:big)
+    @test !f(Dict(Int=>Int))
+end
+
+# issue #37974
+primitive type UInt24 24 end
+let a = Core.Intrinsics.trunc_int(UInt24, 3),
+    f(t) = t[2]
+    @test f((a, true)) === true
+    @test f((a, false)) === false
+    @test sizeof(Tuple{UInt24,Bool}) == 8
+    @test sizeof(UInt24) == 3
+    @test sizeof(Union{UInt8,UInt24}) == 3
+    @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
+end
+
+# issue #39232
+function f39232(a)
+    z = Any[]
+    for (i, ai) in enumerate(a)
+        push!(z, ai)
+    end
+    return z
+end
+@test f39232((+, -)) == Any[+, -]
+
+@testset "GC.@preserve" begin
+    # main use case
+    function f1(cond)
+        val = [1]
+        GC.@preserve val begin end
+    end
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f1, Tuple{Bool}, true, false, false))
+
+    # stack allocated objects (JuliaLang/julia#34241)
+    function f3(cond)
+        val = ([1],)
+        GC.@preserve val begin end
+    end
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f3, Tuple{Bool}, true, false, false))
+
+    # unions of immutables (JuliaLang/julia#39501)
+    function f2(cond)
+        val = cond ? 1 : 1f0
+        GC.@preserve val begin end
+    end
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f2, Tuple{Bool}, true, false, false))
+    # make sure the fix for the above doesn't regress #34241
+    function f4(cond)
+        val = cond ? ([1],) : ([1f0],)
+        GC.@preserve val begin end
+    end
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
+end
+
+# issue #32843
+function f32843(vals0, v)
+    (length(vals0) > 1) && (vals = v[1])
+    (length(vals0) == 1 && vals0[1]==1) && (vals = 1:2)
+    vals
+end
+@test_throws UndefVarError f32843([6], Vector[[1]])

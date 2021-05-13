@@ -5,7 +5,6 @@
 """
     typejoin(T, S)
 
-
 Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
 they both inherit.
 """
@@ -121,18 +120,46 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     return Any
 end
 
+# return an upper-bound on type `a` with type `b` removed
+# such that `return <: a` && `Union{return, b} == Union{a, b}`
+# WARNING: this is wrong for some objects for which subtyping is broken
+#          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
+function typesplit(@nospecialize(a), @nospecialize(b))
+    @_pure_meta
+    if a <: b
+        return Bottom
+    end
+    if isa(a, Union)
+        return Union{typesplit(a.a, b),
+                     typesplit(a.b, b)}
+    end
+    return a
+end
+
+
 """
     promote_typejoin(T, S)
 
 Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
+
+See instead [`promote`](@ref), [`promote_type`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.promote_typejoin(Int, Float64)
+Real
+
+julia> Base.promote_type(Int, Float64)
+Float64
+```
 """
 function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
     return Union{a, b, c}::Type
 end
-_promote_typesubtract(@nospecialize(a)) = Core.Compiler.typesubtract(a, Union{Nothing, Missing})
+_promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
 
 
 # Returns length, isfixed
@@ -140,9 +167,8 @@ function full_va_len(p)
     isempty(p) && return 0, true
     last = p[end]
     if isvarargtype(last)
-        N = unwrap_unionall(last).parameters[2]
-        if isa(N, Integer)
-            return length(p)::Int + Int(N) - 1, true
+        if isdefined(last, :N) && isa(last.N, Int)
+            return length(p)::Int + last.N - 1, true
         end
         return length(p)::Int, false
     end
@@ -175,6 +201,9 @@ tolerated; for example, `promote_type(Int64, Float64)` returns
 [`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
 represented exactly as `Float64` values.
 
+See also: [`promote`](@ref), [`promote_typejoin`](@ref), [`promote_rule`](@ref).
+
+# Examples
 ```jldoctest
 julia> promote_type(Int64, Float64)
 Float64
@@ -237,6 +266,8 @@ promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = 
 
 Convert all arguments to a common type, and return them all (as a tuple).
 If no arguments can be converted, an error is raised.
+
+See also: [`promote_type`], [`promote_rule`].
 
 # Examples
 ```jldoctest
@@ -316,8 +347,10 @@ If `y` is an `Int` literal (e.g. `2` in `x^2` or `-3` in `x^-3`), the Julia code
 enable compile-time specialization on the value of the exponent.
 (As a default fallback we have `Base.literal_pow(^, x, Val(y)) = ^(x,y)`,
 where usually `^ == Base.^` unless `^` has been defined in the calling
-namespace.)
+namespace.) If `y` is a negative integer literal, then `Base.literal_pow`
+transforms the operation to `inv(x)^-y` by default, where `-y` is positive.
 
+# Examples
 ```jldoctest
 julia> 3^5
 243

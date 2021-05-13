@@ -93,6 +93,11 @@ end
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 2)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(5, 4), trues(2)) == false
+    @test checkbounds(Bool, A, trues(6, 4), trues(3)) == false
+    @test checkbounds(Bool, A, trues(5, 4), trues(4)) == false
 end
 
 @testset "array of CartesianIndex" begin
@@ -225,6 +230,58 @@ end
     end
 end
 
+@testset "LinearIndices" begin
+    @testset "constructors" begin
+        for oinds in [
+            (2, 3),
+            (UInt8(2), 3),
+            (2, UInt8(3)),
+            (2, 1:3),
+            (Base.OneTo(2), 1:3)
+        ]
+            R = LinearIndices(oinds)
+            @test size(R) == (2, 3)
+            @test axes(R) == (Base.OneTo(2), Base.OneTo(3))
+            @test R[begin] == 1
+            @test R[end] == 6
+        end
+
+        for oinds in [(2, ), (2, 3), (2, 3, 4)]
+            R = CartesianIndices(oinds)
+            @test size(R) == oinds
+        end
+    end
+
+    @testset "IdentityUnitRange" begin
+        function _collect(A)
+            rst = eltype(A)[]
+            for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+        function _simd_collect(A)
+            rst = eltype(A)[]
+            @simd for i in A
+                push!(rst, i)
+            end
+            rst
+        end
+
+        for oinds in [
+            (Base.IdentityUnitRange(0:1),),
+            (Base.IdentityUnitRange(0:1), Base.IdentityUnitRange(0:2)),
+            (Base.IdentityUnitRange(0:1), Base.OneTo(3)),
+        ]
+            R = LinearIndices(oinds)
+            @test axes(R) === oinds
+            @test _collect(R) == _simd_collect(R) == vec(collect(R))
+        end
+        R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
+        @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+    end
+end
+
 # token type on which to dispatch testing methods in order to avoid potential
 # name conflicts elsewhere in the base test suite
 mutable struct TestAbstractArray end
@@ -242,10 +299,10 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
     B = T(A)
     @test A == B
     # Test indexing up to 5 dimensions
-    trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
-    trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
-    trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
-    trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
+    trailing5 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-5, 0)))
+    trailing4 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-4, 0)))
+    trailing3 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-3, 0)))
+    trailing2 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-2, 0)))
     i=0
     for i5 = 1:size(B, 5)
         for i4 = 1:size(B, 4)
@@ -362,10 +419,10 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         N = prod(shape)
         A = reshape(Vector(1:N), shape)
         B = T(A)
-        trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
-        trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
-        trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
-        trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
+        trailing5 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-5, 0)))
+        trailing4 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-4, 0)))
+        trailing3 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-3, 0)))
+        trailing2 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-2, 0)))
         idxs = rand(1:N, 3, 3, 3)
         @test B[idxs] == A[idxs] == idxs
         @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
@@ -401,6 +458,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] ==
                 B[LinearIndices(mask1)[findall(mask1)], LinearIndices(mask2)[findall(mask2)], trailing2]
             @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
+
+            if ndims(B) > 1
+                maskfront = bitrand(shape[1:end-1])
+                Bslice = B[ntuple(i->(:), ndims(B)-1)..., 1]
+                @test B[maskfront,1] == Bslice[maskfront]
+                @test size(B[maskfront, 1:1]) == (sum(maskfront), 1)
+            end
         end
     end
 end
@@ -541,16 +605,24 @@ function test_cat(::Type{TestAbstractArray})
     b_int = reshape([1:27...], 3, 3, 3)
     b_float = reshape(Float64[1:27...], 3, 3, 3)
     b2hcat = Array{Float64}(undef, 3, 6, 3)
+    b2vcat = Array{Float64}(undef, 6, 3, 3)
     b1 = reshape([1:9...], 3, 3)
     b2 = reshape([10:18...], 3, 3)
     b3 = reshape([19:27...], 3, 3)
     b2hcat[:, :, 1] = hcat(b1, b1)
     b2hcat[:, :, 2] = hcat(b2, b2)
     b2hcat[:, :, 3] = hcat(b3, b3)
+    b2vcat[:, :, 1] = vcat(b1, b1)
+    b2vcat[:, :, 2] = vcat(b2, b2)
+    b2vcat[:, :, 3] = vcat(b3, b3)
     b3hcat = Array{Float64}(undef, 3, 9, 3)
     b3hcat[:, :, 1] = hcat(b1, b1, b1)
     b3hcat[:, :, 2] = hcat(b2, b2, b2)
     b3hcat[:, :, 3] = hcat(b3, b3, b3)
+    b3vcat = Array{Float64}(undef, 9, 3, 3)
+    b3vcat[:, :, 1] = vcat(b1, b1, b1)
+    b3vcat[:, :, 2] = vcat(b2, b2, b2)
+    b3vcat[:, :, 3] = vcat(b3, b3, b3)
     B = TSlow(b_int)
     B1 = TSlow([1:24...])
     B2 = TSlow([1:25...])
@@ -561,14 +633,20 @@ function test_cat(::Type{TestAbstractArray})
     i = rand(1:10)
 
     @test cat(;dims=i) == Any[]
+    @test Base.typed_hcat(Float64) == Vector{Float64}()
+    @test Base.typed_vcat(Float64) == Vector{Float64}()
     @test vcat() == Any[]
     @test hcat() == Any[]
+    @test vcat(1, 1.0, 3, 3.0) == [1.0, 1.0, 3.0, 3.0]
     @test hcat(1, 1.0, 3, 3.0) == [1.0 1.0 3.0 3.0]
     @test_throws ArgumentError hcat(B1, B2)
     @test_throws ArgumentError vcat(C1, C2)
 
     @test vcat(B) == B
     @test hcat(B) == B
+    @test Base.typed_vcat(Float64, B) == TSlow(b_float)
+    @test Base.typed_vcat(Float64, B, B) == TSlow(b2vcat)
+    @test Base.typed_vcat(Float64, B, B, B) == TSlow(b3vcat)
     @test Base.typed_hcat(Float64, B) == TSlow(b_float)
     @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
     @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
@@ -614,6 +692,12 @@ function test_cat(::Type{TestAbstractArray})
     # 36041
     @test_throws MethodError cat(["a"], ["b"], dims=[1, 2])
     @test cat([1], [1], dims=[1, 2]) == I(2)
+
+    # inferrability
+    As = [zeros(2, 2) for _ = 1:2]
+    @test @inferred(cat(As...; dims=Val(3))) == zeros(2, 2, 2)
+    cat3v(As) = cat(As...; dims=Val(3))
+    @test @inferred(cat3v(As)) == zeros(2, 2, 2)
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -751,6 +835,11 @@ end
 @testset "ndims and friends" begin
     @test ndims(Diagonal(rand(1:5,5))) == 2
     @test ndims(Diagonal{Float64}) == 2
+    @test ndims(Diagonal) == 2
+    @test ndims(Vector) == 1
+    @test ndims(Matrix) == 2
+    @test ndims(Array{<:Any, 0}) == 0
+    @test_throws MethodError ndims(Array)
 end
 
 @testset "Issue #17811" begin
@@ -773,6 +862,18 @@ end
 @testset "to_shape" begin
     @test Base.to_shape(()) === ()
     @test Base.to_shape(1) === 1
+    @test Base.to_shape(big(1)) === Base.to_shape(1)
+    @test Base.to_shape(Int8(1)) === Base.to_shape(1)
+end
+
+@testset "issue #39923: similar" begin
+    for ax in [(big(2), big(3)), (big(2), 3), (UInt64(2), 3), (2, UInt32(3)),
+        (big(2), Base.OneTo(3)), (Base.OneTo(2), Base.OneTo(big(3)))]
+
+        A = similar(ones(), Int, ax)
+        @test axes(A) === (Base.OneTo(2), Base.OneTo(3))
+        @test eltype(A) === Int
+    end
 end
 
 @testset "issue #19267" begin
@@ -784,6 +885,13 @@ end
     @test ndims((1:3)[:,:,1:1,:]) == 4
     @test ndims((1:3)[:,:,1:1]) == 3
     @test ndims((1:3)[:,:,1:1,:,:,[1]]) == 6
+end
+
+@testset "issue #38192" begin
+    img = cat([1 2; 3 4], [1 5; 6 7]; dims=3)
+    mask = img[:,:,1] .== img[:,:,2]
+    img[mask,2] .= 0
+    @test img == cat([1 2; 3 4], [0 5; 6 7]; dims=3)
 end
 
 @testset "dispatch loop introduced in #19305" begin
@@ -1140,4 +1248,77 @@ end
     @test last(itr, 25) !== itr
     @test last(itr, 1) == [itr[end]]
     @test_throws ArgumentError last(itr, -6)
+end
+
+@testset "Base.rest" begin
+    a = reshape(1:4, 2, 2)'
+    @test Base.rest(a) == a[:]
+    _, st = iterate(a)
+    @test Base.rest(a, st) == [3, 2, 4]
+end
+
+@testset "issue #37741, non-int cat" begin
+    @test [1; 1:BigInt(5)] == [1; 1:5]
+    @test [1:BigInt(5); 1] == [1:5; 1]
+end
+
+@testset "Base.isstored" begin
+    a = rand(3, 4, 5)
+    @test Base.isstored(a, 1, 2, 3)
+    @test_throws BoundsError Base.isstored(a, 4, 4, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 5, 5)
+    @test_throws BoundsError Base.isstored(a, 3, 4, 6)
+end
+
+mutable struct TestPushArray{T, N} <: AbstractArray{T, N}
+    data::Array{T}
+end
+Base.push!(tpa::TestPushArray{T}, a::T) where T = push!(tpa.data, a)
+Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
+
+@testset "push! and pushfirst!" begin
+    a_orig = [1]
+    tpa = TestPushArray{Int, 2}(a_orig)
+    push!(tpa, 2, 3, 4, 5, 6)
+    @test tpa.data == collect(1:6)
+    a_orig = [1]
+    tpa = TestPushArray{Int, 2}(a_orig)
+    pushfirst!(tpa, 6, 5, 4, 3, 2)
+    @test tpa.data == reverse(collect(1:6))
+end
+
+@testset "splatting into hvcat" begin
+    t = (1, 2)
+    @test [t...; 3 4] == [1 2; 3 4]
+    @test [0 t...; t... 0] == [0 1 2; 1 2 0]
+    @test_throws ArgumentError [t...; 3 4 5]
+
+    @test Int[t...; 3 4] == [1 2; 3 4]
+    @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
+    @test_throws ArgumentError Int[t...; 3 4 5]
+end
+
+@testset "issue #39896, modified getindex " begin
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3))
+            @test arr[inds] == arr[collect(inds)]
+            @test arr[inds] isa AbstractVector{eltype(arr)}
+        end
+    end
+    for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
+        @test arr[true:true] == [arr[1]]
+        @test arr[true:true] isa AbstractVector{eltype(arr)}
+        @test arr[false:false] == []
+        @test arr[false:false] isa AbstractVector{eltype(arr)}
+    end
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        @test_throws BoundsError arr[true:true]
+        @test_throws BoundsError arr[false:false]
+    end
+end
+
+@testset "reduce(vcat, ...) inferrence #40277" begin
+    x_vecs = ([5, ], [1.0, 2.0, 3.0])
+    @test @inferred(reduce(vcat, x_vecs)) == [5.0, 1.0, 2.0, 3.0]
+    @test @inferred(reduce(vcat, ([10.0], [20.0], Bool[]))) == [10.0, 20.0]
 end

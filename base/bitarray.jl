@@ -605,7 +605,7 @@ gen_bitarrayN(::Type{BitVector}, itsz, itr)                        = gen_bitarra
 gen_bitarrayN(::Type{BitVector}, itsz::HasShape{1}, itr)           = gen_bitarray(itsz, itr)
 gen_bitarrayN(::Type{BitArray{N}}, itsz::HasShape{N}, itr) where N = gen_bitarray(itsz, itr)
 # The first of these is just for ambiguity resolution
-gen_bitarrayN(::Type{BitVector}, itsz::HasShape{N}, itr) where N      = throw(DimensionMismatch("cannot create a $T from a $N-dimensional iterator"))
+gen_bitarrayN(::Type{BitVector}, itsz::HasShape{N}, itr) where N      = throw(DimensionMismatch("cannot create a BitVector from a $N-dimensional iterator"))
 gen_bitarrayN(@nospecialize(T::Type), itsz::HasShape{N}, itr) where N = throw(DimensionMismatch("cannot create a $T from a $N-dimensional iterator"))
 gen_bitarrayN(@nospecialize(T::Type), itsz, itr) = throw(DimensionMismatch("cannot create a $T from a generic iterator"))
 
@@ -1386,15 +1386,15 @@ circshift!(B::BitVector, i::Integer) = circshift!(B, B, i)
 
 ## count & find ##
 
-function bitcount(Bc::Vector{UInt64})
-    n = 0
+function bitcount(Bc::Vector{UInt64}; init::T=0) where {T}
+    n::T = init
     @inbounds for i = 1:length(Bc)
-        n += count_ones(Bc[i])
+        n = (n + count_ones(Bc[i])) % T
     end
     return n
 end
 
-count(B::BitArray) = bitcount(B.chunks)
+_count(::typeof(identity), B::BitArray, ::Colon, init) = bitcount(B.chunks; init)
 
 function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
@@ -1707,6 +1707,8 @@ map!(::typeof(identity), dest::BitArray, A::BitArray) = copyto!(dest, A)
 for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(Union{typeof(|), typeof(max)}),            :(|)),
                (:(Union{typeof(xor), typeof(!=)}),           :xor),
+               (:(typeof(nand)),                             :nand),
+               (:(typeof(nor)),                              :nor),
                (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> p | ~q)),
                (:(typeof(<=)),                               :((p, q) -> ~p | q)),
                (:(typeof(==)),                               :((p, q) -> ~xor(p, q))),

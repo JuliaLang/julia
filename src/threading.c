@@ -81,6 +81,8 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     // for codegen
     return &jl_get_ptls_states_fast;
 }
+
+JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f) { }
 #elif defined(_OS_WINDOWS_)
 // Apparently windows doesn't have a static TLS model (or one that can be
 // reliably used from a shared library) either..... Use `TLSAlloc` instead.
@@ -138,16 +140,16 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     // for codegen
     return &jl_get_ptls_states;
 }
+
+JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f) { }
 #else
 // We use the faster static version in the main executable to replace
 // the slower version in the shared object. The code in different libraries
 // or executables, however, have to agree on which version to use.
-// The general solution is to add one more indirection in the C entry point
-// (see `jl_get_ptls_states_wrapper`).
+// The general solution is to add one more indirection in the C entry point.
 //
 // When `ifunc` is available, we can use it to trick the linker to use the
 // real address (`jl_get_ptls_states_static`) directly as the symbol address.
-// (see `jl_get_ptls_states_resolve`).
 //
 // However, since the detection of the static version in `ifunc`
 // is not guaranteed to be reliable, we still need to fallback to the wrapper
@@ -184,13 +186,6 @@ static jl_ptls_t jl_get_ptls_states_init(void)
     return cb();
 }
 
-static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_wrapper(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
-{
-#ifndef __clang_analyzer__
-    return (*jl_tls_states_cb)();
-#endif
-}
-
 JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
 {
     if (f == jl_tls_states_cb || !f)
@@ -205,29 +200,13 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
     }
 }
 
-#  if JL_USE_IFUNC
-static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
 {
-    if (jl_tls_states_cb != jl_get_ptls_states_init)
-        return jl_tls_states_cb;
-    // If we can't find the static version, return the wrapper instead
-    // of the slow version so that we won't resolve to the slow version
-    // due to issues in the relocation order.
-    // This may not be necessary once `ifunc` support in glibc is more mature.
-    if (!jl_get_ptls_states_static)
-        return jl_get_ptls_states_wrapper;
-    jl_tls_states_cb = jl_get_ptls_states_static;
-    return jl_tls_states_cb;
+#ifndef __clang_analyzer__
+    return (*jl_tls_states_cb)();
+#endif
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
-    __attribute__((ifunc ("jl_get_ptls_states_resolve")));
-#  else // JL_TLS_USE_IFUNC
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void) JL_GLOBALLY_ROOTED
-{
-    return jl_get_ptls_states_wrapper();
-}
-#  endif // JL_TLS_USE_IFUNC
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 {
     if (jl_tls_states_cb == jl_get_ptls_states_init)
@@ -237,8 +216,9 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 }
 #endif
 
-JL_DLLEXPORT int jl_n_threads;
 jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
+uint8_t *jl_measure_compile_time = NULL;
+uint64_t *jl_cumulative_compile_time = NULL;
 
 // return calling thread's ID
 // Also update the suspended_threads list in signals-mach when changing the
@@ -408,14 +388,22 @@ void jl_init_threading(void)
 
     // how many threads available, usable
     jl_n_threads = JULIA_NUM_THREADS;
-    if (jl_options.nthreads < 0) // --threads=auto
+    if (jl_options.nthreads < 0) { // --threads=auto
         jl_n_threads = jl_cpu_threads();
-    else if (jl_options.nthreads > 0) // --threads=N
+    }
+    else if (jl_options.nthreads > 0) { // --threads=N
         jl_n_threads = jl_options.nthreads;
-    else if ((cp = getenv(NUM_THREADS_NAME)))
-        jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
+    }
+    else if ((cp = getenv(NUM_THREADS_NAME))) {
+        if (strcmp(cp, "auto"))
+            jl_n_threads = (uint64_t)strtol(cp, NULL, 10); // ENV[NUM_THREADS_NAME] == "N"
+        else
+            jl_n_threads = jl_cpu_threads(); // ENV[NUM_THREADS_NAME] == "auto"
+    }
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
+    jl_measure_compile_time = (uint8_t*)calloc(jl_n_threads, sizeof(*jl_measure_compile_time));
+    jl_cumulative_compile_time = (uint64_t*)calloc(jl_n_threads, sizeof(*jl_cumulative_compile_time));
 #ifndef __clang_analyzer__
     jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
 #endif
@@ -441,8 +429,8 @@ void jl_start_threads(void)
     // do we have exclusive use of the machine? default is no
     exclusive = DEFAULT_MACHINE_EXCLUSIVE;
     cp = getenv(MACHINE_EXCLUSIVE_NAME);
-    if (cp)
-        exclusive = strtol(cp, NULL, 10);
+    if (cp && strcmp(cp, "0") != 0)
+        exclusive = 1;
 
     // exclusive use: affinitize threads, master thread on proc 0, rest
     // according to a 'compact' policy

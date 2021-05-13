@@ -418,7 +418,7 @@ end
 
 Run `command` and return the resulting output as a `String`.
 """
-read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
+read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
 
 """
     run(command, args...; wait::Bool = true)
@@ -476,7 +476,7 @@ function test_success(proc::Process)
         #TODO: this codepath is not currently tested
         throw(_UVError("could not start process " * repr(proc.cmd), proc.exitcode))
     end
-    return proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
+    return proc.exitcode == 0 && proc.termsignal == 0
 end
 
 function success(x::Process)

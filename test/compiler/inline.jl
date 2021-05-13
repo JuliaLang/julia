@@ -150,9 +150,21 @@ end
     @test !any(x -> x isa Expr && x.head === :invoke, src.code)
 end
 
+function fully_eliminated(f, args)
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode)
+    end
+end
+
+function fully_eliminated(f, args, retval)
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode) && code[1].val == retval
+    end
+end
+
 # check that type.mutable can be fully eliminated
 f_mutable_nothrow(s::String) = Val{typeof(s).mutable}
-@test length(code_typed(f_mutable_nothrow, (String,))[1][1].code) == 1
+@test fully_eliminated(f_mutable_nothrow, (String,))
 
 # check that ifelse can be fully eliminated
 function f_ifelse(x)
@@ -163,7 +175,7 @@ end
 # 2 for now because the compiler leaves a GotoNode around
 @test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
 
-# Test that inlining of _apply properly hits the inference cache
+# Test that inlining of _apply_iterate properly hits the inference cache
 @noinline cprop_inline_foo1() = (1, 1)
 @noinline cprop_inline_foo2() = (2, 2)
 function cprop_inline_bar(x...)
@@ -193,7 +205,7 @@ end
 function cprop_inline_baz1()
     return cprop_inline_bar(cprop_inline_foo1()..., cprop_inline_foo1()...)
 end
-@test length(code_typed(cprop_inline_baz1, ())[1][1].code) == 1
+@test fully_eliminated(cprop_inline_baz1, ())
 
 function cprop_inline_baz2()
     return cprop_inline_bar(cprop_inline_foo2()..., cprop_inline_foo2()...)
@@ -205,14 +217,14 @@ function f_apply_typevar(T)
     NTuple{N, T} where N
     return T
 end
-@test length(code_typed(f_apply_typevar, (Type{Any},))[1][1].code) == 1
+@test fully_eliminated(f_apply_typevar, (Type{Any},))
 
 # check that div can be fully eliminated
 function f_div(x)
-	div(x, 1)
-	return x
+    div(x, 1)
+    return x
 end
-@test length(code_typed(f_div, (Int,))[1][1].code) == 1
+@test fully_eliminated(f_div, (Int,)) == 1
 # ...unless we div by an unknown amount
 function f_div(x, y)
     div(x, y)
@@ -221,12 +233,12 @@ end
 @test length(code_typed(f_div, (Int, Int))[1][1].code) > 1
 
 f_identity_splat(t) = (t...,)
-@test length(code_typed(f_identity_splat, (Tuple{Int,Int},))[1][1].code) == 1
+@test fully_eliminated(f_identity_splat, (Tuple{Int,Int},))
 
 # splatting one tuple into (,) plus zero or more empties should reduce
 # this pattern appears for example in `fill_to_length`
 f_splat_with_empties(t) = (()..., t..., ()..., ()...)
-@test length(code_typed(f_splat_with_empties, (NTuple{200,UInt8},))[1][1].code) == 1
+@test fully_eliminated(f_splat_with_empties, (NTuple{200,UInt8},))
 
 # check that <: can be fully eliminated
 struct SomeArbitraryStruct; end
@@ -234,10 +246,7 @@ function f_subtype()
     T = SomeArbitraryStruct
     T <: Bool
 end
-let code = code_typed(f_subtype, Tuple{})[1][1].code
-    @test length(code) == 1
-    @test code[1] == ReturnNode(false)
-end
+@test fully_eliminated(f_subtype, Tuple{}, false)
 
 # check that pointerref gets deleted if unused
 f_pointerref(T::Type{S}) where S = Val(length(T.parameters))
@@ -261,9 +270,7 @@ function foo_apply_apply_type_svec()
     B = Tuple{Float32, Float32}
     Core.apply_type(A..., B.types...)
 end
-let ci = code_typed(foo_apply_apply_type_svec, Tuple{})[1].first
-    @test length(ci.code) == 1 && ci.code[1] == ReturnNode(NTuple{3, Float32})
-end
+@test fully_eliminated(foo_apply_apply_type_svec, Tuple{}, NTuple{3, Float32})
 
 # The that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
@@ -277,10 +284,7 @@ b30118(x...) = c30118(x)
 f34900(x::Int, y) = x
 f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
-let ci = code_typed(f34900, Tuple{Int, Int})[1].first
-    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode) &&
-        ci.code[1].val.n == 2
-end
+@test fully_eliminated(f34900, Tuple{Int, Int}, Core.Argument(2))
 
 @testset "check jl_ir_flag_inlineable for inline macro" begin
     @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
@@ -307,3 +311,72 @@ let ci = code_typed(f_29115, Tuple{Pair{Int64, Int64}})[1].first
     @test length(ci.code) == 4 && isexpr(ci.code[1], :call) &&
         ci.code[end-1].args[1] === GlobalRef(Core, :tuple)
 end
+
+# Issue #37182 & #37555 - Inlining of pending nodes
+function f37555(x::Int; kwargs...)
+    @assert x < 10
+    +(x, kwargs...)
+end
+@test f37555(1) == 1
+
+# Test that we can inline small constants even if they are not isbits
+struct NonIsBitsDims
+    dims::NTuple{N, Int} where N
+end
+NonIsBitsDims() = NonIsBitsDims(())
+let ci = code_typed(NonIsBitsDims, Tuple{})[1].first
+    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode) &&
+        ci.code[1].val.value == NonIsBitsDims()
+end
+
+struct NonIsBitsDimsUndef
+    dims::NTuple{N, Int} where N
+    NonIsBitsDimsUndef() = new()
+end
+@test Core.Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
+@test !Core.Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
+
+# More nothrow modeling for apply_type
+f_apply_type_typeof(x) = (Ref{typeof(x)}; nothing)
+@test fully_eliminated(f_apply_type_typeof, Tuple{Any})
+@test fully_eliminated(f_apply_type_typeof, Tuple{Vector})
+@test fully_eliminated(x->(Val{x}; nothing), Tuple{Int})
+@test fully_eliminated(x->(Val{x}; nothing), Tuple{Symbol})
+@test fully_eliminated(x->(Val{x}; nothing), Tuple{Tuple{Int, Int}})
+@test !fully_eliminated(x->(Val{x}; nothing), Tuple{String})
+@test !fully_eliminated(x->(Val{x}; nothing), Tuple{Any})
+@test !fully_eliminated(x->(Val{x}; nothing), Tuple{Tuple{Int, String}})
+
+struct RealConstrained{T <: Real}; end
+@test !fully_eliminated(x->(RealConstrained{x}; nothing), Tuple{Int})
+@test !fully_eliminated(x->(RealConstrained{x}; nothing), Tuple{Type{Vector{T}} where T})
+
+# Check that pure functions with non-inlineable results still get deleted
+struct Big
+    x::NTuple{1024, Int}
+end
+@Base.pure Big() = Big(ntuple(identity, 1024))
+function pure_elim_full()
+    Big()
+    nothing
+end
+
+@test fully_eliminated(pure_elim_full, Tuple{})
+
+# Union splitting of convert
+f_convert_missing(x) = convert(Int64, x)
+let ci = code_typed(f_convert_missing, Tuple{Union{Int64, Missing}})[1][1],
+    ci_unopt = code_typed(f_convert_missing, Tuple{Union{Int64, Missing}}; optimize=false)[1][1]
+    # We want to check that inlining was able to union split this, but we don't
+    # want to make the test too specific to the exact structure that inlining
+    # generates, so instead, we just check that the compiler made it bigger.
+    # There are performance tests that are also sensitive to union splitting
+    # here, so a non-obvious regression
+    @test length(ci.code) >
+        length(ci_unopt.code)
+end
+
+# OC getfield elim
+using Base.Experimental: @opaque
+f_oc_getfield(x) = (@opaque ()->x)()
+@test fully_eliminated(f_oc_getfield, Tuple{Int})

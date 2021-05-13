@@ -12,7 +12,7 @@ the top of the `Makefile` to set appropriate code signing parameters.
 
 The framework is installed in `/Library/Frameworks` and the app in
 `/Applications`.  Installation may be system-wide (i.e., relative to `/`) or
-local to the user's home directory (i.e., `$Home/Appliations/Julia.app`).
+local to the user's home directory (i.e., `$Home/Applications/Julia.app`).
 
 The `julia` binary is embedded in the framework at
 `Julia.framework/Helpers/julia`.

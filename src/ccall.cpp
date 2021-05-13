@@ -5,6 +5,10 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 
+#ifdef _OS_WINDOWS_
+extern const char jl_crtdll_basename[];
+#endif
+
 // somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 {
@@ -22,11 +26,11 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
     GlobalVariable *libptrgv;
     jl_codegen_params_t::SymMapGV *symMap;
 #ifdef _OS_WINDOWS_
-    if ((intptr_t)f_lib == 1) {
+    if ((intptr_t)f_lib == (intptr_t)JL_EXE_LIBNAME) {
         libptrgv = prepare_global_in(M, jlexe_var);
         symMap = &emission_context.symMapExe;
     }
-    else if ((intptr_t)f_lib == 2) {
+    else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME) {
         libptrgv = prepare_global_in(M, jldll_var);
         symMap = &emission_context.symMapDl;
     }
@@ -1007,14 +1011,18 @@ std::string generate_func_sig(const char *fname)
         abi->use_sret(jl_nothing_type);
     }
     else {
-        if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_cpointer_type(rt) || jl_is_array_type(rt) || retboxed) {
+        if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_layout_opaque(((jl_datatype_t*)rt)->layout) || jl_is_cpointer_type(rt) || retboxed) {
             prt = lrt; // passed as pointer
             abi->use_sret(jl_voidpointer_type);
         }
         else if (abi->use_sret((jl_datatype_t*)rt)) {
             AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
+#if JL_LLVM_VERSION < 120000
             retattrs.addAttribute(Attribute::StructRet);
+#else
+            retattrs.addStructRetAttr(lrt);
+#endif
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
             paramattrs.push_back(std::move(retattrs));
@@ -1049,7 +1057,7 @@ std::string generate_func_sig(const char *fname)
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
-                if (jl_datatype_size(bt) < 4) {
+                if (jl_datatype_size(bt) < 4 && bt != jl_float16_type) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type))
                         ab.addAttribute(Attribute::SExt);
                     else
@@ -1064,7 +1072,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         Type *pat;
-        if (!jl_is_datatype(tti) || ((jl_datatype_t*)tti)->layout == NULL || jl_is_array_type(tti)) {
+        if (!jl_is_datatype(tti) || ((jl_datatype_t*)tti)->layout == NULL || jl_is_layout_opaque(((jl_datatype_t*)tti)->layout)) {
             tti = (jl_value_t*)jl_voidpointer_type; // passed as pointer
         }
 
@@ -1262,7 +1270,20 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     auto _is_libjulia_func = [&] (uintptr_t ptr, const char *name) {
         if ((uintptr_t)fptr == ptr)
             return true;
-        return (!f_lib || f_lib == JL_DL_LIBNAME) && f_name && !strcmp(f_name, name);
+        if (f_lib) {
+#ifdef _OS_WINDOWS_
+            if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
+                (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+                (!strcmp(f_lib, jl_crtdll_basename))) {
+                // libjulia-like
+            }
+            else
+                return false;
+#else
+            return false;
+#endif
+        }
+        return f_name && !strcmp(f_name, name);
     };
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
 
@@ -1477,6 +1498,28 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         tbaa_decorate(tbaa_const, tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
     }
+    else if (is_libjulia_func(jl_gc_disable_finalizers_internal)
+#ifdef NDEBUG
+             || is_libjulia_func(jl_gc_enable_finalizers_internal)
+#endif
+             ) {
+        JL_GC_POP();
+        Value *ptls_i32 = emit_bitcast(ctx, ctx.ptlsStates, T_pint32);
+        const int finh_offset = offsetof(jl_tls_states_t, finalizers_inhibited);
+        Value *pfinh = ctx.builder.CreateInBoundsGEP(ptls_i32, ConstantInt::get(T_size, finh_offset / 4));
+        LoadInst *finh = ctx.builder.CreateAlignedLoad(pfinh, Align(sizeof(int32_t)));
+        Value *newval;
+        if (is_libjulia_func(jl_gc_disable_finalizers_internal)) {
+            newval = ctx.builder.CreateAdd(finh, ConstantInt::get(T_int32, 1));
+        }
+        else {
+            newval = ctx.builder.CreateSelect(ctx.builder.CreateICmpEQ(finh, ConstantInt::get(T_int32, 0)),
+                                              ConstantInt::get(T_int32, 0),
+                                              ctx.builder.CreateSub(finh, ConstantInt::get(T_int32, 1)));
+        }
+        ctx.builder.CreateStore(newval, pfinh);
+        return ghostValue(jl_nothing_type);
+    }
     else if (is_libjulia_func(jl_get_current_task)) {
         assert(lrt == T_prjlvalue);
         assert(!isVa && !llvmcall && nccallargs == 0);
@@ -1674,19 +1717,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
         ctx.builder.CreateMemCpy(
                 emit_inttoptr(ctx, destp, T_pint8),
-#if JL_LLVM_VERSION >= 100000
                 MaybeAlign(1),
-#else
-                1,
-#endif
                 emit_inttoptr(ctx,
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
                     T_pint8),
-#if JL_LLVM_VERSION >= 100000
                 MaybeAlign(0),
-#else
-                0,
-#endif
                 emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
                 false);
         JL_GC_POP();
@@ -1833,12 +1868,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = (strncmp(f_name, "extern ", 7) == 0);
             if (f_extern)
                 f_name += 7;
-            llvmf = jl_Module->getOrInsertFunction(f_name, functype)
-#if JL_LLVM_VERSION >= 90000
-                .getCallee();
-#else
-                ;
-#endif
+            llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
             if (!f_extern && (!isa<Function>(llvmf) ||
                               cast<Function>(llvmf)->getIntrinsicID() ==
                                       Intrinsic::not_intrinsic)) {

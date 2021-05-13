@@ -45,15 +45,13 @@ JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 // create a new top-level module
 void jl_init_main_module(void)
 {
-    if (jl_main_module != NULL)
-        jl_error("Main module already initialized.");
-
+    assert(jl_main_module == NULL);
     jl_main_module = jl_new_module(jl_symbol("Main"));
     jl_main_module->parent = jl_main_module;
     jl_set_const(jl_main_module, jl_symbol("Core"),
                  (jl_value_t*)jl_core_module);
-    jl_set_global(jl_core_module, jl_symbol("Main"),
-                  (jl_value_t*)jl_main_module);
+    jl_set_const(jl_core_module, jl_symbol("Main"),
+                 (jl_value_t*)jl_main_module);
 }
 
 static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROOT)
@@ -305,7 +303,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
+static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, int *has_opaque)
 {
     if (!jl_is_expr(v))
         return;
@@ -334,6 +332,10 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
     }
     else if (head == foreigncall_sym) {
         *has_intrinsics = 1;
+        return;
+    }
+    else if (head == new_opaque_closure_sym) {
+        *has_opaque = 1;
         return;
     }
     else if (head == call_sym && jl_expr_nargs(e) > 0) {
@@ -365,7 +367,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs)
     for (i = 0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
         if (jl_is_expr(a))
-            expr_attributes(a, has_intrinsics, has_defs);
+            expr_attributes(a, has_intrinsics, has_defs, has_opaque);
     }
 }
 
@@ -374,17 +376,17 @@ int jl_code_requires_compiler(jl_code_info_t *src)
     jl_array_t *body = src->code;
     assert(jl_typeis(body, jl_array_any_type));
     size_t i;
-    int has_intrinsics = 0, has_defs = 0;
+    int has_intrinsics = 0, has_defs = 0, has_opaque = 0;
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        expr_attributes(stmt, &has_intrinsics, &has_defs);
+        expr_attributes(stmt, &has_intrinsics, &has_defs, &has_opaque);
         if (has_intrinsics)
             return 1;
     }
     return 0;
 }
 
-static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs, int *has_loops)
+static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs, int *has_loops, int *has_opaque)
 {
     size_t i;
     *has_loops = 0;
@@ -400,7 +402,7 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
                     *has_loops = 1;
             }
         }
-        expr_attributes(stmt, has_intrinsics, has_defs);
+        expr_attributes(stmt, has_intrinsics, has_defs, has_opaque);
     }
 }
 
@@ -507,7 +509,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == const_sym ||
          ((jl_expr_t*)e)->head == toplevel_sym ||
          ((jl_expr_t*)e)->head == error_sym ||
-         ((jl_expr_t*)e)->head == jl_incomplete_sym);
+         ((jl_expr_t*)e)->head == incomplete_sym);
 }
 
 int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
@@ -518,7 +520,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     jl_sym_t *head = ex->head;
     if (head == module_sym || head == import_sym || head == using_sym ||
         head == export_sym || head == thunk_sym || head == toplevel_sym ||
-        head == error_sym || head == jl_incomplete_sym || head == method_sym) {
+        head == error_sym || head == incomplete_sym || head == method_sym) {
         return 0;
     }
     if (head == global_sym || head == const_sym) {
@@ -542,10 +544,10 @@ static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_m
     return li;
 }
 
-static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import)
+static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym_t *asname)
 {
     assert(m);
-    jl_sym_t *name = import->name;
+    jl_sym_t *name = asname ? asname : import->name;
     jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
         b = jl_get_binding(m, name);
@@ -590,6 +592,15 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
     return NULL;
 }
 
+static void check_macro_rename(jl_sym_t *from, jl_sym_t *to, const char *keyword)
+{
+    char *n1 = jl_symbol_name(from), *n2 = jl_symbol_name(to);
+    if (n1[0] == '@' && n2[0] != '@')
+        jl_errorf("cannot rename macro \"%s\" to non-macro \"%s\" in \"%s\"", n1, n2, keyword);
+    if (n1[0] != '@' && n2[0] == '@')
+        jl_errorf("cannot rename non-macro \"%s\" to macro \"%s\" in \"%s\"", n1, n2, keyword);
+}
+
 // Format msg and eval `throw(ErrorException(msg)))` in module `m`.
 // Used in `jl_toplevel_eval_flex` instead of `jl_errorf` so that the error
 // location in julia code gets into the backtrace.
@@ -630,7 +641,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
 
     jl_expr_t *ex = (jl_expr_t*)e;
 
-    if (ex->head == dot_sym) {
+    if (ex->head == dot_sym && jl_expr_nargs(ex) != 1) {
         if (jl_expr_nargs(ex) != 2)
             jl_eval_errorf(m, "syntax: malformed \".\" expression");
         jl_value_t *lhs = jl_exprarg(ex, 0);
@@ -691,13 +702,26 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                     if (m == jl_main_module && name == NULL) {
                         // TODO: for now, `using A` in Main also creates an explicit binding for `A`
                         // This will possibly be extended to all modules.
-                        import_module(m, u);
+                        import_module(m, u, NULL);
                     }
                 }
+                continue;
             }
-            else {
-                jl_eval_errorf(m, "syntax: malformed \"using\" statement");
+            else if (from && jl_is_expr(a) && ((jl_expr_t*)a)->head == as_sym && jl_expr_nargs(a) == 2 &&
+                     jl_is_expr(jl_exprarg(a, 0)) && ((jl_expr_t*)jl_exprarg(a, 0))->head == dot_sym) {
+                jl_sym_t *asname = (jl_sym_t*)jl_exprarg(a, 1);
+                if (jl_is_symbol(asname)) {
+                    jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
+                    name = NULL;
+                    jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "using");
+                    assert(name);
+                    check_macro_rename(name, asname, "using");
+                    // `using A: B as C` syntax
+                    jl_module_use_as(m, import, name, asname);
+                    continue;
+                }
             }
+            jl_eval_errorf(m, "syntax: malformed \"using\" statement");
         }
         JL_GC_POP();
         return jl_nothing;
@@ -716,15 +740,35 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 name = NULL;
                 jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "import");
                 if (name == NULL) {
-                    import_module(m, import);
+                    // `import A` syntax
+                    import_module(m, import, NULL);
                 }
                 else {
+                    // `import A.B` or `import A: B` syntax
                     jl_module_import(m, import, name);
                 }
+                continue;
             }
-            else {
-                jl_eval_errorf(m, "syntax: malformed \"import\" statement");
+            else if (jl_is_expr(a) && ((jl_expr_t*)a)->head == as_sym && jl_expr_nargs(a) == 2 &&
+                     jl_is_expr(jl_exprarg(a, 0)) && ((jl_expr_t*)jl_exprarg(a, 0))->head == dot_sym) {
+                jl_sym_t *asname = (jl_sym_t*)jl_exprarg(a, 1);
+                if (jl_is_symbol(asname)) {
+                    jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
+                    name = NULL;
+                    jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "import");
+                    if (name == NULL) {
+                        // `import A as B` syntax
+                        import_module(m, import, asname);
+                    }
+                    else {
+                        check_macro_rename(name, asname, "import");
+                        // `import A.B as C` syntax
+                        jl_module_import_as(m, import, name, asname);
+                    }
+                    continue;
+                }
             }
+            jl_eval_errorf(m, "syntax: malformed \"import\" statement");
         }
         JL_GC_POP();
         return jl_nothing;
@@ -787,7 +831,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         JL_GC_POP();
         return res;
     }
-    else if (head == error_sym || head == jl_incomplete_sym) {
+    else if (head == error_sym || head == incomplete_sym) {
         if (jl_expr_nargs(ex) == 0)
             jl_eval_errorf(m, "malformed \"%s\" expression", jl_symbol_name(head));
         if (jl_is_string(jl_exprarg(ex, 0)))
@@ -803,12 +847,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return (jl_value_t*)ex;
     }
 
-    int has_intrinsics = 0, has_defs = 0, has_loops = 0;
+    int has_intrinsics = 0, has_defs = 0, has_loops = 0, has_opaque = 0;
     assert(head == thunk_sym);
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
     assert(jl_is_code_info(thk));
     assert(jl_typeis(thk->code, jl_array_any_type));
-    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops);
+    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque);
 
     jl_value_t *result;
     if (has_intrinsics || (!has_defs && fast && has_loops &&
@@ -834,6 +878,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     else {
         // use interpreter
         assert(thk);
+        if (has_opaque) {
+            jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+        }
         result = jl_interpret_toplevel_thunk(m, thk);
     }
 
@@ -853,6 +900,15 @@ static void jl_check_open_for(jl_module_t *m, const char* funcname)
         if (m != jl_main_module) { // TODO: this was grand-fathered in
             JL_LOCK(&jl_modules_mutex);
             int open = ptrhash_has(&jl_current_modules, (void*)m);
+            if (!open && jl_module_init_order != NULL) {
+                size_t i, l = jl_array_len(jl_module_init_order);
+                for (i = 0; i < l; i++) {
+                    if (m == (jl_module_t*)jl_array_ptr_ref(jl_module_init_order, i)) {
+                        open = 1;
+                        break;
+                    }
+                }
+            }
             JL_UNLOCK(&jl_modules_mutex);
             if (!open && !jl_is__toplevel__mod(m)) {
                 const char* name = jl_symbol_name(m->name);

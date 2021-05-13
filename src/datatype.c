@@ -97,6 +97,9 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->isinlinealloc = 0;
     t->has_concrete_subtype = 1;
     t->cached_by_hash = 0;
+    t->name = NULL;
+    t->super = NULL;
+    t->parameters = NULL;
     t->layout = NULL;
     t->names = NULL;
     t->types = NULL;
@@ -224,18 +227,21 @@ STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
 {
     if (jl_is_datatype_make_singleton(st)) {
-        st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
-        jl_gc_wb(st, st->instance);
+        // It's possible for st to already have an ->instance if it was redefined
+        if (!st->instance) {
+            st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
+            jl_gc_wb(st, st->instance);
+        }
     }
 }
 
-static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align) JL_NOTSAFEPOINT
+static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align, int asfield) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(ty)) {
-        unsigned na = union_isinlinable(((jl_uniontype_t*)ty)->a, 1, nbytes, align);
+        unsigned na = union_isinlinable(((jl_uniontype_t*)ty)->a, 1, nbytes, align, asfield);
         if (na == 0)
             return 0;
-        unsigned nb = union_isinlinable(((jl_uniontype_t*)ty)->b, 1, nbytes, align);
+        unsigned nb = union_isinlinable(((jl_uniontype_t*)ty)->b, 1, nbytes, align, asfield);
         if (nb == 0)
             return 0;
         return na + nb;
@@ -243,6 +249,9 @@ static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbyte
     if (jl_is_datatype(ty) && jl_datatype_isinlinealloc(ty) && (!pointerfree || ((jl_datatype_t*)ty)->layout->npointers == 0)) {
         size_t sz = jl_datatype_size(ty);
         size_t al = jl_datatype_align(ty);
+        // primitive types in struct slots need their sizes aligned. issue #37974
+        if (asfield && jl_is_primitivetype(ty))
+            sz = LLT_ALIGN(sz, al);
         if (*nbytes < sz)
             *nbytes = sz;
         if (*align < al)
@@ -252,9 +261,15 @@ static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbyte
     return 0;
 }
 
+int jl_uniontype_size(jl_value_t *ty, size_t *sz) JL_NOTSAFEPOINT
+{
+    size_t al = 0;
+    return union_isinlinable(ty, 0, sz, &al, 0) != 0;
+}
+
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al) JL_NOTSAFEPOINT
 {
-    unsigned countbits = union_isinlinable(eltype, 0, fsz, al);
+    unsigned countbits = union_isinlinable(eltype, 0, fsz, al, 1);
     return (countbits > 0 && countbits < 127) ? countbits : 0;
 }
 
@@ -373,7 +388,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             st->layout = &opaque_byte_layout;
             return;
         }
-        else if (st == jl_simplevector_type || st->name == jl_array_typename) {
+        else if (st == jl_simplevector_type || st == jl_module_type || st->name == jl_array_typename) {
             static const jl_datatype_layout_t opaque_ptr_layout = {0, 1, -1, sizeof(void*), 0, 0};
             st->layout = &opaque_ptr_layout;
             return;
@@ -453,11 +468,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     zeroinit = 1;
                 }
                 else {
+                    uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->haspadding)
                         haspadding = 1;
+                    if (i >= st->ninitialized && fld_npointers &&
+                        fld_npointers * sizeof(void*) != fsz) {
+                        // field may be undef (may be uninitialized and contains pointer),
+                        // and contains non-pointer fields of non-zero sizes.
+                        haspadding = 1;
+                    }
                     if (!zeroinit)
                         zeroinit = ((jl_datatype_t*)fld)->zeroinit;
-                    npointers += ((jl_datatype_t*)fld)->layout->npointers;
+                    npointers += fld_npointers;
                 }
             }
             else {
@@ -522,6 +544,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (npointers)
                 free(pointers);
         }
+        st->zeroinit = zeroinit;
     }
     // now finish deciding if this instantiation qualifies for special properties
     assert(!isbitstype || st->layout->npointers == 0); // the definition of isbits
@@ -905,7 +928,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
     return jv;
 }
 
-static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na)
+static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na) JL_NOTSAFEPOINT
 {
     if (na < jl_datatype_nfields(type)) {
         char *data = (char*)jl_data_ptr(jv);
@@ -917,8 +940,9 @@ static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na)
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (!jl_is_datatype(type) || type->layout == NULL)
+    if (!jl_is_datatype(type) || type->layout == NULL) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
+    }
     if (type->ninitialized > na || na > jl_datatype_nfields(type))
         jl_error("invalid struct allocation");
     for (size_t i = 0; i < na; i++) {
@@ -929,12 +953,10 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
     if (type->instance != NULL)
         return type->instance;
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
-    JL_GC_PUSH1(&jv);
     for (size_t i = 0; i < na; i++) {
         set_nth_field(type, (void*)jv, i, args[i]);
     }
     init_struct_tail(type, jv, na);
-    JL_GC_POP();
     return jv;
 }
 
@@ -961,13 +983,13 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
     }
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
     jl_value_t *fi = NULL;
-    JL_GC_PUSH2(&jv, &fi);
     if (type->layout->npointers > 0) {
         // if there are references, zero the space first to prevent the GC
         // from seeing uninitialized references during jl_get_nth_field and jl_isa,
         // which can allocate.
         memset(jl_data_ptr(jv), 0, jl_datatype_size(type));
     }
+    JL_GC_PUSH2(&jv, &fi);
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *ft = jl_field_type_concrete(type, i);
         fi = jl_get_nth_field(tup, i);

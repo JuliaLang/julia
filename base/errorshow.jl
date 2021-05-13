@@ -9,7 +9,7 @@ This method is used to display the exception after a call to [`throw`](@ref).
 # Examples
 ```jldoctest
 julia> struct MyException <: Exception
-           msg::AbstractString
+           msg::String
        end
 
 julia> function Base.showerror(io::IO, err::MyException)
@@ -31,7 +31,7 @@ showerror(io::IO, ex) = show(io, ex)
 
 show_index(io::IO, x::Any) = show(io, x)
 show_index(io::IO, x::Slice) = show_index(io, x.indices)
-show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
+show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
@@ -92,7 +92,7 @@ function showerror(io::IO, ex, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
-    print(io, "LoadError: ")
+    !isa(ex.error, LoadError) && print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
     print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
@@ -159,14 +159,8 @@ showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
 
 function showerror(io::IO, ex::UndefVarError)
-    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
-        return showerror(io, ErrorException("""
-        `$(ex.var)` has been moved to the package LegacyStrings.jl:
-        Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;
-        Then do `using LegacyStrings` to get `$(ex.var)`.
-        """))
-    end
     print(io, "UndefVarError: $(ex.var) not defined")
+    Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::InexactError)
@@ -281,14 +275,11 @@ function showerror(io::IO, ex::MethodError)
         if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
             any(x -> x <: Number, arg_types_param)
 
-            nouns = Dict{Any,String}(
-                Base.:+ => "addition",
-                Base.:- => "subtraction",
-            )
+            nounf = f === Base.:+ ? "addition" : "subtraction"
             varnames = ("scalar", "array")
             first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
             fstring = f === Base.:+ ? "+" : "-"  # avoid depending on show_default for functions (invalidation)
-            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$fstring $second")
+            print(io, "\nFor element-wise $nounf, use broadcasting with dot syntax: $first .$fstring $second")
         end
     end
     if ft <: AbstractArray
@@ -316,7 +307,7 @@ function showerror(io::IO, ex::MethodError)
             hasrows |= isrow
             push!(vec_args, isrow ? vec(arg) : arg)
         end
-        if hasrows && applicable(f, vec_args...)
+        if hasrows && applicable(f, vec_args...) && isempty(kwargs)
             print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.",
                       "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
                       "\nYou can convert to a column vector with the vec() function.")
@@ -423,7 +414,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = (unwrap_unionall(sig[i]).parameters[1], "...")
+                    sigstr = (unwrap_unionall(sig[i]).T, "...")
                     j = length(t_i)
                 else
                     sigstr = (sig[i],)
@@ -460,7 +451,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
                 for t in arg_types_param[length(sig):end]
-                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).parameters[1], method.sig)
+                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).T, method.sig)
                         right_matches += 1
                     end
                 end
@@ -473,7 +464,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                         sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
-                            sigstr = ((sigtype::DataType).parameters[1], "...")
+                            sigstr = ((sigtype::Core.TypeofVararg).T, "...")
                         else
                             sigstr = (sigtype,)
                         end
@@ -555,16 +546,9 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
-function replaceuserpath(str)
-    str = replace(str, homedir() => "~")
-    # seems to be necessary for some paths with small letter drive c:// etc
-    str = replace(str, lowercasefirst(homedir()) => "~")
-    return str
-end
+const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
+const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
-const STACKTRACE_MODULECOLORS = [:light_blue, :light_yellow,
-        :light_magenta, :light_green, :light_cyan, :light_red,
-        :blue, :yellow, :magenta, :green, :cyan, :red]
 stacktrace_expand_basepaths()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
 stacktrace_contract_userdir()::Bool =
@@ -573,17 +557,17 @@ stacktrace_linebreaks()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
-    n = length(trace)
-    ndigits_max = ndigits(n)
+    num_frames = length(trace)
+    ndigits_max = ndigits(num_frames)
 
-    modulecolordict = Dict{Module, Symbol}()
+    modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     println(io, "\nStacktrace:")
 
-    for (i, frame) in enumerate(trace)
-        print_stackframe(io, i, frame, 1, ndigits_max, modulecolordict, modulecolorcycler)
-        if i < n
+    for (i, (frame, n)) in enumerate(trace)
+        print_stackframe(io, i, frame, n, ndigits_max, modulecolordict, modulecolorcycler)
+        if i < num_frames
             println(io)
             print_linebreaks && println(io)
         end
@@ -678,7 +662,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
     if m !== nothing
         while parentmodule(m) !== m
@@ -698,10 +682,10 @@ end
 
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
-    stacktrace_contract_userdir() && (file = replaceuserpath(file))
+    stacktrace_contract_userdir() && (file = contractuser(file))
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
@@ -741,13 +725,7 @@ function print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
     # filename, separator, line
     # use escape codes for formatting, printstyled can't do underlined and color
     # codes are bright black (90) and underlined (4)
-    function print_underlined(io::IO, s...)
-        colored = get(io, :color, false)::Bool
-        start_s = colored ? "\033[90;4m" : ""
-        end_s   = colored ? "\033[0m"    : ""
-        print(io, start_s, s..., end_s)
-    end
-    print_underlined(io, pathparts[end], ":", line)
+    printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
@@ -782,8 +760,7 @@ function show_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], filtered) catch end
     # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    frames = map(x->first(x)::StackFrame, filtered)
-    show_full_backtrace(io, frames; print_linebreaks = stacktrace_linebreaks())
+    show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     return
 end
 
@@ -896,3 +873,16 @@ function show(io::IO, ip::InterpreterIP)
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
     end
 end
+
+# handler for displaying a hint in case the user tries to call
+# the instance of a number (probably missing the operator)
+# eg: (1 + 2)(3 + 4)
+function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
+    if ex.f isa Number
+        print(io, "\nMaybe you forgot to use an operator such as ")
+        printstyled(io, "*, ^, %, / etc. ", color=:cyan)
+        print(io, "?")
+    end
+end
+
+Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)

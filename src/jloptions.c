@@ -47,6 +47,7 @@ jl_options_t jl_options = { 0,    // quiet
                             0,    // code_coverage
                             0,    // malloc_log
                             2,    // opt_level
+                            0,    // opt_level_min
 #ifdef JL_DEBUG_BUILD
                             2,    // debug_level [debug build]
 #else
@@ -75,6 +76,7 @@ jl_options_t jl_options = { 0,    // quiet
                             0, // image_file_specified
                             JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
                             0, // image-codegen
+                            0, // rr-detach
 };
 
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
@@ -121,6 +123,7 @@ static const char opts[]  =
     // code generation options
     " -C, --cpu-target <target> Limit usage of CPU features up to <target>; set to \"help\" to see the available options\n"
     " -O, --optimize={0,1,2,3}  Set the optimization level (default level is 2 if unspecified or 3 if used without a level)\n"
+    " --min-optlevel={0,1,2,3}  Set a lower bound on the optimization level (default is 0)\n"
     " -g, -g <level>            Enable / Set the level of debug info generation"
 #ifdef JL_DEBUG_BUILD
         " (default level for julia-debug is 2 if unspecified or if used without a level)\n"
@@ -128,7 +131,7 @@ static const char opts[]  =
         " (default level is 1 if unspecified or 2 if used without a level)\n"
 #endif
     " --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
-    " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
+    " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring @inbounds declarations)\n"
 #ifdef USE_POLLY
     " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
@@ -189,6 +192,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_worker,
            opt_bind_to,
            opt_handle_signals,
+           opt_optlevel_min,
            opt_output_o,
            opt_output_asm,
            opt_output_ji,
@@ -203,6 +207,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_project,
            opt_bug_report,
            opt_image_codegen,
+           opt_rr_detach,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -234,6 +239,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
+        { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },
@@ -254,6 +260,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       0, 1 },
         { "image-codegen",   no_argument,       0, opt_image_codegen },
+        { "rr-detach",       no_argument,       0, opt_rr_detach },
         { 0, 0, 0, 0 }
     };
 
@@ -533,6 +540,24 @@ restart_switch:
                 jl_options.opt_level = 3;
             }
             break;
+        case opt_optlevel_min: // minimum module optimize level
+            if (optarg != NULL) {
+                if (!strcmp(optarg,"0"))
+                    jl_options.opt_level_min = 0;
+                else if (!strcmp(optarg,"1"))
+                    jl_options.opt_level_min = 1;
+                else if (!strcmp(optarg,"2"))
+                    jl_options.opt_level_min = 2;
+                else if (!strcmp(optarg,"3"))
+                    jl_options.opt_level_min = 3;
+                else
+                    jl_errorf("julia: invalid argument to --min-optlevel (%s)", optarg);
+                break;
+            }
+            else {
+                jl_options.opt_level_min = 0;
+            }
+            break;
         case 'i': // isinteractive
             jl_options.isinteractive = 1;
             break;
@@ -654,6 +679,9 @@ restart_switch:
             break;
         case opt_image_codegen:
             jl_options.image_codegen = 1;
+            break;
+        case opt_rr_detach:
+            jl_options.rr_detach = 1;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

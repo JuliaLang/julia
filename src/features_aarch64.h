@@ -43,12 +43,12 @@ JL_FEATURE_DEF(pa, 30, 0) // HWCAP_PACA
 
 // hwcap2
 JL_FEATURE_DEF(ccdp, 32 + 0, 0) // HWCAP2_DCPODP, ARMv8.2-DCCVADP. Required in ARMv8.5
-JL_FEATURE_DEF(sve2, 32 + 1, 90000) // HWCAP2_SVE2
-// JL_FEATURE_DEF_NAME(sve2_aes, 32 + 2, 90000, "sve2-aes") // HWCAP2_SVEAES, Implied by `sve2-aes`
-JL_FEATURE_DEF_NAME(sve2_aes, 32 + 3, 90000, "sve2-aes") // HWCAP2_SVEPMULL, ID_AA64ZFR0_EL1.AES == 2
+JL_FEATURE_DEF(sve2, 32 + 1, 0) // HWCAP2_SVE2
+// JL_FEATURE_DEF_NAME(sve2_aes, 32 + 2, 0, "sve2-aes") // HWCAP2_SVEAES, Implied by `sve2-aes`
+JL_FEATURE_DEF_NAME(sve2_aes, 32 + 3, 0, "sve2-aes") // HWCAP2_SVEPMULL, ID_AA64ZFR0_EL1.AES == 2
 JL_FEATURE_DEF_NAME(sve2_bitperm, 32 + 4, 100000, "sve2-bitperm") // HWCAP2_SVEBITPERM
-JL_FEATURE_DEF_NAME(sve2_sha3, 32 + 5, 90000, "sve2-sha3") // HWCAP2_SVESHA3
-JL_FEATURE_DEF_NAME(sve2_sm4, 32 + 6, 90000, "sve2-sm4") // HWCAP2_SM4
+JL_FEATURE_DEF_NAME(sve2_sha3, 32 + 5, 0, "sve2-sha3") // HWCAP2_SVESHA3
+JL_FEATURE_DEF_NAME(sve2_sm4, 32 + 6, 0, "sve2-sm4") // HWCAP2_SM4
 JL_FEATURE_DEF(altnzcv, 32 + 7, 0) // HWCAP2_FLAGM2, ARMv8.5-CondM. Required in ARMv8.5
 JL_FEATURE_DEF(fptoint, 32 + 8, 0) // HWCAP2_FRINT. Required in ARMv8.5
 // JL_FEATURE_DEF(svei8mm, 32 + 9, UINT32_MAX) // HWCAP2_SVEI8MM, ARMv8.2-I8MM. Same as `i8mm`
@@ -60,6 +60,7 @@ JL_FEATURE_DEF(bf16, 32 + 14, 110000) // HWCAP2_BF16, ARMv8.2-BF16. Required in 
 // JL_FEATURE_DEF(dgh, 32 + 15, UINT32_MAX) // HWCAP2_DGH, ARMv8.0-DGH. Not implement in LLVM yet
 JL_FEATURE_DEF(rand, 32 + 16, 0) // HWCAP2_RNG, ARMv8.5-RNG
 JL_FEATURE_DEF(bti, 32 + 17, 0) // HWCAP2_BTI
+JL_FEATURE_DEF(mte, 32 + 18, 0) // HWCAP2_MTE, ARMv8.5-MemTag (reserved as of kernel 5.9-rc1)
 
 // custom bits to match llvm model
 JL_FEATURE_DEF(v8_1a, 32 * 2 + 0, 0)
@@ -74,7 +75,6 @@ JL_FEATURE_DEF(v8_6a, 32 * 2 + 5, 110000)
 //     am: ID_AA64PFR0_EL1.AMU (0b1, 0b10)
 //     specrestrict: ID_AA64PFR0_EL1.CSV2 (0b10)
 //     predres: ID_AA64PFR0_EL1.CSV3 (0b1)
-//     mte: ID_AA64PFR1_EL1.MTE (0b1, 0b10)
 //     ecv: ID_AA64MMFR0_EL1.ECV (0b1, 0b10) (LLVM 11)
 //     lor: ID_AA64MMFR1_EL1.LO (0b1)
 //     perfmon: ID_AA64DFR0_EL1.PMUVer (0b1, 0b100, 0b101, 0b110)

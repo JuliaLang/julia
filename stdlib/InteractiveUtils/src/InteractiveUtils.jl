@@ -21,27 +21,58 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r"")
+    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
-"""
-function varinfo(m::Module=Main, pattern::Regex=r"")
-    rows =
-        Any[ let value = getfield(m, v)
-                 Any[string(v),
-                     (value===Base || value===Main || value===Core ? "" : format_bytes(summarysize(value))),
-                     summary(value)]
-             end
-             for v in sort!(names(m)) if isdefined(m, v) && occursin(pattern, string(v)) ]
 
+- `all` : also list non-exported objects defined in the module, deprecated objects, and compiler-generated objects.
+- `imported` : also list objects explicitly imported from other modules.
+- `recursive` : recursively include objects in sub-modules, observing the same settings in each.
+- `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
+"""
+function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false)
+    @assert sortby in [:name, :size, :summary] "Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"
+    function _populate_rows(m2::Module, allrows, include_self::Bool, prep::String)
+        newrows = Any[
+            let
+                value = getfield(m2, v)
+                ssize_str, ssize = if value===Base || value===Main || value===Core
+                    ("", typemax(Int))
+                else
+                    ss = summarysize(value)
+                    (format_bytes(ss), ss)
+                end
+                Any[string(prep, v), ssize_str, summary(value), ssize]
+            end
+            for v in names(m2; all, imported)
+            if (string(v) != split(string(m2), ".")[end] || include_self) && isdefined(m2, v) && occursin(pattern, string(v)) ]
+        append!(allrows, newrows)
+        if recursive
+            for row in newrows
+                if row[3] == "Module" && !in(split(row[1], ".")[end], [split(string(m2), ".")[end], "Base", "Main", "Core"])
+                    _populate_rows(getfield(m2, Symbol(split(row[1], ".")[end])), allrows, false, prep * "$(row[1]).")
+                end
+            end
+        end
+        return allrows
+    end
+    rows = _populate_rows(m, Vector{Any}[], true, "")
+    if sortby == :name
+        col, reverse = 1, false
+    elseif sortby == :size
+        col, reverse = 4, true
+    elseif sortby == :summary
+        col, reverse = 3, false
+    end
+    rows = sort!(rows, by=r->r[col], rev=reverse)
     pushfirst!(rows, Any["name", "size", "summary"])
 
-    return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
+    return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
 end
-varinfo(pat::Regex) = varinfo(Main, pat)
+varinfo(pat::Regex; kwargs...) = varinfo(Main, pat, kwargs...)
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)
@@ -50,6 +81,8 @@ Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
+
+See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
@@ -139,7 +172,7 @@ function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=fa
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
                        (type_close_enough(x, t) ||
-                        (supertypes ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                        (supertypes ? (isa(x, Type) && t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                         x != Any)
                    end
@@ -230,6 +263,8 @@ subtypes(m::Module, x::Type) = _subtypes_in([m], x)
 Return a list of immediate subtypes of DataType `T`. Note that all currently loaded subtypes
 are included, including those not visible in the current module.
 
+See also [`supertype`](@ref), [`supertypes`](@ref), [`methodswith`](@ref).
+
 # Examples
 ```jldoctest
 julia> subtypes(Integer)
@@ -247,6 +282,8 @@ subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
 Return a tuple `(T, ..., Any)` of `T` and all its supertypes, as determined by
 successive calls to the [`supertype`](@ref) function, listed in order of `<:`
 and terminated by `Any`.
+
+See also [`subtypes`](@ref).
 
 # Examples
 ```jldoctest
@@ -365,15 +402,18 @@ function report_bug(kind)
             mktempdir() do tmp
                 old_load_path = copy(LOAD_PATH)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
+                old_active_project = Base.ACTIVE_PROJECT[]
+                Base.ACTIVE_PROJECT[] = nothing
                 Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
                 BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
+                Base.ACTIVE_PROJECT[] = old_active_project
             end
         end
     else
         BugReporting = Base.require(BugReportingId)
     end
-    return Base.invokelatest(BugReporting.make_interactive_report, kind)
+    return Base.invokelatest(BugReporting.make_interactive_report, kind, ARGS)
 end
 
 end

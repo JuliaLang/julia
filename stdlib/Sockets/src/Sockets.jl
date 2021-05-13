@@ -367,7 +367,7 @@ function recvfrom(sock::UDPSocket)
     end
 end
 
-alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), size) # size is always 64k from libuv
+alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
 
 function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::Ptr{Cvoid}, flags::Cuint)
     sock = @handle_as handle UDPSocket
@@ -572,6 +572,9 @@ end
     nagle(socket::Union{TCPServer, TCPSocket}, enable::Bool)
 
 Enables or disables Nagle's algorithm on a given TCP server or socket.
+
+!!! compat "Julia 1.3"
+    This function requires Julia 1.3 or later.
 """
 function nagle(sock::Union{TCPServer, TCPSocket}, enable::Bool)
     # disable or enable Nagle's algorithm on all OSes

@@ -7,15 +7,15 @@ using Test, LinearAlgebra, SparseArrays
 @testset "Adjoint and Transpose inner constructor basics" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
     # Adjoint/Transpose eltype must match the type of the Adjoint/Transpose of the input eltype
-    @test_throws ErrorException Adjoint{Float64,Vector{Int}}(intvec)
-    @test_throws ErrorException Adjoint{Float64,Matrix{Int}}(intmat)
-    @test_throws ErrorException Transpose{Float64,Vector{Int}}(intvec)
-    @test_throws ErrorException Transpose{Float64,Matrix{Int}}(intmat)
+    @test_throws TypeError Adjoint{Float64,Vector{Int}}(intvec)[1,1]
+    @test_throws TypeError Adjoint{Float64,Matrix{Int}}(intmat)[1,1]
+    @test_throws TypeError Transpose{Float64,Vector{Int}}(intvec)[1,1]
+    @test_throws TypeError Transpose{Float64,Matrix{Int}}(intmat)[1,1]
     # Adjoint/Transpose wrapped array type must match the input array type
-    @test_throws MethodError Adjoint{Int,Vector{Float64}}(intvec)
-    @test_throws MethodError Adjoint{Int,Matrix{Float64}}(intmat)
-    @test_throws MethodError Transpose{Int,Vector{Float64}}(intvec)
-    @test_throws MethodError Transpose{Int,Matrix{Float64}}(intmat)
+    @test_throws TypeError Adjoint{Int,Vector{Float64}}(intvec)[1,1]
+    @test_throws TypeError Adjoint{Int,Matrix{Float64}}(intmat)[1,1]
+    @test_throws TypeError Transpose{Int,Vector{Float64}}(intvec)[1,1]
+    @test_throws TypeError Transpose{Int,Matrix{Float64}}(intmat)[1,1]
     # Adjoint/Transpose inner constructor basic functionality, concrete scalar eltype
     @test (Adjoint{Int,Vector{Int}}(intvec)::Adjoint{Int,Vector{Int}}).parent === intvec
     @test (Adjoint{Int,Matrix{Int}}(intmat)::Adjoint{Int,Matrix{Int}}).parent === intmat
@@ -275,6 +275,9 @@ end
     @test vec(Transpose(intvec)) === intvec
     cvec = [1 + 1im]
     @test vec(cvec')[1] == cvec[1]'
+    mvec = [[1 2; 3 4+5im]];
+    @test vec(transpose(mvec))[1] == transpose(mvec[1])
+    @test vec(adjoint(mvec))[1] == adjoint(mvec[1])
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
@@ -483,6 +486,22 @@ end
                   "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
 end
 
+@testset "showarg" begin
+    io = IOBuffer()
+
+    A = ones(Float64, 3,3)
+
+    B = Adjoint(A)
+    @test summary(B) == "3×3 adjoint(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "adjoint(::Matrix{Float64})"
+
+    B = Transpose(A)
+    @test summary(B) == "3×3 transpose(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "transpose(::Matrix{Float64})"
+end
+
 @testset "strided transposes" begin
     for t in (Adjoint, Transpose)
         @test strides(t(rand(3))) == (3, 1)
@@ -555,6 +574,26 @@ end
     @test_throws DimensionMismatch [1, 2]' * [1,2,3]
     @test Int[]' * Int[] == 0
     @test transpose(Int[]) * Int[] == 0
+end
+
+@testset "reductions: $adjtrans" for adjtrans in [transpose, adjoint]
+    mat = rand(ComplexF64, 3,5)
+    @test sum(adjtrans(mat)) ≈ sum(collect(adjtrans(mat)))
+    @test sum(adjtrans(mat), dims=1) ≈ sum(collect(adjtrans(mat)), dims=1)
+    @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
+
+    @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
+    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
+
+    mat = [rand(ComplexF64,2,2) for _ in 1:3, _ in 1:5]
+    @test sum(adjtrans(mat)) ≈ sum(collect(adjtrans(mat)))
+    @test sum(adjtrans(mat), dims=1) ≈ sum(collect(adjtrans(mat)), dims=1)
+    @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
+
+    @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
+    @test sum(x -> x[1,2], adjtrans(mat)) ≈ sum(x -> x[1,2], collect(adjtrans(mat)))
+    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
+    @test sum(x -> x[1,2], adjtrans(mat), dims=1) ≈ sum(x -> x[1,2], collect(adjtrans(mat)), dims=1)
 end
 
 end # module TestAdjointTranspose

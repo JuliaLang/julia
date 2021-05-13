@@ -470,7 +470,7 @@ overwritten with the value of `X`, [`convert`](@ref)ing to the
 [`eltype`](@ref) of `A` if necessary.
 
 
-If any index `I_k` selects more than one location, then the right hand side `X` must be an
+If any index `I_k` is itself an array, then the right hand side `X` must also be an
 array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
 the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
 `A` is overwritten with the value `X[I_1, I_2, ..., I_n]`, converting if necessary. The
@@ -735,7 +735,7 @@ julia> LinearIndices(A)[2, 2]
 5
 ```
 
-It's important to note that there's a very large assymmetry in the performance
+It's important to note that there's a very large asymmetry in the performance
 of these conversions. Converting a linear index to a set of cartesian indices
 requires dividing and taking the remainder, whereas going the other way is just
 multiplies and adds. In modern processors, integer division can be 10-50 times

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 abstract type MethodTableView; end
 
 struct MethodLookupResult
@@ -45,7 +47,7 @@ CachedMethodTable(table::T) where T =
 
 Find all methods in the given method table `view` that are applicable to the
 given signature `sig`. If no applicable methods are found, an empty result is
-returned. If the number of applicable methods exeeded the specified limit,
+returned. If the number of applicable methods exceeded the specified limit,
 `missing` is returned.
 """
 function findall(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable; limit::Int=typemax(Int))
@@ -84,9 +86,9 @@ function findsup(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable)
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
     result = ccall(:jl_gf_invoke_lookup_worlds, Any, (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
-                   sig, table.world, min_valid, max_valid)::Union{Method, Nothing}
+                   sig, table.world, min_valid, max_valid)::Union{MethodMatch, Nothing}
     result === nothing && return nothing
-    (result, WorldRange(min_valid[], max_valid[]))
+    (result.method, WorldRange(min_valid[], max_valid[]))
 end
 
 # This query is not cached

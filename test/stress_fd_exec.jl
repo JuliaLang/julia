@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Test
 let ps = Pipe[]
     ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))

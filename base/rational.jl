@@ -262,6 +262,7 @@ typemin(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, zero(T), on
 typemax(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, one(T), zero(T))
 
 isinteger(x::Rational) = x.den == 1
+ispow2(x::Rational) = ispow2(x.num) & ispow2(x.den)
 
 +(x::Rational) = unsafe_rational(+x.num, x.den)
 -(x::Rational) = unsafe_rational(-x.num, x.den)
@@ -277,13 +278,35 @@ function -(x::Rational{T}) where T<:Unsigned
     x
 end
 
-for (op,chop) in ((:+,:checked_add), (:-,:checked_sub), (:rem,:rem), (:mod,:mod))
+function +(x::Rational, y::Rational)
+    xp, yp = promote(x, y)
+    if isinf(x) && x == y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(checked_add(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+end
+
+function -(x::Rational, y::Rational)
+    xp, yp = promote(x, y)
+    if isinf(x) && x == -y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(checked_sub(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+end
+
+for (op,chop) in ((:rem,:rem), (:mod,:mod))
     @eval begin
         function ($op)(x::Rational, y::Rational)
             xd, yd = divgcd(promote(x.den, y.den)...)
             Rational(($chop)(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
         end
+    end
+end
 
+for (op,chop) in ((:+,:checked_add), (:-,:checked_sub), (:rem,:rem), (:mod,:mod))
+    @eval begin
         function ($op)(x::Rational, y::Integer)
             unsafe_rational(($chop)(x.num, checked_mul(x.den, y)), x.den)
         end
@@ -484,4 +507,28 @@ function gcdx(x::Rational, y::Rational)
         _, a, b = gcdx(idiv(x, c), idiv(y, c))
     end
     c, a, b
+end
+
+## streamlined hashing for smallish rational types ##
+
+decompose(x::Rational) = numerator(x), 0, denominator(x)
+function hash(x::Rational{<:BitInteger64}, h::UInt)
+    num, den = Base.numerator(x), Base.denominator(x)
+    den == 1 && return hash(num, h)
+    den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
+    if isodd(den)
+        pow = trailing_zeros(num)
+        num >>= pow
+    else
+        pow = trailing_zeros(den)
+        den >>= pow
+        pow = -pow
+        if den == 1 && abs(num) < 9007199254740992
+            return hash(ldexp(Float64(num),pow),h)
+        end
+    end
+    h = hash_integer(den, h)
+    h = hash_integer(pow, h)
+    h = hash_integer(num, h)
+    return h
 end

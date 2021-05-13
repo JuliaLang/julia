@@ -140,7 +140,7 @@ function footnote(stream::IO, block::MD)
             buffer = IOBuffer()
             write(buffer, readline(stream, keep=true))
             while !eof(stream)
-                if startswith(stream, "    ")
+                if startswith(stream, "    ") || startswith(stream, "\t")
                     write(buffer, readline(stream, keep=true))
                 elseif blankline(stream)
                     write(buffer, '\n')
@@ -224,10 +224,10 @@ function admonition(stream::IO, block::MD)
                     return false
                 end
             end
-        # Consume the following indented (4 spaces) block.
+        # Consume the following indented (4 spaces or tab) block.
         buffer = IOBuffer()
         while !eof(stream)
-            if startswith(stream, "    ")
+            if startswith(stream, "    ") || startswith(stream, "\t")
                 write(buffer, readline(stream, keep=true))
             elseif blankline(stream)
                 write(buffer, '\n')

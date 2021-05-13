@@ -586,11 +586,14 @@ end
 @testset "replace! & replace" begin
     a = [1, 2, 3, 1]
     @test replace(x -> iseven(x) ? 2x : x, a) == [1, 4, 3, 1]
+    @test replace(x -> iseven(x) ? 2x : x, Tuple(a)) === (1, 4, 3, 1)
     @test replace!(x -> iseven(x) ? 2x : x, a) === a
     @test a == [1, 4, 3, 1]
     @test replace(a, 1=>0) == [0, 4, 3, 0]
+    @test replace(Tuple(a), 1=>0) === (0, 4, 3, 0)
     for count = (1, 0x1, big(1))
         @test replace(a, 1=>0, count=count) == [0, 4, 3, 1]
+        @test replace(Tuple(a), 1=>0, count=count) === (0, 4, 3, 1)
     end
     @test replace!(a, 1=>2) === a
     @test a == [2, 4, 3, 2]
@@ -615,6 +618,7 @@ end
 
     for count = (0, 0x0, big(0)) # count == 0 --> no replacements
         @test replace([1, 2], 1=>0, 2=>0; count) == [1, 2]
+        @test replace((1, 2), 1=>0, 2=>0; count) === (1, 2)
         for dict = (Dict(1=>2, 2=>3), IdDict(1=>2, 2=>3))
             @test replace(dict, (1=>2) => (1=>3); count) == dict
         end
@@ -646,9 +650,31 @@ end
     x = @inferred replace([1, missing], missing=>2, 1=>missing)
     @test isequal(x, [missing, 2]) && x isa Vector{Union{Int, Missing}}
 
+    # eltype promotion for dicts
+    d = Dict(1=>2, 3=>4)
+    f = replace(d, (1=>2) => (1=>nothing))
+    @test f == Dict(3=>4, 1=>nothing)
+    @test eltype(f) == Pair{Int, Union{Nothing, Int}}
+    f = replace(d, (1=>2) => (1=>missing), (3=>4)=>(3=>missing))
+    @test valtype(f) == Union{Missing,Int}
+    f = replace(d, (1=>2) => (1=>'a'), (3=>4)=>(3=>'b'))
+    @test valtype(f) == Any
+    @test f == Dict(3=>'b', 1=>'a')
+
+    # eltype promotion for sets
+    s = Set([1, 2, 3])
+    f = replace(s, 2=>missing, 3=>nothing)
+    @test f == Set([1, missing, nothing])
+    @test eltype(f) == Union{Int,Missing,Nothing}
+    f = replace(s, 2=>'a')
+    @test eltype(f) == Any
+    @test f == Set([1, 3, 'a'])
+
     # test that isequal is used
     @test replace([NaN, 1.0], NaN=>0.0) == [0.0, 1.0]
+    @test replace((NaN, 1.0), NaN=>0.0) === (0.0, 1.0)
     @test replace([1, missing], missing=>0) == [1, 0]
+    @test replace((1, missing), missing=>0) === (1, 0)
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin

@@ -93,6 +93,7 @@ end
         #  with resizing of b
         b = view(UInt8[0, 0, 0], 1:0)
         @test_throws MethodError readbytes!(file, b, 2)
+        @test !islocked(file.lock) # Issue #37218
         @test isempty(b)
     end
 end

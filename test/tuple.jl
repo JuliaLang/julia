@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 struct BitPerm_19352
     p::NTuple{8,UInt8}
     function BitPerm(p::NTuple{8,UInt8})
@@ -275,7 +278,7 @@ end
 @testset "filter" begin
     @test filter(isodd, (1,2,3)) == (1, 3)
     @test filter(isequal(2), (true, 2.0, 3)) === (2.0,)
-    @test filter(i -> true, ()) == ()
+    @test filter(Returns(true), ()) == ()
     @test filter(identity, (true,)) === (true,)
     longtuple = ntuple(identity, 20)
     @test filter(iseven, longtuple) == ntuple(i->2i, 10)
@@ -504,6 +507,7 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+@test Base.tuple_type_tail(Tuple{Vararg{Int}}) == Tuple{Vararg{Int}}
 
 @testset "setindex" begin
     @test Base.setindex((1, ), 2, 1) === (2, )
@@ -574,4 +578,47 @@ end
     @test_throws BoundsError (1,2.0)[0:2]
     @test_throws BoundsError (1,2.0)[0:1]
     @test_throws BoundsError (1,2.0)[0:0]
+end
+
+@testset "Base.rest" begin
+    t = (1, 2.0, 0x03, 4f0)
+    @test Base.rest(t) === t
+    @test Base.rest(t, 2) === (2.0, 0x03, 4f0)
+
+    a = [1 2; 3 4]
+    @test Base.rest(a) == a[:]
+    @test pointer(Base.rest(a)) != pointer(a)
+    @test Base.rest(a, 3) == [2, 4]
+
+    itr = (-i for i in a)
+    @test Base.rest(itr) == itr
+    _, st = iterate(itr)
+    r = Base.rest(itr, st)
+    @test r isa Iterators.Rest
+    @test collect(r) == -[3, 2, 4]
+end
+
+# issue #38837
+f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
+@test @inferred(f38837((1,2))) === (1.0f0, 2.0)
+
+@testset "indexing with UnitRanges" begin
+    f(t) = t[3:end-2]
+    @test @inferred(f(Tuple(1:10))) === Tuple(3:8)
+    @test @inferred(f((true, 2., 3, 4f0, 0x05, 6, 7.))) === (3, 4f0, 0x05)
+
+    f2(t) = t[Base.OneTo(5)]
+    @test @inferred(f2(Tuple(1:10))) === Tuple(1:5)
+    @test @inferred(f2((true, 2., 3, 4f0, 0x05, 6, 7.))) === (true, 2., 3, 4f0, 0x05)
+
+    @test @inferred((t -> t[1:end])(Tuple(1:15))) === Tuple(1:15)
+    @test @inferred((t -> t[2:end])(Tuple(1:15))) === Tuple(2:15)
+    @test @inferred((t -> t[3:end])(Tuple(1:15))) === Tuple(3:15)
+    @test @inferred((t -> t[1:end-1])(Tuple(1:15))) === Tuple(1:14)
+    @test @inferred((t -> t[1:end-2])(Tuple(1:15))) === Tuple(1:13)
+    @test @inferred((t -> t[3:2])(Tuple(1:15))) === ()
+
+    @test_throws BoundsError (1, 2)[1:4]
+    @test_throws BoundsError (1, 2)[0:2]
+    @test_throws ArgumentError (1, 2)[OffsetArrays.IdOffsetRange(1:2, -1)]
 end

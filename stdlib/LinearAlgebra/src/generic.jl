@@ -2,6 +2,14 @@
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
+# Elements of `out` may not be defined (e.g., for `BigFloat`). To make
+# `mul!(out, A, B)` work for such cases, `out .*ₛ beta` short-circuits
+# `out * beta`.  Using `broadcasted` to avoid the multiplication
+# inside this function.
+function *ₛ end
+Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
+    iszero(beta::Number) ? false : broadcasted(*, out, beta)
+
 """
     MulAddMul(alpha, beta)
 
@@ -121,10 +129,22 @@ match the length of the second, $(length(X))."))
     C
 end
 
-@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
-    generic_mul!(C, s, X, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
-    generic_mul!(C, X, s, MulAddMul(alpha, beta))
+@inline function mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
+    if axes(C) == axes(X)
+        C .= (s .* X) .*ₛ alpha .+ C .*ₛ beta
+    else
+        generic_mul!(C, s, X, MulAddMul(alpha, beta))
+    end
+    return C
+end
+@inline function mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
+    if axes(C) == axes(X)
+        C .= (X .* s) .*ₛ alpha .+ C .*ₛ beta
+    else
+        generic_mul!(C, X, s, MulAddMul(alpha, beta))
+    end
+    return C
+end
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
@@ -682,9 +702,10 @@ end
 function opnorm2(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
     m,n = size(A)
-    if m == 1 || n == 1 return norm2(A) end
     Tnorm = typeof(float(real(zero(T))))
-    (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
+    if m == 0 || n == 0 return zero(Tnorm) end
+    if m == 1 || n == 1 return norm2(A) end
+    return svdvals(A)[1]
 end
 
 function opnormInf(A::AbstractMatrix{T}) where T
@@ -898,6 +919,9 @@ function dot(x::AbstractArray, y::AbstractArray)
     s
 end
 
+dot(x::Adjoint, y::Adjoint) = conj(dot(parent(x), parent(y)))
+dot(x::Transpose, y::Transpose) = dot(parent(x), parent(y))
+
 """
     dot(x, A, y)
 
@@ -1086,6 +1110,8 @@ When `A` is sparse, a similar polyalgorithm is used. For indefinite matrices, th
 factorization does not use pivoting during the numerical factorization and therefore the
 procedure can fail even for invertible matrices.
 
+See also: [`factorize`](@ref), [`pinv`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 0; 1 -2]; B = [32; -4];
@@ -1266,15 +1292,17 @@ false
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
+    return _istriu(A, k)
+end
+istriu(x::Number) = true
+
+@inline function _istriu(A::AbstractMatrix, k)
     m, n = size(A)
     for j in 1:min(n, m + k - 1)
-        for i in max(1, j - k + 1):m
-            iszero(A[i, j]) || return false
-        end
+        all(iszero, view(A, max(1, j - k + 1):m, j)) || return false
     end
     return true
 end
-istriu(x::Number) = true
 
 """
     istril(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1308,15 +1336,17 @@ false
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
+    return _istril(A, k)
+end
+istril(x::Number) = true
+
+@inline function _istril(A::AbstractMatrix, k)
     m, n = size(A)
     for j in max(1, k + 2):n
-        for i in 1:min(j - k - 1, m)
-            iszero(A[i, j]) || return false
-        end
+        all(iszero, view(A, 1:min(j - k - 1, m), j)) || return false
     end
     return true
 end
-istril(x::Number) = true
 
 """
     isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
@@ -1464,20 +1494,17 @@ end
 
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but
 # ensures that tridiagonalization of Hermitian matrices become real. See lawn72
-@inline function reflector!(x::AbstractVector)
+@inline function reflector!(x::AbstractVector{T}) where {T}
     require_one_based_indexing(x)
     n = length(x)
+    n == 0 && return zero(eltype(x))
     @inbounds begin
         ξ1 = x[1]
-        normu = abs2(ξ1)
-        for i = 2:n
-            normu += abs2(x[i])
-        end
+        normu = norm(x)
         if iszero(normu)
             return zero(ξ1/normu)
         end
-        normu = sqrt(normu)
-        ν = copysign(normu, real(ξ1))
+        ν = T(copysign(normu, real(ξ1)))
         ξ1 += ν
         x[1] = -ν
         for i = 2:n
@@ -1488,28 +1515,18 @@ end
 end
 
 # apply reflector from left
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix)
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractMatrix)
     require_one_based_indexing(x)
     m, n = size(A)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
-    @inbounds begin
-        for j = 1:n
-            # dot
-            vAj = A[1, j]
-            for i = 2:m
-                vAj += x[i]'*A[i, j]
-            end
-
-            vAj = conj(τ)*vAj
-
-            # ger
-            A[1, j] -= vAj
-            for i = 2:m
-                A[i, j] -= x[i]*vAj
-            end
-        end
+    m == 0 && return A
+    @inbounds for j = 1:n
+        Aj, xj = view(A, 2:m, j), view(x, 2:m)
+        vAj = conj(τ)*(A[1, j] + dot(xj, Aj))
+        A[1, j] -= vAj
+        axpy!(-vAj, xj, Aj)
     end
     return A
 end
@@ -1518,6 +1535,8 @@ end
     det(M)
 
 Matrix determinant.
+
+See also: [`logdet`](@ref) and [`logabsdet`](@ref).
 
 # Examples
 ```jldoctest
@@ -1617,7 +1636,7 @@ julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
   Any[0 + 6im, [7.0, 8.0]]
 
 julia> LinearAlgebra.promote_leaf_eltypes(a)
-ComplexF64 = Complex{Float64}
+ComplexF64 (alias for Complex{Float64})
 ```
 """
 promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:Number} = T

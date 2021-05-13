@@ -7,7 +7,7 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     uplo::Char # upper bidiagonal ('U') or lower ('L')
     function Bidiagonal{T,V}(dv, ev, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
-        if length(ev) != length(dv)-1
+        if length(ev) != max(length(dv)-1, 0)
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
         new{T,V}(dv, ev, uplo)
@@ -352,7 +352,7 @@ function diag(M::Bidiagonal, n::Integer=0)
 end
 
 function +(A::Bidiagonal, B::Bidiagonal)
-    if A.uplo == B.uplo
+    if A.uplo == B.uplo || length(A.dv) == 0
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.uplo)
     else
         newdv = A.dv+B.dv
@@ -361,7 +361,7 @@ function +(A::Bidiagonal, B::Bidiagonal)
 end
 
 function -(A::Bidiagonal, B::Bidiagonal)
-    if A.uplo == B.uplo
+    if A.uplo == B.uplo || length(A.dv) == 0
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.uplo)
     else
         newdv = A.dv-B.dv
@@ -371,8 +371,9 @@ end
 
 -(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev,A.uplo)
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.uplo)
-*(B::Number, A::Bidiagonal) = A*B
+*(B::Number, A::Bidiagonal) = Bidiagonal(B*A.dv, B*A.ev, A.uplo)
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
+\(B::Number, A::Bidiagonal) = Bidiagonal(B\A.dv, B\A.ev, A.uplo)
 
 function ==(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
@@ -634,8 +635,6 @@ end
 
 const UpperOrUnitUpperTriangular = Union{UpperTriangular, UnitUpperTriangular}
 const LowerOrUnitLowerTriangular = Union{LowerTriangular, UnitLowerTriangular}
-const AdjOrTransUpperOrUnitUpperTriangular = Union{Adjoint{<:Any, <:UpperOrUnitUpperTriangular}, Transpose{<:Any, <:UpperOrUnitUpperTriangular}}
-const AdjOrTransLowerOrUnitLowerTriangular = Union{Adjoint{<:Any, <:LowerOrUnitLowerTriangular}, Transpose{<:Any, <:LowerOrUnitLowerTriangular}}
 
 function *(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
@@ -646,28 +645,10 @@ function *(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
     end
 end
 
-function *(A::AdjOrTransUpperOrUnitUpperTriangular, B::Bidiagonal)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    if B.uplo == 'L'
-        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
-    else
-        A_mul_B_td!(zeros(TS, size(A)...), A, B)
-    end
-end
-
 function *(A::LowerOrUnitLowerTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if B.uplo == 'L'
         A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
-    else
-        A_mul_B_td!(zeros(TS, size(A)...), A, B)
-    end
-end
-
-function *(A::AdjOrTransLowerOrUnitLowerTriangular, B::Bidiagonal)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    if B.uplo == 'U'
-        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -687,28 +668,10 @@ function *(A::Bidiagonal, B::UpperOrUnitUpperTriangular)
     end
 end
 
-function *(A::Bidiagonal, B::AdjOrTransUpperOrUnitUpperTriangular)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    if A.uplo == 'L'
-        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
-    else
-        A_mul_B_td!(zeros(TS, size(A)...), A, B)
-    end
-end
-
 function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if A.uplo == 'L'
         A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
-    else
-        A_mul_B_td!(zeros(TS, size(A)...), A, B)
-    end
-end
-
-function *(A::Bidiagonal, B::AdjOrTransLowerOrUnitLowerTriangular)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    if A.uplo == 'U'
-        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -886,7 +849,7 @@ eigvals(M::Bidiagonal) = M.dv
 function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
     Q = Matrix{T}(undef, n,n)
-    blks = [0; findall(x -> x == 0, M.ev); n]
+    blks = [0; findall(iszero, M.ev); n]
     v = zeros(T, n)
     if M.uplo == 'U'
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector

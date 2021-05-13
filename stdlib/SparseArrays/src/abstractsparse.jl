@@ -121,3 +121,5 @@ julia> findnz(A)
 ```
 """
 function findnz end
+
+widelength(x::AbstractSparseArray) = prod(Int64.(size(x)))

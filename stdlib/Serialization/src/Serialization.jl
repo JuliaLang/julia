@@ -22,7 +22,8 @@ mutable struct Serializer{I<:IO} <: AbstractSerializer
     table::IdDict{Any,Any}
     pending_refs::Vector{Int}
     known_object_data::Dict{UInt64,Any}
-    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}())
+    version::Int
+    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}(), ser_version)
 end
 
 Serializer(io::IO) = Serializer{typeof(io)}(io)
@@ -78,7 +79,10 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 12 # do not make changes without bumping the version #!
+const ser_version = 15 # do not make changes without bumping the version #!
+
+format_version(::AbstractSerializer) = ser_version
+format_version(s::Serializer) = s.version
 
 const NTAGS = length(TAGS)
 
@@ -413,13 +417,20 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.slot_syms)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
+    serialize(s, meth.is_for_opaque_closure)
+    serialize(s, meth.aggressive_constprop)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
         serialize(s, nothing)
     end
     if isdefined(meth, :generator)
-        serialize(s, Base._uncompressed_ast(meth, meth.generator.inferred)) # XXX: what was this supposed to do?
+        serialize(s, meth.generator)
+    else
+        serialize(s, nothing)
+    end
+    if isdefined(meth, :recursion_relation)
+        serialize(s, method.recursion_relation)
     else
         serialize(s, nothing)
     end
@@ -428,9 +439,12 @@ end
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
-    isa(linfo.def, Module) || error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
-    serialize(s, linfo.uninferred)
+    if isdefined(linfo, :uninferred)
+        serialize(s, linfo.uninferred)
+    else
+        writetag(s.io, UNDEFREF_TAG)
+    end
     serialize(s, nothing)  # for backwards compat
     serialize(s, linfo.sparam_vals)
     serialize(s, Any)  # for backwards compat
@@ -444,11 +458,19 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    state = [t.code, t.storage, t.state, t.result, t.exception]
     writetag(s.io, TASK_TAG)
-    for fld in state
-        serialize(s, fld)
+    serialize(s, t.code)
+    serialize(s, t.storage)
+    serialize(s, t.state)
+    if t._isexception && (stk = Base.catch_stack(t); !isempty(stk))
+        # the exception stack field is hidden inside the task, so if there
+        # is any information there make a CapturedException from it instead.
+        # TODO: Handle full exception chain, not just the first one.
+        serialize(s, CapturedException(stk[1][1], stk[1][2]))
+    else
+        serialize(s, t.result)
     end
+    serialize(s, t._isexception)
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
@@ -716,6 +738,8 @@ function readheader(s::AbstractSerializer)
         error("""Cannot read stream serialized with a newer version of Julia.
                  Got data version $version > current version $ser_version""")
     end
+    s.version = version
+    return
 end
 
 """
@@ -986,8 +1010,23 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     end
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
-    template = deserialize(s)
+    is_for_opaque_closure = false
+    aggressive_constprop = false
+    template_or_is_opaque = deserialize(s)
+    if isa(template_or_is_opaque, Bool)
+        is_for_opaque_closure = template_or_is_opaque
+        if format_version(s) >= 14
+            aggressive_constprop = deserialize(s)::Bool
+        end
+        template = deserialize(s)
+    else
+        template = template_or_is_opaque
+    end
     generator = deserialize(s)
+    recursion_relation = nothing
+    if format_version(s) >= 15
+        recursion_relation = deserialize(s)
+    end
     if makenew
         meth.module = mod
         meth.name = name
@@ -996,6 +1035,8 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.sig = sig
         meth.nargs = nargs
         meth.isva = isva
+        meth.is_for_opaque_closure = is_for_opaque_closure
+        meth.aggressive_constprop = aggressive_constprop
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -1006,15 +1047,16 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         end
         meth.slot_syms = slot_syms
         if generator !== nothing
-            linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
-            linfo.specTypes = Tuple
-            linfo.inferred = generator
-            linfo.def = meth
-            meth.generator = linfo
+            meth.generator = generator
         end
-        mt = ccall(:jl_method_table_for, Any, (Any,), sig)
-        if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
-            ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
+        if recursion_relation !== nothing
+            meth.recursion_relation = recursion_relation
+        end
+        if !is_for_opaque_closure
+            mt = ccall(:jl_method_table_for, Any, (Any,), sig)
+            if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
+                ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
+            end
         end
         remember_object(s, meth, lnumber)
     end
@@ -1024,7 +1066,10 @@ end
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
-    linfo.uninferred = deserialize(s)::CodeInfo
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        linfo.uninferred = handle_deserialize(s, tag)::CodeInfo
+    end
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
         # for reading files prior to v1.2
@@ -1033,7 +1078,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo.sparam_vals = deserialize(s)::SimpleVector
     _rettype = deserialize(s)  # for backwards compat
     linfo.specTypes = deserialize(s)
-    linfo.def = deserialize(s)::Module
+    linfo.def = deserialize(s)
     return linfo
 end
 
@@ -1114,6 +1159,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci.inlineable = deserialize(s)
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
+    if format_version(s) >= 14
+        ci.aggressive_constprop = deserialize(s)::Bool
+    end
     return ci
 end
 
@@ -1263,6 +1311,8 @@ function deserialize_typename(s::AbstractSerializer, number)
                 tn.mt.kwsorter = kws
             end
         end
+    elseif makenew
+        tn.mt = Symbol.name.mt
     end
     return tn::Core.TypeName
 end
@@ -1348,7 +1398,15 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
         @assert false
     end
     t.result = deserialize(s)
-    t.exception = deserialize(s)
+    exc = deserialize(s)
+    if exc === nothing
+        t._isexception = false
+    elseif exc isa Bool
+        t._isexception = exc
+    else
+        t._isexception = true
+        t.result = exc
+    end
     t
 end
 

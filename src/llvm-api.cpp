@@ -16,9 +16,6 @@
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/Attributes.h>
-#if JL_LLVM_VERSION < 110000
-#include <llvm/IR/CallSite.h>
-#endif
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalValue.h>
@@ -27,6 +24,11 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Vectorize.h>
+#if JL_LLVM_VERSION < 120000
+#include <llvm/Transforms/Scalar/InstSimplifyPass.h>
+#endif
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
 #include "julia.h"
@@ -90,12 +92,42 @@ extern "C" JL_DLLEXPORT LLVMBool LLVMExtraInitializeNativeDisassembler()
     return InitializeNativeTargetDisassembler();
 }
 
-// Exporting the Barrier LLVM pass
+// Various missing passes (being upstreamed)
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddBarrierNoopPass(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createBarrierNoopPass());
 }
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddDivRemPairsPass(LLVMPassManagerRef PM) {
+    unwrap(PM)->add(createDivRemPairsPass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLoopDistributePass(LLVMPassManagerRef PM) {
+    unwrap(PM)->add(createLoopDistributePass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLoopFusePass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createLoopFusePass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraLoopLoadEliminationPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createLoopLoadEliminationPass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddLoadStoreVectorizerPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createLoadStoreVectorizerPass());
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddVectorCombinePass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createVectorCombinePass());
+}
+
+// Can be removed in LLVM 12
+extern "C" JL_DLLEXPORT void LLVMExtraAddInstructionSimplifyPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createInstSimplifyLegacyPass());
+}
+
 
 // Infrastructure for writing LLVM passes in Julia
 

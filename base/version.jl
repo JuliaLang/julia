@@ -105,12 +105,12 @@ function split_idents(s::AbstractString)
     return tuple(pidents...)::VerTuple
 end
 
-function VersionNumber(v::AbstractString)
+function tryparse(::Type{VersionNumber}, v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
-    m = match(VERSION_REGEX, v)
-    m === nothing && throw(ArgumentError("invalid version string: $v"))
+    m = match(VERSION_REGEX, String(v)::String)
+    m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = parse(VInt, major)
+    major = parse(VInt, major::AbstractString)
     minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
     patch = patch !== nothing ? parse(VInt, patch) : VInt(0)
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
@@ -121,17 +121,13 @@ function VersionNumber(v::AbstractString)
     return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
 end
 
-parse(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
-function tryparse(::Type{VersionNumber}, v::AbstractString)
-    try
-        return VersionNumber(v)
-    catch e
-        if isa(e, InterruptException)
-            rethrow(e)
-        end
-        return nothing
-    end
+function parse(::Type{VersionNumber}, v::AbstractString)
+    ver = tryparse(VersionNumber, v)
+    ver === nothing && throw(ArgumentError("invalid version string: $v"))
+    return ver
 end
+
+VersionNumber(v::AbstractString) = parse(VersionNumber, v)
 
 """
     @v_str
@@ -253,6 +249,8 @@ const libllvm_version = if endswith(libllvm_version_string, "jl")
 else
     VersionNumber(libllvm_version_string)
 end
+
+libllvm_path() = ccall(:jl_get_libllvm, Any, ())
 
 function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit
