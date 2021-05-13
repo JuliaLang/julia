@@ -522,7 +522,7 @@ pattern given in the `format` string (see [`DateFormat`](@ref)  for syntax).
 julia> DateTime("2020-01-01", "yyyy-mm-dd")
 2020-01-01T00:00:00
 
-julia> a = ("2020-01-01", "2020-01-02")
+julia> a = ("2020-01-01", "2020-01-02");
 
 julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 2-element Vector{DateTime}:
@@ -562,7 +562,7 @@ in the `format` string (see [`DateFormat`](@ref) for syntax).
 julia> Date("2020-01-01", "yyyy-mm-dd")
 2020-01-01T00:00:00
 
-julia> a = ("2020-01-01", "2020-01-02")
+julia> a = ("2020-01-01", "2020-01-02");
 
 julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 2-element Vector{Date}:
@@ -602,7 +602,7 @@ in the `format` string (see [`DateFormat`](@ref) for syntax).
 julia> Time("12:34pm", "HH:MMp")
 12:34:00
 
-julia> a = ("12:34pm", "2:34am")
+julia> a = ("12:34pm", "2:34am");
 
 julia> [Time(d, dateformat"HH:MMp") for d ∈ a] # preferred
 2-element Vector{Time}:
