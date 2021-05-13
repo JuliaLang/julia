@@ -117,7 +117,7 @@ Standard library changes
 
 * new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
 * `cholesky()` now fully preserves the user-specified permutation. ([#40560])
-
+* `issparse` now applies consistently to all wrapper arrays, including nested, by checking `issparse` on the wrapped parent array ([#37644]).
 
 #### Dates
 
