@@ -318,7 +318,7 @@ end
                     mktempdir() do dir
                         path = joinpath(dir, "stdin.txt")
                         write(path, "hello from stdin\n")
-                        redirect(readline, stdin=path)
+                        redirect_stdio(readline, stdin=path)
                     end
                 end
             end)
