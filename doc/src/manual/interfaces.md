@@ -371,7 +371,7 @@ julia> A[1:2,:]
  2.0  5.0  8.0
 ```
 
-In this example it is accomplished by defining `Base.similar(A::SparseArray, ::Type{S}, dims::Dims)`
+In this example it is accomplished by defining `Base.similar(A::SparseArray, ::Type{T}, dims::Dims) where T`
 to create the appropriate wrapped array. (Note that while `similar` supports 1- and 2-argument
 forms, in most case you only need to specialize the 3-argument form.) For this to work it's important
 that `SparseArray` is mutable (supports `setindex!`). Defining `similar`, `getindex` and
