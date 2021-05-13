@@ -560,7 +560,7 @@ in the `format` string (see [`DateFormat`](@ref) for syntax).
 # Example
 ```jldoctest
 julia> Date("2020-01-01", "yyyy-mm-dd")
-2020-01-01T00:00:00
+2020-01-01
 
 julia> a = ("2020-01-01", "2020-01-02");
 
