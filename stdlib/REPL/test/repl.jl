@@ -750,6 +750,32 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "begin")
     @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
 
+    # Test switching repl modes
+    sendrepl2("""\e[200~
+            julia> A = 1
+            1
+
+            shell> echo foo
+            foo
+
+            shell> echo foo
+                   foo
+            foo foo
+
+            help?> Int
+            Dummy docstring
+
+                Some text
+
+                julia> error("If this error throws, the paste handler has failed to ignore this docstring example")
+
+            julia> B = 2
+            2\e[201~
+             """)
+    wait(c)
+    @test Main.A == 1
+    @test Main.B == 2
+
     # Close repl
     write(stdin_write, '\x04')
     Base.wait(repltask)
