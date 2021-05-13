@@ -284,9 +284,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     return CallMeta(rettype, info)
 end
 
-widenwrappedconditional(@nospecialize(typ))   = widenconditional(typ)
-widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
-
 function add_call_backedges!(interp::AbstractInterpreter,
                              @nospecialize(rettype),
                              edges::Vector{MethodInstance},
@@ -1128,7 +1125,7 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     end
     method, valid_worlds = result
     update_valid_age!(sv, valid_worlds)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     rt, edge = typeinf_edge(interp, method, ti, env, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     return CallMeta(rt, InvokeCallInfo(MethodMatch(ti, env, method, argtype <: method.sig)))
