@@ -91,7 +91,7 @@ struct StateUpdate
 end
 
 # Represent that the type estimate has been approximated, due to "causes"
-# (only used in abstractinterpret, doesn't appear in optimize)
+# (only used in abstract interpretion, doesn't appear in optimization)
 # N.B. in the lattice, this is epsilon smaller than `typ` (except Union{})
 struct LimitedAccuracy
     typ
