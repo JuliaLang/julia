@@ -83,7 +83,8 @@ julia> Date(Dates.Month(7),Dates.Year(2013))
 [`Date`](@ref) or [`DateTime`](@ref) parsing is accomplished by the use of format strings. Format
 strings work by the notion of defining *delimited* or *fixed-width* "slots" that contain a period
 to parse and passing the text to parse and format string to a [`Date`](@ref) or [`DateTime`](@ref)
-constructor, of the form `Date("2015-01-01","y-m-d")` or `DateTime("20150101","yyyymmdd")`.
+constructor, of the form `Date("2015-01-01",dateformat"y-m-d")` or
+`DateTime("20150101",dateformat"yyyymmdd")`.
 
 Delimited slots are marked by specifying the delimiter the parser should expect between two subsequent
 periods; so `"y-m-d"` lets the parser know that between the first and second slots in a date string
@@ -92,14 +93,14 @@ parser know which periods to parse in each slot.
 
 As in the case of constructors above such as `Date(2013)`, delimited `DateFormat`s allow for
 missing parts of dates and times so long as the preceding parts are given. The other parts are given the usual
-default values.  For example, `Date("1981-03", "y-m-d")` returns `1981-03-01`, whilst
-`Date("31/12", "d/m/y")` gives `0001-12-31`.  (Note that the default year is
+default values.  For example, `Date("1981-03", dateformat"y-m-d")` returns `1981-03-01`, whilst
+`Date("31/12", dateformat"d/m/y")` gives `0001-12-31`.  (Note that the default year is
 1 AD/CE.)
 Consequently, an empty string will always return `0001-01-01` for `Date`s,
 and `0001-01-01T00:00:00.000` for `DateTime`s.
 
 Fixed-width slots are specified by repeating the period character the number of times corresponding
-to the width with no delimiter between characters. So `"yyyymmdd"` would correspond to a date
+to the width with no delimiter between characters. So `dateformat"yyyymmdd"` would correspond to a date
 string like `"20140716"`. The parser distinguishes a fixed-width slot by the absence of a delimiter,
 noting the transition `"yyyymm"` from one period character to the next.
 
@@ -110,10 +111,16 @@ supported, so `u` corresponds to "Jan", "Feb", "Mar", etc. And `U` corresponds t
 custom locales can be loaded by passing in the `locale=>Dict{String,Int}` mapping to the `MONTHTOVALUEABBR`
 and `MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
 
-One note on parsing performance: using the `Date(date_string,format_string)` function is fine
-if only called a few times. If there are many similarly formatted date strings to parse however,
-it is much more efficient to first create a [`Dates.DateFormat`](@ref), and pass it instead of
-a raw format string.
+The above examples used the `dateformat""` string macro. This macro creates a `DateFormat` object once when
+the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
+
+```jldoctest
+julia> for i = 1:10^5
+           Date("2015-01-01", dateformat"y-m-d")
+       end
+```
+
+Or you can create the DateFormat object explicitly:
 
 ```jldoctest
 julia> df = DateFormat("y-m-d");
@@ -136,13 +143,9 @@ julia> Date.(years, DateFormat("yyyy"))
  2016-01-01
 ```
 
-You can also use the `dateformat""` string macro. This macro creates the `DateFormat` object once when the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
-
-```jldoctest
-julia> for i = 1:10^5
-           Date("2015-01-01", dateformat"y-m-d")
-       end
-```
+For convenience, you may pass the format string directly (e.g., `Date("2015-01-01","y-m-d")`),
+although this form incurs performance costs if you are parsing the same format repeatedly, as
+it internally creates a new `DateFormat` object each time.
 
 As well as via the constructors, a `Date` or `DateTime` can be constructed from
 strings using the [`parse`](@ref) and [`tryparse`](@ref) functions, but with
