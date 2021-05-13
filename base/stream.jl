@@ -1127,7 +1127,7 @@ function _fd(x::Union{LibuvStream, LibuvServer})
     return fd[]
 end
 
-struct redirect_stdio <: Function
+struct RedirectStdStream <: Function
     unix_fd::Int
     writable::Bool
 end
@@ -1135,7 +1135,7 @@ for (f, writable, unix_fd) in
         ((:redirect_stdin, false, 0),
          (:redirect_stdout, true, 1),
          (:redirect_stderr, true, 2))
-    @eval const ($f) = redirect_stdio($unix_fd, $writable)
+    @eval const ($f) = RedirectStdStream($unix_fd, $writable)
 end
 function _redirect_io_libc(stream, unix_fd::Int)
     posix_fd = _fd(stream)
@@ -1154,7 +1154,7 @@ function _redirect_io_global(io, unix_fd::Int)
     unix_fd == 2 && (global stderr = io)
     nothing
 end
-function (f::redirect_stdio)(handle::Union{LibuvStream, IOStream})
+function (f::RedirectStdStream)(handle::Union{LibuvStream, IOStream})
     _redirect_io_libc(handle, f.unix_fd)
     c_sym = f.unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
             f.unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
@@ -1164,7 +1164,7 @@ function (f::redirect_stdio)(handle::Union{LibuvStream, IOStream})
     _redirect_io_global(handle, f.unix_fd)
     return handle
 end
-function (f::redirect_stdio)(::DevNull)
+function (f::RedirectStdStream)(::DevNull)
     nulldev = @static Sys.iswindows() ? "NUL" : "/dev/null"
     handle = open(nulldev, write=f.writable)
     _redirect_io_libc(handle, f.unix_fd)
@@ -1172,13 +1172,13 @@ function (f::redirect_stdio)(::DevNull)
     _redirect_io_global(devnull, f.unix_fd)
     return devnull
 end
-function (f::redirect_stdio)(io::AbstractPipe)
+function (f::RedirectStdStream)(io::AbstractPipe)
     io2 = (f.writable ? pipe_writer : pipe_reader)(io)
     f(io2)
     _redirect_io_global(io, f.unix_fd)
     return io
 end
-function (f::redirect_stdio)(p::Pipe)
+function (f::RedirectStdStream)(p::Pipe)
     if p.in.status == StatusInit && p.out.status == StatusInit
         link_pipe!(p)
     end
@@ -1186,9 +1186,9 @@ function (f::redirect_stdio)(p::Pipe)
     f(io2)
     return p
 end
-(f::redirect_stdio)() = f(Pipe())
+(f::RedirectStdStream)() = f(Pipe())
 
-# Deprecate these in v2 (redirect_stdio support)
+# Deprecate these in v2 (RedirectStdStream support)
 iterate(p::Pipe) = (p.out, 1)
 iterate(p::Pipe, i::Int) = i == 1 ? (p.in, 2) : nothing
 getindex(p::Pipe, key::Int) = key == 1 ? p.out : key == 2 ? p.in : throw(KeyError(key))
@@ -1205,7 +1205,7 @@ the pipe.
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
     `Pipe`, socket, or `devnull`.
 
-See also [`redirect`](@ref).
+See also [`redirect_stdio`](@ref).
 """
 redirect_stdout
 
@@ -1218,7 +1218,7 @@ Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
     `Pipe`, socket, or `devnull`.
 
-See also [`redirect`](@ref).
+See also [`redirect_stdio`](@ref).
 """
 redirect_stderr
 
@@ -1232,27 +1232,27 @@ Note that the direction of the stream is reversed.
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
     `Pipe`, socket, or `devnull`.
 
-See also [`redirect`](@ref).
+See also [`redirect_stdio`](@ref).
 """
 redirect_stdin
 
 """
-    redirect(;stdin=stdin, stderr=stderr, stdout=stdout)
+    redirect_stdio(;stdin=stdin, stderr=stderr, stdout=stdout)
 
 Redirect a subset of the streams `stdin`, `stderr`, `stdout`.
 Each argument must be an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
 
 !!! compat "Julia 1.7"
-    `redirect` requires Julia 1.7 or later.
+    `redirect_stdio` requires Julia 1.7 or later.
 """
-function redirect(;stdin=nothing, stderr=nothing, stdout=nothing)
+function redirect_stdio(;stdin=nothing, stderr=nothing, stdout=nothing)
     stdin  === nothing || redirect_stdin(stdin)
     stderr === nothing || redirect_stderr(stderr)
     stdout === nothing || redirect_stdout(stdout)
 end
 
 """
-    redirect(f; stdin=nothing, stderr=nothing, stdout=nothing)
+    redirect_stdio(f; stdin=nothing, stderr=nothing, stdout=nothing)
 
 Redirect a subset of the streams `stdin`, `stderr`, `stdout`,
 call `f()` and restore each stream.
@@ -1264,7 +1264,7 @@ Possible values for each stream are:
 
 # Examples
 ```julia
-julia> redirect(stdout="stdout.txt", stderr="stderr.txt") do
+julia> redirect_stdio(stdout="stdout.txt", stderr="stderr.txt") do
            print("hello stdout")
            print(stderr, "hello stderr")
        end
@@ -1280,7 +1280,7 @@ julia> read("stderr.txt", String)
 
 It is possible to pass the same argument to `stdout` and `stderr`:
 ```julia
-julia> redirect(stdout="log.txt", stderr="log.txt", stdin=devnull) do
+julia> redirect_stdio(stdout="log.txt", stderr="log.txt", stdin=devnull) do
     ...
 end
 ```
@@ -1291,19 +1291,19 @@ julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
 
-julia> redirect(f, stdout=io1, stderr=io2) # not suppored
+julia> redirect_stdio(f, stdout=io1, stderr=io2) # not suppored
 ```
 Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
 ```julia
 julia> io = open(...)
 
-julia> redirect(f, stdout=io, stdin=io) # not supported
+julia> redirect_stdio(f, stdout=io, stdin=io) # not supported
 ```
 
 !!! compat "Julia 1.7"
-    `redirect` requires Julia 1.7 or later.
+    `redirect_stdio` requires Julia 1.7 or later.
 """
-function redirect(f; stdin=nothing, stderr=nothing, stdout=nothing)
+function redirect_stdio(f; stdin=nothing, stderr=nothing, stdout=nothing)
 
     function resolve(new::Nothing, oldstream, mode)
         (new=nothing, close=false, old=nothing)
@@ -1334,19 +1334,19 @@ function redirect(f; stdin=nothing, stderr=nothing, stdout=nothing)
         new_err, close_err, old_err = resolve(stderr, Base.stderr, "w")
     end
 
-    redirect(; stderr=new_err, stdin=new_in, stdout=new_out)
+    redirect_stdio(; stderr=new_err, stdin=new_in, stdout=new_out)
 
     try
         return f()
     finally
-        redirect(;stderr=old_err, stdin=old_in, stdout=old_out)
+        redirect_stdio(;stderr=old_err, stdin=old_in, stdout=old_out)
         close_err && close(new_err)
         close_in  && close(new_in )
         close_out && close(new_out)
     end
 end
 
-function (f::redirect_stdio)(thunk::Function, stream)
+function (f::RedirectStdStream)(thunk::Function, stream)
     stdold = f.unix_fd == 0 ? stdin :
              f.unix_fd == 1 ? stdout :
              f.unix_fd == 2 ? stderr :

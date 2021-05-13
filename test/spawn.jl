@@ -261,20 +261,20 @@ end
     end
 end
 
-@testset "redirect" begin
+@testset "redirect_stdio" begin
 
     function hello_err_out()
         println(stderr, "hello from stderr")
         println(stdout, "hello from stdout")
     end
     @testset "same path for multiple streams" begin
-        @test_throws ArgumentError redirect(hello_err_out,
+        @test_throws ArgumentError redirect_stdio(hello_err_out,
                                             stdin="samepath.txt", stdout="samepath.txt")
-        @test_throws ArgumentError redirect(hello_err_out,
+        @test_throws ArgumentError redirect_stdio(hello_err_out,
                                             stdin="samepath.txt", stderr="samepath.txt")
         mktempdir() do dir
             path = joinpath(dir, "stdouterr.txt")
-            redirect(hello_err_out, stdout=path, stderr=path)
+            redirect_stdio(hello_err_out, stdout=path, stderr=path)
             @test read(path, String) == """
             hello from stderr
             hello from stdout
@@ -285,11 +285,11 @@ end
     mktempdir() do dir
         path_stdout = joinpath(dir, "stdout.txt")
         path_stderr = joinpath(dir, "stderr.txt")
-        redirect(hello_err_out, stderr=devnull, stdout=path_stdout)
+        redirect_stdio(hello_err_out, stderr=devnull, stdout=path_stdout)
         @test read(path_stdout, String) == "hello from stdout\n"
 
         open(path_stderr, "w") do ioerr
-            redirect(hello_err_out, stderr=ioerr, stdout=devnull)
+            redirect_stdio(hello_err_out, stderr=ioerr, stdout=devnull)
         end
         @test read(path_stderr, String) == "hello from stderr\n"
     end
@@ -302,7 +302,7 @@ end
         content_stderr = randstring()
         content_stdout = randstring()
 
-        redirect(stdout=path_stdout, stderr=path_stderr) do
+        redirect_stdio(stdout=path_stdout, stderr=path_stderr) do
             print(content_stdout)
             print(stderr, content_stderr)
         end
