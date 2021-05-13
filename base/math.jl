@@ -495,7 +495,7 @@ log(x::Number)
 Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
-See also: [`exp2`](@ref), [`ldexp`](@ref).
+See also: [`exp2`](@ref), [`ldexp`](@ref), [`ispow2`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
