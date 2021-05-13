@@ -46,7 +46,7 @@ New library functions
 * New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
 * New macros `@something` and `@coalesce` which are short-circuiting versions of `something` and `coalesce`, respectively ([#40729])
-* New function `redirect` for redirecting `stdin`, `stdout` and `stderr` ([#37978]).
+* New function `redirect_stdio` for redirecting `stdin`, `stdout` and `stderr` ([#37978]).
 
 New library features
 --------------------
