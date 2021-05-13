@@ -301,15 +301,12 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 # join is implemented using IO
 
 """
-    join([io::IO,] strings [, delim [, last]])
+    join([io::IO,] iterator [, delim [, last]])
 
-Join an array of `strings` into a single string, inserting the given delimiter (if any) between
-adjacent strings. If `last` is given, it will be used instead of `delim` between the last
-two strings. If `io` is given, the result is written to `io` rather than returned
-as a `String`.
-
-`strings` can be any iterable over elements `x` which are convertible to strings
-via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
+Join any `iterator` into a single string, inserting the given delimiter (if any) between
+adjacent items.  If `last` is given, it will be used instead of `delim` between the last
+two items.  Each item of the iterator is converted to a string via `print(io::IOBuffer, x)`.
+If `io` is given, the result is written to `io` rather than returned as a `String`.  
 
 # Examples
 ```jldoctest
@@ -320,15 +317,15 @@ julia> join([1,2,3,4,5])
 "12345"
 ```
 """
-function join(io::IO, string_iterator, delim, last)
+function join(io::IO, iterator, delim, last)
     first = true
     local prev
-    for str in string_iterator
+    for item in iterator
         if @isdefined prev
             first ? (first = false) : print(io, delim)
             print(io, prev)
         end
-        prev = str
+        prev = item
     end
     if @isdefined prev
         first || print(io, last)
@@ -336,19 +333,19 @@ function join(io::IO, string_iterator, delim, last)
     end
     nothing
 end
-function join(io::IO, string_iterator, delim="")
+function join(io::IO, iterator, delim="")
     # Specialization of the above code when delim==last,
     # which lets us emit (compile) less code
     first = true
-    for str in string_iterator
+    for item in iterator
         first ? (first = false) : print(io, delim)
-        print(io, str)
+        print(io, item)
     end
 end
 
-join(string_iterator) = sprint(join, string_iterator)
-join(string_iterator, delim) = sprint(join, string_iterator, delim)
-join(string_iterator, delim, last) = sprint(join, string_iterator, delim, last)
+join(iterator) = sprint(join, iterator)
+join(iterator, delim) = sprint(join, iterator, delim)
+join(iterator, delim, last) = sprint(join, iterator, delim, last)
 
 ## string escaping & unescaping ##
 
