@@ -76,6 +76,9 @@ end
 answer_color(::AbstractREPL) = ""
 
 const JULIA_PROMPT = "julia> "
+const PKG_PROMPT = "pkg> "
+const SHELL_PROMPT = "shell> "
+const HELP_PROMPT = "help?> "
 
 mutable struct REPLBackend
     "channel for AST"
@@ -935,7 +938,7 @@ function setup_interface(
         on_enter = return_callback)
 
     # Setup help mode
-    help_mode = Prompt("help?> ",
+    help_mode = Prompt(HELP_PROMPT,
         prompt_prefix = hascolor ? repl.help_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
@@ -947,7 +950,7 @@ function setup_interface(
 
 
     # Set up shell mode
-    shell_mode = Prompt("shell> ";
+    shell_mode = Prompt(SHELL_PROMPT;
         prompt_prefix = hascolor ? repl.shell_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
@@ -1001,6 +1004,12 @@ function setup_interface(
     search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
     search_prompt.complete = LatexCompletions()
 
+    jl_prompt_len = length(JULIA_PROMPT)
+    pkg_prompt_len = length(PKG_PROMPT)
+    shell_prompt_len = length(SHELL_PROMPT)
+    help_prompt_len = length(HELP_PROMPT)
+    pkg_prompt_regex = r"^(?:\(.+\) )?pkg>"
+
     # Canonicalize user keymap input
     if isa(extra_repl_keymap, Dict)
         extra_repl_keymap = AnyDict[extra_repl_keymap]
@@ -1053,12 +1062,15 @@ function setup_interface(
             oldpos = firstindex(input)
             firstline = true
             isprompt_paste = false
-            jl_prompt_len = 7 # "julia> "
+            curr_prompt_len = 0
+            pasting_help = false
+
             while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
-                    # Check if the next statement starts with "julia> ", in that case
-                    # skip it. But first skip whitespace
-                    while input[oldpos] in ('\n', ' ', '\t')
+                    # Check if the next statement starts with a prompt i.e. "julia> ", in that case
+                    # skip it. But first skip whitespace unless pasting in a docstring which may have
+                    # indented prompt examples that we don't want to execute
+                    while input[oldpos] in (pasting_help ? ('\n') : ('\n', ' ', '\t'))
                         oldpos = nextind(input, oldpos)
                         oldpos >= sizeof(input) && return
                     end
@@ -1066,7 +1078,32 @@ function setup_interface(
                     if (firstline || isprompt_paste) && startswith(SubString(input, oldpos), JULIA_PROMPT)
                         isprompt_paste = true
                         oldpos += jl_prompt_len
-                    # If we are prompt pasting and current statement does not begin with julia> , skip to next line
+                        curr_prompt_len = jl_prompt_len
+                        transition(s, julia_prompt)
+                        pasting_help = false
+                    # Check if input line starts with "pkg> " or "(...) pkg> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), pkg_prompt_regex)
+                        detected_pkg_prompt = match(pkg_prompt_regex, SubString(input, oldpos)).match
+                        isprompt_paste = true
+                        curr_prompt_len = length(detected_pkg_prompt)
+                        oldpos += curr_prompt_len
+                        Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
+                        pasting_help = false
+                    # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), SHELL_PROMPT)
+                        isprompt_paste = true
+                        oldpos += shell_prompt_len
+                        curr_prompt_len = shell_prompt_len
+                        transition(s, shell_mode)
+                        pasting_help = false
+                    # Check if input line starts with "help?> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), HELP_PROMPT)
+                        isprompt_paste = true
+                        oldpos += help_prompt_len
+                        curr_prompt_len = help_prompt_len
+                        transition(s, help_mode)
+                        pasting_help = true
+                    # If we are prompt pasting and current statement does not begin with a mode prefix, skip to next line
                     elseif isprompt_paste
                         while input[oldpos] != '\n'
                             oldpos = nextind(input, oldpos)
@@ -1075,29 +1112,47 @@ function setup_interface(
                         continue
                     end
                 end
-                ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
-                if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
-                        (pos > ncodeunits(input) && !endswith(input, '\n'))
-                    # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
-                    # Insert all the remaining text as one line (might be empty)
-                    tail = input[oldpos:end]
-                    if !firstline
-                        # strip leading whitespace, but only if it was the result of executing something
-                        # (avoids modifying the user's current leading wip line)
-                        tail = lstrip(tail)
+                if s.current_mode == julia_prompt
+                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
+                    if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
+                            (pos > ncodeunits(input) && !endswith(input, '\n'))
+                        # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
+                        # Insert all the remaining text as one line (might be empty)
+                        tail = input[oldpos:end]
+                        if !firstline
+                            # strip leading whitespace, but only if it was the result of executing something
+                            # (avoids modifying the user's current leading wip line)
+                            tail = lstrip(tail)
+                        end
+                        if isprompt_paste # remove indentation spaces corresponding to the prompt
+                            tail = replace(tail, r"^"m * ' '^curr_prompt_len => "")
+                        end
+                        LineEdit.replace_line(s, tail, true)
+                        LineEdit.refresh_line(s)
+                        break
                     end
-                    if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        tail = replace(tail, r"^"m * ' '^jl_prompt_len => "")
+                elseif s.current_mode == shell_mode # handle multiline shell commands
+                    lines = split(input[oldpos:end], '\n')
+                    pos = oldpos + sizeof(lines[1]) + 1
+                    if length(lines) > 1
+                        for line in lines[2:end]
+                            # to be recognized as a multiline shell command, the lines must be indented to the
+                            # same prompt position
+                            if !startswith(line, ' '^curr_prompt_len)
+                                break
+                            end
+                            pos += sizeof(line) + 1
+                        end
                     end
-                    LineEdit.replace_line(s, tail, true)
-                    LineEdit.refresh_line(s)
-                    break
+                else
+                    nl_pos = findfirst('\n', input[oldpos:end])
+                    pos = isnothing(nl_pos) ? oldpos : oldpos + nl_pos
                 end
                 # get the line and strip leading and trailing whitespace
                 line = strip(input[oldpos:prevind(input, pos)])
                 if !isempty(line)
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        line = replace(line, r"^"m * ' '^jl_prompt_len => "")
+                        line = replace(line, r"^"m * ' '^curr_prompt_len => "")
                     end
                     # put the line on the screen and history
                     LineEdit.replace_line(s, line)
