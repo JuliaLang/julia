@@ -131,6 +131,9 @@ f(3)
 julia> b === nothing
 true
 ```
+
+!!! compat "Julia 1.7"
+    This macro is available as of Julia 1.7.
 """
 macro something(args...)
     expr = :(nothing)
