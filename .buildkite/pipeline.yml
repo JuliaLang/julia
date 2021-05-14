@@ -1,0 +1,11 @@
+steps:
+  - label: "analyzegc"
+    commands:
+      - apt-get update
+      - apt-get install -y build-essential libatomic1 python python3 gfortran perl wget m4 cmake pkg-config curl
+      - make -j 6 -C deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
+      - make -j 6 -C test/clangsa
+      - make -j 6 -C src analyzegc
+    agents:
+      queue: "juliacpu"
+    timeout_in_minutes: 60
