@@ -1008,7 +1008,7 @@ function setup_interface(
     pkg_prompt_len = length(PKG_PROMPT)
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
-    pkg_prompt_regex = r"^(?:\(.+\) )?pkg>"
+    pkg_prompt_regex = r"^(?:\(.+\) )?pkg> "
 
     # Canonicalize user keymap input
     if isa(extra_repl_keymap, Dict)
@@ -1085,7 +1085,7 @@ function setup_interface(
                     elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), pkg_prompt_regex)
                         detected_pkg_prompt = match(pkg_prompt_regex, SubString(input, oldpos)).match
                         isprompt_paste = true
-                        curr_prompt_len = length(detected_pkg_prompt)
+                        curr_prompt_len = sizeof(detected_pkg_prompt)
                         oldpos += curr_prompt_len
                         Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
                         pasting_help = false
@@ -1112,25 +1112,18 @@ function setup_interface(
                         continue
                     end
                 end
+                dump_tail = false
+                nl_pos = findfirst('\n', input[oldpos:end])
                 if s.current_mode == julia_prompt
                     ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
                     if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                             (pos > ncodeunits(input) && !endswith(input, '\n'))
                         # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                         # Insert all the remaining text as one line (might be empty)
-                        tail = input[oldpos:end]
-                        if !firstline
-                            # strip leading whitespace, but only if it was the result of executing something
-                            # (avoids modifying the user's current leading wip line)
-                            tail = lstrip(tail)
-                        end
-                        if isprompt_paste # remove indentation spaces corresponding to the prompt
-                            tail = replace(tail, r"^"m * ' '^curr_prompt_len => "")
-                        end
-                        LineEdit.replace_line(s, tail, true)
-                        LineEdit.refresh_line(s)
-                        break
+                        dump_tail = true
                     end
+                elseif isnothing(nl_pos) # no newline at end, so just dump the tail into the prompt and don't execute
+                    dump_tail = true
                 elseif s.current_mode == shell_mode # handle multiline shell commands
                     lines = split(input[oldpos:end], '\n')
                     pos = oldpos + sizeof(lines[1]) + 1
@@ -1145,8 +1138,21 @@ function setup_interface(
                         end
                     end
                 else
-                    nl_pos = findfirst('\n', input[oldpos:end])
-                    pos = isnothing(nl_pos) ? oldpos : oldpos + nl_pos
+                    pos = oldpos + nl_pos
+                end
+                if dump_tail
+                    tail = input[oldpos:end]
+                    if !firstline
+                        # strip leading whitespace, but only if it was the result of executing something
+                        # (avoids modifying the user's current leading wip line)
+                        tail = lstrip(tail)
+                    end
+                    if isprompt_paste # remove indentation spaces corresponding to the prompt
+                        tail = replace(tail, r"^"m * ' '^curr_prompt_len => "")
+                    end
+                    LineEdit.replace_line(s, tail, true)
+                    LineEdit.refresh_line(s)
+                    break
                 end
                 # get the line and strip leading and trailing whitespace
                 line = strip(input[oldpos:prevind(input, pos)])
