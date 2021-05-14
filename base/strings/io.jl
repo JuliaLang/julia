@@ -64,10 +64,10 @@ Hello, world
 
 julia> io = IOBuffer();
 
-julia> println(io, "Hello, world")
+julia> println(io, "Hello", ',', " world.")
 
 julia> String(take!(io))
-"Hello, world\\n"
+"Hello, world.\\n"
 ```
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
@@ -172,6 +172,8 @@ highly efficient, then it may make sense to add a method to `string` and
 define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
 functions are consistent.
 
+See also: [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
+
 # Examples
 ```jldoctest
 julia> string("a", 1, true)
@@ -187,6 +189,54 @@ string(a::Symbol) = String(a)
 print(io::IO, s::AbstractString) = for c in s; print(io, c); end
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += Int(write(io, c))::Int; end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
+
+# show elided string if more than `limit` characters
+function show(
+    io    :: IO,
+    mime  :: MIME"text/plain",
+    str   :: AbstractString;
+    limit :: Union{Int, Nothing} = nothing,
+)
+    # compute limit in default case
+    if limit === nothing
+        get(io, :limit, false) || return show(io, str)
+        limit = max(20, displaysize(io)[2])
+        # one line in collection, seven otherwise
+        get(io, :typeinfo, nothing) === nothing && (limit *= 7)
+    end
+
+    # early out for short strings
+    len = ncodeunits(str)
+    len ≤ limit - 2 && # quote chars
+        return show(io, str)
+
+    # these don't depend on string data
+    units = codeunit(str) == UInt8 ? "bytes" : "code units"
+    skip_text(skip) = " ⋯ $skip $units ⋯ "
+    short = length(skip_text("")) + 4 # quote chars
+    chars = max(limit, short + 1) - short # at least 1 digit
+
+    # figure out how many characters to print in elided case
+    chars -= d = ndigits(len - chars) # first adjustment
+    chars += d - ndigits(len - chars) # second if needed
+    chars = max(0, chars)
+
+    # find head & tail, avoiding O(length(str)) computation
+    head = nextind(str, 0, 1 + (chars + 1) ÷ 2)
+    tail = prevind(str, len + 1, chars ÷ 2)
+
+    # threshold: min chars skipped to make elision worthwhile
+    t = short + ndigits(len - chars) - 1
+    n = tail - head # skipped code units
+    if 4t ≤ n || t ≤ n && t ≤ length(str, head, tail-1)
+        skip = skip_text(n)
+        show(io, SubString(str, 1:prevind(str, head)))
+        print(io, skip) # TODO: bold styled
+        show(io, SubString(str, tail))
+    else
+        show(io, str)
+    end
+end
 
 # optimized methods to avoid iterating over chars
 write(io::IO, s::Union{String,SubString{String}}) =
@@ -251,15 +301,12 @@ IOBuffer(s::SubString{String}) = IOBuffer(view(unsafe_wrap(Vector{UInt8}, s.stri
 # join is implemented using IO
 
 """
-    join([io::IO,] strings [, delim [, last]])
+    join([io::IO,] iterator [, delim [, last]])
 
-Join an array of `strings` into a single string, inserting the given delimiter (if any) between
-adjacent strings. If `last` is given, it will be used instead of `delim` between the last
-two strings. If `io` is given, the result is written to `io` rather than returned
-as a `String`.
-
-`strings` can be any iterable over elements `x` which are convertible to strings
-via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
+Join any `iterator` into a single string, inserting the given delimiter (if any) between
+adjacent items.  If `last` is given, it will be used instead of `delim` between the last
+two items.  Each item of `iterator` is converted to a string via `print(io::IOBuffer, x)`.
+If `io` is given, the result is written to `io` rather than returned as a `String`.
 
 # Examples
 ```jldoctest
@@ -270,15 +317,15 @@ julia> join([1,2,3,4,5])
 "12345"
 ```
 """
-function join(io::IO, strings, delim, last)
+function join(io::IO, iterator, delim, last)
     first = true
     local prev
-    for str in strings
+    for item in iterator
         if @isdefined prev
             first ? (first = false) : print(io, delim)
             print(io, prev)
         end
-        prev = str
+        prev = item
     end
     if @isdefined prev
         first || print(io, last)
@@ -286,19 +333,19 @@ function join(io::IO, strings, delim, last)
     end
     nothing
 end
-function join(io::IO, strings, delim="")
+function join(io::IO, iterator, delim="")
     # Specialization of the above code when delim==last,
     # which lets us emit (compile) less code
     first = true
-    for str in strings
+    for item in iterator
         first ? (first = false) : print(io, delim)
-        print(io, str)
+        print(io, item)
     end
 end
 
-join(strings) = sprint(join, strings)
-join(strings, delim) = sprint(join, strings, delim)
-join(strings, delim, last) = sprint(join, strings, delim, last)
+join(iterator) = sprint(join, iterator)
+join(iterator, delim) = sprint(join, iterator, delim)
+join(iterator, delim, last) = sprint(join, iterator, delim, last)
 
 ## string escaping & unescaping ##
 

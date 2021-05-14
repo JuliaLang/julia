@@ -19,7 +19,7 @@
 import Core: Const, PartialStruct
 
 # The type of this value might be Bool.
-# However, to enable a limited amount of back-propagagation,
+# However, to enable a limited amount of back-propagation,
 # we also keep some information about how this Bool value was created.
 # In particular, if you branch on this value, then may assume that in
 # the true branch, the type of `var` will be limited by `vtype` and in
@@ -91,7 +91,7 @@ struct StateUpdate
 end
 
 # Represent that the type estimate has been approximated, due to "causes"
-# (only used in abstractinterpret, doesn't appear in optimize)
+# (only used in abstract interpretion, doesn't appear in optimization)
 # N.B. in the lattice, this is epsilon smaller than `typ` (except Union{})
 struct LimitedAccuracy
     typ
@@ -313,6 +313,9 @@ function widenconditional(typ::AnyConditional)
 end
 widenconditional(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
+widenwrappedconditional(@nospecialize(typ))   = widenconditional(typ)
+widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
+
 ignorelimited(@nospecialize typ) = typ
 ignorelimited(typ::LimitedAccuracy) = typ.typ
 
@@ -329,10 +332,7 @@ function stupdate!(state::Nothing, changes::StateUpdate)
                 if isa(newtype, VarState)
                     newtypetyp = ignorelimited(newtype.typ)
                     if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                        newtypetyp = widenconditional(newtypetyp)
-                        if newtype.typ isa LimitedAccuracy
-                            newtypetyp = LimitedAccuracy(newtypetyp, newtype.typ.causes)
-                        end
+                        newtypetyp = widenwrappedconditional(newtype.typ)
                         newst[i] = VarState(newtypetyp, newtype.undef)
                     end
                 end
@@ -360,10 +360,7 @@ function stupdate!(state::VarTable, changes::StateUpdate)
         if !changes.conditional && isa(newtype, VarState)
             newtypetyp = ignorelimited(newtype.typ)
             if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                newtypetyp = widenconditional(newtypetyp)
-                if newtype.typ isa LimitedAccuracy
-                    newtypetyp = LimitedAccuracy(newtypetyp, newtype.typ.causes)
-                end
+                newtypetyp = widenwrappedconditional(newtype.typ)
                 newtype = VarState(newtypetyp, newtype.undef)
             end
         end

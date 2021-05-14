@@ -13,6 +13,8 @@ copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
 
 Construct the union of sets. Maintain order with arrays.
 
+See also: [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
+
 # Examples
 ```jldoctest
 julia> union([1, 2], [3, 4])
@@ -81,7 +83,11 @@ end
 max_values(::Type) = typemax(Int)
 max_values(T::Union{map(X -> Type{X}, BitIntegerSmall_types)...}) = 1 << (8*sizeof(T))
 # saturated addition to prevent overflow with typemax(Int)
-max_values(T::Union) = max(max_values(T.a), max_values(T.b), max_values(T.a) + max_values(T.b))
+function max_values(T::Union)
+    a = max_values(T.a)::Int
+    b = max_values(T.b)::Int
+    return max(a, b, a + b)
+end
 max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
 
@@ -100,6 +106,8 @@ end
 
 Construct the intersection of sets.
 Maintain order with arrays.
+
+See also: [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref Base.issubset), [`issetequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -144,6 +152,8 @@ intersect!(s::AbstractSet, itr) =
 
 Construct the set of elements in `s` but not in any of the iterables in `itrs`.
 Maintain order with arrays.
+
+See also [`setdiff!`](@ref), [`union`](@ref) and [`intersect`](@ref).
 
 # Examples
 ```jldoctest
@@ -193,6 +203,8 @@ end
 Construct the symmetric difference of elements in the passed in sets.
 When `s` is not an `AbstractSet`, the order is maintained.
 Note that in this case the multiplicity of elements matters.
+
+See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref) and [`intersect`](@ref).
 
 # Examples
 ```jldoctest
@@ -246,7 +258,7 @@ function ⊇ end
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
 
-See also [`⊊`](@ref), [`⊈`](@ref).
+See also [`⊊`](@ref), [`⊈`](@ref), [`∩`](@ref intersect), [`∪`](@ref union), [`contains`](@ref).
 
 # Examples
 ```jldoctest
@@ -357,6 +369,8 @@ false
 Determine whether `a` and `b` have the same elements. Equivalent
 to `a ⊆ b && b ⊆ a` but more efficient when possible.
 
+See also: [`isdisjoint`](@ref), [`union`](@ref).
+
 # Examples
 ```jldoctest
 julia> issetequal([1, 2], [1, 2, 3])
@@ -389,6 +403,8 @@ end
 
 Return whether the collections `v1` and `v2` are disjoint, i.e. whether
 their intersection is empty.
+
+See also: [`issetequal`](@ref), [`intersect`](@ref).
 
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.

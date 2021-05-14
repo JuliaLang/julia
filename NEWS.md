@@ -15,6 +15,8 @@ New language features
 Language changes
 ----------------
 
+* `macroexpand`, `@macroexpand`, and `@macroexpand1` no longer wrap errors in a `LoadError`. To reduce breakage, `@test_throws` has been modified so that many affected tests will still pass ([#38379]].
+* The middle dot `·` (`\cdotp` U+00b7) and the Greek interpunct `·` (U+0387) are now treated as equivalent to the dot operator `⋅` (`\cdot` U+22c5) (#25157).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -40,10 +42,10 @@ New library functions
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
 * `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
-* New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}; kwargs...)` ([#38438])
 * Two arguments method `lock(f, lck)` now accepts a `Channel` as the second argument. ([#39312])
 * New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
+* New macros `@something` and `@coalesce` which are short-circuiting versions of `something` and `coalesce`, respectively ([#40729])
 
 New library features
 --------------------
@@ -54,6 +56,7 @@ New library features
 Standard library changes
 ------------------------
 
+* Long strings are now elided using the syntax `"head" ⋯ 12345 bytes ⋯ "tail"` when displayed in the REPL ([#40736]).
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 * `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).
 * `range` now supports `start` as an optional keyword argument ([#38041]).
@@ -84,6 +87,7 @@ Standard library changes
   @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T))) broken=(T == Float64)
   ```
   ([#39322])
+* `@lock` is now exported from Base ([#39588]).
 
 #### Package Manager
 
@@ -96,6 +100,7 @@ Standard library changes
 * SuiteSparse is updated to 5.8.1. ([#39455])
 * The shape of an `UpperHessenberg` matrix is preserved under certain arithmetic operations, e.g. when multiplying or dividing by an `UpperTriangular` matrix. ([#40039])
 * `cis(A)` now supports matrix arguments ([#40194]).
+* `dot` now supports `UniformScaling` with `AbstractMatrix` ([#40250]).
 
 #### Markdown
 
@@ -111,6 +116,9 @@ Standard library changes
 
 #### SparseArrays
 
+* new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
+* `cholesky()` now fully preserves the user-specified permutation. ([#40560])
+* `issparse` now applies consistently to all wrapper arrays, including nested, by checking `issparse` on the wrapped parent array ([#37644]).
 
 #### Dates
 
@@ -132,6 +140,9 @@ Standard library changes
 
 * `mmap` is now exported ([#39816]).
 
+#### DelimitedFiles
+
+* `readdlm` now defaults to `use_mmap=false` on all OSes for consistent reliability in abnormal filesystem situations ([#40415]).
 
 Deprecated or removed
 ---------------------

@@ -1016,9 +1016,22 @@ end
 show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 """
-    @show
+    @show exs...
 
-Show an expression and result, returning the result. See also [`show`](@ref).
+Prints one or more expressions, and their results, to `stdout`, and returns the last result.
+
+See also: [`show`](@ref), [`@info`](@ref Logging), [`println`](@ref).
+
+# Examples
+```jldoctest
+julia> x = @show 1+2
+1 + 2 = 3
+3
+
+julia> @show x^2 x/2;
+x ^ 2 = 9
+x / 2 = 1.5
+```
 """
 macro show(exs...)
     blk = Expr(:block)
@@ -1264,7 +1277,7 @@ const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode, SSAValue,
 # IOContext(io, :unquote_fallback => false) tells show_unquoted to treat any
 # Expr whose head is :$ as if it is inside a quote, preventing fallback to the
 # "unhandled" case: this is used by print/string to be lawful to Rule 1 above.
-# On the countrary, show/repr have to follow Rule 2, requiring any Expr whose
+# On the contrary, show/repr have to follow Rule 2, requiring any Expr whose
 # head is :$ and which is not inside a quote to fallback to the "unhandled" case:
 # this is behavior is triggered by IOContext(io, :unquote_fallback => true)
 print(        io::IO, ex::ExprNode)    = (show_unquoted(IOContext(io, :unquote_fallback => false), ex, 0, -1); nothing)
@@ -2476,7 +2489,7 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
         # TODO: static parameter values?
         # only accepts :source or :none, we can't have a fallback for default since
         # that would break code_typed(, debuginfo=:source) iff IRShow.default_debuginfo[] = :none
-        IRShow.show_ir(lambda_io, src, IRShow.__debuginfo[debuginfo](src))
+        IRShow.show_ir(lambda_io, src, IRShow.IRShowConfig(IRShow.__debuginfo[debuginfo](src)))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)
@@ -2835,7 +2848,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     toplevel && print(io, " with eltype ", eltype(v))
     return nothing
 end
-showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
+showindices(io, ::Slice, inds...) =
     (print(io, ", :"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))

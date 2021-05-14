@@ -321,7 +321,7 @@ function Base.showerror(io::IO, err::ParserError)
     printstyled(io, " error: "; color=Base.error_color())
     println(io, format_error_message_for_err_type(err))
     # In this case we want the arrow to point one character
-    pos = err.pos
+    pos = err.pos::Int
     err.type == ErrUnexpectedEofExpectedValue && (pos += 1)
     str1, err1 = point_to_line(err.str, pos, pos, io)
     @static if VERSION <= v"1.6.0-DEV.121"
@@ -751,7 +751,7 @@ isvalid_binary(c::Char) = '0' <= c <= '1'
 
 const ValidSigs = Union{typeof.([isvalid_hex, isvalid_oct, isvalid_binary, isdigit])...}
 # This function eats things accepted by `f` but also allows eating `_` in between
-# digits. Retruns if it ate at lest one character and if it ate an underscore
+# digits. Returns if it ate at lest one character and if it ate an underscore
 function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=true)::Err{Tuple{Bool, Bool}}
     contains_underscore = false
     at_least_one = false

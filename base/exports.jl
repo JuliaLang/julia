@@ -675,6 +675,7 @@ export
     istaskstarted,
     istaskfailed,
     lock,
+    @lock,
     notify,
     ReentrantLock,
     schedule,
@@ -698,9 +699,11 @@ export
 
 # missing values
     coalesce,
+    @coalesce,
     ismissing,
     missing,
     skipmissing,
+    @something,
     something,
     isnothing,
     nonmissingtype,

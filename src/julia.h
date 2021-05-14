@@ -838,7 +838,8 @@ typedef enum {
 
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t);
 
-JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
+JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_finalize(jl_value_t *o);
 JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_0w(void);
@@ -1531,11 +1532,10 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int error);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT,
-                                                         jl_sym_t *var);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
-JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
+JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
@@ -1549,7 +1549,7 @@ JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t 
 JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
-JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
 STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {
@@ -1639,10 +1639,6 @@ typedef enum {
     JL_IMAGE_JULIA_HOME = 1,
     //JL_IMAGE_LIBJULIA = 2,
 } JL_IMAGE_SEARCH;
-// this helps turn threading compilation mismatches into linker errors
-#define julia_init julia_init__threading
-#define jl_init jl_init__threading
-#define jl_init_with_image jl_init_with_image__threading
 
 JL_DLLEXPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
@@ -1703,7 +1699,7 @@ enum JL_RTLD_CONSTANT {
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
 typedef void *jl_uv_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
-JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
 JL_DLLEXPORT jl_uv_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_dlclose(jl_uv_libhandle handle) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_dlsym(jl_uv_libhandle handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT;
@@ -1965,7 +1961,8 @@ JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT; // deprecated
 // Mainly for debugging, use `void*` so that no type cast is needed in C++.
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
 
