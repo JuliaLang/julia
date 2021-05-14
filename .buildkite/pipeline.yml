@@ -7,5 +7,6 @@ steps:
       - make -j 6 -C test/clangsa
       - make -j 6 -C src analyzegc
     agents:
-      queue: "juliacpu"
+      queue: "juliacpu" # this should be julia -- also in pipeline settings
+      # os: linux # tag missing for juliacpu queue
     timeout_in_minutes: 60
