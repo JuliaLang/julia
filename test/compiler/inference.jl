@@ -1529,7 +1529,7 @@ end
 
 # approximate static parameters due to unions
 let T1 = Array{Float64}, T2 = Array{_1,2} where _1
-    inference_test_copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+    inference_test_copy(a::T) where {T<:Array} = ccall(:any_function_name, Ref{T}, (Any,), a)
     rt = Base.return_types(inference_test_copy, (Union{T1,T2},))[1]
     @test rt >: T1 && rt >: T2
 

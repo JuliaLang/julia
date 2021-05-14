@@ -366,7 +366,33 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref).
 """
 copy
 
-copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+function copy(a::Array{T,N}) where {T,N}
+    nbytes = convert(Csize_t, Csize_t(length(a)) * aligned_sizeof(T))
+    bitsunion = isbitsunion(T)
+
+    t1 = @_gc_preserve_begin a
+
+    res = if N == 1
+        ccall(:jl_alloc_array_1d, Array{T,N}, (Any, Int), Array{T,N}, size(a,1))
+    elseif N == 2
+        ccall(:jl_alloc_array_2d, Array{T,N}, (Any, Int, Int), Array{T,N}, size(a,1), size(a, 2))
+    elseif N == 3
+        ccall(:jl_alloc_array_3d, Array{T,N}, (Any, Int, Int, Int), Array{T,N}, size(a,1), size(a, 2), size(a, 3))
+    else
+        ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, to_shape(axes(a)))
+    end
+
+    ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), pointer(res, 1), pointer(a, 1), nbytes)
+    if bitsunion
+        ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t),
+            ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), res),
+            ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), a), nbytes)
+    end
+
+    @_gc_preserve_end t1
+
+    res
+end
 
 ## Constructors ##
 
