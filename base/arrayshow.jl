@@ -300,7 +300,7 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                                 @goto skip
                             end
                         end
-                        [print(io, ";") for i ∈ 1:i+2]
+                        print(io, ";"^(i+2))
                         print(io, " \u2026 ")
                         show_full && print(io, "\n\n")
                         @goto skip
