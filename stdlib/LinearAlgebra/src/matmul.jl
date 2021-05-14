@@ -1095,8 +1095,8 @@ This can mean performing `B*C` first if `C::AbstractVector`, using five-argument
 `mul!` to fuse the scalar `A::Number` with the matrix multiplication `B*C`,
 or examining `size.((A,B,C,D))` to choose which to multiply first.
 
-!!! compat "Julia 1.6"
-    These optimisations require at least Julia 1.6.
+!!! compat "Julia 1.7"
+    These optimisations require at least Julia 1.7.
 """
 *(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = A * (B*x)
 
@@ -1136,7 +1136,7 @@ mat_vec_scalar(A::AdjOrTransAbsVec, x::StridedVector, γ) = (A * x) * γ
 function _mat_vec_scalar(A, x, γ)
     T = promote_type(eltype(A), eltype(x), typeof(γ))
     C = similar(A, T, axes(A,1))
-    mul!(C, A, x, γ, false)
+    mul!(C, A, x, γ, zero(γ))
 end
 
 mat_mat_scalar(A, B, γ) = (A*B) .* γ # fallback
@@ -1146,7 +1146,7 @@ mat_mat_scalar(A::StridedMaybeAdjOrTransMat, B::StridedMaybeAdjOrTransMat, γ) =
 function _mat_mat_scalar(A, B, γ)
     T = promote_type(eltype(A), eltype(B), typeof(γ))
     C = similar(A, T, axes(A,1), axes(B,2))
-    mul!(C, A, B, γ, false)
+    mul!(C, A, B, γ, zero(γ))
 end
 
 mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
