@@ -10,3 +10,14 @@ steps:
       queue: "juliacpu" # this should be julia -- also in pipeline settings
       # os: linux # tag missing for juliacpu queue
     timeout_in_minutes: 60
+  - label: "llvmpasses"
+    commands:
+      - apt-get update
+      - apt-get install -y build-essential libatomic1 python python3 gfortran perl wget m4 cmake pkg-config curl
+      - make -j 6 release
+      - make -j 6 -C src install-analysis-deps
+      - make -j 6 -C test/llvmpasses
+    agents:
+      queue: "juliacpu" # this should be julia -- also in pipeline settings
+      # os: linux # tag missing for juliacpu queue
+    timeout_in_minutes: 60
