@@ -198,6 +198,8 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
   * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
   * [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
     waits for an object to become available.
+  * [`putwillblock`](@ref) tests if a  [`put!`](@ref) call will block
+  * [`takewillblock`](@ref) tests if a  [`take!`](@ref) call will block
   * A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
     freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
     On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
