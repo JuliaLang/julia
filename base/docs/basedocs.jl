@@ -2698,4 +2698,42 @@ A quoted piece of code, that does not support interpolation. See the [manual sec
 """
 QuoteNode
 
+
+"""
+    "
+" Is used to delimit string literals.
+
+#Examples
+```jldoctest
+
+>julia "Hello World!"
+"Hello World!"
+>julia "Hello World!\n"
+"Hello World!\n"
+```
+See also [\"""](@ref \"\"\").
+"""
+kw"\""
+
+"""
+    \"""
+\""" is used to delimit string literals. Strings created by triple quotation marks can contain " characters without escaping and are dedented to the level of the least-indented line. This is useful for defining strings within code that is indented.
+
+#Examples
+
+```jldoctest
+>julia \""" Hello World! \"""
+"Hello World!"
+>julia \"""Contains "quote" characters\"""
+"Contains \"quote\" characters"
+julia> \"""
+           Hello,
+           world.
+         \"""
+"  Hello,\n  world.\n"
+```
+See also ["](@ref \")
+"""
+kw"\"\"\""
+
 end
