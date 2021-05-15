@@ -462,11 +462,11 @@ function serialize(s::AbstractSerializer, t::Task)
     serialize(s, t.code)
     serialize(s, t.storage)
     serialize(s, t.state)
-    if t._isexception && (stk = Base.catch_stack(t); !isempty(stk))
+    if t._isexception && (stk = Base.current_exceptions(t); !isempty(stk))
         # the exception stack field is hidden inside the task, so if there
         # is any information there make a CapturedException from it instead.
         # TODO: Handle full exception chain, not just the first one.
-        serialize(s, CapturedException(stk[1][1], stk[1][2]))
+        serialize(s, CapturedException(stk[1].exception, stk[1].backtrace))
     else
         serialize(s, t.result)
     end

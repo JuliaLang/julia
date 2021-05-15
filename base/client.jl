@@ -98,13 +98,13 @@ function display_error(io::IO, er, bt)
     showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     println(io)
 end
-function display_error(io::IO, stack::Vector)
+function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
     show_exception_stack(IOContext(io, :limit => true), bt)
     println(io)
 end
-display_error(stack::Vector) = display_error(stderr, stack)
+display_error(stack::ExceptionStack) = display_error(stderr, stack)
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
@@ -143,7 +143,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 @error "SYSTEM: display_error(errio, lasterr) caused an error"
             end
             errcount += 1
-            lasterr = catch_stack()
+            lasterr = current_exceptions()
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -257,7 +257,7 @@ function exec_options(opts)
         try
             load_julia_startup()
         catch
-            invokelatest(display_error, catch_stack())
+            invokelatest(display_error, current_exceptions())
             !(repl || is_interactive) && exit(1)
         end
     end
@@ -291,7 +291,7 @@ function exec_options(opts)
         try
             include(Main, PROGRAM_FILE)
         catch
-            invokelatest(display_error, catch_stack())
+            invokelatest(display_error, current_exceptions())
             if !is_interactive::Bool
                 exit(1)
             end
@@ -494,7 +494,7 @@ function _start()
     try
         exec_options(JLOptions())
     catch
-        invokelatest(display_error, catch_stack())
+        invokelatest(display_error, current_exceptions())
         exit(1)
     end
     if is_interactive && get(stdout, :color, false)

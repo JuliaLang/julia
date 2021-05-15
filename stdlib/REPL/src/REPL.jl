@@ -29,8 +29,7 @@ import Base:
     display,
     show,
     AnyDict,
-    ==,
-    catch_stack
+    ==
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
@@ -160,7 +159,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 println("SYSTEM ERROR: Failed to report error to REPL frontend")
                 println(err)
             end
-            lasterr = catch_stack()
+            lasterr = current_exceptions()
         end
     end
     Base.sigatomic_end()
@@ -301,7 +300,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    Base.invokelatest(Base.display_error, errio, catch_stack())
+                    Base.invokelatest(Base.display_error, errio, current_exceptions())
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -311,7 +310,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 end
                 break
             end
-            val = catch_stack()
+            val = current_exceptions()
             iserr = true
         end
     end
@@ -835,7 +834,7 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
                 ast = Base.invokelatest(f, line)
                 response = eval_with_backend(ast, backend(repl))
             catch
-                response = Pair{Any, Bool}(catch_stack(), true)
+                response = Pair{Any, Bool}(current_exceptions(), true)
             end
             hide_output = suppress_on_semicolon && ends_with_semicolon(line)
             print_response(repl, response, !hide_output, hascolor(repl))
@@ -987,7 +986,7 @@ function setup_interface(
             hist_from_file(hp, hist_path)
         catch
             # use REPL.hascolor to avoid using the local variable with the same name
-            print_response(repl, Pair{Any, Bool}(catch_stack(), true), true, REPL.hascolor(repl))
+            print_response(repl, Pair{Any, Bool}(current_exceptions(), true), true, REPL.hascolor(repl))
             println(outstream(repl))
             @info "Disabling history file for this session"
             repl.history_file = false
