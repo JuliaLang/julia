@@ -17,7 +17,7 @@ Documentation:
 [codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
 [docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
 
-## The Julia Language
+## The Julia Language Hello World
 
 Julia is a high-level, high-performance dynamic language for technical
 computing.  The main homepage for Julia can be found at
