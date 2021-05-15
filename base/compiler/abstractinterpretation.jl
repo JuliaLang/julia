@@ -1667,12 +1667,16 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
             elseif isa(stmt, GotoIfNot)
-                condt = abstract_eval_value(interp, stmt.cond, changes, frame)
+                condx = stmt.cond
+                condt = abstract_eval_value(interp, condx, changes, frame)
                 if condt === Bottom
                     empty!(frame.pclimitations)
-                end
-                if condt === Bottom
                     break
+                end
+                if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
+                    # if this non-`Conditional` object is a slot, we form and propagate
+                    # the conditional constraint on it
+                    condt = Conditional(condx, Const(true), Const(false))
                 end
                 condval = maybe_extract_const_bool(condt)
                 l = stmt.dest::Int
