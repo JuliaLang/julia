@@ -45,6 +45,7 @@ New library functions
 * Two arguments method `lock(f, lck)` now accepts a `Channel` as the second argument. ([#39312])
 * New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
+* New macros `@something` and `@coalesce` which are short-circuiting versions of `something` and `coalesce`, respectively ([#40729])
 
 New library features
 --------------------
@@ -55,6 +56,7 @@ New library features
 Standard library changes
 ------------------------
 
+* Long strings are now elided using the syntax `"head" ⋯ 12345 bytes ⋯ "tail"` when displayed in the REPL ([#40736]).
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 * `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).
 * `range` now supports `start` as an optional keyword argument ([#38041]).
@@ -85,6 +87,7 @@ Standard library changes
   ```
   ([#39322])
 * `@lock` is now exported from Base ([#39588]).
+* The experimental function `Base.catch_stack()` has been renamed to `current_exceptions()`, exported from Base and given a more specific return type ([#29901])
 * Some degree trigonometric functions, `sind`, `cosd`, `tand`, `asind`, `acosd`, `asecd`, `acscd`, `acotd` now accept an square matrix ([#39758]).
 
 #### Package Manager
@@ -116,7 +119,7 @@ Standard library changes
 
 * new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
 * `cholesky()` now fully preserves the user-specified permutation. ([#40560])
-
+* `issparse` now applies consistently to all wrapper arrays, including nested, by checking `issparse` on the wrapped parent array ([#37644]).
 
 #### Dates
 

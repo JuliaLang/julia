@@ -77,7 +77,7 @@ function showerror(io::IO, ex::TaskFailedException, bt = nothing; backtrace=true
 end
 
 function show_task_exception(io::IO, t::Task; indent = true)
-    stack = catch_stack(t)
+    stack = current_exceptions(t)
     b = IOBuffer()
     if isempty(stack)
         # exception stack buffer not available; probably a serialized task
@@ -162,7 +162,7 @@ end
         end
     elseif field === :backtrace
         # TODO: this field name should be deprecated in 2.0
-        return catch_stack(t)[end][2]
+        return current_exceptions(t)[end][2]
     elseif field === :exception
         # TODO: this field name should be deprecated in 2.0
         return t._isexception ? t.result : nothing
@@ -434,18 +434,18 @@ function errormonitor(t::Task)
             try # try to display the failure atomically
                 errio = IOContext(PipeBuffer(), errs::IO)
                 emphasize(errio, "Unhandled Task ")
-                display_error(errio, catch_stack(t))
+                display_error(errio, current_exceptions(t))
                 write(errs, errio)
             catch
                 try # try to display the secondary error atomically
                     errio = IOContext(PipeBuffer(), errs::IO)
                     print(errio, "\nSYSTEM: caught exception while trying to print a failed Task notice: ")
-                    display_error(errio, catch_stack())
+                    display_error(errio, current_exceptions())
                     write(errs, errio)
                     flush(errs)
                     # and then the actual error, as best we can
                     Core.print(Core.stderr, "while handling: ")
-                    Core.println(Core.stderr, catch_stack(t)[end][1])
+                    Core.println(Core.stderr, current_exceptions(t)[end][1])
                 catch e
                     # give up
                     Core.print(Core.stderr, "\nSYSTEM: caught exception of type ", typeof(e).name.name,

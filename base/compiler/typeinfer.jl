@@ -428,8 +428,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
     s_edges = me.stmt_edges[1]
     if s_edges === nothing
-        s_edges = []
-        me.stmt_edges[1] = s_edges
+        s_edges = me.stmt_edges[1] = []
     end
     for edges in me.stmt_edges
         edges === nothing && continue

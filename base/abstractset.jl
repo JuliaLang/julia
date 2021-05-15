@@ -83,7 +83,11 @@ end
 max_values(::Type) = typemax(Int)
 max_values(T::Union{map(X -> Type{X}, BitIntegerSmall_types)...}) = 1 << (8*sizeof(T))
 # saturated addition to prevent overflow with typemax(Int)
-max_values(T::Union) = max(max_values(T.a), max_values(T.b), max_values(T.a) + max_values(T.b))
+function max_values(T::Union)
+    a = max_values(T.a)::Int
+    b = max_values(T.b)::Int
+    return max(a, b, a + b)
+end
 max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
 
