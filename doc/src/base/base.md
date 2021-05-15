@@ -354,7 +354,7 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
-Base.catch_stack
+Base.current_exceptions
 Base.@assert
 Base.Experimental.register_error_hint
 Base.Experimental.show_error_hints
