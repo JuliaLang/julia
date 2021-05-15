@@ -128,7 +128,7 @@ struct ExceptionStack <: AbstractArray{Any,1}
 end
 
 """
-    current_exceptions(task=current_task(); [inclue_bt=true])
+    current_exceptions(task=current_task(); backtrace=true)
 
 Get the stack of exceptions currently being handled. For nested catch blocks
 there may be more than one current exception in which case the most recently
