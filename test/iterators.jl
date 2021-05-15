@@ -2,6 +2,9 @@
 
 using Base.Iterators
 using Random
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays : OffsetArray, IdOffsetRange
+using Base: IdentityUnitRange
 
 @test Base.IteratorSize(Any) isa Base.SizeUnknown
 
@@ -848,3 +851,11 @@ end
     @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
+                                    
+@testset "proper patition for non-1-indexed vector" begin
+    @test partition(OffsetArray(1:10,10), 5) |> collect == [1:5,6:10] # OffsetVector
+    @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
+    @test partition(IdOffsetRange(2:7,10), 5) |> collect == [12:16,17:17] # IdOffsetRange
+end
+                                    
+          
