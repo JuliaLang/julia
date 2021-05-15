@@ -1833,6 +1833,24 @@ end
     end == Any[Tuple{Int,Int}]
 end
 
+@testset "conditional constraint propagation from non-`Conditional` object" begin
+    @test Base.return_types((Bool,)) do b
+        if b
+            return !b ? nothing : 1 # ::Int
+        else
+            return 0
+        end
+    end == Any[Int]
+
+    @test Base.return_types((Any,)) do b
+        if b
+            return b # ::Bool
+        else
+            return nothing
+        end
+    end == Any[Union{Bool,Nothing}]
+end
+
 function f25579(g)
     h = g[]
     t = (h === nothing)
