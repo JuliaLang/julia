@@ -927,6 +927,14 @@ end
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
+function show(io::IO, r::StepRangeLen)
+    if step(r) != 0
+        print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
+    else
+        # ugly temporary printing, to avoid 0:0:0 etc.
+        print(io, "StepRangeLen(", repr(first(r)), ", ", repr(step(r)), ", ", repr(length(r)), ")")
+    end
+end
 
 function ==(r::T, s::T) where {T<:AbstractRange}
     isempty(r) && return isempty(s)
@@ -1238,7 +1246,7 @@ function _define_range_op(@nospecialize f)
             r1l = length(r1)
             (r1l == length(r2) ||
              throw(DimensionMismatch("argument dimensions must match: length of r1 is $r1l, length of r2 is $(length(r2))")))
-            range($f(first(r1), first(r2)), step=$f(step(r1), step(r2)), length=r1l)
+            StepRangeLen($f(first(r1), first(r2)), $f(step(r1), step(r2)), r1l)
         end
 
         function $f(r1::LinRange{T}, r2::LinRange{T}) where T
