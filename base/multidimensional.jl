@@ -69,6 +69,7 @@ module IteratorsMD
     CartesianIndex(index::NTuple{N,Integer}) where {N} = CartesianIndex{N}(index)
     CartesianIndex(index::Integer...) = CartesianIndex(index)
     CartesianIndex{N}(index::Vararg{Integer,N}) where {N} = CartesianIndex{N}(index)
+    CartesianIndex{N}(I::CartesianIndex{N}) where {N} = I
     # Allow passing tuples smaller than N
     CartesianIndex{N}(index::Tuple) where {N} = CartesianIndex{N}(fill_to_length(index, 1, Val(N)))
     CartesianIndex{N}(index::Integer...) where {N} = CartesianIndex{N}(index)

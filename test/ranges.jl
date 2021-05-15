@@ -1889,3 +1889,62 @@ end
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
 end
+
+@testset "map a type over a range" begin
+    for r = Any[1:5, Base.OneTo(3), UnitRange(1.0, 4.0), 1:1:5, Base.IdentityUnitRange(Base.OneTo(3))]
+        for T in [Int8, Int16, Int32, Int64, Int128, BigInt]
+            r2 = map(T, r)
+            if r isa AbstractUnitRange
+                @test r2 isa AbstractUnitRange
+            else
+                @test r2 isa AbstractRange
+            end
+            @test r2 == r
+        end
+        for T in [Float16, Float32, Float64, BigFloat]
+            r2 = map(T, r)
+            @test r2 isa AbstractRange
+            @test r2 == r
+        end
+    end
+
+    r = Base.IdentityUnitRange(2:4)
+    r2 = map(Int, r)
+    @test r2 isa AbstractUnitRange
+    @test eltype(r) == Int
+    @test r2 == r
+
+    for r in Any[LinRange{Int}(1, 4, 4), LinRange(1, 4, 4), range(float(1), stop = float(4), step = float(1))]
+        for T in [Float32, Float64, BigFloat]
+            r2 = map(T, r)
+            @test r2 isa AbstractRange
+            @test r2 == r
+        end
+    end
+
+    @testset "Bool" begin
+        for fn = 0:1
+            for r in Any[1:fn, Base.OneTo(fn), 1:1:1, range(float(1), stop = float(fn), step = float(1)),
+                    LinRange{Int}(1, fn, fn), LinRange(1, fn, fn), Base.IdentityUnitRange(Base.OneTo(fn))]
+                r2 = map(Bool, r)
+                @test eltype(r2) == Bool
+                @test r2 == r
+                @test r2 == map(Bool, r)
+            end
+        end
+        for fn = 0:1
+            for r in Any[0:fn, 0:1:fn, range(float(0), stop = float(fn), step = float(1)),
+                    LinRange{Int}(0, fn, fn + 1), LinRange(0, fn, fn + 1)]
+                r2 = map(Bool, r)
+                @test eltype(r2) == Bool
+                @test r2 == r
+                @test r2 == map(Bool, r)
+            end
+        end
+    end
+    # test with a type that is not a subtype of Number
+    R = range(CartesianIndex(1), step = CartesianIndex(1), length = 4)
+    @test map(CartesianIndex, 1:4) == CartesianIndices((1:4,)) == R
+    R = range(CartesianIndex(1,1), step = CartesianIndex(2,2), length = 4)
+    @test map(CartesianIndex, 1:2:7, 1:2:7) == R
+end
