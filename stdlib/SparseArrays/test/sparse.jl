@@ -2165,6 +2165,12 @@ end
     @test issparse(LinearAlgebra.UnitLowerTriangular(Array(m))) == false
     @test issparse(UpperTriangular(Array(m))) == false
     @test issparse(LinearAlgebra.UnitUpperTriangular(Array(m))) == false
+    @test issparse(Base.ReshapedArray(m, (20, 5), ()))
+    @test issparse(@view m[1:3, :])
+
+    # greater nesting
+    @test issparse(Symmetric(UpperTriangular(m)))
+    @test issparse(Symmetric(UpperTriangular(Array(m)))) == false
 end
 
 @testset "issparse for sparse vectors #34253" begin

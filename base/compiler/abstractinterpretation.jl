@@ -284,9 +284,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     return CallMeta(rettype, info)
 end
 
-widenwrappedconditional(@nospecialize(typ))   = widenconditional(typ)
-widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
-
 function add_call_backedges!(interp::AbstractInterpreter,
                              @nospecialize(rettype),
                              edges::Vector{MethodInstance},
@@ -1128,7 +1125,7 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     end
     method, valid_worlds = result
     update_valid_age!(sv, valid_worlds)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     rt, edge = typeinf_edge(interp, method, ti, env, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     return CallMeta(rt, InvokeCallInfo(MethodMatch(ti, env, method, argtype <: method.sig)))
@@ -1846,7 +1843,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 end
 
 function conditional_changes(changes::VarTable, @nospecialize(typ), var::Slot)
-    if typ ⊑ (changes[slot_id(var)]::VarState).typ
+    oldtyp = (changes[slot_id(var)]::VarState).typ
+    # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
+    # since we probably formed these types with `typesubstract`, the comparison is likely simple
+    if ignorelimited(typ) ⊑ ignorelimited(oldtyp)
+        # typ is better unlimited, but we may still need to compute the tmeet with the limit "causes" since we ignored those in the comparison
+        oldtyp isa LimitedAccuracy && (typ = tmerge(typ, LimitedAccuracy(Bottom, oldtyp.causes)))
         return StateUpdate(var, VarState(typ, false), changes, true)
     end
     return changes

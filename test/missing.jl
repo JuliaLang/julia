@@ -575,6 +575,16 @@ end
     @test coalesce(missing, nothing) === nothing
 end
 
+@testset "@coalesce" begin
+    @test @coalesce() === missing
+    @test @coalesce(1) === 1
+    @test @coalesce(nothing) === nothing
+    @test @coalesce(missing) === missing
+
+    @test @coalesce(1, error("failed")) === 1
+    @test_throws ErrorException @coalesce(missing, error("failed"))
+end
+
 mutable struct Obj; x; end
 @testset "weak references" begin
     @noinline function mk_wr(r, wr)
