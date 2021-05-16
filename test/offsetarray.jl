@@ -790,5 +790,6 @@ end
 
 @testset "proper patition for non-1-indexed vector" begin
     @test Iterators.partition(OffsetArray(1:10,10), 5) |> collect == [1:5,6:10] # OffsetVector
+    @test Iterators.partition(OffsetArray(collect(1:10),10), 5) |> collect == [1:5,6:10] # OffsetVector
     @test Iterators.partition(IdOffsetRange(2:7,10), 5) |> collect == [12:16,17:17] # IdOffsetRange
 end
