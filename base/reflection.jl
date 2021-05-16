@@ -1160,10 +1160,12 @@ generic function and type signature.
 - `optimize=true`: controls whether additional optimizations, such as inlining, are also applied.
 - `debuginfo=:default`: controls the amount of code metadata present in the output,
 possible options are `:source` or `:none`.
-- `world=Base.get_world_counter()`: controls the world age to use when looking up methods.
-- `interp=Core.Compiler.NativeInterpreter(world)`: controls the interpreter to use.
+- `world`: optional, controls the world age to use when looking up methods, use current world age if not specified.
+- `interp`: optional, controls the interpreter to use, use the native interpreter Julia uses if not specified.
 
 # Example
+
+One can put the argument types in a tuple to get the corresponding `code_typed`.
 
 ```julia
 julia> code_typed(+, (Float64, Float64))
