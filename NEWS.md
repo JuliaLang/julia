@@ -89,6 +89,7 @@ Standard library changes
   ([#39322])
 * `@lock` is now exported from Base ([#39588]).
 * The experimental function `Base.catch_stack()` has been renamed to `current_exceptions()`, exported from Base and given a more specific return type ([#29901])
+* Some degree trigonometric functions, `sind`, `cosd`, `tand`, `asind`, `acosd`, `asecd`, `acscd`, `acotd`, `atand` now accept an square matrix ([#39758]).
 
 #### Package Manager
 
