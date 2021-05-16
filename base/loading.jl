@@ -316,16 +316,16 @@ function pathof(m::Module)
 end
 
 """
-    pkgdir(m::Module)
+    pkgdir(m::Module[, paths::String...])
 
  Return the root directory of the package that imported module `m`,
  or `nothing` if `m` was not imported from a package.
  """
-function pkgdir(m::Module)
+function pkgdir(m::Module, paths::String...)
     rootmodule = Base.moduleroot(m)
     path = pathof(rootmodule)
     path === nothing && return nothing
-    return dirname(dirname(path))
+    return joinpath(dirname(dirname(path)), paths...)
 end
 
 ## generic project & manifest API ##
