@@ -8,6 +8,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_gcext.h"
 #include "builtin_proto.h"
 #include "serialize.h"
 
@@ -817,6 +818,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 ios_write(s->s, (char*)&tn->hash, sizeof(tn->hash));
             }
             return;
+        }
+
+        if (jl_is_foreign_type(t)) {
+            jl_error("Cannot serialize instances of foreign datatypes");
         }
 
         char *data = (char*)jl_data_ptr(v);
