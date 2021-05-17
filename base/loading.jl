@@ -329,6 +329,7 @@ julia> pkgdir(Foo)
 
 julia> pkgdir(Foo, "src", "file.jl")
 "/path/to/Foo.jl/src/file.jl"
+```
 
 !!! compat "Julia 1.7"
     The optional argument `paths` requires at least Julia 1.7.
