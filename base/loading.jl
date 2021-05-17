@@ -318,9 +318,13 @@ end
 """
     pkgdir(m::Module[, paths::String...])
 
- Return the root directory of the package that imported module `m`,
- or `nothing` if `m` was not imported from a package.
- """
+Return the root directory of the package that imported module `m`,
+or `nothing` if `m` was not imported from a package. The optional
+argument `paths` can be used to access subdirs of the module root.
+
+!!! compat "Julia 1.7"
+    This function requires at least Julia 1.7.
+"""
 function pkgdir(m::Module, paths::String...)
     rootmodule = Base.moduleroot(m)
     path = pathof(rootmodule)
