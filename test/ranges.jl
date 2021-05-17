@@ -1581,6 +1581,19 @@ end
         @test @inferred(r ./ Inf) == [0.0, 0.0, 0.0, 0.0]
 
         @test eval(Meta.parse(repr(0 * r))) == [0.0, 0.0, 0.0, 0.0]
+
+        # Not constant-valued, but related methods:
+        @test @inferred(-1 * r) == [-1,-2,-3,-4]
+        @test @inferred(r * -1) == [-1,-2,-3,-4]
+        @test @inferred(r / -1) == [-1,-2,-3,-4]
+
+        @test @inferred(-1.0 .* r) == [-1,-2,-3,-4]
+        @test @inferred(r .* -1.0) == [-1,-2,-3,-4]
+        @test @inferred(r ./ -1.0) == [-1,-2,-3,-4]
+
+        @test @inferred(-1 * reverse(r)) == [-4,-3,-2,-1]
+        @test @inferred(-1.0 .* reverse(r)) == [-4,-3,-2,-1]
+        @test @inferred(reverse(r) ./ -1.0) == [-4,-3,-2,-1]
     end
 
     @test_broken @inferred(range(0, step=0, length=4)) == [0, 0, 0, 0]
@@ -1896,8 +1909,14 @@ end
     @test_throws BoundsError r[true:true:true]
 end
 
-@testset "PR 40320 nanosoldier" begin
+@testset "PR 40320 fixes" begin
+    # found by nanosoldier
     @test 0.2 * (-2:2) == -0.4:0.2:0.4  # from tests of AbstractFFTs, needs Base.TwicePrecision
     @test 0.2f0 * (-2:2) == Float32.(-0.4:0.2:0.4)  # likewise needs Float64
     @test 0.2 * (-2:1:2) == -0.4:0.2:0.4
+
+    # https://github.com/JuliaLang/julia/issues/40846
+    @test 0.1 .* (3:-1:1) ≈ [0.3, 0.2, 0.1]
+    @test (10:-1:1) * 0.1 == 1:-0.1:0.1 
+    @test 0.2 * (-2:2:2) == [-0.4, 0, 0.4]
 end
