@@ -322,7 +322,7 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
             idxdiff = lastidxs .- idxs .< 0
             if any(idxdiff)
                 lastchangeindex = 2 + findlast(idxdiff)
-                [print(io, ";") for i ∈ 1:lastchangeindex]
+                print(io, ";"^lastchangeindex)
                 lastchangeindex == ndims(a) && (reached_last_d = true)
                 print(io, " ")
             end
@@ -332,7 +332,7 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
         lastidxs = idxs
     end
     if !show_full
-        reached_last_d || [print(io, ";") for i ∈ 1:nd+2]
+        reached_last_d || print(io, ";"^(nd+2))
         print(io, "]")
     end
 end
