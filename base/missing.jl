@@ -116,7 +116,7 @@ for f in (:(Base.float), :(Base.complex))
 end
 
 # Binary operators/functions
-for f in (:(+), :(-), :(*), :(/), :(^), :(mod), :(rem))
+for f in (:(+), :(-), :(*), :(/), :(^), :(mod), :(rem), :(mod1))
     @eval begin
         # Scalar with missing
         ($f)(::Missing, ::Missing) = missing
