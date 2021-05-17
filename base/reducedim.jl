@@ -283,11 +283,16 @@ _firstslice(i::OneTo) = OneTo(1)
 _firstslice(i::Slice) = Slice(_firstslice(i.indices))
 _firstslice(i) = i[firstindex(i):firstindex(i)]
 
-function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
+function _mapreducedim!(f, op, R::AbstractArray, As::Vararg{<:AbstractArrayOrBroadcasted,N}) where {N}
+    @assert N >= 1
+    A = As[1]
+    for B in tail(As)
+        axes(A) == axes(B) || throw(DimensionMismatch(
+            "mapreducedim expects all arguments to agree, but got first $(axes(A)) and later $(axes(B))"))
+    end
     lsiz = check_reducedims(R,A)
     isempty(A) && return R
-
-    if has_fast_linear_indexing(A) && lsiz > 16
+    if N == 1 && has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
         nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
@@ -306,7 +311,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
             @simd for i in axes(A, 1)
-                r = op(r, f(A[i, IA]))
+                r = op(r, f(map(a -> a[i,IA], As)...))
             end
             R[i1,IR] = r
         end
@@ -314,49 +319,14 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             @simd for i in axes(A, 1)
-                R[i,IR] = op(R[i,IR], f(A[i,IA]))
-            end
-        end
-    end
-    return R
-end
-
-# function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted, Bs::AbstractArrayOrBroadcasted...)
-function _mapreducedim!(f, op, R::AbstractArray, As::AbstractArrayOrBroadcasted...)
-    @assert length(As) > 1  # another method handles one array
-    A = As[1]
-    lsiz = check_reducedims(R, A)
-    for B in tail(As)
-        axes(A) == axes(B) || throw(DimensionMismatch("expected all the same size"))
-    end
-    isempty(A) && return R
-    vN = Val(length(As))
-
-    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
-    keep, Idefault = Broadcast.shapeindexer(indsRt)
-    if reducedim1(R, A)
-        i1 = first(axes1(R))
-        @inbounds for IA in CartesianIndices(indsAt)
-            IR = Broadcast.newindex(IA, keep, Idefault)
-            r = R[i1,IR]
-            @simd for i in axes(A, 1)
-                r = op(r, f(map(X -> X[i,IA], As)...))  # fine
-            end
-            R[i1,IR] = r
-        end
-    else
-        @inbounds for IA in CartesianIndices(indsAt)
-            IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in axes(A, 1)
-                # R[i,IR] = op(R[i,IR], f(map(X -> X[i,IA], As)...)) # slow!
-                # R[i,IR] = op(R[i,IR], f(ntuple(n -> As[n][i,IA], vN)...)) # slow!
-                # R[i,IR] = op(R[i,IR], _f_all(f, i, IA, Xs...)) # slow!
-                # R[i,IR] = op(R[i,IR], f(A[i,IA], B[i,IA])) # fast!
-                if length(As) == 2
+                # R[i,IR] = op(R[i,IR], f(ntuple(n -> @inbounds(As[n][i,IA]), Val(N))...)) # slow!
+                if N == 1
+                    R[i,IR] = op(R[i,IR], f(A[i,IA]))
+                elseif N == 2
                     R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA]))
-                elseif length(As) == 3
+                elseif N == 3
                     R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA], As[3][i,IA]))
-                elseif length(As) == 4
+                elseif N == 4
                     R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA], As[3][i,IA], As[4][i,IA]))
                 else
                     error("nope!")
@@ -366,14 +336,6 @@ function _mapreducedim!(f, op, R::AbstractArray, As::AbstractArrayOrBroadcasted.
     end
     return R
 end
-
-# @inline _f_all(f, i, I, X, Y) = f(X[i,I], Y[i,I])
-# @inline _f_all(f, i, I, X, Y, Z) = f(X[i,I], Y[i,I], Z[i,I])
-
-# @generated function _f_all(f, ind, Xs...)
-#     args = [:(Xs[$n][ind...]) for n in 1:length(Xs)]
-#     :(f($(args...)))
-# end
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted...) =
     (_mapreducedim!(f, op, R, A...); R)
@@ -430,14 +392,43 @@ mapreduce_empty(f::typeof(splat(+)).name.wrapper, op, ::Type{T}) where {T<:Tuple
 
 # With dims, vararg case without init goes to fallback:
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims, Bs...) =
-    mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A, Bs...)
+function _mapreduce_dim(f, op, init, A::AbstractArrayOrBroadcasted, dims, Bs...)
+    if ndims(A) > 1 && all(ndims(A) == ndims(B) for B in Bs)
+        mapreducedim!(f, op, reducedim_initarray(A, dims, init), A, Bs...)
+    elseif 1 in dims
+        # mapreduce(/,+, 1:3, (1:4), dims=1, init=99)
+        fill(mapreduce(f, op, A, Bs...; init), 1)
+        # mapreduce(/,+, 1:3, (1:4), init=99) makes a Float
+    else
+        # mapreduce(/,+, 1:3, (1:4), dims=2, init=99)
+        T = typeof(init)
+        map((xs...) -> T(op(init, f(xs...))), A, Bs...)
+    end
+end
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims, Bs...) =
     _mapreduce_dim(identity, op, _InitialValue(), map(f, A, Bs...), dims)
+
+#=
+
+mapreduce(/,+,[1 2 3; 4 5 6],[7,8,9,10],dims=2,init=0.0)
+mapreduce(/,+,[1 2 3; 4 5 6],[7,8,9,10],dims=1,init=0.0)
+mapreduce(/,+,[1 2 3; 4 5 6],rand(2,3,1),dims=1,init=0.0) # WTF
+
+mapreduce(/,+,rand(2,3),rand(2,3,1),dims=2,init=0.0) # any differences mean you take vec,
+# but you must take it earlier.
+
+=#
+
+#=
+According to https://juliahub.com/ui/Search?q=_mapreduce_dim&type=code
+there are 3 packages which overload _mapreduce_dim,
+so perhaps it's not a disaster to change its order of arguments,
+rather than putting B last like this.
+=#
 
 #=
 
@@ -459,7 +450,8 @@ julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=2);
   5.900 μs (7 allocations: 79.16 KiB)
 
 julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=2, init=0.0);
-  2.731 μs (5 allocations: 976 bytes)
+  2.731 μs (5 allocations: 976 bytes)       # with explicit if N == 2 ... 
+  1.110 ms (50005 allocations: 782.20 KiB)  # with map() or ntuple() etc.
 
 =#
 
