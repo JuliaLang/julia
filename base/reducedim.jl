@@ -283,7 +283,7 @@ _firstslice(i::OneTo) = OneTo(1)
 _firstslice(i::Slice) = Slice(_firstslice(i.indices))
 _firstslice(i) = i[firstindex(i):firstindex(i)]
 
-function _mapreducedim!(f, op, R::AbstractArray, As::Vararg{<:AbstractArrayOrBroadcasted,N}) where {N}
+function _mapreducedim!(f, op, R::AbstractArray, As::Vararg{AbstractArrayOrBroadcasted,N}) where {N}
     @assert N >= 1
     A = As[1]
     for B in tail(As)
@@ -329,7 +329,7 @@ function _mapreducedim!(f, op, R::AbstractArray, As::Vararg{<:AbstractArrayOrBro
                 elseif N == 4
                     R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA], As[3][i,IA], As[4][i,IA]))
                 else
-                    error("nope!")
+                    error("no go! can't seem to make the generic case fast")
                 end
             end
         end
@@ -337,7 +337,7 @@ function _mapreducedim!(f, op, R::AbstractArray, As::Vararg{<:AbstractArrayOrBro
     return R
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted...) =
+mapreducedim!(f, op, R::AbstractArray, A::Vararg{AbstractArrayOrBroadcasted,N}) where {N} =
     (_mapreducedim!(f, op, R, A...); R)
 
 reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
@@ -370,8 +370,11 @@ julia> mapreduce(isodd, |, a, dims=1)
  1  1  1  1
 ```
 """
-mapreduce(f, op, As::AbstractArrayOrBroadcasted...; dims=:, init=_InitialValue()) =
-    _mapreduce_dim(f, op, init, first(As), dims, tail(As)...)
+mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
+    _mapreduce_dim(f, op, init, A, dims)
+
+mapreduce(f, op, A::AbstractArrayOrBroadcasted, Bs::Vararg{AbstractArrayOrBroadcasted,N}; dims=:, init=_InitialValue()) where {N} =
+    _mapreduce_dim_vararg(f, op, init, (A, Bs...), dims)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
     mapfoldl_impl(f, op, nt, A)
@@ -379,48 +382,37 @@ _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
     _mapreduce(f, op, IndexStyle(A), A)
 
-# Vararg complete reduction using zip:
+_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
+    mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
-_mapreduce_dim(f, op, init, A::AbstractArrayOrBroadcasted, ::Colon, Bs...) =
-    mapreduce(splat(f), op, zip(A, Bs...); init)
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon, Bs...) =
-    mapreduce(splat(f), op, zip(A, Bs...))
+_mapreduce_dim_vararg(f, op, init, As::Tuple, ::Colon) = mapreduce(Base.splat(f), op, zip(As...); init)
+
+_mapreduce_dim_vararg(f, op, ::_InitialValue, As::Tuple, ::Colon) = mapreduce(Base.splat(f), op, zip(As...))
 
 mapreduce_empty(f::typeof(splat(+)).name.wrapper, op, ::Type{T}) where {T<:Tuple} =
     reduce_empty(op, Core.Compiler.return_type(op, T))  # for mapreduce(+, +, Int[], Int[])
 
-# With dims, vararg case without init goes to fallback:
 
-function _mapreduce_dim(f, op, init, A::AbstractArrayOrBroadcasted, dims, Bs...)
-    if ndims(A) > 1 && all(ndims(A) == ndims(B) for B in Bs)
-        mapreducedim!(f, op, reducedim_initarray(A, dims, init), A, Bs...)
-    elseif 1 in dims
-        # mapreduce(/,+, 1:3, (1:4), dims=1, init=99)
-        fill(mapreduce(f, op, A, Bs...; init), 1)
-        # mapreduce(/,+, 1:3, (1:4), init=99) makes a Float
-    else
-        # mapreduce(/,+, 1:3, (1:4), dims=2, init=99)
-        T = typeof(init)
-        map((xs...) -> T(op(init, f(xs...))), A, Bs...)
-    end
-end
+_mapreduce_dim_vararg(f, op, ::_InitialValue, As::Tuple, dims) =
+    _mapreduce_dim(identity, op, _InitialValue(), map(f, As...), dims) # fallback
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
-    mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+_mapreduce_dim_vararg(f, op, init, As::Tuple, dims) =
+    _mapreduce_dim_vararg(f, op, init, As, dims, IteratorSize(Generator(f, As...)))
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims, Bs...) =
-    _mapreduce_dim(identity, op, _InitialValue(), map(f, A, Bs...), dims)
+_mapreduce_dim_vararg(f, op, init, As::Tuple, dims, ::HasShape) = 
+    mapreducedim!(f, op, reducedim_initarray(first(As), dims, init), As...)
+
+_mapreduce_dim_vararg(f, op, init, As::Tuple, dims, ::SizeUnknown) = 1 in dims ? 
+    fill(mapreduce(f, op, As...; init), 1) : 
+    map((xs...) -> op(init, f(xs...)), As...)
 
 #=
 
 mapreduce(/,+,[1 2 3; 4 5 6],[7,8,9,10],dims=2,init=0.0)
 mapreduce(/,+,[1 2 3; 4 5 6],[7,8,9,10],dims=1,init=0.0)
-mapreduce(/,+,[1 2 3; 4 5 6],rand(2,3,1),dims=1,init=0.0) # WTF
-
-mapreduce(/,+,rand(2,3),rand(2,3,1),dims=2,init=0.0) # any differences mean you take vec,
-# but you must take it earlier.
-
+mapreduce(/,+,[1 2 3; 4 5 6],rand(2,3,1),dims=1,init=0.0) 
+mapreduce(/,+,rand(2,3),rand(2,3,1),dims=2,init=0.0) 
 =#
 
 #=
