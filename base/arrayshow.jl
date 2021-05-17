@@ -452,7 +452,7 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
         last(rr) != last(indr) && rdots && print(io, "\u2026 ; ")
     end
     if !drop_brackets
-        nc > 1 || [print(io, ";") for i ∈ 1:2]
+        nc > 1 || print(io, ";;")
         print(io, "]")
     end
     return nothing
