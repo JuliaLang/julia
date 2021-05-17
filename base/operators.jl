@@ -202,7 +202,7 @@ largest values and `isgreater` defines a descending total order with `NaN` and
 !!! note
 
     Like `min`, `isgreater` orders containers (tuples, vectors, etc)
-    lexigraphically with `isless(y, x)` rather than recursively with itself:
+    lexicographically with `isless(y, x)` rather than recursively with itself:
 
     ```jldoctest
     julia> Base.isgreater(1, NaN) # 1 is greater than NaN
@@ -480,7 +480,7 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0
 """
     max(x, y, ...)
 
-Return the maximum of the arguments. See also the [`maximum`](@ref) function
+Return the maximum of the arguments (with respect to [`isless`](@ref)). See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
 
 # Examples
@@ -494,7 +494,7 @@ max(x, y) = ifelse(isless(y, x), x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments. See also the [`minimum`](@ref) function
+Return the minimum of the arguments (with respect to [`isless`](@ref)). See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
 
 # Examples
