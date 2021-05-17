@@ -321,8 +321,62 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     return R
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
-    (_mapreducedim!(f, op, R, A); R)
+# function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted, Bs::AbstractArrayOrBroadcasted...)
+function _mapreducedim!(f, op, R::AbstractArray, As::AbstractArrayOrBroadcasted...)
+    @assert length(As) > 1  # another method handles one array
+    A = As[1]
+    lsiz = check_reducedims(R, A)
+    for B in tail(As)
+        axes(A) == axes(B) || throw(DimensionMismatch("expected all the same size"))
+    end
+    isempty(A) && return R
+    vN = Val(length(As))
+
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
+    keep, Idefault = Broadcast.shapeindexer(indsRt)
+    if reducedim1(R, A)
+        i1 = first(axes1(R))
+        @inbounds for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            r = R[i1,IR]
+            @simd for i in axes(A, 1)
+                r = op(r, f(map(X -> X[i,IA], As)...))  # fine
+            end
+            R[i1,IR] = r
+        end
+    else
+        @inbounds for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            @simd for i in axes(A, 1)
+                # R[i,IR] = op(R[i,IR], f(map(X -> X[i,IA], As)...)) # slow!
+                # R[i,IR] = op(R[i,IR], f(ntuple(n -> As[n][i,IA], vN)...)) # slow!
+                # R[i,IR] = op(R[i,IR], _f_all(f, i, IA, Xs...)) # slow!
+                # R[i,IR] = op(R[i,IR], f(A[i,IA], B[i,IA])) # fast!
+                if length(As) == 2
+                    R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA]))
+                elseif length(As) == 3
+                    R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA], As[3][i,IA]))
+                elseif length(As) == 4
+                    R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA], As[3][i,IA], As[4][i,IA]))
+                else
+                    error("nope!")
+                end
+            end
+        end
+    end
+    return R
+end
+
+# @inline _f_all(f, i, I, X, Y) = f(X[i,I], Y[i,I])
+# @inline _f_all(f, i, I, X, Y, Z) = f(X[i,I], Y[i,I], Z[i,I])
+
+# @generated function _f_all(f, ind, Xs...)
+#     args = [:(Xs[$n][ind...]) for n in 1:length(Xs)]
+#     :(f($(args...)))
+# end
+
+mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted...) =
+    (_mapreducedim!(f, op, R, A...); R)
 
 reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
     mapreducedim!(identity, op, R, A)
@@ -354,10 +408,8 @@ julia> mapreduce(isodd, |, a, dims=1)
  1  1  1  1
 ```
 """
-mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
-    _mapreduce_dim(f, op, init, A, dims)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
-    reduce(op, map(f, A...); kw...)
+mapreduce(f, op, As::AbstractArrayOrBroadcasted...; dims=:, init=_InitialValue()) =
+    _mapreduce_dim(f, op, init, first(As), dims, tail(As)...)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
     mapfoldl_impl(f, op, nt, A)
@@ -365,11 +417,51 @@ _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
     _mapreduce(f, op, IndexStyle(A), A)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
-    mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
+# Vararg complete reduction using zip:
+
+_mapreduce_dim(f, op, init, A::AbstractArrayOrBroadcasted, ::Colon, Bs...) =
+    mapreduce(splat(f), op, zip(A, Bs...); init)
+
+_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon, Bs...) =
+    mapreduce(splat(f), op, zip(A, Bs...))
+
+mapreduce_empty(f::typeof(splat(+)).name.wrapper, op, ::Type{T}) where {T<:Tuple} =
+    reduce_empty(op, Core.Compiler.return_type(op, T))  # for mapreduce(+, +, Int[], Int[])
+
+# With dims, vararg case without init goes to fallback:
+
+_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims, Bs...) =
+    mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A, Bs...)
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+
+_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims, Bs...) =
+    _mapreduce_dim(identity, op, _InitialValue(), map(f, A, Bs...), dims)
+
+#=
+
+julia> @btime reduce(+, map(dot, $(rand(100,100)), $(rand(100,100))));  # as in 1.6
+  6.979 μs (2 allocations: 78.20 KiB)
+
+julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)));
+  7.156 μs (2 allocations: 78.20 KiB)
+
+# Not giving init means you get the map(f,A,B) behaviour of before, to compare:
+
+julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=1);
+  5.465 μs (3 allocations: 79.08 KiB)
+
+julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=1, init=0.0);
+  7.750 μs (1 allocation: 896 bytes)
+
+julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=2);
+  5.900 μs (7 allocations: 79.16 KiB)
+
+julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=2, init=0.0);
+  2.731 μs (5 allocations: 976 bytes)
+
+=#
 
 """
     reduce(f, A; dims=:, [init])
