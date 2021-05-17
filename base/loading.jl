@@ -323,7 +323,7 @@ or `nothing` if `m` was not imported from a package. The optional
 argument `paths` can be used to access subdirs of the module root.
 
 !!! compat "Julia 1.7"
-    This function requires at least Julia 1.7.
+    The optional argument `paths` requires at least Julia 1.7.
 """
 function pkgdir(m::Module, paths::String...)
     rootmodule = Base.moduleroot(m)
