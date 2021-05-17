@@ -55,6 +55,8 @@ Base.Channel
 Base.Channel(::Function)
 Base.put!(::Channel, ::Any)
 Base.take!(::Channel)
+Base.putwillblock(::Channel)
+Base.takewillblock(::Channel)
 Base.isready(::Channel)
 Base.fetch(::Channel)
 Base.close(::Channel)
