@@ -541,7 +541,7 @@ end
 Similar to `exp(im*x)`, this computes ``\\exp(i x)``, but is typically faster.
 The `cis` name is shorthand for the Euler formula of ``cos(x) + i sin(x) = \\exp(i x)``.
 
-See also [`cispi`](@ref), [`sincosip`](@ref), [`angle`](@ref), [`exp`](@ref).
+See also [`cispi`](@ref), [`sincospi`](@ref), [`angle`](@ref), [`exp`](@ref).
 
 # Examples
 ```jldoctest
