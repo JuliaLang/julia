@@ -1004,8 +1004,19 @@ end
 end
 
 @testset "map on Dicts/Sets is forbidden" begin
-    @test_throws ErrorException map(identity, Set([1,2,3]))
-    @test_throws ErrorException map(identity, Dict("a"=>"b"))
+    s = Set([1,2,3])
+    d = Dict(:a=>10, :b=>20, :c=>30)
+    @test_throws ErrorException map(string, s)
+    @test_throws ErrorException map(string, d)
+    @test_throws ErrorException map(string, s, s)
+    @test_throws ErrorException map(string, d, d)
+    @test_throws ErrorException map(string, s, d)
+
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), s)
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), d)
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), s, s)
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), d, d)
+    @test_throws MethodError map!(string, Array{Any}(undef, 3), s, d)
 end
 
 @testset "Issue 30145" begin
