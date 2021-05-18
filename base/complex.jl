@@ -535,18 +535,14 @@ end
 #     return Complex(abs(iz)/r/2, copysign(r,iz))
 # end
 
-# compute exp(im*theta)
-function cis(theta::Real)
-    s, c = sincos(theta)
-    Complex(c, s)
-end
-
 """
-    cis(z)
+    cis(x)
 
-Return ``\\exp(iz)``.
+Computes a faster version of ``\\exp(i x)``, where `x` is a real or complex number.
+The `cis` name comes from the Euler formula of ``\\exp(i x) = cos(x) + i sin(x)`` where
+`cis` is shorthand for "cosine" plus "imaginary" times "sine".
 
-See also [`cispi`](@ref), [`angle`](@ref).
+See also [`cispi`](@ref), [`angle`](@ref), [`exp`](@ref).
 
 # Examples
 ```jldoctest
@@ -554,18 +550,27 @@ julia> cis(π) ≈ -1
 true
 ```
 """
+function cis end
+function cis(theta::Real)
+    s, c = sincos(theta)
+    Complex(c, s)
+end
+
 function cis(z::Complex)
     v = exp(-imag(z))
     s, c = sincos(real(z))
     Complex(v * c, v * s)
 end
 
-cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
-
 """
-    cispi(z)
+    cispi(x)
 
-Compute ``\\exp(i\\pi x)`` more accurately than `cis(pi*x)`, especially for large `x`.
+Computes ``\\exp(i \pi x)`` (or equivalently ``cis(\pi x)``) that is both faster and 
+more accurate (especially for large `x`).  Input `x` can be a real or complex number.
+The `cis` name comes from the Euler formula of ``\\exp(i x) = cos(x) + i sin(x)`` where
+`cis` is shorthand for "cosine" plus "imaginary" times "sine".
+
+See also [`cis`](@ref), [`angle`](@ref), [`exp`](@ref).
 
 # Examples
 ```jldoctest
@@ -579,6 +584,9 @@ julia> cispi(0.25 + 1im)
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 """
+function cispi end
+cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
+
 function cispi(z::Complex)
     sipi, copi = sincospi(z)
     return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))

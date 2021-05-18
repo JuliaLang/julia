@@ -567,6 +567,8 @@ exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
 
 Compute ``\\exp(i A)`` for a square matrix ``A``.
 
+See also [`cispi`](@ref), [`exp`](@ref).
+
 !!! compat "Julia 1.7"
     Support for using `cis` with matrices was added in Julia 1.7.
 
