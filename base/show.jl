@@ -46,8 +46,8 @@ end
 
 show(io::IO, ::MIME"text/plain", f::Fix1) = print(io, f.f, "(", f.x, ") (fix argument 1)")
 show(io::IO, ::MIME"text/plain", f::Fix2) = print(io, f.f, "(", f.x, ") (fix arguemnt 2)")
-show(io::IO, f::Fix1) = print(io, f.f, "(", f.x, ")")
-show(io::IO, f::Fix2) = print(io, f.f, "(", f.x, ")")
+show(io::IO, f::Union{Fix1, Fix2}) = print(io, f.f, "(", f.x, ")")
+print(io::IO, f::Union{Fix1, Fix2}) = show(io, f)
 
 show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
 show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
