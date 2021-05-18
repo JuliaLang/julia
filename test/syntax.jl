@@ -1176,8 +1176,8 @@ end
 @test_throws ParseError Meta.parse("1e3.")
 @test Meta.parse("2e_1") == Expr(:call, :*, 2, :e_1)
 # issue #17705
-@test Meta.parse("2e3_") == Expr(:call, :*, 2e3, :_)
-@test Meta.parse("2e-3_") == Expr(:call, :*, 2e-3, :_)
+@test Meta.parse("2e3_") == Expr(:closure, Expr(:call, :*, 2e3, :_))
+@test Meta.parse("2e-3_") == Expr(:closure, Expr(:call, :*, 2e-3, :_))
 @test Meta.parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), LineNumberNode(1, :none), "x"))
 
 # misplaced top-level expressions
@@ -2787,3 +2787,15 @@ macro m_nospecialize_unnamed_hygiene()
 end
 
 @test @m_nospecialize_unnamed_hygiene()(1) === Any
+
+@testset "underscore closures" begin
+    @test :(f(_)) == Expr(:closure, Expr(:call, :f, :_))
+    @test :(f(x, _)) == Expr(:closure, Expr(:call, :f, :x, :_))
+    @test :(_(x, y)) == Expr(:closure, Expr(:call, :_, :x, :y))
+
+    @test :(f[_]) == Expr(:closure, Expr(:ref, :f, :_))
+    @test :(f[x, _]) == Expr(:closure, Expr(:ref, :f, :x, :_))
+    @test :(_[x, y]) == Expr(:closure, Expr(:ref, :_, :x, :y))
+
+    @test :(_.x) == Expr(:closure, Expr(:(.), :_, QuoteNode(:x)))
+end

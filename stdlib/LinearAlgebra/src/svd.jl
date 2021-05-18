@@ -5,7 +5,7 @@
     SVD <: Factorization
 
 Matrix factorization type of the singular value decomposition (SVD) of a matrix `A`.
-This is the return type of [`svd(_)`](@ref), the corresponding matrix factorization function.
+This is the return type of [`svd(::Any)`](@ref), the corresponding matrix factorization function.
 
 If `F::SVD` is the factorization object, `U`, `S`, `V` and `Vt` can be obtained
 via `F.U`, `F.S`, `F.V` and `F.Vt`, such that `A = U * Diagonal(S) * Vt`.
@@ -268,7 +268,7 @@ end
 
 Matrix factorization type of the generalized singular value decomposition (SVD)
 of two matrices `A` and `B`, such that `A = F.U*F.D1*F.R0*F.Q'` and
-`B = F.V*F.D2*F.R0*F.Q'`. This is the return type of [`svd(_, _)`](@ref), the
+`B = F.V*F.D2*F.R0*F.Q'`. This is the return type of [`svd(::Any, ::Any)`](@ref), the
 corresponding matrix factorization function.
 
 For an M-by-N matrix `A` and P-by-N matrix `B`,

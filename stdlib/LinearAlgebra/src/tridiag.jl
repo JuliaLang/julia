@@ -21,7 +21,7 @@ end
 Construct a symmetric tridiagonal matrix from the diagonal (`dv`) and first
 sub/super-diagonal (`ev`), respectively. The result is of type `SymTridiagonal`
 and provides efficient specialized eigensolvers, but may be converted into a
-regular matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short).
+regular matrix with [`convert(Array, ::Any)`](@ref) (or `Array(_)` for short).
 
 For `SymTridiagonal` block matrices, the elements of `dv` are symmetrized.
 The argument `ev` is interpreted as the superdiagonal. Blocks from the
@@ -497,7 +497,7 @@ end
 Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal,
 respectively. The result is of type `Tridiagonal` and provides efficient specialized linear
 solvers, but may be converted into a regular matrix with
-[`convert(Array, _)`](@ref) (or `Array(_)` for short).
+[`convert(Array, ::Any)`](@ref) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
 
 # Examples

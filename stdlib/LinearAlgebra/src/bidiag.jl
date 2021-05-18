@@ -28,7 +28,7 @@ end
 Constructs an upper (`uplo=:U`) or lower (`uplo=:L`) bidiagonal matrix using the
 given diagonal (`dv`) and off-diagonal (`ev`) vectors. The result is of type `Bidiagonal`
 and provides efficient specialized linear solvers, but may be converted into a regular
-matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short). The length of `ev`
+matrix with [`convert(Array, ::Any)`](@ref) (or `Array(_)` for short). The length of `ev`
 must be one less than the length of `dv`.
 
 # Examples
