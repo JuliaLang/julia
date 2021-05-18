@@ -538,9 +538,8 @@ end
 """
     cis(x)
 
-Computes a faster version of ``\\exp(i x)``, where `x` is a real or complex number.
-The `cis` name comes from the Euler formula of ``\\exp(i x) = cos(x) + i sin(x)`` where
-`cis` is shorthand for "cosine" plus "imaginary" times "sine".
+Similar to `exp(im*x)`, this computes ``\\exp(i x)``, but is typically faster.
+The `cis` name is shorthand for the Euler formula of ``cos(x) + i sin(x) = \\exp(i x)``.
 
 See also [`cispi`](@ref), [`angle`](@ref), [`exp`](@ref).
 
@@ -565,10 +564,8 @@ end
 """
     cispi(x)
 
-Computes ``\\exp(i \\pi x)`` (or equivalently ``cis(\\pi x)``) that is both faster and
-more accurate (especially for large `x`).  Input `x` can be a real or complex number.
-The `cis` name comes from the Euler formula of ``\\exp(i x) = cos(x) + i sin(x)`` where
-`cis` is shorthand for "cosine" plus "imaginary" times "sine".
+Similar to `exp(im*pi*x)`, this computes ``\\exp(i \\pi x)``, but is more accurate (especially for large `x`) and typically faster.
+The `cis` name is shorthand for the Euler formula of ``cos(x) + i sin(x) = \\exp(i x)``.
 
 See also [`cis`](@ref), [`angle`](@ref), [`exp`](@ref).
 
