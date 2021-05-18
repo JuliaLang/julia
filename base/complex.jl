@@ -565,7 +565,7 @@ end
 """
     cispi(x)
 
-Computes ``\\exp(i \pi x)`` (or equivalently ``cis(\pi x)``) that is both faster and 
+Computes ``\\exp(i \pi x)`` (or equivalently ``cis(\pi x)``) that is both faster and
 more accurate (especially for large `x`).  Input `x` can be a real or complex number.
 The `cis` name comes from the Euler formula of ``\\exp(i x) = cos(x) + i sin(x)`` where
 `cis` is shorthand for "cosine" plus "imaginary" times "sine".
