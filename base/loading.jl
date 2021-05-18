@@ -320,7 +320,7 @@ end
 
 Return the root directory of the package that imported module `m`,
 or `nothing` if `m` was not imported from a package. Optionally further
-path component strings can be provided to construct a path within the 
+path component strings can be provided to construct a path within the
 package root.
 
 ```julia
