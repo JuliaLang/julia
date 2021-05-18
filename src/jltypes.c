@@ -2302,6 +2302,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "specializations",
                             "speckeyset",
                             "slot_syms",
+                            "external_mt",
                             "source",
                             "unspecialized",
                             "generator",
@@ -2328,6 +2329,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_simplevector_type,
                             jl_array_type,
                             jl_string_type,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type, // jl_method_instance_type
                             jl_any_type,
@@ -2535,7 +2537,7 @@ void jl_init_types(void) JL_GC_DISABLED
 #endif
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 11, jl_uint8_type);
-    jl_svecset(jl_method_type->types, 11, jl_method_instance_type);
+    jl_svecset(jl_method_type->types, 12, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 6, jl_code_instance_type);
     jl_svecset(jl_code_instance_type->types, 9, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 10, jl_voidpointer_type);
