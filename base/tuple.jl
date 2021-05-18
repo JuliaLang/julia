@@ -32,10 +32,10 @@ getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
 
-# get methods (getindex with default value) (Issue #40809)
+# get methods (getindex with default value)
 
-get(t::Tuple, i::Int, default) = i <= length(t) ? getindex(t, i) : default
-get(f::Callable, t::Tuple, i::Int) = i <= length(t) ? getindex(t, i) : f()
+get(t::Tuple, i::Int, default) = i in 1:length(t) ? getindex(t, i) : default
+get(f::Callable, t::Tuple, i::Int) = i in 1:length(t) ? getindex(t, i) : f()
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
 

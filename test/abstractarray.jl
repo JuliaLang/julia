@@ -599,7 +599,6 @@ function test_get(::Type{TestAbstractArray})
     @test get(TSlow([1]), (), 0) == 1
     @test get(TSlow(fill(1)), (), 0) == 1
 
-    # Issue #40809
     @test get(()->0, A, ()) == 0
     @test get(()->0, B, ()) == 0
     @test get(()->0, A, (1,)) == get(()->0, A, 1) == A[1] == 1
