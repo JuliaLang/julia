@@ -44,6 +44,11 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
+show(io::IO, ::MIME"text/plain", f::Fix1) = _show_fix(io, f)
+show(io::IO, ::MIME"text/plain", f::Fix2) = _show_fix(io, f)
+_show_fix(io::IO, f) = print(io, f.f, "(", f.x, ")")
+
+
 show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
 show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
 
