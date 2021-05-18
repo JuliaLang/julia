@@ -1150,6 +1150,12 @@ end
 
 (f::Fix2)(y) = f.f(y, f.x)
 
+Base.print(io::IO, f::Base.Fix1) = _show_fix(io, f)
+Base.show(io::IO, ::MIME"text/plain", f::Base.Fix1) = _show_fix(io, f)
+Base.print(io::IO, f::Base.Fix2) = _show_fix(io, f)
+Base.show(io::IO, ::MIME"text/plain", f::Base.Fix2) = _show_fix(io, f)
+_show_fix(io::IO, f::Base.Fix2) = print(io, f.f, "(", f.x, ")")
+
 """
     isequal(x)
 
