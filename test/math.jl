@@ -141,7 +141,7 @@ end
 # We compare to BigFloat instead of hard-coding
 # values, assuming that BigFloat has an independently tested implementation.
 @testset "basic math functions" begin
-    @testset "$T" for T in (Float32, Float64)
+    @testset "$T" for T in (Float16, Float32, Float64)
         x = T(1//3)
         y = T(1//2)
         yi = 4
@@ -196,11 +196,13 @@ end
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
-            @test exp(T(1)) ≈ T(ℯ) atol=10*eps(T)
+            @test exp(T(1)) ≈ T(ℯ) atol=2*eps(T)
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*eps(T)
+            @test isequal(expm1(floatmin(T)), -one(T))
+            @test isequal(expm1(floatmax(T)), T(Inf))
+            @test expm1(T(1)) ≈ T(ℯ)-1 atol=2*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(hypot(floatmax(T),T(1)),floatmax(T))
             @test isequal(hypot(floatmin(T)*sqrt(eps(T)),T(0)),floatmin(T)*sqrt(eps(T)))
