@@ -103,9 +103,9 @@ Standard library changes
 * The shape of an `UpperHessenberg` matrix is preserved under certain arithmetic operations, e.g. when multiplying or dividing by an `UpperTriangular` matrix. ([#40039])
 * `cis(A)` now supports matrix arguments ([#40194]).
 * `dot` now supports `UniformScaling` with `AbstractMatrix` ([#40250]).
-* `qr[!]` and `lu[!]` now support `Symbol` values as their optional `pivot` argument:
-  defaults are `qr(A, :none)` (vs. `qr(A, :colnorm)` for pivoting) and `lu(A, :rowmax)`
-  (vs. `lu(A, :none)` without pivoting); the former `Val{true/false}`-based calls are deprecated. ([#40623])
+* `qr[!]` and `lu[!]` now support `PivotingStrategy` values as their optional `pivot` argument:
+  defaults are `qr(A, NoPivot())` (vs. `qr(A, ColNorm())` for pivoting) and `lu(A, RowMax())`
+  (vs. `lu(A, NoPivot())` without pivoting); the former `Val{true/false}`-based calls are deprecated. ([#40623])
 
 #### Markdown
 

@@ -16,14 +16,9 @@ size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
 size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
-function checknonsingular(info, pivoted = :rowmax)
-    if info != 0
-        pivoted === :rowmax && throw(SingularException(info))
-        pivoted === :none   && throw(ZeroPivotException(info))
-    else
-        return nothing
-    end
-end
+checknonsingular(info, ::RowMax) = info == 0 || throw(SingularException(info))
+checknonsingular(info, ::NoPivot) = info == 0 || throw(ZeroPivotException(info))
+checknonsingular(info) = checknonsingular(info, RowMax())
 
 """
     issuccess(F::Factorization)

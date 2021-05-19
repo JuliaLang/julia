@@ -382,13 +382,13 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
-    @test A*(lu(A, :none)\b) == b
+    @test A*(lu(A, NoPivot())\b) == b
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-    @test A*(lu(A, :rowmax)\b) == b
+    @test A*(lu(A, RowMax())\b) == b
 end
 
 @testset "Issue 18742" begin

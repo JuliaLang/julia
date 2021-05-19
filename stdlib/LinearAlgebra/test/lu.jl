@@ -85,7 +85,7 @@ dimg  = randn(n)/2
     end
     κd    = cond(Array(d),1)
     @testset "Tridiagonal LU" begin
-        lud   = @inferred lu(d)
+        lud = @inferred lu(d)
         @test LinearAlgebra.issuccess(lud)
         @test @inferred(lu(lud)) == lud
         @test_throws ErrorException lud.Z
@@ -229,12 +229,12 @@ end
     @test_throws SingularException lu!(copy(A); check = true)
     @test !issuccess(lu(A; check = false))
     @test !issuccess(lu!(copy(A); check = false))
-    @test_throws ZeroPivotException lu(A, :none)
-    @test_throws ZeroPivotException lu!(copy(A), :none)
-    @test_throws ZeroPivotException lu(A, :none; check = true)
-    @test_throws ZeroPivotException lu!(copy(A), :none; check = true)
-    @test !issuccess(lu(A, :none; check = false))
-    @test !issuccess(lu!(copy(A), :none; check = false))
+    @test_throws ZeroPivotException lu(A, NoPivot())
+    @test_throws ZeroPivotException lu!(copy(A), NoPivot())
+    @test_throws ZeroPivotException lu(A, NoPivot(); check = true)
+    @test_throws ZeroPivotException lu!(copy(A), NoPivot(); check = true)
+    @test !issuccess(lu(A, NoPivot(); check = false))
+    @test !issuccess(lu!(copy(A), NoPivot(); check = false))
     F = lu(A; check = false)
     @test sprint((io, x) -> show(io, "text/plain", x), F) ==
         "Failed factorization of type $(typeof(F))"
@@ -320,7 +320,7 @@ include("trickyarithmetic.jl")
 @testset "lu with type whose sum is another type" begin
     A = TrickyArithmetic.A[1 2; 3 4]
     ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
-    B = lu(A, :none)
+    B = lu(A, NoPivot())
     @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
 end
 

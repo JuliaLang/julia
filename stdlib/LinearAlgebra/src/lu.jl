@@ -76,28 +76,26 @@ adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
 # StridedMatrix
-function lu!(A::StridedMatrix{T}, pivot::Symbol = :rowmax; check::Bool = true) where {T<:BlasFloat}
-    if pivot === :none
-        return generic_lufact!(A, pivot; check = check)
-    elseif pivot === :rowmax
-        lpt = LAPACK.getrf!(A)
-        check && checknonsingular(lpt[3])
-        return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
-    else
-        throw(ArgumentError("only `:rowmax` and `:none` are supported as `pivot` argument but you supplied `$pivot`"))
-    end
+lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMax(); check=check)
+function lu!(A::StridedMatrix{T}, ::RowMax; check::Bool = true) where {T<:BlasFloat}
+    lpt = LAPACK.getrf!(A)
+    check && checknonsingular(lpt[3])
+    return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
-function lu!(A::HermOrSym, pivot::Symbol = :rowmax; check::Bool = true)
+function lu!(A::StridedMatrix{<:BlasFloat}, pivot::NoPivot; check::Bool = true)
+    return generic_lufact!(A, pivot; check = check)
+end
+function lu!(A::HermOrSym, pivot::PivotingStrategy = RowMax(); check::Bool = true)
     copytri!(A.data, A.uplo, isa(A, Hermitian))
     lu!(A.data, pivot; check = check)
 end
 # for backward compatibility
 # TODO: remove towards Julia v2
-@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{true}; check::Bool = true) lu!(A, :rowmax; check=check)
-@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{false}; check::Bool = true) lu!(A, :none; check=check)
+@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{true}; check::Bool = true) lu!(A, RowMax(); check=check)
+@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{false}; check::Bool = true) lu!(A, NoPivot(); check=check)
 
 """
-    lu!(A, pivot = :rowmax; check = true) -> LU
+    lu!(A, pivot = RowMax(); check = true) -> LU
 
 `lu!` is the same as [`lu`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
@@ -133,17 +131,17 @@ Stacktrace:
 [...]
 ```
 """
-lu!(A::StridedMatrix, pivot::Symbol = :rowmax; check::Bool = true) =
+lu!(A::StridedMatrix, pivot::PivotingStrategy = RowMax(); check::Bool = true) =
     generic_lufact!(A, pivot; check = check)
-function generic_lufact!(A::StridedMatrix{T}, pivot = :rowmax; check::Bool = true) where T
-    # Check arguments
-    if pivot !== :rowmax && pivot !== :none
-        throw(ArgumentError("only `rowmax` and `none` are supported as `pivot` argument but you supplied `$pivot`"))
-    end
-
+function generic_lufact!(A::StridedMatrix{T}, pivot::PivotingStrategy = RowMax();
+                         check::Bool = true) where {T}
     # Extract values
     m, n = size(A)
     minmn = min(m,n)
+
+    if pivot !== RowMax() && pivot !== NoPivot()
+        throw(ArgumentError("only `RowMax()` and `NoPivot()` are supported as `pivot` argument but you supplied `$pivot`"))
+    end
 
     # Initialize variables
     info = 0
@@ -152,7 +150,7 @@ function generic_lufact!(A::StridedMatrix{T}, pivot = :rowmax; check::Bool = tru
         for k = 1:minmn
             # find index max
             kp = k
-            if pivot === :rowmax && k < m
+            if pivot === RowMax() && k < m
                 amax = abs(A[k, k])
                 for i = k+1:m
                     absi = abs(A[i,k])
@@ -213,7 +211,7 @@ end
 
 # for all other types we must promote to a type which is stable under division
 """
-    lu(A, pivot = :rowmax; check = true) -> F::LU
+    lu(A, pivot = RowMax(); check = true) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -224,7 +222,7 @@ validity (via [`issuccess`](@ref)) lies with the user.
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
 type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
 pivoting is chosen (default) the element type should also support [`abs`](@ref) and
-[`<`](@ref). Pivoting can be turned off by passing `pivot = :none`.
+[`<`](@ref). Pivoting can be turned off by passing `pivot = NoPivot()`.
 
 The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
 
@@ -280,13 +278,13 @@ julia> l == F.L && u == F.U && p == F.p
 true
 ```
 """
-function lu(A::AbstractMatrix{T}, pivot::Symbol = :rowmax; check::Bool = true) where {T}
+function lu(A::AbstractMatrix{T}, pivot::PivotingStrategy = RowMax(); check::Bool = true) where {T}
     S = lutype(T)
     lu!(copy_oftype(A, S), pivot; check = check)
 end
 # TODO: remove for Julia v2.0
-@deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, :rowmax; check=check)
-@deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, :none; check=check)
+@deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, RowMax(); check=check)
+@deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, NoPivot(); check=check)
 
 
 lu(S::LU) = S
@@ -497,13 +495,12 @@ inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 # Tridiagonal
 
 # See dgttrf.f
-function lu!(A::Tridiagonal{T,V}, pivot::Symbol = :rowmax; check::Bool = true) where {T,V}
+function lu!(A::Tridiagonal{T,V}, pivot::PivotingStrategy = RowMax(); check::Bool = true) where {T,V}
     # Extract values
     n = size(A, 1)
 
-    # Check arguments
-    if pivot !== :rowmax && pivot !== :none
-        throw(ArgumentError("only `:row` and `:none` are supported as `pivot` argument but you supplied `$pivot`"))
+    if pivot !== RowMax() && pivot !== NoPivot()
+        throw(ArgumentError("only `RowMax()` and `NoPivot()` are supported as `pivot` argument but you supplied `$pivot`"))
     end
 
     # Initialize variables
@@ -523,7 +520,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Symbol = :rowmax; check::Bool = true) w
         end
         for i = 1:n-2
             # pivot or not?
-            if pivot === :none || abs(d[i]) >= abs(dl[i])
+            if pivot === NoPivot() || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -546,7 +543,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Symbol = :rowmax; check::Bool = true) w
         end
         if n > 1
             i = n-1
-            if pivot === :none || abs(d[i]) >= abs(dl[i])
+            if pivot === NoPivot() || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact

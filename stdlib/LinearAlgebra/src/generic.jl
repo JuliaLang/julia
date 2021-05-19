@@ -1141,7 +1141,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         end
         return lu(A) \ B
     end
-    return qr(A, :colnorm) \ B
+    return qr(A, ColNorm()) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b

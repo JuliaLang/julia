@@ -246,20 +246,14 @@ function qrfactPivotedUnblocked!(A::AbstractMatrix)
 end
 
 # LAPACK version
-Base.@aggressive_constprop function qr!(A::StridedMatrix{<:BlasFloat}, pivot::Symbol = :none; blocksize=36)
-    if pivot === :none
-        return QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), blocksize))...)
-    elseif pivot === :colnorm
-        return QRPivoted(LAPACK.geqp3!(A)...)
-    else
-        throw(ArgumentError("only `:colnorm` and `:none` are supported as `pivot` argument but you supplied `$pivot`"))
-    end
-end
+qr!(A::StridedMatrix{<:BlasFloat}, ::NoPivot; blocksize=36) =
+    QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), blocksize))...)
+qr!(A::StridedMatrix{<:BlasFloat}, ::ColNorm) = QRPivoted(LAPACK.geqp3!(A)...)
 
 # Generic fallbacks
 
 """
-    qr!(A, pivot = :none; blocksize)
+    qr!(A, pivot = NoPivot(); blocksize)
 
 `qr!` is the same as [`qr`](@ref) when `A` is a subtype of [`StridedMatrix`](@ref),
 but saves space by overwriting the input `A`, instead of creating a copy.
@@ -298,23 +292,17 @@ Stacktrace:
 [...]
 ```
 """
-Base.@aggressive_constprop function qr!(A::AbstractMatrix, pivot::Symbol = :none)
-    if pivot === :none
-        return qrfactUnblocked!(A)
-    elseif pivot === :colnorm
-        return qrfactPivotedUnblocked!(A)
-    else
-        throw(ArgumentError("only `:colnorm` and `:none` are supported as `pivot` argument but you supplied `$pivot`"))
-    end
-end
+qr!(A::AbstractMatrix, ::NoPivot) = qrfactUnblocked!(A)
+qr!(A::AbstractMatrix, ::ColNorm) = qrfactPivotedUnblocked!(A)
+qr!(A::AbstractMatrix) = qr!(A, NoPivot())
 # TODO: Remove in Julia v2.0
-@deprecate qr!(A::AbstractMatrix, ::Val{true})  qr!(A, :colnorm)
-@deprecate qr!(A::AbstractMatrix, ::Val{false}) qr!(A, :none)
+@deprecate qr!(A::AbstractMatrix, ::Val{true})  qr!(A, ColNorm())
+@deprecate qr!(A::AbstractMatrix, ::Val{false}) qr!(A, NoPivot())
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
 """
-    qr(A, pivot = :none; blocksize) -> F
+    qr(A, pivot = NoPivot(); blocksize) -> F
 
 Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
@@ -325,7 +313,7 @@ A = Q R
 
 The returned object `F` stores the factorization in a packed format:
 
- - if `pivot == :colnorm` then `F` is a [`QRPivoted`](@ref) object,
+ - if `pivot == ColNorm()` then `F` is a [`QRPivoted`](@ref) object,
 
  - otherwise if the element type of `A` is a BLAS type ([`Float32`](@ref), [`Float64`](@ref),
    `ComplexF32` or `ComplexF64`), then `F` is a [`QRCompactWY`](@ref) object,
@@ -355,7 +343,7 @@ and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix w
 orthogonal matrix.
 
 The block size for QR decomposition can be specified by keyword argument
-`blocksize :: Integer` when `pivot == :none` and `A isa StridedMatrix{<:BlasFloat}`.
+`blocksize :: Integer` when `pivot == NoPivot()` and `A isa StridedMatrix{<:BlasFloat}`.
 It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
 
 !!! compat "Julia 1.4"
@@ -391,15 +379,15 @@ true
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
 """
-Base.@aggressive_constprop function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
+function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
     AA = similar(A, _qreltype(T), size(A))
     copyto!(AA, A)
     return qr!(AA, arg...; kwargs...)
 end
 # TODO: remove in Julia v2.0
-@deprecate qr(A::AbstractMatrix, ::Val{false}; kwargs...) qr(A, :none; kwargs...)
-@deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, :colnorm; kwargs...)
+@deprecate qr(A::AbstractMatrix, ::Val{false}; kwargs...) qr(A, NoPivot(); kwargs...)
+@deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, ColNorm(); kwargs...)
 
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)

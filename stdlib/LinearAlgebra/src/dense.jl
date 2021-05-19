@@ -1371,7 +1371,7 @@ function factorize(A::StridedMatrix{T}) where T
         end
         return lu(A)
     end
-    qr(A, :colnorm)
+    qr(A, ColNorm())
 end
 factorize(A::Adjoint)   =   adjoint(factorize(parent(A)))
 factorize(A::Transpose) = transpose(factorize(parent(A)))

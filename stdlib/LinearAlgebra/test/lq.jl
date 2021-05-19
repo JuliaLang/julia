@@ -40,7 +40,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                 lqa   = lq(a)
                 x = lqa\b
                 l,q   = lqa.L, lqa.Q
-                qra   = qr(a, :colnorm)
+                qra   = qr(a, ColNorm())
                 @testset "Basic ops" begin
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1
