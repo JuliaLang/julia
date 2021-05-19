@@ -508,4 +508,50 @@ end
     end
 end
 
+@testset "Broadcasted range" begin
+    @testset "Date" begin
+        @testset "basic" begin
+            result = (Date(2020):Week(1):Date(2021)) .+ Day(1)
+
+            @test result == Date(2020,1,2):Week(1):Date(2021,1,2)
+            @test result isa StepRange
+        end
+
+        @testset "end-of-month" begin
+            r = Date(2020,10,31):Month(1):Date(2021)
+
+            @test collect(r .- Day(1)) == [Date(2020,10,30), Date(2020,11,30), Date(2020,12,30)]
+            @test collect(r) .- Day(1) == [Date(2020,10,30), Date(2020,11,29), Date(2020,12,30)]
+        end
+
+        @testset "leap day" begin
+            r = Date(2020,2,28):Year(1):Date(2022)
+
+            @test collect(r .+ Day(1)) == [Date(2020,2,29), Date(2021,2,28)]
+            @test collect(r) .+ Day(1) == [Date(2020,2,29), Date(2021,3,1)]
+        end
+
+        @testset "round-trip" begin
+            r = Date(2020,2,27):Day(1):Date(2020,3,1)
+
+            @test r .+ Year(0) == r
+            @test (r .+ Year(1)) .- Year(1) == r
+        end
+    end
+
+    @testset "DateTime" begin
+        result = (DateTime(2020):Hour(1):DateTime(2021)) .+ Minute(1)
+
+        @test result == DateTime(2020,1,1,0,1):Hour(1):DateTime(2021,1,1,0,1)
+        @test result isa StepRange
+    end
+
+    @testset "Time" begin
+        result = (Time(18):Hour(1):Time(22)) .+ Hour(4)
+
+        @test result == [Time.(22:23); Time.(0:2)]
+        @test result isa Vector
+    end
+end
+
 end

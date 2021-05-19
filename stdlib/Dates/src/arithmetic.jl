@@ -95,5 +95,17 @@ end
 (-)(x::AbstractRange{T}, y::AbstractRange{T}) where {T<:TimeType} = Vector(x) - Vector(y)
 
 # Allow dates, times, and time zones to broadcast as unwrapped scalars
-Base.Broadcast.broadcastable(x::AbstractTime) = Ref(x)
-Base.Broadcast.broadcastable(x::TimeZone) = Ref(x)
+broadcastable(x::AbstractTime) = Ref(x)
+broadcastable(x::TimeZone) = Ref(x)
+
+function broadcasted(::typeof(+), r::StepRange{T}, p::Period) where {T<:TimeType}
+    StepRange{T}(r.start + p, r.step, r.stop + p)
+end
+
+# Note: Since `Time` is cyclical adding a period may cause the resulting range to cross
+# over midnight. If this occurs we would return an empty range or incorrect result.
+broadcasted(::typeof(+), r::StepRange{Time}, p::Period) = collect(r) + p
+
+broadcasted(::typeof(+), p::Period, r::StepRange{<:TimeType}) = broadcasted(+, r, p)
+broadcasted(::typeof(-), r::StepRange{<:TimeType}, p::Period) = broadcasted(+, r, -p)
+broadcasted(::typeof(-), p::Period, r::StepRange{<:TimeType}) = broadcasted(-, r, p)
