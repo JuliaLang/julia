@@ -355,6 +355,10 @@ end
     @test [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]] ≈ [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 end
 
+@testset "Issue 40128" begin
+               @test LinearAlgebra.det_bareiss(BigInt[1 2; 3 4]) == -2
+end
+
 # Minimal modulo number type - but not subtyping Number
 struct ModInt{n}
     k
