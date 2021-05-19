@@ -200,7 +200,7 @@ end
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test isequal(expm1(floatmin(T)), -one(T))
+            @test isequal(expm1(-floatmax(T)), -one(T))
             @test isequal(expm1(floatmax(T)), T(Inf))
             @test expm1(T(1)) ≈ T(ℯ)-1 atol=2*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
@@ -291,7 +291,7 @@ end
     @testset "Float16 expm1" begin
         T=Float16
         @test isequal(expm1(T(0)), T(0))
-        @test isequal(expm1(floatmin(T)), -one(T))
+        @test isequal(expm1(-floatmax(T)), -one(T))
         @test isequal(expm1(floatmax(T)), T(Inf))
         @test expm1(T(1)) ≈ T(ℯ)-1 atol=2*eps(T)
     end
