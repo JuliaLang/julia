@@ -291,6 +291,7 @@ end
 
 @testset "broadcasting of Char" begin
     @test identity.('a') == 'a'
+    @test 'a' .* ['b', 'c'] == ["ab", "ac"]
 end
 
 @testset "code point format of U+ syntax (PR 33291)" begin
