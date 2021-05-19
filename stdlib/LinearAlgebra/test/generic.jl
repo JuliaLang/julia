@@ -517,4 +517,10 @@ end
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
 end
 
+@testset "isapprox allows Tuples" begin
+    @test (1, [2,3]) ≈ (1.0, [2.0, 3+10eps()])
+    @test [1, [2,3]] ≈ (1.0, [2.0, 3+10eps()])
+    @test_throws Exception (1, [2,3]) ≈ (1.0, 2.0, 3)
+end
+
 end # module TestGeneric

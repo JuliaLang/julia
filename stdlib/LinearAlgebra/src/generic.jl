@@ -1647,44 +1647,17 @@ promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_elt
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
 # Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
 # `a ≈ a` is `true`.
-function isapprox(x::AbstractArray, y::AbstractArray;
+function isapprox(x::Union{Tuple,AbstractArray}, y::Union{Tuple,AbstractArray};
     atol::Real=0,
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y),atol),
     nans::Bool=false, norm::Function=norm)
-    d = norm(x - y)
+    d = norm(x .- y)
     if isfinite(d)
         return d <= max(atol, rtol*max(norm(x), norm(y)))
     else
         # Fall back to a component-wise approximate comparison
         return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
     end
-end
-
-"""
-    isapprox(xs::Tuple, ys::Tuple; kwargs...)
-    (x, x2, x3...) ≈ (y, y2, y3...)
-
-Check that each element `x` of the first tuple is approximately equal to
-the corresponding element `y` of the second: `all(x ≈ y for (x,y) in zip(xs,ys))`.
-
-Any keyword arguments apply to every comparison.
-
-!!! compat "Julia 1.7"
-    Applying `isapprox` to tuples requires Julia 1.7 or later.
-
-```jldoctest
-julia> (1, [2,3]) ≈ (1.0, [2.0, 3+10eps()])
-true
-```
-"""
-function isapprox(xs::Union{Tuple,NamedTuple}, ys::Union{Tuple,NamedTuple}; kwargs...)
-    length(xs) == length(ys) || throw(ArgumentError("lengths must match"))
-    all(xy -> (xy[1], xy[2]; kwargs...), zip(xs, ys))
-end
-
-function isapprox(xs::NamedTuple, ys::NamedTuple; kwargs...) # not sure this is a good idea!
-    sort(collect(keys(xs))) == sort(collect(keys(ys))) || throw(ArgumentError("keys must match"))
-    all(isapprox(xs[k], ys[k]; kwargs...) for k in keys(xs))
 end
 
 """
