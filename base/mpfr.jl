@@ -815,8 +815,8 @@ Set the precision (in bits) to be used for `T` arithmetic.
     setting.
 """
 function setprecision(::Type{BigFloat}, precision::Integer)
-    if precision < 2
-        throw(DomainError(precision, "`precision` cannot be less than 2."))
+    if precision < 1
+        throw(DomainError(precision, "`precision` cannot be less than 1."))
     end
     DEFAULT_PRECISION[] = precision
     return precision
