@@ -31,6 +31,8 @@ end
 
 UInt128(u::UUID) = u.value
 
+hash(uuid::UUID, h::UInt) = hash(0x2e9d5a7e9fca58d3, hash(convert(NTuple{2, UInt64}, uuid), h))
+
 let
 @inline function uuid_kernel(s, i, u)
     _c = UInt32(@inbounds codeunit(s, i))
