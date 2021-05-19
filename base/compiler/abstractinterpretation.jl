@@ -184,7 +184,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
             condval = maybe_extract_const_bool(this_conditional)
             for i = 1:length(argtypes)
-                fargs[i] isa SlotNumber || continue
+                fargs[i] isa Slot || continue
                 if this_conditional isa InterConditional && this_conditional.slot == i
                     vtype = this_conditional.vtype
                     elsetype = this_conditional.elsetype
@@ -222,7 +222,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # find the first argument which supports refinment,
             # and intersect all equvalent arguments with it
             arg = fargs[i]
-            arg isa SlotNumber || continue # can't refine
+            arg isa Slot || continue # can't refine
             old = argtypes[i]
             old isa Type || continue # unlikely to refine
             id = slot_id(arg)
@@ -980,10 +980,10 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
                 a = ssa_def_slot(fargs[3], sv)
                 b = ssa_def_slot(fargs[4], sv)
-                if isa(a, SlotNumber) && slot_id(cnd.var) == slot_id(a)
+                if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
                     tx = (cnd.vtype ⊑ tx ? cnd.vtype : tmeet(tx, widenconst(cnd.vtype)))
                 end
-                if isa(b, SlotNumber) && slot_id(cnd.var) == slot_id(b)
+                if isa(b, Slot) && slot_id(cnd.var) == slot_id(b)
                     ty = (cnd.elsetype ⊑ ty ? cnd.elsetype : tmeet(ty, widenconst(cnd.elsetype)))
                 end
                 return tmerge(tx, ty)
@@ -1004,7 +1004,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
             a = ssa_def_slot(fargs[2], sv)
-            if isa(a, SlotNumber)
+            if isa(a, Slot)
                 aty = widenconst(argtypes[2])
                 if rt === Const(false)
                     return Conditional(a, Union{}, aty)
@@ -1027,7 +1027,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
             aty = argtypes[2]
             bty = argtypes[3]
             # if doing a comparison to a singleton, consider returning a `Conditional` instead
-            if isa(aty, Const) && isa(b, SlotNumber)
+            if isa(aty, Const) && isa(b, Slot)
                 if rt === Const(false)
                     aty = Union{}
                 elseif rt === Const(true)
@@ -1037,7 +1037,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 end
                 return Conditional(b, aty, bty)
             end
-            if isa(bty, Const) && isa(a, SlotNumber)
+            if isa(bty, Const) && isa(a, Slot)
                 if rt === Const(false)
                     bty = Union{}
                 elseif rt === Const(true)
@@ -1048,10 +1048,10 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 return Conditional(a, bty, aty)
             end
             # narrow the lattice slightly (noting the dependency on one of the slots), to promote more effective smerge
-            if isa(b, SlotNumber)
+            if isa(b, Slot)
                 return Conditional(b, rt === Const(false) ? Union{} : bty, rt === Const(true) ? Union{} : bty)
             end
-            if isa(a, SlotNumber)
+            if isa(a, Slot)
                 return Conditional(a, rt === Const(false) ? Union{} : aty, rt === Const(true) ? Union{} : aty)
             end
         elseif f === Core.Compiler.not_int
@@ -1355,7 +1355,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
         return Const((e::QuoteNode).value)
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
-    elseif isa(e, SlotNumber) || isa(e, Argument)
+    elseif isa(e, Slot) || isa(e, Argument)
         return (vtypes[slot_id(e)]::VarState).typ
     elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name)
@@ -1499,7 +1499,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     elseif e.head === :isdefined
         sym = e.args[1]
         t = Bool
-        if isa(sym, SlotNumber)
+        if isa(sym, Slot)
             vtyp = vtypes[slot_id(sym)]
             if vtyp.typ === Bottom
                 t = Const(false) # never assigned previously
@@ -1631,7 +1631,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    states = frame.stmt_types
+    s = frame.stmt_types
     n = frame.nstmts
     nargs = frame.nargs
     def = frame.linfo.def
@@ -1656,7 +1656,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             edges === nothing || empty!(edges)
             frame.stmt_info[pc] = nothing
             stmt = frame.src.code[pc]
-            changes = states[pc]::VarTable
+            changes = s[pc]::VarTable
             t = nothing
 
             hd = isa(stmt, Expr) ? stmt.head : nothing
@@ -1695,14 +1695,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         changes_else = conditional_changes(changes_else, condt.elsetype, condt.var)
                         changes      = conditional_changes(changes,      condt.vtype,    condt.var)
                     end
-                    newstate_else = stupdate!(states[l], changes_else)
+                    newstate_else = stupdate!(s[l], changes_else)
                     if newstate_else !== nothing
                         # add else branch to active IP list
                         if l < frame.pc´´
                             frame.pc´´ = l
                         end
                         push!(W, l)
-                        states[l] = newstate_else
+                        s[l] = newstate_else
                     end
                 end
             elseif isa(stmt, ReturnNode)
@@ -1750,16 +1750,16 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 l = stmt.args[1]::Int
                 frame.cur_hand = Pair{Any,Any}(l, frame.cur_hand)
                 # propagate type info to exception handler
-                old = states[l]
+                old = s[l]
                 newstate_catch = stupdate!(old, changes)
                 if newstate_catch !== nothing
                     if l < frame.pc´´
                         frame.pc´´ = l
                     end
                     push!(W, l)
-                    states[l] = newstate_catch
+                    s[l] = newstate_catch
                 end
-                typeassert(states[l], VarTable)
+                typeassert(s[l], VarTable)
                 frame.handler_at[l] = frame.cur_hand
             elseif hd === :leave
                 for i = 1:((stmt.args[1])::Int)
@@ -1773,12 +1773,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     end
                     frame.src.ssavaluetypes[pc] = t
                     lhs = stmt.args[1]
-                    if isa(lhs, SlotNumber)
+                    if isa(lhs, Slot)
                         changes = StateUpdate(lhs, VarState(t, false), changes, false)
                     end
                 elseif hd === :method
                     fname = stmt.args[1]
-                    if isa(fname, SlotNumber)
+                    if isa(fname, Slot)
                         changes = StateUpdate(fname, VarState(Any, false), changes, false)
                     end
                 elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect
@@ -1799,7 +1799,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # the handling for Expr(:enter) propagates all changes from before the try/catch
                     # so this only needs to propagate any changes
                     l = frame.cur_hand.first::Int
-                    if stupdate1!(states[l]::VarTable, changes::StateUpdate) !== false
+                    if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
                         if l < frame.pc´´
                             frame.pc´´ = l
                         end
@@ -1817,19 +1817,19 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
             pc´ > n && break # can't proceed with the fast-path fall-through
             frame.handler_at[pc´] = frame.cur_hand
-            newstate = stupdate!(states[pc´], changes)
+            newstate = stupdate!(s[pc´], changes)
             if isa(stmt, GotoNode) && frame.pc´´ < pc´
                 # if we are processing a goto node anyways,
                 # (such as a terminator for a loop, if-else, or try block),
                 # consider whether we should jump to an older backedge first,
                 # to try to traverse the statements in approximate dominator order
                 if newstate !== nothing
-                    states[pc´] = newstate
+                    s[pc´] = newstate
                 end
                 push!(W, pc´)
                 pc = frame.pc´´
             elseif newstate !== nothing
-                states[pc´] = newstate
+                s[pc´] = newstate
                 pc = pc´
             elseif pc´ in W
                 pc = pc´
@@ -1842,7 +1842,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     nothing
 end
 
-function conditional_changes(changes::VarTable, @nospecialize(typ), var::SlotNumber)
+function conditional_changes(changes::VarTable, @nospecialize(typ), var::Slot)
     oldtyp = (changes[slot_id(var)]::VarState).typ
     # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
     # since we probably formed these types with `typesubstract`, the comparison is likely simple

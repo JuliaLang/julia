@@ -316,29 +316,16 @@ function pathof(m::Module)
 end
 
 """
-    pkgdir(m::Module[, paths::String...])
+    pkgdir(m::Module)
 
-Return the root directory of the package that imported module `m`,
-or `nothing` if `m` was not imported from a package. Optionally further
-path component strings can be provided to construct a path within the
-package root.
-
-```julia
-julia> pkgdir(Foo)
-"/path/to/Foo.jl"
-
-julia> pkgdir(Foo, "src", "file.jl")
-"/path/to/Foo.jl/src/file.jl"
-```
-
-!!! compat "Julia 1.7"
-    The optional argument `paths` requires at least Julia 1.7.
-"""
-function pkgdir(m::Module, paths::String...)
+ Return the root directory of the package that imported module `m`,
+ or `nothing` if `m` was not imported from a package.
+ """
+function pkgdir(m::Module)
     rootmodule = Base.moduleroot(m)
     path = pathof(rootmodule)
     path === nothing && return nothing
-    return joinpath(dirname(dirname(path)), paths...)
+    return dirname(dirname(path))
 end
 
 ## generic project & manifest API ##

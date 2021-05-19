@@ -33,7 +33,7 @@ import Core: Const, PartialStruct
 # end
 # ```
 struct Conditional
-    var::SlotNumber
+    var::Slot
     vtype
     elsetype
     function Conditional(
@@ -84,7 +84,7 @@ end
 const VarTable = Array{Any,1}
 
 struct StateUpdate
-    var::SlotNumber
+    var::Union{Slot,SSAValue}
     vtype::VarState
     state::VarTable
     conditional::Bool
@@ -321,18 +321,20 @@ ignorelimited(typ::LimitedAccuracy) = typ.typ
 
 function stupdate!(state::Nothing, changes::StateUpdate)
     newst = copy(changes.state)
-    changeid = slot_id(changes.var)
-    newst[changeid] = changes.vtype
-    # remove any Conditional for this slot from the vtable
-    # (unless this change is came from the conditional)
-    if !changes.conditional
-        for i = 1:length(newst)
-            newtype = newst[i]
-            if isa(newtype, VarState)
-                newtypetyp = ignorelimited(newtype.typ)
-                if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                    newtypetyp = widenwrappedconditional(newtype.typ)
-                    newst[i] = VarState(newtypetyp, newtype.undef)
+    if isa(changes.var, Slot)
+        changeid = slot_id(changes.var::Slot)
+        newst[changeid] = changes.vtype
+        # remove any Conditional for this Slot from the vtable
+        # (unless this change is came from the conditional)
+        if !changes.conditional
+            for i = 1:length(newst)
+                newtype = newst[i]
+                if isa(newtype, VarState)
+                    newtypetyp = ignorelimited(newtype.typ)
+                    if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
+                        newtypetyp = widenwrappedconditional(newtype.typ)
+                        newst[i] = VarState(newtypetyp, newtype.undef)
+                    end
                 end
             end
         end
@@ -341,8 +343,11 @@ function stupdate!(state::Nothing, changes::StateUpdate)
 end
 
 function stupdate!(state::VarTable, changes::StateUpdate)
+    if !isa(changes.var, Slot)
+        return stupdate!(state, changes.state)
+    end
     newstate = nothing
-    changeid = slot_id(changes.var)
+    changeid = slot_id(changes.var::Slot)
     for i = 1:length(state)
         if i == changeid
             newtype = changes.vtype
@@ -350,7 +355,7 @@ function stupdate!(state::VarTable, changes::StateUpdate)
             newtype = changes.state[i]
         end
         oldtype = state[i]
-        # remove any Conditional for this slot from the vtable
+        # remove any Conditional for this Slot from the vtable
         # (unless this change is came from the conditional)
         if !changes.conditional && isa(newtype, VarState)
             newtypetyp = ignorelimited(newtype.typ)
@@ -385,8 +390,11 @@ stupdate!(state::Nothing, changes::VarTable) = copy(changes)
 stupdate!(state::Nothing, changes::Nothing) = nothing
 
 function stupdate1!(state::VarTable, change::StateUpdate)
-    changeid = slot_id(change.var)
-    # remove any Conditional for this slot from the catch block vtable
+    if !isa(change.var, Slot)
+        return false
+    end
+    changeid = slot_id(change.var::Slot)
+    # remove any Conditional for this Slot from the catch block vtable
     # (unless this change is came from the conditional)
     if !change.conditional
         for i = 1:length(state)

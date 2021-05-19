@@ -202,9 +202,8 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         const uint8_t *ov = (const uint8_t*)ptr + offs;
         if (jl_is_uniontype(ft)) {
             // compute the same type layout as julia_struct_to_llvm
-            size_t fsz = 0, al = 0;
-            (void)jl_islayout_inline(ft, &fsz, &al);
-            fsz = jl_field_size(bt, i);
+            size_t fsz = jl_field_size(bt, i);
+            size_t al = jl_field_align(bt, i);
             uint8_t sel = ((const uint8_t*)ptr)[offs + fsz - 1];
             jl_value_t *active_ty = jl_nth_union_component(ft, sel);
             size_t active_sz = jl_datatype_size(active_ty);
