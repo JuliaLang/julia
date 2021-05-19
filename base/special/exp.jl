@@ -70,11 +70,11 @@ LogB(::Val{10}, ::Type{Float16}) = -0.30103f0
 
 # Hardcoded version of of Paterson-Stockmayer for polys of degree 8
 @inline function evalpoly_ps8(x,c)
-    xx = x * x   # x^2
+    xx = x * x    # x^2
     xxx = xx * x  # x^3
-    X_987 = muladd(c[9], xx, muladd(c[8], x, c[7]))
-    X_654 = muladd(xx, c[6], muladd(c[5], x, c[4]))
-    Y_1 = muladd(c[3], xx, muladd(c[2], x, c[1]))
+    X_987 = muladd(c[9], xx, muladd(c[8], x, c[7])) # c[7]+c[8]*x+c[9]*x^2
+    X_654 = muladd(xx, c[6], muladd(c[5], x, c[4])) # c[4]+c[5]*x+c[6]*x^2
+    Y_1 = muladd(c[3], xx, muladd(c[2], x, c[1]))   # c[1]+c[2]*x+c[3]*x^2
     Y = muladd(xxx, muladd(xxx, X_987, X_654), Y_1)
     return Y
 end
