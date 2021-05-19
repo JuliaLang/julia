@@ -2711,6 +2711,9 @@ end
 @test :([1 2 ;;
          3 4 ; 2 3 4 5]) == :([1 2 3 4 ; 2 3 4 5])
 
+Meta.parse("[1;\n]") == Expr(:vect, 1) # ensure line breaks following semicolons are treated correctly
+Meta.parse("[1;\n\n]") == Expr(:vect, 1) # ensure line breaks following semicolons are treated correctly
+
 # issue #25652
 x25652 = 1
 x25652_2 = let (x25652, _) = (x25652, nothing)
