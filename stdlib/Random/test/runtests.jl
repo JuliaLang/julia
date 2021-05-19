@@ -308,7 +308,7 @@ end
 
 # test all rand APIs
 for rng in ([], [MersenneTwister(0)], [RandomDevice()])
-    ftypes = [Float16, Float32, Float64]
+    ftypes = [Float16, Float32, Float64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
     types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
     randset = Set(rand(Int, 20))
@@ -412,8 +412,6 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         @test_throws MethodError r(Bool)
         @test_throws MethodError r(String)
         @test_throws MethodError r(AbstractFloat)
-        # TODO(#17627): Consider adding support for randn(BigFloat) and removing this test.
-        @test_throws MethodError r(BigFloat)
 
         @test_throws MethodError r(Int64, (2,3))
         @test_throws MethodError r(String, 1)
