@@ -67,6 +67,19 @@ LogB(::Val{2}, ::Type{Float16}) = -1.0f0
 LogB(::Val{:ℯ}, ::Type{Float16}) = -0.6931472f0
 LogB(::Val{10}, ::Type{Float16}) = -0.30103f0
 
+
+# Hardcoded version of of Paterson-Stockmayer for polys of degree 8
+@inline function evalpoly_ps8(x,c)
+    xx = x * x   # x^2
+    xxx = xx * x  # x^3
+    X_987 = muladd(c[9], xx, muladd(c[8], x, c[7]))
+    X_654 = muladd(xx, c[6], muladd(c[5], x, c[4]))
+    Y_1 = muladd(c[3], xx, muladd(c[2], x, c[1]))
+    Y = muladd(xxx, muladd(xxx, X_987, X_654), Y_1)
+    return Y
+end
+
+
 # Range reduced kernels
 @inline function expm1b_kernel(::Val{2}, x::Float64)
     return x * evalpoly(x, (0.6931471805599393, 0.24022650695910058,
@@ -83,17 +96,17 @@ end
 end
 
 @inline function expb_kernel(::Val{2}, x::Float32)
-    return evalpoly(x, (1.0f0, 0.6931472f0, 0.2402265f0,
-                        0.05550411f0, 0.009618025f0,
-                        0.0013333423f0, 0.00015469732f0, 1.5316464f-5))
+    return evalpoly_ps8(x, (1.0f0, 0.6931472f0, 0.2402265f0,
+                            0.05550411f0, 0.009618025f0,
+                            0.0013333423f0, 0.00015469732f0, 1.5316464f-5))
 end
 @inline function expb_kernel(::Val{:ℯ}, x::Float32)
-    return evalpoly(x, (1.0f0, 1.0f0, 0.5f0, 0.16666667f0,
+    return evalpoly_ps8(x, (1.0f0, 1.0f0, 0.5f0, 0.16666667f0,
                         0.041666217f0, 0.008333249f0,
                         0.001394858f0, 0.00019924171f0))
 end
 @inline function expb_kernel(::Val{10}, x::Float32)
-    return evalpoly(x, (1.0f0, 2.3025851f0, 2.650949f0,
+    return evalpoly_ps8(x, (1.0f0, 2.3025851f0, 2.650949f0,
                         2.0346787f0, 1.1712426f0, 0.53937745f0,
                         0.20788547f0, 0.06837386f0))
 end
@@ -380,9 +393,9 @@ function expm1_small(x::Float32)
     return fma(x, p2[1], x*p2[2])
 end
 @inline function expm1_small(x::Float64)
-    p = evalpoly(x, (0.16666666666666632, 0.04166666666666556, 0.008333333333401227,
-                     0.001388888889068783, 0.00019841269447671544, 2.480157691845342e-5,
-                     2.7558212415361945e-6, 2.758218402815439e-7, 2.4360682937111612e-8))
+    p = evalpoly_ps8(x, (0.16666666666666632, 0.04166666666666556, 0.008333333333401227,
+                         0.001388888889068783, 0.00019841269447671544, 2.480157691845342e-5,
+                         2.7558212415361945e-6, 2.758218402815439e-7, 2.4360682937111612e-8))
     p2 = exthorner(x, (1.0, .5, p))
     return fma(x, p2[1], x*p2[2])
 end
