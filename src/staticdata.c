@@ -317,11 +317,21 @@ static void *jl_sysimg_handle = NULL;
 static uint64_t sysimage_base = 0;
 static uintptr_t *sysimg_gvars_base = NULL;
 static const int32_t *sysimg_gvars_offsets = NULL;
+static uint64_t sysimg_gvars_max = 0;
 static jl_sysimg_fptrs_t sysimg_fptrs;
 
-static inline uintptr_t *sysimg_gvars(uintptr_t *base, size_t idx)
+static inline uintptr_t *sysimg_gvars(size_t idx)
 {
-    return base + sysimg_gvars_offsets[idx] / sizeof(base[0]);
+    if (!sysimg_gvars_offsets)
+        return ((uintptr_t **)sysimg_gvars_base)[idx];
+    return sysimg_gvars_base + sysimg_gvars_offsets[idx] / sizeof(sysimg_gvars_base[0]);
+}
+
+void jl_foreach_sysimg_gvar_slot(void (*fptr)(void *, void *, jl_value_t **), void *ctx1, void *ctx2)
+{
+    for (int i = 0; i < sysimg_gvars_max; ++i) {
+        fptr(ctx1, ctx2, (jl_value_t**)sysimg_gvars(i));
+    }
 }
 
 JL_DLLEXPORT int jl_running_on_valgrind(void)
@@ -332,17 +342,25 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 static void jl_load_sysimg_so(void)
 {
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
+    int sysimg_chained = jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED;
+    const char *fname = NULL;
     // in --build mode only use sysimg data, not precompiled native code
-    if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
-        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base", (void **)&sysimg_gvars_base, 1);
-        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 1);
-        sysimg_gvars_offsets += 1;
-        assert(sysimg_fptrs.base);
+    if (sysimg_chained ||
+        (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES)) {
+        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 0);
+        if (sysimg_gvars_offsets) {
+            jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base", (void **)&sysimg_gvars_base, 1);
+            sysimg_gvars_offsets += 1;
+            assert(sysimg_fptrs.base);
+        } else {
+            jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars", (void **)&sysimg_gvars_base, 1);
+            assert(sysimg_fptrs.values);
+        }
         uintptr_t *tls_getter_slot;
         jl_dlsym(jl_sysimg_handle, "jl_get_ptls_states_slot", (void **)&tls_getter_slot, 1);
         *tls_getter_slot = (uintptr_t)jl_get_ptls_states_getter();
         size_t *tls_offset_idx;
-        jl_dlsym(jl_sysimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
+        jl_dlsym(jl_sysimg_handle, "jl_sysimg_tls_offset", (void **)&tls_offset_idx, 1);
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 
 #ifdef _OS_WINDOWS_
@@ -351,6 +369,7 @@ static void jl_load_sysimg_so(void)
         Dl_info dlinfo;
         if (dladdr((void*)sysimg_gvars_base, &dlinfo) != 0) {
             sysimage_base = (intptr_t)dlinfo.dli_fbase;
+            fname = dlinfo.dli_fname;
         }
         else {
             sysimage_base = 0;
@@ -365,6 +384,10 @@ static void jl_load_sysimg_so(void)
     size_t *plen;
     jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
     jl_restore_system_image_data(sysimg_data, *plen);
+
+    if (jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED && fname) {
+        jl_init_sysimage_chaining((void*)sysimage_base, fname);
+    }
 }
 
 
@@ -960,6 +983,9 @@ static void jl_write_values(jl_serializer_state *s)
                                 else if (invokeptr_id == -2) {
                                     fptr_id = JL_API_WITH_PARAMETERS;
                                 }
+                                else if (invokeptr_id == -3) {
+                                    fptr_id = JL_API_CONST;
+                                }
                                 else {
                                     assert(invokeptr_id > 0);
                                     ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
@@ -1172,11 +1198,11 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
     case FunctionRef:
         switch ((jl_callingconv_t)offset) {
         case JL_API_BOXED:
-            if (sysimg_fptrs.base)
+            if (sysimg_fptrs.base || sysimg_fptrs.values)
                 return (uintptr_t)jl_fptr_args;
             JL_FALLTHROUGH;
         case JL_API_WITH_PARAMETERS:
-            if (sysimg_fptrs.base)
+            if (sysimg_fptrs.base || sysimg_fptrs.values)
                 return (uintptr_t)jl_fptr_sparam;
             return (uintptr_t)NULL;
         case JL_API_CONST:
@@ -1286,9 +1312,8 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
 {
     jl_sysimg_fptrs_t fvars = sysimg_fptrs;
     // make these NULL now so we skip trying to restore GlobalVariable pointers later
-    sysimg_gvars_base = NULL;
     sysimg_fptrs.base = NULL;
-    if (fvars.base == NULL)
+    if (fvars.base == NULL && fvars.values == NULL)
         return;
     int sysimg_fvars_max = s->fptr_record->size / sizeof(void*);
     size_t i;
@@ -1311,16 +1336,21 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             assert(jl_is_method(codeinst->def->def.method) && codeinst->invoke != jl_fptr_const_return);
             assert(specfunc ? codeinst->invoke != NULL : codeinst->invoke == NULL);
             linfos[i] = codeinst->def;
-            int32_t offset = fvars.offsets[i];
-            for (; clone_idx < fvars.nclones; clone_idx++) {
-                uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
-                if (idx < i)
-                    continue;
-                if (idx == i)
-                    offset = fvars.clone_offsets[clone_idx];
-                break;
+            void *fptr = NULL;
+            if (fvars.offsets) {
+                int32_t offset = fvars.offsets[i];
+                for (; clone_idx < fvars.nclones; clone_idx++) {
+                    uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
+                    if (idx < i)
+                        continue;
+                    if (idx == i)
+                        offset = fvars.clone_offsets[clone_idx];
+                    break;
+                }
+                fptr = (void*)(base + offset);
+            } else {
+                fptr = (void*)fvars.values[i];
             }
-            void *fptr = (void*)(base + offset);
             if (specfunc) {
                 codeinst->specptr.fptr = fptr;
                 codeinst->isspecsig = 1; // TODO: set only if confirmed to be true
@@ -1347,10 +1377,11 @@ static void jl_update_all_gvars(jl_serializer_state *s)
         uint32_t offset = load_uint32(&gvars);
         if (offset) {
             uintptr_t v = get_item_for_reloc(s, base, size, offset);
-            *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
+            *sysimg_gvars(gvname_index) = v;
         }
         gvname_index += 1;
     }
+    sysimg_gvars_max = gvname_index;
 }
 
 

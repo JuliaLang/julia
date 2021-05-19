@@ -463,6 +463,14 @@ function __init__()
     nothing
 end
 
+function __init_build()
+    reinit_stdio()
+    Sys.__init_build()
+    init_depot_path()
+    init_load_path()
+    init_active_project()
+end
+
 end
 
 end # baremodule Base

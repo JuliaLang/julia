@@ -12,7 +12,9 @@ extern const char jl_crtdll_basename[];
 // somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 {
-    return prepare_global_in(M, jlRTLD_DEFAULT_var);
+    GlobalVariable *var = prepare_global_in(M, jlRTLD_DEFAULT_var);
+    var->setSection(JL_SYSIMG_LINK_SECTION);
+    return var;
 }
 
 // Find or create the GVs for the library and symbol lookup.
