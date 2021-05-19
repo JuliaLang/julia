@@ -1,0 +1,28 @@
+steps:
+  - label: "analyzegc"
+    commands:
+      - echo "--- Install apt-get pre-reqs"
+      - apt-get update
+      - apt-get install -y build-essential libatomic1 python python3 gfortran perl wget m4 cmake pkg-config curl
+      - echo "--- Install in-tree LLVM dependencies"
+      - make -j 6 -C deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
+      - echo "+++ run clangsa/analyzegc"
+      - make -j 6 -C test/clangsa
+      - make -j 6 -C src analyzegc
+    agents:
+      queue: "juliacpu" # this should be julia -- also in pipeline settings
+      # os: linux # tag missing for juliacpu queue
+    timeout_in_minutes: 60
+  - label: "llvmpasses"
+    commands:
+      - echo "--- Install apt-get pre-reqs"
+      - apt-get update
+      - apt-get install -y build-essential libatomic1 python python3 gfortran perl wget m4 cmake pkg-config curl
+      - echo "+++ run llvmpasses"
+      - make -j 6 release
+      - make -j 6 -C src install-analysis-deps
+      - make -j 6 -C test/llvmpasses
+    agents:
+      queue: "juliacpu" # this should be julia -- also in pipeline settings
+      # os: linux # tag missing for juliacpu queue
+    timeout_in_minutes: 60
