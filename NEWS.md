@@ -11,7 +11,7 @@ New language features
   as `.&&` and `.||`. ([#39594])
 * `⫪` (U+2AEA, `\Top`, `\downvDash`) and `⫫` (U+2AEB, `\Bot`, `\upvDash`, `\indep`)
   may now be used as binary operators with comparison precedence. ([#39403])
-* Repeated semicolons may now be used in array concatenation literals to describe dimension breaks,
+* Repeated semicolons may now be used inside array literals to separate dimensions of an array,
   with the number of semicolons specifying the particular dimension. Just as the single semicolon
   in `[A; B]` has always described concatenating along the first dimension (vertically), now two
   semicolons `[A;; B]` do so in the second dimension (horizontally), three semicolons `;;;` in the
