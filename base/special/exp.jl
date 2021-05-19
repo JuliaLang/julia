@@ -435,7 +435,7 @@ end
     return Float32(muladd(twopk, small_part, twopk-1.0))
 end
 
-@inline function Base.expm1(x::Float16)
+@inline function expm1(x::Float16)
     x > MAX_EXP(Float16) && return Inf16
     x < MIN_EXP(Float16) && return -one(Float16)
     x = Float32(x)

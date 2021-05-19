@@ -288,6 +288,13 @@ end
             @test tanh(T(Inf)) === T(1)
         end
     end
+    @testset "Float16 expm1" begin
+        T=Float16
+        @test isequal(expm1(T(0)), T(0))
+        @test isequal(expm1(floatmin(T)), -one(T))
+        @test isequal(expm1(floatmax(T)), T(Inf))
+        @test expm1(T(1)) ≈ T(ℯ)-1 atol=2*eps(T)
+    end
 end
 
 @testset "exp function" for T in (Float64, Float32)
