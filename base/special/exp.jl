@@ -102,13 +102,13 @@ end
 end
 @inline function expb_kernel(::Val{:ℯ}, x::Float32)
     return evalpoly_ps8(x, (1.0f0, 1.0f0, 0.5f0, 0.16666667f0,
-                        0.041666217f0, 0.008333249f0,
-                        0.001394858f0, 0.00019924171f0))
+                            0.041666217f0, 0.008333249f0,
+                            0.001394858f0, 0.00019924171f0))
 end
 @inline function expb_kernel(::Val{10}, x::Float32)
     return evalpoly_ps8(x, (1.0f0, 2.3025851f0, 2.650949f0,
-                        2.0346787f0, 1.1712426f0, 0.53937745f0,
-                        0.20788547f0, 0.06837386f0))
+                            2.0346787f0, 1.1712426f0, 0.53937745f0,
+                            0.20788547f0, 0.06837386f0))
 end
 
 # Table stores data with 60 sig figs by using the fact that the first 12 bits of all the
