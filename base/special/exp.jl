@@ -393,7 +393,6 @@ end
 
 @inline function expm1(x::Float64)
     T = Float64
-    x < MIN_EXP(T) && return -1.0
     if -0.2876820724517809 <= x <= 0.22314355131420976
         return expm1_small(x)
     elseif !(abs(x)<=MIN_EXP(Float64))
