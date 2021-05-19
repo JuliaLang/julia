@@ -1098,6 +1098,13 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
                 ((!jl_is_kind(p) && ((jl_datatype_t*)p)->isconcretetype) ||
                  (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars));
         }
+        if (istuple && dt->has_concrete_subtype) {
+            if (jl_is_vararg(p))
+                p = ((jl_vararg_t*)p)->T;
+            // tuple types like Tuple{:x} cannot have instances
+            if (p && !jl_is_type(p) && !jl_is_typevar(p))
+                dt->has_concrete_subtype = 0;
+        }
     }
     if (dt->name == jl_type_typename)
         cacheable = 0; // the cache for Type ignores parameter normalization, so it can't be used as a regular hash

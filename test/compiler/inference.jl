@@ -3310,3 +3310,6 @@ g39915(a_tuple) = f33915(a_tuple, (true, false, true, false))
 @test Base.return_types() do
     g39915((1, 1.0, "a", :a))
 end |> first === Tuple{Int, String}
+
+# issue #40742
+@test Base.return_types(string, (Vector{Tuple{:x}},)) == Any[String]
