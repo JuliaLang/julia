@@ -99,6 +99,7 @@ end
     #getindex(c::Char) = c
     for x in testarrays
         @test getindex(x) == x
+        @test getindex(x, CartesianIndex()) == x
     end
 
     #first(c::Char) = c
