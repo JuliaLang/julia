@@ -21,6 +21,20 @@ g = Float16(1.)
     @test isequal(Float16(0.0), Float16(0.0))
     @test !isequal(Float16(-0.0), Float16(0.0))
     @test !isequal(Float16(0.0), Float16(-0.0))
+
+    for T = Base.BitInteger_types
+        @test -Inf16 < typemin(T)
+        @test -Inf16 <= typemin(T)
+        @test typemin(T) > -Inf16
+        @test typemin(T) >= -Inf16
+        @test typemin(T) != -Inf16
+
+        @test Inf16 > typemax(T)
+        @test Inf16 >= typemax(T)
+        @test typemax(T) < Inf16
+        @test typemax(T) <= Inf16
+        @test typemax(T) != Inf16
+    end
 end
 
 @testset "convert" begin
