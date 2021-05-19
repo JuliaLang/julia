@@ -1879,6 +1879,15 @@
           (collapse-level (1- n) lnew (1+ i)))
         l))
   (define (parse-array-inner s a is-row-first semicolon-count max-level closer gotnewline gotlinesep)
+    (define (process-semicolon next)
+      (set! semicolon-count (1+ semicolon-count))
+      (set! max-level (max max-level semicolon-count))
+      (if (and (null? is-row-first) (= semicolon-count 2) (not (eqv? next #\;)))
+          ; finding ;; that isn't a row-separator makes it column-first
+          (set! is-row-first #f))
+      (set! a (collapse-level 1 a semicolon-count))
+      (if (not (eqv? next #\;))
+          (set! a (ncons '() semicolon-count a)))) ; restore empty lists for lower dims
     (let ((t (if (or gotnewline (eqv? (peek-token s) #\newline))
                  #\newline
                  (require-token s))))
@@ -1886,6 +1895,7 @@
           (begin
             (take-token s)
             (set! a (collapse-level (- max-level semicolon-count) a (1+ semicolon-count)))
+            (error (string a))
             (cond ((= max-level 0)
                    (if (length= (car a) 1)
                        (fix 'vect (car a))
@@ -1895,42 +1905,34 @@
                   (else
                    (fixcat 'ncat max-level (car a)))))
       (case t
-        ((#\; #\newline)
+        ((#\newline)
          (or gotnewline (take-token s))
          (let ((next (peek-token s)))
-           (if (and (eqv? t #\newline)
-                    (or (memv next (list #\newline #\; 'for closer))
-                        (> semicolon-count 0)))
-               ; ignore linebreaks that are preceded by a semicolon, another linebreak, part of a comprehension, or followed by a closer
-               (begin
-                 (if (not (memv next (list closer #\newline)))
-                     (set! a (ncons '() semicolon-count a))) ; restore empty lists for lower dims
-                 (parse-array-inner s a is-row-first semicolon-count max-level closer #f gotlinesep))
-               (begin
-                 (set! semicolon-count (1+ semicolon-count))
-                 (let ((is-line-sep
-                        (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 2))
-                            (cond ((eqv? next #\newline) #t) ; [a b ;;<newline>...
-                                  ((not (or (eof-object? next) (eqv? next #\;))) ; [a b ;;...
-                                   (error "cannot mix space and ;; separators in an array expression, except to wrap a line"))
-                                  (else #f)) ; [a b ;;<eof> for REPL,  [a ;;...
-                            #f))) ; [a ; b ;; c ; d...
-                   (if is-line-sep
-                       (begin
-                         (set! a (unfixrow a))
-                         (set! max-level
-                               (if (null? (cdr a))
-                                   0 ; no prior single semicolon
-                                   max-level)))
-                       (begin
-                         (set! max-level (max max-level semicolon-count))
-                         (if (and (null? is-row-first) (= semicolon-count 2) (not (eqv? next #\;)))
-                             ; finding ;; that isn't a row-separator makes it column-first
-                             (set! is-row-first #f))
-                         (set! a (collapse-level 1 a semicolon-count))
-                         (if (not (memv next (list #\; closer #\newline)))
-                             (set! a (ncons '() semicolon-count a))))) ; restore empty lists for lower dims
-                 (parse-array-inner s a is-row-first semicolon-count max-level closer #f is-line-sep))))))
+           (if (eqv? next #\;)
+               (error "unexpected semicolon after line break in an array expression"))
+           (if (and (= semicolon-count 0) (not (memv next (list 'for closer #\newline))))
+               ; treat a linebreak prior to a value as a semicolon if no previous semicolons observed
+                (process-semicolon next))
+           (parse-array-inner s a is-row-first semicolon-count max-level closer #f gotlinesep)))
+        ((#\;)
+         (or gotnewline (take-token s))
+         (let ((next (peek-token s)))
+           (let ((is-line-sep
+                 (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 1))
+                     (cond ((eqv? next #\newline) #t) ; [a b ;;<newline>...
+                           ((not (or (eof-object? next) (eqv? next #\;))) ; [a b ;;...
+                             (error "cannot mix space and ;; separators in an array expression, except to wrap a line"))
+                           (else #f)) ; [a b ;;<eof> for REPL,  [a ;;...
+                     #f))) ; [a ; b ;; c ; d...
+             (if is-line-sep
+                 (begin
+                   (set! a (unfixrow a))
+                   (set! max-level
+                         (if (null? (cdr a))
+                             0 ; no prior single semicolon
+                             max-level)))
+                 (process-semicolon next))
+           (parse-array-inner s a is-row-first semicolon-count max-level closer #f is-line-sep))))
         ((#\,)
          (error "unexpected comma in matrix expression"))
         ((#\] #\})
@@ -1945,10 +1947,11 @@
              (error "invalid comprehension syntax")))
         (else
          (if (and (not gotlinesep) (pair? (car a)) (not (ts:space? s)))
-             (error (string "expected \"" closer "\" or separator in arguments to \""
-                            (if (eqv? closer #\]) #\[ #\{) " " closer
-                            "\"; got \""
-                            (deparse (caar a)) t "\"")))
+             (error (string a " " gotlinesep " " (peek-token s))))
+            ;  (error (string "expected \"" closer "\" or separator in arguments to \""
+            ;                 (if (eqv? closer #\]) #\[ #\{) " " closer
+            ;                 "\"; got \""
+            ;                 (deparse (caar a)) t "\"")))
          (let ((u (parse-eq* s)))
            (set! a (cons (cons u (car a)) (cdr a)))
            (if (= (length (car a)) 2)
@@ -1956,7 +1959,7 @@
                (if (null? is-row-first)
                    (set! is-row-first #t)
                    (if (not is-row-first)
-                       (error "cannot mix space and ;; separators in an array expression, except to wrap a line")))))
+                       (error "cannot mix space and \";;\" separators in an array expression, except to wrap a line")))))
          (parse-array-inner s a is-row-first 0 max-level closer #f #f))))))
   ;; if a [ ] expression is a cat expression, `end` is not special
   (with-bindings ((end-symbol last-end-symbol))
