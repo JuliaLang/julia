@@ -1901,8 +1901,11 @@
            (if (and (eqv? t #\newline)
                     (or (memv next (list #\newline #\; 'for closer))
                         (> semicolon-count 0)))
-               ; treat line breaks not prior to a comprehension as a semicolon if semicolons absent
-               (parse-array-inner s a is-row-first semicolon-count max-level closer #f gotlinesep)
+               ; ignore linebreaks that are preceded by a semicolon, another linebreak, part of a comprehension, or followed by a closer
+               (begin
+                 (if (not (memv next (list closer #\newline)))
+                     (set! a (ncons '() semicolon-count a))) ; restore empty lists for lower dims
+                 (parse-array-inner s a is-row-first semicolon-count max-level closer #f gotlinesep))
                (begin
                  (set! semicolon-count (1+ semicolon-count))
                  (let ((is-line-sep
@@ -1925,7 +1928,7 @@
                              ; finding ;; that isn't a row-separator makes it column-first
                              (set! is-row-first #f))
                          (set! a (collapse-level 1 a semicolon-count))
-                         (if (not (memv next (list #\; closer)))
+                         (if (not (memv next (list #\; closer #\newline)))
                              (set! a (ncons '() semicolon-count a))))) ; restore empty lists for lower dims
                  (parse-array-inner s a is-row-first semicolon-count max-level closer #f is-line-sep))))))
         ((#\,)
