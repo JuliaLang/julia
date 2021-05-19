@@ -31,7 +31,10 @@ end
 
 UInt128(u::UUID) = u.value
 
-hash(uuid::UUID, h::UInt) = hash(0x2e9d5a7e9fca58d3, hash(convert(NTuple{2, UInt64}, uuid), h))
+let
+    uuid_hash_seed = UInt === UInt64 ? 0xd06fa04f86f11b53 : 0x96a1f36d
+    hash(uuid::UUID, h::UInt) = hash(uuid_hash_seed, hash(convert(NTuple{2, UInt64}, uuid), h))
+end
 
 let
 @inline function uuid_kernel(s, i, u)
