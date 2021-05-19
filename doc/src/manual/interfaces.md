@@ -479,7 +479,7 @@ they are iterable collections of their characters (see [Strings](@ref) for more)
 The next two steps (selecting the output array and implementation) are dependent upon
 determining a single answer for a given set of arguments. Broadcast must take all the varied
 types of its arguments and collapse them down to just one output array and one
-implementation. Broadcast calls this single answer a "style." Every broadcastable object
+implementation. Broadcast calls this single answer a "style". Every broadcastable object
 each has its own preferred style, and a promotion-like system is used to combine these
 styles into a single answer — the "destination style".
 
@@ -549,7 +549,7 @@ Base.showarg(io::IO, A::ArrayAndChar, toplevel) = print(io, typeof(A), " with ch
 
 ```
 
-You might want broadcasting to preserve the `char` "metadata." First we define
+You might want broadcasting to preserve the `char` "metadata". First we define
 
 ```jldoctest ArrayAndChar; output = false
 Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()
