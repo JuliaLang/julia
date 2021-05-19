@@ -1851,7 +1851,7 @@
          (take-token s))
      `(comprehension ,gen))))
 
-(define (parse-matrix s first closer gotnewline last-end-symbol)
+(define (parse-array s first closer gotnewline last-end-symbol)
   (define (fix head v)
     (cons head (reverse v)))
   (define (unfixrow l)
@@ -1878,7 +1878,7 @@
                          (cons (cons lhfix (cadr l)) (cddr l)))))
           (collapse-level (1- n) lnew (1+ i)))
         l))
-  (define (parse-matrix-inner s a is-row-first semicolon-count max-level closer gotnewline gotlinesep)
+  (define (parse-array-inner s a is-row-first semicolon-count max-level closer gotnewline gotlinesep)
     (let ((t (if (or gotnewline (eqv? (peek-token s) #\newline))
                  #\newline
                  (require-token s))))
@@ -1902,7 +1902,7 @@
                     (or (memv next (list #\newline #\; 'for closer))
                         (> semicolon-count 0)))
                ; treat line breaks not prior to a comprehension as a semicolon if semicolons absent
-               (parse-matrix-inner s a is-row-first semicolon-count max-level closer #f gotlinesep)
+               (parse-array-inner s a is-row-first semicolon-count max-level closer #f gotlinesep)
                (begin
                  (set! semicolon-count (1+ semicolon-count))
                  (let ((is-line-sep
@@ -1927,7 +1927,7 @@
                          (set! a (collapse-level 1 a semicolon-count))
                          (if (not (memv next (list #\; closer)))
                              (set! a (ncons '() semicolon-count a))))) ; restore empty lists for lower dims
-                 (parse-matrix-inner s a is-row-first semicolon-count max-level closer #f is-line-sep))))))
+                 (parse-array-inner s a is-row-first semicolon-count max-level closer #f is-line-sep))))))
         ((#\,)
          (error "unexpected comma in matrix expression"))
         ((#\] #\})
@@ -1954,10 +1954,10 @@
                    (set! is-row-first #t)
                    (if (not is-row-first)
                        (error "cannot mix space and ;; separators in an array expression, except to wrap a line")))))
-         (parse-matrix-inner s a is-row-first 0 max-level closer #f #f))))))
+         (parse-array-inner s a is-row-first 0 max-level closer #f #f))))))
   ;; if a [ ] expression is a cat expression, `end` is not special
   (with-bindings ((end-symbol last-end-symbol))
-    (parse-matrix-inner s (list (list first)) '() 0 0 closer gotnewline #f)))
+    (parse-array-inner s (list (list first)) '() 0 0 closer gotnewline #f)))
 
 (define (expect-space-before s t)
   (if (not (ts:space? s))
@@ -1984,9 +1984,9 @@
                  (take-token s)
                  (if (memv (peek-token s) (list #\, closer))
                      (parse-vect s first closer)
-                     (parse-matrix s first closer #t last-end-symbol)))
+                     (parse-array s first closer #t last-end-symbol)))
                 (else
-                 (parse-matrix s first closer #f last-end-symbol)))))))
+                 (parse-array s first closer #f last-end-symbol)))))))
 
 (define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
 (define (=-to-kw e) (if (assignment? e) (cons 'kw (cdr e)) e))
