@@ -205,7 +205,7 @@ convert(::Type{Factorization{T}}, B::BunchKaufman) where {T} = convert(BunchKauf
 size(B::BunchKaufman) = size(getfield(B, :LD))
 size(B::BunchKaufman, d::Integer) = size(getfield(B, :LD), d)
 issymmetric(B::BunchKaufman) = B.symmetric
-ishermitian(B::BunchKaufman) = !B.symmetric
+ishermitian(B::BunchKaufman{T}) where T = T<:Real || !B.symmetric
 
 function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar, rook::Bool) where T
     require_one_based_indexing(v)
@@ -278,6 +278,14 @@ Base.propertynames(B::BunchKaufman, private::Bool=false) =
     (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
 
 issuccess(B::BunchKaufman) = B.info == 0
+
+function adjoint(B::BunchKaufman)
+    if ishermitian(B)
+        return B
+    else
+        throw(ArgumentError("adjoint not implemented for complex symmetric matrices"))
+    end
+end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)
     if issuccess(B)
