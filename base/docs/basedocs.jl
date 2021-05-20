@@ -2709,7 +2709,7 @@ QuoteNode
 >julia "Hello World!"
 "Hello World!"
 >julia "Hello World!\\n"
-"Hello World!\n"
+"Hello World!\\n"
 ```
 See also [\"""](@ref \"\"\").
 """
@@ -2723,9 +2723,9 @@ kw"\""
 
 ```jldoctest
 >julia \""" Hello World! \"""
-"Hello World!"
+" Hello World! "
 >julia \"""Contains "quote" characters\"""
-"Contains \"quote\" characters"
+"Contains \\"quote\\" characters"
 julia> \"""
            Hello,
            world.
