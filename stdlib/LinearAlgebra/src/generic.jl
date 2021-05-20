@@ -1559,12 +1559,7 @@ end
 det(x::Number) = x
 
 # Resolve Issue #40128
-function det(A::AbstractMatrix{BigInt})
-    m, n = size(A)
-    if m == n || throw(DimensionMismatch("matrix is not square: dimensions are $(size(A))"))
-        det_bareiss(A)
-    end
-end
+det(A::AbstractMatrix{BigInt}) = det_bareiss(A)
 
 """
     logabsdet(M)
@@ -1632,7 +1627,7 @@ exactdiv(a, b) = a/b
 exactdiv(a::Integer, b::Integer) = div(a, b)
 
 """
-    LinearAlgebra.det_bareiss!(M)
+    det_bareiss!(M)
 
 Calculates the determinant of a matrix using the
 [Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm) using
@@ -1650,13 +1645,14 @@ julia> LinearAlgebra.det_bareiss!(M)
 ```
 """
 function det_bareiss!(M)
-    n, sign, prev = size(M,1), Int8(1), one(eltype(M))
+    n = checksquare(M)
+    sign, prev = Int8(1), one(eltype(M))
     for i in 1:n-1
         if iszero(M[i,i]) # swap with another col to make nonzero
             swapto = findfirst(!iszero, @view M[i,i+1:end])
             isnothing(swapto) && return zero(prev)
             sign = -sign
-            Base.swapcols!(M, i, swapto)
+            Base.swapcols!(M, i, i + swapto)
         end
         for k in i+1:n, j in i+1:n
             M[j,k] = exactdiv(M[j,k]*M[i,i] - M[j,i]*M[i,k], prev)
