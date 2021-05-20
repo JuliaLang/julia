@@ -2286,3 +2286,14 @@ end
     s = sprint(show, MIME("text/plain"), Function)
     @test s == "Function"
 end
+
+@testset "printing inline n-dimensional arrays and one-column matrices" begin
+    @test replstr([Int[1 2 3 ;;; 4 5 6]]) == "1-element Vector{Array{$Int, 3}}:\n [1 2 3;;; 4 5 6]"
+    @test replstr([Int[1 2 3 ;;; 4 5 6;;;;]]) == "1-element Vector{Array{$Int, 4}}:\n [1 2 3;;; 4 5 6;;;;]"
+    @test replstr([fill(1, (20,20,20))]) == "1-element Vector{Array{$Int, 3}}:\n [1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; … ;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1]"
+    @test replstr([fill(1, 5, 1)]) == "1-element Vector{Matrix{$Int}}:\n [1; 1; … ; 1; 1;;]"
+    @test replstr([fill(1, 5, 2)]) == "1-element Vector{Matrix{$Int}}:\n [1 1; 1 1; … ; 1 1; 1 1]"
+    @test replstr([[1;]]) == "1-element Vector{Vector{$Int}}:\n [1]"
+    @test replstr([[1;;]]) == "1-element Vector{Matrix{$Int}}:\n [1;;]"
+    @test replstr([[1;;;]]) == "1-element Vector{Array{$Int, 3}}:\n [1;;;]"
+end

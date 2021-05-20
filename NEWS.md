@@ -11,6 +11,11 @@ New language features
   as `.&&` and `.||`. ([#39594])
 * `⫪` (U+2AEA, `\Top`, `\downvDash`) and `⫫` (U+2AEB, `\Bot`, `\upvDash`, `\indep`)
   may now be used as binary operators with comparison precedence. ([#39403])
+* Repeated semicolons may now be used inside array literals to separate dimensions of an array,
+  with the number of semicolons specifying the particular dimension. Just as the single semicolon
+  in `[A; B]` has always described concatenating along the first dimension (vertically), now two
+  semicolons `[A;; B]` do so in the second dimension (horizontally), three semicolons `;;;` in the
+  third, and so on. ([#33697])
 
 Language changes
 ----------------
@@ -148,7 +153,7 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
-- Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in a future release.
+- Multiple successive semicolons in an array expresion were previously ignored (e.g., `[1 ;; 2] == [1 ; 2]`). This is now being used to separate dimensions for array literals. (see **New language features**)
 
 
 External dependencies
