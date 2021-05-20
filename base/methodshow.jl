@@ -280,9 +280,9 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     modulecolordict = Dict{Module, Symbol}()
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(METHODLIST_MODULECOLORS))
     modulecolordict[parentmodule_before_main(modul)] = :blue
-    
+
     digit_align_width = length(string(max>0 ? max : length(ms)))
-    
+
     for meth in ms
         if max==-1 || n<max
             n += 1
