@@ -291,3 +291,6 @@ substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
+
+## ReshapedArrays may forward a mapped function to the parent
+map(f, R::ReshapedArray) = ReshapedArray(map(f, parent(R)), R.dims, R.mi)
