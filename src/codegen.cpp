@@ -7931,6 +7931,10 @@ extern "C" void jl_init_llvm(void)
     // to ensure compatibility with GCC codes
     options.StackAlignmentOverride = 16;
 #endif
+#ifdef JL_DEBUG_BUILD
+    // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
+    options.StackProtectorGuard = StackProtectorGuards::Global;
+#endif
     Triple TheTriple(sys::getProcessTriple());
 #if defined(FORCE_ELF)
     TheTriple.setObjectFormat(Triple::ELF);
