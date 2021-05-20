@@ -2933,6 +2933,10 @@ bitstring(B::BitArray) = sprint(bitshow, B)
 # printing OpaqueClosure
 function show(io::IO, oc::Core.OpaqueClosure)
     A, R = typeof(oc).parameters
+    name = oc.source.name
+    if name !== Symbol("opaque closure")
+        print(io, name)
+    end
     show_tuple_as_call(io, Symbol(""), A; hasfirst=false)
     print(io, "::", R)
     print(io, "->◌")
