@@ -2708,7 +2708,7 @@ QuoteNode
 
 >julia "Hello World!"
 "Hello World!"
->julia "Hello World!\n"
+>julia "Hello World!\\n"
 "Hello World!\n"
 ```
 See also [\"""](@ref \"\"\").
@@ -2730,7 +2730,7 @@ julia> \"""
            Hello,
            world.
          \"""
-"  Hello,\n  world.\n"
+"  Hello,\\n  world.\\n"
 ```
 See also ["](@ref \")
 """
