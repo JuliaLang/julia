@@ -172,9 +172,11 @@ of those methods are, use the [`methods`](@ref) function:
 
 ```jldoctest fofxy
 julia> methods(f)
-# 2 methods for generic function "f":
-[1] f(x::Float64, y::Float64) in Main at none:1
-[2] f(x::Number, y::Number) in Main at none:1
+# 2 methods for generic function "f" from Main:
+ [1] f(x::Float64, y::Float64)
+   @ none:1
+ [2] f(x::Number, y::Number)
+   @ none:1
 ```
 
 which shows that `f` has two methods, one taking two `Float64` arguments and one taking arguments
@@ -190,10 +192,14 @@ julia> f(x,y) = println("Whoa there, Nelly.")
 f (generic function with 3 methods)
 
 julia> methods(f)
-# 3 methods for generic function "f":
-[1] f(x::Float64, y::Float64) in Main at none:1
-[2] f(x::Number, y::Number) in Main at none:1
-[3] f(x, y) in Main at none:1
+# 3 methods for generic function "f" from Main:
+ [1] f(x::Float64, y::Float64)
+   @ none:1
+ [2] f(x::Number, y::Number)
+   @ none:1
+ [3] f(x::Any, y::Any)
+   @ none:1
+
 
 julia> f("foo", 1)
 Whoa there, Nelly.
@@ -211,26 +217,30 @@ of methods:
 
 ```julia-repl
 julia> methods(+)
-# 180 methods for generic function "+":
-[1] +(x::Bool, z::Complex{Bool}) in Base at complex.jl:227
-[2] +(x::Bool, y::Bool) in Base at bool.jl:89
-[3] +(x::Bool) in Base at bool.jl:86
-[4] +(x::Bool, y::T) where T<:AbstractFloat in Base at bool.jl:96
-[5] +(x::Bool, z::Complex) in Base at complex.jl:234
-[6] +(a::Float16, b::Float16) in Base at float.jl:373
-[7] +(x::Float32, y::Float32) in Base at float.jl:375
-[8] +(x::Float64, y::Float64) in Base at float.jl:376
-[9] +(z::Complex{Bool}, x::Bool) in Base at complex.jl:228
-[10] +(z::Complex{Bool}, x::Real) in Base at complex.jl:242
-[11] +(x::Char, y::Integer) in Base at char.jl:40
-[12] +(c::BigInt, x::BigFloat) in Base.MPFR at mpfr.jl:307
-[13] +(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) in Base.GMP at gmp.jl:392
-[14] +(a::BigInt, b::BigInt, c::BigInt, d::BigInt) in Base.GMP at gmp.jl:391
-[15] +(a::BigInt, b::BigInt, c::BigInt) in Base.GMP at gmp.jl:390
-[16] +(x::BigInt, y::BigInt) in Base.GMP at gmp.jl:361
-[17] +(x::BigInt, c::Union{UInt16, UInt32, UInt64, UInt8}) in Base.GMP at gmp.jl:398
+# 207 methods for generic function "+" from Base:
+   [1] +(x::T, y::T) where {T<:Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}}
+     @ int.jl:87
+   [2] +(c::Union{UInt16, UInt32, UInt64, UInt8}, x::BigInt)
+     @ Base.GMP gmp.jl:529
+   [3] +(c::Union{Int16, Int32, Int64, Int8}, x::BigInt)
+     @ Base.GMP gmp.jl:535
+   [4] +(c::Union{UInt16, UInt32, UInt64, UInt8}, x::BigFloat)
+     @ Base.MPFR mpfr.jl:376
+   [5] +(c::Union{Int16, Int32, Int64, Int8}, x::BigFloat)
+     @ Base.MPFR mpfr.jl:384
+   [6] +(c::Union{Float16, Float32, Float64}, x::BigFloat)
+     @ Base.MPFR mpfr.jl:392
+   [7] +(x::Union{Dates.CompoundPeriod, Dates.Period})
+     @ Dates /Users/me/.julia/dev/julia/usr/share/julia/stdlib/v1.7/Dates/src/periods.jl:372
+   [8] +(x::Rational, y::Integer)
+     @ rational.jl:310
+   [9] +(x::T, y::Integer) where {T<:AbstractChar}
+     @ char.jl:235
+  [10] +(Da::LinearAlgebra.Diagonal, Db::LinearAlgebra.Diagonal)
+     @ LinearAlgebra /Users/me/.julia/dev/julia/usr/share/julia/stdlib/v1.7/LinearAlgebra/src/diagonal.jl:172
 ...
-[180] +(a, b, c, xs...) in Base at operators.jl:424
+ [207] +(a::Any, b::Any, c::Any, xs::Any...)
+     @ operators.jl:653
 ```
 
 Multiple dispatch together with the flexible parametric type system give Julia its ability to
@@ -257,10 +267,13 @@ julia> g(2, 3.0)
 
 julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x::Float64, y) in Main at none:1
-  g(x, y::Float64) in Main at none:1
+  g(x::Float64, y::Any) @ Main REPL[3]:1
+  g(x::Any, y::Float64) @ Main REPL[4]:1
 Possible fix, define
   g(::Float64, ::Float64)
+Stacktrace:
+ [1] top-level scope
+   @ none:1
 ```
 
 Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
