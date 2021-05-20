@@ -220,4 +220,23 @@ Q factor:
  0.0  0.0  0.0  1.0"""
 end
 
+@testset "adjoint of LQ" begin
+    n = 5
+    B = ones(n, 2)
+
+    for b in (B[:, 1], B)
+        for A in (
+            randn(n, n),
+            # Tall problems become least squares problems similarly to QR
+            randn(n - 2, n),
+            complex.(randn(n, n), randn(n, n)))
+
+            F = lq(A)
+            @test A'\b ≈ F'\b
+        end
+        @test_throws DimensionMismatch lq(randn(n, n + 2))'\b
+    end
+
+end
+
 end # module TestLQ

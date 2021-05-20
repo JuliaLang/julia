@@ -103,6 +103,8 @@ function \(F::Factorization, B::AbstractVecOrMat)
     copyto!(BB, B)
     ldiv!(F, BB)
 end
+_rows(b::AbstractVector, r::AbstractVector) = b[r]
+_rows(B::AbstractVector, r::AbstractMatrix) = B[r, :]
 function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     F = adjF.parent
@@ -110,6 +112,10 @@ function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
     BB = similar(B, TFB, size(B))
     copyto!(BB, B)
     ldiv!(adjoint(F), BB)
+    # For tall problems, we compute a least sqaures solution so only part
+    # of the rhs should be returned from \ while ldiv! uses (and returns)
+    # the complete rhs
+    return (>)(size(adjF)...) ? _rows(BB, 1:size(adjF, 2)) : BB
 end
 
 function /(B::AbstractMatrix, F::Factorization)
