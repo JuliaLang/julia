@@ -65,10 +65,6 @@ struct InterpreterIP
     mod::Union{Module,Nothing}
 end
 
-struct ExceptionStack
-    stack::Array{Tuple{Any, Array{Union{Ptr{Nothing}, InterpreterIP}, 1}}, 1}
-end
-
 # convert dual arrays (raw bt buffer, array of GC managed values) to a single
 # array of locations
 function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
