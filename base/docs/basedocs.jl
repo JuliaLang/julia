@@ -2701,38 +2701,42 @@ QuoteNode
 
 """
     "
-" Is used to delimit string literals.
+`"` Is used to delimit string literals.
 
-#Examples
+# Examples
+
 ```jldoctest
-
->julia "Hello World!"
+julia> "Hello World!"
 "Hello World!"
->julia "Hello World!\\n"
+
+julia> "Hello World!\\n"
 "Hello World!\\n"
 ```
-See also [\"""](@ref \"\"\").
+
+See also [`\"""`](@ref \"\"\").
 """
 kw"\""
 
 """
     \"""
-\""" is used to delimit string literals. Strings created by triple quotation marks can contain " characters without escaping and are dedented to the level of the least-indented line. This is useful for defining strings within code that is indented.
+`\"""` is used to delimit string literals. Strings created by triple quotation marks can contain `"` characters without escaping and are dedented to the level of the least-indented line. This is useful for defining strings within code that is indented.
 
-#Examples
+# Examples
 
 ```jldoctest
->julia \""" Hello World! \"""
-" Hello World! "
->julia \"""Contains "quote" characters\"""
+julia> \"""Hello World!\"""
+"Hello World!"
+
+julia> \"""Contains "quote" characters\"""
 "Contains \\"quote\\" characters"
+
 julia> \"""
-           Hello,
-           world.
-         \"""
-"  Hello,\\n  world.\\n"
+         Hello,
+         world.\"""
+"Hello,\\nworld."
 ```
-See also ["](@ref \")
+
+See also [`"`](@ref \")
 """
 kw"\"\"\""
 
