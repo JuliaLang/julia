@@ -146,5 +146,5 @@ others.
 
 Supported IDEs include: [julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode) (VS
 Code plugin), [Juno](http://junolab.org/) (Atom plugin). [Jupyter](https://jupyter.org/)
-notebooks are available through the [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and 
+notebooks are available through the [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
 [Pluto](https://github.com/fonsp/Pluto.jl) notebooks through the Pluto.jl package.
