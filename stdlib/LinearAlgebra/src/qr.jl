@@ -248,7 +248,7 @@ end
 # LAPACK version
 qr!(A::StridedMatrix{<:BlasFloat}, ::NoPivot; blocksize=36) =
     QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), blocksize))...)
-qr!(A::StridedMatrix{<:BlasFloat}, ::ColNorm) = QRPivoted(LAPACK.geqp3!(A)...)
+qr!(A::StridedMatrix{<:BlasFloat}, ::ColumnNorm) = QRPivoted(LAPACK.geqp3!(A)...)
 
 # Generic fallbacks
 
@@ -293,10 +293,10 @@ Stacktrace:
 ```
 """
 qr!(A::AbstractMatrix, ::NoPivot) = qrfactUnblocked!(A)
-qr!(A::AbstractMatrix, ::ColNorm) = qrfactPivotedUnblocked!(A)
+qr!(A::AbstractMatrix, ::ColumnNorm) = qrfactPivotedUnblocked!(A)
 qr!(A::AbstractMatrix) = qr!(A, NoPivot())
 # TODO: Remove in Julia v2.0
-@deprecate qr!(A::AbstractMatrix, ::Val{true})  qr!(A, ColNorm())
+@deprecate qr!(A::AbstractMatrix, ::Val{true})  qr!(A, ColumnNorm())
 @deprecate qr!(A::AbstractMatrix, ::Val{false}) qr!(A, NoPivot())
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
@@ -313,7 +313,7 @@ A = Q R
 
 The returned object `F` stores the factorization in a packed format:
 
- - if `pivot == ColNorm()` then `F` is a [`QRPivoted`](@ref) object,
+ - if `pivot == ColumnNorm()` then `F` is a [`QRPivoted`](@ref) object,
 
  - otherwise if the element type of `A` is a BLAS type ([`Float32`](@ref), [`Float64`](@ref),
    `ComplexF32` or `ComplexF64`), then `F` is a [`QRCompactWY`](@ref) object,
@@ -387,7 +387,7 @@ function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
 end
 # TODO: remove in Julia v2.0
 @deprecate qr(A::AbstractMatrix, ::Val{false}; kwargs...) qr(A, NoPivot(); kwargs...)
-@deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, ColNorm(); kwargs...)
+@deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, ColumnNorm(); kwargs...)
 
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)

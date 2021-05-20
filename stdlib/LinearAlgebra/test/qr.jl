@@ -102,7 +102,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test Base.propertynames(qra)       == (:R, :Q)
             end
             @testset "(Automatic) Fat (pivoted) QR decomposition" begin
-                @inferred qr(a, ColNorm())
+                @inferred qr(a, ColumnNorm())
 
                 qrpa  = factorize(a[1:n1,:])
                 q,r = qrpa.Q, qrpa.R
@@ -254,7 +254,7 @@ end
     A = zeros(1, 2)
     B = zeros(1, 1)
     @test A \ B == zeros(2, 1)
-    @test qr(A, ColNorm()) \ B == zeros(2, 1)
+    @test qr(A, ColumnNorm()) \ B == zeros(2, 1)
 end
 
 @testset "Issue 24107" begin
@@ -276,7 +276,7 @@ end
     @test A \b ≈ ldiv!(c, qr(A ), b)
     @test b == b0
     c0 = copy(c)
-    @test Ac\c ≈ ldiv!(b, qr(Ac, ColNorm()), c)
+    @test Ac\c ≈ ldiv!(b, qr(Ac, ColumnNorm()), c)
     @test c0 == c
 end
 
@@ -293,7 +293,7 @@ end
 
 @testset "det(Q::Union{QRCompactWYQ, QRPackedQ})" begin
     # 40 is the number larger than the default block size 36 of QRCompactWY
-    @testset for n in [1:3; 40], m in [1:3; 40], pivot in (NoPivot(), ColNorm())
+    @testset for n in [1:3; 40], m in [1:3; 40], pivot in (NoPivot(), ColumnNorm())
         @testset "real" begin
             @testset for k in 0:min(n, m, 5)
                 A = cat(Array(I(k)), randn(n - k, m - k); dims=(1, 2))

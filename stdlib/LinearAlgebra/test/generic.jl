@@ -388,7 +388,7 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-    @test A*(lu(A, RowMax())\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
 end
 
 @testset "Issue 18742" begin

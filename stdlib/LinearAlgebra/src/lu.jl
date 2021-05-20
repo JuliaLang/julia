@@ -76,8 +76,8 @@ adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
 # StridedMatrix
-lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMax(); check=check)
-function lu!(A::StridedMatrix{T}, ::RowMax; check::Bool = true) where {T<:BlasFloat}
+lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
+function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
     lpt = LAPACK.getrf!(A)
     check && checknonsingular(lpt[3])
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
@@ -85,17 +85,17 @@ end
 function lu!(A::StridedMatrix{<:BlasFloat}, pivot::NoPivot; check::Bool = true)
     return generic_lufact!(A, pivot; check = check)
 end
-function lu!(A::HermOrSym, pivot::PivotingStrategy = RowMax(); check::Bool = true)
+function lu!(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
     copytri!(A.data, A.uplo, isa(A, Hermitian))
     lu!(A.data, pivot; check = check)
 end
 # for backward compatibility
 # TODO: remove towards Julia v2
-@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{true}; check::Bool = true) lu!(A, RowMax(); check=check)
+@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{true}; check::Bool = true) lu!(A, RowMaximum(); check=check)
 @deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{false}; check::Bool = true) lu!(A, NoPivot(); check=check)
 
 """
-    lu!(A, pivot = RowMax(); check = true) -> LU
+    lu!(A, pivot = RowMaximum(); check = true) -> LU
 
 `lu!` is the same as [`lu`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
@@ -131,17 +131,13 @@ Stacktrace:
 [...]
 ```
 """
-lu!(A::StridedMatrix, pivot::PivotingStrategy = RowMax(); check::Bool = true) =
+lu!(A::StridedMatrix, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
     generic_lufact!(A, pivot; check = check)
-function generic_lufact!(A::StridedMatrix{T}, pivot::PivotingStrategy = RowMax();
+function generic_lufact!(A::StridedMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum();
                          check::Bool = true) where {T}
     # Extract values
     m, n = size(A)
     minmn = min(m,n)
-
-    if pivot !== RowMax() && pivot !== NoPivot()
-        throw(ArgumentError("only `RowMax()` and `NoPivot()` are supported as `pivot` argument but you supplied `$pivot`"))
-    end
 
     # Initialize variables
     info = 0
@@ -150,7 +146,7 @@ function generic_lufact!(A::StridedMatrix{T}, pivot::PivotingStrategy = RowMax()
         for k = 1:minmn
             # find index max
             kp = k
-            if pivot === RowMax() && k < m
+            if pivot === RowMaximum() && k < m
                 amax = abs(A[k, k])
                 for i = k+1:m
                     absi = abs(A[i,k])
@@ -211,7 +207,7 @@ end
 
 # for all other types we must promote to a type which is stable under division
 """
-    lu(A, pivot = RowMax(); check = true) -> F::LU
+    lu(A, pivot = RowMaximum(); check = true) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -278,12 +274,12 @@ julia> l == F.L && u == F.U && p == F.p
 true
 ```
 """
-function lu(A::AbstractMatrix{T}, pivot::PivotingStrategy = RowMax(); check::Bool = true) where {T}
+function lu(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T}
     S = lutype(T)
     lu!(copy_oftype(A, S), pivot; check = check)
 end
 # TODO: remove for Julia v2.0
-@deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, RowMax(); check=check)
+@deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, RowMaximum(); check=check)
 @deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, NoPivot(); check=check)
 
 
@@ -495,13 +491,9 @@ inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 # Tridiagonal
 
 # See dgttrf.f
-function lu!(A::Tridiagonal{T,V}, pivot::PivotingStrategy = RowMax(); check::Bool = true) where {T,V}
+function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T,V}
     # Extract values
     n = size(A, 1)
-
-    if pivot !== RowMax() && pivot !== NoPivot()
-        throw(ArgumentError("only `RowMax()` and `NoPivot()` are supported as `pivot` argument but you supplied `$pivot`"))
-    end
 
     # Initialize variables
     info = 0
