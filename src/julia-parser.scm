@@ -1887,7 +1887,7 @@
           (set! is-row-first #f))
       (set! a (collapse-level 1 a semicolon-count)))
     (define (restore-lower-dim-lists next)
-      (if (not (memv next (list #\; 'for closer #\newline)))
+      (if (and (not gotlinesep) (not (memv next (list #\; 'for closer #\newline))))
           (set! a (ncons '() semicolon-count a))))
     (let ((t (if (or gotnewline (eqv? (peek-token s) #\newline))
                  #\newline
@@ -1910,7 +1910,8 @@
          (let ((next (peek-token s)))
            (if (eqv? next #\;)
                (error "unexpected semicolon after line break in an array expression"))
-           (if (and (= semicolon-count 0) (not (memv next (list 'for closer #\newline))))
+           (if (and (= semicolon-count 0)
+                    (not (memv next (list 'for closer #\newline))))
                ; treat a linebreak prior to a value as a semicolon if no previous semicolons observed
                 (process-semicolon next))
            (restore-lower-dim-lists next)
@@ -1922,19 +1923,18 @@
                  (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 1))
                      (cond ((eqv? next #\newline) #t) ; [a b ;;<newline>...
                            ((not (or (eof-object? next) (eqv? next #\;))) ; [a b ;;...
-                             (error "cannot mix space and ;; separators in an array expression, except to wrap a line"))
+                             (error (string "cannot mix space and ;; separators in an array expression, "
+                                            "except to wrap a line")))
                            (else #f)) ; [a b ;;<eof> for REPL,  [a ;;...
                      #f))) ; [a ; b ;; c ; d...
              (if is-line-sep
-                 (begin
-                   (set! a (unfixrow a))
-                   (set! max-level
-                         (if (null? (cdr a))
-                             0 ; no prior single semicolon
-                             max-level)))
-                 (begin
-                   (process-semicolon next)
-                   (restore-lower-dim-lists next)))
+                 (begin (set! a (unfixrow a))
+                        (set! max-level
+                              (if (null? (cdr a))
+                                  0 ; no prior single semicolon
+                                  max-level)))
+                 (begin (process-semicolon next)
+                        (restore-lower-dim-lists next)))
            (parse-array-inner s a is-row-first semicolon-count max-level closer #f is-line-sep))))
         ((#\,)
          (error "unexpected comma in array expression"))
@@ -1961,7 +1961,8 @@
                (if (null? is-row-first)
                    (set! is-row-first #t)
                    (if (not is-row-first)
-                       (error "cannot mix space and \";;\" separators in an array expression, except to wrap a line")))))
+                       (error (string "cannot mix space and \";;\" separators in an array expression, "
+                                      "except to wrap a line"))))))
          (parse-array-inner s a is-row-first 0 max-level closer #f #f))))))
   ;; if a [ ] expression is a cat expression, `end` is not special
   (with-bindings ((end-symbol last-end-symbol))
