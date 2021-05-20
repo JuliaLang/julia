@@ -726,6 +726,25 @@ function map!(f, iter::ValueIterator{<:Dict})
     return iter
 end
 
+function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
+    for (k, v) in d2
+        i = ht_keyindex2!(d1, k)
+        if i > 0
+            d1.vals[i] = combine(d1.vals[i], v)
+            # We don't use @inbounds in front of the whole formula
+            # because we don't know what the combine function does.
+            # Using @inbounds only for array access seems to slow
+            # things down for simple functions like integer addition.
+        else
+            if !isequal(k, convert(K, k))
+                throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+            end
+            @inbounds _setindex!(d1, convert(V, v), k, -i)
+        end
+    end
+    return d1
+end
+
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
     parent::ImmutableDict{K,V}
     key::K
