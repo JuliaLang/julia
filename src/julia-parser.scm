@@ -1885,9 +1885,10 @@
       (if (and (null? is-row-first) (= semicolon-count 2) (not (eqv? next #\;)))
           ; finding ;; that isn't a row-separator makes it column-first
           (set! is-row-first #f))
-      (set! a (collapse-level 1 a semicolon-count))
-      (if (not (eqv? next #\;))
-          (set! a (ncons '() semicolon-count a)))) ; restore empty lists for lower dims
+      (set! a (collapse-level 1 a semicolon-count)))
+    (define (restore-lower-dim-lists next)
+      (if (not (memv next (list #\; 'for closer #\newline)))
+          (set! a (ncons '() semicolon-count a))))
     (let ((t (if (or gotnewline (eqv? (peek-token s) #\newline))
                  #\newline
                  (require-token s))))
@@ -1895,7 +1896,6 @@
           (begin
             (take-token s)
             (set! a (collapse-level (- max-level semicolon-count) a (1+ semicolon-count)))
-            (error (string a))
             (cond ((= max-level 0)
                    (if (length= (car a) 1)
                        (fix 'vect (car a))
@@ -1913,6 +1913,7 @@
            (if (and (= semicolon-count 0) (not (memv next (list 'for closer #\newline))))
                ; treat a linebreak prior to a value as a semicolon if no previous semicolons observed
                 (process-semicolon next))
+           (restore-lower-dim-lists next)
            (parse-array-inner s a is-row-first semicolon-count max-level closer #f gotlinesep)))
         ((#\;)
          (or gotnewline (take-token s))
@@ -1931,10 +1932,12 @@
                          (if (null? (cdr a))
                              0 ; no prior single semicolon
                              max-level)))
-                 (process-semicolon next))
+                 (begin
+                   (process-semicolon next)
+                   (restore-lower-dim-lists next)))
            (parse-array-inner s a is-row-first semicolon-count max-level closer #f is-line-sep))))
         ((#\,)
-         (error "unexpected comma in matrix expression"))
+         (error "unexpected comma in array expression"))
         ((#\] #\})
          (error (string "unexpected \"" t "\"")))
         ((for)
@@ -1947,11 +1950,10 @@
              (error "invalid comprehension syntax")))
         (else
          (if (and (not gotlinesep) (pair? (car a)) (not (ts:space? s)))
-             (error (string a " " gotlinesep " " (peek-token s))))
-            ;  (error (string "expected \"" closer "\" or separator in arguments to \""
-            ;                 (if (eqv? closer #\]) #\[ #\{) " " closer
-            ;                 "\"; got \""
-            ;                 (deparse (caar a)) t "\"")))
+            (error (string "expected \"" closer "\" or separator in arguments to \""
+                           (if (eqv? closer #\]) #\[ #\{) " " closer
+                           "\"; got \""
+                           (deparse (caar a)) t "\"")))
          (let ((u (parse-eq* s)))
            (set! a (cons (cons u (car a)) (cdr a)))
            (if (= (length (car a)) 2)
