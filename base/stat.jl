@@ -40,14 +40,20 @@ struct StatStruct
     mtime   :: Float64
     ctime   :: Float64
 end
+const StatFieldTypes = Union{UInt,Int,Int64,Float64}
 
 function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
-    mapreduce(&, fieldnames(StatStruct)[2:end]; init=true) do f
-        getfield(x, f) == getfield(y, f)
+    for i = 2:nfields(x)
+        xi = getfield(x, i)::StatFieldTypes
+        xi === getfield(y, i) || return false
     end
+    return true
 end
 function Base.hash(obj::StatStruct, h::UInt)
-    return hash((getfield.((obj,), fieldnames(StatStruct)[2:end])...,), h)
+    for i = 2:nfields(obj)
+        h = hash(getfield(obj, i)::StatFieldTypes, h)
+    end
+    return h
 end
 
 StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -68,61 +74,72 @@ StatStruct(desc::Union{AbstractString, OS_HANDLE}, buf::Union{Vector{UInt8},Ptr{
     ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
 )
 
-function show(io::IO, st::StatStruct)
-    compact = get(io, :compact, true)
-    function iso_datetime_with_relative(t, tnow)
-        str = Libc.strftime("%FT%T%z", t)
-        secdiff = t - tnow
-        for (d, name) in ((24*60*60,"day"),(60*60,"hour"),(60,"minute"),(1,"second"))
-            tdiff = round(Int, div(abs(secdiff), d))
-            (tdiff == 0 && name != "second") && continue # find first unit difference
-            if tdiff == 0 && name == "second"
-                str *= " (just now)"
-                break
-            end
+function iso_datetime_with_relative(t, tnow)
+    str = Libc.strftime("%FT%T%z", t)
+    secdiff = t - tnow
+    for (d, name) in ((24*60*60, "day"), (60*60, "hour"), (60, "minute"), (1, "second"))
+        tdiff = round(Int, div(abs(secdiff), d))
+        if tdiff != 0 # find first unit difference
             plural = tdiff == 1 ? "" : "s"
             when = secdiff < 0 ? "ago" : "in the future"
-            str *= " ($(tdiff) $(name)$(plural) $(when))"
-            break
+            return "$str ($tdiff $name$plural $when)"
         end
-        return str
     end
-    if compact
-        print(io, "$(st.desc)")
-        print(io, " size: $(st.size) bytes")
-        print(io, " device: $(st.device)")
-        print(io, " inode: $(st.inode)")
-        print(io, " mode: 0o$(string(filemode(st), base = 8, pad = 6)) ($(filemode_string(st)))")
-        print(io, " nlink: $(st.nlink)")
-        username = getusername(st.uid)
-        isnothing(username) ? print(io, " uid: $(st.uid)") : print(io, " uid: $(st.uid) ($username)")
-        groupname = getgroupname(st.gid)
-        isnothing(groupname) ? print(io, " gid: $(st.gid)") : print(io, " gid: $(st.gid) ($groupname)")
-        print(io, " rdev: $(st.rdev)")
-        print(io, " blksize: $(st.blksize)")
-        print(io, " blocks: $(st.blocks)")
-        tnow = Libc.TimeVal().sec
-        print(io, " mtime: $(iso_datetime_with_relative(st.mtime, tnow))")
-        println(io, " ctime: $(iso_datetime_with_relative(st.ctime, tnow))")
-    else
-        println(io, "StatStruct for $(st.desc)")
-        println(io, "   size: $(st.size) bytes")
-        println(io, " device: $(st.device)")
-        println(io, "  inode: $(st.inode)")
-        println(io, "   mode: 0o$(string(filemode(st), base = 8, pad = 6)) ($(filemode_string(st)))")
-        println(io, "  nlink: $(st.nlink)")
-        username = getusername(st.uid)
-        isnothing(username) ? println(io, "    uid: $(st.uid)") : println(io, "    uid: $(st.uid) ($username)")
-        groupname = getgroupname(st.gid)
-        isnothing(groupname) ? println(io, "    gid: $(st.gid)") : println(io, "    gid: $(st.gid) ($groupname)")
-        println(io, "   rdev: $(st.rdev)")
-        println(io, "blksize: $(st.blksize)")
-        println(io, " blocks: $(st.blocks)")
-        tnow = Libc.TimeVal().sec
-        println(io, "  mtime: $(iso_datetime_with_relative(st.mtime, tnow))")
-        println(io, "  ctime: $(iso_datetime_with_relative(st.ctime, tnow))")
-    end
+    return "$str (just now)"
 end
+
+
+function getusername(uid::Unsigned)
+    pwd = Libc.getpwuid(uid, false)
+    pwd === nothing && return
+    isempty(pwd.username) && return
+    return pwd.username
+end
+
+function getgroupname(gid::Unsigned)
+    gp = Libc.getgrgid(gid, false)
+    gp === nothing && return
+    isempty(gp.groupname) && return
+    return gp.groupname
+end
+
+function show_statstruct(io::IO, st::StatStruct, oneline::Bool)
+    print(io, oneline ? "StatStruct(" : "StatStruct for ")
+    show(io, st.desc)
+    oneline || print("\n  ")
+    print(io, " size: ", st.size, " bytes")
+    oneline || print("\n")
+    print(io, " device: ", st.device)
+    oneline || print("\n ")
+    print(io, " inode: ", st.inode)
+    oneline || print("\n  ")
+    print(io, " mode: 0o", string(filemode(st), base = 8, pad = 6), " (", filemode_string(st), ")")
+    oneline || print("\n ")
+    print(io, " nlink: ", st.nlink)
+    oneline || print("\n   ")
+    print(io, " uid: $(st.uid)")
+    username = getusername(st.uid)
+    username === nothing || print(io, " (", username, ")")
+    oneline || print("\n   ")
+    print(io, " gid: ", st.gid)
+    groupname = getgroupname(st.gid)
+    groupname === nothing || print(io, " (", groupname, ")")
+    oneline || print("\n  ")
+    print(io, " rdev: ", st.rdev)
+    oneline || print("\n ")
+    print(io, " blksz: ", st.blksize)
+    oneline || print("\n")
+    print(io, " blocks: ", st.blocks)
+    tnow = round(UInt, time())
+    oneline || print("\n ")
+    print(io, " mtime: ", iso_datetime_with_relative(st.mtime, tnow))
+    oneline || print("\n ")
+    print(io, " ctime: ", iso_datetime_with_relative(st.ctime, tnow))
+    print(io, oneline ? ")" : "\n")
+end
+
+show(io::IO, st::StatStruct) = show_statstruct(io, st, true)
+show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false)
 
 # stat & lstat functions
 
@@ -131,7 +148,7 @@ macro stat_call(sym, arg1type, arg)
         stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
-            uv_error(string("stat(",repr($(esc(arg))),")"), r)
+            uv_error(string("stat(", repr($(esc(arg))), ")"), r)
         end
         st = StatStruct($(esc(arg)), stat_buf)
         if ispath(st) != (r == 0)
@@ -187,7 +204,7 @@ lstat(path...) = lstat(joinpath(path...))
 # some convenience functions
 
 const filemode_table = (
-    (
+    [
         (S_IFLNK, "l"),
         (S_IFSOCK, "s"),  # Must appear before IFREG and IFDIR as IFSOCK == IFREG | IFDIR
         (S_IFREG, "-"),
@@ -195,40 +212,40 @@ const filemode_table = (
         (S_IFDIR, "d"),
         (S_IFCHR, "c"),
         (S_IFIFO, "p")
-    ),
-    (
+    ],
+    [
         (S_IRUSR, "r"),
-    ),
-    (
+    ],
+    [
         (S_IWUSR, "w"),
-    ),
-    (
+    ],
+    [
         (S_IXUSR|S_ISUID, "s"),
         (S_ISUID, "S"),
         (S_IXUSR, "x")
-    ),
-    (
+    ],
+    [
         (S_IRGRP, "r"),
-    ),
-    (
+    ],
+    [
         (S_IWGRP, "w"),
-    ),
-    (
+    ],
+    [
         (S_IXGRP|S_ISGID, "s"),
         (S_ISGID, "S"),
         (S_IXGRP, "x")
-    ),
-    (
+    ],
+    [
         (S_IROTH, "r"),
-    ),
-    (
+    ],
+    [
         (S_IWOTH, "w"),
-    ),
-    (
+    ],
+    [
         (S_IXOTH|S_ISVTX, "t"),
         (S_ISVTX, "T"),
         (S_IXOTH, "x")
-    )
+    ]
 )
 
 """
@@ -239,19 +256,19 @@ Equivalent to `stat(file).mode`.
 filemode(st::StatStruct) = st.mode
 filemode_string(st::StatStruct) = filemode_string(st.mode)
 function filemode_string(mode)
-    str = ""
+    str = IOBuffer()
     for table in filemode_table
         complete = true
         for (bit, char) in table
             if mode & bit == bit
-                str *= char
+                write(str, char)
                 complete = false
                 break
             end
         end
-        complete && (str *= "-")
+        complete && write(str, "-")
     end
-    return str
+    return String(take!(str))
 end
 
 """
@@ -470,93 +487,4 @@ function ismount(path...)
     (s1.device != s2.device) && return true
     (s1.inode == s2.inode) && return true
     false
-end
-
-mutable struct Cpasswd
-    pw_name::Ptr{Cchar}     # username
-    pw_passwd::Ptr{Cchar}   # user password
-    pw_uid::Cuint           # user ID
-    pw_gid::Cuint           # group ID
-    pw_gecos::Ptr{Cchar}    # user information
-    pw_dir::Ptr{Cchar}      # home directory
-    pw_shell::Ptr{Cchar}    # shell program
-    Cpasswd() = new()
-end
-struct Passwd
-    name::String
-    passwd::String
-    uid::Int
-    gid::Int
-    gecos::String
-    dir::String
-    shell::String
-end
-function getpwuid(uid)
-    pd = Cpasswd()
-    pwdptr = pointer_from_objref(pd)
-    tempPwdPtr = pointer_from_objref(Cpasswd())
-    buf = Array{Cchar}(undef, 200)
-    bufsize = sizeof(buf)
-    ret = ccall(:getpwuid_r, Cint, (Cuint, Ptr{Cpasswd}, Ptr{UInt8}, Csize_t, Ptr{Cpasswd}), uid, pwdptr, buf, bufsize, tempPwdPtr)
-    ret != 0 && error("getpwuid_r error")
-    out = Passwd(
-        pd.pw_name == C_NULL ? "" : unsafe_string(pd.pw_name),
-        pd.pw_passwd == C_NULL ? "" : unsafe_string(pd.pw_passwd),
-        pd.pw_uid,
-        pd.pw_gid,
-        pd.pw_gecos == C_NULL ? "" : unsafe_string(pd.pw_gecos),
-        pd.pw_dir == C_NULL ? "" : unsafe_string(pd.pw_dir),
-        pd.pw_shell == C_NULL ? "" : unsafe_string(pd.pw_shell)
-    )
-    return out
-end
-
-function getusername(uid::Union{UInt32, UInt64})
-    if Sys.iswindows()
-        return nothing
-    else
-        pwd = getpwuid(uid)
-        isempty(pwd.name) && return
-        return pwd.name
-    end
-end
-
-mutable struct Cgroup
-    gr_name::Ptr{Cchar}     # group name
-    gr_passwd::Ptr{Cchar}   # group password
-    gr_gid::Cuint           # group ID
-    gr_mem::Ptr{Ptr{Cchar}} # group members
-    Cgroup() = new()
-end
-struct Group
-    name::String
-    passwd::String
-    gid::Int
-    mem::Vector{String}
-end
-function getgrgid(gid)
-    gp = Cgroup()
-    gpptr = pointer_from_objref(gp)
-    tempGpPtr = pointer_from_objref(Cgroup())
-    buf = Array{Cchar}(undef, 200)
-    bufsize = sizeof(buf)
-    ret = ccall(:getgrgid_r, Cint, (Cuint, Ptr{Cgroup}, Ptr{UInt8}, Csize_t, Ptr{Cgroup}), gid, gpptr, buf, bufsize, tempGpPtr)
-    ret != 0 && error("getpwuid_r error")
-    out = Group(
-        gp.gr_name == C_NULL ? "" : unsafe_string(gp.gr_name),
-        gp.gr_passwd == C_NULL ? "" : unsafe_string(gp.gr_passwd),
-        gp.gr_gid,
-        gp.gr_mem == C_NULL ? "" : [""] # TODO: Actually populate
-    )
-    return out
-end
-
-function getgroupname(gid::Union{UInt32, UInt64})
-    if Sys.iswindows()
-        return nothing
-    else
-        gp = getgrgid(gid)
-        isempty(gp.name) && return
-        return gp.name
-    end
 end
