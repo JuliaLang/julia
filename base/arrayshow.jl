@@ -271,17 +271,21 @@ end
 
 # typeinfo agnostic
 # n-dimensional arrays
-show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices::Bool) =
-    _show_nd(io, inferencebarrier(a), print_matrix, label_slices, map(unitrange, axes(a)))
+show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bool) =
+    _show_nd(io, inferencebarrier(a), print_matrix, show_full, map(unitrange, axes(a)))
 
-function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Function, label_slices::Bool, axs::Tuple{Vararg{AbstractUnitRange}})
+function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Function, show_full::Bool, axs::Tuple{Vararg{AbstractUnitRange}})
     limit::Bool = get(io, :limit, false)
     if isempty(a)
         return
     end
     tailinds = tail(tail(axs))
     nd = ndims(a)-2
-    for I in CartesianIndices(tailinds)
+    show_full || print(io, "[")
+    Is = CartesianIndices(tailinds)
+    lastidxs = first(Is).I
+    reached_last_d = false
+    for I in Is
         idxs = I.I
         if limit
             for i = 1:nd
@@ -296,7 +300,9 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                                 @goto skip
                             end
                         end
-                        print(io, "...\n\n")
+                        print(io, ";"^(i+2))
+                        print(io, " \u2026 ")
+                        show_full && print(io, "\n\n")
                         @goto skip
                     end
                     if ind[firstindex(ind)+2] < ii <= ind[end-3]
@@ -305,13 +311,29 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                 end
             end
         end
-        if label_slices
+        if show_full
             _show_nd_label(io, a, idxs)
         end
         slice = view(a, axs[1], axs[2], idxs...)
-        print_matrix(io, slice)
-        print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+        if show_full
+            print_matrix(io, slice)
+            print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+        else
+            idxdiff = lastidxs .- idxs .< 0
+            if any(idxdiff)
+                lastchangeindex = 2 + findlast(idxdiff)
+                print(io, ";"^lastchangeindex)
+                lastchangeindex == ndims(a) && (reached_last_d = true)
+                print(io, " ")
+            end
+            print_matrix(io, slice)
+        end
         @label skip
+        lastidxs = idxs
+    end
+    if !show_full
+        reached_last_d || print(io, ";"^(nd+2))
+        print(io, "]")
     end
 end
 
@@ -386,9 +408,9 @@ end
 preceded by `prefix`, supposed to encode the type of the elements.
 """
 _show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
-    _show_nonempty(io, inferencebarrier(X), prefix, axes(X))
+    _show_nonempty(io, inferencebarrier(X), prefix, false, axes(X))
 
-function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
+function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
     indr, indc = axs
@@ -407,7 +429,7 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
             cdots = true
         end
     end
-    print(io, prefix, "[")
+    drop_brackets || print(io, prefix, "[")
     for rr in (rr1, rr2)
         for i in rr
             for cr in (cr1, cr2)
@@ -429,12 +451,16 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
         end
         last(rr) != last(indr) && rdots && print(io, "\u2026 ; ")
     end
-    print(io, "]")
+    if !drop_brackets
+        nc > 1 || print(io, ";;")
+        print(io, "]")
+    end
+    return nothing
 end
 
 
 _show_nonempty(io::IO, X::AbstractArray, prefix::String) =
-    show_nd(io, X, (io, slice) -> _show_nonempty(io, slice, prefix), false)
+    show_nd(io, X, (io, slice) -> _show_nonempty(io, inferencebarrier(slice), prefix, true, axes(slice)), false)
 
 # a specific call path is used to show vectors (show_vector)
 _show_nonempty(::IO, ::AbstractVector, ::String) =
