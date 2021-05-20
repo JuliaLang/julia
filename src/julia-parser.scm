@@ -1908,10 +1908,11 @@
         ((#\newline)
          (or gotnewline (take-token s))
          (let ((next (peek-token s)))
-           (if (eqv? next #\;)
-               (error "unexpected semicolon after line break in an array expression"))
+           (if (and (> semicolon-count 0) (eqv? next #\;))
+               (error (string "semicolons may appear before or after a line break in an array expression, "
+                              "but not both")))
            (if (and (= semicolon-count 0)
-                    (not (memv next (list 'for closer #\newline))))
+                    (not (memv next (list #\; 'for closer #\newline))))
                ; treat a linebreak prior to a value as a semicolon if no previous semicolons observed
                 (process-semicolon next))
            (restore-lower-dim-lists next)

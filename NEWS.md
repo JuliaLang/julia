@@ -154,7 +154,6 @@ Standard library changes
 Deprecated or removed
 ---------------------
 - Multiple successive semicolons in an array expresion were previously ignored (e.g., `[1 ;; 2] == [1 ; 2]`). This is now being used to separate dimensions for array literals. (see **New language features**)
-- A semicolon following a line break inside an array literal was previously ignored (e.g., `[1\n; 2] == [1 ; 2]`. This is now considered invalid syntax.
 
 
 External dependencies

@@ -2714,7 +2714,9 @@ end
 
     @test Meta.parse("[1;\n]") == :([1;]) # ensure line breaks following semicolons are treated correctly
     @test Meta.parse("[1;\n\n]") == :([1;])
-    @test_throws ParseError Meta.parse("[1\n;2]") # semicolons shouldn't follow line breaks
+    @test Meta.parse("[1\n;]") == :([1;]) # semicolons following a linebreak are fine
+    @test Meta.parse("[1\n;;; 2]") == :([1;;; 2])
+    @test_throws ParseError Meta.parse("[1;\n;2]") # semicolons cannot straddle a line break
 end
 
 # issue #25652
