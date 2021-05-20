@@ -1832,17 +1832,18 @@ diagonal.
 
 # Examples
 ```jldoctest
-julia> cat(dims=[1, 2], fill(1, 1, 1), fill(2, 2, 2))
-3×3 Matrix{Int64}:
-1  0  0
-0  2  2
-0  2  2
-
-
-julia> cat(dims=[1, 2], [1 2], [3 4])
-2×4 Matrix{Int64}:
-1  2  0  0
-0  0  3  4
+julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)
+2×6×1 Array{Float64, 3}:
+[:, :, 1] =
+ 1.0  2.0  3.14159  10.0  10.0  10.0
+ 3.0  4.0  3.14159  10.0  10.0  10.0
+ 
+julia> cat(true, trues(2,2), trues(4)', dims=(1,2))
+4×7 Matrix{Bool}:
+ 1  0  0  0  0  0  0
+ 0  1  1  0  0  0  0
+ 0  1  1  0  0  0  0
+ 0  0  0  1  1  1  1
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
