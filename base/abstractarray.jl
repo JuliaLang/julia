@@ -1830,23 +1830,22 @@ dimensions for every new input array and putting zero blocks elsewhere. For exam
 `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
 diagonal.
 
-julia> cat(a, b, dims=3)
-2×2×4 Array{Int64, 3}:
+See also [`hcat`](@ref), [`vcat`](@ref), [`hvcat`](@ref), [`repeat`](@ref).
+
+# Examples
+```jldoctest
+julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)
+2×6×1 Array{Float64, 3}:
 [:, :, 1] =
- 1  2
- 3  4
+ 1.0  2.0  3.14159  10.0  10.0  10.0
+ 3.0  4.0  3.14159  10.0  10.0  10.0
 
-[:, :, 2] =
- 5  6
- 7  8
-
-[:, :, 3] =
-  9  10
- 11  12
-
-[:, :, 4] =
- 13  14
- 15  16
+julia> cat(true, trues(2,2), trues(4)', dims=(1,2))
+4×7 Matrix{Bool}:
+ 1  0  0  0  0  0  0
+ 0  1  1  0  0  0  0
+ 0  1  1  0  0  0  0
+ 0  0  0  1  1  1  1
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
