@@ -377,9 +377,22 @@ Represent an AbstractUnitRange `range` as an offset vector such that `range[i] =
 
 `IdentityUnitRange`s are frequently used as axes for offset arrays.
 """
-struct IdentityUnitRange{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
-    indices::T
+struct IdentityUnitRange{I<:AbstractUnitRange, T} <: AbstractUnitRange{T}
+    indices::I
+
+    function IdentityUnitRange{I,T}(indices::I) where {I<:AbstractUnitRange, T}
+        _eltypecheck(T, eltype(I))
+        new{I,T}(indices)
+    end
 end
+_eltypecheck(::Type{T}, ::Type{T}) where {T} = nothing
+_eltypecheck(::Type{T}, ::Type{Eltype}) where {T,Eltype} = throw(ArgumentError("type parameter T must be the element type ($Eltype), received T = $T"))
+
+function IdentityUnitRange{I,T}(indices::AbstractUnitRange) where {I<:AbstractUnitRange, T}
+    IdentityUnitRange{I,T}(convert(I, indices)::I)
+end
+IdentityUnitRange{I}(indices::I) where {I<:AbstractUnitRange} = IdentityUnitRange{I, eltype(I)}(indices)
+IdentityUnitRange(indices::I) where {I<:AbstractUnitRange} = IdentityUnitRange{I, eltype(I)}(indices)
 IdentityUnitRange(S::IdentityUnitRange) = S
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
@@ -394,9 +407,32 @@ last(S::IdentityUnitRange) = last(S.indices)
 size(S::IdentityUnitRange) = (length(S.indices),)
 length(S::IdentityUnitRange) = length(S.indices)
 unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
-getindex(S::IdentityUnitRange, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+function getindex(S::IdentityUnitRange, i::Integer)
+    @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+    @boundscheck checkbounds(S, i)
+    return eltype(S)(i)
+end
+function getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer})
+    @_inline_meta
+    @boundscheck checkbounds(S, i)
+    if eltype(i) === Bool
+        # logical indexing
+        return range(first(i) ? first(S) : last(S), length = Int(last(i)))
+    else
+        return map(eltype(S), i)
+    end
+end
+function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
+    @_inline_meta
+    @boundscheck checkbounds(S, i)
+    if eltype(i) === Bool
+        # logical indexing
+        return range(first(i) ? first(S) : last(S), step = oneunit(step(i)), length = Int(last(i)))
+    else
+        return map(eltype(S), i)
+    end
+end
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
