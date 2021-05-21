@@ -141,12 +141,12 @@ Base.propertynames(F::LQ, private::Bool=false) =
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-function show(io::IO, ::MIME"text/plain", C::LQ)
-    println(io, typeof(C), " with factors L and Q:")
-    io = IOContext(io, :compact => true)
-    show(io, C.L)
-    println(io)
-    show(io, C.Q)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LQ)
+    summary(io, F); println(io)
+    println(io, "L factor:")
+    show(io, mime, F.L)
+    println(io, "\nQ factor:")
+    show(io, mime, F.Q)
 end
 
 LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
