@@ -22,9 +22,15 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64, Matrix{Float64}} with factors L and Q:
-[-8.60233 0.0; 4.41741 -0.697486]
-[-0.581238 -0.813733; -0.813733 0.581238]
+LQ{Float64, Matrix{Float64}}
+L factor:
+2×2 Matrix{Float64}:
+ -8.60233   0.0
+  4.41741  -0.697486
+Q factor:
+2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}}:
+ -0.581238  -0.813733
+ -0.813733   0.581238
 
 julia> S.L * S.Q
 2×2 Matrix{Float64}:
@@ -90,9 +96,15 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64, Matrix{Float64}} with factors L and Q:
-[-8.60233 0.0; 4.41741 -0.697486]
-[-0.581238 -0.813733; -0.813733 0.581238]
+LQ{Float64, Matrix{Float64}}
+L factor:
+2×2 Matrix{Float64}:
+ -8.60233   0.0
+  4.41741  -0.697486
+Q factor:
+2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}}:
+ -0.581238  -0.813733
+ -0.813733   0.581238
 
 julia> S.L * S.Q
 2×2 Matrix{Float64}:
@@ -141,12 +153,12 @@ Base.propertynames(F::LQ, private::Bool=false) =
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-function show(io::IO, ::MIME"text/plain", C::LQ)
-    println(io, typeof(C), " with factors L and Q:")
-    io = IOContext(io, :compact => true)
-    show(io, C.L)
-    println(io)
-    show(io, C.Q)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LQ)
+    summary(io, F); println(io)
+    println(io, "L factor:")
+    show(io, mime, F.L)
+    println(io, "\nQ factor:")
+    show(io, mime, F.Q)
 end
 
 LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
