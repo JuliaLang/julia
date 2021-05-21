@@ -452,6 +452,9 @@ f(3)
 ERROR: `b` is still missing
 [...]
 ```
+
+!!! compat "Julia 1.7"
+    This macro is available as of Julia 1.7.
 """
 macro coalesce(args...)
     expr = :(missing)

@@ -146,6 +146,8 @@ let fails = @testset NoThrowTestSet begin
         @test endswith(str1, str2)
         # 21 - Fail - contains
         @test contains(str1, str2)
+        # 22 - Fail - Type Comparison
+        @test typeof(1) <: typeof("julia")
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -254,6 +256,11 @@ let fails = @testset NoThrowTestSet begin
     let str = sprint(show, fails[21])
         @test occursin("Expression: contains(str1, str2)", str)
         @test occursin("Evaluated: contains(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[22])
+        @test occursin("Expression: typeof(1) <: typeof(\"julia\")", str)
+        @test occursin("Evaluated: $(typeof(1)) <: $(typeof("julia"))", str)
     end
 end
 

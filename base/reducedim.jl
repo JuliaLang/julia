@@ -999,7 +999,7 @@ julia> findmin(A, dims=1)
 ([1.0 2.0], CartesianIndex{2}[CartesianIndex(1, 1) CartesianIndex(1, 2)])
 
 julia> findmin(A, dims=2)
-([1.0; 3.0], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1)])
+([1.0; 3.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
 ```
 """
 findmin(A::AbstractArray; dims=:) = _findmin(A, dims)
@@ -1046,7 +1046,7 @@ julia> findmax(A, dims=1)
 ([3.0 4.0], CartesianIndex{2}[CartesianIndex(2, 1) CartesianIndex(2, 2)])
 
 julia> findmax(A, dims=2)
-([2.0; 4.0], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2)])
+([2.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2);;])
 ```
 """
 findmax(A::AbstractArray; dims=:) = _findmax(A, dims)

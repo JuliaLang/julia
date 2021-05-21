@@ -1171,15 +1171,15 @@ function length(itr::PartitionIterator)
     return cld(l, itr.n)
 end
 
-function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
-    state > length(itr.c) && return nothing
-    r = min(state + itr.n - 1, length(itr.c))
+function iterate(itr::PartitionIterator{<:AbstractRange}, state = firstindex(itr.c))
+    state > lastindex(itr.c) && return nothing
+    r = min(state + itr.n - 1, lastindex(itr.c))
     return @inbounds itr.c[state:r], r + 1
 end
 
-function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
-    state > length(itr.c) && return nothing
-    r = min(state + itr.n - 1, length(itr.c))
+function iterate(itr::PartitionIterator{<:AbstractArray}, state = firstindex(itr.c))
+    state > lastindex(itr.c) && return nothing
+    r = min(state + itr.n - 1, lastindex(itr.c))
     return @inbounds view(itr.c, state:r), r + 1
 end
 

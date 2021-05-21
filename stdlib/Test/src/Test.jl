@@ -516,6 +516,12 @@ function get_test_result(ex, source)
         first(string(ex.args[1])) != '.' && !is_splat(ex.args[2]) && !is_splat(ex.args[3]) &&
         (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
         ex = Expr(:comparison, ex.args[2], ex.args[1], ex.args[3])
+
+    # Mark <: and >: as :comparison expressions
+    elseif isa(ex, Expr) && length(ex.args) == 2 &&
+        !is_splat(ex.args[1]) && !is_splat(ex.args[2]) &&
+        Base.operator_precedence(ex.head) == comparison_prec
+        ex = Expr(:comparison, ex.args[1], ex.head, ex.args[2])
     end
     if isa(ex, Expr) && ex.head === :comparison
         # pass all terms of the comparison to `eval_comparison`, as an Expr
@@ -583,7 +589,7 @@ function get_test_result(ex, source)
             $testret
         catch _e
             _e isa InterruptException && rethrow()
-            Threw(_e, Base.catch_stack(), $(QuoteNode(source)))
+            Threw(_e, Base.current_exceptions(), $(QuoteNode(source)))
         end
     end
     Base.remove_linenums!(result)
@@ -1266,7 +1272,7 @@ function testset_beginend(args, tests, source)
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
             pop_testset()
@@ -1340,7 +1346,7 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         end
     end
     quote

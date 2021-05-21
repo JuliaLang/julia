@@ -706,7 +706,7 @@ julia> sparse(A)
   ⋅    ⋅   1.0
 ```
 """
-sparse(A::AbstractMatrix{Tv}) where {Tv} = convert(SparseMatrixCSC{Tv,Int}, A)
+sparse(A::AbstractMatrix{Tv}) where {Tv} = convert(SparseMatrixCSC{Tv}, A)
 
 sparse(S::AbstractSparseMatrixCSC) = copy(S)
 

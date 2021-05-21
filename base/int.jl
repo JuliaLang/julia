@@ -390,6 +390,9 @@ Number of ones in the binary representation of `x`.
 ```jldoctest
 julia> count_ones(7)
 3
+
+julia> count_ones(Int32(-1))
+32
 ```
 """
 count_ones(x::BitInteger) = (ctpop_int(x) % Int)::Int
@@ -429,6 +432,9 @@ Number of zeros in the binary representation of `x`.
 ```jldoctest
 julia> count_zeros(Int32(2 ^ 16 - 1))
 16
+
+julia> count_zeros(-1)
+0
 ```
 """
 count_zeros(x::Integer) = count_ones(~x)

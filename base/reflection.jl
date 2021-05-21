@@ -862,7 +862,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
-        if generated && isgenerated(m)
+        if generated && hasgenerator(m)
             if may_invoke_generator(m)
                 return ccall(:jl_code_for_staged, Any, (Any,), m)::CodeInfo
             else
@@ -877,8 +877,8 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     end
 end
 
-isgenerated(m::Method) = isdefined(m, :generator)
-isgenerated(m::Core.MethodInstance) = isgenerated(m.def)
+hasgenerator(m::Method) = isdefined(m, :generator)
+hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
 
 # low-level method lookup functions used by the compiler
 
@@ -915,15 +915,13 @@ end
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
-mutable struct MethodList
+mutable struct MethodList <: AbstractArray{Method,1}
     ms::Array{Method,1}
     mt::Core.MethodTable
 end
 
-length(m::MethodList) = length(m.ms)
-isempty(m::MethodList) = isempty(m.ms)
-iterate(m::MethodList, s...) = iterate(m.ms, s...)
-eltype(::Type{MethodList}) = Method
+size(m::MethodList) = size(m.ms)
+getindex(m::MethodList, i) = m.ms[i]
 
 function MethodList(mt::Core.MethodTable)
     ms = Method[]
