@@ -252,6 +252,10 @@ end
 size(A::SVD, dim::Integer) = dim == 1 ? size(A.U, dim) : size(A.Vt, dim)
 size(A::SVD) = (size(A, 1), size(A, 2))
 
+function adjoint(F::SVD)
+    return SVD(F.Vt', F.S, F.U')
+end
+
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:AbstractArray})
     summary(io, F); println(io)
     println(io, "U factor:")
