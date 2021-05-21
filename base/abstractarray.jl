@@ -1830,6 +1830,8 @@ dimensions for every new input array and putting zero blocks elsewhere. For exam
 `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
 diagonal.
 
+See also [`hcat`](@ref), [`vcat`](@ref), [`hvcat`](@ref), [`repeat`](@ref).
+
 # Examples
 ```jldoctest
 julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)
