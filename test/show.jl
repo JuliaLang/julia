@@ -2011,7 +2011,7 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     io = IOBuffer()
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
-    @test count(contains(r"my_fun28173 at a{80}:\d+"), eachline(io)) == 9
+    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
 end
 
 # Verify that extra instructions at the end of the IR
