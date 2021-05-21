@@ -2186,6 +2186,9 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     return A
 end
 
+cat_ndims(a) = 0
+cat_ndims(a::AbstractArray) = ndims(a)
+
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
     # into the destination
@@ -2195,7 +2198,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
         if a isa AbstractArray
             cat_size(a, N) == length(a) ||
                 throw(ArgumentError("all dimensions of elements other than $N must be of length 1"))
-            nd = max(nd, ndims(a))
+            nd = max(nd, cat_ndims(a))
         end
         Ndim += cat_size(a, N)
     end
@@ -2221,7 +2224,7 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     d2 = row_first ? 1 : 2
 
     # discover dimensions
-    @inbounds nd = max(N, ndims(as[1]))
+    @inbounds nd = max(N, cat_ndims(as[1]))
     outdims = zeros(Int, nd)
 
     # discover number of rows or columns
@@ -2287,7 +2290,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
 
     # discover dimensions
-    @inbounds nd = max(N, ndims(as[1]))
+    @inbounds nd = max(N, cat_ndims(as[1]))
     outdims = zeros(Int, nd)
     currentdims = zeros(Int, nd)
     blockcounts = zeros(Int, nd)
