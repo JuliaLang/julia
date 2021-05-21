@@ -776,7 +776,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             .convertSwitchToLookupTable(true)
             .needCanonicalLoops(false)
             .hoistCommonInsts(true)
-            .sinkCommonInsts(true)
+            // .sinkCommonInsts(true) // FIXME: Causes assertion in llvm-late-lowering
     ));
     PM->add(createSLPVectorizerPass());
     // might need this after LLVM 11:
