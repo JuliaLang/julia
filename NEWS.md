@@ -108,6 +108,7 @@ Standard library changes
 * The shape of an `UpperHessenberg` matrix is preserved under certain arithmetic operations, e.g. when multiplying or dividing by an `UpperTriangular` matrix. ([#40039])
 * `cis(A)` now supports matrix arguments ([#40194]).
 * `dot` now supports `UniformScaling` with `AbstractMatrix` ([#40250]).
+* `det(M::AbstractMatrix{BigInt})` now calls `det_bareiss(M)`, which uses the [Bareiss](https://en.wikipedia.org/wiki/Bareiss_algorithm) algorithm to calculate precise values.([#40868]).
 
 #### Markdown
 
