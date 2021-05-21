@@ -205,7 +205,7 @@ end
     show(bf, "text/plain", lq(Matrix(I, 4, 4)))
     seekstart(bf)
     @test String(take!(bf)) == """
-LQ{Float64, Matrix{Float64}}
+LinearAlgebra.LQ{Float64, Matrix{Float64}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
