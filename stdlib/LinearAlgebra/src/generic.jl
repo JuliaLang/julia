@@ -1558,6 +1558,9 @@ function det(A::AbstractMatrix{T}) where T
 end
 det(x::Number) = x
 
+# Resolve Issue #40128
+det(A::AbstractMatrix{BigInt}) = det_bareiss(A)
+
 """
     logabsdet(M)
 
@@ -1619,6 +1622,55 @@ end
 logdet(A) = log(det(A))
 
 const NumberArray{T<:Number} = AbstractArray{T}
+
+exactdiv(a, b) = a/b
+exactdiv(a::Integer, b::Integer) = div(a, b)
+
+"""
+    det_bareiss!(M)
+
+Calculates the determinant of a matrix using the
+[Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm) using
+inplace operations.
+
+# Examples
+```jldoctest
+julia> M = [1 0; 2 2]
+2×2 Matrix{Int64}:
+ 1  0
+ 2  2
+
+julia> LinearAlgebra.det_bareiss!(M)
+2
+```
+"""
+function det_bareiss!(M)
+    n = checksquare(M)
+    sign, prev = Int8(1), one(eltype(M))
+    for i in 1:n-1
+        if iszero(M[i,i]) # swap with another col to make nonzero
+            swapto = findfirst(!iszero, @view M[i,i+1:end])
+            isnothing(swapto) && return zero(prev)
+            sign = -sign
+            Base.swapcols!(M, i, i + swapto)
+        end
+        for k in i+1:n, j in i+1:n
+            M[j,k] = exactdiv(M[j,k]*M[i,i] - M[j,i]*M[i,k], prev)
+        end
+        prev = M[i,i]
+    end
+    return sign * M[end,end]
+end
+"""
+    LinearAlgebra.det_bareiss(M)
+
+Calculates the determinant of a matrix using the
+[Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm).
+Also refer to [`det_bareiss!`](@ref).
+"""
+det_bareiss(M) = det_bareiss!(copy(M))
+
+
 
 """
     promote_leaf_eltypes(itr)
