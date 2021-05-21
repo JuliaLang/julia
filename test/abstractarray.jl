@@ -1358,4 +1358,9 @@ end
         @test [v v; v v;;; v v; v v] == fill(1, 2, 2, 2)
         @test [v v v; v v v;;; v v v; v v v] == fill(1, 2, 3, 2)
     end
+
+    # mixed scalars and arrays work, for numbers and strings
+    for v = (1, "test")
+        @test [v v;;; fill(v, 1, 2)] == fill(v, 1, 2, 2)
+    end
 end
