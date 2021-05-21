@@ -1919,6 +1919,8 @@
            (parse-array-inner s a is-row-first semicolon-count max-level closer #f gotlinesep)))
         ((#\;)
          (or gotnewline (take-token s))
+         (if (and (> semicolon-count 0) (ts:space? s)) ; disallow [a; ;b]
+             (error "multiple semicolons must be adjacent in an array expression"))
          (let ((next (peek-token s)))
            (let ((is-line-sep
                  (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 1))
