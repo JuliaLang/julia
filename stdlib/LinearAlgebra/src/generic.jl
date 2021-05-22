@@ -1795,3 +1795,35 @@ function normalize(a::AbstractArray, p::Real = 2)
         return T[]
     end
 end
+
+"""
+    islc(A::AbstractMatrix, y::AbstractVector)
+
+For a matrix A and a vector y, checks if y is a linear combination of columns of A.
+In other words, checks that equation Ax = y has a solution or not.
+
+
+# Examples
+```jldoctest
+julia> A = [1 1; 1 0]
+2×2 Matrix{Int64}:
+ 1  1
+ 1  0
+julia> y = [3, 1]
+ 2-element Vector{Int64}:
+  3
+  1
+julia> println(islc(A, y))
+  true
+```
+"""
+function islc(A::AbstractMatrix, y::AbstractVector)
+    tA = copy(A)
+    ty = copy(y)
+
+    r1 = rank(tA)
+    tA = [tA'; ty']'
+    r2 = rank(tA)
+
+    return r1 == r2
+end
