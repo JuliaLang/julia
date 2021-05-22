@@ -47,6 +47,7 @@ function _threadsfor(iter, lbody, schedule)
     range = iter.args[2]
     quote
         local threadsfor_fun
+        local threadsfor_fun_dynamic
         let range = $(esc(range))
         function threadsfor_fun(onethread=false)
             r = range # Load into local variable
@@ -85,6 +86,15 @@ function _threadsfor(iter, lbody, schedule)
                 $(esc(lbody))
             end
         end
+        idx = Atomic{UInt}(1)
+        function threadsfor_fun_dynamic()
+            r = range # Load into local variable
+            lenr = length(r)
+            while (i = atomic_add!(idx, UInt(1))) <= lenr
+                local $(esc(lidx)) = @inbounds r[i]
+                $(esc(lbody))
+            end
+        end
         end
         if threadid() != 1 || ccall(:jl_in_threaded_region, Cint, ()) != 0
             $(if schedule === :static
@@ -94,7 +104,11 @@ function _threadsfor(iter, lbody, schedule)
               :(Base.invokelatest(threadsfor_fun, true))
               end)
         else
-            threading_run(threadsfor_fun)
+            $(if schedule === :dynamic
+              :(threading_run(threadsfor_fun_dynamic))
+            else
+              :(threading_run(threadsfor_fun))
+            end)
         end
         nothing
     end
@@ -110,14 +124,19 @@ A barrier is placed at the end of the loop which waits for all tasks to finish
 execution.
 
 The `schedule` argument can be used to request a particular scheduling policy.
-The only currently supported value is `:static`, which creates one task per thread
+Currently supported values are `:static` and `:dynamic`. `:static` creates one task per thread
 and divides the iterations equally among them. Specifying `:static` is an error
 if used from inside another `@threads` loop or from a thread other than 1.
+`:dynamic` creates one task per thread if possible and gets one new item from the iterations
+only if previous item is processed until all items are processed.
 
 The default schedule (used when no `schedule` argument is present) is subject to change.
 
 !!! compat "Julia 1.5"
     The `schedule` argument is available as of Julia 1.5.
+
+!!! compat "Julia 1.7"
+        The `schedule` argument supports `:dynamic` as of Julia 1.7.
 
 See also: [`@spawn`](@ref Threads.@spawn), [`nthreads()`](@ref Threads.nthreads),
 [`threadid()`](@ref Threads.threadid), `pmap` in [`Distributed`](@ref man-distributed),
@@ -133,7 +152,7 @@ macro threads(args...)
             # for now only allow quoted symbols
             sched = nothing
         end
-        if sched !== :static
+        if sched ∉ [:static, :dynamic]
             throw(ArgumentError("unsupported schedule argument in @threads"))
         end
     elseif na == 1
