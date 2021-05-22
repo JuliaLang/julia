@@ -283,7 +283,7 @@ _firstslice(i::OneTo) = OneTo(1)
 _firstslice(i::Slice) = Slice(_firstslice(i.indices))
 _firstslice(i) = i[firstindex(i):firstindex(i)]
 
-function _mapreducedim!(f, op, R::AbstractArray, As::Vararg{AbstractArrayOrBroadcasted,N}) where {N}
+function _mapreducedim!(f::F, op, R::AbstractArray, As::Vararg{AbstractArrayOrBroadcasted,N}) where {F,N}
     @assert N >= 1
     A = As[1]
     for B in tail(As)
@@ -292,12 +292,12 @@ function _mapreducedim!(f, op, R::AbstractArray, As::Vararg{AbstractArrayOrBroad
     end
     lsiz = check_reducedims(R,A)
     isempty(A) && return R
-    if N == 1 && has_fast_linear_indexing(A) && lsiz > 16
+    if all(has_fast_linear_indexing, As) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
         nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i = 1:nslices
-            @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+            @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz, tail(As)...))
             ibase += lsiz
         end
         return R
@@ -311,7 +311,7 @@ function _mapreducedim!(f, op, R::AbstractArray, As::Vararg{AbstractArrayOrBroad
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
             @simd for i in axes(A, 1)
-                r = op(r, f(map(a -> a[i,IA], As)...))
+                r = op(r, f(ith_all(i,IA, As)...))
             end
             R[i1,IR] = r
         end
@@ -319,22 +319,17 @@ function _mapreducedim!(f, op, R::AbstractArray, As::Vararg{AbstractArrayOrBroad
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             @simd for i in axes(A, 1)
-                # R[i,IR] = op(R[i,IR], f(ntuple(n -> @inbounds(As[n][i,IA]), Val(N))...)) # slow!
-                if N == 1
-                    R[i,IR] = op(R[i,IR], f(A[i,IA]))
-                elseif N == 2
-                    R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA]))
-                elseif N == 3
-                    R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA], As[3][i,IA]))
-                elseif N == 4
-                    R[i,IR] = op(R[i,IR], f(A[i,IA], As[2][i,IA], As[3][i,IA], As[4][i,IA]))
-                else
-                    error("no go! can't seem to make the generic case fast")
-                end
+                R[i,IR] = op(R[i,IR], f(ith_all(i, IA, As)...)) 
             end
         end
     end
     return R
+end
+
+@inline ith_all(i, I, ::Tuple{}) = () # ith_all(i, as) used for map, in abstractarray.jl
+function ith_all(i, I, as::Tuple)
+    @_propagate_inbounds_meta
+    return (as[1][i, I], ith_all(i, I, tail(as))...)
 end
 
 mapreducedim!(f, op, R::AbstractArray, A::Vararg{AbstractArrayOrBroadcasted,N}) where {N} =
@@ -424,26 +419,31 @@ rather than putting B last like this.
 
 #=
 
-julia> @btime reduce(+, map(dot, $(rand(100,100)), $(rand(100,100))));  # as in 1.6
-  6.979 μs (2 allocations: 78.20 KiB)
 
-julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)));
-  7.156 μs (2 allocations: 78.20 KiB)
+julia> @btime reduce(+, map(/, $(rand(100,100)), $(rand(100,100))));  # as in 1.6
+  5.736 μs (2 allocations: 78.20 KiB)
 
-# Not giving init means you get the map(f,A,B) behaviour of before, to compare:
+julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)));
+  9.291 μs (0 allocations: 0 bytes)  # with zip
 
-julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=1);
-  5.465 μs (3 allocations: 79.08 KiB)
+julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)), dims=1);
+  5.500 μs (3 allocations: 79.08 KiB)
+  9.708 μs (3 allocations: 79.08 KiB)  # without mapreduce_impl story
 
-julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=1, init=0.0);
-  7.750 μs (1 allocation: 896 bytes)
+julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)), dims=1, init=0.0);
+  8.500 μs (1 allocation: 896 bytes)
+  266.750 μs (40090 allocations: 627.27 KiB)  # with vararg mapreduce_impl
+  4.869 μs (301 allocations: 5.56 KiB)        # with explicit N==2 version
+  2.273 μs (1 allocation: 896 bytes)          # with ith_all
 
-julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=2);
-  5.900 μs (7 allocations: 79.16 KiB)
+julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)), dims=2);
+  5.910 μs (7 allocations: 79.16 KiB)
 
-julia> @btime mapreduce(dot, +, $(rand(100,100)), $(rand(100,100)), dims=2, init=0.0);
-  2.731 μs (5 allocations: 976 bytes)       # with explicit if N == 2 ... 
-  1.110 ms (50005 allocations: 782.20 KiB)  # with map() or ntuple() etc.
+julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)), dims=2, init=0.0);
+  2.755 μs (5 allocations: 976 bytes)       # with explicit if N==2 
+1.098 ms (50005 allocations: 782.20 KiB)    # with ntuple
+  2.750 μs (5 allocations: 976 bytes)       # with ith_all
+
 
 =#
 
