@@ -205,24 +205,44 @@ function show(io::IO, m::Method)
         print(io, m.name, "(...) in ", m.module)
         return
     end
-    print(io, decls[1][2], "(")
-    join(
-        io,
-        String[isempty(d[2]) ? d[1] : string(d[1], "::", d[2]) for d in decls[2:end]],
-        ", ",
-        ", ",
-    )
+    printstyled(io, decls[1][2]; color=:blue)
+    print(io, "(")
+    for (d, i) in zip(decls[2:end], 2:length(decls))
+        if isempty(d[2])
+            printstyled(io, d[1]; color=:magenta)
+        else
+            printstyled(io, d[1]; color=:magenta)
+            typespec = split(d[2], "{"; limit=2)
+            if length(typespec) == 1
+                printstyled(io, "::", d[2]; color=:yellow)
+            else
+                printstyled(io, "::", typespec[1]; color=:yellow)
+                printstyled(io, "{", typespec[2]; color=247)
+            end
+        end
+        if i < length(decls)
+            printstyled(io, ", ")
+        end
+    end
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
-        print(io, "; ")
-        join(io, map(sym_to_string, kwargs), ", ", ", ")
+        printstyled(io, "; "; bold=true)
+        for (k, i) in zip(kwargs, 1:length(kwargs))
+            printstyled(io, sym_to_string(k); color=:magenta)
+            if i < length(kwargs)
+                printstyled(io, ", ")
+            end
+        end
     end
     print(io, ")")
     show_method_params(io, tv)
-    print(io, " in ", m.module)
+    printstyled(io, " in "; color=:light_black)
+    printstyled(io, m.module; color=:light_red)
     if line > 0
         file, line = updated_methodloc(m)
-        print(io, " at ", file, ":", line)
+        printstyled(io, " at "; color=:light_black)
+        printstyled(io, file; color=:green)
+        printstyled(io, ":", line)
     end
 end
 
@@ -236,15 +256,16 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
         # try to detect Builtin
         print(io, "# built-in function; no methods")
     else
-        m = n==1 ? "method" : "methods"
-        print(io, "# $n $m")
+        printstyled(io, "# "; color=:light_black)
+        printstyled(io, n; color=:cyan, bold=true)
+        print(io, " ", n==1 ? "method" : "methods")
         sname = string(name)
-        namedisplay = namefmt(sname)
         if hasname
             what = startswith(sname, '@') ? "macro" : "generic function"
-            print(io, " for ", what, " ", namedisplay)
+            print(io, " for ", what, " ")
+            printstyled(io, sname; color=:blue)
         elseif '#' in sname
-            print(io, " for anonymous function ", namedisplay)
+            print(io, " for anonymous function ", namefmt(sname))
         elseif mt === _TYPE_NAME.mt
             print(io, " for type constructor")
         end
