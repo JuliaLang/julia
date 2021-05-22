@@ -466,6 +466,7 @@ I = findall(!iszero, z)
 @test std(A_3_3, dims=1) == OffsetArray([1 1 1], A_3_3.offsets)
 @test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), A_3_3.offsets)
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
+@test diff(reshape(1:12, -1:1, -1:2), dims=1) == OffsetArray(fill(1, 2, 4), -2, -2)
 
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/92
 A92 = OffsetArray(reshape(1:27, 3, 3, 3), -2, -2, -2)
