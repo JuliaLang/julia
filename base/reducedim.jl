@@ -368,7 +368,7 @@ julia> mapreduce(isodd, |, a, dims=1)
 mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
     _mapreduce_dim(f, op, init, A, dims)
 
-mapreduce(f, op, A::AbstractArrayOrBroadcasted, Bs::Vararg{AbstractArrayOrBroadcasted,N}; dims=:, init=_InitialValue()) where {N} =
+mapreduce(f, op, A::AbstractArrayOrBroadcasted, Bs::AbstractArrayOrBroadcasted...; dims=:, init=_InitialValue()) =
     _mapreduce_dim_vararg(f, op, init, (A, Bs...), dims)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
@@ -381,16 +381,18 @@ _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 
-_mapreduce_dim_vararg(f, op, init, As::Tuple, ::Colon) = mapreduce(Base.splat(f), op, zip(As...); init)
+_mapreduce_dim_vararg(f, op, init, As::Tuple, ::Colon) = 
+    only(_mapreduce_dim_vararg(f, op, init, As, 1:maximum(ndims, As)))
 
-_mapreduce_dim_vararg(f, op, ::_InitialValue, As::Tuple, ::Colon) = mapreduce(Base.splat(f), op, zip(As...))
+_mapreduce_dim_vararg(f, op, ::_InitialValue, As::Tuple, ::Colon) = 
+    mapreduce(splat(f), op, zip(As...)) # fallback -- but extending _mapreduce won't be hard
 
 mapreduce_empty(f::typeof(splat(+)).name.wrapper, op, ::Type{T}) where {T<:Tuple} =
     reduce_empty(op, Core.Compiler.return_type(op, T))  # for mapreduce(+, +, Int[], Int[])
 
 
 _mapreduce_dim_vararg(f, op, ::_InitialValue, As::Tuple, dims) =
-    _mapreduce_dim(identity, op, _InitialValue(), map(f, As...), dims) # fallback
+    _mapreduce_dim(identity, op, _InitialValue(), map(f, As...), dims) # fallback -- no vararg reducedim_init
 
 _mapreduce_dim_vararg(f, op, init, As::Tuple, dims) =
     _mapreduce_dim_vararg(f, op, init, As, dims, IteratorSize(Generator(f, As...)))
@@ -403,6 +405,7 @@ _mapreduce_dim_vararg(f, op, init, As::Tuple, dims, ::SizeUnknown) = 1 in dims ?
     map((xs...) -> op(init, f(xs...)), As...)
 
 #=
+# shapes:
 
 mapreduce(/,+,[1 2 3; 4 5 6],[7,8,9,10],dims=2,init=0.0)
 mapreduce(/,+,[1 2 3; 4 5 6],[7,8,9,10],dims=1,init=0.0)
@@ -419,31 +422,37 @@ rather than putting B last like this.
 
 #=
 
+# times, scalar reduction:
 
 julia> @btime reduce(+, map(/, $(rand(100,100)), $(rand(100,100))));  # as in 1.6
   5.736 μs (2 allocations: 78.20 KiB)
 
 julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)));
-  9.291 μs (0 allocations: 0 bytes)  # with zip
+  9.291 μs (0 allocations: 0 bytes)    # with zip
+  5.340 μs (1 allocation: 16 bytes)    # with _mapreduce, ultimately mapreduce_impl
+
+julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)); init=0.0);
+  2.713 μs (9 allocations: 368 bytes)  # with only(..., dims=all), ultimately mapreduce_impl
+
+
+# times, with dims:
 
 julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)), dims=1);
   5.500 μs (3 allocations: 79.08 KiB)
   9.708 μs (3 allocations: 79.08 KiB)  # without mapreduce_impl story
 
 julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)), dims=1, init=0.0);
-  8.500 μs (1 allocation: 896 bytes)
-  266.750 μs (40090 allocations: 627.27 KiB)  # with vararg mapreduce_impl
-  4.869 μs (301 allocations: 5.56 KiB)        # with explicit N==2 version
+  266.750 μs (40090 allocations: 627.27 KiB)  # with vararg mapreduce_impl, first try
+  4.869 μs (301 allocations: 5.56 KiB)        # with explicit N==2 version of mapreduce_impl
   2.273 μs (1 allocation: 896 bytes)          # with ith_all
 
 julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)), dims=2);
   5.910 μs (7 allocations: 79.16 KiB)
 
 julia> @btime mapreduce(/, +, $(rand(100,100)), $(rand(100,100)), dims=2, init=0.0);
-  2.755 μs (5 allocations: 976 bytes)       # with explicit if N==2 
-1.098 ms (50005 allocations: 782.20 KiB)    # with ntuple
+  1.098 ms (50005 allocations: 782.20 KiB)  # with vararg version, ntuple, first try
+  2.755 μs (5 allocations: 976 bytes)       # with explicit if N==2 ...
   2.750 μs (5 allocations: 976 bytes)       # with ith_all
-
 
 =#
 
