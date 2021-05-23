@@ -227,6 +227,12 @@ struct HandlerInfo
     handler_at::Vector{Tuple{Int,Int}} # tuple of current (handler, exception stack) value at the pc
 end
 
+struct StmtChange
+    slot::SlotNumber
+    typ
+    StmtChange(slot::SlotNumber, @nospecialize(typ)) = new(slot, typ)
+end
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -249,6 +255,9 @@ mutable struct InferenceState
     ssavaluetypes::Vector{Any}
     stmt_edges::Vector{Vector{Any}}
     stmt_info::Vector{CallInfo}
+    # additional state updates at current statement made by means other than the assignment
+    # e.g. type information refinement from `typeassert` call itself
+    curr_stmt_changes::Vector{StmtChange}
 
     #= intermediate states for interprocedural abstract interpretation =#
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
@@ -301,6 +310,8 @@ mutable struct InferenceState
         stmt_edges = Vector{Vector{Any}}(undef, nstmts)
         stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
 
+        curr_stmt_changes = StmtChange[]
+
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
@@ -350,7 +361,7 @@ mutable struct InferenceState
 
         this = new(
             mi, world, mod, sptypes, slottypes, src, cfg, method_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info, curr_stmt_changes,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,

@@ -39,6 +39,16 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     multiple_matches = napplicable > 1
     fargs = arginfo.fargs
     all_effects = EFFECTS_TOTAL
+    if fargs !== nothing
+        # keeps refinement information on slot types obtained from call signature
+        refine_targets = Union{Nothing,StmtChange}[]
+        for i = 1:length(fargs)
+            x = fargs[i]
+            push!(refine_targets, isa(x, SlotNumber) ? StmtChange(x, Bottom) : nothing)
+        end
+    else
+        refine_targets = nothing
+    end
 
     for i in 1:napplicable
         match = applicable[i]::MethodMatch
@@ -162,6 +172,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 conditionals[2][i] = tmerge(𝕃ᵢ, conditionals[2][i], cnd.elsetype)
             end
         end
+        if refine_targets !== nothing
+            for i in 1:length(refine_targets)
+                target = refine_targets[i]
+                if target !== nothing
+                    refine_targets[i] = StmtChange(target.slot, tmerge(𝕃ᵢ, fieldtype(sig, i), target.typ))
+                end
+            end
+        end
         if bail_out_call(interp, InferenceLoopState(sig, rettype, all_effects), sv)
             add_remark!(interp, sv, "Call inference reached maximally imprecise information. Bailing on.")
             break
@@ -177,6 +195,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # there is unanalyzed candidate, widen type and effects to the top
         rettype = excttype = Any
         all_effects = Effects()
+        refine_targets = nothing
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!all(matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -203,6 +222,18 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
     end
 
+    # if refinement information on slot types is available, apply it now
+    anyrefined = false
+    if rettype !== Bottom && refine_targets !== nothing
+        for target in refine_targets
+            if target !== nothing
+                if target.typ !== Bottom
+                    push!(sv.curr_stmt_changes, target)
+                    anyrefined = true # TODO limit this when t ⋤ old
+                end
+            end
+        end
+    end
     if call_result_unused(si) && !(rettype === Bottom)
         add_remark!(interp, sv, "Call result type was widened because the return value is unused")
         # We're mainly only here because the optimizer might want this code,
@@ -213,7 +244,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # and avoid keeping track of a more complex result type.
         rettype = Any
     end
-    add_call_backedges!(interp, rettype, all_effects, edges, matches, atype, sv)
+    add_call_backedges!(interp, rettype, all_effects, anyrefined, edges, matches, atype, sv)
     if isa(sv, InferenceState)
         # TODO (#48913) implement a proper recursion handling for irinterp:
         # This works just because currently the `:terminate` condition guarantees that
@@ -492,8 +523,9 @@ function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospe
     end
 end
 
-function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype), all_effects::Effects,
-    edges::Vector{MethodInstance}, matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
+function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype),
+    all_effects::Effects, anyrefined::Bool, edges::Vector{MethodInstance},
+    matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
     sv::AbsIntState)
     # don't bother to add backedges when both type and effects information are already
     # maximized to the top since a new method couldn't refine or widen them anyway
@@ -503,7 +535,9 @@ function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype)
         if !isoverlayed(method_table(interp))
             all_effects = Effects(all_effects; nonoverlayed=ALWAYS_FALSE)
         end
-        all_effects === Effects() && return nothing
+        if all_effects === Effects() && !anyrefined
+            return nothing
+        end
     end
     for edge in edges
         add_backedge!(sv, edge)
@@ -1821,7 +1855,12 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
     ft = popfirst!(argtypes)
     rt = builtin_tfunction(interp, f, argtypes, sv)
     pushfirst!(argtypes, ft)
-    if has_mustalias(𝕃ᵢ) && f === getfield && isa(fargs, Vector{Any}) && la ≥ 3
+    if f === typeassert
+        # perform very limited back-propagation of invariants after this type assertion
+        if rt !== Bottom && isa(fargs, Vector{Any}) && (x2 = fargs[2]; isa(x2, SlotNumber))
+            push!(sv.curr_stmt_changes, StmtChange(x2, rt))
+        end
+    elseif has_mustalias(𝕃ᵢ) && f === getfield && isa(fargs, Vector{Any}) && la ≥ 3
         a3 = argtypes[3]
         if isa(a3, Const)
             if rt !== Bottom && !isalreadyconst(rt)
@@ -3383,6 +3422,17 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
+            end
+            while !isempty(frame.curr_stmt_changes)
+                stmtchange = pop!(frame.curr_stmt_changes)
+                if changes !== nothing && stmtchange.slot == changes.var
+                    continue # type propagation from statement (like assignment) should have the precedence
+                end
+                vtype = currstate[slot_id(stmtchange.slot)]
+                if ⋤(𝕃ᵢ, stmtchange.typ, vtype.typ)
+                    stmtupdate = StateUpdate(stmtchange.slot, VarState(stmtchange.typ, vtype.undef), false)
+                    stoverwrite1!(currstate, stmtupdate)
+                end
             end
             if rt === nothing
                 ssavaluetypes[currpc] = Any
