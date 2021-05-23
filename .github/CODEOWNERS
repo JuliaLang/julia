@@ -1,6 +1,5 @@
-CODEOWNERS @JuliaLang/github-actions @DilumAluthge
-/.github/ @JuliaLang/github-actions @DilumAluthge
-/.buildkite/ @staticfloat @DilumAluthge
-
-/stdlib/LinearAlgebra/ @andreasnoack
-/stdlib/libblastrampoline_jll/ @ViralBShah
+/.github/ @JuliaLang/github-actions 
+/.buildkite/ @JuliaLang/github-actions
+/src @JuliaLang/compiler
+/stdlib/LinearAlgebra/ @JuliaLang/linearalgebra
+/stdlib/libblastrampoline_jll/ @staticfloat
