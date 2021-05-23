@@ -1,1 +1,7 @@
-/.github/workflows/ @JuliaLang/github-actions
+/.github/ @JuliaLang/github-actions 
+/.buildkite/ @JuliaLang/github-actions
+/src/ @JuliaLang/compiler
+/stdlib/LinearAlgebra/ @JuliaLang/linearalgebra
+/stdlib/libblastrampoline_jll/ @staticfloat
+/test/ @JuliaLang/test
+
