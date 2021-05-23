@@ -191,7 +191,8 @@ end
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
 (\)(x::Number, D::Diagonal) = Diagonal(x \ D.diag)
-
+(^)(D::Diagonal, a::Number) = Diagonal(D.diag .^ a)
+                    
 function (*)(Da::Diagonal, Db::Diagonal)
     nDa, mDb = size(Da, 2), size(Db, 1)
     if nDa != mDb
