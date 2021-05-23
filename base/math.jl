@@ -149,18 +149,24 @@ julia> evalpoly(2, (1, 2, 3))
 17
 ```
 """
-function evalpoly(x, p::Tuple)
+@inline function evalpoly(x, p::Tuple)
     N = length(p)
     N < 7 && return _evalpoly(x, p)
-    leftover = N - mod(N, 4) + 1
+    nmod4 = mod(N, 4)
+    leftover = N - nmod4 + 1
     x2=x*x
     x4=x2*x2
-    ex = _evalpoly(x, p[leftover:N])
-    for i in end_length-4:-4:1
-        part = muladd(x2, muladd(x, p[i+3], p[i+2]), muladd(x, p[i+1], p[i]))
-        ex = muladd(x4, ex, part)
+    if nmod4 == 0
+        res = muladd(x2, muladd(x, p[end], p[end-1]), muladd(x, p[end-2], p[end-3]))
+        leftover -= 4
+    else
+        res = _evalpoly(x, p[leftover:N])
     end
-    ex
+    for i in leftover-4:-4:1
+        part = muladd(x2, muladd(x, p[i+3], p[i+2]), muladd(x, p[i+1], p[i]))
+        res = muladd(x4, res, part)
+    end
+    res
 end
 evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 
