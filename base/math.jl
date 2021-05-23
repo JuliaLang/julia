@@ -155,7 +155,7 @@ function evalpoly(x, p::Tuple)
     leftover = N - mod(N, 4) + 1
     x2=x*x
     x4=x2*x2
-    ex = _evalpoly(x, x2, p[leftover:N])
+    ex = _evalpoly(x, p[leftover:N])
     for i in end_length-4:-4:1
         part = muladd(x2, muladd(x, p[i+3], p[i+2]), muladd(x, p[i+1], p[i]))
         ex = muladd(x4, ex, part)
