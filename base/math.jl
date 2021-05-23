@@ -135,8 +135,8 @@ Evaluate the polynomial ``\\sum_k x^{k-1} p[k]`` for the coefficients `p[1]`, `p
 that is, the coefficients are given in ascending order by power of `x`.
 Loops are unrolled at compile time if the number of coefficients is statically known, i.e.
 when `p` is a `Tuple`.
-This function generates efficient code using Horner's method if `x` is real, or using
-a Goertzel-like [^DK62] algorithm if `x` is complex.
+This function generates efficient code using a modified version of Horner's method if `x` is real,
+or using a Goertzel-like [^DK62] algorithm if `x` is complex.
 
 [^DK62]: Donald Knuth, Art of Computer Programming, Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
 
@@ -150,18 +150,18 @@ julia> evalpoly(2, (1, 2, 3))
 ```
 """
 function evalpoly(x, p::Tuple)
-    if @generated
-        N = length(p.parameters::Core.SimpleVector)
-        ex = :(p[end])
-        for i in N-1:-1:1
-            ex = :(muladd(x, $ex, p[$i]))
-        end
-        ex
-    else
-        _evalpoly(x, p)
+    N = length(p)
+    N < 7 && return _evalpoly(x, p)
+    leftover = N - mod(N, 4) + 1
+    x2=x*x
+    x4=x2*x2
+    ex = _evalpoly(x, x2, p[leftover:N])
+    for i in end_length-4:-4:1
+        part = muladd(x2, muladd(x, p[i+3], p[i+2]), muladd(x, p[i+1], p[i]))
+        ex = muladd(x4, ex, part)
     end
+    ex
 end
-
 evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 
 function _evalpoly(x, p)
