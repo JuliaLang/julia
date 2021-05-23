@@ -1,1 +1,6 @@
-/.github/workflows/ @JuliaLang/github-actions
+CODEOWNERS @JuliaLang/github-actions @DilumAluthge
+/.github/ @JuliaLang/github-actions @DilumAluthge
+/.buildkite/ @staticfloat @DilumAluthge
+
+/stdlib/LinearAlgebra/ @andreasnoack
+/stdlib/libblastrampoline_jll/ @ViralBShah
