@@ -565,9 +565,10 @@ exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
 """
     cis(A::AbstractMatrix)
 
-Similar to `exp(im*A)`, this computes ``\\exp(i A)`` for a square matrix ``A``, but is typically faster.
+Same as `exp(im*A)`, this computes ``\\exp(i A)`` for a square matrix ``A``, 
+but is typically faster, especially if `A` is `Hermitian` or real-`Symmetric`.
 
-See also [`cispi`](@ref), [`exp`](@ref).
+See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref).
 
 !!! compat "Julia 1.7"
     Support for using `cis` with matrices was added in Julia 1.7.
