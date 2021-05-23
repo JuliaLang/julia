@@ -25,6 +25,8 @@ Distributed.put!(::Distributed.Future, ::Any)
 Distributed.take!(::RemoteChannel, ::Any...)
 Distributed.isready(::RemoteChannel, ::Any...)
 Distributed.isready(::Distributed.Future)
+Distributed.putwillblock(::RemoteChannel, ::Any...)
+Distributed.takewillblock(::RemoteChannel, ::Any...)
 Distributed.AbstractWorkerPool
 Distributed.WorkerPool
 Distributed.CachingPool

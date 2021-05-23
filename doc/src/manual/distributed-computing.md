@@ -530,7 +530,7 @@ return an `AbstractChannel`.
 For example, `RemoteChannel(()->Channel{Int}(10), pid)`, will return a reference to a channel
 of type `Int` and size 10. The channel exists on worker `pid`.
 
-Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and [`wait`](@ref)
+Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref), [`putwillblock`](@ref), [`takewillblock`](@ref) and [`wait`](@ref)
 on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote process.
 
 [`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.

@@ -224,6 +224,38 @@ function isready(rr::RemoteChannel, args...)
     end
 end
 
+"""
+    takewillblock(rr::RemoteChannel, args...)
+
+Returns `true` if a [`take!`](@ref) on a [`RemoteChannel`](@ref) will block.
+Note that this function can cause race conditions, since by the
+time you receive its result it may no longer be true. 
+"""
+function takewillblock(rr::RemoteChannel, args...) 
+    rid = remoteref_id(rr)
+    return if rr.where == myid()
+        takewillblock(lookup_ref(rid).c, args...)
+    else
+        remotecall_fetch(rid->takewillblock(lookup_ref(rid).c, args...), rr.where, rid)
+    end
+end
+
+"""
+    putwillblock(rr::RemoteChannel, args...)
+
+Returns `true` if a [`put!`](@ref) on a [`RemoteChannel`](@ref) will block.
+Note that this function can cause race conditions, since by the
+time you receive its result it may no longer be true. 
+"""
+function putwillblock(rr::RemoteChannel, args...) 
+    rid = remoteref_id(rr)
+    return if rr.where == myid()
+        putwillblock(lookup_ref(rid).c, args...)
+    else
+        remotecall_fetch(rid->putwillblock(lookup_ref(rid).c, args...), rr.where, rid)
+    end
+end
+
 del_client(rr::AbstractRemoteRef) = del_client(remoteref_id(rr), myid())
 
 del_client(id, client) = del_client(PGRP, id, client)
