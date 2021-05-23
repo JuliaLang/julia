@@ -229,9 +229,9 @@ end
 
 Returns `true` if a [`take!`](@ref) on a [`RemoteChannel`](@ref) will block.
 Note that this function can cause race conditions, since by the
-time you receive its result it may no longer be true. 
+time you receive its result it may no longer be true.
 """
-function takewillblock(rr::RemoteChannel, args...) 
+function takewillblock(rr::RemoteChannel, args...)
     rid = remoteref_id(rr)
     return if rr.where == myid()
         takewillblock(lookup_ref(rid).c, args...)
@@ -245,9 +245,9 @@ end
 
 Returns `true` if a [`put!`](@ref) on a [`RemoteChannel`](@ref) will block.
 Note that this function can cause race conditions, since by the
-time you receive its result it may no longer be true. 
+time you receive its result it may no longer be true.
 """
-function putwillblock(rr::RemoteChannel, args...) 
+function putwillblock(rr::RemoteChannel, args...)
     rid = remoteref_id(rr)
     return if rr.where == myid()
         putwillblock(lookup_ref(rid).c, args...)

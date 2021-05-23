@@ -151,7 +151,7 @@ Standard library changes
 
 
 #### Distributed
-* New functions `putwillblock` and `takewillblock` that test if calling `put!` or `take!` on a RemoteChannel would block  ([#??])
+* New functions `putwillblock` and `takewillblock` that test if calling `put!` or `take!` on a RemoteChannel would block  ([#40921])
 
 #### UUIDs
 
