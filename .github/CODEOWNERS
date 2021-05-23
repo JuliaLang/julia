@@ -3,3 +3,5 @@
 /src @JuliaLang/compiler
 /stdlib/LinearAlgebra/ @JuliaLang/linearalgebra
 /stdlib/libblastrampoline_jll/ @staticfloat
+/test @JuliaLang/test
+
