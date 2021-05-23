@@ -24,7 +24,7 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # if you are adding a new target, it can help to copy an similar, existing target
 #
 # autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
-# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack blastrampoline openblas utf8proc objconv libwhich
+# custom Makefile rules: openlibm dsfmt libsuitesparse-wrapper libsuitesparse lapack blastrampoline openblas utf8proc objconv libwhich
 # CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls
 #
 # downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
@@ -47,7 +47,7 @@ DEP_LIBS += csl
 endif
 
 ifeq ($(USE_GPL_LIBS), 1)
-DEP_LIBS += suitesparse-wrapper
+DEP_LIBS += libsuitesparse-wrapper
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
@@ -135,7 +135,7 @@ endif
 
 ifeq ($(USE_GPL_LIBS), 1)
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-DEP_LIBS += suitesparse
+DEP_LIBS += libsuitesparse
 endif
 endif
 
@@ -166,13 +166,13 @@ ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
 endif
 
-DEP_LIBS_STAGED := $(filter-out suitesparse-wrapper,$(DEP_LIBS))
+DEP_LIBS_STAGED := $(filter-out libsuitesparse-wrapper,$(DEP_LIBS))
 
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	suitesparse suitesparse-wrapper
+	libsuitesparse libsuitesparse-wrapper
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -184,7 +184,7 @@ DEP_LIBS_ALL := $(filter-out clang llvm-tools,$(DEP_LIBS_ALL))
 endif
 
 ifeq ($(USE_BINARYBUILDER_SUITESPARSE),0)
-DEP_LIBS_STAGED := $(filter-out suitesparse,$(DEP_LIBS_STAGED))
+DEP_LIBS_STAGED := $(filter-out libsuitesparse,$(DEP_LIBS_STAGED))
 endif
 
 ## Common build target prefixes
@@ -216,7 +216,7 @@ include $(SRCDIR)/objconv.mk
 include $(SRCDIR)/blastrampoline.mk
 include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
-include $(SRCDIR)/suitesparse.mk
+include $(SRCDIR)/libsuitesparse.mk
 include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
