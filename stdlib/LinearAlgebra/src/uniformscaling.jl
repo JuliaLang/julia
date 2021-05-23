@@ -139,7 +139,7 @@ isdiag(::UniformScaling) = true
 istriu(::UniformScaling) = true
 istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
-ishermitian(J::UniformScaling) = isreal(J.λ)
+ishermitian(J::UniformScaling) = isreal(J.λ) && isposdef(J.λ)
 isposdef(J::UniformScaling) = isposdef(J.λ)
 
 (+)(J::UniformScaling, x::Number) = J.λ + x

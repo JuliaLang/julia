@@ -113,6 +113,7 @@ end
     @test issymmetric(I)
     @test issymmetric(UniformScaling(complex(1.0,1.0)))
     @test ishermitian(I)
+    @test !ishermitian(-I)
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
     @test isposdef(UniformScaling(rand()))
     @test !isposdef(UniformScaling(-rand()))
