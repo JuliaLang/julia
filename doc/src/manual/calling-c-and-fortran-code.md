@@ -928,7 +928,7 @@ macro dlsym(func, lib)
         let zlocal = $z[]
             if zlocal == C_NULL
                 zlocal = dlsym($(esc(lib))::Ptr{Cvoid}, $(esc(func)))::Ptr{Cvoid}
-                $z[] = $zlocal
+                $z[] = zlocal
             end
             zlocal
         end
