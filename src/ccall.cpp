@@ -1692,6 +1692,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         // The inbounds gep makes it more clear to LLVM that the resulting value is not
         // a null pointer.
         auto strp = ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, obj, 1);
+        auto bptr = emit_bitcast(ctx, obj, T_pint8);
+        Value *len = tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_int8, bptr, Align(sizeof(size_t))));
+        Value *lowbit = ctx.builder.CreateTrunc(len, T_int1);
+        Value *bytegep = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, bptr, 1);
+        strp = ctx.builder.CreateSelect(lowbit, emit_bitcast(ctx, strp, T_pint8), bytegep);
         strp = ctx.builder.CreatePtrToInt(strp, T_size);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
