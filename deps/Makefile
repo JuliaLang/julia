@@ -134,7 +134,7 @@ DEP_LIBS += mpfr
 endif
 
 ifeq ($(USE_GPL_LIBS), 1)
-ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
+ifeq ($(USE_SYSTEM_LIBSUITESPARSE), 0)
 DEP_LIBS += libsuitesparse
 endif
 endif
@@ -183,7 +183,7 @@ ifeq ($(USE_BINARYBUILDER_LLVM),0)
 DEP_LIBS_ALL := $(filter-out clang llvm-tools,$(DEP_LIBS_ALL))
 endif
 
-ifeq ($(USE_BINARYBUILDER_SUITESPARSE),0)
+ifeq ($(USE_BINARYBUILDER_LIBSUITESPARSE),0)
 DEP_LIBS_STAGED := $(filter-out libsuitesparse,$(DEP_LIBS_STAGED))
 endif
 
