@@ -888,6 +888,19 @@ end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 
+# handler for displaying a hint in case the user tries to setindex
+# the instance of a number (probably attempting to use wrong indexing)
+# eg: a = [1 2; 3 4]; a[1][2] = 5
+function nonsetable_number_hint_handler(io, ex, arg_types, kwargs)
+    if ex.f == setindex! && arg_types[1] <: Number
+        print(io, "\nMaybe you are trying to use an invalid array indexing method? ")
+        print(io, "Separate each index with commas in a single set of brackets: ")
+        printstyled(io, "a[1, 2]", color=:cyan)
+    end
+end
+
+Experimental.register_error_hint(nonsetable_number_hint_handler, MethodError)
+
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)
 getindex(s::ExceptionStack, i::Int) = s.stack[i]
