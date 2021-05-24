@@ -5,7 +5,7 @@
     Schur <: Factorization
 
 Matrix factorization type of the Schur factorization of a matrix `A`. This is the
-return type of [`schur(_)`](@ref), the corresponding matrix factorization function.
+return type of [`schur(::Any)`](@ref), the corresponding matrix factorization function.
 
 If `F::Schur` is the factorization object, the (quasi) triangular Schur factor can
 be obtained via either `F.Schur` or `F.T` and the orthogonal/unitary Schur vectors
@@ -241,7 +241,7 @@ ordschur(schur::Schur, select::Union{Vector{Bool},BitVector}) =
     GeneralizedSchur <: Factorization
 
 Matrix factorization type of the generalized Schur factorization of two matrices
-`A` and `B`. This is the return type of [`schur(_, _)`](@ref), the corresponding
+`A` and `B`. This is the return type of [`schur(::Any, ::Any)`](@ref), the corresponding
 matrix factorization function.
 
 If `F::GeneralizedSchur` is the factorization object, the (quasi) triangular Schur

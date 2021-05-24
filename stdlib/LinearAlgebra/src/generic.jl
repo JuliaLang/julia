@@ -927,7 +927,7 @@ dot(x::Transpose, y::Transpose) = dot(parent(x), parent(y))
 
 Compute the generalized dot product `dot(x, A*y)` between two vectors `x` and `y`,
 without storing the intermediate result of `A*y`. As for the two-argument
-[`dot(_,_)`](@ref), this acts recursively. Moreover, for complex vectors, the
+[`dot(::Any, ::Any)`](@ref), this acts recursively. Moreover, for complex vectors, the
 first vector is conjugated.
 
 !!! compat "Julia 1.4"

@@ -106,7 +106,7 @@ Base.iterate(C::Cholesky, ::Val{:done}) = nothing
     CholeskyPivoted
 
 Matrix factorization type of the pivoted Cholesky factorization of a dense symmetric/Hermitian
-positive semi-definite matrix `A`. This is the return type of [`cholesky(_, Val(true))`](@ref),
+positive semi-definite matrix `A`. This is the return type of [`cholesky(::Any, Val(true))`](@ref),
 the corresponding matrix factorization function.
 
 The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`

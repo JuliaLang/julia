@@ -17,7 +17,7 @@ upper-Hessenberg matrix.
 If `F::Hessenberg` is the factorization object, the unitary matrix can be accessed
 with `F.Q` and the Hessenberg matrix with `F.H`. When `Q` is extracted, the resulting
 type is the `HessenbergQ` object, and may be converted to a regular matrix with
-[`convert(Array, _)`](@ref) (or `Array(_)` for short).
+[`convert(Array, ::Any)`](@ref) (or `Array(_)` for short).
 
 Iterating the decomposition produces the factors `F.Q` and `F.H`.
 
