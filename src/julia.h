@@ -429,6 +429,9 @@ typedef struct {
     jl_svec_t *cache;        // sorted array
     jl_svec_t *linearcache;  // unsorted array
     intptr_t hash;
+    uint8_t abstract;
+    uint8_t mutabl;
+    uint8_t references_self;
     struct _jl_methtable_t *mt;
     jl_array_t *partial;     // incomplete instantiations of this type
 } jl_typename_t;
@@ -489,8 +492,6 @@ typedef struct _jl_datatype_t {
     int32_t size; // TODO: move to _jl_datatype_layout_t
     int32_t ninitialized;
     uint32_t hash;
-    uint8_t abstract;
-    uint8_t mutabl;
     // memoized properties
     uint8_t hasfreetypevars; // majority part of isconcrete computation
     uint8_t isconcretetype; // whether this type can have instances
@@ -1136,10 +1137,10 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_svec(v)        jl_typeis(v,jl_simplevector_type)
 #define jl_is_simplevector(v) jl_is_svec(v)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
-#define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutabl)
-#define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->mutabl))
-#define jl_is_immutable(t)   (!((jl_datatype_t*)t)->mutabl)
-#define jl_is_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->mutabl))
+#define jl_is_mutable(t)     (((jl_datatype_t*)t)->name->mutabl)
+#define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->name->mutabl))
+#define jl_is_immutable(t)   (!((jl_datatype_t*)t)->name->mutabl)
+#define jl_is_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_uniontype(v)   jl_typeis(v,jl_uniontype_type)
 #define jl_is_typevar(v)     jl_typeis(v,jl_tvar_type)
 #define jl_is_unionall(v)    jl_typeis(v,jl_unionall_type)
@@ -1208,7 +1209,7 @@ STATIC_INLINE int jl_is_primitivetype(void *v) JL_NOTSAFEPOINT
 STATIC_INLINE int jl_is_structtype(void *v) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(v) &&
-            !((jl_datatype_t*)(v))->abstract &&
+            !((jl_datatype_t*)(v))->name->abstract &&
             !jl_is_primitivetype(v));
 }
 
@@ -1224,7 +1225,7 @@ STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d) JL_NOTSAFEPOINT
 
 STATIC_INLINE int jl_is_abstracttype(void *v) JL_NOTSAFEPOINT
 {
-    return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->abstract);
+    return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->name->abstract);
 }
 
 STATIC_INLINE int jl_is_array_type(void *t) JL_NOTSAFEPOINT
@@ -1315,7 +1316,7 @@ STATIC_INLINE int jl_egal_(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAY
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
     if (dt != (jl_datatype_t*)jl_typeof(b))
         return 0;
-    if (dt->mutabl) {
+    if (dt->name->mutabl) {
         if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
             return jl_egal__special(a, b, dt);
         return 0;
@@ -1355,7 +1356,7 @@ STATIC_INLINE int jl_is_concrete_type(jl_value_t *v) JL_NOTSAFEPOINT
 JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_method_t *definition);
 
 // type constructors
-JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule);
+JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule, int abstract, int mutabl);
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub);
 JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p);
 JL_DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n);

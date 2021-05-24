@@ -65,7 +65,7 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
-        if ((invariant || !dt->abstract) && !jl_is_kind(t1))
+        if ((invariant || !dt->name->abstract) && !jl_is_kind(t1))
             return 1;
         return 0;
     }

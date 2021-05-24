@@ -1362,7 +1362,7 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
             if (jl_is_concrete_type(utyp))
                 alwaysboxed = !jl_is_pointerfree(utyp);
             else
-                alwaysboxed = !((jl_datatype_t*)utyp)->abstract && ((jl_datatype_t*)utyp)->mutabl;
+                alwaysboxed = !((jl_datatype_t*)utyp)->name->abstract && ((jl_datatype_t*)utyp)->name->mutabl;
             if (alwaysboxed) {
                 // discovered that this union-split type must actually be isboxed
                 if (v.Vboxed) {
@@ -3149,7 +3149,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == jl_builtin_sizeof && nargs == 1) {
         const jl_cgval_t &obj = argv[1];
         jl_datatype_t *sty = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
-        assert(jl_string_type->mutabl);
+        assert(jl_string_type->name->mutabl);
         if (sty == jl_string_type || sty == jl_simplevector_type) {
             if (obj.constant) {
                 size_t sz;

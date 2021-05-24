@@ -162,8 +162,8 @@ function fully_eliminated(f, args, retval)
     end
 end
 
-# check that type.mutable can be fully eliminated
-f_mutable_nothrow(s::String) = Val{typeof(s).mutable}
+# check that ismutabletype(type) can be fully eliminated
+f_mutable_nothrow(s::String) = Val{typeof(s).name.mutable}
 @test fully_eliminated(f_mutable_nothrow, (String,))
 
 # check that ifelse can be fully eliminated

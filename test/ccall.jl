@@ -906,7 +906,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         global function $fname(s::$t)
             verbose && println("B: ", s)
             @test s == $v
-            if($(t).mutable)
+            if $(t).name.mutable
                 @test !(s === $a)
             end
             global c = s
@@ -934,7 +934,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         end
         verbose && println("C: ",b)
         @test b == $v
-        if ($(t).mutable)
+        if $(t).name.mutable
             @test !(b === c)
             @test !(b === a)
         end
@@ -943,7 +943,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         end
         verbose && println("C: ",b)
         @test b == $v
-        if ($(t).mutable)
+        if $(t).name.mutable
             @test !(b === c)
             @test !(b === a)
         end
@@ -953,7 +953,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
-        if ($(t).mutable)
+        if $(t).name.mutable
             @test !(b === a)
         end
         let cf = @cfunction($fname, Any, (Ref{$t},))
@@ -962,7 +962,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
-        if ($(t).mutable)
+        if $(t).name.mutable
             @test !(b === a)
         end
         let cf = @cfunction($fname, Any, (Ref{Any},))
@@ -970,7 +970,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         end
         @test b == $v
         @test b === c
-        if ($(t).mutable)
+        if $(t).name.mutable
             @test !(b === a)
         end
         let cf = @cfunction($fname, Ref{AbstractString}, (Ref{Any},))

@@ -303,7 +303,7 @@ end
 function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested
-    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
+    isa(x, DataType) && x.name.abstract && dumpsubtypes(io, x, Main, n, indent)
     nothing
 end
 
