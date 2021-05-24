@@ -436,7 +436,7 @@ end
 
 @inline function expm1(x::Float16)
     x > MAX_EXP(Float16) && return Inf16
-    x < MIN_EXP(Float16) && return -one(Float16)
+    x < MIN_EXP(Float16) && return Float16(-1.0)
     x = Float32(x)
     if -0.2876821f0 <=x <= 0.22314355f0
         return Float16(x*evalpoly(x, (1f0, .5f0, 0.16666628f0, 0.04166785f0, 0.008351848f0, 0.0013675707f0)))
