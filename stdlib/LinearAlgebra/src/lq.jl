@@ -125,8 +125,8 @@ lq_eltype(::Type{T}) where {T} = typeof(zero(T) / sqrt(abs2(one(T))))
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
 LQ{T}(A::LQ) where {T} = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
-Factorization{T}(A::LQ{T}) where {T} = A
 Factorization{T}(A::LQ) where {T} = LQ{T}(A)
+
 AbstractMatrix(A::LQ) = A.L*A.Q
 AbstractArray(A::LQ) = AbstractMatrix(A)
 Matrix(A::LQ) = Array(AbstractArray(A))
@@ -194,7 +194,7 @@ function lmul!(A::LQ, B::StridedVecOrMat)
 end
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    _cut_B(lmul!(Factorization{TAB}(A), copy_oftype(B, TAB)), 1:size(A,1))
+    _cut_B(lmul!(convert(Factorization{TAB}, A), copy_oftype(B, TAB)), 1:size(A,1))
 end
 
 ## Multiplication by Q

@@ -222,9 +222,8 @@ end
 
 @testset "adjoint of LQ" begin
     n = 5
-    B = ones(n, 2)
 
-    for b in (B[:, 1], B)
+    for b in (ones(n), ones(n, 2), ones(Complex{Float64}, n, 2))
         for A in (
             randn(n, n),
             # Tall problems become least squares problems similarly to QR

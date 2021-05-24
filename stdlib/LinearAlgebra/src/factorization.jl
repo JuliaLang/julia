@@ -59,6 +59,9 @@ convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)
 
 ### General promotion rules
 Factorization{T}(F::Factorization{T}) where {T} = F
+# This is a bit odd since the return is not a Factorization but it works well in generic code
+Factorization{T}(A::Adjoint{<:Any,<:Factorization}) where {T} =
+    adjoint(Factorization{T}(parent(A)))
 inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n)))
 
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, 1:nfields(F); init=h)
@@ -107,17 +110,18 @@ _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
-function \(adjF::Union{<:Factorization,Adjoint{<:Any,<:Factorization}}, B::AbstractVecOrMat)
+function \(F::Union{<:Factorization,Adjoint{<:Any,<:Factorization}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
-    m, n = size(adjF)
+    m, n = size(F)
     if m != size(B, 1)
         throw(DimensionMismatch("arguments must have the same number of rows"))
     end
-    # F = adjF.parent
-    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(adjF)))
+
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    FF = Factorization{TFB}(F)
 
     # For wide problem we (often) compute a minimum norm solution. The solution
-    # is larger than the right hand side so we use size(adjF, 2).
+    # is larger than the right hand side so we use size(F, 2).
     BB = _zeros(TFB, B, n)
 
     if n > size(B, 1)
@@ -128,7 +132,7 @@ function \(adjF::Union{<:Factorization,Adjoint{<:Any,<:Factorization}}, B::Abstr
         copyto!(BB, B)
     end
 
-    ldiv!(adjF, BB)
+    ldiv!(FF, BB)
 
     # For tall problems, we compute a least sqaures solution so only part
     # of the rhs should be returned from \ while ldiv! uses (and returns)

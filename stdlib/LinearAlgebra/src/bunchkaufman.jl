@@ -196,11 +196,9 @@ julia> S.L*S.D*S.L' - A[S.p, S.p]
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
     bunchkaufman!(copy_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
 
-convert(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) where {T} = B
-convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =
+BunchKaufman{T}(B::BunchKaufman) where {T} =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)
-convert(::Type{Factorization{T}}, B::BunchKaufman{T}) where {T} = B
-convert(::Type{Factorization{T}}, B::BunchKaufman) where {T} = convert(BunchKaufman{T}, B)
+Factorization{T}(B::BunchKaufman) where {T} = BunchKaufman{T}(B)
 
 size(B::BunchKaufman) = size(getfield(B, :LD))
 size(B::BunchKaufman, d::Integer) = size(getfield(B, :LD), d)
