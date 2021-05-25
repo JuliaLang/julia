@@ -1551,9 +1551,9 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
 
 # inference of `T.mutable`
-@test Core.Compiler.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
-@test Core.Compiler.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
-@test Core.Compiler.getfield_tfunc(DataType, Const(:mutable)) == Bool
+@test Core.Compiler.getfield_tfunc(Const(Int.name), Const(:mutable)) == Const(false)
+@test Core.Compiler.getfield_tfunc(Const(Vector{Int}.name), Const(:mutable)) == Const(true)
+@test Core.Compiler.getfield_tfunc(Core.TypeName, Const(:mutable)) == Bool
 
 # getfield on abstract named tuples. issue #32698
 import Core.Compiler.getfield_tfunc
@@ -1831,6 +1831,24 @@ end
         d = b ? a : 1 # d::Int, not d::Union{Nothing,Int}
         return c, d # ::Tuple{Int,Int}
     end == Any[Tuple{Int,Int}]
+end
+
+@testset "conditional constraint propagation from non-`Conditional` object" begin
+    @test Base.return_types((Bool,)) do b
+        if b
+            return !b ? nothing : 1 # ::Int
+        else
+            return 0
+        end
+    end == Any[Int]
+
+    @test Base.return_types((Any,)) do b
+        if b
+            return b # ::Bool
+        else
+            return nothing
+        end
+    end == Any[Union{Bool,Nothing}]
 end
 
 function f25579(g)

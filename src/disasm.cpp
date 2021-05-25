@@ -249,7 +249,7 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
         if (frame.Line != UINT_MAX && frame.Line != 0)
             Out << ":" << frame.Line;
         StringRef method = StringRef(frame.FunctionName).rtrim(';');
-        Out << " within `" << method << "'";
+        Out << " within `" << method << "`";
         if (collapse_recursive) {
             while (nctx < nframes) {
                 const DILineInfo &frame = DI.at(nframes - 1 - nctx);

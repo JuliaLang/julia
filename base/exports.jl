@@ -391,6 +391,7 @@ export
     first,
     hcat,
     hvcat,
+    hvncat,
     indexin,
     argmax,
     argmin,
@@ -716,6 +717,7 @@ export
 # errors
     backtrace,
     catch_backtrace,
+    current_exceptions,
     error,
     rethrow,
     retry,
