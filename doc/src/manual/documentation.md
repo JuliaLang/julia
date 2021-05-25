@@ -343,7 +343,7 @@ for your custom type that returns the documentation on a per-instance basis. For
 
 ```julia
 struct MyType
-    value
+    value::Int
 end
 
 Docs.getdoc(t::MyType) = "Documentation for MyType with value $(t.value)"
