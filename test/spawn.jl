@@ -272,6 +272,10 @@ end
                                             stdin="samepath.txt", stdout="samepath.txt")
         @test_throws ArgumentError redirect_stdio(hello_err_out,
                                             stdin="samepath.txt", stderr="samepath.txt")
+
+        @test_throws ArgumentError redirect_stdio(hello_err_out,
+                                            stdin=joinpath("tricky", "..", "samepath.txt"),
+                                            stderr="samepath.txt")
         mktempdir() do dir
             path = joinpath(dir, "stdouterr.txt")
             redirect_stdio(hello_err_out, stdout=path, stderr=path)
