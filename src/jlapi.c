@@ -91,6 +91,19 @@ JL_DLLEXPORT void jl_init(void)
     free(libbindir);
 }
 
+// HACK: remove this for Julia 1.8 (see <https://github.com/JuliaLang/julia/issues/40730>)
+JL_DLLEXPORT void jl_init__threading(void)
+{
+    jl_init();
+}
+
+// HACK: remove this for Julia 1.8 (see <https://github.com/JuliaLang/julia/issues/40730>)
+JL_DLLEXPORT void jl_init_with_image__threading(const char *julia_bindir,
+                                     const char *image_relative_path)
+{
+    jl_init_with_image(julia_bindir, image_relative_path);
+}
+
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
