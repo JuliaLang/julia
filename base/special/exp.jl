@@ -391,7 +391,7 @@ end
     return fma(x, p2[1], x*p2[2])
 end
 
-@inline function expm1(x::Float64)
+function expm1(x::Float64)
     T = Float64
     if -0.2876820724517809 <= x <= 0.22314355131420976
         return expm1_small(x)
@@ -417,7 +417,7 @@ end
     return twopk*((jU-twopnk) + fma(jU, p, jL))
 end
 
-@inline function expm1(x::Float32)
+function expm1(x::Float32)
     x > MAX_EXP(Float32) && return Inf32
     x < MIN_EXP(Float32) && return -1f0
     if -0.2876821f0 <=x <= 0.22314355f0
@@ -434,7 +434,7 @@ end
     return Float32(muladd(twopk, small_part, twopk-1.0))
 end
 
-@inline function expm1(x::Float16)
+function expm1(x::Float16)
     x > MAX_EXP(Float16) && return Inf16
     x < MIN_EXP(Float16) && return Float16(-1.0)
     x = Float32(x)
