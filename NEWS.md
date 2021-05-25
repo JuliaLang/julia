@@ -22,6 +22,7 @@ Language changes
 
 * `macroexpand`, `@macroexpand`, and `@macroexpand1` no longer wrap errors in a `LoadError`. To reduce breakage, `@test_throws` has been modified so that many affected tests will still pass ([#38379]].
 * The middle dot `·` (`\cdotp` U+00b7) and the Greek interpunct `·` (U+0387) are now treated as equivalent to the dot operator `⋅` (`\cdot` U+22c5) (#25157).
+* The minus sign `−` (`\minus` U+2212) is now treated as equivalent to the hyphen-minus sign `-` (U+002d).
 
 Compiler/Runtime improvements
 -----------------------------
