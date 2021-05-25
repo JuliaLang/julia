@@ -106,6 +106,7 @@ pack-checksum-compilersupportlibraries: | checksum-csl
 # We need to adjust to the fact that the checksum files are called `suitesparse`
 pack-checksum-libsuitesparse: | pack-checksum-suitesparse
 	@# nothing to do but disable the prefix rule
+pack-checksum-suitesparse: | checksum-libsuitesparse
 
 # define how to pack parallel checksums into a single file format
 pack-checksum-%: FORCE
