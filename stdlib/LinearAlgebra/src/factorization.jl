@@ -99,64 +99,24 @@ function (/)(B::VecOrMat{Complex{T}}, F::Factorization{T}) where T<:BlasReal
     return copy(reinterpret(Complex{T}, x))
 end
 
-# convenience methods
-## return only the solution of a least squares problem while avoiding promoting
-## vectors to matrices.
-_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
-_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
-
-## append right hand side with zeros if necessary
-_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
-_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
-
-# General fallback definition for handling under- and overdetermined system as well as square problems
-function \(F::Union{<:Factorization,Adjoint{<:Any,<:Factorization}}, B::AbstractVecOrMat)
+function \(F::Union{Factorization, Adjoint{<:Any,<:Factorization}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
-    m, n = size(F)
-    if m != size(B, 1)
-        throw(DimensionMismatch("arguments must have the same number of rows"))
-    end
-
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    FF = Factorization{TFB}(F)
-
-    # For wide problem we (often) compute a minimum norm solution. The solution
-    # is larger than the right hand side so we use size(F, 2).
-    BB = _zeros(TFB, B, n)
-
-    if n > size(B, 1)
-        # Underdetermined
-        fill!(BB, 0)
-        copyto!(view(BB, 1:m, :), B)
-    else
-        copyto!(BB, B)
-    end
-
-    ldiv!(FF, BB)
-
-    # For tall problems, we compute a least sqaures solution so only part
-    # of the rhs should be returned from \ while ldiv! uses (and returns)
-    # the complete rhs
-    return _cut_B(BB, 1:n)
+    BB = similar(B, TFB, size(B))
+    copyto!(BB, B)
+    ldiv!(F, BB)
 end
 
-function /(B::AbstractMatrix, F::Factorization)
+function /(B::AbstractMatrix, F::Union{Factorization, Adjoint{<:Any,<:Factorization}})
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
     BB = similar(B, TFB, size(B))
     copyto!(BB, B)
     rdiv!(BB, F)
 end
-function /(B::AbstractMatrix, adjF::Adjoint{<:Any,<:Factorization})
-    require_one_based_indexing(B)
-    F = adjF.parent
-    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
-    rdiv!(BB, adjoint(F))
-end
 /(adjB::AdjointAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjB.parent)
 /(B::TransposeAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjoint(B))
+
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
 function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)

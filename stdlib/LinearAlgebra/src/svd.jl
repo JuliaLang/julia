@@ -235,7 +235,7 @@ svdvals(A::AbstractVector{<:BlasFloat}) = [norm(A)]
 svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S.S)::Vector{T}
 
-# SVD least squares
+### SVD least squares ###
 function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
     m, n = size(A)
     k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
