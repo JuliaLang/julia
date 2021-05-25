@@ -115,7 +115,7 @@ pack-checksum-%: FORCE
 				done; \
 				rmdir $$each; \
 			fi; \
-		done >> $*
+		done > $*
 	@cd "$(JULIAHOME)/deps/checksums" && \
 		sort $* > $*.tmp && \
 		mv $*.tmp $*
