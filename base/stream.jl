@@ -1316,7 +1316,7 @@ function redirect_stdio(f; stdin=nothing, stderr=nothing, stdout=nothing)
     end
 
     same_path(x, y) = false
-    same_path(x::AbstractString, y::AbstractString) = x == y
+    same_path(x::AbstractString, y::AbstractString) = samefile(x, y)
     if same_path(stderr, stdin)
         throw(ArgumentError("stdin and stderr cannot be the same path"))
     end
