@@ -920,11 +920,11 @@ static bool jl_is_pointerfree(jl_value_t* t)
 
 // these queries are usually related, but we split them out here
 // for convenience and clarity (and because it changes the calling convention)
-static bool deserves_stack(jl_value_t* t, bool pointerfree=false)
+static bool deserves_stack(jl_value_t* t)
 {
     if (!jl_is_concrete_immutable(t))
         return false;
-    return ((jl_datatype_t*)t)->isinlinealloc;
+    return jl_datatype_isinlinealloc((jl_datatype_t*)t, 0);
 }
 static bool deserves_argbox(jl_value_t* t)
 {
@@ -3042,6 +3042,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         jl_value_t *jt = jl_tparam0(utt);
                         if (jl_is_vararg(jt))
                             jt = jl_unwrap_vararg(jt);
+                        assert(jl_is_datatype(jt));
                         Value *vidx = emit_unbox(ctx, T_size, fld, (jl_value_t*)jl_long_type);
                         // This is not necessary for correctness, but allows to omit
                         // the extra code for getting the length of the tuple
@@ -3053,7 +3054,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj)),
                                 jl_true);
                         }
-                        bool isboxed = !jl_datatype_isinlinealloc(jt);
+                        bool isboxed = !jl_datatype_isinlinealloc((jl_datatype_t*)jt, 0);
                         Value *ptr = maybe_decay_tracked(ctx, data_pointer(ctx, obj));
                         *ret = typed_load(ctx, ptr, vidx,
                                 isboxed ? (jl_value_t*)jl_any_type : jt,
@@ -5424,10 +5425,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     // some sanity checking and check whether there's a vararg
     size_t nargt = jl_svec_len(argt);
     bool isVa = (nargt > 0 && jl_is_vararg(jl_svecref(argt, nargt - 1)));
-    if (isVa) {
-        emit_error(ctx, "cfunction: Vararg syntax not allowed for argument list");
-        return jl_cgval_t();
-    }
+    assert(!isVa);
 
     jl_array_t *closure_types = NULL;
     jl_value_t *sigt = NULL; // dispatch-sig = type signature with Ref{} annotations removed and applied to the env
@@ -5576,7 +5574,7 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
         crt = (jl_value_t*)jl_any_type;
     }
     bool toboxed;
-    Type *lcrt = _julia_struct_to_llvm(&params, crt, NULL, &toboxed);
+    Type *lcrt = _julia_struct_to_llvm(&params, crt, &toboxed);
     if (toboxed)
         lcrt = T_prjlvalue;
     size_t nargs = jl_nparams(sigt)-1;
@@ -6325,7 +6323,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (allunbox)
                 return;
         }
-        else if (deserves_stack(jt, true)) {
+        else if (deserves_stack(jt)) {
             bool isboxed;
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);

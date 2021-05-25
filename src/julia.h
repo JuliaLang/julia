@@ -432,6 +432,7 @@ typedef struct {
     uint8_t abstract;
     uint8_t mutabl;
     uint8_t references_self;
+    uint8_t mayinlinealloc;
     struct _jl_methtable_t *mt;
     jl_array_t *partial;     // incomplete instantiations of this type
 } jl_typename_t;
@@ -498,7 +499,6 @@ typedef struct _jl_datatype_t {
     uint8_t isdispatchtuple; // aka isleaftupletype
     uint8_t isbitstype; // relevant query for C-api and type-parameters
     uint8_t zeroinit; // if one or more fields requires zero-initialization
-    uint8_t isinlinealloc; // if this is allocated inline
     uint8_t has_concrete_subtype; // If clear, no value will have this datatype
     uint8_t cached_by_hash; // stored in hash-based set cache (instead of linear cache)
 } jl_datatype_t;
@@ -1048,7 +1048,6 @@ STATIC_INLINE jl_value_t *jl_field_type_concrete(jl_datatype_t *st JL_PROPAGATES
 #define jl_datatype_align(t)   (((jl_datatype_t*)t)->layout->alignment)
 #define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->size)*8)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->layout->nfields)
-#define jl_datatype_isinlinealloc(t) (((jl_datatype_t *)(t))->isinlinealloc)
 
 JL_DLLEXPORT void *jl_symbol_name(jl_sym_t *s);
 // inline version with strong type check to detect typos in a `->name` chain
