@@ -87,7 +87,7 @@ end
 
 function deepcopy_internal(x::Array, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     _deepcopy_array_t(x, eltype(x), stackdict)
 end
