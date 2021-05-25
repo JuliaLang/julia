@@ -650,6 +650,12 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     return bt;
 }
 
+JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt)
+{
+    return jl_is_datatype(dt) && dt->layout && dt->layout->fielddesc_type == 3;
+}
+
+
 // bits constructors ----------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
