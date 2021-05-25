@@ -104,8 +104,8 @@ pack-checksum-csl: | pack-checksum-compilersupportlibraries
 pack-checksum-compilersupportlibraries: | checksum-csl
 
 # We need to adjust to the fact that the checksum files are called `suitesparse`
-pack-checksum-libsuitesparse:
-	@$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)" -f "$(JULIAHOME)/contrib/refresh_checksums.mk" pack-checksum-suitesparse
+pack-checksum-libsuitesparse: | pack-checksum-suitesparse
+	@# nothing to do but disable the prefix rule
 
 # define how to pack parallel checksums into a single file format
 pack-checksum-%: FORCE
