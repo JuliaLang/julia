@@ -2798,6 +2798,8 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
         gc_mark_queue_obj(gc_cache, sp, jl_an_empty_vec_any);
     if (jl_module_init_order != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_module_init_order);
+    if (jl_task_switch_hooks != NULL)
+        gc_mark_queue_obj(gc_cache, sp, jl_task_switch_hooks);
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
         if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
             gc_mark_queue_obj(gc_cache, sp, jl_current_modules.table[i]);

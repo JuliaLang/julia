@@ -2125,7 +2125,32 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_function_type->name->mt = NULL; // subtypes of Function have independent method tables
     jl_builtin_type->name->mt = NULL;  // so they don't share the Any type table
 
-    jl_svec_t *tv = jl_svec2(tvar("T"), tvar("N"));
+    // Ref{T} where {T}
+    jl_svec_t *tv = jl_svec1(tvar("T"));
+    jl_ref_type = (jl_unionall_t*)
+        jl_new_abstracttype((jl_value_t*)jl_symbol("Ref"), core, jl_any_type, tv)->name->wrapper;
+
+    // Ptr{T} <: Ref{T} where {T}
+    tv = jl_svec1(tvar("T"));
+    jl_pointer_type = (jl_unionall_t*)
+        jl_new_primitivetype((jl_value_t*)jl_symbol("Ptr"), core,
+                             (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv), 1), tv,
+                             sizeof(void*)*8)->name->wrapper;
+    jl_pointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->name;
+    // common subtypes
+    jl_voidpointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
+    jl_uint8pointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_uint8_type);
+
+    // LLVMPtr{T, AS} where {T, AS}
+    tv = jl_svec2(tvar("T"), tvar("AS"));
+    jl_svec_t *tv_base = jl_svec1(tvar("T"));
+    jl_llvmpointer_type = (jl_unionall_t*)
+        jl_new_primitivetype((jl_value_t*)jl_symbol("LLVMPtr"), core,
+                             (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv_base), 1), tv,
+                             sizeof(void*)*8)->name->wrapper;
+    jl_llvmpointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_llvmpointer_type))->name;
+
+    tv = jl_svec2(tvar("T"), tvar("N"));
     jl_abstractarray_type = (jl_unionall_t*)
         jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractArray"), core,
                             jl_any_type, tv)->name->wrapper;
@@ -2150,6 +2175,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_array_symbol_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_symbol_type, jl_box_long(1));
     jl_array_uint8_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_uint8_type, jl_box_long(1));
     jl_array_int32_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_int32_type, jl_box_long(1));
+    jl_array_voidpointer_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     jl_nonfunction_mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
     jl_type_type_mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
@@ -2407,26 +2433,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_intrinsic_type = jl_new_primitivetype((jl_value_t*)jl_symbol("IntrinsicFunction"), core,
                                              jl_builtin_type, jl_emptysvec, 32);
 
-    tv = jl_svec1(tvar("T"));
-    jl_ref_type = (jl_unionall_t*)
-        jl_new_abstracttype((jl_value_t*)jl_symbol("Ref"), core, jl_any_type, tv)->name->wrapper;
-
-    tv = jl_svec1(tvar("T"));
-    jl_pointer_type = (jl_unionall_t*)
-        jl_new_primitivetype((jl_value_t*)jl_symbol("Ptr"), core,
-                             (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv), 1), tv,
-                             sizeof(void*)*8)->name->wrapper;
-    jl_pointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->name;
-
-    // LLVMPtr{T, AS} where {T, AS}
-    tv = jl_svec2(tvar("T"), tvar("AS"));
-    jl_svec_t *tv_base = jl_svec1(tvar("T"));
-    jl_llvmpointer_type = (jl_unionall_t*)
-        jl_new_primitivetype((jl_value_t*)jl_symbol("LLVMPtr"), core,
-                             (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv_base), 1), tv,
-                             sizeof(void*)*8)->name->wrapper;
-    jl_llvmpointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_llvmpointer_type))->name;
-
     // Type{T} where T<:Tuple
     tttvar = jl_new_typevar(jl_symbol("T"),
                             (jl_value_t*)jl_bottom_type,
@@ -2474,12 +2480,10 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
 
-    jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
-
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
         jl_perm_symsvec(6, "captures", "isva", "world", "source", "invoke", "specptr"),
-        jl_svec(6, jl_any_type, jl_bool_type, jl_long_type, jl_any_type, pointer_void, pointer_void), 0, 0, 6)->name->wrapper;
+        jl_svec(6, jl_any_type, jl_bool_type, jl_long_type, jl_any_type, jl_voidpointer_type, jl_voidpointer_type), 0, 0, 6)->name->wrapper;
     jl_opaque_closure_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type))->name;
     jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type));
 
@@ -2490,8 +2494,6 @@ void jl_init_types(void) JL_GC_DISABLED
         0, 0, 5);
 
     // complete builtin type metadata
-    jl_voidpointer_type = (jl_datatype_t*)pointer_void;
-    jl_uint8pointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_uint8_type);
     jl_svecset(jl_datatype_type->types, 6, jl_voidpointer_type);
     jl_svecset(jl_datatype_type->types, 7, jl_int32_type);
     jl_svecset(jl_datatype_type->types, 8, jl_int32_type);

@@ -216,7 +216,6 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     return bt_size;
 }
 
-static jl_value_t *array_ptr_void_type JL_ALWAYS_LEAFTYPE = NULL;
 // Return backtrace information as an svec of (bt1, bt2, [sp])
 //
 // The stack pointers `sp` are returned only when `returnsp` evaluates to true.
@@ -231,11 +230,8 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     jl_array_t *sp = NULL;
     jl_array_t *bt2 = NULL;
     JL_GC_PUSH3(&ip, &sp, &bt2);
-    if (array_ptr_void_type == NULL) {
-        array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
-    }
-    ip = jl_alloc_array_1d(array_ptr_void_type, 0);
-    sp = returnsp ? jl_alloc_array_1d(array_ptr_void_type, 0) : NULL;
+    ip = jl_alloc_array_1d(jl_array_voidpointer_type, 0);
+    sp = returnsp ? jl_alloc_array_1d(jl_array_voidpointer_type, 0) : NULL;
     bt2 = jl_alloc_array_1d(jl_array_any_type, 0);
     const size_t maxincr = 1000;
     bt_context_t context;
@@ -290,10 +286,7 @@ static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
                              jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
 {
     jl_array_t *bt, *bt2;
-    if (array_ptr_void_type == NULL) {
-        array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
-    }
-    bt = *btout = jl_alloc_array_1d(array_ptr_void_type, bt_size);
+    bt = *btout = jl_alloc_array_1d(jl_array_voidpointer_type, bt_size);
     static_assert(sizeof(jl_bt_element_t) == sizeof(void*),
                   "jl_bt_element_t is presented as Ptr{Cvoid} on julia side");
     memcpy(bt->data, bt_data, bt_size * sizeof(jl_bt_element_t));

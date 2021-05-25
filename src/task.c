@@ -475,6 +475,17 @@ static jl_ptls_t NOINLINE refetch_ptls(void)
     return jl_get_ptls_states();
 }
 
+jl_array_t *jl_task_switch_hooks JL_GLOBALLY_ROOTED = NULL;
+JL_DLLEXPORT void jl_hook_task_switch(jl_task_switch_hook_t hook)
+{
+    if (jl_task_switch_hooks == NULL) {
+        jl_task_switch_hooks = jl_alloc_array_1d(jl_array_voidpointer_type, 0);
+    }
+    jl_array_grow_end(jl_task_switch_hooks, 1);
+    ((jl_task_switch_hook_t *)jl_array_data(
+        jl_task_switch_hooks))[jl_array_len(jl_task_switch_hooks) - 1] = hook;
+}
+
 JL_DLLEXPORT void jl_switch(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -492,7 +503,7 @@ JL_DLLEXPORT void jl_switch(void)
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
     if (ptls->in_pure_callback)
-        jl_error("task switch not allowed from inside staged nor pure functions");
+        jl_error("task switch not allowed from inside staged nor pure functions or callbacks");
     if (t->sticky && jl_atomic_load_acquire(&t->tid) == -1) {
         // manually yielding to a task
         if (jl_atomic_compare_exchange(&t->tid, -1, ptls->tid) != -1)
@@ -500,6 +511,17 @@ JL_DLLEXPORT void jl_switch(void)
     }
     else if (t->tid != ptls->tid) {
         jl_error("cannot switch to task running on another thread");
+    }
+
+    if (jl_task_switch_hooks) {
+        int last_in = ptls->in_pure_callback;
+        ptls->in_pure_callback = 1;
+        for (int i = 0; i < jl_array_len(jl_task_switch_hooks); i++) {
+            jl_task_switch_hook_t hook =
+                ((jl_task_switch_hook_t *)jl_array_data(jl_task_switch_hooks))[i];
+            hook(t);
+        }
+        ptls->in_pure_callback = last_in;
     }
 
     // Store old values on the stack and reset
