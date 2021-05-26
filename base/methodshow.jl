@@ -100,9 +100,9 @@ end
 function show_method_params(io::IO, tv)
     if !isempty(tv)
         print(io, " where ")
-        # if length(tv) == 1
-        #     show(io, tv[1])
-        # else
+        if length(tv) == 1
+            show(io, tv[1])
+        else
             print(io, "{")
             for i = 1:length(tv)
                 if i > 1
@@ -113,7 +113,7 @@ function show_method_params(io::IO, tv)
                 io = IOContext(io, :unionall_env => x)
             end
             print(io, "}")
-        # end
+        end
     end
 end
 
