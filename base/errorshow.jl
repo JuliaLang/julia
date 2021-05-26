@@ -338,7 +338,7 @@ function showerror_ambiguous(io::IO, meth, f, args)
         print(io, "::", a)
         i < length(p) && print(io, ", ")
     end
-    print(io, ") is ambiguous. Candidates:")
+    print(io, ") is ambiguous. \nCandidates:")
     sigfix = Any
     for m in meth
         print(io, "\n  ", m)

@@ -266,9 +266,10 @@ julia> g(2, 3.0)
 8.0
 
 julia> g(2.0, 3.0)
-ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x::Float64, y::Any) @ Main REPL[3]:1
-  g(x::Any, y::Float64) @ Main REPL[4]:1
+ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
+Candidates:
+  g(x::Float64, y::Any) @ Main none:1
+  g(x::Any, y::Float64) @ Main none:1
 Possible fix, define
   g(::Float64, ::Float64)
 Stacktrace:
