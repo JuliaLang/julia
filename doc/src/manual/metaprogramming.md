@@ -644,6 +644,61 @@ This allows macros to look up contextual information, such as existing bindings,
 or to insert the value as an extra argument to a runtime function call doing self-reflection
 in the current module.
 
+### Renumbering lines in macros
+
+You will likely want to renumber new lines of code introduced in macros
+Consider the following trivial macro:
+
+```jldoctest macro_line_numbers
+julia> macro adds_more_lines_1()
+           quote
+               "code"
+           end
+       end
+@adds_more_lines_1 (macro with 1 method)
+```
+
+Let's take a closer look at the new code introduced by the macro:
+
+```jldoctest macro_line_numbers
+julia> numbered = quote
+           "code"
+       end;
+
+julia> numbered.head
+:block
+
+julia> typeof.(numbered.args)
+2-element Vector{DataType}:
+ LineNumberNode
+ String
+```
+
+Julia will introduce a new line number for the new line of code pointing to the definition expression.
+You likely want line numbering to point to the user's call site, rather than the definition expression. 
+This is for the following two reasons:
+
+- If an error occurs in code introduced in a macro, you likely want stack-traces to point to the user's call site, rather than the definition expression.
+- If a user calls a macro, you likely want coverage to consider the user's call site as covered, rather than the definition expression.
+
+Thus, consider revising the macro as follows:
+
+```jldoctest macro_line_numbers
+julia> macro adds_more_lines_2()
+           result = 
+               quote
+                   "code"
+               end
+           result.args[1] = __source__
+           result
+       end
+@adds_more_lines_2 (macro with 1 method)
+```
+
+`__source__` will contain a line number pointing to the user's call site (see more information about `__source__` above).
+The macro will renumber the new line of code to point the user's call site, rather than the definition expression.
+Sometimes users will pass entire lines code to macros, complete with additional line numbers.
+In this case, instead of using `__source__` to renumber lines, you might use these more fine-grained line numebrs.
 
 ### Building an advanced macro
 
