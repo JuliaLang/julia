@@ -1160,8 +1160,16 @@ generic function and type signature.
 - `optimize=true`: controls whether additional optimizations, such as inlining, are also applied.
 - `debuginfo=:default`: controls the amount of code metadata present in the output,
 possible options are `:source` or `:none`.
-- `world`: optional, controls the world age to use when looking up methods, use current world age if not specified.
-- `interp`: optional, controls the interpreter to use, use the native interpreter Julia uses if not specified.
+
+# Internal Keyword Arguments
+
+This section should be considered internal, and is only for who understands Julia compiler
+internals.
+
+- `world=Base.get_world_counter()`: optional, controls the world age to use when looking up methods,
+use current world age if not specified.
+- `interp=Core.Compiler.NativeInterpreter(world)`: optional, controls the interpreter to use,
+use the native interpreter Julia uses if not specified.
 
 # Example
 
