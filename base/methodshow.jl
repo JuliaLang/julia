@@ -217,7 +217,17 @@ function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width =
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
         print(io, "; ")
-        join(io, map(sym_to_string, kwargs), ", ", ", ")
+        for kw in kwargs
+            skw = sym_to_string(kw)
+            if QuoteNode(kw) in m.roots # then it's required
+                printstyled(io, skw, color=:bold)
+            else
+                print(io, skw)
+            end
+            if kw != last(kwargs)
+                print(io, ", ")
+            end
+        end
     end
     print(io, ")")
     show_method_params(io, tv)
