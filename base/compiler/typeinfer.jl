@@ -428,8 +428,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
     s_edges = me.stmt_edges[1]
     if s_edges === nothing
-        s_edges = []
-        me.stmt_edges[1] = s_edges
+        s_edges = me.stmt_edges[1] = []
     end
     for edges in me.stmt_edges
         edges === nothing && continue
@@ -540,7 +539,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         subex = e.args[i]
         if isa(subex, Expr)
             annotate_slot_load!(subex, vtypes, sv, undefs)
-        elseif isa(subex, Slot)
+        elseif isa(subex, SlotNumber)
             e.args[i] = visit_slot_load!(subex, vtypes, sv, undefs)
         end
     end
@@ -549,13 +548,13 @@ end
 function annotate_slot_load(@nospecialize(e), vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     if isa(e, Expr)
         annotate_slot_load!(e, vtypes, sv, undefs)
-    elseif isa(e, Slot)
+    elseif isa(e, SlotNumber)
         return visit_slot_load!(e, vtypes, sv, undefs)
     end
     return e
 end
 
-function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
+function visit_slot_load!(sl::SlotNumber, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     id = slot_id(sl)
     s = vtypes[id]
     vt = widenconditional(ignorelimited(s.typ))
@@ -584,7 +583,7 @@ function record_slot_assign!(sv::InferenceState)
         if isa(st_i, VarTable) && isa(expr, Expr) && expr.head === :(=)
             lhs = expr.args[1]
             rhs = expr.args[2]
-            if isa(lhs, Slot)
+            if isa(lhs, SlotNumber)
                 vt = widenconst(sv.src.ssavaluetypes[i])
                 if vt !== Bottom
                     id = slot_id(lhs)
@@ -660,7 +659,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
                 body[i] = ReturnNode(annotate_slot_load(expr.val, st_i, sv, undefs))
             elseif isa(expr, GotoIfNot)
                 body[i] = GotoIfNot(annotate_slot_load(expr.cond, st_i, sv, undefs), expr.dest)
-            elseif isa(expr, Slot)
+            elseif isa(expr, SlotNumber)
                 body[i] = visit_slot_load!(expr, st_i, sv, undefs)
             end
         else

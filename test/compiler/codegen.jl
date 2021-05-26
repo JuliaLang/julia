@@ -553,3 +553,20 @@ end
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
 end
+
+# issue #32843
+function f32843(vals0, v)
+    (length(vals0) > 1) && (vals = v[1])
+    (length(vals0) == 1 && vals0[1]==1) && (vals = 1:2)
+    vals
+end
+@test_throws UndefVarError f32843([6], Vector[[1]])
+
+# issue #40855, struct constants with union fields
+@enum T40855 X40855
+struct A40855
+    d::Union{Nothing, T40855}
+    b::Union{Nothing, Int}
+end
+g() = string(A40855(X40855, 1))
+@test g() == "$(@__MODULE__).A40855($(@__MODULE__).X40855, 1)"

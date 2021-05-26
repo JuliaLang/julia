@@ -299,10 +299,10 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
     B = T(A)
     @test A == B
     # Test indexing up to 5 dimensions
-    trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
-    trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
-    trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
-    trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
+    trailing5 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-5, 0)))
+    trailing4 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-4, 0)))
+    trailing3 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-3, 0)))
+    trailing2 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-2, 0)))
     i=0
     for i5 = 1:size(B, 5)
         for i4 = 1:size(B, 4)
@@ -419,10 +419,10 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         N = prod(shape)
         A = reshape(Vector(1:N), shape)
         B = T(A)
-        trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
-        trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
-        trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
-        trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
+        trailing5 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-5, 0)))
+        trailing4 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-4, 0)))
+        trailing3 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-3, 0)))
+        trailing2 = CartesianIndex(ntuple(Returns(1), max(ndims(B)-2, 0)))
         idxs = rand(1:N, 3, 3, 3)
         @test B[idxs] == A[idxs] == idxs
         @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
@@ -835,6 +835,11 @@ end
 @testset "ndims and friends" begin
     @test ndims(Diagonal(rand(1:5,5))) == 2
     @test ndims(Diagonal{Float64}) == 2
+    @test ndims(Diagonal) == 2
+    @test ndims(Vector) == 1
+    @test ndims(Matrix) == 2
+    @test ndims(Array{<:Any, 0}) == 0
+    @test_throws MethodError ndims(Array)
 end
 
 @testset "Issue #17811" begin
@@ -857,6 +862,18 @@ end
 @testset "to_shape" begin
     @test Base.to_shape(()) === ()
     @test Base.to_shape(1) === 1
+    @test Base.to_shape(big(1)) === Base.to_shape(1)
+    @test Base.to_shape(Int8(1)) === Base.to_shape(1)
+end
+
+@testset "issue #39923: similar" begin
+    for ax in [(big(2), big(3)), (big(2), 3), (UInt64(2), 3), (2, UInt32(3)),
+        (big(2), Base.OneTo(3)), (Base.OneTo(2), Base.OneTo(big(3)))]
+
+        A = similar(ones(), Int, ax)
+        @test axes(A) === (Base.OneTo(2), Base.OneTo(3))
+        @test eltype(A) === Int
+    end
 end
 
 @testset "issue #19267" begin
@@ -1279,4 +1296,71 @@ end
     @test Int[t...; 3 4] == [1 2; 3 4]
     @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
     @test_throws ArgumentError Int[t...; 3 4 5]
+end
+
+@testset "issue #39896, modified getindex " begin
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3))
+            @test arr[inds] == arr[collect(inds)]
+            @test arr[inds] isa AbstractVector{eltype(arr)}
+        end
+    end
+    for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
+        @test arr[true:true] == [arr[1]]
+        @test arr[true:true] isa AbstractVector{eltype(arr)}
+        @test arr[false:false] == []
+        @test arr[false:false] isa AbstractVector{eltype(arr)}
+    end
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        @test_throws BoundsError arr[true:true]
+        @test_throws BoundsError arr[false:false]
+    end
+end
+
+@testset "hvncat" begin
+    a = fill(1, (2,3,2,4,5))
+    b = fill(2, (1,1,2,4,5))
+    c = fill(3, (1,2,2,4,5))
+    d = fill(4, (1,1,1,4,5))
+    e = fill(5, (1,1,1,4,5))
+    f = fill(6, (1,1,1,4,5))
+    g = fill(7, (2,3,1,4,5))
+    h = fill(8, (3,3,3,1,2))
+    i = fill(9, (3,2,3,3,2))
+    j = fill(10, (3,1,3,3,2))
+
+    result = [a; b c ;;; d e f ; g ;;;;; h ;;;; i j]
+    @test size(result) == (3,3,3,4,7)
+    @test result == [a; [b ;; c] ;;; [d e f] ; g ;;;;; h ;;;; i ;; j]
+    @test result == cat(cat([a ; b c], [d e f ; g], dims = 3), cat(h, [i j], dims = 4), dims = 5)
+
+    # terminating semicolons extend dimensions
+    @test [1;] == [1]
+    @test [1;;] == fill(1, (1,1))
+
+    for v in (1, fill(1), fill(1,1,1), fill(1, 1, 1, 1))
+        @test_throws ArgumentError [v; v;; v]
+        @test_throws ArgumentError [v; v;; v; v; v]
+        @test_throws ArgumentError [v; v; v;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v; v;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v; v]
+        # ensure a wrong shape with the right number of elements doesn't pass through
+        @test_throws ArgumentError [v; v;; v; v;;; v; v; v; v]
+
+        @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
+        @test [v; v;; v; v;;;] == fill(1, 2, 2, 1)
+        @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
+        @test [v v; v v;;;] == fill(1, 2, 2, 1)
+        @test [v; v;; v; v;;; v; v;; v; v;;] == fill(1, 2, 2, 2)
+        @test [v; v; v;; v; v; v;;; v; v; v;; v; v; v;;] == fill(1, 3, 2, 2)
+        @test [v v; v v;;; v v; v v] == fill(1, 2, 2, 2)
+        @test [v v v; v v v;;; v v v; v v v] == fill(1, 2, 3, 2)
+    end
+
+    # mixed scalars and arrays work, for numbers and strings
+    for v = (1, "test")
+        @test [v v;;; fill(v, 1, 2)] == fill(v, 1, 2, 2)
+    end
 end

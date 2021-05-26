@@ -45,7 +45,6 @@
     ALIAS(lt_float_fast, lt_float) \
     ALIAS(le_float_fast, le_float) \
     ADD_I(fpiseq, 2) \
-    ADD_I(fpislt, 2) \
     /*  bitwise operators */ \
     ADD_I(and_int, 2) \
     ADD_I(or_int, 2) \

@@ -102,6 +102,7 @@ or could not be evaluated due to an error, the test set will then throw a `TestS
 
 ```@docs
 Test.@testset
+Test.TestSetException
 ```
 
 We can put our tests for the `foo(x)` function in a test set:
@@ -200,6 +201,13 @@ Test Failed at none:1
    Evaluated: 1 ≈ 0.999999
 ERROR: There was an error during testing
 ```
+You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
+after the `≈` comparison:
+```jldoctest
+julia> @test 1 ≈ 0.999999  rtol=1e-5
+Test Passed
+```
+Note that this is not a specific feature of the `≈` but rather a general feature of the `@test` macro: `@test a <op> b key=val` is transformed by the macro into `@test op(a, b, key=val)`. It is, however, particularly useful for `≈` tests.
 
 ```@docs
 Test.@inferred
@@ -286,6 +294,18 @@ And using that testset looks like:
         @test true
     end
 end
+```
+
+## Test utilities
+
+```@docs
+Test.GenericArray
+Test.GenericDict
+Test.GenericOrder
+Test.GenericSet
+Test.GenericString
+Test.detect_ambiguities
+Test.detect_unbound_args
 ```
 
 ```@meta

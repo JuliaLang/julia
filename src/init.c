@@ -628,7 +628,7 @@ static void restore_fp_env(void)
     }
 }
 
-void _julia_init(JL_IMAGE_SEARCH rel)
+JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
     // Make sure we finalize the tls callback before starting any threads.
@@ -687,22 +687,26 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #endif
 #endif
 
-#if defined(JL_USE_INTEL_JITEVENTS)
+#if \
+    defined(JL_USE_INTEL_JITEVENTS) || \
+    defined(JL_USE_OPROFILE_JITEVENTS) || \
+    defined(JL_USE_PERF_JITEVENTS)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
+#endif
+
+#if defined(JL_USE_INTEL_JITEVENTS)
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_intel_jitevents = 1;
     }
 #endif
 
 #if defined(JL_USE_OPROFILE_JITEVENTS)
-    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_oprofile_jitevents = 1;
     }
 #endif
 
 #if defined(JL_USE_PERF_JITEVENTS)
-    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_perf_jitevents= 1;
     }

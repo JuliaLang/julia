@@ -20,6 +20,8 @@ nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
+See also: [`names`](@ref), [`nameof`](@ref), [`fullname`](@ref), [`@__MODULE__`](@ref).
+
 # Examples
 ```jldoctest
 julia> parentmodule(Main)
@@ -94,6 +96,8 @@ are also included.
 
 As a special case, all names defined in `Main` are considered \"exported\",
 since it is not idiomatic to explicitly export names from `Main`.
+
+See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
     sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
@@ -150,7 +154,7 @@ function fieldname(t::DataType, i::Integer)
     end
     throw_need_pos_int(i) = throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
 
-    t.abstract && throw_not_def_field()
+    t.name.abstract && throw_not_def_field()
     names = _fieldnames(t)
     n_fields = length(names)::Int
     i > n_fields && throw_field_access(t, i, n_fields)
@@ -167,10 +171,15 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
 
 Get a tuple with the names of the fields of a `DataType`.
 
+See also [`propertynames`](@ref), [`hasfield`](@ref).
+
 # Examples
 ```jldoctest
 julia> fieldnames(Rational)
 (:num, :den)
+
+julia> fieldnames(typeof(1+im))
+(:re, :im)
 ```
 """
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
@@ -284,9 +293,11 @@ macro locals()
 end
 
 """
-    objectid(x)
+    objectid(x) -> UInt
 
 Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
+
+See also [`hash`](@ref), [`IdDict`](@ref).
 """
 objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
@@ -446,6 +457,8 @@ Return `true` iff value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
+See also [`isbits`](@ref), [`isstructtype`](@ref).
+
 # Examples
 ```jldoctest
 julia> ismutable(1)
@@ -458,7 +471,7 @@ true
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
 """
-ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).mutable)
+ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).name.mutable)
 
 
 """
@@ -473,7 +486,7 @@ Determine whether type `T` was declared as a mutable type
 function ismutabletype(@nospecialize(t::Type))
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.mutable
+    return isa(t, DataType) && t.name.mutable
 end
 
 
@@ -489,7 +502,7 @@ function isstructtype(@nospecialize(t::Type))
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
     hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return hasfield || (t.size == 0 && !t.abstract)
+    return hasfield || (t.size == 0 && !t.name.abstract)
 end
 
 """
@@ -504,7 +517,7 @@ function isprimitivetype(@nospecialize(t::Type))
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
     hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return !hasfield && t.size != 0 && !t.abstract
+    return !hasfield && t.size != 0 && !t.name.abstract
 end
 
 """
@@ -518,6 +531,8 @@ Typical examples are numeric types such as [`UInt8`](@ref),
 This category of types is significant since they are valid as type parameters,
 may not track [`isdefined`](@ref) / [`isassigned`](@ref) status,
 and have a defined layout that is compatible with C.
+
+See also [`isbits`](@ref), [`isprimitivetype`](@ref), [`ismutable`](@ref).
 
 # Examples
 ```jldoctest
@@ -533,7 +548,7 @@ isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitst
 """
     isbits(x)
 
-Return `true` if `x` is an instance of an `isbitstype` type.
+Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 """
 isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
 
@@ -563,6 +578,8 @@ end
 
 Determine whether type `T` is a concrete type, meaning it could have direct instances
 (values `x` such that `typeof(x) === T`).
+
+See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
 # Examples
 ```jldoctest
@@ -606,7 +623,7 @@ function isabstracttype(@nospecialize(t))
     @_pure_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.abstract
+    return isa(t, DataType) && t.name.abstract
 end
 
 """
@@ -740,7 +757,7 @@ function fieldcount(@nospecialize t)
         end
         abstr = true
     else
-        abstr = t.abstract || (t.name === Tuple.name && isvatuple(t))
+        abstr = t.name.abstract || (t.name === Tuple.name && isvatuple(t))
     end
     if abstr
         throw(ArgumentError("type does not have a definite number of fields"))
@@ -845,7 +862,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     return map(method_instances(f, t)) do m
-        if generated && isgenerated(m)
+        if generated && hasgenerator(m)
             if may_invoke_generator(m)
                 return ccall(:jl_code_for_staged, Any, (Any,), m)::CodeInfo
             else
@@ -860,8 +877,8 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     end
 end
 
-isgenerated(m::Method) = isdefined(m, :generator)
-isgenerated(m::Core.MethodInstance) = isgenerated(m.def)
+hasgenerator(m::Method) = isdefined(m, :generator)
+hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
 
 # low-level method lookup functions used by the compiler
 
@@ -898,15 +915,13 @@ end
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
-mutable struct MethodList
+mutable struct MethodList <: AbstractArray{Method,1}
     ms::Array{Method,1}
     mt::Core.MethodTable
 end
 
-length(m::MethodList) = length(m.ms)
-isempty(m::MethodList) = isempty(m.ms)
-iterate(m::MethodList, s...) = iterate(m.ms, s...)
-eltype(::Type{MethodList}) = Method
+size(m::MethodList) = size(m.ms)
+getindex(m::MethodList, i) = m.ms[i]
 
 function MethodList(mt::Core.MethodTable)
     ms = Method[]
@@ -927,6 +942,8 @@ A list of modules can also be specified as an array.
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
+
+See also: [`which`](@ref) and `@which`.
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
@@ -1262,19 +1279,23 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
         maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
         nd = ndigits(maxcost)
         println(io, meth)
-        IRShow.show_ir(io, code, (io, linestart, idx) -> (print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " "); return ""))
+        irshow_config = IRShow.IRShowConfig() do io, linestart, idx
+            print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
+            return ""
+        end
+        IRShow.show_ir(io, code, irshow_config)
         println(io)
     end
 end
 
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
-function _which(@nospecialize(tt::Type), world=typemax(UInt))
+function _which(@nospecialize(tt::Type), world=get_world_counter())
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
     match = ccall(:jl_gf_invoke_lookup_worlds, Any,
         (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
-        tt, typemax(UInt), min_valid, max_valid)
+        tt, world, min_valid, max_valid)
     if match === nothing
         error("no unique matching method found for the specified argument types")
     end
@@ -1287,6 +1308,8 @@ end
 Returns the method of `f` (a `Method` object) that would be called for arguments of the given `types`.
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
+
+See also: [`parentmodule`](@ref), and `@which` and `@edit` in [`InteractiveUtils`](@ref man-interactive-utils).
 """
 function which(@nospecialize(f), @nospecialize(t))
     if isa(f, Core.Builtin)
@@ -1631,6 +1654,8 @@ as well to get the properties of an instance of the type.
 of the documented interface of `x`.   If you want it to also return "private"
 fieldnames intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
+
+See also: [`hasproperty`](@ref), [`hasfield`](@ref).
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
@@ -1643,5 +1668,7 @@ Return a boolean indicating whether the object `x` has `s` as one of its own pro
 
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
+
+See also: [`propertynames`](@ref), [`hasfield`](@ref).
 """
 hasproperty(x, s::Symbol) = s in propertynames(x)

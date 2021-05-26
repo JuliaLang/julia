@@ -705,7 +705,7 @@ function argmin(r::AbstractRange)
     elseif step(r) > 0
         firstindex(r)
     else
-        first(searchsorted(r, last(r)))
+        lastindex(r)
     end
 end
 
@@ -720,7 +720,7 @@ function argmax(r::AbstractRange)
     if isempty(r)
         throw(ArgumentError("range must be non-empty"))
     elseif step(r) > 0
-        first(searchsorted(r, last(r)))
+        lastindex(r)
     else
         firstindex(r)
     end
@@ -828,17 +828,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        if length(s) == 0
-            return r
-        elseif length(s) == 1
-            if first(s)
-                return r
-            else
-                return range(r[1], length=0)
-            end
-        else # length(s) == 2
-            return range(r[2], length=1)
-        end
+        range(first(s) ? first(r) : last(r), length = Int(last(s)))
     else
         f = first(r)
         st = oftype(f, f + first(s)-1)
@@ -857,17 +847,7 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        if length(s) == 0
-            return range(first(r), step=one(eltype(r)), length=0)
-        elseif length(s) == 1
-            if first(s)
-                return range(first(r), step=one(eltype(r)), length=1)
-            else
-                return range(first(r), step=one(eltype(r)), length=0)
-            end
-        else # length(s) == 2
-            return range(r[2], step=one(eltype(r)), length=1)
-        end
+        range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length = Int(last(s)))
     else
         st = oftype(first(r), first(r) + s.start-1)
         return range(st, step=step(s), length=length(s))
@@ -888,7 +868,7 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
                 return range(first(r), step=step(r), length=0)
             end
         else # length(s) == 2
-            return range(r[2], step=step(r), length=1)
+            return range(last(r), step=step(r), length=1)
         end
     else
         st = oftype(r.start, r.start + (first(s)-1)*step(r))
@@ -910,7 +890,7 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
                 return StepRangeLen{T}(first(r), step(r), 0, 1)
             end
         else # length(s) == 2
-            return StepRangeLen{T}(r[2], step(r), 1, 1)
+            return StepRangeLen{T}(last(r), step(r), 1, 1)
         end
     else
         # Find closest approach to offset by s
@@ -935,7 +915,7 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
                 return LinRange(first(r), first(r), 0)
             end
         else # length(s) == 2
-            return LinRange(r[2], r[2], 1)
+            return LinRange(last(r), last(r), 1)
         end
     else
         vfirst = unsafe_getindex(r, first(s))
@@ -947,6 +927,14 @@ end
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
+function show(io::IO, r::StepRangeLen)
+    if step(r) != 0
+        print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
+    else
+        # ugly temporary printing, to avoid 0:0:0 etc.
+        print(io, "StepRangeLen(", repr(first(r)), ", ", repr(step(r)), ", ", repr(length(r)), ")")
+    end
+end
 
 function ==(r::T, s::T) where {T<:AbstractRange}
     isempty(r) && return isempty(s)
@@ -1258,7 +1246,7 @@ function _define_range_op(@nospecialize f)
             r1l = length(r1)
             (r1l == length(r2) ||
              throw(DimensionMismatch("argument dimensions must match: length of r1 is $r1l, length of r2 is $(length(r2))")))
-            range($f(first(r1), first(r2)), step=$f(step(r1), step(r2)), length=r1l)
+            StepRangeLen($f(first(r1), first(r2)), $f(step(r1), step(r2)), r1l)
         end
 
         function $f(r1::LinRange{T}, r2::LinRange{T}) where T

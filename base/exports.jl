@@ -70,6 +70,7 @@ export
     Rational,
     Regex,
     RegexMatch,
+    Returns,
     RoundFromZero,
     RoundDown,
     RoundingMode,
@@ -168,6 +169,10 @@ export
     ≢,
     xor,
     ⊻,
+    nand,
+    nor,
+    ⊼,
+    ⊽,
     %,
     ÷,
     &,
@@ -386,6 +391,7 @@ export
     first,
     hcat,
     hvcat,
+    hvncat,
     indexin,
     argmax,
     argmin,
@@ -670,6 +676,7 @@ export
     istaskstarted,
     istaskfailed,
     lock,
+    @lock,
     notify,
     ReentrantLock,
     schedule,
@@ -682,6 +689,7 @@ export
     timedwait,
     asyncmap,
     asyncmap!,
+    errormonitor,
 
 # channels
     take!,
@@ -692,9 +700,11 @@ export
 
 # missing values
     coalesce,
+    @coalesce,
     ismissing,
     missing,
     skipmissing,
+    @something,
     something,
     isnothing,
     nonmissingtype,
@@ -707,6 +717,7 @@ export
 # errors
     backtrace,
     catch_backtrace,
+    current_exceptions,
     error,
     rethrow,
     retry,
@@ -912,7 +923,7 @@ export
     uperm,
     walkdir,
 
-# external processes ## TODO: whittle down these exports.
+# external processes
     detach,
     getpid,
     ignorestatus,

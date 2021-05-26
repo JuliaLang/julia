@@ -6,10 +6,22 @@ New language features
 
 * `(; a, b) = x` can now be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
   and similarly for `b`. ([#39285])
+* Implicit multiplication by juxtaposition is now allowed for radical symbols (e.g., `x√y` and `x∛y`). ([#40173])
+* The short-circuiting operators `&&` and `||` can now be dotted to participate in broadcast fusion
+  as `.&&` and `.||`. ([#39594])
+* `⫪` (U+2AEA, `\Top`, `\downvDash`) and `⫫` (U+2AEB, `\Bot`, `\upvDash`, `\indep`)
+  may now be used as binary operators with comparison precedence. ([#39403])
+* Repeated semicolons may now be used inside array literals to separate dimensions of an array,
+  with the number of semicolons specifying the particular dimension. Just as the single semicolon
+  in `[A; B]` has always described concatenating along the first dimension (vertically), now two
+  semicolons `[A;; B]` do so in the second dimension (horizontally), three semicolons `;;;` in the
+  third, and so on. ([#33697])
 
 Language changes
 ----------------
 
+* `macroexpand`, `@macroexpand`, and `@macroexpand1` no longer wrap errors in a `LoadError`. To reduce breakage, `@test_throws` has been modified so that many affected tests will still pass ([#38379]].
+* The middle dot `·` (`\cdotp` U+00b7) and the Greek interpunct `·` (U+0387) are now treated as equivalent to the dot operator `⋅` (`\cdot` U+22c5) (#25157).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -35,19 +47,25 @@ New library functions
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
 * `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
+* Two arguments method `lock(f, lck)` now accepts a `Channel` as the second argument. ([#39312])
+* New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
+* New macros `@something` and `@coalesce` which are short-circuiting versions of `something` and `coalesce`, respectively ([#40729])
 
 New library features
 --------------------
 
 * The optional keyword argument `context` of `sprint` can now be set to a tuple of `:key => value` pairs to specify multiple attributes. ([#39381])
+* `bytes2hex` and `hex2bytes` are no longer limited to arguments of type `Union{String,AbstractVector{UInt8}}` and now only require that they're iterable and have a length. ([#39710])
 
 Standard library changes
 ------------------------
 
+* Long strings are now elided using the syntax `"head" ⋯ 12345 bytes ⋯ "tail"` when displayed in the REPL ([#40736]).
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 * `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).
 * `range` now supports `start` as an optional keyword argument ([#38041]).
+* Some operations on ranges will return a `StepRangeLen` instead of a `StepRange`, to allow the resulting step to be zero. Previously, `λ .* (1:9)` gave an error when `λ = 0`. ([#40320])
 * `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
 * `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
 * `escape_string` can now receive a collection of characters in the keyword
@@ -59,6 +77,24 @@ Standard library changes
 * `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
 * `keys(::Generator)` is now defined to return the iterator's keys ([#34678])
 * `RegexMatch` now iterate to give their captures. ([#34355]).
+* `Test.@test` now accepts `broken` and `skip` boolean keyword arguments, which
+  mimic `Test.@test_broken` and `Test.@test_skip` behavior, but allows skipping
+  tests failing only under certain conditions.  For example
+  ```julia
+  if T == Float64
+      @test_broken isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
+  else
+      @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
+  end
+  ```
+  can be replaced by
+  ```julia
+  @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T))) broken=(T == Float64)
+  ```
+  ([#39322])
+* `@lock` is now exported from Base ([#39588]).
+* The experimental function `Base.catch_stack()` has been renamed to `current_exceptions()`, exported from Base and given a more specific return type ([#29901])
+* Some degree trigonometric functions, `sind`, `cosd`, `tand`, `asind`, `acosd`, `asecd`, `acscd`, `acotd`, `atand` now accept an square matrix ([#39758]).
 
 #### Package Manager
 
@@ -69,6 +105,10 @@ Standard library changes
 * On aarch64, OpenBLAS now uses an ILP64 BLAS like all other 64-bit platforms. ([#39436])
 * OpenBLAS is updated to 0.3.13. ([#39216])
 * SuiteSparse is updated to 5.8.1. ([#39455])
+* The shape of an `UpperHessenberg` matrix is preserved under certain arithmetic operations, e.g. when multiplying or dividing by an `UpperTriangular` matrix. ([#40039])
+* `cis(A)` now supports matrix arguments ([#40194]).
+* `dot` now supports `UniformScaling` with `AbstractMatrix` ([#40250]).
+* `det(M::AbstractMatrix{BigInt})` now calls `det_bareiss(M)`, which uses the [Bareiss](https://en.wikipedia.org/wiki/Bareiss_algorithm) algorithm to calculate precise values.([#40868]).
 
 #### Markdown
 
@@ -84,6 +124,9 @@ Standard library changes
 
 #### SparseArrays
 
+* new `sizehint!(::SparseMatrixCSC, ::Integer)` method ([#30676]).
+* `cholesky()` now fully preserves the user-specified permutation. ([#40560])
+* `issparse` now applies consistently to all wrapper arrays, including nested, by checking `issparse` on the wrapped parent array ([#37644]).
 
 #### Dates
 
@@ -105,10 +148,13 @@ Standard library changes
 
 * `mmap` is now exported ([#39816]).
 
+#### DelimitedFiles
+
+* `readdlm` now defaults to `use_mmap=false` on all OSes for consistent reliability in abnormal filesystem situations ([#40415]).
 
 Deprecated or removed
 ---------------------
-- Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in a future release.
+- Multiple successive semicolons in an array expresion were previously ignored (e.g., `[1 ;; 2] == [1 ; 2]`). This is now being used to separate dimensions for array literals. (see **New language features**)
 
 
 External dependencies

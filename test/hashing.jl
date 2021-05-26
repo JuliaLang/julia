@@ -260,3 +260,27 @@ end
 
 # PR #40083
 @test hash(1:1000) == hash(collect(1:1000))
+
+@testset "test the other core data hashing functions" begin
+    @testset "hash_64_32" begin
+        vals = vcat(
+            typemin(UInt64) .+ UInt64[1:4;],
+            typemax(UInt64) .- UInt64[4:-1:0;]
+        )
+
+        for a in vals, b in vals
+            @test isequal(a, b) == (Base.hash_64_32(a) == Base.hash_64_32(b))
+        end
+    end
+
+    @testset "hash_32_32" begin
+        vals = vcat(
+            typemin(UInt32) .+ UInt32[1:4;],
+            typemax(UInt32) .- UInt32[4:-1:0;]
+        )
+
+        for a in vals, b in vals
+            @test isequal(a, b) == (Base.hash_32_32(a) == Base.hash_32_32(b))
+        end
+    end
+end

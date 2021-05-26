@@ -183,7 +183,7 @@ static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env, int tvar_
     }
     if (dt == jl_symbol_type)
         return 0;
-    assert(!dt->mutabl);
+    assert(!dt->name->mutabl);
     return jl_egal__bits(a, b, dt);
 }
 
@@ -324,7 +324,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     }
     if (tv == jl_symbol_type)
         return ((jl_sym_t*)v)->hash;
-    assert(!tv->mutabl);
+    assert(!tv->name->mutabl);
     return immut_id_(tv, v, tv->hash);
 }
 
@@ -358,7 +358,7 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
                 uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
             }
-            assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
+            assert(jl_is_datatype(fieldtype) && !fieldtype->name->abstract && !fieldtype->name->mutabl);
             int32_t first_ptr = fieldtype->layout->first_ptr;
             if (first_ptr >= 0 && ((jl_value_t**)vo)[first_ptr] == NULL) {
                 // If the field is a inline immutable that can be can be undef
@@ -391,7 +391,7 @@ static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) J
         return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #endif
     }
-    if (dt->mutabl)
+    if (dt->name->mutabl)
         return inthash((uintptr_t)v);
     return immut_id_(dt, v, dt->hash);
 }
@@ -451,7 +451,7 @@ JL_CALLABLE(jl_f_sizeof)
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
         if (dx->layout == NULL) {
-            if (dx->abstract)
+            if (dx->name->abstract)
                 jl_errorf("Abstract type %s does not have a definite size.", jl_symbol_name(dx->name->name));
             else
                 jl_errorf("Argument is an incomplete %s type and does not have a definite size.", jl_symbol_name(dx->name->name));
@@ -473,7 +473,7 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
-    assert(!dt->abstract);
+    assert(!dt->name->abstract);
     return jl_box_long(jl_datatype_size(dt));
 }
 
@@ -840,7 +840,7 @@ JL_CALLABLE(jl_f_setfield)
     assert(jl_is_datatype(st));
     if (st == jl_module_type)
         jl_error("cannot assign variables in other modules");
-    if (!st->mutabl)
+    if (!st->name->mutabl)
         jl_errorf("setfield! immutable struct of type %s cannot be changed", jl_symbol_name(st->name->name));
     size_t idx;
     if (jl_is_long(args[1])) {
@@ -1337,6 +1337,32 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
     return 1;
 }
 
+static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(p))
+        return references_name(((jl_uniontype_t*)p)->a, name, affects_layout) ||
+               references_name(((jl_uniontype_t*)p)->b, name, affects_layout);
+    if (jl_is_unionall(p))
+        return references_name((jl_value_t*)((jl_unionall_t*)p)->var, name, 0) ||
+               references_name(((jl_unionall_t*)p)->body, name, affects_layout);
+    if (jl_is_typevar(p))
+        return references_name(((jl_tvar_t*)p)->ub, name, 0) ||
+               references_name(((jl_tvar_t*)p)->lb, name, 0);
+    if (jl_is_datatype(p)) {
+        jl_datatype_t *dp = (jl_datatype_t*)p;
+        if (affects_layout && dp->name == name)
+            return 1;
+        affects_layout = dp->types == NULL || jl_svec_len(dp->types) != 0;
+        size_t i, l = jl_nparams(p);
+        for (i = 0; i < l; i++) {
+            if (references_name(jl_tparam(p, i), name, affects_layout))
+                return 1;
+        }
+    }
+    return 0;
+}
+
+
 JL_CALLABLE(jl_f__typebody)
 {
     JL_NARGS(_typebody!, 1, 2);
@@ -1361,6 +1387,14 @@ JL_CALLABLE(jl_f__typebody)
         else {
             dt->types = (jl_svec_t*)ft;
             jl_gc_wb(dt, ft);
+            size_t i, nf = jl_svec_len(ft);
+            for (i = 0; i < nf; i++) {
+                jl_value_t *fld = jl_svecref(ft, i);
+                if (references_name(fld, dt->name, 1)) {
+                    dt->name->references_self = 1;
+                    break;
+                }
+            }
         }
     }
 
@@ -1386,8 +1420,6 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     jl_datatype_t *dtb = (jl_datatype_t*)jl_unwrap_unionall(tb);
     if (!(jl_typeof(dta) == jl_typeof(dtb) &&
           dta->name->name == dtb->name->name &&
-          dta->abstract == dtb->abstract &&
-          dta->mutabl == dtb->mutabl &&
           (jl_svec_len(jl_field_names(dta)) != 0 || dta->size == dtb->size) &&
           dta->ninitialized == dtb->ninitialized &&
           jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&

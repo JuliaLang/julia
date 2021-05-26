@@ -5,8 +5,8 @@
 """
     div(x, y, r::RoundingMode=RoundToZero)
 
-The quotient from Euclidean division. Computes x/y, rounded to an integer according
-to the rounding mode `r`. In other words, the quantity
+The quotient from Euclidean (integer) division. Computes x/y, rounded to
+an integer according to the rounding mode `r`. In other words, the quantity
 
     round(x/y,r)
 
@@ -88,12 +88,16 @@ rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
 
 Largest integer less than or equal to `x/y`. Equivalent to `div(x, y, RoundDown)`.
 
-See also: [`div`](@ref)
+See also: [`div`](@ref), [`cld`](@ref), [`fld1`](@ref).
 
 # Examples
 ```jldoctest
 julia> fld(7.3,5.5)
 1.0
+
+julia> fld.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -2  -2  -1  -1  -1  0  0  0  1  1  1
 ```
 Because `fld(x, y)` implements strictly correct floored rounding based on the true
 value of floating-point numbers, unintuitive situations can arise. For example:
@@ -118,12 +122,16 @@ fld(a, b) = div(a, b, RoundDown)
 
 Smallest integer larger than or equal to `x/y`. Equivalent to `div(x, y, RoundUp)`.
 
-See also: [`div`](@ref)
+See also: [`div`](@ref), [`fld`](@ref).
 
 # Examples
 ```jldoctest
 julia> cld(5.5,2.2)
 3.0
+
+julia> cld.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -1  -1  -1  0  0  0  1  1  1  2  2
 ```
 """
 cld(a, b) = div(a, b, RoundUp)
@@ -135,6 +143,8 @@ cld(a, b) = div(a, b, RoundUp)
 The quotient and remainder from Euclidean division.
 Equivalent to `(div(x,y,r), rem(x,y,r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x÷y, x%y)`.
+
+See also: [`fldmod`](@ref), [`cld`](@ref).
 
 # Examples
 ```jldoctest
@@ -211,6 +221,8 @@ end
 
 The floored quotient and modulus after division. A convenience wrapper for
 `divrem(x, y, RoundDown)`. Equivalent to `(fld(x,y), mod(x,y))`.
+
+See also: [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
 """
 fldmod(x,y) = divrem(x, y, RoundDown)
 
