@@ -196,11 +196,13 @@ end
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
-            @test exp(T(1)) ≈ T(ℯ) atol=10*eps(T)
+            @test exp(T(1)) ≈ T(ℯ) atol=2*eps(T)
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*eps(T)
+            @test isequal(expm1(-floatmax(T)), -one(T))
+            @test isequal(expm1(floatmax(T)), T(Inf))
+            @test expm1(T(1)) ≈ T(ℯ)-1 atol=2*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(hypot(floatmax(T),T(1)),floatmax(T))
             @test isequal(hypot(floatmin(T)*sqrt(eps(T)),T(0)),floatmin(T)*sqrt(eps(T)))
@@ -285,6 +287,13 @@ end
             @test isnan_type(T, hypot(T(x), T(NaN)))
             @test tanh(T(Inf)) === T(1)
         end
+    end
+    @testset "Float16 expm1" begin
+        T=Float16
+        @test isequal(expm1(T(0)), T(0))
+        @test isequal(expm1(-floatmax(T)), -one(T))
+        @test isequal(expm1(floatmax(T)), T(Inf))
+        @test expm1(T(1)) ≈ T(ℯ)-1 atol=2*eps(T)
     end
 end
 
