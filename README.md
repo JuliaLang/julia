@@ -5,7 +5,7 @@
 </a>
 </div>
 
-Code coverage:
+Code coverage: 
 [![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
 [![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
 
