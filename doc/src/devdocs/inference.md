@@ -7,7 +7,7 @@ to the process of deducing the types of later values from the types of
 input values. Julia's approach to inference has been described in blog
 posts
 ([1](https://juliacomputing.com/blog/2016/04/inference-convergence/),
-[2](https://juliacomputing.com/blog/2017/05/inference-converage2/).
+[2](https://juliacomputing.com/blog/2017/05/inference-converage2/)).
 
 ## Debugging compiler.jl
 
