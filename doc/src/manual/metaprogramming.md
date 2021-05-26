@@ -675,7 +675,7 @@ julia> typeof.(numbered.args)
 ```
 
 Julia will introduce a new line number for the new line of code pointing to the definition expression.
-You likely want line numbering to point to the user's call site, rather than the definition expression. 
+You likely want line numbering to point to the user's call site, rather than the definition expression.
 This is for the following two reasons:
 
 - If an error occurs in code introduced in a macro, you likely want stack-traces to point to the user's call site, rather than the definition expression.
@@ -685,7 +685,7 @@ Thus, consider revising the macro as follows:
 
 ```jldoctest macro_line_numbers
 julia> macro adds_more_lines_2()
-           result = 
+           result =
                quote
                    "code"
                end
