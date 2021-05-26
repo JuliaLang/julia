@@ -1566,7 +1566,7 @@ Int64
 
 julia> @code_warntype f(2)
 MethodInstance for f(::Int64)
-  from f(a) in Main at none:1
+  from f(a::Any) in Main at none:1
 Arguments
   #self#::Core.Const(f)
   a::Int64
