@@ -4,7 +4,7 @@
 (define (add-dots ops) (append! ops (map (lambda (op) (symbol (string "." op))) ops)))
 
 (define prec-assignment
-  (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
+  (append! (add-dots '(= += -= −= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
            (add-dots '(~))
            '(:= $=)))
 ;; comma - higher than assignment outside parentheses, lower when inside
