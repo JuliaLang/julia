@@ -282,7 +282,6 @@ end
 lock(s::LibuvStream) = lock(s.lock)
 unlock(s::LibuvStream) = unlock(s.lock)
 
-setup_stdio(stream::LibuvStream) = (stream, false)
 rawhandle(stream::LibuvStream) = stream.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
