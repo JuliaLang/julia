@@ -64,6 +64,7 @@ New library features
 Standard library changes
 ------------------------
 
+* TCP socket objects now expose `shutdown` functionality and support half-open mode usage ([#TBD]).
 * Long strings are now elided using the syntax `"head" ⋯ 12345 bytes ⋯ "tail"` when displayed in the REPL ([#40736]).
 * `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
 * `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).

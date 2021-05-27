@@ -230,8 +230,8 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             deregister_worker(wpid)
         end
 
-        isopen(r_stream) && close(r_stream)
-        isopen(w_stream) && close(w_stream)
+        close(r_stream)
+        close(w_stream)
 
         if (myid() == 1) && (wpid > 1)
             if oldstate != W_TERMINATING

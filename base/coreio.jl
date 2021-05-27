@@ -20,13 +20,14 @@ flush(::DevNull) = nothing
 wait_readnb(::DevNull) = wait()
 wait_close(::DevNull) = wait()
 eof(::DevNull) = true
+bytesavailable(io::DevNull) = 0
 
 let CoreIO = Union{Core.CoreSTDOUT, Core.CoreSTDERR}
     global write, unsafe_write
     write(io::CoreIO, x::UInt8) = Core.write(io, x)
     unsafe_write(io::CoreIO, x::Ptr{UInt8}, nb::UInt) = Core.unsafe_write(io, x, nb)
 end
-
+isopen
 stdin = devnull
 stdout = Core.stdout
 stderr = Core.stderr
