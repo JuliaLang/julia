@@ -825,4 +825,18 @@ function shell_completions(string, pos)
     return Completion[], 0:-1, false
 end
 
+function UndefVarError_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    if var === :or
+        print("\nsuggestion: Use `||` for short-circuiting boolean OR.")
+    elseif var === :and
+        print("\nsuggestion: Use `&&` for short-circuiting boolean AND.")
+    end
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
+    nothing
+end
+
 end # module
