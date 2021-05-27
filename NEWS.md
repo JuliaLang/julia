@@ -47,6 +47,8 @@ New library functions
 
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
 * `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
+* New `keepat!(vector, inds)` function which is the inplace equivalent of `vector[inds]`
+  for a list `inds` of integers ([#36229]).
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
 * Two arguments method `lock(f, lck)` now accepts a `Channel` as the second argument. ([#39312])
 * New functor `Returns(value)`, which returns `value` for any arguments ([#39794])

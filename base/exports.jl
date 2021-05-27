@@ -504,6 +504,7 @@ export
     count,
     delete!,
     deleteat!,
+    keepat!,
     eltype,
     empty!,
     empty,
