@@ -1364,3 +1364,24 @@ end
         @test [v v;;; fill(v, 1, 2)] == fill(v, 1, 2, 2)
     end
 end
+
+@testset "keepat!" begin
+    a = [1:6;]
+    @test a === keepat!(a, 1:5)
+    @test a == 1:5
+    @test keepat!(a, [2, 4]) == [2, 4]
+    @test isempty(keepat!(a, []))
+
+    a = [1:6;]
+    @test_throws BoundsError keepat!(a, 1:10) # make sure this is not a no-op
+    @test_throws BoundsError keepat!(a, 2:10)
+    @test_throws ArgumentError keepat!(a, [2, 4, 3])
+
+    b = BitVector([1, 1, 1, 0, 0])
+    @test b === keepat!(b, 1:5)
+    @test b == [1, 1, 1, 0, 0]
+    @test keepat!(b, 2:4) == [1, 1, 0]
+    @test_throws BoundsError keepat!(a, -1:10)
+    @test_throws ArgumentError keepat!(a, [2, 1])
+    @test isempty(keepat!(a, []))
+end
