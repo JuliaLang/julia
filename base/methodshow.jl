@@ -305,7 +305,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
                 m = parentmodule_before_main(meth.module)
                 get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
             end
-            show(io, meth; modulecolor, digit_align_width)
+            show(io, meth; modulecolor) 
 
             file, line = updated_methodloc(meth)
             if last_shown_line_infos !== nothing
