@@ -695,10 +695,11 @@ julia> macro adds_more_lines_2()
 @adds_more_lines_2 (macro with 1 method)
 ```
 
-`__source__` will contain a `LineNumberNode` pointing to the user's call site (see more information about `__source__` above).
-The macro will now renumber the new line of code to point the user's call site, rather than inside the macro.
-Sometimes users will pass entire lines of code to macros, complete with additional line numbers.
-In this case, instead of using `__source__` to renumber lines, you might use these more fine-grained line numebrs.
+`__source__` will contain a `LineNumberNode` pointing to the user's call site. 
+See [Macro invocation](@ref) for more information about `__source__`).
+The macro will now renumber the new line of code to point to the user's call site, rather than inside the macro.
+Sometimes users will pass entire lines of code to macros, complete with additional `LineNumberNode`s.
+In this case, instead of using `__source__` to renumber lines, you might use these more fine-grained `LineNumberNode`s.
 
 ### Building an advanced macro
 
