@@ -819,7 +819,7 @@ let f = function (x; kw...)
 end
 
 # normalization of Unicode symbols (#19464)
-let ε=1, μ=2, x=3, î=4, ⋅=5
+let ε=1, μ=2, x=3, î=4, ⋅=5, (-)=6
     # issue #5434 (mu vs micro):
     @test Meta.parse("\u00b5") === Meta.parse("\u03bc")
     @test µ == μ == 2
@@ -832,6 +832,17 @@ let ε=1, μ=2, x=3, î=4, ⋅=5
     # middot char · or · vs math dot operator ⋅ (#25098)
     @test Meta.parse("\u00b7") === Meta.parse("\u0387") === Meta.parse("\u22c5")
     @test (·) == (·) == (⋅) == 5
+    # minus − vs hyphen-minus - (#26193)
+    @test Meta.parse("\u2212") === Meta.parse("-")
+    @test Meta.parse("\u221242") === Meta.parse("-42")
+    @test Meta.parse("\u2212 42") == Meta.parse("- 42")
+    @test Meta.parse("\u2212x") == Meta.parse("-x")
+    @test Meta.parse("x \u2212 42") == Meta.parse("x - 42")
+    @test Meta.parse("x \u2212= 42") == Meta.parse("x -= 42")
+    @test Meta.parse("100.0e\u22122") === Meta.parse("100.0E\u22122") === Meta.parse("100.0e-2")
+    @test Meta.parse("100.0f\u22122") === Meta.parse("100.0f-2")
+    @test Meta.parse("0x100p\u22128") === Meta.parse("0x100P\u22128") === Meta.parse("0x100p-8")
+    @test (−) == (-) == 6
 end
 
 # issue #8925
