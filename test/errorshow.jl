@@ -653,13 +653,8 @@ backtrace()
     @test occursin("g28442", output[3])
     @test lstrip(output[5])[1:3] == "[2]"
     @test occursin("f28442", output[5])
-    # Issue #30233
-    # Note that we can't use @test_broken on FreeBSD here, because the tests actually do
-    # pass with some compilation options, e.g. with assertions enabled
-    if !Sys.isfreebsd()
-        @test occursin("the last 2 lines are repeated 5000 more times", output[7])
-        @test lstrip(output[8])[1:7] == "[10003]"
-    end
+    @test occursin("the last 2 lines are repeated 5000 more times", output[7])
+    @test lstrip(output[8])[1:7] == "[10003]"
 end
 
 @testset "Line number correction" begin
