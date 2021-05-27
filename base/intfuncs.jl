@@ -117,8 +117,9 @@ function lcm(a::T, b::T) where T<:Integer
     end
 end
 
-gcd(a::Union{Integer,Rational}) = a
-lcm(a::Union{Integer,Rational}) = a
+gcd(a::Integer) = checked_abs(a)
+gcd(a::Rational) = checked_abs(a.num) // a.den
+lcm(a::Union{Integer,Rational}) = gcd(a)
 gcd(a::Unsigned, b::Signed) = gcd(promote(a, abs(b))...)
 gcd(a::Signed, b::Unsigned) = gcd(promote(abs(a), b)...)
 gcd(a::Real, b::Real) = gcd(promote(a,b)...)
