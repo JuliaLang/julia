@@ -836,6 +836,7 @@ let ε=1, μ=2, x=3, î=4, ⋅=5, (-)=6
     @test Meta.parse("\u2212") === Meta.parse("-")
     @test Meta.parse("\u221242") === Meta.parse("-42")
     @test Meta.parse("\u2212 42") == Meta.parse("- 42")
+    @test Meta.parse("\u2212x") == Meta.parse("-x")
     @test Meta.parse("x \u2212 42") == Meta.parse("x - 42")
     @test Meta.parse("x \u2212= 42") == Meta.parse("x -= 42")
     @test Meta.parse("100.0e\u22122") === Meta.parse("100.0E\u22122") === Meta.parse("100.0e-2")
