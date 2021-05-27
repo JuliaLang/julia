@@ -10,7 +10,7 @@ const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:Ab
 Return `true` if `s` starts with `prefix`. If `prefix` is a vector or set
 of characters, test whether the first character of `s` belongs to that set.
 
-See also [`endswith`](@ref).
+See also [`endswith`](@ref), [`contains`](@ref).
 
 # Examples
 ```jldoctest
@@ -30,7 +30,7 @@ startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::Abs
 Return `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
 characters, test whether the last character of `s` belongs to that set.
 
-See also [`startswith`](@ref).
+See also [`startswith`](@ref), [`contains`](@ref).
 
 # Examples
 ```jldoctest
@@ -76,6 +76,8 @@ end
 Return `true` if `haystack` contains `needle`.
 This is the same as `occursin(needle, haystack)`, but is provided for consistency with
 `startswith(haystack, needle)` and `endswith(haystack, needle)`.
+
+See also [`occursin`](@ref), [`in`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest
@@ -166,6 +168,8 @@ The call `chop(s)` removes the last character from `s`.
 If it is requested to remove more characters than `length(s)`
 then an empty string is returned.
 
+See also [`chomp`](@ref), [`startswith`](@ref), [`first`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = "March"
@@ -195,6 +199,8 @@ end
     chomp(s::AbstractString) -> SubString
 
 Remove a single trailing newline from a string.
+
+See also [`chop`](@ref).
 
 # Examples
 ```jldoctest
@@ -233,6 +239,8 @@ The default behaviour is to remove leading whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
+See also [`strip`](@ref) and [`rstrip`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = lpad("March", 20)
@@ -265,6 +273,8 @@ The default behaviour is to remove trailing whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
+See also [`strip`](@ref) and [`lstrip`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = rpad("March", 20)
@@ -295,6 +305,8 @@ The default behaviour is to remove leading and trailing whitespace and delimiter
 
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, vector or set of characters.
+
+See also [`lstrip`](@ref) and [`rstrip`](@ref).
 
 !!! compat "Julia 1.2"
     The method which accepts a predicate function requires Julia 1.2 or later.
@@ -665,8 +677,8 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
 
     next = iterate(itr)
     @inbounds for i in eachindex(dest)
-        x,state = next
-        y,state = iterate(itr, state)
+        x,state = next::NTuple{2,Any}
+        y,state = iterate(itr, state)::NTuple{2,Any}
         next = iterate(itr, state)
         dest[i] = number_from_hex(x) << 4 + number_from_hex(y)
     end

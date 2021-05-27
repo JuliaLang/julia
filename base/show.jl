@@ -1016,9 +1016,22 @@ end
 show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 """
-    @show
+    @show exs...
 
-Show an expression and result, returning the result. See also [`show`](@ref).
+Prints one or more expressions, and their results, to `stdout`, and returns the last result.
+
+See also: [`show`](@ref), [`@info`](@ref Logging), [`println`](@ref).
+
+# Examples
+```jldoctest
+julia> x = @show 1+2
+1 + 2 = 3
+3
+
+julia> @show x^2 x/2;
+x ^ 2 = 9
+x / 2 = 1.5
+```
 """
 macro show(exs...)
     blk = Expr(:block)
@@ -2476,7 +2489,7 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
         # TODO: static parameter values?
         # only accepts :source or :none, we can't have a fallback for default since
         # that would break code_typed(, debuginfo=:source) iff IRShow.default_debuginfo[] = :none
-        IRShow.show_ir(lambda_io, src, IRShow.__debuginfo[debuginfo](src))
+        IRShow.show_ir(lambda_io, src, IRShow.IRShowConfig(IRShow.__debuginfo[debuginfo](src)))
     else
         # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
         body = Expr(:block)
@@ -2603,7 +2616,7 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
     if x !== Any
         print(io, " <: ", supertype(x))
     end
-    if n > 0 && !(x <: Tuple) && !x.abstract
+    if n > 0 && !(x <: Tuple) && !x.name.abstract
         tvar_io::IOContext = io
         for tparam in x.parameters
             # approximately recapture the list of tvar parameterization
@@ -2835,7 +2848,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     toplevel && print(io, " with eltype ", eltype(v))
     return nothing
 end
-showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
+showindices(io, ::Slice, inds...) =
     (print(io, ", :"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))

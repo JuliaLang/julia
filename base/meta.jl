@@ -188,7 +188,7 @@ The expression passed to the [`parse`](@ref) function could not be interpreted a
 expression.
 """
 struct ParseError <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 function _parse_string(text::AbstractString, filename::AbstractString,
@@ -203,21 +203,32 @@ end
 """
     parse(str, start; greedy=true, raise=true, depwarn=true)
 
-Parse the expression string and return an expression (which could later be passed to eval
-for execution). `start` is the index of the first character to start parsing. If `greedy` is
-`true` (default), `parse` will try to consume as much input as it can; otherwise, it will
-stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically
-valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is `true`
-(default), syntax errors other than incomplete expressions will raise an error. If `raise`
-is `false`, `parse` will return an expression that will raise an error upon evaluation. If
-`depwarn` is `false`, deprecation warnings will be suppressed.
+Parse the expression string and return an expression (which could later be
+passed to eval for execution). `start` is the code unit index into `str` of the
+first character to start parsing at (as with all string indexing, these are not
+character indices). If `greedy` is `true` (default), `parse` will try to consume
+as much input as it can; otherwise, it will stop as soon as it has parsed a
+valid expression. Incomplete but otherwise syntactically valid expressions will
+return `Expr(:incomplete, "(error message)")`. If `raise` is `true` (default),
+syntax errors other than incomplete expressions will raise an error. If `raise`
+is `false`, `parse` will return an expression that will raise an error upon
+evaluation. If `depwarn` is `false`, deprecation warnings will be suppressed.
 
 ```jldoctest
-julia> Meta.parse("x = 3, y = 5", 7)
-(:(y = 5), 13)
+julia> Meta.parse("(α, β) = 3, 5", 1) # start of string
+(:((α, β) = (3, 5)), 16)
 
-julia> Meta.parse("x = 3, y = 5", 5)
-(:((3, y) = 5), 13)
+julia> Meta.parse("(α, β) = 3, 5", 1, greedy=false)
+(:((α, β)), 9)
+
+julia> Meta.parse("(α, β) = 3, 5", 16) # end of string
+(nothing, 16)
+
+julia> Meta.parse("(α, β) = 3, 5", 11) # index of 3
+(:((3, 5)), 16)
+
+julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
+(3, 13)
 ```
 """
 function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,

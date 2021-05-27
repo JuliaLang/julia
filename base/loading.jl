@@ -203,7 +203,6 @@ function get_updated_dict(p::TOML.Parser, f::CachedTOMLDict)
             f.mtime = s.mtime
             f.size = s.size
             f.hash = new_hash
-            @debug "Cache of TOML file $(repr(f.path)) invalid, reparsing..."
             TOML.reinit!(p, String(content); filepath=f.path)
             return f.d = TOML.parse(p)
         end
@@ -222,7 +221,6 @@ parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
         if !haskey(toml_cache.d, project_file)
-            @debug "Creating new cache for $(repr(project_file))"
             d = CachedTOMLDict(toml_cache.p, project_file)
             toml_cache.d[project_file] = d
             return d.d
@@ -312,21 +310,35 @@ function pathof(m::Module)
     pkgid === nothing && return nothing
     origin = get(Base.pkgorigins, pkgid, nothing)
     origin === nothing && return nothing
-    origin.path === nothing && return nothing
-    return fixup_stdlib_path(origin.path)
+    path = origin.path
+    path === nothing && return nothing
+    return fixup_stdlib_path(path)
 end
 
 """
-    pkgdir(m::Module)
+    pkgdir(m::Module[, paths::String...])
 
- Return the root directory of the package that imported module `m`,
- or `nothing` if `m` was not imported from a package.
- """
-function pkgdir(m::Module)
+Return the root directory of the package that imported module `m`,
+or `nothing` if `m` was not imported from a package. Optionally further
+path component strings can be provided to construct a path within the
+package root.
+
+```julia
+julia> pkgdir(Foo)
+"/path/to/Foo.jl"
+
+julia> pkgdir(Foo, "src", "file.jl")
+"/path/to/Foo.jl/src/file.jl"
+```
+
+!!! compat "Julia 1.7"
+    The optional argument `paths` requires at least Julia 1.7.
+"""
+function pkgdir(m::Module, paths::String...)
     rootmodule = Base.moduleroot(m)
     path = pathof(rootmodule)
     path === nothing && return nothing
-    return dirname(dirname(path))
+    return joinpath(dirname(dirname(path)), paths...)
 end
 
 ## generic project & manifest API ##
@@ -563,7 +575,8 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
     hash === nothing && return nothing
     hash = SHA1(hash)
     # Keep the 4 since it used to be the default
-    for slug in (version_slug(pkg.uuid, hash, 4), version_slug(pkg.uuid, hash))
+    uuid = pkg.uuid::UUID # checked within `explicit_manifest_uuid_path`
+    for slug in (version_slug(uuid, hash, 4), version_slug(uuid, hash))
         for depot in DEPOT_PATH
             path = abspath(depot, "packages", pkg.name, slug)
             ispath(path) && return path
@@ -1749,7 +1762,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         # now check if this file is fresh relative to its source files
         if !skip_timecheck
             if !samefile(includes[1].filename, modpath)
-                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename)) not file $modpath"
+                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                 return true # cache file was compiled from a different path
             end
             for (modkey, req_modkey) in requires

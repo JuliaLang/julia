@@ -28,15 +28,17 @@ const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
 const DATATYPE_PARAMETERS_FIELDINDEX = fieldindex(DataType, :parameters)
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
-const DATATYPE_MUTABLE_FIELDINDEX = fieldindex(DataType, :mutable)
 const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
-const DATATYPE_ABSTRACT_FIELDINDEX = fieldindex(DataType, :abstract)
 const DATATYPE_NAMES_FIELDINDEX = fieldindex(DataType, :names)
+const DATATYPE_HASH_FIELDINDEX = fieldindex(DataType, :hash)
 
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
 const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
 const TYPENAME_NAMES_FIELDINDEX = fieldindex(Core.TypeName, :names)
 const TYPENAME_WRAPPER_FIELDINDEX = fieldindex(Core.TypeName, :wrapper)
+const TYPENAME_MUTABLE_FIELDINDEX = fieldindex(Core.TypeName, :mutable)
+const TYPENAME_ABSTRACT_FIELDINDEX = fieldindex(Core.TypeName, :abstract)
+const TYPENAME_HASH_FIELDINDEX = fieldindex(Core.TypeName, :hash)
 
 ##########
 # tfuncs #
@@ -88,7 +90,7 @@ function instanceof_tfunc(@nospecialize(t))
             # a real instance must be within the declared bounds of the type,
             # so we can intersect with the original wrapper.
             tr = typeintersect(tr, t′′.name.wrapper)
-            isconcrete = !t′′.abstract
+            isconcrete = !t′′.name.abstract
             if tr === Union{}
                 # runtime unreachable (our inference Type{T} where S is
                 # uninhabited with any runtime T that exists)
@@ -193,7 +195,6 @@ add_tfunc(ne_float, 2, 2, cmp_tfunc, 2)
 add_tfunc(lt_float, 2, 2, cmp_tfunc, 2)
 add_tfunc(le_float, 2, 2, cmp_tfunc, 2)
 add_tfunc(fpiseq, 2, 2, cmp_tfunc, 1)
-add_tfunc(fpislt, 2, 2, cmp_tfunc, 1)
 add_tfunc(eq_float_fast, 2, 2, cmp_tfunc, 1)
 add_tfunc(ne_float_fast, 2, 2, cmp_tfunc, 1)
 add_tfunc(lt_float_fast, 2, 2, cmp_tfunc, 1)
@@ -272,7 +273,7 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
         return Bool
     end
     a1 = unwrap_unionall(a1)
-    if isa(a1, DataType) && !a1.abstract
+    if isa(a1, DataType) && !a1.name.abstract
         if a1 === Module
             Symbol <: widenconst(sym) || return Bottom
             if isa(sym, Const) && isa(sym.val, Symbol) && isa(arg1, Const) && isdefined(arg1.val, sym.val)
@@ -405,7 +406,7 @@ function nfields_tfunc(@nospecialize(x))
     isa(x, Conditional) && return Const(0)
     x = unwrap_unionall(widenconst(x))
     isconstType(x) && return Const(nfields(x.parameters[1]))
-    if isa(x, DataType) && !x.abstract
+    if isa(x, DataType) && !x.name.abstract
         if !(x.name === Tuple.name && isvatuple(x)) &&
            !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
             return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
@@ -530,7 +531,7 @@ function typeof_tfunc(@nospecialize(t))
         return typeof_tfunc(t.ub)
     elseif isa(t, UnionAll)
         u = unwrap_unionall(t)
-        if isa(u, DataType) && !u.abstract
+        if isa(u, DataType) && !u.name.abstract
             if u.name === Tuple.name
                 uu = typeof_concrete_vararg(u)
                 if uu !== nothing
@@ -613,10 +614,9 @@ is_dt_const_field(fld::Int) = (
      fld == DATATYPE_PARAMETERS_FIELDINDEX ||
      fld == DATATYPE_TYPES_FIELDINDEX ||
      fld == DATATYPE_SUPER_FIELDINDEX ||
-     fld == DATATYPE_MUTABLE_FIELDINDEX ||
      fld == DATATYPE_INSTANCE_FIELDINDEX ||
      fld == DATATYPE_NAMES_FIELDINDEX ||
-     fld == DATATYPE_ABSTRACT_FIELDINDEX
+     fld == DATATYPE_HASH_FIELDINDEX
     )
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
     if fld == DATATYPE_INSTANCE_FIELDINDEX
@@ -650,7 +650,7 @@ function fieldcount_noerror(@nospecialize t)
         end
         abstr = true
     else
-        abstr = t.abstract || (t.name === Tuple.name && isvatuple(t))
+        abstr = t.name.abstract || (t.name === Tuple.name && isvatuple(t))
     end
     if abstr
         return nothing
@@ -718,7 +718,7 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), @nospecialize
             getfield_nothrow(rewrap(s.b, s00), name, inbounds)
     elseif isa(s, DataType)
         # Can't say anything about abstract types
-        s.abstract && return false
+        s.name.abstract && return false
         # If all fields are always initialized, and bounds check is disabled, we can assume
         # we don't throw
         if bounds_check_disabled && !isvatuple(s) && s.name !== NamedTuple.body.body.name && fieldcount(s) == s.ninitialized
@@ -776,6 +776,9 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 if (fld == TYPENAME_NAME_FIELDINDEX ||
                     fld == TYPENAME_MODULE_FIELDINDEX ||
                     fld == TYPENAME_WRAPPER_FIELDINDEX ||
+                    fld == TYPENAME_MUTABLE_FIELDINDEX ||
+                    fld == TYPENAME_ABSTRACT_FIELDINDEX ||
+                    fld == TYPENAME_HASH_FIELDINDEX ||
                     (fld == TYPENAME_NAMES_FIELDINDEX && isdefined(sv, fld)))
                     return Const(getfield(sv, fld))
                 end
@@ -800,7 +803,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         s = widenconst(s)
     end
-    if isType(s) || !isa(s, DataType) || s.abstract
+    if isType(s) || !isa(s, DataType) || s.name.abstract
         return Any
     end
     s = s::DataType
@@ -926,7 +929,7 @@ function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
         return exact ? (a || b) : (a && b)
     end
     u isa DataType || return false
-    u.abstract && return false
+    u.name.abstract && return false
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
         # TODO: better approximate inference
         return false
@@ -987,7 +990,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
                       _fieldtype_tfunc(rewrap(u.b, s), exact, name))
     end
     u isa DataType || return Union{Type, TypeVar}
-    if u.abstract
+    if u.name.abstract
         # Abstract types have no fields
         exact && return Bottom
         # Type{...} without free typevars has no subtypes, so it is actually

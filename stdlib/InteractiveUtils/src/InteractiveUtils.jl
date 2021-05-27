@@ -81,6 +81,8 @@ Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
+
+See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
@@ -261,6 +263,8 @@ subtypes(m::Module, x::Type) = _subtypes_in([m], x)
 Return a list of immediate subtypes of DataType `T`. Note that all currently loaded subtypes
 are included, including those not visible in the current module.
 
+See also [`supertype`](@ref), [`supertypes`](@ref), [`methodswith`](@ref).
+
 # Examples
 ```jldoctest
 julia> subtypes(Integer)
@@ -278,6 +282,8 @@ subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
 Return a tuple `(T, ..., Any)` of `T` and all its supertypes, as determined by
 successive calls to the [`supertype`](@ref) function, listed in order of `<:`
 and terminated by `Any`.
+
+See also [`subtypes`](@ref).
 
 # Examples
 ```jldoctest
@@ -297,7 +303,7 @@ end
 function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested
-    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
+    isa(x, DataType) && x.name.abstract && dumpsubtypes(io, x, Main, n, indent)
     nothing
 end
 

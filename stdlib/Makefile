@@ -16,7 +16,7 @@ $(build_datarootdir)/julia/stdlib/$(VERSDIR):
 	mkdir -p $@
 
 JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
-       BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE SUITESPARSE ZLIB \
+       BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE LIBSUITESPARSE ZLIB \
        LLVMUNWIND CSL UNWIND
 
 # Initialize this with JLLs that aren't in deps/Versions.make
@@ -44,7 +44,7 @@ STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching 
           SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
           $(JLL_NAMES)
 
-STDLIBS_EXT = Pkg Statistics LibCURL Downloads ArgTools Tar NetworkOptions
+STDLIBS_EXT = Pkg Statistics LibCURL Downloads ArgTools Tar NetworkOptions SuiteSparse
 PKG_GIT_URL := git://github.com/JuliaLang/Pkg.jl.git
 PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
 STATISTICS_GIT_URL := git://github.com/JuliaLang/Statistics.jl.git
@@ -59,6 +59,8 @@ TAR_GIT_URL := git://github.com/JuliaIO/Tar.jl.git
 TAR_TAR_URL = https://api.github.com/repos/JuliaIO/Tar.jl/tarball/$1
 NETWORKOPTIONS_GIT_URL := git://github.com/JuliaLang/NetworkOptions.jl.git
 NETWORKOPTIONS_TAR_URL = https://api.github.com/repos/JuliaLang/NetworkOptions.jl/tarball/$1
+SUITESPARSE_GIT_URL := git://github.com/JuliaLang/SuiteSparse.jl.git
+SUITESPARSE_TAR_URL = https://api.github.com/repos/JuliaLang/SuiteSparse.jl/tarball/$1
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 

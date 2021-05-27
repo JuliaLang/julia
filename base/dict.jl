@@ -792,6 +792,14 @@ function get(dict::ImmutableDict, key, default)
     return default
 end
 
+function get(default::Callable, dict::ImmutableDict, key)
+    while isdefined(dict, :parent)
+        isequal(dict.key, key) && return dict.value
+        dict = dict.parent
+    end
+    return default()
+end
+
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
 function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
     !isdefined(t, :parent) && return nothing

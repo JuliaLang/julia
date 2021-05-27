@@ -55,8 +55,8 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
-# Test for SIGPIPE being treated as normal termination (throws an error if broken)
-Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
+# Test for SIGPIPE being a failure condition
+@test_throws ProcessFailedException run(pipeline(yescmd, `head`, devnull))
 
 let p = run(pipeline(yescmd, devnull), wait=false)
     t = @async kill(p)
@@ -697,7 +697,15 @@ let text = "input-test-text"
     @test read(proc, String) == string(length(text), '\n')
     @test success(proc)
     @test String(take!(b)) == text
+
+    out = PipeBuffer()
+    proc = run(catcmd, IOBuffer(SubString(text)), out)
+    @test success(proc)
+    @test proc.out === proc.err === proc.in === devnull
+    @test String(take!(out)) == text
 end
+
+
 @test repr(Base.CmdRedirect(``, devnull, 0, false)) == "pipeline(``, stdin>Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"

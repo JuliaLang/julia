@@ -15,7 +15,7 @@ import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 Vector type for storing sparse vectors.
 """
 struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
-    n::Int              # Length of the sparse vector
+    n::Ti              # Length of the sparse vector
     nzind::Vector{Ti}   # Indices of stored values
     nzval::Vector{Tv}   # Stored values, typically nonzeros
 
@@ -23,7 +23,7 @@ struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
         length(nzind) == length(nzval) ||
             throw(ArgumentError("index and value vectors must be the same length"))
-        new(convert(Int, n), nzind, nzval)
+        new(convert(Ti, n), nzind, nzval)
     end
 end
 
@@ -84,30 +84,37 @@ rowvals(x::SparseVectorUnion) = nonzeroinds(x)
 indtype(x::SparseColumnView) = indtype(parent(x))
 indtype(x::SparseVectorView) = indtype(parent(x))
 
+
+function Base.sizehint!(v::SparseVector, newlen::Integer)
+    sizehint!(nonzeroinds(v), newlen)
+    sizehint!(nonzeros(v), newlen)
+    return v
+end
+
 ## similar
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew} =
     SparseVector(length(S), copyto!(similar(nonzeroinds(S), TiNew), nonzeroinds(S)), similar(nonzeros(S), TvNew))
-# parent method for similar that preserves nothing (for when old and new dims differ, and new is 1d)
+# parent method for similar that preserves nothing (for when new dims are 1-d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
 # parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
-_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
-    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew), similar(nonzeros(S), TvNew))
+function _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew}
+    S1 = SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
+    return sizehint!(S1, min(widelength(S1), length(nonzeroinds(S))))
+end
 # The following methods hook into the AbstractArray similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
-# specify a SparseVector result and storage space if the dims specify a SparseMatrixCSC result.
+# specify a SparseVector or a SparseMatrixCSC result.
 similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}) where {Ti,TvNew} =
     _sparsesimilar(S, TvNew, Ti)
 similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}, dims::Union{Dims{1},Dims{2}}) where {Ti,TvNew} =
     _sparsesimilar(S, TvNew, Ti, dims)
 # The following methods cover similar(A, Tv, Ti[, shape...]) calls, which specify the
 # result's index type in addition to its entry type, and aren't covered by the hooks above.
-# The calls without shape again preserve stored-entry structure, whereas those with
-# one-dimensional shape preserve nothing, and those with two-dimensional shape
-# preserve storage space.
+# The calls without shape again preserve stored-entry structure but no storage space.
 similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where{TvNew,TiNew} =
     _sparsesimilar(S, TvNew, TiNew)
 similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Union{Dims{1},Dims{2}}) where {TvNew,TiNew} =
@@ -125,8 +132,11 @@ Base.unaliascopy(S::SparseVector) = typeof(S)(length(S), unaliascopy(nonzeroinds
 ### Construct empty sparse vector
 
 spzeros(len::Integer) = spzeros(Float64, len)
+spzeros(dims::Tuple{<:Integer}) = spzeros(Float64, dims[1])
 spzeros(::Type{T}, len::Integer) where {T} = SparseVector(len, Int[], T[])
+spzeros(::Type{T}, dims::Tuple{<:Integer}) where {T} = spzeros(T, dims[1])
 spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} = SparseVector(len, Ti[], Tv[])
+spzeros(::Type{Tv}, ::Type{Ti}, dims::Tuple{<:Integer}) where {Tv,Ti<:Integer} = spzeros(Tv, Ti, dims[1])
 
 LinearAlgebra.fillstored!(x::SparseVector, y) = (fill!(nonzeros(x), y); x)
 

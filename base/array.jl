@@ -9,7 +9,7 @@ The objects called do not have matching dimensionality. Optional argument `msg` 
 descriptive error string.
 """
 struct DimensionMismatch <: Exception
-    msg::AbstractString
+    msg::String
 end
 DimensionMismatch() = DimensionMismatch("")
 
@@ -54,6 +54,8 @@ Array
 
 One-dimensional dense array with elements of type `T`, often used to represent
 a mathematical vector. Alias for [`Array{T,1}`](@ref).
+
+See also [`empty`](@ref), [`similar`](@ref) and [`zero`](@ref) for creating vectors.
 """
 const Vector{T} = Array{T,1}
 
@@ -62,12 +64,28 @@ const Vector{T} = Array{T,1}
 
 Two-dimensional dense array with elements of type `T`, often used to represent
 a mathematical matrix. Alias for [`Array{T,2}`](@ref).
+
+See also [`fill`](@ref), [`zeros`](@ref), [`undef`](@ref) and [`similar`](@ref)
+for creating matrices.
 """
 const Matrix{T} = Array{T,2}
+
 """
     VecOrMat{T}
 
-Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref).
+Union type of [`Vector{T}`](@ref) and [`Matrix{T}`](@ref) which allows functions to accept either a Matrix or a Vector.
+
+# Examples
+```jldoctest
+julia> Vector{Float64} <: VecOrMat{Float64}
+true
+
+julia> Matrix{Float64} <: VecOrMat{Float64}
+true
+
+julia> Array{Float64, 3} <: VecOrMat{Float64}
+false
+```
 """
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
@@ -343,6 +361,8 @@ end
 Create a shallow copy of `x`: the outer structure is copied, but not all internal values.
 For example, copying an array produces a new array with identically-same elements as the
 original.
+
+See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref).
 """
 copy
 
@@ -420,6 +440,8 @@ array of floats, with each element initialized to `1.0`.
 `dims` may be specified as either a tuple or a sequence of arguments. For example,
 the common idiom `fill(x)` creates a zero-dimensional array containing the single value `x`.
 
+See also: [`fill!`](@ref), [`zeros`](@ref), [`ones`](@ref), [`similar`](@ref).
+
 # Examples
 ```jldoctest
 julia> fill(1.0, (2,3))
@@ -456,7 +478,7 @@ fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
     zeros([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all zeros with size specified by `dims`.
-See also [`fill`](@ref), [`ones`](@ref).
+See also [`fill`](@ref), [`ones`](@ref), [`zero`](@ref).
 
 # Examples
 ```jldoctest
@@ -587,6 +609,8 @@ Return an `Array` of all items in a collection or iterator. For dictionaries, re
 [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
 
+Used by comprehensions to turn a generator into an `Array`.
+
 # Examples
 ```jldoctest
 julia> collect(1:2:13)
@@ -598,6 +622,13 @@ julia> collect(1:2:13)
   9
  11
  13
+
+julia> [x^2 for x in 1:8 if isodd(x)]
+4-element Vector{Int64}:
+  1
+  9
+ 25
+ 49
 ```
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(itr))
@@ -803,16 +834,20 @@ function getindex end
 @eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for UnitRange and Colon
-function getindex(A::Array, I::UnitRange{Int})
+function getindex(A::Array, I::AbstractUnitRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
-    X = similar(A, lI)
+    X = similar(A, axes(I))
     if lI > 0
-        unsafe_copyto!(X, 1, A, first(I), lI)
+        copyto!(X, firstindex(X), A, first(I), lI)
     end
     return X
 end
+
+# getindex for carrying out logical indexing for AbstractUnitRange{Bool} as Bool <: Integer
+getindex(a::Array, r::AbstractUnitRange{Bool}) = getindex(a, to_index(r))
+
 function getindex(A::Array, c::Colon)
     lI = length(A)
     X = similar(A, lI)
@@ -921,6 +956,8 @@ collection to it. The result of the preceding example is equivalent to `append!(
 5, 6])`. For `AbstractSet` objects, [`union!`](@ref) can be used instead.
 
 See [`sizehint!`](@ref) for notes about the performance model.
+
+See also [`pushfirst!`](@ref).
 """
 function push! end
 
@@ -928,7 +965,7 @@ function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
     _growend!(a, 1)
-    a[end] = itemT
+    @inbounds a[end] = itemT
     return a
 end
 
@@ -970,6 +1007,9 @@ themselves in another collection. The result of the preceding example is equival
 `push!([1, 2, 3], 4, 5, 6)`.
 
 See [`sizehint!`](@ref) for notes about the performance model.
+
+See also [`vcat`](@ref) for vectors, [`union!`](@ref) for sets,
+and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
 function append!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
@@ -1144,6 +1184,8 @@ Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned; for unordered containers,
 an arbitrary element is returned.
 
+See also: [`popfirst!`](@ref), [`popat!`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref), and [`push!`](@ref).
+
 # Examples
 ```jldoctest
 julia> A=[1, 2, 3]
@@ -1192,7 +1234,8 @@ Remove the item at the given `i` and return it. Subsequent items
 are shifted to fill the resulting gap.
 When `i` is not a valid index for `a`, return `default`, or throw an error if
 `default` is not specified.
-See also [`deleteat!`](@ref) and [`splice!`](@ref).
+
+See also: [`pop!`](@ref), [`popfirst!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref).
 
 !!! compat "Julia 1.5"
     This function is available as of Julia 1.5.
@@ -1265,6 +1308,8 @@ Remove the first `item` from `collection`.
 
 This function is called `shift` in many other programming languages.
 
+See also: [`pop!`](@ref), [`popat!`](@ref), [`delete!`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5, 6]
@@ -1303,6 +1348,8 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
+See also: [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+
 # Examples
 ```jldoctest
 julia> insert!([6, 5, 4, 2, 1], 4, 3)
@@ -1329,6 +1376,8 @@ end
 
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
+
+See also: [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1440,6 +1489,8 @@ Remove the item at the given index, and return the removed item.
 Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
+
+See also: [`replace`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`pop!`](@ref), [`popat!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1590,7 +1641,7 @@ end
     reverse(v [, start=1 [, stop=length(v) ]] )
 
 Return a copy of `v` reversed from start to stop.  See also [`Iterators.reverse`](@ref)
-for reverse-order iteration without making a copy.
+for reverse-order iteration without making a copy, and in-place [`reverse!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1793,6 +1844,8 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+See also: [`findall`](@ref), [`findnext`](@ref), [`findlast`](@ref), [`searchsortedfirst`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [false, false, true, false]
@@ -1934,6 +1987,8 @@ or `nothing` if not found.
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+See also: [`findnext`](@ref), [`findfirst`](@ref), [`findall`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [false, false, true, true]
@@ -1978,6 +2033,8 @@ Return `nothing` if there is no `true` value in `A`.
 
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
+
+See also: [`findfirst`](@ref), [`findprev`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -2171,6 +2228,8 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+See also: [`findfirst`](@ref), [`searchsorted`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [true, false, false, true]
@@ -2227,6 +2286,8 @@ findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 Return an array containing the first index in `b` for
 each value in `a` that is a member of `b`. The output
 array contains `nothing` wherever `a` is not a member of `b`.
+
+See also: [`sortperm`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -2360,6 +2421,8 @@ The function `f` is passed one argument.
 
 !!! compat "Julia 1.4"
     Support for `a` as a tuple requires at least Julia 1.4.
+
+See also: [`filter!`](@ref), [`Iterators.filter`](@ref).
 
 # Examples
 ```jldoctest

@@ -24,7 +24,7 @@ Given an AbstractArray `A`, create a view `B` such that the
 dimensions appear to be permuted. Similar to `permutedims`, except
 that no copying occurs (`B` shares storage with `A`).
 
-See also: [`permutedims`](@ref).
+See also: [`permutedims`](@ref), [`invperm`](@ref).
 
 # Examples
 ```jldoctest
@@ -83,10 +83,10 @@ end
 """
     permutedims(A::AbstractArray, perm)
 
-Permute the dimensions of array `A`. `perm` is a vector specifying a permutation of length
-`ndims(A)`.
+Permute the dimensions of array `A`. `perm` is a vector or a tuple of length `ndims(A)`
+specifying the permutation.
 
-See also: [`PermutedDimsArray`](@ref).
+See also: [`permutedims!`](@ref), [`PermutedDimsArray`](@ref), [`transpose`](@ref), [`invperm`](@ref).
 
 # Examples
 ```jldoctest
@@ -100,7 +100,7 @@ julia> A = reshape(Vector(1:8), (2,2,2))
  5  7
  6  8
 
-julia> permutedims(A, [3, 2, 1])
+julia> permutedims(A, (3, 2, 1))
 2×2×2 Array{Int64, 3}:
 [:, :, 1] =
  1  3
@@ -109,6 +109,16 @@ julia> permutedims(A, [3, 2, 1])
 [:, :, 2] =
  2  4
  6  8
+
+julia> B = randn(5, 7, 11, 13);
+
+julia> perm = [4,1,3,2];
+
+julia> size(permutedims(B, perm))
+(13, 5, 11, 7)
+
+julia> size(B)[perm] == ans
+true
 ```
 """
 function permutedims(A::AbstractArray, perm)
@@ -251,6 +261,16 @@ end
         end
     end
     P
+end
+
+function Base._mapreduce_dim(f, op, init::Base._InitialValue, A::PermutedDimsArray, dims::Colon)
+    Base._mapreduce_dim(f, op, init, parent(A), dims)
+end
+
+function Base.mapreducedim!(f, op, B::AbstractArray{T,N}, A::PermutedDimsArray{T,N,perm,iperm}) where {T,N,perm,iperm}
+    C = PermutedDimsArray{T,N,iperm,perm,typeof(B)}(B) # make the inverse permutation for the output
+    Base.mapreducedim!(f, op, C, parent(A))
+    B
 end
 
 function Base.showarg(io::IO, A::PermutedDimsArray{T,N,perm}, toplevel) where {T,N,perm}

@@ -171,7 +171,7 @@ function check_worker_state(w::Worker)
     end
 end
 
-exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id))
+exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id)::Worker)
 function exec_conn_func(w::Worker)
     try
         f = notnothing(w.conn_func)
@@ -851,7 +851,7 @@ julia> nprocs()
 3
 
 julia> workers()
-5-element Array{Int64,1}:
+2-element Array{Int64,1}:
  2
  3
 ```

@@ -146,6 +146,8 @@ let fails = @testset NoThrowTestSet begin
         @test endswith(str1, str2)
         # 21 - Fail - contains
         @test contains(str1, str2)
+        # 22 - Fail - Type Comparison
+        @test typeof(1) <: typeof("julia")
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -254,6 +256,11 @@ let fails = @testset NoThrowTestSet begin
     let str = sprint(show, fails[21])
         @test occursin("Expression: contains(str1, str2)", str)
         @test occursin("Evaluated: contains(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[22])
+        @test occursin("Expression: typeof(1) <: typeof(\"julia\")", str)
+        @test occursin("Evaluated: $(typeof(1)) <: $(typeof("julia"))", str)
     end
 end
 
@@ -503,7 +510,7 @@ import Test: record, finish
 using Test: get_testset_depth, get_testset
 using Test: AbstractTestSet, Result, Pass, Fail, Error
 struct CustomTestSet <: Test.AbstractTestSet
-    description::AbstractString
+    description::String
     foo::Int
     results::Vector
     # constructor takes a description string and options keyword arguments
@@ -1149,4 +1156,24 @@ let errors = @testset NoThrowTestSet begin
         @test occursin("TypeError: non-boolean (Missing) used in boolean context", str)
         @test occursin("Expression: !(1 < 2 < missing < 4)", str)
     end
+end
+
+macro test_macro_throw_1()
+    throw(ErrorException("Real error"))
+end
+macro test_macro_throw_2()
+    throw(LoadError("file", 111, ErrorException("Real error")))
+end
+
+@testset "Soft deprecation of @test_throws LoadError [@]macroexpand[1]" begin
+    # If a macroexpand was detected, undecorated LoadErrors can stand in for any error.
+    # This will throw a deprecation warning.
+    @test_deprecated (@test_throws LoadError macroexpand(@__MODULE__, :(@test_macro_throw_1)))
+    @test_deprecated (@test_throws LoadError @macroexpand @test_macro_throw_1)
+    # Decorated LoadErrors are unwrapped if the actual exception matches the inner, but not the outer, exception, regardless of whether or not a macroexpand is detected.
+    # This will not throw a deprecation warning.
+    @test_throws LoadError("file", 111, ErrorException("Real error")) macroexpand(@__MODULE__, :(@test_macro_throw_1))
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_1
+    # Decorated LoadErrors are not unwrapped if a LoadError was thrown.
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
 end

@@ -475,12 +475,6 @@ let
     @test (@macroexpand @fastmath +      ) == :(Base.FastMath.add_fast)
     @test (@macroexpand @fastmath min(1) ) == :(Base.FastMath.min_fast(1))
     let err = try; @macroexpand @doc "" f() = @x; catch ex; ex; end
-        file, line = @__FILE__, @__LINE__() - 1
-        err = err::LoadError
-        @test err.file == file && err.line == line
-        err = err.error::LoadError
-        @test err.file == file && err.line == line
-        err = err.error::UndefVarError
         @test err == UndefVarError(Symbol("@x"))
     end
     @test (@macroexpand @seven_dollar $bar) == 7
@@ -638,7 +632,10 @@ struct ANumber <: Number end
 let err_str
     err_str = @except_str ANumber()(3 + 4) MethodError
     @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
-    @test occursin("Maybe you forgot to use an operator such as *, ^, %, / etc. ?", err_str)
+    @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
+    # issue 40478
+    err_str = @except_str ANumber()(3 + 4) MethodError
+    @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
 end
 
 # Execute backtrace once before checking formatting, see #38858

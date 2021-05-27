@@ -125,9 +125,11 @@ module IteratorsMD
 
     # comparison
     @inline isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = _isless(0, I1.I, I2.I)
-    @inline function _isless(ret, I1::NTuple{N,Int}, I2::NTuple{N,Int}) where N
-        newret = ifelse(ret==0, icmp(I1[N], I2[N]), ret)
-        _isless(newret, Base.front(I1), Base.front(I2))
+    @inline function _isless(ret, I1::Tuple{Int,Vararg{Int,N}}, I2::Tuple{Int,Vararg{Int,N}}) where {N}
+        newret = ifelse(ret==0, icmp(last(I1), last(I2)), ret)
+        t1, t2 = Base.front(I1), Base.front(I2)
+        # avoid dynamic dispatch by telling the compiler relational invariants
+        return isa(t1, Tuple{}) ? _isless(newret, (), ()) : _isless(newret, t1, t2::Tuple{Int,Vararg{Int}})
     end
     _isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
@@ -168,6 +170,7 @@ module IteratorsMD
         error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
 
     # Iteration
+    const OrdinalRangeInt = OrdinalRange{Int, Int}
     """
         CartesianIndices(sz::Dims) -> R
         CartesianIndices((istart:[istep:]istop, jstart:[jstep:]jstop, ...)) -> R
@@ -262,13 +265,13 @@ module IteratorsMD
 
     For cartesian to linear index conversion, see [`LinearIndices`](@ref).
     """
-    struct CartesianIndices{N,R<:NTuple{N,OrdinalRange{Int, Int}}} <: AbstractArray{CartesianIndex{N},N}
+    struct CartesianIndices{N,R<:NTuple{N,OrdinalRangeInt}} <: AbstractArray{CartesianIndex{N},N}
         indices::R
     end
 
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
     function CartesianIndices(inds::NTuple{N,OrdinalRange{<:Integer, <:Integer}}) where {N}
-        indices = map(r->convert(OrdinalRange{Int, Int}, r), inds)
+        indices = map(r->convert(OrdinalRangeInt, r), inds)
         CartesianIndices{N, typeof(indices)}(indices)
     end
 
@@ -394,19 +397,21 @@ module IteratorsMD
     # `iterate` returns `Union{Nothing, Tuple}`, we explicitly pass a `valid` flag to eliminate
     # the type instability inside the core `__inc` logic, and this gives better runtime performance.
     __inc(::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __inc(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
+    @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] + step(rng)
         valid = __is_valid_range(I, rng) && state[1] != last(rng)
         return valid, (I, )
     end
-    @inline function __inc(state, indices)
+    @inline function __inc(state::Tuple{Int,Int,Vararg{Int,N}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt,N}}) where {N}
         rng = indices[1]
         I = state[1] + step(rng)
         if __is_valid_range(I, rng) && state[1] != last(rng)
             return true, (I, tail(state)...)
         end
-        valid, I = __inc(tail(state), tail(indices))
+        t1, t2 = tail(state), tail(indices)
+        # avoid dynamic dispatch by telling the compiler relational invariants
+        valid, I = isa(t1, Tuple{Int}) ? __inc(t1, t2::Tuple{OrdinalRangeInt}) : __inc(t1, t2::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         return valid, (first(rng), I...)
     end
 
@@ -505,20 +510,21 @@ module IteratorsMD
 
     # decrement post check to avoid integer overflow
     @inline __dec(::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __dec(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
+    @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] - step(rng)
         valid = __is_valid_range(I, rng) && state[1] != first(rng)
         return valid, (I,)
     end
-
-    @inline function __dec(state, indices)
+    @inline function __dec(state::Tuple{Int,Int,Vararg{Int,N}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt,N}}) where {N}
         rng = indices[1]
         I = state[1] - step(rng)
         if __is_valid_range(I, rng) && state[1] != first(rng)
             return true, (I, tail(state)...)
         end
-        valid, I = __dec(tail(state), tail(indices))
+        t1, t2 = tail(state), tail(indices)
+        # avoid dynamic dispatch by telling the compiler relational invariants
+        valid, I = isa(t1, Tuple{Int}) ? __dec(t1, t2::Tuple{OrdinalRangeInt}) : __dec(t1, t2::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         return valid, (last(rng), I...)
     end
 
@@ -822,7 +828,7 @@ uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{Any}}) = Slice(OneTo(1))
 uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{Any}}) = Slice(inds[1])
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
-getindex(x::Number, i::CartesianIndex{0}) = x
+getindex(x::Union{Number,Char}, ::CartesianIndex{0}) = x
 getindex(t::Tuple,  i::CartesianIndex{1}) = getindex(t, i.I[1])
 
 # These are not defined on directly on getindex to avoid
@@ -1159,6 +1165,8 @@ Copy `src` to `dest`, indexing each dimension modulo its length.
 their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
+
+See also: [`circshift`](@ref).
 
 # Examples
 ```julia-repl
