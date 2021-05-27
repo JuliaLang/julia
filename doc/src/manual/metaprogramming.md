@@ -674,12 +674,12 @@ julia> typeof.(numbered.args)
  String
 ```
 
-Julia will introduce a new line number for the new line of code pointing to the definition expression.
+When a macro is invoked, Julia will introduce a new `LineNumberNode` that points to inside the macro.
 You likely want line numbering to point to the user's call site, rather than the definition expression.
 This is for the following two reasons:
 
-- If an error occurs in code introduced in a macro, you likely want stack-traces to point to the user's call site, rather than the definition expression.
-- If a user calls a macro, you likely want coverage to consider the user's call site as covered, rather than the definition expression.
+- If an error occurs in code introduced in a macro, you likely want stack-traces to point to the user's call site, rather than the macro's internals.
+- If a user calls a macro, you likely want coverage to consider the user's call site as covered, rather than the macro itself.
 
 Thus, consider revising the macro as follows:
 
@@ -695,8 +695,8 @@ julia> macro adds_more_lines_2()
 @adds_more_lines_2 (macro with 1 method)
 ```
 
-`__source__` will contain a line number pointing to the user's call site (see more information about `__source__` above).
-The macro will renumber the new line of code to point the user's call site, rather than the definition expression.
+`__source__` will contain a `LineNumberNode` pointing to the user's call site (see more information about `__source__` above).
+The macro will now renumber the new line of code to point the user's call site, rather than inside the macro.
 Sometimes users will pass entire lines of code to macros, complete with additional line numbers.
 In this case, instead of using `__source__` to renumber lines, you might use these more fine-grained line numebrs.
 
