@@ -2938,7 +2938,7 @@ See also [`deleteat!`](@ref).
 # Examples
 ```jldoctest
 julia> keepat!([6, 5, 4, 3, 2, 1], 1:2:5)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  6
  4
  2
