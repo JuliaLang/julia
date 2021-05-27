@@ -141,9 +141,6 @@ Random.seed!(1)
                 @test rdiv!(Uc, D) ≈ target atol=atol_three
                 @test_throws DimensionMismatch rdiv!(Matrix{elty}(I, n-1, n-1), D)
                 @test_throws SingularException rdiv!(Uc, Diagonal(fill!(similar(D.diag), 0)))
-                @test rdiv!(Diagonal([2.0,3.0]), Diagonal(2:3)) == Diagonal([1.0,1.0])
-                @test rdiv!(Diagonal([2,3]), Diagonal(2.0:3.0)) == Diagonal([1.0,1.0])
-                @test rdiv!(Diagonal([2,3]), Diagonal(2:3)) == Diagonal([1,1])
                 @test rdiv!(Uc, transpose(D)) ≈ target atol=atol_three
                 @test rdiv!(Uc, adjoint(conj(D))) ≈ target atol=atol_three
                 @test ldiv!(D, Matrix{eltype(D)}(I, size(D))) ≈ D \ Matrix{eltype(D)}(I, size(D)) atol=atol_three
@@ -404,6 +401,13 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+end
+
+@testset "rdiv! (#40887)" begin
+    @test rdiv!(Diagonal([2.0,3.0]), Diagonal(2:3)) == Diagonal([1.0,1.0])
+    @test rdiv!(ones(3,3), 3I(3)) == 0.333333ones(3,3)
+    A=[[2 2];  [2 2];]
+    @test rdiv!(A, 2.0I(2)) == ones(2,2)
 end
 
 @testset "kron (issue #40595)" begin
