@@ -72,6 +72,11 @@ function SVD{T}(U::AbstractArray, S::AbstractVector{Tr}, Vt::AbstractArray) wher
         convert(AbstractArray{T}, Vt))
 end
 
+SVD{T}(F::SVD) where {T} = SVD(
+    convert(AbstractMatrix{T}, F.U),
+    convert(AbstractVector{real(T)}, F.S),
+    convert(AbstractMatrix{T}, F.Vt))
+Factorization{T}(F::SVD) where {T} = SVD{T}(F)
 
 # iteration for destructuring into components
 Base.iterate(S::SVD) = (S.U, Val(:S))
