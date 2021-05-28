@@ -23,6 +23,9 @@ Language changes
 * `macroexpand`, `@macroexpand`, and `@macroexpand1` no longer wrap errors in a `LoadError`. To reduce breakage, `@test_throws` has been modified so that many affected tests will still pass ([#38379]].
 * The middle dot `·` (`\cdotp` U+00b7) and the Greek interpunct `·` (U+0387) are now treated as equivalent to the dot operator `⋅` (`\cdot` U+22c5) (#25157).
 * The minus sign `−` (`\minus` U+2212) is now treated as equivalent to the hyphen-minus sign `-` (U+002d).
+* Destructuring will no longer mutate values on the left hand side while iterating through values on the right hand side. In the example
+  of an array `x`, `x[2], x[1] = x` will now swap the first and second entry of `x`, whereas it used to fill both entries with `x[1]`
+  because `x[2]` was mutated during the iteration of `x`. ([#40737])
 
 Compiler/Runtime improvements
 -----------------------------
