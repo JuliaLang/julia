@@ -153,6 +153,7 @@ static inline uint64_t cycleclock(void)
 }
 
 #include "timing.h"
+#include "trace.h"
 
 extern uint8_t *jl_measure_compile_time;
 extern uint64_t *jl_cumulative_compile_time;

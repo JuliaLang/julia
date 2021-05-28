@@ -239,6 +239,9 @@ void JL_NORETURN jl_finish_task(jl_task_t *t);
 // thread function: used by all except the main thread
 void jl_threadfun(void *arg)
 {
+    //JL_TRACE(TRACE_THREAD_START);
+    jl_trace(TRACE_THREAD_START);
+
     jl_threadarg_t *targ = (jl_threadarg_t*)arg;
 
     // initialize this thread (set tid, create heap, set up root task)

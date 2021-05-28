@@ -92,11 +92,13 @@
 
 // print all generic method dispatches (excludes inlined and specialized call
 // sites). this generally prints too much output to be useful.
-//#define JL_TRACE
+//#define JL_TRACE_DISPATCH
 
 // profile generic (not inlined or specialized) calls to each function
 //#define JL_GF_PROFILE
 
+// tracing of events (just threads for now)
+#define ENABLE_TRACING
 
 // task options ---------------------------------------------------------------
 

@@ -2191,7 +2191,7 @@ static jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types0
     return tt;
 }
 
-#ifdef JL_TRACE
+#ifdef JL_TRACE_DISPATCH
 static int trace_en = 0;
 static int error_en = 1;
 static void __attribute__ ((unused)) enable_trace(int x) { trace_en=x; }
@@ -2295,7 +2295,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
 #ifdef JL_GF_PROFILE
     ncalls++;
 #endif
-#ifdef JL_TRACE
+#ifdef JL_TRACE_DISPATCH
     int traceen = trace_en; //&& ((char*)&mt < jl_stack_hi-6000000);
     if (traceen)
         show_call(F, args, nargs);
@@ -2399,7 +2399,7 @@ have_entry:
         if (jl_options.malloc_log)
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
         if (mfunc == NULL) {
-#ifdef JL_TRACE
+#ifdef JL_TRACE_DISPATCH
             if (error_en)
                 show_call(F, args, nargs);
 #endif
@@ -2408,7 +2408,7 @@ have_entry:
         }
     }
 
-#ifdef JL_TRACE
+#ifdef JL_TRACE_DISPATCH
     if (traceen)
         jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def.method->file), mfunc->def.method->line);
 #endif
