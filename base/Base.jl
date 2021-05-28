@@ -34,6 +34,16 @@ getproperty(x, f::Symbol) = getfield(x, f)
 dotgetproperty(x, f) = getproperty(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
 
+# for closures
+function _typeof_prefer_singleton(Core.@nospecialize x)
+    if x isa DataType
+        if x.layout === Ptr{Nothing}(0)  # we don't have C_NULL yet
+            return DataType
+        end
+    end
+    return Core.Typeof(x)
+end
+
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)

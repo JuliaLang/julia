@@ -19,6 +19,8 @@ eval(m, x) = Core.eval(m, x)
 include(x) = Core.include(Compiler, x)
 include(mod, x) = Core.include(mod, x)
 
+const _typeof_prefer_singleton = Core.typeof
+
 #############
 # from Base #
 #############

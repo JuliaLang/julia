@@ -3931,7 +3931,7 @@ f(x) = yt(x)
                                     (filter identity (map (lambda (v ve)
                                                             (if (is-var-boxed? v lam)
                                                                 #f
-                                                                `(call (core _typeof_prefer_singleton) ,ve)))
+                                                                `(call (top _typeof_prefer_singleton) ,ve)))
                                                           capt-vars var-exprs)))))
                            `(new ,(if (null? P)
                                       type-name
