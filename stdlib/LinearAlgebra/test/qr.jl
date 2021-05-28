@@ -49,7 +49,6 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
             a_1 = size(a, 1)
             @testset "QR decomposition (without pivoting)" begin
                 qra   = @inferred qr(a)
-                @inferred qr(a)
                 q, r  = qra.Q, qra.R
                 @test_throws ErrorException qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
@@ -78,8 +77,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test Base.propertynames(qra)       == (:R, :Q)
             end
             @testset "Thin QR decomposition (without pivoting)" begin
-                qra   = @inferred qr(a[:, 1:n1], Val(false))
-                @inferred qr(a[:, 1:n1], Val(false))
+                qra   = @inferred qr(a[:, 1:n1], NoPivot())
                 q,r   = qra.Q, qra.R
                 @test_throws ErrorException qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
@@ -104,7 +102,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test Base.propertynames(qra)       == (:R, :Q)
             end
             @testset "(Automatic) Fat (pivoted) QR decomposition" begin
-                @inferred qr(a, Val(true))
+                @inferred qr(a, ColumnNorm())
 
                 qrpa  = factorize(a[1:n1,:])
                 q,r = qrpa.Q, qrpa.R
@@ -190,7 +188,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test mul!(c, b, q') ≈ b*q'
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
 
-                qra = qr(a[:,1:n1], Val(false))
+                qra = qr(a[:,1:n1], NoPivot())
                 q, r = qra.Q, qra.R
                 @test rmul!(copy(squareQ(q)'), q) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch rmul!(Matrix{eltya}(I, n+1, n+1),q)
@@ -215,8 +213,8 @@ end
 @testset "transpose errors" begin
     @test_throws MethodError transpose(qr(randn(3,3)))
     @test_throws MethodError adjoint(qr(randn(3,3)))
-    @test_throws MethodError transpose(qr(randn(3,3), Val(false)))
-    @test_throws MethodError adjoint(qr(randn(3,3), Val(false)))
+    @test_throws MethodError transpose(qr(randn(3,3), NoPivot()))
+    @test_throws MethodError adjoint(qr(randn(3,3), NoPivot()))
     @test_throws MethodError transpose(qr(big.(randn(3,3))))
     @test_throws MethodError adjoint(qr(big.(randn(3,3))))
 end
@@ -256,7 +254,7 @@ end
     A = zeros(1, 2)
     B = zeros(1, 1)
     @test A \ B == zeros(2, 1)
-    @test qr(A, Val(true)) \ B == zeros(2, 1)
+    @test qr(A, ColumnNorm()) \ B == zeros(2, 1)
 end
 
 @testset "Issue 24107" begin
@@ -278,7 +276,7 @@ end
     @test A \b ≈ ldiv!(c, qr(A ), b)
     @test b == b0
     c0 = copy(c)
-    @test Ac\c ≈ ldiv!(b, qr(Ac, Val(true)), c)
+    @test Ac\c ≈ ldiv!(b, qr(Ac, ColumnNorm()), c)
     @test c0 == c
 end
 
@@ -295,11 +293,11 @@ end
 
 @testset "det(Q::Union{QRCompactWYQ, QRPackedQ})" begin
     # 40 is the number larger than the default block size 36 of QRCompactWY
-    @testset for n in [1:3; 40], m in [1:3; 40], pivot in [false, true]
+    @testset for n in [1:3; 40], m in [1:3; 40], pivot in (NoPivot(), ColumnNorm())
         @testset "real" begin
             @testset for k in 0:min(n, m, 5)
                 A = cat(Array(I(k)), randn(n - k, m - k); dims=(1, 2))
-                Q, = qr(A, Val(pivot))
+                Q, = qr(A, pivot)
                 @test det(Q) ≈ det(collect(Q))
                 @test abs(det(Q)) ≈ 1
             end
@@ -307,7 +305,7 @@ end
         @testset "complex" begin
             @testset for k in 0:min(n, m, 5)
                 A = cat(Array(I(k)), randn(ComplexF64, n - k, m - k); dims=(1, 2))
-                Q, = qr(A, Val(pivot))
+                Q, = qr(A, pivot)
                 @test det(Q) ≈ det(collect(Q))
                 @test abs(det(Q)) ≈ 1
             end

@@ -35,6 +35,7 @@ export
     BunchKaufman,
     Cholesky,
     CholeskyPivoted,
+    ColumnNorm,
     Eigen,
     GeneralizedEigen,
     GeneralizedSVD,
@@ -42,12 +43,14 @@ export
     Hessenberg,
     LU,
     LDLt,
+    NoPivot,
     QR,
     QRPivoted,
     LQ,
     Schur,
     SVD,
     Hermitian,
+    RowMaximum,
     Symmetric,
     LowerTriangular,
     UpperTriangular,
@@ -164,6 +167,10 @@ abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
 
+abstract type PivotingStrategy end
+struct NoPivot <: PivotingStrategy end
+struct RowMaximum <: PivotingStrategy end
+struct ColumnNorm <: PivotingStrategy end
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,

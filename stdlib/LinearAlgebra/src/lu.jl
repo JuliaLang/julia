@@ -76,22 +76,26 @@ adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
 # StridedMatrix
-function lu!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true);
-             check::Bool = true) where T<:BlasFloat
-    if pivot === Val(false)
-        return generic_lufact!(A, pivot; check = check)
-    end
+lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
+function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
     lpt = LAPACK.getrf!(A)
     check && checknonsingular(lpt[3])
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
-function lu!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true); check::Bool = true)
+function lu!(A::StridedMatrix{<:BlasFloat}, pivot::NoPivot; check::Bool = true)
+    return generic_lufact!(A, pivot; check = check)
+end
+function lu!(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
     copytri!(A.data, A.uplo, isa(A, Hermitian))
     lu!(A.data, pivot; check = check)
 end
+# for backward compatibility
+# TODO: remove towards Julia v2
+@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{true}; check::Bool = true) lu!(A, RowMaximum(); check=check)
+@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{false}; check::Bool = true) lu!(A, NoPivot(); check=check)
 
 """
-    lu!(A, pivot=Val(true); check = true) -> LU
+    lu!(A, pivot = RowMaximum(); check = true) -> LU
 
 `lu!` is the same as [`lu`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
@@ -127,19 +131,22 @@ Stacktrace:
 [...]
 ```
 """
-lu!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true); check::Bool = true) =
+lu!(A::StridedMatrix, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
     generic_lufact!(A, pivot; check = check)
-function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
-                         check::Bool = true) where {T,Pivot}
+function generic_lufact!(A::StridedMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum();
+                         check::Bool = true) where {T}
+    # Extract values
     m, n = size(A)
     minmn = min(m,n)
+
+    # Initialize variables
     info = 0
     ipiv = Vector{BlasInt}(undef, minmn)
     @inbounds begin
         for k = 1:minmn
             # find index max
             kp = k
-            if Pivot && k < m
+            if pivot === RowMaximum() && k < m
                 amax = abs(A[k, k])
                 for i = k+1:m
                     absi = abs(A[i,k])
@@ -175,7 +182,7 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
             end
         end
     end
-    check && checknonsingular(info, Val{Pivot}())
+    check && checknonsingular(info, pivot)
     return LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
 end
 
@@ -200,7 +207,7 @@ end
 
 # for all other types we must promote to a type which is stable under division
 """
-    lu(A, pivot=Val(true); check = true) -> F::LU
+    lu(A, pivot = RowMaximum(); check = true) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -211,7 +218,7 @@ validity (via [`issuccess`](@ref)) lies with the user.
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
 type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
 pivoting is chosen (default) the element type should also support [`abs`](@ref) and
-[`<`](@ref).
+[`<`](@ref). Pivoting can be turned off by passing `pivot = NoPivot()`.
 
 The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
 
@@ -267,11 +274,14 @@ julia> l == F.L && u == F.U && p == F.p
 true
 ```
 """
-function lu(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}=Val(true);
-            check::Bool = true) where T
+function lu(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T}
     S = lutype(T)
     lu!(copy_oftype(A, S), pivot; check = check)
 end
+# TODO: remove for Julia v2.0
+@deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, RowMaximum(); check=check)
+@deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, NoPivot(); check=check)
+
 
 lu(S::LU) = S
 function lu(x::Number; check::Bool=true)
@@ -481,9 +491,11 @@ inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 # Tridiagonal
 
 # See dgttrf.f
-function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true);
-             check::Bool = true) where {T,V}
+function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T,V}
+    # Extract values
     n = size(A, 1)
+
+    # Initialize variables
     info = 0
     ipiv = Vector{BlasInt}(undef, n)
     dl = A.dl
@@ -500,7 +512,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
         end
         for i = 1:n-2
             # pivot or not?
-            if pivot === Val(false) || abs(d[i]) >= abs(dl[i])
+            if pivot === NoPivot() || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -523,7 +535,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
         end
         if n > 1
             i = n-1
-            if pivot === Val(false) || abs(d[i]) >= abs(dl[i])
+            if pivot === NoPivot() || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact
