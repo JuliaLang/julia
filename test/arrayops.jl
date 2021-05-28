@@ -1442,21 +1442,21 @@ end
     @test isempty(eoa)
 end
 
-@testset "mask!" begin
+@testset "keepat!" begin
     # base case w/ Vector
     a = Vector(1:10)
-    mask!(a, [falses(5); trues(5)])
+    keepat!(a, [falses(5); trues(5)])
     @test a == 6:10
 
     # different subtype of AbstractVector
     ba = rand(10) .> 0.5 #
     @test isa(ba, BitArray)
-    mask!(ba, ba)
+    keepat!(ba, ba)
     @test all(ba)
 
     # empty array
     ea = []
-    mask!(ea, Bool[])
+    keepat!(ea, Bool[])
     @test isempty(ea)
 
     # non-1-indexed array
@@ -1464,7 +1464,7 @@ end
 
     # empty non-1-indexed array
     eoa = OffsetArray([], -5)
-    mask!(eoa, Bool[])
+    keepat!(eoa, Bool[])
     @test isempty(eoa)
 end
 
