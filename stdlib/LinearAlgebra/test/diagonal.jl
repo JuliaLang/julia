@@ -404,10 +404,8 @@ Random.seed!(1)
 end
 
 @testset "rdiv! (#40887)" begin
-    @test rdiv!(Diagonal([2.0,3.0]), Diagonal(2:3)) == Diagonal([1.0,1.0])
-    @test rdiv!(ones(3,3), 3I(3)) == 0.333333ones(3,3)
-    A=[[2 2];  [2 2];]
-    @test rdiv!(A, 2.0I(2)) == ones(2,2)
+    @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
+    @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
 end
 
 @testset "kron (issue #40595)" begin
