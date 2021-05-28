@@ -513,8 +513,52 @@ end
     @test_throws ArgumentError chop("∀ϵ∃Δ", head=3, tail=-3)
     @test_throws ArgumentError chop("∀ϵ∃Δ", head=-3, tail=-3)
 
+    @test chopprefix("fo∀\n", "bog") == "fo∀\n"
+    @test chopprefix("fo∀\n", "\n∀foΔ") == "fo∀\n"
+    @test chopprefix("fo∀\n", "∀foΔ") == "fo∀\n"
+    @test chopprefix("fo∀\n", "f") == "o∀\n"
+    @test chopprefix("fo∀\n", "fo") == "∀\n"
+    @test chopprefix("fo∀\n", "fo∀") == "\n"
+    @test chopprefix("fo∀\n", "fo∀\n") == ""
+    @test chopprefix("\nfo∀", "bog") == "\nfo∀"
+    @test chopprefix("\nfo∀", "\n∀foΔ") == "\nfo∀"
+    @test chopprefix("\nfo∀", "\nfo∀") == ""
+    @test chopprefix("\nfo∀", "\n") == "fo∀"
+    @test chopprefix("\nfo∀", "\nf") == "o∀"
+    @test chopprefix("\nfo∀", "\nfo") == "∀"
+    @test chopprefix("\nfo∀", "\nfo∀") == ""
+    @test chopprefix("", "") == ""
+    @test chopprefix("", "asdf") == ""
+    @test chopprefix("", "∃∃∃") == ""
+    @test chopprefix("εfoo", "ε") == "foo"
+    @test chopprefix("ofoε", "o") == "foε"
+    @test chopprefix("∃∃∃∃", "∃") == "∃∃∃"
+
+    @test chopsuffix("fo∀\n", "bog") == "fo∀\n"
+    @test chopsuffix("fo∀\n", "\n∀foΔ") == "fo∀\n"
+    @test chopsuffix("fo∀\n", "∀foΔ") == "fo∀\n"
+    @test chopsuffix("fo∀\n", "\n") == "fo∀"
+    @test chopsuffix("fo∀\n", "∀\n") == "fo"
+    @test chopsuffix("fo∀\n", "o∀\n") == "f"
+    @test chopsuffix("fo∀\n", "fo∀\n") == ""
+    @test chopsuffix("\nfo∀", "bog") == "\nfo∀"
+    @test chopsuffix("\nfo∀", "\n∀foΔ") == "\nfo∀"
+    @test chopsuffix("\nfo∀", "\nfo∀") == ""
+    @test chopsuffix("\nfo∀", "∀") == "\nfo"
+    @test chopsuffix("\nfo∀", "o∀") == "\nf"
+    @test chopsuffix("\nfo∀", "fo∀") == "\n"
+    @test chopsuffix("\nfo∀", "\nfo∀") == ""
+    @test chopsuffix("", "") == ""
+    @test chopsuffix("", "asdf") == ""
+    @test chopsuffix("", "∃∃∃") == ""
+    @test chopsuffix("fooε", "ε") == "foo"
+    @test chopsuffix("εofo", "o") == "εof"
+    @test chopsuffix("∃∃∃∃", "∃") == "∃∃∃"
+
     @test isa(chomp("foo"), SubString)
     @test isa(chop("foo"), SubString)
+    @test isa(chopprefix("foo", "fo"), SubString)
+    @test isa(chopsuffix("foo", "oo"), SubString)
 end
 
 @testset "bytes2hex and hex2bytes" begin

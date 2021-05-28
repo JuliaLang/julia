@@ -196,6 +196,60 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
+    chopprefix(s::AbstractString, prefix::AbstractString) -> SubString
+
+Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
+
+See also [`chopsuffix`](@ref).
+
+!!! compat "Julia 1.7"
+    This function is available as of Julia 1.7.
+
+# Examples
+```jldoctest
+julia> chopprefix("Hamburger", "Ham")
+"burger"
+
+julia> chopprefix("Hamburger", "hotdog")
+"Hamburger"
+```
+"""
+function chopprefix(s::AbstractString, prefix::AbstractString)
+    if startswith(s, prefix)
+        SubString(s, nextind(s, lastindex(prefix), 1), lastindex(s))
+    else
+        SubString(s)
+    end
+end
+
+"""
+    chopsuffix(s::AbstractString, suffix::AbstractString) -> SubString
+
+Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
+
+See also [`chopprefix`](@ref).
+
+!!! compat "Julia 1.7"
+    This function is available as of Julia 1.7.
+
+# Examples
+```jldoctest
+julia> chopsuffix("Hamburger", "er")
+"Hamburg"
+
+julia> chopsuffix("Hamburger", "hotdog")
+"Hamburger"
+```
+"""
+function chopsuffix(s::AbstractString, suffix::AbstractString)
+    if endswith(s, suffix)
+        SubString(s, firstindex(s), prevind(s, lastindex(s), length(suffix)))
+    else
+        SubString(s)
+    end
+end
+
+"""
     chomp(s::AbstractString) -> SubString
 
 Remove a single trailing newline from a string.
