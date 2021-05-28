@@ -776,7 +776,6 @@ end
     b = 123
 
     @test x'*A*y == (x'*A)*y == x'*(A*y)
-    
     @test y'*A'*x == (y'*A')*x == y'*(A'*x)
     @test y'*transpose(A)*x == (y'*transpose(A))*x == y'*(transpose(A)*x)
 
