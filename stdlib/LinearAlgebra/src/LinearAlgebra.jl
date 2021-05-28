@@ -451,6 +451,9 @@ function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorization
     # the complete rhs
     return _cut_B(BB, 1:n)
 end
+# disambiguate
+(\)(F::LAPACKFactorizations{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    invoke(\, Tuple{Factorization{T}, VecOrMat{Complex{T}}}, F, B)
 
 """
     LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
