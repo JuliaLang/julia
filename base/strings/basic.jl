@@ -35,8 +35,8 @@ model allows index arithmetic to work with out-of- bounds indices as
 intermediate values so long as one never uses them to retrieve a character,
 which often helps avoid needing to code around edge cases.
 
-See also: [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref),
-[`nextind`](@ref), [`prevind`](@ref)
+See also [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref),
+[`nextind`](@ref), [`prevind`](@ref).
 """
 AbstractString
 
@@ -62,8 +62,8 @@ julia> ncodeunits('∫'), ncodeunits('e'), ncodeunits('ˣ')
 (3, 1, 2)
 ```
 
-See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
-[`length`](@ref), [`lastindex`](@ref)
+See also [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
+[`length`](@ref), [`lastindex`](@ref).
 """
 ncodeunits(s::AbstractString)
 
@@ -77,7 +77,7 @@ limited to these three types, but it's hard to think of widely used string
 encodings that don't use one of these units. `codeunit(s)` is the same as
 `typeof(codeunit(s,1))` when `s` is a non-empty string.
 
-See also: [`ncodeunits`](@ref)
+See also [`ncodeunits`](@ref).
 """
 codeunit(s::AbstractString)
 
@@ -102,7 +102,7 @@ julia> typeof(a)
 UInt8
 ```
 
-See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
+See also [`ncodeunits`](@ref), [`checkbounds`](@ref).
 """
 @propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
@@ -118,8 +118,8 @@ In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must be
 [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code). This
 is a basic assumption of Julia's generic string support.
 
-See also: [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
-[`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
+See also [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
+[`nextind`](@ref), [`prevind`](@ref), [`length`](@ref).
 
 # Examples
 ```jldoctest
@@ -152,7 +152,7 @@ be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
 then a bounds error is raised. The `iterate` function, as part of the iteration
 protocol may assume that `i` is the start of a character in `s`.
 
-See also: [`getindex`](@ref), [`checkbounds`](@ref)
+See also [`getindex`](@ref), [`checkbounds`](@ref).
 """
 @propagate_inbounds iterate(s::AbstractString, i::Integer) = typeof(i) === Int ?
     throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
@@ -375,8 +375,8 @@ value `0`.
     the string because it counts the value on the fly. This is in contrast to
     the method for arrays, which is a constant-time operation.
 
-See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
-[`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
+See also [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
+[`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref).
 
 # Examples
 ```jldoctest
@@ -695,7 +695,7 @@ reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
 
 Repeat a string `r` times. This can be written as `s^r`.
 
-See also: [`^`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer))
+See also [`^`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer)).
 
 # Examples
 ```jldoctest
@@ -710,7 +710,7 @@ repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
 
-See also: [`repeat`](@ref)
+See also [`repeat`](@ref).
 
 # Examples
 ```jldoctest

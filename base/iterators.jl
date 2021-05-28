@@ -221,7 +221,7 @@ CartesianIndex(1, 2) d
 CartesianIndex(2, 2) e
 ```
 
-See also: [`IndexStyle`](@ref), [`axes`](@ref).
+See also [`IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
@@ -1338,7 +1338,7 @@ length(s::Stateful) = length(s.itr) - s.taken
 Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
 collection has zero or multiple elements.
 
-See also: [`first`](@ref), [`last`](@ref).
+See also [`first`](@ref), [`last`](@ref).
 
 !!! compat "Julia 1.4"
     This method requires at least Julia 1.4.

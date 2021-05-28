@@ -283,7 +283,7 @@ isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 Tests whether a character is a lowercase letter (according to the Unicode
 standard's `Lowercase` derived property).
 
-See also: [`isuppercase`](@ref).
+See also [`isuppercase`](@ref).
 
 # Examples
 ```jldoctest
@@ -307,7 +307,7 @@ islowercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_isl
 Tests whether a character is an uppercase letter (according to the Unicode
 standard's `Uppercase` derived property).
 
-See also: [`islowercase`](@ref).
+See also [`islowercase`](@ref).
 
 # Examples
 ```jldoctest
@@ -328,7 +328,7 @@ isuppercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_isu
 
 Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
 
-See also: [`islowercase`](@ref), [`isuppercase`](@ref).
+See also [`islowercase`](@ref), [`isuppercase`](@ref).
 """
 function iscased(c::AbstractChar)
     cat = category_code(c)
@@ -514,7 +514,7 @@ isxdigit(c::AbstractChar) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 
 Return `s` with all characters converted to uppercase.
 
-See also: [`lowercase`](@ref), [`titlecase`](@ref), [`uppercasefirst`](@ref).
+See also [`lowercase`](@ref), [`titlecase`](@ref), [`uppercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -529,7 +529,7 @@ uppercase(s::AbstractString) = map(uppercase, s)
 
 Return `s` with all characters converted to lowercase.
 
-See also: [`uppercase`](@ref), [`titlecase`](@ref), [`lowercasefirst`](@ref).
+See also [`uppercase`](@ref), [`titlecase`](@ref), [`lowercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -551,7 +551,7 @@ which characters should be considered as word separators.
 See also [`uppercasefirst`](@ref) to capitalize only the first
 character in `s`.
 
-See also: [`uppercase`](@ref), [`lowercase`](@ref), [`uppercasefirst`](@ref).
+See also [`uppercase`](@ref), [`lowercase`](@ref), [`uppercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -593,8 +593,8 @@ Return `s` with the first character converted to uppercase (technically "title
 case" for Unicode). See also [`titlecase`](@ref) to capitalize the first
 character of every word in `s`.
 
-See also: [`lowercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
-[`titlecase`](@ref)
+See also [`lowercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
+[`titlecase`](@ref).
 
 # Examples
 ```jldoctest
@@ -615,8 +615,8 @@ end
 
 Return `s` with the first character converted to lowercase.
 
-See also: [`uppercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
-[`titlecase`](@ref)
+See also [`uppercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
+[`titlecase`](@ref).
 
 # Examples
 ```jldoctest

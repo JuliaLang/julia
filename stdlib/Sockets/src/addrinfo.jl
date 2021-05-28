@@ -260,7 +260,7 @@ julia> getipaddr(IPv6)
 ip"fe80::9731:35af:e1c5:6e49"
 ```
 
-See also: [`getipaddrs`](@ref)
+See also [`getipaddrs`](@ref).
 """
 function getipaddr(addr_type::Type{T}) where T<:IPAddr
     addrs = getipaddrs(addr_type)
@@ -305,7 +305,7 @@ julia> getipaddrs(IPv6)
  ip"fe80::445e:5fff:fe5d:5500"
 ```
 
-See also: [`islinklocaladdr`](@ref), `split(ENV["SSH_CONNECTION"], ' ')[3]`
+See also [`islinklocaladdr`](@ref).
 """
 function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr
     addresses = T[]

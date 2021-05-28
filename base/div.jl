@@ -12,7 +12,7 @@ an integer according to the rounding mode `r`. In other words, the quantity
 
 without any intermediate rounding.
 
-See also: [`fld`](@ref), [`cld`](@ref) which are special cases of this function
+See also [`fld`](@ref) and [`cld`](@ref), which are special cases of this function.
 
 # Examples:
 ```jldoctest
@@ -88,7 +88,7 @@ rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
 
 Largest integer less than or equal to `x/y`. Equivalent to `div(x, y, RoundDown)`.
 
-See also: [`div`](@ref), [`cld`](@ref), [`fld1`](@ref).
+See also [`div`](@ref), [`cld`](@ref), [`fld1`](@ref).
 
 # Examples
 ```jldoctest
@@ -122,7 +122,7 @@ fld(a, b) = div(a, b, RoundDown)
 
 Smallest integer larger than or equal to `x/y`. Equivalent to `div(x, y, RoundUp)`.
 
-See also: [`div`](@ref), [`fld`](@ref).
+See also [`div`](@ref), [`fld`](@ref).
 
 # Examples
 ```jldoctest

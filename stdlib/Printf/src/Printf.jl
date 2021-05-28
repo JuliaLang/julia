@@ -910,7 +910,7 @@ Use dynamic width and precision        0.12
 ```
 
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
-See also: [`@sprintf`](@ref).
+See also [`@sprintf`](@ref).
 
 # Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
