@@ -37,7 +37,7 @@ setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f),
 # for closures
 function _typeof_prefer_singleton(Core.@nospecialize x)
     if x isa DataType
-        if x.layout === Ptr{Nothing}(0)  # we don't have C_NULL yet
+        if x.layout === C_NULL
             return DataType
         end
     end
