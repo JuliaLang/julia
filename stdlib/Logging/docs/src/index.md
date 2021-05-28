@@ -259,7 +259,7 @@ julia> close(io)
 ### Example: Enable debug-level messages
 
 Here is an example of creating a [`ConsoleLogger`](@ref) that lets through any messages
-with log level higher than, or equal, to [`Logging.Info`](@ref).
+with log level higher than, or equal, to [`Logging.Debug`](@ref).
 
 ```julia-repl
 julia> using Logging
