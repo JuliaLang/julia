@@ -131,15 +131,10 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         if isa(c, Core.TypeofVararg)
             # Tuple{Vararg{T}} --> Tuple{T} is OK
             return _limit_type_size(t, c.T, sources, depth, 0)
-        elseif isType(t) # allow taking typeof as Type{...}, but ensure it doesn't start nesting
-            tt = unwrap_unionall(t.parameters[1])
-            (!isa(tt, DataType) || isType(tt)) && (depth += 1)
-            is_derived_type_from_any(tt, sources, depth) && return t
-            return Type
-        elseif isa(c, DataType)
+        elseif isa(c, DataType) && t.name === c.name
             tP = t.parameters
             cP = c.parameters
-            if t.name === c.name && !isempty(cP)
+            if !isempty(cP)
                 if t.name === Tuple.name
                     # for covariant datatypes (Tuple),
                     # apply type-size limit element-wise
@@ -166,6 +161,11 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                     return Tuple{Q...}
                 end
             end
+        elseif isType(t) # allow taking typeof as Type{...}, but ensure it doesn't start nesting
+            tt = unwrap_unionall(t.parameters[1])
+            (!isa(tt, DataType) || isType(tt) || tt === c) && (depth += 1) # `tt === c` avoids single-level nesting, i.e. `t === Type{c}`
+            is_derived_type_from_any(tt, sources, depth) && return t
+            return Type
         end
         if allowed_tuplelen < 1 && t.name === Tuple.name
             return Any
@@ -233,10 +233,6 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         tP = t.parameters
         if isa(c, Core.TypeofVararg)
             return type_more_complex(t, unwrapva(c), sources, depth, tupledepth, 0)
-        elseif isType(t) # allow taking typeof any source type anywhere as Type{...}, as long as it isn't nesting Type{Type{...}}
-            tt = unwrap_unionall(t.parameters[1])
-            (!isa(tt, DataType) || isType(tt)) && (depth += 1)
-            return !is_derived_type_from_any(tt, sources, depth)
         elseif isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
@@ -267,6 +263,10 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
                 type_more_complex(tPi, cPi, sources, depth + 1, tupledepth, 0) && return true
             end
             return false
+        elseif isType(t) # allow taking typeof any source type anywhere as Type{...}, as long as it isn't nesting Type{Type{...}}
+            tt = unwrap_unionall(t.parameters[1])
+            (!isa(tt, DataType) || isType(tt) || tt === c) && (depth += 1) # `tt === c` avoids single-level nesting, i.e. `t === Type{c}`
+            return !is_derived_type_from_any(tt, sources, depth)
         end
     end
     return true

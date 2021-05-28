@@ -3289,6 +3289,9 @@ end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
     end
 end
 
+# https://github.com/JuliaLang/julia/issues/40814
+@test Base.return_types(NTuple{3,Int}, (Vector{Int},)) == Any[NTuple{3,Int}]
+
 # Make sure that const prop doesn't fall into cycles that aren't problematic
 # in the type domain
 f_recurse(x) = x > 1000000 ? x : f_recurse(x+1)
