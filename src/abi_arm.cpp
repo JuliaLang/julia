@@ -33,7 +33,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 Type *get_llvm_fptype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->mutabl || jl_datatype_nfields(dt) != 0)
+    if (dt->name->mutabl || jl_datatype_nfields(dt) != 0)
         return NULL;
     Type *lltype;
     // Check size first since it's cheaper.

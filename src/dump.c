@@ -8,6 +8,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_gcext.h"
 #include "builtin_proto.h"
 #include "serialize.h"
 
@@ -270,7 +271,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     write_int32(s->s, dt->size);
     int has_instance = (dt->instance != NULL);
     int has_layout = (dt->layout != NULL);
-    write_uint8(s->s, dt->abstract | (dt->mutabl << 1) | (has_layout << 2) | (has_instance << 3));
+    write_uint8(s->s, dt->name->abstract | (has_layout << 1) | (has_instance << 2));
     write_uint8(s->s, dt->hasfreetypevars
             | (dt->isconcretetype << 1)
             | (dt->isdispatchtuple << 2)
@@ -279,7 +280,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             | (dt->isinlinealloc << 5)
             | (dt->has_concrete_subtype << 6)
             | (dt->cached_by_hash << 7));
-    if (!dt->abstract) {
+    if (!dt->name->abstract) {
         write_uint16(s->s, dt->ninitialized);
     }
     write_int32(s->s, dt->hash);
@@ -815,8 +816,13 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, tn->wrapper);
                 jl_serialize_value(s, tn->mt);
                 ios_write(s->s, (char*)&tn->hash, sizeof(tn->hash));
+                write_uint8(s->s, tn->abstract | (tn->mutabl << 1) | (tn->references_self << 2));
             }
             return;
+        }
+
+        if (jl_is_foreign_type(t)) {
+            jl_error("Cannot serialize instances of foreign datatypes");
         }
 
         char *data = (char*)jl_data_ptr(v);
@@ -833,7 +839,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                         ios_write(s->s, last, prevptr - last);
                     jl_value_t *e = *(jl_value_t**)prevptr;
                     JL_GC_PROMISE_ROOTED(e);
-                    if (t->mutabl && e && jl_field_isptr(t, i - 1) && jl_is_cpointer(e) &&
+                    if (t->name->mutabl && e && jl_field_isptr(t, i - 1) && jl_is_cpointer(e) &&
                         jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
                         // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                         jl_serialize_cnull(s, jl_typeof(e));
@@ -849,7 +855,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             }
             if (i == nf)
                 break;
-            if (t->mutabl && jl_is_cpointer_type(jl_field_type(t, i)) && *(void**)ptr != (void*)-1) {
+            if (t->name->mutabl && jl_is_cpointer_type(jl_field_type(t, i)) && *(void**)ptr != (void*)-1) {
                 if (ptr > last)
                     ios_write(s->s, last, ptr - last);
                 char *n = NULL;
@@ -1263,10 +1269,9 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     uint8_t flags = read_uint8(s->s);
     uint8_t memflags = read_uint8(s->s);
     dt->size = size;
-    dt->abstract = flags & 1;
-    dt->mutabl = (flags >> 1) & 1;
-    int has_layout = (flags >> 2) & 1;
-    int has_instance = (flags >> 3) & 1;
+    int abstract = flags & 1;
+    int has_layout = (flags >> 1) & 1;
+    int has_instance = (flags >> 2) & 1;
     dt->hasfreetypevars = memflags & 1;
     dt->isconcretetype = (memflags >> 1) & 1;
     dt->isdispatchtuple = (memflags >> 2) & 1;
@@ -1275,10 +1280,10 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->isinlinealloc = (memflags >> 5) & 1;
     dt->has_concrete_subtype = (memflags >> 6) & 1;
     dt->cached_by_hash = (memflags >> 7) & 1;
-    if (!dt->abstract)
-        dt->ninitialized = read_uint16(s->s);
-    else
+    if (abstract)
         dt->ninitialized = 0;
+    else
+        dt->ninitialized = read_uint16(s->s);
     dt->hash = read_int32(s->s);
 
     if (has_layout) {
@@ -1728,6 +1733,10 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             tn->mt = (jl_methtable_t*)jl_deserialize_value(s, (jl_value_t**)&tn->mt);
             jl_gc_wb(tn, tn->mt);
             ios_read(s->s, (char*)&tn->hash, sizeof(tn->hash));
+            int8_t flags = read_int8(s->s);
+            tn->abstract = flags & 1;
+            tn->mutabl = (flags>>1) & 1;
+            tn->references_self = (flags>>2) & 1;
         }
         else {
             jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(jl_get_global(m, sym));

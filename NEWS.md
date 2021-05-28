@@ -11,12 +11,21 @@ New language features
   as `.&&` and `.||`. ([#39594])
 * `⫪` (U+2AEA, `\Top`, `\downvDash`) and `⫫` (U+2AEB, `\Bot`, `\upvDash`, `\indep`)
   may now be used as binary operators with comparison precedence. ([#39403])
+* Repeated semicolons may now be used inside array literals to separate dimensions of an array,
+  with the number of semicolons specifying the particular dimension. Just as the single semicolon
+  in `[A; B]` has always described concatenating along the first dimension (vertically), now two
+  semicolons `[A;; B]` do so in the second dimension (horizontally), three semicolons `;;;` in the
+  third, and so on. ([#33697])
 
 Language changes
 ----------------
 
 * `macroexpand`, `@macroexpand`, and `@macroexpand1` no longer wrap errors in a `LoadError`. To reduce breakage, `@test_throws` has been modified so that many affected tests will still pass ([#38379]].
 * The middle dot `·` (`\cdotp` U+00b7) and the Greek interpunct `·` (U+0387) are now treated as equivalent to the dot operator `⋅` (`\cdot` U+22c5) (#25157).
+* The minus sign `−` (`\minus` U+2212) is now treated as equivalent to the hyphen-minus sign `-` (U+002d).
+* Destructuring will no longer mutate values on the left hand side while iterating through values on the right hand side. In the example
+  of an array `x`, `x[2], x[1] = x` will now swap the first and second entry of `x`, whereas it used to fill both entries with `x[1]`
+  because `x[2]` was mutated during the iteration of `x`. ([#40737])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -41,6 +50,8 @@ New library functions
 
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
 * `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
+* New `keepat!(vector, inds)` function which is the inplace equivalent of `vector[inds]`
+  for a list `inds` of integers ([#36229]).
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
 * Two arguments method `lock(f, lck)` now accepts a `Channel` as the second argument. ([#39312])
 * New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
@@ -107,6 +118,7 @@ Standard library changes
   as their optional `pivot` argument: defaults are `qr(A, NoPivot())` (vs.
   `qr(A, ColumnNorm())` for pivoting) and `lu(A, RowMaximum())` (vs. `lu(A, NoPivot())`
   without pivoting); the former `Val{true/false}`-based calls are deprecated. ([#40623])
+* `det(M::AbstractMatrix{BigInt})` now calls `det_bareiss(M)`, which uses the [Bareiss](https://en.wikipedia.org/wiki/Bareiss_algorithm) algorithm to calculate precise values.([#40868]).
 
 #### Markdown
 
@@ -152,7 +164,7 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
-- Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in a future release.
+- Multiple successive semicolons in an array expresion were previously ignored (e.g., `[1 ;; 2] == [1 ; 2]`). This is now being used to separate dimensions for array literals. (see **New language features**)
 
 
 External dependencies

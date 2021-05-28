@@ -328,8 +328,8 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                 if isa(typ, UnionAll)
                     typ = unwrap_unionall(typ)
                 end
-                (isa(typ, DataType) && (!typ.abstract)) || return nothing
-                @assert !typ.mutable
+                (isa(typ, DataType) && (!typ.name.abstract)) || return nothing
+                @assert !typ.name.mutable
                 if length(def.args) < 1 + field
                     if field > fieldcount(typ)
                         return nothing
@@ -625,7 +625,7 @@ function getfield_elim_pass!(ir::IRCode)
                         if isa(typ, UnionAll)
                             typ = unwrap_unionall(typ)
                         end
-                        if typ isa DataType && !typ.mutable
+                        if typ isa DataType && !typ.name.mutable
                             process_immutable_preserve(new_preserves, compact, def)
                             old_preserves[pidx] = nothing
                             continue
@@ -662,7 +662,7 @@ function getfield_elim_pass!(ir::IRCode)
 
         def, typeconstraint = stmt.args[2], struct_typ
 
-        if struct_typ.mutable
+        if struct_typ.name.mutable
             isa(def, SSAValue) || continue
             let intermediaries = IdSet()
                 callback = function(@nospecialize(pi), ssa::AnySSAValue)
@@ -775,7 +775,7 @@ function getfield_elim_pass!(ir::IRCode)
         end
         # Could still end up here if we tried to setfield! and immutable, which would
         # error at runtime, but is not illegal to have in the IR.
-        typ.mutable || continue
+        typ.name.mutable || continue
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
         ok = true
