@@ -953,6 +953,8 @@ Factorial of `n`. If `n` is an [`Integer`](@ref), the factorial is computed as a
 integer (promoted to at least 64 bits). Note that this may overflow if `n` is not small,
 but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
 
+See also [`binomial`](@ref).
+
 # Examples
 ```jldoctest
 julia> factorial(6)
@@ -966,9 +968,6 @@ Stacktrace:
 julia> factorial(big(21))
 51090942171709440000
 ```
-
-# See also
-* [`binomial`](@ref)
 
 # External links
 * [Factorial](https://en.wikipedia.org/wiki/Factorial) on Wikipedia.
@@ -999,6 +998,8 @@ If ``n`` is negative, then it is defined in terms of the identity
 \\binom{n}{k} = (-1)^k \\binom{k-n-1}{k}
 ```
 
+See also [`factorial`](@ref).
+
 # Examples
 ```jldoctest
 julia> binomial(5, 3)
@@ -1010,9 +1011,6 @@ julia> factorial(5) ÷ (factorial(5-3) * factorial(3))
 julia> binomial(-5, 3)
 -35
 ```
-
-# See also
-* [`factorial`](@ref)
 
 # External links
 * [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.

@@ -508,7 +508,9 @@ min(x,y) = ifelse(isless(y, x), y, x)
 """
     minmax(x, y)
 
-Return `(min(x,y), max(x,y))`. See also: [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
+Return `(min(x,y), max(x,y))`.
+
+See also [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
 
 # Examples
 ```jldoctest
@@ -873,7 +875,7 @@ const ÷ = div
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
 in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
-See also: [`fld1`](@ref), [`fldmod1`](@ref).
+See also [`fld1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -892,7 +894,7 @@ mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-See also: [`mod1`](@ref), [`fldmod1`](@ref).
+See also [`mod1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -919,7 +921,7 @@ end
 
 Return `(fld1(x,y), mod1(x,y))`.
 
-See also: [`fld1`](@ref), [`mod1`](@ref).
+See also [`fld1`](@ref), [`mod1`](@ref).
 """
 fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
