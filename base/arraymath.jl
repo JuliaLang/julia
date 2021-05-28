@@ -24,7 +24,7 @@ julia> A
  2-2im  3-1im
 ```
 """
-conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
+conj!(A::AbstractArray{<:Number}) = (@inbounds map!(conj, A, A); A)
 
 for f in (:-, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast_preserving_zero_d($f, A)
@@ -36,7 +36,7 @@ end
 for f in (:+, :-)
     @eval function ($f)(A::AbstractArray, B::AbstractArray)
         promote_shape(A, B) # check size compatibility
-        broadcast_preserving_zero_d($f, A, B)
+        return map($f, A, B)
     end
 end
 
@@ -44,15 +44,15 @@ function +(A::Array, Bs::Array...)
     for B in Bs
         promote_shape(A, B) # check size compatibility
     end
-    broadcast_preserving_zero_d(+, A, Bs...)
+    return map(+, A, Bs...)
 end
 
 for f in (:/, :\, :*)
     if f !== :/
-        @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
+        @eval ($f)(x::Number, A::AbstractArray) = map(t -> ($f)(x, t), A)
     end
     if f !== :\
-        @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
+        @eval ($f)(A::AbstractArray, x::Number) = map(t -> ($f)(t, x), A)
     end
 end
 
