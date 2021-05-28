@@ -953,7 +953,7 @@ function ldiv!(Fadj::Adjoint{<:Any,<:Union{QR,QRCompactWY,QRPivoted}}, B::Abstra
     require_one_based_indexing(B)
     m, n = size(Fadj)
 
-    # We don't allow solutions overdetermined systems. It would at least be
+    # We don't allow solutions overdetermined systems
     if m > n
         throw(DimensionMismatch("overdetermined systems are not supported"))
     end

@@ -438,7 +438,6 @@ function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorization
 
     if n > size(B, 1)
         # Underdetermined
-        fill!(BB, 0)
         copyto!(view(BB, 1:m, :), B)
     else
         copyto!(BB, B)
@@ -446,7 +445,7 @@ function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorization
 
     ldiv!(FF, BB)
 
-    # For tall problems, we compute a least sqaures solution so only part
+    # For tall problems, we compute a least squares solution so only part
     # of the rhs should be returned from \ while ldiv! uses (and returns)
     # the complete rhs
     return _cut_B(BB, 1:n)
