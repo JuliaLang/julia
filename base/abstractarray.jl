@@ -2918,3 +2918,46 @@ function rest(a::AbstractArray{T}, state...) where {T}
     sizehint!(v, length(a))
     return foldl(push!, Iterators.rest(a, state...), init=v)
 end
+
+
+## keepat! ##
+
+"""
+    keepat!(a::AbstractVector, inds)
+
+Remove the items at all the indices which are not given by `inds`,
+and return the modified `a`.
+Items which are kept are shifted to fill the resulting gaps.
+
+`inds` must be an iterator of sorted and unique integer indices.
+See also [`deleteat!`](@ref).
+
+!!! compat "Julia 1.7"
+    This function is available as of Julia 1.7.
+
+# Examples
+```jldoctest
+julia> keepat!([6, 5, 4, 3, 2, 1], 1:2:5)
+3-element Vector{Int64}:
+ 6
+ 4
+ 2
+```
+"""
+function keepat!(a::AbstractVector, inds)
+    local prev
+    i = firstindex(a)
+    for k in inds
+        if @isdefined(prev)
+            prev < k || throw(ArgumentError("indices must be unique and sorted"))
+        end
+        ak = a[k] # must happen even when i==k for bounds checking
+        if i != k
+            @inbounds a[i] = ak # k > i, so a[i] is inbounds
+        end
+        prev = k
+        i = nextind(a, i)
+    end
+    deleteat!(a, i:lastindex(a))
+    return a
+end

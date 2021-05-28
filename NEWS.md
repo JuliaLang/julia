@@ -22,6 +22,10 @@ Language changes
 
 * `macroexpand`, `@macroexpand`, and `@macroexpand1` no longer wrap errors in a `LoadError`. To reduce breakage, `@test_throws` has been modified so that many affected tests will still pass ([#38379]].
 * The middle dot `·` (`\cdotp` U+00b7) and the Greek interpunct `·` (U+0387) are now treated as equivalent to the dot operator `⋅` (`\cdot` U+22c5) (#25157).
+* The minus sign `−` (`\minus` U+2212) is now treated as equivalent to the hyphen-minus sign `-` (U+002d).
+* Destructuring will no longer mutate values on the left hand side while iterating through values on the right hand side. In the example
+  of an array `x`, `x[2], x[1] = x` will now swap the first and second entry of `x`, whereas it used to fill both entries with `x[1]`
+  because `x[2]` was mutated during the iteration of `x`. ([#40737])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -46,11 +50,14 @@ New library functions
 
 * Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
 * `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
+* New `keepat!(vector, inds)` function which is the inplace equivalent of `vector[inds]`
+  for a list `inds` of integers ([#36229]).
 * New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
 * Two arguments method `lock(f, lck)` now accepts a `Channel` as the second argument. ([#39312])
 * New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
 * New macros `@something` and `@coalesce` which are short-circuiting versions of `something` and `coalesce`, respectively ([#40729])
+* New function `redirect_stdio` for redirecting `stdin`, `stdout` and `stderr` ([#37978]).
 
 New library features
 --------------------
