@@ -475,7 +475,7 @@ static Value *emit_struct_gep(jl_codectx_t &ctx, Type *lty, Value *base, unsigne
     return ctx.builder.CreateConstInBoundsGEP2_32(lty, base, 0, idx);
 }
 
-static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_unionall_t *ua, bool *isboxed, bool llvmcall=false);
+static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, bool *isboxed, bool llvmcall=false);
 
 static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, bool *isboxed)
 {
@@ -486,7 +486,7 @@ static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, bool 
     if (jl_is_concrete_immutable(jt)) {
         if (jl_datatype_nbits(jt) == 0)
             return T_void;
-        Type *t = _julia_struct_to_llvm(ctx, jt, NULL, isboxed);
+        Type *t = _julia_struct_to_llvm(ctx, jt, isboxed);
         assert(t != NULL);
         return t;
     }
@@ -542,23 +542,10 @@ static bool jl_type_hasptr(jl_value_t* typ)
     return jl_is_datatype(typ) && ((jl_datatype_t*)typ)->layout->npointers > 0;
 }
 
-// compute whether all concrete subtypes of this type have the same layout
-// (which is conservatively approximated here by asking whether the types of any of the
-// fields depend on any of the parameters of the containing type)
-static bool julia_struct_has_layout(jl_datatype_t *dt, jl_unionall_t *ua)
+// return whether all concrete subtypes of this type have the same layout
+static bool julia_struct_has_layout(jl_datatype_t *dt)
 {
-    if (dt->layout)
-        return true;
-    if (ua) {
-        jl_svec_t *types = jl_get_fieldtypes(dt);
-        size_t i, ntypes = jl_svec_len(types);
-        for (i = 0; i < ntypes; i++) {
-            jl_value_t *ty = jl_svecref(types, i);
-            if (jl_has_typevar_from_unionall(ty, ua))
-                return false;
-        }
-    }
-    return true;
+    return dt->layout || jl_has_fixed_layout(dt);
 }
 
 static unsigned jl_field_align(jl_datatype_t *dt, size_t i)
@@ -569,7 +556,7 @@ static unsigned jl_field_align(jl_datatype_t *dt, size_t i)
     return std::min({al, (unsigned)jl_datatype_align(dt), (unsigned)JL_HEAP_ALIGNMENT});
 }
 
-static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_unionall_t *ua_env, bool *isboxed, bool llvmcall)
+static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, bool *isboxed, bool llvmcall)
 {
     // this function converts a Julia Type into the equivalent LLVM struct
     // use this where C-compatible (unboxed) structs are desired
@@ -584,7 +571,12 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
         bool isTuple = jl_is_tuple_type(jt);
         jl_svec_t *ftypes = jl_get_fieldtypes(jst);
         size_t i, ntypes = jl_svec_len(ftypes);
-        if (ntypes == 0 || (jst->layout && jl_datatype_nbits(jst) == 0))
+        if (!julia_struct_has_layout(jst))
+            return NULL; // caller should have checked jl_type_mappable_to_c already, but we'll be nice
+        if (jst->layout == NULL)
+            jl_compute_field_offsets(jst);
+        assert(jst->layout);
+        if (ntypes == 0 || jl_datatype_nbits(jst) == 0)
             return T_void;
         Type *_struct_decl = NULL;
         // TODO: we should probably make a temporary root for `jst` somewhere
@@ -592,8 +584,6 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
         Type *&struct_decl = (ctx && !llvmcall ? ctx->llvmtypes[jst] : _struct_decl);
         if (struct_decl)
             return struct_decl;
-        if (!julia_struct_has_layout(jst, ua_env))
-            return NULL;
         std::vector<Type*> latypes(0);
         bool isarray = true;
         bool isvector = true;
@@ -605,17 +595,8 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
             if (jlasttype != NULL && ty != jlasttype)
                 isvector = false;
             jlasttype = ty;
-            size_t fsz = 0, al = 0;
-            bool isptr = !jl_islayout_inline(ty, &fsz, &al);
-            if (jst->layout) {
-                // NOTE: jl_field_isptr can disagree with jl_islayout_inline here if the
-                // struct decided this field must be a pointer due to a type circularity.
-                // Example from issue #40050: `struct B <: Ref{Tuple{B}}; end`
-                isptr = jl_field_isptr(jst, i);
-                assert((isptr ? sizeof(void*) : fsz + jl_is_uniontype(ty)) == jl_field_size(jst, i));
-            }
             Type *lty;
-            if (isptr) {
+            if (jl_field_isptr(jst, i)) {
                 lty = T_prjlvalue;
                 isvector = false;
             }
@@ -626,13 +607,15 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
                 // pick an Integer type size such that alignment will generally be correct,
                 // and always end with an Int8 (selector byte).
                 // We may need to insert padding first to get to the right offset
+                size_t fsz = 0, al = 0;
+                bool isptr = !jl_islayout_inline(ty, &fsz, &al);
+                assert(!isptr && fsz == jl_field_size(jst, i) - 1); (void)isptr;
                 if (al > MAX_ALIGN) {
                     Type *AlignmentType;
                     AlignmentType = ArrayType::get(FixedVectorType::get(T_int8, al), 0);
                     latypes.push_back(AlignmentType);
                     al = MAX_ALIGN;
                 }
-                assert(al <= jl_field_align(jst, i));
                 Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
                 unsigned NumATy = fsz / al;
                 unsigned remainder = fsz % al;
@@ -647,8 +630,9 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
                 continue;
             }
             else {
-                lty = _julia_struct_to_llvm(ctx, ty, NULL, &isptr, llvmcall);
-                assert(!isptr);
+                bool isptr;
+                lty = _julia_struct_to_llvm(ctx, ty, &isptr, llvmcall);
+                assert(lty && !isptr);
             }
             if (lasttype != NULL && lasttype != lty)
                 isarray = false;
@@ -703,16 +687,9 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, jl_
     return T_prjlvalue;
 }
 
-static Type *julia_struct_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, jl_unionall_t *ua, bool *isboxed)
+static Type *julia_struct_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed)
 {
-    return _julia_struct_to_llvm(&ctx.emission_context, jt, ua, isboxed);
-}
-
-bool jl_type_mappable_to_c(jl_value_t *ty)
-{
-    jl_codegen_params_t params;
-    bool toboxed;
-    return _julia_struct_to_llvm(&params, ty, NULL, &toboxed) != NULL;
+    return _julia_struct_to_llvm(&ctx.emission_context, jt, isboxed);
 }
 
 static bool is_datatype_all_pointers(jl_datatype_t *dt)

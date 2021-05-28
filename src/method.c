@@ -21,6 +21,25 @@ extern jl_value_t *jl_builtin_tuple;
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
 
+static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
+{
+    if (jl_is_svec(rt))
+        jl_errorf("%s: missing return type", where);
+    JL_TYPECHKS(where, type, rt);
+    if (!jl_type_mappable_to_c(rt))
+        jl_errorf("%s: return type doesn't correspond to a C type", where);
+    JL_TYPECHKS(where, simplevector, at);
+    int i, l = jl_svec_len(at);
+    for (i = 0; i < l; i++) {
+        jl_value_t *ati = jl_svecref(at, i);
+        if (jl_is_vararg(ati))
+            jl_errorf("%s: Vararg not allowed for argument list", where);
+        JL_TYPECHKS(where, type, ati);
+        if (!jl_type_mappable_to_c(ati))
+            jl_errorf("%s: argument %d type doesn't correspond to a C type", where, i + 1);
+    }
+}
+
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
@@ -120,10 +139,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     }
                     jl_exprargset(e, 3, at);
                 }
-                if (jl_is_svec(rt))
-                    jl_error("cfunction: missing return type");
-                JL_TYPECHK(cfunction method definition, type, rt);
-                JL_TYPECHK(cfunction method definition, simplevector, at);
+                check_c_types("cfunction method definition", rt, at);
                 JL_TYPECHK(cfunction method definition, quotenode, jl_exprarg(e, 4));
                 JL_TYPECHK(cfunction method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
                 return expr;
@@ -156,10 +172,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     }
                     jl_exprargset(e, 2, at);
                 }
-                if (jl_is_svec(rt))
-                    jl_error("ccall: missing return type");
-                JL_TYPECHK(ccall method definition, type, rt);
-                JL_TYPECHK(ccall method definition, simplevector, at);
+                check_c_types("ccall method definition", rt, at);
                 JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
                 JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
                 JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));

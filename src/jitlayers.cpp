@@ -264,8 +264,6 @@ int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt
     return success;
 }
 
-bool jl_type_mappable_to_c(jl_value_t *ty);
-
 // declare a C-callable entry point; called during code loading from the toplevel
 extern "C" JL_DLLEXPORT
 void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
@@ -292,7 +290,7 @@ void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
     size_t i, nargs = jl_nparams(sigt);
     for (i = 1; i < nargs; i++) {
         jl_value_t *ati = jl_tparam(sigt, i);
-        if (!jl_is_concrete_type(ati) || jl_is_kind(ati))
+        if (!jl_is_concrete_type(ati) || jl_is_kind(ati) || !jl_type_mappable_to_c(ati))
             jl_error("@ccallable: argument types must be concrete");
     }
 

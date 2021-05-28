@@ -35,6 +35,45 @@ static int typeenv_has(jl_typeenv_t *env, jl_tvar_t *v) JL_NOTSAFEPOINT
     return 0;
 }
 
+static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
+{
+    if (jl_typeis(v, jl_tvar_type))
+        return !typeenv_has(env, (jl_tvar_t*)v);
+    if (jl_is_uniontype(v))
+        return layout_uses_free_typevars(((jl_uniontype_t*)v)->a, env) ||
+               layout_uses_free_typevars(((jl_uniontype_t*)v)->b, env);
+    if (jl_is_vararg(v)) {
+        jl_vararg_t *vm = (jl_vararg_t*)v;
+        if (vm->T) {
+            if (layout_uses_free_typevars(vm->T, env))
+                return 1;
+            if (vm->N && layout_uses_free_typevars(vm->N, env))
+                return 1;
+        }
+        return 0;
+    }
+    if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        jl_typeenv_t newenv = { ua->var, NULL, env };
+        return layout_uses_free_typevars(ua->body, &newenv);
+    }
+    if (jl_is_datatype(v)) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        if (dt->layout || dt->isconcretetype || !dt->name->mayinlinealloc)
+            return 0;
+        jl_svec_t *types = jl_get_fieldtypes(dt);
+        size_t i, l = jl_svec_len(types);
+        for (i = 0; i < l; i++) {
+            jl_value_t *ft = jl_svecref(types, i);
+            if (layout_uses_free_typevars(ft, env)) {
+                // This might be inline-alloc, but we don't know the layout
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     if (jl_typeis(v, jl_tvar_type)) {
@@ -180,6 +219,35 @@ JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua)
     return _jl_has_typevar_from_ua(t, ua, NULL);
 }
 
+int jl_has_fixed_layout(jl_datatype_t *dt)
+{
+    if (dt->layout || dt->isconcretetype)
+        return 1;
+    if (jl_is_tuple_type(dt))
+        return 0; // TODO: relax more?
+    jl_svec_t *types = jl_get_fieldtypes(dt);
+    size_t i, l = jl_svec_len(types);
+    for (i = 0; i < l; i++) {
+        jl_value_t *ft = jl_svecref(types, i);
+        if (layout_uses_free_typevars(ft, NULL)) {
+            // This might be inline-alloc, but we don't know the layout
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int jl_type_mappable_to_c(jl_value_t *ty)
+{
+    assert(!jl_is_typevar(ty) && jl_is_type(ty));
+    if (jl_is_structtype(ty)) {
+        jl_datatype_t *jst = (jl_datatype_t*)ty;
+        return jst->layout || jl_has_fixed_layout(jst);
+    }
+    if (jl_is_tuple_type(jl_unwrap_unionall(ty)))
+        return 0; // TODO: relax some?
+    return 1; // as boxed or primitive
+}
 
 // Return true for any type (Integer or Unsigned) that can fit in a
 // size_t and pass back value, else return false
@@ -1409,7 +1477,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     if (jl_is_primitivetype(dt)) {
         ndt->size = dt->size;
         ndt->layout = dt->layout;
-        ndt->isbitstype = ndt->isinlinealloc = ndt->isconcretetype;
+        ndt->isbitstype = ndt->isconcretetype;
     }
 
     jl_datatype_t *primarydt = ((jl_datatype_t*)jl_unwrap_unionall(tn->wrapper));
@@ -1449,8 +1517,11 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     }
 
     // now publish the finished result
+    // XXX: if the stack was used, this will publish in the wrong order,
+    // leading to incorrect layouts and data races (#40050: the A{T} should be
+    // an isbitstype singleton of size 0)
     if (cacheable) {
-        if (!jl_is_primitivetype(dt) && ndt->types != NULL && !ndt->name->abstract) {
+        if (!jl_is_primitivetype(dt) && ndt->types != NULL && ndt->isconcretetype) {
             jl_compute_field_offsets(ndt);
         }
         jl_cache_type_(ndt);
@@ -1886,7 +1957,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_datatype_type->name->wrapper = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = (jl_datatype_t*)jl_type_type;
     jl_datatype_type->parameters = jl_emptysvec;
-    jl_datatype_type->name->names = jl_perm_symsvec(18,
+    jl_datatype_type->name->names = jl_perm_symsvec(17,
                                                     "name",
                                                     "super",
                                                     "parameters",
@@ -1902,10 +1973,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                                     "isdispatchtuple",
                                                     "isbitstype",
                                                     "zeroinit",
-                                                    "isinlinealloc",
                                                     "has_concrete_subtype",
                                                     "cached_by_hash");
-    jl_datatype_type->types = jl_svec(18,
+    jl_datatype_type->types = jl_svec(17,
                                       jl_typename_type,
                                       jl_datatype_type,
                                       jl_simplevector_type,
@@ -1913,7 +1983,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                       jl_any_type, // instance
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type, // properties
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
-                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type);
+                                      jl_any_type, jl_any_type, jl_any_type);
     jl_datatype_type->ninitialized = 3;
     jl_precompute_memoized_dt(jl_datatype_type, 1);
 
@@ -1922,14 +1992,14 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type->name->mt = jl_nonfunction_mt;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_emptysvec;
-    jl_typename_type->name->names = jl_perm_symsvec(12, "name", "module",
+    jl_typename_type->name->names = jl_perm_symsvec(13, "name", "module",
                                                     "names", "wrapper",
                                                     "cache", "linearcache",
-                                                    "hash", "abstract", "mutable", "references_self",
+                                                    "hash", "abstract", "mutable", "references_self", "mayinlinealloc",
                                                     "mt", "partial");
-    jl_typename_type->types = jl_svec(12, jl_symbol_type, jl_any_type, jl_simplevector_type,
+    jl_typename_type->types = jl_svec(13, jl_symbol_type, jl_any_type, jl_simplevector_type,
                                       jl_type_type, jl_simplevector_type, jl_simplevector_type,
-                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type,
+                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type, jl_any_type,
                                       jl_methtable_type, jl_any_type);
     jl_typename_type->ninitialized = 2;
     jl_precompute_memoized_dt(jl_typename_type, 1);
@@ -2503,13 +2573,13 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_datatype_type->types, 14, jl_bool_type);
     jl_svecset(jl_datatype_type->types, 15, jl_bool_type);
     jl_svecset(jl_datatype_type->types, 16, jl_bool_type);
-    jl_svecset(jl_datatype_type->types, 17, jl_bool_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 3, jl_type_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
     jl_svecset(jl_typename_type->types, 7, jl_bool_type);
     jl_svecset(jl_typename_type->types, 8, jl_bool_type);
     jl_svecset(jl_typename_type->types, 9, jl_bool_type);
+    jl_svecset(jl_typename_type->types, 10, jl_bool_type);
     jl_svecset(jl_methtable_type->types, 4, jl_long_type);
     jl_svecset(jl_methtable_type->types, 6, jl_module_type);
     jl_svecset(jl_methtable_type->types, 7, jl_array_any_type);
@@ -2540,10 +2610,10 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_symbol_type);
 
     // override the preferred layout for a couple types
-    jl_lineinfonode_type->isinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
+    jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
     // It seems like we probably usually end up needing the box for kinds (used in an Any context)--but is that true?
-    jl_uniontype_type->isinlinealloc = 0;
-    jl_unionall_type->isinlinealloc = 0;
+    jl_uniontype_type->name->mayinlinealloc = 0;
+    jl_unionall_type->name->mayinlinealloc = 0;
 }
 
 #ifdef __cplusplus

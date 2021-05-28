@@ -1395,6 +1395,8 @@ JL_CALLABLE(jl_f__typebody)
                     break;
                 }
             }
+            if (!dt->name->mutabl && !dt->name->references_self)
+                dt->name->mayinlinealloc = 1;
         }
     }
 

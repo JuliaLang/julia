@@ -149,7 +149,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
     if (bt == jl_bool_type)
         return ConstantInt::get(T_int8, (*(const uint8_t*)ptr) ? 1 : 0);
 
-    Type *lt = julia_struct_to_llvm(ctx, (jl_value_t*)bt, NULL, NULL);
+    Type *lt = julia_struct_to_llvm(ctx, (jl_value_t*)bt, NULL);
 
     if (jl_is_vecelement_type((jl_value_t*)bt) && !jl_is_uniontype(jl_tparam0(bt)))
         bt = (jl_datatype_t*)jl_tparam0(bt);
