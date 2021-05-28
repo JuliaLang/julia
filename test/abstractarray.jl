@@ -835,6 +835,11 @@ end
 @testset "ndims and friends" begin
     @test ndims(Diagonal(rand(1:5,5))) == 2
     @test ndims(Diagonal{Float64}) == 2
+    @test ndims(Diagonal) == 2
+    @test ndims(Vector) == 1
+    @test ndims(Matrix) == 2
+    @test ndims(Array{<:Any, 0}) == 0
+    @test_throws MethodError ndims(Array)
 end
 
 @testset "Issue #17811" begin
@@ -1293,8 +1298,90 @@ end
     @test_throws ArgumentError Int[t...; 3 4 5]
 end
 
-@testset "reduce(vcat, ...) inferrence #40277" begin
-    x_vecs = ([5, ], [1.0, 2.0, 3.0])
-    @test @inferred(reduce(vcat, x_vecs)) == [5.0, 1.0, 2.0, 3.0]
-    @test @inferred(reduce(vcat, ([10.0], [20.0], Bool[]))) == [10.0, 20.0]
+@testset "issue #39896, modified getindex " begin
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3))
+            @test arr[inds] == arr[collect(inds)]
+            @test arr[inds] isa AbstractVector{eltype(arr)}
+        end
+    end
+    for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
+        @test arr[true:true] == [arr[1]]
+        @test arr[true:true] isa AbstractVector{eltype(arr)}
+        @test arr[false:false] == []
+        @test arr[false:false] isa AbstractVector{eltype(arr)}
+    end
+    for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
+        @test_throws BoundsError arr[true:true]
+        @test_throws BoundsError arr[false:false]
+    end
+end
+
+@testset "hvncat" begin
+    a = fill(1, (2,3,2,4,5))
+    b = fill(2, (1,1,2,4,5))
+    c = fill(3, (1,2,2,4,5))
+    d = fill(4, (1,1,1,4,5))
+    e = fill(5, (1,1,1,4,5))
+    f = fill(6, (1,1,1,4,5))
+    g = fill(7, (2,3,1,4,5))
+    h = fill(8, (3,3,3,1,2))
+    i = fill(9, (3,2,3,3,2))
+    j = fill(10, (3,1,3,3,2))
+
+    result = [a; b c ;;; d e f ; g ;;;;; h ;;;; i j]
+    @test size(result) == (3,3,3,4,7)
+    @test result == [a; [b ;; c] ;;; [d e f] ; g ;;;;; h ;;;; i ;; j]
+    @test result == cat(cat([a ; b c], [d e f ; g], dims = 3), cat(h, [i j], dims = 4), dims = 5)
+
+    # terminating semicolons extend dimensions
+    @test [1;] == [1]
+    @test [1;;] == fill(1, (1,1))
+
+    for v in (1, fill(1), fill(1,1,1), fill(1, 1, 1, 1))
+        @test_throws ArgumentError [v; v;; v]
+        @test_throws ArgumentError [v; v;; v; v; v]
+        @test_throws ArgumentError [v; v; v;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v; v;; v; v]
+        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v; v]
+        # ensure a wrong shape with the right number of elements doesn't pass through
+        @test_throws ArgumentError [v; v;; v; v;;; v; v; v; v]
+
+        @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
+        @test [v; v;; v; v;;;] == fill(1, 2, 2, 1)
+        @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
+        @test [v v; v v;;;] == fill(1, 2, 2, 1)
+        @test [v; v;; v; v;;; v; v;; v; v;;] == fill(1, 2, 2, 2)
+        @test [v; v; v;; v; v; v;;; v; v; v;; v; v; v;;] == fill(1, 3, 2, 2)
+        @test [v v; v v;;; v v; v v] == fill(1, 2, 2, 2)
+        @test [v v v; v v v;;; v v v; v v v] == fill(1, 2, 3, 2)
+    end
+
+    # mixed scalars and arrays work, for numbers and strings
+    for v = (1, "test")
+        @test [v v;;; fill(v, 1, 2)] == fill(v, 1, 2, 2)
+    end
+end
+
+@testset "keepat!" begin
+    a = [1:6;]
+    @test a === keepat!(a, 1:5)
+    @test a == 1:5
+    @test keepat!(a, [2, 4]) == [2, 4]
+    @test isempty(keepat!(a, []))
+
+    a = [1:6;]
+    @test_throws BoundsError keepat!(a, 1:10) # make sure this is not a no-op
+    @test_throws BoundsError keepat!(a, 2:10)
+    @test_throws ArgumentError keepat!(a, [2, 4, 3])
+
+    b = BitVector([1, 1, 1, 0, 0])
+    @test b === keepat!(b, 1:5)
+    @test b == [1, 1, 1, 0, 0]
+    @test keepat!(b, 2:4) == [1, 1, 0]
+    @test_throws BoundsError keepat!(a, -1:10)
+    @test_throws ArgumentError keepat!(a, [2, 1])
+    @test isempty(keepat!(a, []))
 end

@@ -563,7 +563,7 @@ void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int hasptr, int isunion, int elsz);
 void jl_module_run_initializer(jl_module_t *m);
-jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
+jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
@@ -676,8 +676,6 @@ void jl_init_int32_int64_cache(void);
 
 void jl_teardown_codegen(void);
 
-void _julia_init(JL_IMAGE_SEARCH rel);
-
 void jl_set_base_ctx(char *__stk);
 
 extern ssize_t jl_tls_offset;
@@ -745,9 +743,9 @@ static inline void jl_set_gc_and_wait(void)
 void jl_gc_set_permalloc_region(void *start, void *end);
 
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm(jl_method_instance_t *linfo, size_t world,
-        int raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo);
+        int raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary);
 JL_DLLEXPORT void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, char getwrapper, char optimize, const jl_cgparams_t params);
-JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo);
+JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo, char binary);
 JL_DLLEXPORT jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, const char *debuginfo);
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo);
 
@@ -1043,10 +1041,9 @@ extern void *jl_crtdll_handle;
 extern void *jl_winsock_handle;
 #endif
 
-void *jl_get_library_(const char *f_lib, int throw_err) JL_NOTSAFEPOINT;
+void *jl_get_library_(const char *f_lib, int throw_err);
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
-JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
-                                      void **hnd) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
@@ -1115,7 +1112,6 @@ JL_DLLEXPORT jl_value_t *jl_ne_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_lt_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_le_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_fpiseq(jl_value_t *a, jl_value_t *b);
-JL_DLLEXPORT jl_value_t *jl_fpislt(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_not_int(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_and_int(jl_value_t *a, jl_value_t *b);

@@ -646,7 +646,7 @@ static int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
     if (v == jl_bottom_type)
         return 1;
     if (jl_is_datatype(v)) {
-        if (((jl_datatype_t*)v)->abstract) {
+        if (((jl_datatype_t*)v)->name->abstract) {
             if (jl_is_type_type(v))
                 return 1;//!jl_has_free_typevars(jl_tparam0(v));
             return 0;

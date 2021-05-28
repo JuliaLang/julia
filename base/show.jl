@@ -1016,9 +1016,22 @@ end
 show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 """
-    @show
+    @show exs...
 
-Show an expression and result, returning the result. See also [`show`](@ref).
+Prints one or more expressions, and their results, to `stdout`, and returns the last result.
+
+See also: [`show`](@ref), [`@info`](@ref Logging), [`println`](@ref).
+
+# Examples
+```jldoctest
+julia> x = @show 1+2
+1 + 2 = 3
+3
+
+julia> @show x^2 x/2;
+x ^ 2 = 9
+x / 2 = 1.5
+```
 """
 macro show(exs...)
     blk = Expr(:block)
@@ -1464,8 +1477,8 @@ emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, f
     printstyled(io, str; color=col, bold=true) :
     print(io, uppercase(str))
 
-show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
-show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")
+show_linenumber(io::IO, line)       = printstyled(io, "#= line ", line, " =#", color=:light_black)
+show_linenumber(io::IO, line, file) = printstyled(io, "#= ", file, ":", line, " =#", color=:light_black)
 show_linenumber(io::IO, line, file::Nothing) = show_linenumber(io, line)
 
 # show a block, e g if/for/etc
@@ -2603,7 +2616,7 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
     if x !== Any
         print(io, " <: ", supertype(x))
     end
-    if n > 0 && !(x <: Tuple) && !x.abstract
+    if n > 0 && !(x <: Tuple) && !x.name.abstract
         tvar_io::IOContext = io
         for tparam in x.parameters
             # approximately recapture the list of tvar parameterization
@@ -2835,7 +2848,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     toplevel && print(io, " with eltype ", eltype(v))
     return nothing
 end
-showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
+showindices(io, ::Slice, inds...) =
     (print(io, ", :"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))

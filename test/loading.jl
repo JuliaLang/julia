@@ -314,6 +314,11 @@ module NotPkgModule; end
         @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
         @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
         @test pkgdir(NotPkgModule) === nothing
+
+        @test pkgdir(Foo, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(Foo.SubFoo1, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(Foo.SubFoo2, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(NotPkgModule, "src") === nothing
     end
 
 end
@@ -717,4 +722,11 @@ import .Foo.Libdl; import Libdl
                   exprs[2].args[[1,3]] == [Symbol("@test"), :(1 == 2)]
         end
     end
+end
+
+@testset "`Base.project_names` and friends" begin
+    # Some functions in Pkg assumes that these tuples have the same length
+    n = length(Base.project_names)
+    @test length(Base.manifest_names) == n
+    @test length(Base.preferences_names) == n
 end

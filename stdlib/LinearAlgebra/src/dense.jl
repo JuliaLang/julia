@@ -75,7 +75,8 @@ isposdef!(A::AbstractMatrix) =
 
 Test whether a matrix is positive definite (and Hermitian) by trying to perform a
 Cholesky factorization of `A`.
-See also [`isposdef!`](@ref)
+
+See also [`isposdef!`](@ref), [`cholesky`](@ref).
 
 # Examples
 ```jldoctest
@@ -205,6 +206,8 @@ diagind(m::Integer, n::Integer, k::Integer=0) =
 
 An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 
+See also: [`diag`](@ref), [`diagm`](@ref), [`Diagonal`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
@@ -227,7 +230,7 @@ end
 
 The `k`th diagonal of a matrix, as a vector.
 
-See also: [`diagm`](@ref)
+See also: [`diagm`](@ref), [`diagind`](@ref), [`Diagonal`](@ref), [`isdiag`](@ref).
 
 # Examples
 ```jldoctest
@@ -556,6 +559,8 @@ julia> exp(A)
 """
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
+exp(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(exp(parent(A)))
+exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
 
 """
     cis(A::AbstractMatrix)
@@ -612,7 +617,6 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = opnorm(A, 1)
-    Inn    = Matrix{T}(I, n, n)
     ## For sufficiently small nA, use lower order Padé-Approximations
     if (nA <= 2.1)
         if nA > 0.95
@@ -629,17 +633,21 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
             C = T[120.,60.,12.,1.]
         end
         A2 = A * A
-        P  = copy(Inn)
-        U  = C[2] * P
-        V  = C[1] * P
-        for k in 1:(div(size(C, 1), 2) - 1)
+        # Compute U and V: Even/odd terms in Padé numerator & denom
+        # Expansion of k=1 in for loop
+        P = A2
+        U = mul!(C[4]*P, true, C[2]*I, true, true) #U = C[2]*I + C[4]*P
+        V = mul!(C[3]*P, true, C[1]*I, true, true) #V = C[1]*I + C[3]*P
+        for k in 2:(div(size(C, 1), 2) - 1)
             k2 = 2 * k
             P *= A2
-            U += C[k2 + 2] * P
-            V += C[k2 + 1] * P
+            mul!(U, C[k2 + 2], P, true, true) # U += C[k2+2]*P
+            mul!(V, C[k2 + 1], P, true, true) # V += C[k2+1]*P
         end
+
         U = A * U
         X = V + U
+        # Padé approximant:  (V-U)\(V+U)
         LAPACK.gesv!(V-U, X)
     else
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
@@ -655,10 +663,26 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
-        U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
-                  CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2 .+ CC[2].*Inn)
-        V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
-                   CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2 .+ CC[1].*Inn
+        Ut = mul!(CC[4]*A2, true,CC[2]*I, true, true); # Ut = CC[4]*A2+CC[2]*I
+        # Allocation economical version of:
+        #U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
+        #          CC[8].*A6 .+ CC[6].*A4 .+ Ut)
+        U = mul!(CC[8].*A6 .+ CC[6].*A4 .+ Ut,
+                 A6,
+                 CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2,
+                 true, true)
+        U = A*U
+
+        # Allocation economical version of: Vt = CC[3]*A2 (recycle Ut)
+        Vt = mul!(Ut, CC[3], A2, true, false)
+        mul!(Vt, true, CC[1]*I, true, true); # Vt += CC[1]*I
+        # Allocation economical version of:
+        #V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
+        #           CC[7].*A6 .+ CC[5].*A4 .+ Vt
+        V = mul!(CC[7].*A6 .+ CC[5].*A4 .+ Vt,
+                 A6,
+                 CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2,
+                 true, true)
 
         X = V + U
         LAPACK.gesv!(V-U, X)
@@ -759,6 +783,9 @@ function log(A::StridedMatrix)
     end
 end
 
+log(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(log(parent(A)))
+log(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(log(parent(A)))
+
 """
     sqrt(A::AbstractMatrix)
 
@@ -833,6 +860,9 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
         return SchurF.vectors * sqrt(UpperTriangular(SchurF.T)) * SchurF.vectors'
     end
 end
+
+sqrt(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(sqrt(parent(A)))
+sqrt(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
@@ -1398,31 +1428,23 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
-        return Matrix{Tout}(undef, n, m)
+        return similar(A, Tout, (n, m))
     end
-    if istril(A)
-        if istriu(A)
-            maxabsA = maximum(abs.(diag(A)))
-            tol = max(rtol*maxabsA, atol)
-            B = zeros(Tout, n, m)
-            for i = 1:min(m, n)
-                if abs(A[i,i]) > tol
-                    Aii = inv(A[i,i])
-                    if isfinite(Aii)
-                        B[i,i] = Aii
-                    end
-                end
-            end
-            return B
-        end
+    if isdiag(A)
+        ind = diagind(A)
+        dA = view(A, ind)
+        maxabsA = maximum(abs, dA)
+        tol = max(rtol * maxabsA, atol)
+        B = fill!(similar(A, Tout, (n, m)), 0)
+        B[ind] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
+        return B
     end
     SVD         = svd(A, full = false)
     tol         = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
-    Sinv        = zeros(Stype, length(SVD.S))
+    Sinv        = fill!(similar(A, Stype, length(SVD.S)), 0)
     index       = SVD.S .> tol
-    Sinv[index] = one(Stype) ./ SVD.S[index]
-    Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
+    Sinv[index] .= pinv.(view(SVD.S, index))
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(x::Number)

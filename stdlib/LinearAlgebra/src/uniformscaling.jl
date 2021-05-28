@@ -265,7 +265,8 @@ end
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
 
 /(J1::UniformScaling, J2::UniformScaling) = J2.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ/J2.λ)
-/(J::UniformScaling, A::AbstractMatrix) = lmul!(J.λ, inv(A))
+/(J::UniformScaling, A::AbstractMatrix) =
+    (invA = inv(A); lmul!(J.λ, convert(AbstractMatrix{promote_type(eltype(J),eltype(invA))}, invA)))
 /(A::AbstractMatrix, J::UniformScaling) = J.λ == 0 ? throw(SingularException(1)) : A/J.λ
 /(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) / J
 
@@ -273,7 +274,8 @@ end
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
-\(A::AbstractMatrix, J::UniformScaling) = rmul!(inv(A), J.λ)
+\(A::AbstractMatrix, J::UniformScaling) =
+    (invA = inv(A); rmul!(convert(AbstractMatrix{promote_type(eltype(invA),eltype(J))}, invA), J.λ))
 \(F::Factorization, J::UniformScaling) = F \ J(size(F,1))
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
@@ -282,6 +284,24 @@ end
     mul!(C, A, J.λ, alpha, beta)
 @inline mul!(C::AbstractVecOrMat, J::UniformScaling, B::AbstractVecOrMat, alpha::Number, beta::Number) =
     mul!(C, J.λ, B, alpha, beta)
+
+function mul!(out::AbstractMatrix{T}, a::Number, B::UniformScaling, α::Number, β::Number) where {T}
+    checksquare(out)
+    if iszero(β)  # zero contribution of the out matrix
+        fill!(out, zero(T))
+    elseif !isone(β)
+        rmul!(out, β)
+    end
+    s = convert(T, a*B.λ*α)
+    if !iszero(s)
+        @inbounds for i in diagind(out)
+            out[i] += s
+        end
+    end
+    return out
+end
+@inline mul!(out::AbstractMatrix, A::UniformScaling, b::Number, α::Number, β::Number)=
+    mul!(out, A.λ, UniformScaling(b), α, β)
 rmul!(A::AbstractMatrix, J::UniformScaling) = rmul!(A, J.λ)
 lmul!(J::UniformScaling, B::AbstractVecOrMat) = lmul!(J.λ, B)
 rdiv!(A::AbstractMatrix, J::UniformScaling) = rdiv!(A, J.λ)

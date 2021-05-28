@@ -454,6 +454,17 @@ end
     target = J * A * alpha + C * beta
     @test mul!(copy(C), J, A, alpha, beta) ≈ target
     @test mul!(copy(C), A, J, alpha, beta) ≈ target
+
+    a = randn()
+    C = randn(3, 3)
+    target_5mul = a*alpha*J + beta*C
+    @test mul!(copy(C), a, J, alpha, beta) ≈ target_5mul
+    @test mul!(copy(C), J, a, alpha, beta) ≈ target_5mul
+    target_5mul = beta*C # alpha = 0
+    @test mul!(copy(C), a, J, 0, beta) ≈ target_5mul
+    target_5mul = a*alpha*Matrix(J, 3, 3) # beta = 0
+    @test mul!(copy(C), a, J, alpha, 0) ≈ target_5mul
+
 end
 
 @testset "Construct Diagonal from UniformScaling" begin
@@ -526,6 +537,14 @@ end
     @test sum(A + I) ≈ 3.0
     @test sum(I - A) ≈ 3.0
     @test sum(A - I) ≈ -3.0
+end
+
+@testset "type promotion when dividing UniformScaling by matrix" begin
+    A = randn(5,5)
+    cA = complex(A)
+    J = (5+2im)*I
+    @test J/A ≈ J/cA
+    @test A\J ≈ cA\J
 end
 
 end # module TestUniformscaling

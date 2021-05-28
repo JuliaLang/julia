@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, digits!
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -343,6 +343,7 @@ end
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
 isodd(x::BigInt) = MPZ.tstbit(x, 0)
+iseven(x::BigInt) = !isodd(x)
 
 function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
@@ -768,8 +769,11 @@ end
 
 if Limb === UInt
     # this condition is true most (all?) of the time, and in this case we can define
-    # an optimized version of the above hash_integer(::Integer, ::UInt) method for BigInt
-    # used e.g. for Rational{BigInt}
+    # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
+    # and of hash
+
+    using .Base: hash_uint
+
     function hash_integer(n::BigInt, h::UInt)
         GC.@preserve n begin
             s = n.size
@@ -799,7 +803,7 @@ if Limb === UInt
                 limb <= typemin(Int) % UInt && return hash(-(limb % Int), h)
             end
             pow = trailing_zeros(x)
-            nd = ndigits0z(x, 2)
+            nd = Base.ndigits0z(x, 2)
             idx = _divLimb(pow) + 1
             shift = _modLimb(pow) % UInt
             upshift = BITS_PER_LIMB - shift
@@ -931,7 +935,7 @@ function Base.://(x::Rational{BigInt}, y::Rational{BigInt})
         if iszero(x.num)
             throw(DivideError())
         end
-        return (isneg(x.num) ? -one(BigFloat) : one(BigFloat)) // y.num
+        return (isneg(x.num) ? -one(BigInt) : one(BigInt)) // y.num
     end
     zq = _MPQ()
     ccall((:__gmpq_div, :libgmp), Cvoid,

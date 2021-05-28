@@ -273,6 +273,8 @@
     XX(jl_idtable_rehash) \
     XX(jl_infer_thunk) \
     XX(jl_init_restored_modules) \
+    XX(jl_init) \
+    XX(jl_init_with_image) \
     XX(jl_init__threading) \
     XX(jl_init_with_image__threading) \
     XX(jl_install_sigint_handler) \
@@ -538,4 +540,5 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
-    XX(jl_yield)
+    XX(jl_yield) \
+    XX(jl_print_backtrace)

@@ -237,7 +237,20 @@ function parameter_upper_bound(t::UnionAll, idx)
 end
 
 # these were internal functions, but some packages seem to be relying on them
-@deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes)
+@deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes) false
 cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not recursively calls itself
 
 # END 1.6 deprecations
+
+# BEGIN 1.7 deprecations
+
+# the plan is to eventually overload getproperty to access entries of the dict
+@noinline function getproperty(x::Pairs, s::Symbol)
+    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    return getfield(x, s)
+end
+
+# This function was marked as experimental and not exported.
+@deprecate catch_stack(task=current_task(); include_bt=true) current_exceptions(task; backtrace=include_bt) false
+
+# END 1.7 deprecations

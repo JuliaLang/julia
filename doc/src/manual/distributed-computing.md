@@ -80,8 +80,16 @@ you read from a remote object to obtain data needed by the next local operation.
 but is more efficient.
 
 ```julia-repl
-julia> remotecall_fetch(getindex, 2, r, 1, 1)
+julia> remotecall_fetch(r-> fetch(r)[1, 1], 2, r)
 0.18526337335308085
+```
+
+This fetches the array on worker 2 and returns the first value. Note, that `fetch` doesn't move any data in
+this case, since it's executed on the worker that owns the array. One can also write:
+
+```julia-repl
+julia> remotecall_fetch(getindex, 2, r, 1, 1)
+0.10824216411304866
 ```
 
 Remember that [`getindex(r,1,1)`](@ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
@@ -648,7 +656,7 @@ Once finalized, a reference becomes invalid and cannot be used in any further ca
 ## Local invocations
 
 Data is necessarily copied over to the remote node for execution. This is the case for both
-remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
+remotecalls and when data is stored to a [`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed

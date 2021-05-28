@@ -1717,19 +1717,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
         ctx.builder.CreateMemCpy(
                 emit_inttoptr(ctx, destp, T_pint8),
-#if JL_LLVM_VERSION >= 100000
                 MaybeAlign(1),
-#else
-                1,
-#endif
                 emit_inttoptr(ctx,
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
                     T_pint8),
-#if JL_LLVM_VERSION >= 100000
                 MaybeAlign(0),
-#else
-                0,
-#endif
                 emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
                 false);
         JL_GC_POP();

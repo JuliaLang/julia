@@ -429,6 +429,9 @@ typedef struct {
     jl_svec_t *cache;        // sorted array
     jl_svec_t *linearcache;  // unsorted array
     intptr_t hash;
+    uint8_t abstract;
+    uint8_t mutabl;
+    uint8_t references_self;
     struct _jl_methtable_t *mt;
     jl_array_t *partial;     // incomplete instantiations of this type
 } jl_typename_t;
@@ -489,8 +492,6 @@ typedef struct _jl_datatype_t {
     int32_t size; // TODO: move to _jl_datatype_layout_t
     int32_t ninitialized;
     uint32_t hash;
-    uint8_t abstract;
-    uint8_t mutabl;
     // memoized properties
     uint8_t hasfreetypevars; // majority part of isconcrete computation
     uint8_t isconcretetype; // whether this type can have instances
@@ -838,7 +839,8 @@ typedef enum {
 
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t);
 
-JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
+JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_finalize(jl_value_t *o);
 JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_0w(void);
@@ -1135,10 +1137,10 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_svec(v)        jl_typeis(v,jl_simplevector_type)
 #define jl_is_simplevector(v) jl_is_svec(v)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
-#define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutabl)
-#define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->mutabl))
-#define jl_is_immutable(t)   (!((jl_datatype_t*)t)->mutabl)
-#define jl_is_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->mutabl))
+#define jl_is_mutable(t)     (((jl_datatype_t*)t)->name->mutabl)
+#define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->name->mutabl))
+#define jl_is_immutable(t)   (!((jl_datatype_t*)t)->name->mutabl)
+#define jl_is_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_uniontype(v)   jl_typeis(v,jl_uniontype_type)
 #define jl_is_typevar(v)     jl_typeis(v,jl_tvar_type)
 #define jl_is_unionall(v)    jl_typeis(v,jl_unionall_type)
@@ -1207,7 +1209,7 @@ STATIC_INLINE int jl_is_primitivetype(void *v) JL_NOTSAFEPOINT
 STATIC_INLINE int jl_is_structtype(void *v) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(v) &&
-            !((jl_datatype_t*)(v))->abstract &&
+            !((jl_datatype_t*)(v))->name->abstract &&
             !jl_is_primitivetype(v));
 }
 
@@ -1223,7 +1225,7 @@ STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d) JL_NOTSAFEPOINT
 
 STATIC_INLINE int jl_is_abstracttype(void *v) JL_NOTSAFEPOINT
 {
-    return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->abstract);
+    return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->name->abstract);
 }
 
 STATIC_INLINE int jl_is_array_type(void *t) JL_NOTSAFEPOINT
@@ -1314,7 +1316,7 @@ STATIC_INLINE int jl_egal_(jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAY
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
     if (dt != (jl_datatype_t*)jl_typeof(b))
         return 0;
-    if (dt->mutabl) {
+    if (dt->name->mutabl) {
         if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
             return jl_egal__special(a, b, dt);
         return 0;
@@ -1354,7 +1356,7 @@ STATIC_INLINE int jl_is_concrete_type(jl_value_t *v) JL_NOTSAFEPOINT
 JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_method_t *definition);
 
 // type constructors
-JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule);
+JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule, int abstract, int mutabl);
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub);
 JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p);
 JL_DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n);
@@ -1531,11 +1533,10 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int error);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT,
-                                                         jl_sym_t *var);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
-JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
+JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
@@ -1549,7 +1550,7 @@ JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t 
 JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
-JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
 STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {
@@ -1639,10 +1640,6 @@ typedef enum {
     JL_IMAGE_JULIA_HOME = 1,
     //JL_IMAGE_LIBJULIA = 2,
 } JL_IMAGE_SEARCH;
-// this helps turn threading compilation mismatches into linker errors
-#define julia_init julia_init__threading
-#define jl_init jl_init__threading
-#define jl_init_with_image jl_init_with_image__threading
 
 JL_DLLEXPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
@@ -1703,7 +1700,7 @@ enum JL_RTLD_CONSTANT {
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
 typedef void *jl_uv_libhandle; // compatible with dlopen (void*) / LoadLibrary (HMODULE)
-JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags, int throw_err);
 JL_DLLEXPORT jl_uv_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_dlclose(jl_uv_libhandle handle) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_dlsym(jl_uv_libhandle handle, const char *symbol, void ** value, int throw_err) JL_NOTSAFEPOINT;
@@ -1965,7 +1962,8 @@ JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT; // deprecated
 // Mainly for debugging, use `void*` so that no type cast is needed in C++.
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
 

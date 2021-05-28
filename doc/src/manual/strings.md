@@ -801,7 +801,7 @@ else
 end
 ```
 
-If a regular expression does match, the value returned by [`match`](@ref) is a `RegexMatch`
+If a regular expression does match, the value returned by [`match`](@ref) is a [`RegexMatch`](@ref)
 object. These objects record how the expression matches, including the substring that the pattern
 matches and any captured substrings, if there are any. This example only captures the portion
 of the substring that matches, but perhaps we want to capture any non-blank text after the comment
@@ -882,10 +882,10 @@ julia> m.offsets
 ```
 
 It is convenient to have captures returned as an array so that one can use destructuring syntax
-to bind them to local variables:
+to bind them to local variables. As a convinience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
 
 ```jldoctest acdmatch
-julia> first, second, third = m.captures; first
+julia> first, second, third = m; first
 "a"
 ```
 

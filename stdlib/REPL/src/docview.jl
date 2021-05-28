@@ -224,7 +224,7 @@ function lookup_doc(ex)
             op = str[1:end-1]
             eq = isdotted ? ".=" : "="
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
-        elseif isdotted
+        elseif isdotted && ex !== :(..)
             op = str[2:end]
             return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
         end
@@ -272,14 +272,14 @@ function summarize(io::IO, TT::Type, binding::Binding)
     if T isa DataType
         println(io, "```")
         print(io,
-            T.abstract ? "abstract type " :
-            T.mutable  ? "mutable struct " :
+            T.name.abstract ? "abstract type " :
+            T.name.mutable  ? "mutable struct " :
             Base.isstructtype(T) ? "struct " :
             "primitive type ")
         supert = supertype(T)
         println(io, T)
         println(io, "```")
-        if !T.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
+        if !T.name.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
             println(io, "# Fields")
             println(io, "```")
             pad = maximum(length(string(f)) for f in fieldnames(T))
