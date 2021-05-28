@@ -833,6 +833,7 @@ export
     readline,
     readlines,
     readuntil,
+    redirect_stdio,
     redirect_stderr,
     redirect_stdin,
     redirect_stdout,
