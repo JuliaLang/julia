@@ -2819,3 +2819,14 @@ macro m_nospecialize_unnamed_hygiene()
 end
 
 @test @m_nospecialize_unnamed_hygiene()(1) === Any
+
+# https://github.com/JuliaLang/julia/issues/40574
+@testset "no mutation while destructuring" begin
+    x = [1, 2]
+    x[2], x[1] = x
+    @test x == [2, 1]
+
+    x = [1, 2, 3]
+    x[3], x[1:2]... = x
+    @test x == [2, 3, 1]
+end
