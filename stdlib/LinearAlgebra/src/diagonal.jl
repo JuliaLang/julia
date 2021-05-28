@@ -457,6 +457,7 @@ function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
 end
 
 function rdiv!(A::AbstractMatrix, D::Diagonal)
+    require_one_based_indexing(A)
     dd = D.diag
     m, n = size(A)
     if (k = length(dd)) ≠ n
