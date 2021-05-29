@@ -480,6 +480,8 @@ end
         @test gcd(b, a) === T(2)//T(105)
         @test lcm(a, b) === T(30)//T(7)
         if T <: Signed
+            @test gcd(-a) === a
+            @test lcm(-b) === b
             @test gcdx(a, b) === (T(2)//T(105), T(-11), T(4))
             @test gcd(-a, b) === T(2)//T(105)
             @test gcd(a, -b) === T(2)//T(105)
