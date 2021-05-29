@@ -173,10 +173,8 @@ of those methods are, use the [`methods`](@ref) function:
 ```jldoctest fofxy
 julia> methods(f)
 # 2 methods for generic function "f" from Main:
- [1] f(x::Float64, y::Float64)
-   @ none:1
- [2] f(x::Number, y::Number)
-   @ none:1
+ [1] f(x::Float64, y::Float64) @ none:1
+ [2] f(x::Number, y::Number) @ none:1
 ```
 
 which shows that `f` has two methods, one taking two `Float64` arguments and one taking arguments
@@ -193,13 +191,9 @@ f (generic function with 3 methods)
 
 julia> methods(f)
 # 3 methods for generic function "f" from Main:
- [1] f(x::Float64, y::Float64)
-   @ none:1
- [2] f(x::Number, y::Number)
-   @ none:1
- [3] f(x::Any, y::Any)
-   @ none:1
-
+ [1] f(x::Float64, y::Float64) @ none:1
+ [2] f(x::Number, y::Number) @ none:1
+ [3] f(x::Any, y::Any) @ none:1
 
 julia> f("foo", 1)
 Whoa there, Nelly.
@@ -218,29 +212,20 @@ of methods:
 ```julia-repl
 julia> methods(+)
 # 207 methods for generic function "+" from Base:
-   [1] +(x::T, y::T) where {T<:Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}}
-     @ int.jl:87
-   [2] +(c::Union{UInt16, UInt32, UInt64, UInt8}, x::BigInt)
-     @ Base.GMP gmp.jl:529
-   [3] +(c::Union{Int16, Int32, Int64, Int8}, x::BigInt)
-     @ Base.GMP gmp.jl:535
-   [4] +(c::Union{UInt16, UInt32, UInt64, UInt8}, x::BigFloat)
-     @ Base.MPFR mpfr.jl:376
-   [5] +(c::Union{Int16, Int32, Int64, Int8}, x::BigFloat)
-     @ Base.MPFR mpfr.jl:384
-   [6] +(c::Union{Float16, Float32, Float64}, x::BigFloat)
-     @ Base.MPFR mpfr.jl:392
-   [7] +(x::Union{Dates.CompoundPeriod, Dates.Period})
-     @ Dates /Users/me/.julia/dev/julia/usr/share/julia/stdlib/v1.7/Dates/src/periods.jl:372
-   [8] +(x::Rational, y::Integer)
-     @ rational.jl:310
-   [9] +(x::T, y::Integer) where {T<:AbstractChar}
-     @ char.jl:235
-  [10] +(Da::LinearAlgebra.Diagonal, Db::LinearAlgebra.Diagonal)
-     @ LinearAlgebra /Users/me/.julia/dev/julia/usr/share/julia/stdlib/v1.7/LinearAlgebra/src/diagonal.jl:172
+   [1] +(x::T, y::T) where T<:Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8} @ int.jl:87
+   [2] +(c::Union{UInt16, UInt32, UInt64, UInt8}, x::BigInt) @ Base.GMP gmp.jl:529
+   [3] +(c::Union{Int16, Int32, Int64, Int8}, x::BigInt) @ Base.GMP gmp.jl:535
+   [4] +(c::Union{UInt16, UInt32, UInt64, UInt8}, x::BigFloat) @ Base.MPFR mpfr.jl:376
+   [5] +(c::Union{Int16, Int32, Int64, Int8}, x::BigFloat) @ Base.MPFR mpfr.jl:384
+   [6] +(c::Union{Float16, Float32, Float64}, x::BigFloat) @ Base.MPFR mpfr.jl:392
+   [7] +(x::Union{Dates.CompoundPeriod, Dates.Period}) @ Dates /Users/me/.julia/dev/julia/usr/share/julia/stdlib/v1.7/Dates/src/periods.jl:372
+   [8] +(r1::OrdinalRange, r2::OrdinalRange) @ range.jl:1245
 ...
- [207] +(a::Any, b::Any, c::Any, xs::Any...)
-     @ operators.jl:653
+ [203] +(x::Float32, y::Float32) @ float.jl:388
+ [204] +(x::Number) @ operators.jl:592
+ [205] +(x::T, y::T) where T<:Number @ promotion.jl:410
+ [206] +(x::Number, y::Number) @ promotion.jl:335
+ [207] +(a::Any, b::Any, c::Any, xs::Any...) @ operators.jl:655
 ```
 
 Multiple dispatch together with the flexible parametric type system give Julia its ability to
