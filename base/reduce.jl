@@ -261,20 +261,21 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     end
 end
 
+# vararg version
 @noinline function mapreduce_impl(f::F, op, A::AbstractArrayOrBroadcasted,
-                                  ifirst::Integer, ilast::Integer, blksize::Int, 
+                                  ifirst::Integer, ilast::Integer, blksize::Int,
                                   Bs::Vararg{AbstractArrayOrBroadcasted,N}) where {F,N}
     Xs = (A, Bs...)
     if ifirst == ilast
-        @inbounds x1 = ith_all(ifirst, Xs) # getindex.(Xs, ifirst)
+        @inbounds x1 = ith_all(ifirst, Xs)
         return mapreduce_first(f, op, x1...)
     elseif ilast - ifirst < blksize
         # sequential portion
-        @inbounds x1 = ith_all(ifirst, Xs) # getindex.(Xs, ifirst)
-        @inbounds x2 = ith_all(ifirst+1, Xs) # getindex.(Xs, ifirst+1)
+        @inbounds x1 = ith_all(ifirst, Xs)
+        @inbounds x2 = ith_all(ifirst+1, Xs)
         v = op(f(x1...), f(x2...))
         @simd for i = ifirst + 2 : ilast
-            @inbounds xi = ith_all(i, Xs) # getindex.(Xs, i)
+            @inbounds xi = ith_all(i, Xs)
             v = op(v, f(xi...))
         end
         return v
@@ -286,9 +287,6 @@ end
         return op(v1, v2)
     end
 end
-
-# mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
-#     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer, Bs::AbstractArrayOrBroadcasted...) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op), Bs...)

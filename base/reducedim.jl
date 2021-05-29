@@ -385,14 +385,14 @@ _mapreduce_dim_vararg(f, op, init, As::Tuple, ::Colon) =
     only(_mapreduce_dim_vararg(f, op, init, As, 1:maximum(ndims, As)))
 
 _mapreduce_dim_vararg(f, op, ::_InitialValue, As::Tuple, ::Colon) =
-    mapreduce(splat(f), op, zip(As...)) # fallback -- but extending _mapreduce may not be hard
+    mapreduce(splat(f), op, zip(As...)) # fallback, without init -- needs vararg _mapreduce
 
 mapreduce_empty(f::typeof(splat(+)).name.wrapper, op, ::Type{T}) where {T<:Tuple} =
     reduce_empty(op, Core.Compiler.return_type(op, T))  # for mapreduce(+, +, Int[], Int[])
 
 
 _mapreduce_dim_vararg(f, op, ::_InitialValue, As::Tuple, dims) =
-    _mapreduce_dim(identity, op, _InitialValue(), map(f, As...), dims) # fallback -- no vararg reducedim_init
+    _mapreduce_dim(identity, op, _InitialValue(), map(f, As...), dims) # fallback, without init -- no vararg reducedim_init
 
 _mapreduce_dim_vararg(f, op, init, As::Tuple, dims) =
     _mapreduce_dim_vararg(f, op, init, As, dims, IteratorSize(Generator(f, As...)))
