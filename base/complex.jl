@@ -564,7 +564,7 @@ end
 """
     cispi(x)
 
-Same as `exp(im*pi*x)`, this computes ``\\exp(i \\pi x)``, but is more accurate (especially for large `x`) and typically faster.
+Equivalent to `exp(im*pi*x)`, this computes ``\\exp(i \\pi x)``, but is more accurate (especially for large `x`) and is typically faster.
 The `cis` name is shorthand for Euler's formula: ``cos(x) + i sin(x) = \\exp(i x)``.
 
 See also [`cis`](@ref), [`sincospi`](@ref), [`exp`](@ref), [`angle`](@ref).
