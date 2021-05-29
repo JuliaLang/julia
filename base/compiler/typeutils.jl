@@ -56,6 +56,38 @@ function isknownlength(t::DataType)
     return isdefined(va, :N) && va.N isa Int
 end
 
+# Compute the minimum number of initialized fields for a particular datatype
+# (therefore also a lower bound on the number of fields)
+function datatype_min_ninitialized(t::DataType)
+    t.name.abstract && return 0
+    if t.name === NamedTuple_typename
+        names, types = t.parameters[1], t.parameters[2]
+        if names isa Tuple
+            return length(names)
+        end
+        t = argument_datatype(types)
+        if !(t isa DataType && t.name === Tuple.name)
+            return 0
+        end
+    end
+    if t.name === Tuple.name
+        n = length(t.parameters)
+        n == 0 && return 0
+        va = t.parameters[n]
+        if isvarargtype(va)
+            n -= 1
+            if isdefined(va, :N)
+                va = va.N
+                if va isa Int
+                    n += va
+                end
+            end
+        end
+        return n
+    end
+    return length(t.name.names) - t.name.n_uninitialized
+end
+
 # test if non-Type, non-TypeVar `x` can be used to parameterize a type
 function valid_tparam(@nospecialize(x))
     if isa(x, Tuple)

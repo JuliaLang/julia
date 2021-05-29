@@ -271,7 +271,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     write_int32(s->s, dt->size);
     int has_instance = (dt->instance != NULL);
     int has_layout = (dt->layout != NULL);
-    write_uint8(s->s, dt->name->abstract | (has_layout << 1) | (has_instance << 2));
+    write_uint8(s->s, has_layout | (has_instance << 1));
     write_uint8(s->s, dt->hasfreetypevars
             | (dt->isconcretetype << 1)
             | (dt->isdispatchtuple << 2)
@@ -279,9 +279,6 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             | (dt->zeroinit << 4)
             | (dt->has_concrete_subtype << 5)
             | (dt->cached_by_hash << 6));
-    if (!dt->name->abstract) {
-        write_uint16(s->s, dt->ninitialized);
-    }
     write_int32(s->s, dt->hash);
 
     if (has_layout) {
@@ -311,7 +308,6 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     if (has_instance)
         jl_serialize_value(s, dt->instance);
     jl_serialize_value(s, dt->name);
-    jl_serialize_value(s, dt->names);
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->super);
     jl_serialize_value(s, dt->types);
@@ -815,7 +811,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, tn->wrapper);
                 jl_serialize_value(s, tn->mt);
                 ios_write(s->s, (char*)&tn->hash, sizeof(tn->hash));
-                write_uint8(s->s, tn->abstract | (tn->mutabl << 1) | (tn->references_self << 2) | (tn->mayinlinealloc << 3));
+                write_uint8(s->s, tn->abstract | (tn->mutabl << 1) | (tn->mayinlinealloc << 2));
+                if (!tn->abstract)
+                    write_uint16(s->s, tn->n_uninitialized);
                 size_t nb = tn->atomicfields ? (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t) : 0;
                 write_int32(s->s, nb);
                 if (nb)
@@ -1273,9 +1271,8 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     uint8_t flags = read_uint8(s->s);
     uint8_t memflags = read_uint8(s->s);
     dt->size = size;
-    int abstract = flags & 1;
-    int has_layout = (flags >> 1) & 1;
-    int has_instance = (flags >> 2) & 1;
+    int has_layout = flags & 1;
+    int has_instance = (flags >> 1) & 1;
     dt->hasfreetypevars = memflags & 1;
     dt->isconcretetype = (memflags >> 1) & 1;
     dt->isdispatchtuple = (memflags >> 2) & 1;
@@ -1283,10 +1280,6 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->zeroinit = (memflags >> 4) & 1;
     dt->has_concrete_subtype = (memflags >> 5) & 1;
     dt->cached_by_hash = (memflags >> 6) & 1;
-    if (abstract)
-        dt->ninitialized = 0;
-    else
-        dt->ninitialized = read_uint16(s->s);
     dt->hash = read_int32(s->s);
 
     if (has_layout) {
@@ -1334,8 +1327,6 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     }
     dt->name = (jl_typename_t*)jl_deserialize_value(s, (jl_value_t**)&dt->name);
     jl_gc_wb(dt, dt->name);
-    dt->names = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->names);
-    jl_gc_wb(dt, dt->names);
     dt->parameters = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->parameters);
     jl_gc_wb(dt, dt->parameters);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
@@ -1738,8 +1729,11 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             int8_t flags = read_int8(s->s);
             tn->abstract = flags & 1;
             tn->mutabl = (flags>>1) & 1;
-            tn->references_self = (flags>>2) & 1;
-            tn->mayinlinealloc = (flags>>3) & 1;
+            tn->mayinlinealloc = (flags>>2) & 1;
+            if (tn->abstract)
+                tn->n_uninitialized = 0;
+            else
+                tn->n_uninitialized = read_uint16(s->s);
             size_t nfields = read_int32(s->s);
             if (nfields) {
                 tn->atomicfields = (uint32_t*)malloc(nfields);

@@ -3347,7 +3347,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = jl_cgval_t(); // unreachable
             return true;
         }
-        if (fieldidx < 0 || fieldidx >= jl_datatype_nfields(stt)) {
+        ssize_t nf = jl_datatype_nfields(stt);
+        if (fieldidx < 0 || fieldidx >= nf) {
             if (order != jl_memory_order_unspecified) {
                 emit_atomic_error(ctx, "isdefined: atomic ordering cannot be specified for nonexistent field");
                 *ret = jl_cgval_t(); // unreachable
@@ -3367,7 +3368,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = jl_cgval_t(); // unreachable
             return true;
         }
-        if (fieldidx < stt->ninitialized) {
+        else if (fieldidx < nf - stt->name->n_uninitialized) {
             *ret = mark_julia_const(jl_true);
         }
         else if (jl_field_isptr(stt, fieldidx) || jl_type_hasptr(jl_field_type(stt, fieldidx))) {
