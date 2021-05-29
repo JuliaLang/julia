@@ -75,7 +75,6 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->abstract = abstract;
     tn->mutabl = mutabl;
-    tn->references_self = 0;
     tn->mayinlinealloc = 0;
     tn->mt = NULL;
     tn->partial = NULL;
@@ -105,7 +104,6 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->super = NULL;
     t->parameters = NULL;
     t->layout = NULL;
-    t->names = NULL;
     t->types = NULL;
     t->instance = NULL;
     return t;
@@ -246,7 +244,7 @@ int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_NOTSAFEPOIN
         if (ty->layout->npointers > 0) {
             if (pointerfree)
                 return 0;
-            if (ty->ninitialized != jl_svec_len(ty->types))
+            if (ty->name->n_uninitialized != 0)
                 return 0;
             if (ty->layout->fielddesc_type > 1) // GC only implements support for 8 and 16 (not array32)
                 return 0;
@@ -352,7 +350,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
     assert(st->types && w->types);
     size_t i, nfields = jl_svec_len(st->types);
-    assert(st->ninitialized <= nfields);
+    assert(st->name->n_uninitialized <= nfields);
     if (st == w && st->layout) {
         // this check allows us to force re-computation of the layout for some types during init
         st->layout = NULL;
@@ -392,7 +390,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     }
     else {
         // compute a conservative estimate of whether there could exist an instance of a subtype of this
-        for (i = 0; st->has_concrete_subtype && i < st->ninitialized; i++) {
+        for (i = 0; st->has_concrete_subtype && i < nfields - st->name->n_uninitialized; i++) {
             jl_value_t *fld = jl_svecref(st->types, i);
             if (fld == jl_bottom_type)
                 st->has_concrete_subtype = 0;
@@ -448,7 +446,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->haspadding)
                         haspadding = 1;
-                    if (i >= st->ninitialized && fld_npointers &&
+                    if (i >= nfields - st->name->n_uninitialized && fld_npointers &&
                         fld_npointers * sizeof(void*) != fsz) {
                         // field may be undef (may be uninitialized and contains pointer),
                         // and contains non-pointer fields of non-zero sizes.
@@ -577,7 +575,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     jl_gc_wb(t, t->parameters);
     t->types = ftypes;
     if (ftypes != NULL) jl_gc_wb(t, t->types);
-    t->ninitialized = ninitialized;
     t->size = 0;
 
     t->name = NULL;
@@ -606,6 +603,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     jl_gc_wb(t, t->name);
     t->name->names = fnames;
     jl_gc_wb(t->name, t->name->names);
+    tn->n_uninitialized = jl_svec_len(fnames) - ninitialized;
 
     uint32_t *volatile atomicfields = NULL;
     int i;
@@ -1212,7 +1210,8 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
     if (!jl_is_datatype(type) || type->layout == NULL) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     }
-    if (type->ninitialized > na || na > jl_datatype_nfields(type))
+    size_t nf = jl_datatype_nfields(type);
+    if (nf - type->name->n_uninitialized > na || na > nf)
         jl_error("invalid struct allocation");
     for (size_t i = 0; i < na; i++) {
         jl_value_t *ft = jl_field_type_concrete(type, i);
@@ -1312,24 +1311,22 @@ JL_DLLEXPORT void jl_unlock_value(jl_value_t *v) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
 {
-    jl_svec_t *fn = jl_field_names(t);
-    size_t n = jl_svec_len(fn);
-    if (n == 0) {
-        if (jl_is_namedtuple_type(t)) {
-            jl_value_t *ns = jl_tparam0(t);
-            if (jl_is_tuple(ns)) {
-                n = jl_nfields(ns);
-                for(size_t i=0; i < n; i++) {
-                    if (jl_get_nth_field(ns, i) == (jl_value_t*)fld) {
-                        return (int)i;
-                    }
+    if (jl_is_namedtuple_type(t)) {
+        jl_value_t *ns = jl_tparam0(t);
+        if (jl_is_tuple(ns)) {
+            size_t i, n = jl_nfields(ns);
+            for (i = 0; i < n; i++) {
+                if (jl_get_nth_field(ns, i) == (jl_value_t*)fld) {
+                    return (int)i;
                 }
             }
         }
     }
     else {
-        for(size_t i=0; i < n; i++) {
-            if (jl_svecref(fn,i) == (jl_value_t*)fld) {
+        jl_svec_t *fn = jl_field_names(t);
+        size_t i, n = jl_svec_len(fn);
+        for (i = 0; i < n; i++) {
+            if (jl_svecref(fn, i) == (jl_value_t*)fld) {
                 return (int)i;
             }
         }

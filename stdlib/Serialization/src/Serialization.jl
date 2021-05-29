@@ -509,7 +509,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, isdefined(primary, :instance))
     serialize(s, t.abstract)
     serialize(s, t.mutable)
-    serialize(s, primary.ninitialized)
+    serialize(s, Int32(length(primary.types) - t.n_uninitialized))
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))

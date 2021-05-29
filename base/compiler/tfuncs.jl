@@ -29,7 +29,6 @@ const DATATYPE_PARAMETERS_FIELDINDEX = fieldindex(DataType, :parameters)
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
 const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
-const DATATYPE_NAMES_FIELDINDEX = fieldindex(DataType, :names)
 const DATATYPE_HASH_FIELDINDEX = fieldindex(DataType, :hash)
 
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
@@ -289,7 +288,7 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             else
                 return Bottom
             end
-            if 1 <= idx <= a1.ninitialized
+            if 1 <= idx <= datatype_min_ninitialized(a1)
                 return Const(true)
             elseif a1.name === _NAMEDTUPLE_NAME
                 if isconcretetype(a1)
@@ -620,7 +619,6 @@ is_dt_const_field(fld::Int) = (
      fld == DATATYPE_TYPES_FIELDINDEX ||
      fld == DATATYPE_SUPER_FIELDINDEX ||
      fld == DATATYPE_INSTANCE_FIELDINDEX ||
-     fld == DATATYPE_NAMES_FIELDINDEX ||
      fld == DATATYPE_HASH_FIELDINDEX
     )
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
@@ -738,14 +736,14 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
         s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
         # If all fields are always initialized, and bounds check is disabled, we can assume
         # we don't throw
-        if !boundscheck && !isvatuple(s) && s.name !== NamedTuple.body.body.name && fieldcount(s) == s.ninitialized
+        if !boundscheck && s.name.n_uninitialized == 0
             return true
         end
         # Else we need to know what the field is
         isa(name, Const) || return false
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false
-        field <= s.ninitialized && return true
+        field <= datatype_min_ninitialized(s) && return true
         # `try_compute_fieldidx` already check for field index bound.
         !isvatuple(s) && isbitstype(fieldtype(s0, field)) && return true
     end

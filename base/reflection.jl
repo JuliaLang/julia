@@ -129,7 +129,7 @@ function _fieldnames(@nospecialize t)
             throw(ArgumentError("type does not have definite field names"))
         end
     end
-    isdefined(t, :names) ? t.names : t.name.names
+    return t.name.names
 end
 
 """
@@ -749,7 +749,7 @@ function fieldcount(@nospecialize t)
         throw(TypeError(:fieldcount, DataType, t))
     end
     if t.name === NamedTuple_typename
-        names, types = t.parameters
+        names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
             return length(names)
         end

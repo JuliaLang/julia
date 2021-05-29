@@ -3137,7 +3137,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
 }
 
 // see if it might be possible to construct an instance of `typ`
-// if ninitialized == nfields, but a fieldtype is Union{},
+// if n_uninitialized == 0, but a fieldtype is Union{},
 // that type will not be constructable, for example, tested recursively
 int jl_has_concrete_subtype(jl_value_t *typ)
 {

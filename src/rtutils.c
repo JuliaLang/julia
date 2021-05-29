@@ -1100,10 +1100,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             size_t i = 0;
             if (vt == jl_typemap_entry_type)
                 i = 1;
+            jl_value_t *names = isnamedtuple ? jl_tparam0(vt) : (jl_value_t*)jl_field_names(vt);
             for (; i < tlen; i++) {
                 if (!istuple) {
-                    n += jl_printf(out, "%s", jl_symbol_name(jl_field_name(vt, i)));
-                    n += jl_printf(out, "=");
+                    jl_value_t *fname = isnamedtuple ? jl_fieldref_noalloc(names, i) : jl_svecref(names, i);
+                    n += jl_printf(out, "%s=", jl_symbol_name((jl_sym_t*)fname));
                 }
                 size_t offs = jl_field_offset(vt, i);
                 char *fld_ptr = (char*)v + offs;
