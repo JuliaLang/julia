@@ -40,14 +40,14 @@ let err = try
     io = IOBuffer()
     Base.showerror(io, err)
     lines = split(String(take!(io)), '\n')
-    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Number, y) in $curmod_str at")
-    @test ambig_checkline(lines[2])
+    ambig_checkline(str) = startswith(str, "  ambig(x::Any, y::Integer) @ $curmod_str") ||
+                           startswith(str, "  ambig(x::Integer, y::Any) @ $curmod_str") ||
+                           startswith(str, "  ambig(x::Number, y::Any) @ $curmod_str")
     @test ambig_checkline(lines[3])
     @test ambig_checkline(lines[4])
-    @test lines[5] == "Possible fix, define"
-    @test lines[6] == "  ambig(::Integer, ::Integer)"
+    @test ambig_checkline(lines[5])
+    @test lines[6] == "Possible fix, define"
+    @test lines[7] == "  ambig(::Integer, ::Integer)"
 end
 
 ambig_with_bounds(x, ::Int, ::T) where {T<:Integer,S} = 0
