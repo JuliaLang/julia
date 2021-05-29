@@ -90,7 +90,7 @@ end
     lt = LowerTriangular([1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0])
     @test convert(LowerTriangular, sparse(lt)) isa LowerTriangular
     @test convert(LowerTriangular, sparse(lt)) == lt
-    
+
     ut = UpperTriangular([1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0])
     @test convert(UpperTriangular, sparse(ut)) isa UpperTriangular
     @test convert(UpperTriangular, sparse(ut)) == ut
