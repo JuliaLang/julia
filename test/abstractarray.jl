@@ -1385,3 +1385,9 @@ end
     @test_throws ArgumentError keepat!(a, [2, 1])
     @test isempty(keepat!(a, []))
 end
+
+@testset "reshape with Integers" begin
+    @test reshape(1:2, 1, 1:2) == reshape(1:2, 1, 2)
+    @test reshape(1:2, 1, Int32(2)) == reshape(1:2, 1, 2)
+    @test reshape(reshape(1:2, Int32(2), 1), 1, Int32(2)) == reshape(1:2, 1, 2)
+end
