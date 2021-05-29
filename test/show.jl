@@ -755,14 +755,14 @@ end
 
 f5971(x, y...; z=1, w...) = nothing
 let repr = sprint(show, "text/plain", methods(f5971))
-    @test occursin("f5971(x, y...; z, w...)", repr)
+    @test occursin("f5971(x::Any, y::Any...; z, w...)", repr)
 end
 let repr = sprint(show, "text/html", methods(f5971))
-    @test occursin("f5971(x, y...; <i>z, w...</i>)", repr)
+    @test occursin("f5971(x<b>::Any</b>, y<b>::Any...</b>; <i>z, w...</i>)", repr)
 end
 f16580(x, y...; z=1, w=y+x, q...) = nothing
 let repr = sprint(show, "text/html", methods(f16580))
-    @test occursin("f16580(x, y...; <i>z, w, q...</i>)", repr)
+    @test occursin("f16580(x<b>::Any</b>, y<b>::Any...</b>; <i>z, w, q...</i>)", repr)
 end
 
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
@@ -935,9 +935,9 @@ show_f2(x::Vararg{Any}) = [x...]
 show_f3(x::Vararg) = [x...]
 show_f4(x::Vararg{Any,3}) = [x...]
 show_f5(A::AbstractArray{T, N}, indices::Vararg{Int,N}) where {T, N} = [indices...]
-test_mt(show_f1, "show_f1(x...)")
-test_mt(show_f2, "show_f2(x...)")
-test_mt(show_f3, "show_f3(x...)")
+test_mt(show_f1, "show_f1(x::Any...)")
+test_mt(show_f2, "show_f2(x::Any...)")
+test_mt(show_f3, "show_f3(x::Any...)")
 test_mt(show_f4, "show_f4(x::Vararg{Any, 3})")
 test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 
@@ -1882,10 +1882,10 @@ function _methodsstr(f)
 end
 
 @testset "show function methods" begin
-    @test occursin("methods for generic function \"sin\":", _methodsstr(sin))
+    @test occursin("methods for generic function \"sin\" from Base:", _methodsstr(sin))
 end
 @testset "show macro methods" begin
-    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":")
+    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\" from Base:")
 end
 @testset "show constructor methods" begin
     @test occursin("methods for type constructor:\n", _methodsstr(Vector))
@@ -1905,7 +1905,7 @@ end
 @testset "#22798" begin
     buf = IOBuffer()
     show(buf, methods(f22798))
-    @test occursin("f22798(x::Integer, y)", String(take!(buf)))
+    @test occursin("f22798(x::Integer, y::Any)", String(take!(buf)))
 end
 
 @testset "Intrinsic printing" begin
@@ -2275,10 +2275,10 @@ end
     _show(io, x) = show(io, MIME(mime), x)
 
     @eval var","(x) = x
-    @test occursin("var\",\"(x)", sprint(_show, methods(var",")))
+    @test occursin("var\",\"(x::Any)", sprint(_show, methods(var",")))
 
     @eval f1(var"a.b") = 3
-    @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
+    @test occursin("f1(var\"a.b\"::Any)", sprint(_show, methods(f1)))
 
     italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
 
