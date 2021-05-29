@@ -2843,7 +2843,7 @@ function mapslices(f, A::AbstractArray; dims)
         res1[begin] = r1
     end
 
-    # Determine result size and allocate. We always pad ndims(res1) out to length(dims)    
+    # Determine result size and allocate. We always pad ndims(res1) out to length(dims):
     din = 0
     Rsize = ntuple(ndims(A)) do d
         if d in dims
@@ -2854,13 +2854,13 @@ function mapslices(f, A::AbstractArray; dims)
     end
     R = similar(res1, Rsize)
 
-    # Determine iteration space. It will be convenient in the loop to mask N-dimensional 
+    # Determine iteration space. It will be convenient in the loop to mask N-dimensional
     # CartesianIndices, with some trivial dimensions:
     dim_mask = ntuple(d -> d in dims, ndims(A))
     itershape = ifelse.(dim_mask, Ref(Base.OneTo(1)), axes(A))
     indices = Iterators.drop(CartesianIndices(itershape), 1)
 
-    # That skips the first element, which we already have: 
+    # That skips the first element, which we already have:
     ridx = ifelse.(dim_mask, Slice.(axes(R)), idx1)
     concatenate_setindex!(R, res1, ridx...)
 
@@ -2893,16 +2893,11 @@ end
             end
         end
     else
+        # we can't guarantee safety (#18524), so allocate new storage for each slice
         for I in indices
             idx = ifelse.(dim_mask, Slice.(axes(A)), Tuple(I))
-            r = f(A[idx...])
-            if r isa AbstractArray || must_extend
-                ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
-                concatenate_setindex!(R, r, ridx...)
-            else
-                ridx = ifelse.(dim_mask, first.(axes(R)), Tuple(I))
-                R[ridx...] = r
-            end
+            ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
+            concatenate_setindex!(R, f(A[idx...]), ridx...)
         end
     end
 end
