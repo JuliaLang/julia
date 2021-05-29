@@ -35,7 +35,7 @@ dotgetproperty(x, f) = getproperty(x, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
 
 # for closures
-function _typeof_prefer_singleton(Core.@nospecialize x)
+function _typeof_captured_variable(Core.@nospecialize x)
     if x isa DataType
         if x.layout === C_NULL
             return DataType
