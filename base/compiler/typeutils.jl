@@ -42,6 +42,8 @@ end
 
 has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
 
+has_concrete_subtype(d::DataType) = d.flags & 0x20 == 0x20
+
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
@@ -59,7 +61,7 @@ end
 # Compute the minimum number of initialized fields for a particular datatype
 # (therefore also a lower bound on the number of fields)
 function datatype_min_ninitialized(t::DataType)
-    t.name.abstract && return 0
+    isabstracttype(t) && return 0
     if t.name === NamedTuple_typename
         names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
