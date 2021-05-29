@@ -2778,47 +2778,58 @@ foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
 """
     mapslices(f, A; dims)
 
-Transform the given dimensions of array `A` using function `f`. `f` is called on each slice
-of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the
-colons go in this expression. The results are concatenated along the remaining dimensions.
-For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
-for all `i` and `j`.
+Transform the given dimensions of array `A` by applying a function `f` on each slice
+of the form `A[..., :, ..., :, ...]`, with a colon at each `d` in `dims`. The results are
+concatenated along the remaining dimensions.
 
-See also [`eachcol`](@ref), [`eachslice`](@ref).
+For example, if `dims = [1,2]` and `A` is 4-dimensional, then `f` is called on `x = A[:,:,i,j]`
+for all `i` and `j`, and `f(x)` becomes `R[:,:,i,j]` in the result `R`.
+
+See also [`eachcol`](@ref), [`eachslice`](@ref), [`mapreduce`](@ref).
 
 # Examples
 ```jldoctest
-julia> a = reshape(Vector(1:16),(2,2,2,2))
-2×2×2×2 Array{Int64, 4}:
-[:, :, 1, 1] =
- 1  3
- 2  4
+julia> A = reshape(1:30,(2,5,3))
+2×5×3 reshape(::UnitRange{$Int}, 2, 5, 3) with eltype Int64:
+[:, :, 1] =
+ 1  3  5  7   9
+ 2  4  6  8  10
 
-[:, :, 2, 1] =
- 5  7
- 6  8
+[:, :, 2] =
+ 11  13  15  17  19
+ 12  14  16  18  20
 
-[:, :, 1, 2] =
-  9  11
- 10  12
+[:, :, 3] =
+ 21  23  25  27  29
+ 22  24  26  28  30
 
-[:, :, 2, 2] =
- 13  15
- 14  16
+julia> f(x::Matrix) = fill(x[1,1], 1,4);  # returns a 1×4 matrix
 
-julia> mapslices(sum, a, dims = [1,2])
-1×1×2×2 Array{Int64, 4}:
-[:, :, 1, 1] =
- 10
+julia> mapslices(f, A, dims=(1,2))
+1×4×3 Array{$Int, 3}:
+[:, :, 1] =
+ 1  1  1  1
 
-[:, :, 2, 1] =
- 26
+[:, :, 2] =
+ 11  11  11  11
 
-[:, :, 1, 2] =
- 42
+[:, :, 3] =
+ 21  21  21  21
 
-[:, :, 2, 2] =
- 58
+julia> g(x) = x[begin] // x[end-1];  # returns a number
+
+julia> mapslices(g, A, dims=[1,3])
+1×5×1 Array{Rational{$Int}, 3}:
+[:, :, 1] =
+ 1//21  3//23  1//5  7//27  9//29
+
+julia> map(g, eachslice(A, dims=2))
+5-element Vector{Rational{$Int}}:
+ 1//21
+ 3//23
+ 1//5
+ 7//27
+ 9//29
 ```
 """
 function mapslices(f, A::AbstractArray; dims)
