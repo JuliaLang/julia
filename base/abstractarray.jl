@@ -2790,7 +2790,7 @@ See also [`eachcol`](@ref), [`eachslice`](@ref), [`mapreduce`](@ref).
 # Examples
 ```jldoctest
 julia> A = reshape(1:30,(2,5,3))
-2×5×3 reshape(::UnitRange{$Int}, 2, 5, 3) with eltype Int64:
+2×5×3 reshape(::UnitRange{$Int}, 2, 5, 3) with eltype $Int:
 [:, :, 1] =
  1  3  5  7   9
  2  4  6  8  10
@@ -2830,6 +2830,9 @@ julia> map(g, eachslice(A, dims=2))
  1//5
  7//27
  9//29
+
+julia> mapslices(sum, A; dims=(1,3)) == sum(A; dims=(1,3))
+true
 ```
 """
 function mapslices(f, A::AbstractArray; dims)
