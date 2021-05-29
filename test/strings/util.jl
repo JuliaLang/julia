@@ -355,6 +355,7 @@ end
     @test chopprefix("εfoo", "ε") == "foo"
     @test chopprefix("ofoε", "o") == "foε"
     @test chopprefix("∃∃∃∃", "∃") == "∃∃∃"
+    @test chopprefix("∃∃∃∃", "") == "∃∃∃∃"
 
     @test chopsuffix("fo∀\n", "bog") == "fo∀\n"
     @test chopsuffix("fo∀\n", "\n∀foΔ") == "fo∀\n"
@@ -376,6 +377,7 @@ end
     @test chopsuffix("fooε", "ε") == "foo"
     @test chopsuffix("εofo", "o") == "εof"
     @test chopsuffix("∃∃∃∃", "∃") == "∃∃∃"
+    @test chopsuffix("∃∃∃∃", "") == "∃∃∃∃"
 
     @test isa(chomp("foo"), SubString)
     @test isa(chop("foo"), SubString)

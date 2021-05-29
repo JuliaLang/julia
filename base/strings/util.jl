@@ -242,10 +242,10 @@ julia> chopsuffix("Hamburger", "hotdog")
 ```
 """
 function chopsuffix(s::AbstractString, suffix::AbstractString)
-    if endswith(s, suffix)
-        SubString(s, firstindex(s), prevind(s, lastindex(s), length(suffix)))
-    else
+    if isempty(s) || !endswith(s, suffix)
         SubString(s)
+    else
+        SubString(s, firstindex(s), prevind(s, lastindex(s), length(suffix)))
     end
 end
 
