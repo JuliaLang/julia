@@ -24,7 +24,7 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # if you are adding a new target, it can help to copy an similar, existing target
 #
 # autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
-# custom Makefile rules: openlibm dsfmt libsuitesparse-wrapper libsuitesparse lapack blastrampoline openblas utf8proc objconv libwhich
+# custom Makefile rules: openlibm dsfmt libsuitesparse lapack blastrampoline openblas utf8proc objconv libwhich
 # CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls
 #
 # downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
@@ -44,10 +44,6 @@ DEP_LIBS += blastrampoline
 
 ifeq ($(USE_SYSTEM_CSL), 0)
 DEP_LIBS += csl
-endif
-
-ifeq ($(USE_GPL_LIBS), 1)
-DEP_LIBS += libsuitesparse-wrapper
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
@@ -166,13 +162,11 @@ ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
 endif
 
-DEP_LIBS_STAGED := $(filter-out libsuitesparse-wrapper,$(DEP_LIBS))
-
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	libsuitesparse libsuitesparse-wrapper
+	libsuitesparse
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)

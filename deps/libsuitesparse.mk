@@ -42,13 +42,9 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted: $(SRCCACHE)/Suit
 checksum-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SuiteSparse-winclang.patch-applied: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
-	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/SuiteSparse-winclang.patch
-	echo 1 > $@
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SuiteSparse-shlib.patch-applied: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/SuiteSparse-shlib.patch
 	echo 1 > $@
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SuiteSparse-shlib.patch-applied
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
@@ -83,13 +79,13 @@ $(build_prefix)/manifest/libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARS
 	#cp -a $(dir $<)include/* $(build_includedir)
 	echo $(UNINSTALL_libsuitesparse) > $@
 
-clean-libsuitesparse: clean-suitesparse-wrapper uninstall-libsuitesparse
+clean-libsuitesparse: uninstall-libsuitesparse
 	-rm $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 	-rm -fr $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/lib
 	-rm -fr $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/include
 	-$(MAKE) -C $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER) clean
 
-distclean-libsuitesparse: clean-libsuitesparse-wrapper
+distclean-libsuitesparse:
 	-rm -rf $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz \
 		$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)
 
@@ -99,51 +95,11 @@ configure-libsuitesparse: extract-libsuitesparse
 compile-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 fastcheck-libsuitesparse: #none
 check-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked
-install-libsuitesparse: $(build_prefix)/manifest/libsuitesparse install-libsuitesparse-wrapper
-
-# LIBSUITESPARSE WRAPPER
-
-ifeq ($(USE_SYSTEM_LIBSUITESPARSE), 1)
-LIBSUITESPARSE_INC := -I $(LOCALBASE)/include/suitesparse
-LIBSUITESPARSE_LIB := -lumfpack -lcholmod -lamd -lcamd -lcolamd -lspqr
-else
-LIBSUITESPARSE_INC := -I $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/CHOLMOD/Include -I $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SuiteSparse_config -I $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SPQR/Include
-LIBSUITESPARSE_LIB := -L$(build_shlibdir) -lcholmod -lumfpack -lspqr $(RPATH_ORIGIN)
-$(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT): $(build_prefix)/manifest/libsuitesparse
-endif
-
-$(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT): $(SRCDIR)/SuiteSparse_wrapper.c
-	mkdir -p $(build_shlibdir)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(LIBSUITESPARSE_INC) $< -o $@ $(LIBSUITESPARSE_LIB)
-	$(INSTALL_NAME_CMD)libsuitesparse_wrapper.$(SHLIB_EXT) $@
-	touch -c $@
-
-clean-libsuitesparse-wrapper:
-	-rm -f $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT)
-
-distclean-libsuitesparse-wrapper: clean-suitesparse-wrapper
-
-get-libsuitesparse-wrapper:
-extract-libsuitesparse-wrapper:
-configure-libsuitesparse-wrapper:
-compile-libsuitesparse-wrapper:
-fastcheck-libsuitesparse-wrapper: #none
-check-libsuitesparse-wrapper:
-install-libsuitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT)
+install-libsuitesparse: $(build_prefix)/manifest/libsuitesparse
 
 else # USE_BINARYBUILDER_LIBSUITESPARSE
 
 $(eval $(call bb-install,libsuitesparse,LIBSUITESPARSE,false))
-
-get-libsuitesparse-wrapper: get-libsuitesparse
-extract-libsuitesparse-wrapper: extract-libsuitesparse
-configure-libsuitesparse-wrapper: configure-libsuitesparse
-compile-libsuitesparse-wrapper: compile-libsuitesparse
-fastcheck-libsuitesparse-wrapper: fastcheck-libsuitesparse
-check-libsuitesparse-wrapper: check-libsuitesparse
-clean-libsuitesparse-wrapper: clean-libsuitesparse
-distclean-libsuitesparse-wrapper: distclean-libsuitesparse
-install-libsuitesparse-wrapper: install-libsuitesparse
 
 # libsuitesparse depends on blastrampoline
 compile-libsuitesparse: | $(build_prefix)/manifest/blastrampoline
