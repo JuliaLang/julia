@@ -431,7 +431,9 @@
          (body  (blockify body))
          (ftype (decl-type (car pargl)))
          ;; 1-element list of vararg argument, or empty if none
-         (vararg (let ((l (if (null? pargl) '() (last pargl))))
+         (vararg (let* ((l (if (null? pargl) '() (last pargl)))
+                        ;; handle vararg with default value
+                        (l (if (kwarg? l) (cadr l) l)))
                    (if (or (vararg? l) (varargexpr? l))
                        (list l) '())))
          ;; positional args with vararg

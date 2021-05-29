@@ -374,3 +374,9 @@ using InteractiveUtils
 no_kw_args(x::Int) = 0
 @test_throws MethodError no_kw_args(1, k=1)
 @test_throws MethodError no_kw_args("", k=1)
+
+# issue #40964
+f40964(xs::Int...=1; k = 2) = (xs, k)
+@test f40964() === ((1,), 2)
+@test f40964(7, 8) === ((7,8), 2)
+@test f40964(7, 8, k=0) === ((7,8), 0)

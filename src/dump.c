@@ -277,9 +277,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             | (dt->isdispatchtuple << 2)
             | (dt->isbitstype << 3)
             | (dt->zeroinit << 4)
-            | (dt->isinlinealloc << 5)
-            | (dt->has_concrete_subtype << 6)
-            | (dt->cached_by_hash << 7));
+            | (dt->has_concrete_subtype << 5)
+            | (dt->cached_by_hash << 6));
     if (!dt->name->abstract) {
         write_uint16(s->s, dt->ninitialized);
     }
@@ -816,7 +815,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, tn->wrapper);
                 jl_serialize_value(s, tn->mt);
                 ios_write(s->s, (char*)&tn->hash, sizeof(tn->hash));
-                write_uint8(s->s, tn->abstract | (tn->mutabl << 1) | (tn->references_self << 2));
+                write_uint8(s->s, tn->abstract | (tn->mutabl << 1) | (tn->references_self << 2) | (tn->mayinlinealloc << 3));
             }
             return;
         }
@@ -1277,9 +1276,8 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->isdispatchtuple = (memflags >> 2) & 1;
     dt->isbitstype = (memflags >> 3) & 1;
     dt->zeroinit = (memflags >> 4) & 1;
-    dt->isinlinealloc = (memflags >> 5) & 1;
-    dt->has_concrete_subtype = (memflags >> 6) & 1;
-    dt->cached_by_hash = (memflags >> 7) & 1;
+    dt->has_concrete_subtype = (memflags >> 5) & 1;
+    dt->cached_by_hash = (memflags >> 6) & 1;
     if (abstract)
         dt->ninitialized = 0;
     else
@@ -1737,6 +1735,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             tn->abstract = flags & 1;
             tn->mutabl = (flags>>1) & 1;
             tn->references_self = (flags>>2) & 1;
+            tn->mayinlinealloc = (flags>>3) & 1;
         }
         else {
             jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(jl_get_global(m, sym));

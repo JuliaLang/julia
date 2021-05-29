@@ -57,6 +57,7 @@ New library functions
 * New functor `Returns(value)`, which returns `value` for any arguments ([#39794])
 * New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
 * New macros `@something` and `@coalesce` which are short-circuiting versions of `something` and `coalesce`, respectively ([#40729])
+* New function `redirect_stdio` for redirecting `stdin`, `stdout` and `stderr` ([#37978]).
 
 New library features
 --------------------
@@ -114,6 +115,10 @@ Standard library changes
 * The shape of an `UpperHessenberg` matrix is preserved under certain arithmetic operations, e.g. when multiplying or dividing by an `UpperTriangular` matrix. ([#40039])
 * `cis(A)` now supports matrix arguments ([#40194]).
 * `dot` now supports `UniformScaling` with `AbstractMatrix` ([#40250]).
+* `qr[!]` and `lu[!]` now support `LinearAlgebra.PivotingStrategy` (singleton type) values
+  as their optional `pivot` argument: defaults are `qr(A, NoPivot())` (vs.
+  `qr(A, ColumnNorm())` for pivoting) and `lu(A, RowMaximum())` (vs. `lu(A, NoPivot())`
+  without pivoting); the former `Val{true/false}`-based calls are deprecated. ([#40623])
 * `det(M::AbstractMatrix{BigInt})` now calls `det_bareiss(M)`, which uses the [Bareiss](https://en.wikipedia.org/wiki/Bareiss_algorithm) algorithm to calculate precise values.([#40868]).
 
 #### Markdown

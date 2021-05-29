@@ -322,7 +322,7 @@ run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
 With an I/O stream parameter `io`, the result will be written there,
 rather than returned as a string.
 
-See also: [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref)
+See also [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref).
 
 # Example
 ```jldoctest
@@ -376,7 +376,7 @@ It joins command-line arguments to be passed to a Windows
 C/C++/Julia application into a command line, escaping or quoting the
 meta characters space, TAB, double quote and backslash where needed.
 
-See also: [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref)
+See also [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref).
 """
 function escape_microsoft_c_args(io::IO, args::AbstractString...)
     # http://daviddeley.com/autohotkey/parameters/parameters.htm#WINCRULES

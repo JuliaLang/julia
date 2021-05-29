@@ -2740,7 +2740,7 @@ mapany(f, itr) = Any[f(x) for x in itr]
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise, and stop when when any of them is exhausted.
 
-See also: [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
+See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
 # Examples
 ```jldoctest
