@@ -377,6 +377,9 @@ _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
     _mapreduce(f, op, IndexStyle(A), A)
 
+_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
+    mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
+
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
