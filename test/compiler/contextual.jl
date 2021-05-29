@@ -116,7 +116,7 @@ f() = 2
 @test overdub(Ctx(), gcd, 10, 20) === gcd(10, 20)
 
 # Test that pure propagates for Cassette
-Base.@pure isbitstype(T) = T.isbitstype
+Base.@pure isbitstype(T) = Base.isbitstype(T)
 f31012(T) = Val(isbitstype(T))
 @test @inferred(overdub(Ctx(), f31012, Int64)) == Val(true)
 

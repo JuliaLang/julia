@@ -437,13 +437,14 @@ typedef struct {
     jl_value_t *wrapper;
     jl_svec_t *cache;        // sorted array
     jl_svec_t *linearcache;  // unsorted array
-    intptr_t hash;
-    int32_t n_uninitialized;
-    uint8_t abstract;
-    uint8_t mutabl;
-    uint8_t mayinlinealloc;
     struct _jl_methtable_t *mt;
     jl_array_t *partial;     // incomplete instantiations of this type
+    intptr_t hash;
+    int32_t n_uninitialized;
+    // type properties
+    uint8_t abstract:1;
+    uint8_t mutabl:1;
+    uint8_t mayinlinealloc:1;
 } jl_typename_t;
 
 typedef struct {
@@ -499,15 +500,15 @@ typedef struct _jl_datatype_t {
     jl_value_t *instance;  // for singletons
     const jl_datatype_layout_t *layout;
     int32_t size; // TODO: move to _jl_datatype_layout_t
-    uint32_t hash;
     // memoized properties
-    uint8_t hasfreetypevars; // majority part of isconcrete computation
-    uint8_t isconcretetype; // whether this type can have instances
-    uint8_t isdispatchtuple; // aka isleaftupletype
-    uint8_t isbitstype; // relevant query for C-api and type-parameters
-    uint8_t zeroinit; // if one or more fields requires zero-initialization
-    uint8_t has_concrete_subtype; // If clear, no value will have this datatype
-    uint8_t cached_by_hash; // stored in hash-based set cache (instead of linear cache)
+    uint32_t hash;
+    uint8_t hasfreetypevars:1; // majority part of isconcrete computation
+    uint8_t isconcretetype:1; // whether this type can have instances
+    uint8_t isdispatchtuple:1; // aka isleaftupletype
+    uint8_t isbitstype:1; // relevant query for C-api and type-parameters
+    uint8_t zeroinit:1; // if one or more fields requires zero-initialization
+    uint8_t has_concrete_subtype:1; // If clear, no value will have this datatype
+    uint8_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {

@@ -7530,7 +7530,7 @@ end
 struct S38224
     i::Union{Int,Missing}
 end
-@test S38224.zeroinit
+@test S38224.flags & 0x10 == 0x10 # .zeroinit
 for _ in 1:5
     let a = Vector{S38224}(undef, 1000000)
         @test all(x->ismissing(x.i), a)

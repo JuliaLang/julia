@@ -987,23 +987,12 @@ static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
     Value *Idx = ConstantInt::get(T_size, offsetof(jl_datatype_t, name));
     Value *Nam = tbaa_decorate(tbaa_const,
             ctx.builder.CreateAlignedLoad(T_pint8, ctx.builder.CreateInBoundsGEP(T_pint8, Ptr, Idx), Align(sizeof(int8_t*))));
-    Value *Idx2 = ConstantInt::get(T_size, offsetof(jl_typename_t, name));
+    Value *Idx2 = ConstantInt::get(T_size, offsetof(jl_typename_t, n_uninitialized) + sizeof(((jl_typename_t*)nullptr)->n_uninitialized));
     Value *mutabl = tbaa_decorate(tbaa_const,
             ctx.builder.CreateAlignedLoad(T_int8, ctx.builder.CreateInBoundsGEP(T_int8, Nam, Idx2), Align(1)));
+    mutabl = ctx.builder.CreateLShr(mutabl, 1);
     return ctx.builder.CreateTrunc(mutabl, T_int1);
 }
-
-/* this is valid code, it's simply unused
-static Value *emit_datatype_abstract(jl_codectx_t &ctx, Value *dt)
-{
-    Value *Ptr = emit_bitcast(ctx, decay_derived(ctx, dt), T_pint8);
-    Value *Idx = ConstantInt::get(T_size, offsetof(jl_datatype_t, abstract));
-
-    Value *abstract = tbaa_decorate(tbaa_const,
-            ctx.builder.CreateAlignedLoad(T_int8, ctx.builder.CreateInBoundsGEP(T_int8, Ptr, Idx), Align(1)));
-    return ctx.builder.CreateTrunc(abstract, T_int1);
-}
-*/
 
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *dt)
 {
@@ -1297,8 +1286,9 @@ static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *t
 static Value *emit_isconcrete(jl_codectx_t &ctx, Value *typ)
 {
     Value *isconcrete;
-    isconcrete = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(ctx, decay_derived(ctx, typ), T_pint8), offsetof(jl_datatype_t, isconcretetype));
+    isconcrete = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(ctx, decay_derived(ctx, typ), T_pint8), offsetof(jl_datatype_t, hash) + sizeof(((jl_datatype_t*)nullptr)->hash));
     isconcrete = tbaa_decorate(tbaa_const, ctx.builder.CreateAlignedLoad(T_int8, isconcrete, Align(1)));
+    isconcrete = ctx.builder.CreateLShr(isconcrete, 1);
     isconcrete = ctx.builder.CreateTrunc(isconcrete, T_int1);
     return isconcrete;
 }

@@ -53,7 +53,7 @@ end
 function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
     nf = nfields(x)
-    if T.name.mutable
+    if ismutable(x)
         if haskey(stackdict, x)
             return stackdict[x]
         end
