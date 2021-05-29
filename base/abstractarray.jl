@@ -2822,28 +2822,48 @@ julia> mapslices(sum, a, dims = [1,2])
 ```
 """
 function mapslices(f, A::AbstractArray; dims)
-    if isempty(dims)
-        return map(f,A)
-    end
-    if !isa(dims, AbstractVector)
-        dims = [dims...]
-    end
-
-    dimsA = [axes(A)...]
-    ndimsA = ndims(A)
-    alldims = [1:ndimsA;]
-
-    otherdims = setdiff(alldims, dims)
-
-    idx = Any[first(ind) for ind in axes(A)]
-    itershape   = tuple(dimsA[otherdims]...)
-    for d in dims
-        idx[d] = Slice(axes(A, d))
-    end
+    isempty(dims) && return map(f, A)
 
     # Apply the function to the first slice in order to determine the next steps
-    Aslice = A[idx...]
+    idx1 = ntuple(d -> d in dims ? (:) : firstindex(A,d), ndims(A))
+    Aslice = A[idx1...]
     r1 = f(Aslice)
+
+    if r1 isa AbstractArray && ndims(r1) > 0
+        # Could easily allow for ndims(res1) > length(dims), at least when size is 1,
+        # but for now we don't, to match old behaviour:
+        ndims(r1) > length(dims) && throw(DimensionMismatch(
+            "got ndims(f(x)) = $(ndims(r1)), expected no larger than length(dims) = $(length(dims))"))
+        res1 = r1
+    else
+        # If the result of f on a single slice is a scalar then we add singleton
+        # dimensions. When adding the dimensions, we have to respect the
+        # index type of the input array (e.g. in the case of OffsetArrays)
+        res1 = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
+        res1[begin] = r1
+    end
+
+    # Determine result size and allocate. We always pad ndims(res1) out to length(dims)    
+    din = 0
+    Rsize = ntuple(ndims(A)) do d
+        if d in dims
+            axes(res1, din += 1)
+        else
+            axes(A,d)
+        end
+    end
+    R = similar(res1, Rsize)
+
+    # Determine iteration space. It will be convenient in the loop to mask N-dimensional 
+    # CartesianIndices, with some trivial dimensions:
+    dim_mask = ntuple(d -> d in dims, ndims(A))
+    itershape = ifelse.(dim_mask, Ref(Base.OneTo(1)), axes(A))
+    indices = Iterators.drop(CartesianIndices(itershape), 1)
+
+    # That skips the first element, which we already have: 
+    ridx = ifelse.(dim_mask, Slice.(axes(R)), idx1)
+    concatenate_setindex!(R, res1, ridx...)
+
     # In some cases, we can re-use the first slice for a dramatic performance
     # increase. The slice itself must be mutable and the result cannot contain
     # any mutable containers. The following errs on the side of being overly
@@ -2851,60 +2871,26 @@ function mapslices(f, A::AbstractArray; dims)
     safe_for_reuse = isa(Aslice, StridedArray) &&
                      (isa(r1, Number) || (isa(r1, AbstractArray) && eltype(r1) <: Number))
 
-    # determine result size and allocate
-    Rsize = copy(dimsA)
-    # TODO: maybe support removing dimensions
-    if !isa(r1, AbstractArray) || ndims(r1) == 0
-        # If the result of f on a single slice is a scalar then we add singleton
-        # dimensions. When adding the dimensions, we have to respect the
-        # index type of the input array (e.g. in the case of OffsetArrays)
-        tmp = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
-        tmp[firstindex(tmp)] = r1
-        r1 = tmp
-    end
-    nextra = max(0, length(dims)-ndims(r1))
-    if eltype(Rsize) == Int
-        Rsize[dims] = [size(r1)..., ntuple(Returns(1), nextra)...]
-    else
-        Rsize[dims] = [axes(r1)..., ntuple(Returns(OneTo(1)), nextra)...]
-    end
-    R = similar(r1, tuple(Rsize...,))
-
-    ridx = Any[map(first, axes(R))...]
-    for d in dims
-        ridx[d] = axes(R,d)
-    end
-
-    concatenate_setindex!(R, r1, ridx...)
-
-    nidx = length(otherdims)
-    indices = Iterators.drop(CartesianIndices(itershape), 1) # skip the first element, we already handled it
-    inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
+    inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
+    return R
 end
 
-@noinline function inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
+@noinline function inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
         for I in indices
-            replace_tuples!(nidx, idx, ridx, otherdims, I)
+            idx = ifelse.(dim_mask, Slice.(axes(A)), Tuple(I))
+            ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
             _unsafe_getindex!(Aslice, A, idx...)
             concatenate_setindex!(R, f(Aslice), ridx...)
         end
     else
-        # we can't guarantee safety (#18524), so allocate new storage for each slice
         for I in indices
-            replace_tuples!(nidx, idx, ridx, otherdims, I)
+            idx = ifelse.(dim_mask, Slice.(axes(A)), Tuple(I))
+            ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
             concatenate_setindex!(R, f(A[idx...]), ridx...)
         end
-    end
-
-    return R
-end
-
-function replace_tuples!(nidx, idx, ridx, otherdims, I)
-    for i in 1:nidx
-        idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
     end
 end
 
