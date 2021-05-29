@@ -392,7 +392,7 @@ end
             end
 
             @testset "QRPivoted" begin
-                F = LinearAlgebra.qr(A, Val(true))
+                F = LinearAlgebra.qr(A, ColumnNorm())
                 x = F'\b
                 @test x ≈ A'\b
                 @test length(size(x)) == length(size(b))
@@ -402,8 +402,8 @@ end
         @test_throws DimensionMismatch("arguments must have the same number of rows") qr(randn(n, n + 1))'\b
         @test_throws DimensionMismatch("overdetermined systems are not supported")    LinearAlgebra.qrfactUnblocked!(randn(n - 2, n))'\b
         @test_throws DimensionMismatch("arguments must have the same number of rows") LinearAlgebra.qrfactUnblocked!(randn(n, n + 1))'\b
-        @test_throws DimensionMismatch("overdetermined systems are not supported")    qr(randn(n - 2, n), Val(true))'\b
-        @test_throws DimensionMismatch("arguments must have the same number of rows") qr(randn(n, n + 1), Val(true))'\b
+        @test_throws DimensionMismatch("overdetermined systems are not supported")    qr(randn(n - 2, n), ColumnNorm())'\b
+        @test_throws DimensionMismatch("arguments must have the same number of rows") qr(randn(n, n + 1), ColumnNorm())'\b
     end
 end
 
