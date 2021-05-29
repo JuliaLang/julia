@@ -107,10 +107,19 @@ julia> reshape(1:6, 2, 3)
 """
 reshape
 
-reshape(parent::AbstractArray, dims::Union{Integer, AbstractUnitRange{<:Integer}}...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Union{Integer, AbstractUnitRange{<:Integer}, Colon}...) = reshape(parent, dims)
 reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
-reshape(parent::AbstractArray, shp::Tuple{Union{Integer, AbstractUnitRange{<:Integer}}, Vararg{Union{Integer, AbstractUnitRange{<:Integer}}}}) =
-    reshape(parent, map(OneTo, shp))
+reshape(parent::AbstractArray, shp::Tuple) = reshape(parent, map(_toshape, shp)::Tuple{Vararg{Union{Int,Colon}}})
+
+@inline function _toshape(r::AbstractUnitRange{<:Integer})
+    @noinline throw(r) = "range arguments to reshape must begin at 1, received $r"
+    first(r) == 1 || throw(r)
+    to_shape(OneTo(r))
+end
+_toshape(r::Integer) = to_shape(r)
+_toshape(x::Colon) = x
+_toshape(x) = throw(ArgumentError("reshape accepts Integers, AbstractUnitRanges or Colons as arguments, received $x"))
+
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
