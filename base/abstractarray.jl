@@ -2876,20 +2876,33 @@ function mapslices(f, A::AbstractArray; dims)
 end
 
 @noinline function inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
+    must_extend = any(dim_mask .& size(R) .> 1)
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
         for I in indices
             idx = ifelse.(dim_mask, Slice.(axes(A)), Tuple(I))
-            ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
             _unsafe_getindex!(Aslice, A, idx...)
-            concatenate_setindex!(R, f(Aslice), ridx...)
+            r = f(Aslice)
+            if r isa AbstractArray || must_extend
+                ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
+                R[ridx...] = r
+            else
+                ridx = ifelse.(dim_mask, first.(axes(R)), Tuple(I))
+                R[ridx...] = r
+            end
         end
     else
         for I in indices
             idx = ifelse.(dim_mask, Slice.(axes(A)), Tuple(I))
-            ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
-            concatenate_setindex!(R, f(A[idx...]), ridx...)
+            r = f(A[idx...])
+            if r isa AbstractArray || must_extend
+                ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
+                concatenate_setindex!(R, r, ridx...)
+            else
+                ridx = ifelse.(dim_mask, first.(axes(R)), Tuple(I))
+                R[ridx...] = r
+            end
         end
     end
 end
