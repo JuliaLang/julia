@@ -488,14 +488,6 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
 (/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
     rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
 
-(\)(F::Factorization, D::Diagonal) =
-    ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
-\(adjF::Adjoint{<:Any,<:Factorization}, D::Diagonal) =
-    (F = adjF.parent; ldiv!(adjoint(F), Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
-(\)(A::Union{QR,QRCompactWY,QRPivoted}, B::Diagonal) =
-    invoke(\, Tuple{Union{QR,QRCompactWY,QRPivoted}, AbstractVecOrMat}, A, B)
-
-
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
     valA = A.diag; nA = length(valA)
     valB = B.diag; nB = length(valB)

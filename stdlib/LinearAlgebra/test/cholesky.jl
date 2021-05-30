@@ -475,4 +475,12 @@ end
     end
 end
 
+@testset "adjoint of Cholesky" begin
+    A = randn(5, 5)
+    A = A'A
+    F = cholesky(A)
+    b = ones(size(A, 1))
+    @test F\b == F'\b
+end
+
 end # module TestCholesky

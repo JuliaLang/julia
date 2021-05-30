@@ -217,4 +217,24 @@ end
     @test Uc * diagm(0=>Sc) * transpose(V) ≈ complex.(A) rtol=1e-3
 end
 
+@testset "adjoint of SVD" begin
+    n = 5
+    B = randn(5, 2)
+
+    @testset "size(b)=$(size(b))" for b in (B[:, 1], B)
+        @testset "size(A)=$(size(A))" for A in (
+            randn(n, n),
+            # Wide problems become minimum norm (in x) problems similarly to LQ
+            randn(n + 2, n),
+            randn(n - 2, n),
+            complex.(randn(n, n), randn(n, n)))
+
+            F = svd(A)
+            x = F'\b
+            @test x ≈ A'\b
+            @test length(size(x)) == length(size(b))
+        end
+    end
+end
+
 end # module TestSVD
