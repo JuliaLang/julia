@@ -193,7 +193,7 @@ end
 (\)(x::Number, D::Diagonal) = Diagonal(x \ D.diag)
 (^)(D::Diagonal, a::Number) = Diagonal(D.diag .^ a)
 (^)(D::Diagonal, a::Real) = Diagonal(D.diag .^ a) # for disambiguation
-(^)(D::Diagonal, a::Integer) = Base.literal_pow(^, D, Val(a)) # for disambiguation
+(^)(D::Diagonal, a::Integer) = Diagonal(D.diag .^ a) # for disambiguation
 Base.literal_pow(::typeof(^), D::Diagonal, valp::Val) =
     Diagonal(Base.literal_pow.(^, D.diag, valp)) # for speed
 Base.literal_pow(::typeof(^), D::Diagonal, ::Val{-1}) = inv(D) # for disambiguation

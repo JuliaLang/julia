@@ -182,8 +182,11 @@ Random.seed!(1)
                 @test Array(D^a) ≈ DM^a
             end
             @test Diagonal(1:100)^2 == Diagonal((1:100).^2)
+            p = 3
+            @test Diagonal(1:100)^p == Diagonal((1:100).^p)
             @test Diagonal(1:100)^(-1) == Diagonal(inv.(1:100))
             @test Diagonal(1:100)^2.0 == Diagonal((1:100).^2.0)
+            @test Diagonal(1:100)^(2.0+0im) == Diagonal((1:100).^(2.0+0im))
         end
 
         if relty <: BlasFloat
