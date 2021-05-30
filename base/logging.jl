@@ -133,9 +133,29 @@ isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
 const BelowMinLevel = LogLevel(-1000001)
+"""
+    Debug
+
+Alias for [`LogLevel(-1000)`](@ref LogLevel).
+"""
 const Debug         = LogLevel(   -1000)
+"""
+    Info
+
+Alias for [`LogLevel(0)`](@ref LogLevel).
+"""
 const Info          = LogLevel(       0)
+"""
+    Warn
+
+Alias for [`LogLevel(1000)`](@ref LogLevel).
+"""
 const Warn          = LogLevel(    1000)
+"""
+    Error
+
+Alias for [`LogLevel(2000)`](@ref LogLevel).
+"""
 const Error         = LogLevel(    2000)
 const AboveMaxLevel = LogLevel( 1000001)
 
