@@ -605,4 +605,16 @@ end
     end
 end
 
+@testset "adjoint of LDLt" begin
+    Sr = SymTridiagonal(randn(5), randn(4))
+    Sc = SymTridiagonal(complex.(randn(5)) .+ 1im, complex.(randn(4), randn(4)))
+    b = ones(size(Sr, 1))
+
+    F = ldlt(Sr)
+    @test F\b == F'\b
+
+    F = ldlt(Sc)
+    @test copy(Sc')\b == F'\b
+end
+
 end # module TestTridiagonal

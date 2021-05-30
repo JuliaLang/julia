@@ -212,11 +212,8 @@ end
 
 @testset "transpose errors" begin
     @test_throws MethodError transpose(qr(randn(3,3)))
-    @test_throws MethodError adjoint(qr(randn(3,3)))
     @test_throws MethodError transpose(qr(randn(3,3), NoPivot()))
-    @test_throws MethodError adjoint(qr(randn(3,3), NoPivot()))
     @test_throws MethodError transpose(qr(big.(randn(3,3))))
-    @test_throws MethodError adjoint(qr(big.(randn(3,3))))
 end
 
 @testset "Issue 7304" begin
@@ -366,6 +363,47 @@ end
         dest3 = PermutedDimsArray(similar(Q), (2, 1))
         copyto!(dest3, Q)
         @test dest3 ≈ Qmat
+    end
+end
+
+@testset "adjoint of QR" begin
+    n = 5
+    B = randn(5, 2)
+
+    @testset "size(b)=$(size(b))" for b in (B[:, 1], B)
+        @testset "size(A)=$(size(A))" for A in (
+            randn(n, n),
+            # Wide problems become minimum norm (in x) problems similarly to LQ
+            randn(n + 2, n),
+            complex.(randn(n, n), randn(n, n)))
+
+            @testset "QRCompactWY" begin
+                F = qr(A)
+                x = F'\b
+                @test x ≈ A'\b
+                @test length(size(x)) == length(size(b))
+            end
+
+            @testset "QR" begin
+                F = LinearAlgebra.qrfactUnblocked!(copy(A))
+                x = F'\b
+                @test x ≈ A'\b
+                @test length(size(x)) == length(size(b))
+            end
+
+            @testset "QRPivoted" begin
+                F = LinearAlgebra.qr(A, ColumnNorm())
+                x = F'\b
+                @test x ≈ A'\b
+                @test length(size(x)) == length(size(b))
+            end
+        end
+        @test_throws DimensionMismatch("overdetermined systems are not supported")    qr(randn(n - 2, n))'\b
+        @test_throws DimensionMismatch("arguments must have the same number of rows") qr(randn(n, n + 1))'\b
+        @test_throws DimensionMismatch("overdetermined systems are not supported")    LinearAlgebra.qrfactUnblocked!(randn(n - 2, n))'\b
+        @test_throws DimensionMismatch("arguments must have the same number of rows") LinearAlgebra.qrfactUnblocked!(randn(n, n + 1))'\b
+        @test_throws DimensionMismatch("overdetermined systems are not supported")    qr(randn(n - 2, n), ColumnNorm())'\b
+        @test_throws DimensionMismatch("arguments must have the same number of rows") qr(randn(n, n + 1), ColumnNorm())'\b
     end
 end
 
