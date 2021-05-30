@@ -516,7 +516,7 @@ function get_deps(raw_manifest::Dict)
         return raw_manifest
     else
         # if the manifest has no deps, there won't be a `deps` field
-        return get(raw_manifest, "deps", Dict{String, Any}())
+        return get(Dict{String, Any}, raw_manifest, "deps")
     end
 end
 
