@@ -565,7 +565,7 @@ exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
 """
     cis(A::AbstractMatrix)
 
-Same as `exp(im*A)`, this computes ``\\exp(i A)`` for a square matrix ``A``,
+Equivalent to `exp(im*A)`, this computes ``\\exp(i A)`` for a square matrix ``A``,
 but is typically faster, especially if `A` is `Hermitian` or real-`Symmetric`.
 
 See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref).
