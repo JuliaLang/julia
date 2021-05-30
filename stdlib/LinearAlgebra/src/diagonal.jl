@@ -456,7 +456,7 @@ function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
     A
 end
 
-function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+function rdiv!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
     dd = D.diag
     m, n = size(A)
