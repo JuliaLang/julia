@@ -403,6 +403,28 @@ Random.seed!(1)
 
 end
 
+@testset "rdiv! (#40887)" begin
+    @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
+    @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
+end
+
+@testset "kron (issue #40595)" begin
+    # custom array type to test that kron on Diagonal matrices preserves types of the parents if possible
+    struct KronTestArray{T, N, AT} <: AbstractArray{T, N}
+        data::AT
+    end
+    KronTestArray(data::AbstractArray) = KronTestArray{eltype(data), ndims(data), typeof(data)}(data)
+    Base.size(A::KronTestArray) = size(A.data)
+    LinearAlgebra.kron(A::KronTestArray, B::KronTestArray) = KronTestArray(kron(A.data, B.data))
+    Base.getindex(K::KronTestArray{<:Any,N}, i::Vararg{Int,N}) where {N} = K.data[i...]
+
+    A = KronTestArray([1, 2, 3]);
+    @test kron(A, A) isa KronTestArray
+    Ad = Diagonal(A);
+    @test kron(Ad, Ad).diag isa KronTestArray
+    @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
+end
+
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
@@ -548,7 +570,7 @@ end
     D = Diagonal(randn(5))
     Q = qr(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
-    Q = qr(randn(5, 5), Val(true)).Q
+    Q = qr(randn(5, 5), ColumnNorm()).Q
     @test_throws ArgumentError lmul!(Q, D)
 end
 
@@ -662,13 +684,15 @@ end
     @test yt*D*y == (yt*D)*y == (yt*A)*y
 end
 
-@testset "Multiplication of single element Diagonal (#36746)" begin
+@testset "Multiplication of single element Diagonal (#36746, #40726)" begin
     @test_throws DimensionMismatch Diagonal(randn(1)) * randn(5)
     @test_throws DimensionMismatch Diagonal(randn(1)) * Diagonal(randn(3, 3))
     A = [1 0; 0 2]
     v = [3, 4]
     @test Diagonal(A) * v == A * v
     @test Diagonal(A) * Diagonal(A) == A * A
+    @test_throws DimensionMismatch [1 0;0 1] * Diagonal([2 3])   # Issue #40726
+    @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
 end
 
 @testset "Triangular division by Diagonal #27989" begin

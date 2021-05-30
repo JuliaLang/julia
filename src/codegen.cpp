@@ -920,11 +920,11 @@ static bool jl_is_pointerfree(jl_value_t* t)
 
 // these queries are usually related, but we split them out here
 // for convenience and clarity (and because it changes the calling convention)
-static bool deserves_stack(jl_value_t* t, bool pointerfree=false)
+static bool deserves_stack(jl_value_t* t)
 {
     if (!jl_is_concrete_immutable(t))
         return false;
-    return ((jl_datatype_t*)t)->isinlinealloc;
+    return jl_datatype_isinlinealloc((jl_datatype_t*)t, 0);
 }
 static bool deserves_argbox(jl_value_t* t)
 {
@@ -1362,7 +1362,7 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
             if (jl_is_concrete_type(utyp))
                 alwaysboxed = !jl_is_pointerfree(utyp);
             else
-                alwaysboxed = !((jl_datatype_t*)utyp)->abstract && ((jl_datatype_t*)utyp)->mutabl;
+                alwaysboxed = !((jl_datatype_t*)utyp)->name->abstract && ((jl_datatype_t*)utyp)->name->mutabl;
             if (alwaysboxed) {
                 // discovered that this union-split type must actually be isboxed
                 if (v.Vboxed) {
@@ -1689,7 +1689,7 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", dwarf_version);
     }
     if (!m->getModuleFlag("Debug Info Version"))
-        m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
+        m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(jl_data_layout);
     m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
@@ -1718,13 +1718,9 @@ static void jl_init_function(Function *F)
     F->setHasUWTable(); // force NeedsWinEH
 #endif
 #ifdef JL_DISABLE_FPO
-#if LLVM_VERSION_MAJOR >= 8
     F->addFnAttr("frame-pointer", "all");
-#else
-    F->addFnAttr("no-frame-pointer-elim", "true");
 #endif
-#endif
-#if JL_LLVM_VERSION >= 110000 && !defined(JL_ASAN_ENABLED) && !defined(_OS_WINDOWS_)
+#if !defined(JL_ASAN_ENABLED) && !defined(_OS_WINDOWS_)
     // ASAN won't like us accessing undefined memory causing spurious issues,
     // and Windows has platform-specific handling which causes it to mishandle
     // this annotation. Other platforms should just ignore this if they don't
@@ -3046,6 +3042,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         jl_value_t *jt = jl_tparam0(utt);
                         if (jl_is_vararg(jt))
                             jt = jl_unwrap_vararg(jt);
+                        assert(jl_is_datatype(jt));
                         Value *vidx = emit_unbox(ctx, T_size, fld, (jl_value_t*)jl_long_type);
                         // This is not necessary for correctness, but allows to omit
                         // the extra code for getting the length of the tuple
@@ -3057,7 +3054,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj)),
                                 jl_true);
                         }
-                        bool isboxed = !jl_datatype_isinlinealloc(jt);
+                        bool isboxed = !jl_datatype_isinlinealloc((jl_datatype_t*)jt, 0);
                         Value *ptr = maybe_decay_tracked(ctx, data_pointer(ctx, obj));
                         *ret = typed_load(ctx, ptr, vidx,
                                 isboxed ? (jl_value_t*)jl_any_type : jt,
@@ -3153,7 +3150,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == jl_builtin_sizeof && nargs == 1) {
         const jl_cgval_t &obj = argv[1];
         jl_datatype_t *sty = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
-        assert(jl_string_type->mutabl);
+        assert(jl_string_type->name->mutabl);
         if (sty == jl_string_type || sty == jl_simplevector_type) {
             if (obj.constant) {
                 size_t sz;
@@ -3802,30 +3799,14 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             ssaslot->insertAfter(varslot);
             if (vi.isVolatile) {
                 Value *unbox = ctx.builder.CreateAlignedLoad(ssaslot->getAllocatedType(), varslot,
-#if JL_LLVM_VERSION >= 110000
                         varslot->getAlign(),
-#else
-                        varslot->getAlignment(),
-#endif
                         true);
-                ctx.builder.CreateAlignedStore(unbox, ssaslot,
-#if JL_LLVM_VERSION >= 110000
-                        ssaslot->getAlign()
-#else
-                        ssaslot->getAlignment()
-#endif
-                        );
+                ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign());
             }
             else {
                 const DataLayout &DL = jl_data_layout;
                 uint64_t sz = DL.getTypeStoreSize(T);
-                emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz,
-#if JL_LLVM_VERSION >= 110000
-                        ssaslot->getAlign().value()
-#else
-                        ssaslot->getAlignment()
-#endif
-                        );
+                emit_memcpy(ctx, ssaslot, tbaa_stack, vi.value, sz, ssaslot->getAlign().value());
             }
             Value *tindex = NULL;
             if (vi.pTIndex)
@@ -3976,11 +3957,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(T_int8, 0x80)),
                     ConstantInt::get(T_int8, 0));
-#if JL_LLVM_VERSION >= 100000
             ctx.builder.CreateMemCpy(phi, MaybeAlign(min_align), dest, MaybeAlign(0), nbytes, false);
-#else
-            ctx.builder.CreateMemCpy(phi, min_align, dest, 0, nbytes, false);
-#endif
             ctx.builder.CreateLifetimeEnd(dest);
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ctx, ptr_phi), T_pint8),
@@ -4020,15 +3997,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         // here it's moved into phi in the successor (from dest)
         dest = emit_static_alloca(ctx, vtype);
         Value *phi = emit_static_alloca(ctx, vtype);
-#if JL_LLVM_VERSION >= 100000
         ctx.builder.CreateMemCpy(phi, MaybeAlign(julia_alignment(phiType)),
              dest, MaybeAlign(0),
              jl_datatype_size(phiType), false);
-#else
-        ctx.builder.CreateMemCpy(phi, julia_alignment(phiType),
-             dest, 0,
-             jl_datatype_size(phiType), false);
-#endif
         ctx.builder.CreateLifetimeEnd(dest);
         slot = mark_julia_slot(phi, phiType, NULL, tbaa_stack);
     }
@@ -5454,10 +5425,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     // some sanity checking and check whether there's a vararg
     size_t nargt = jl_svec_len(argt);
     bool isVa = (nargt > 0 && jl_is_vararg(jl_svecref(argt, nargt - 1)));
-    if (isVa) {
-        emit_error(ctx, "cfunction: Vararg syntax not allowed for argument list");
-        return jl_cgval_t();
-    }
+    assert(!isVa);
 
     jl_array_t *closure_types = NULL;
     jl_value_t *sigt = NULL; // dispatch-sig = type signature with Ref{} annotations removed and applied to the env
@@ -5606,7 +5574,7 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
         crt = (jl_value_t*)jl_any_type;
     }
     bool toboxed;
-    Type *lcrt = _julia_struct_to_llvm(&params, crt, NULL, &toboxed);
+    Type *lcrt = _julia_struct_to_llvm(&params, crt, &toboxed);
     if (toboxed)
         lcrt = T_prjlvalue;
     size_t nargs = jl_nparams(sigt)-1;
@@ -6355,7 +6323,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (allunbox)
                 return;
         }
-        else if (deserves_stack(jt, true)) {
+        else if (deserves_stack(jt)) {
             bool isboxed;
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);
@@ -7961,6 +7929,10 @@ extern "C" void jl_init_llvm(void)
     // to ensure compatibility with GCC codes
     options.StackAlignmentOverride = 16;
 #endif
+#ifdef JL_DEBUG_BUILD
+    // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
+    options.StackProtectorGuard = StackProtectorGuards::Global;
+#endif
     Triple TheTriple(sys::getProcessTriple());
 #if defined(FORCE_ELF)
     TheTriple.setObjectFormat(Triple::ELF);
@@ -8122,12 +8094,12 @@ extern "C" void jl_dump_llvm_mfunction(void *v)
 
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
-    raw_fd_ostream OS(fname, EC, sys::fs::F_None);
+    raw_fd_ostream OS(fname, EC, sys::fs::OF_None);
     llvm::WriteBitcodeToFile(*((llvm::Function*)F)->getParent(), OS);
 }
 
 extern void jl_write_bitcode_module(void *M, char *fname) {
     std::error_code EC;
-    raw_fd_ostream OS(fname, EC, sys::fs::F_None);
+    raw_fd_ostream OS(fname, EC, sys::fs::OF_None);
     llvm::WriteBitcodeToFile(*(llvm::Module*)M, OS);
 }

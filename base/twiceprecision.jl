@@ -214,6 +214,14 @@ function TwicePrecision{T}(nd::Tuple{I,I}, nb::Integer) where {T,I}
     twiceprecision(TwicePrecision{T}(nd), nb)
 end
 
+# Fix #39798
+# See steprangelen_hp(::Type{Float64}, ref::Tuple{Integer,Integer},
+#                         step::Tuple{Integer,Integer}, nb::Integer,
+#                         len::Integer, offset::Integer)
+function TwicePrecision{T}(nd::Tuple{Integer,Integer}, nb::Integer) where T
+    twiceprecision(TwicePrecision{T}(nd), nb)
+end
+
 # Truncating constructors. Useful for generating values that can be
 # exactly multiplied by small integers.
 function twiceprecision(val::T, nb::Integer) where {T<:IEEEFloat}
@@ -673,7 +681,7 @@ end
 
 # range for rational numbers, start = start_n/den, stop = stop_n/den
 # Note this returns a StepRangeLen
-_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEEFloat} = _linspace(T, start, stop, len, 1)
+_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEEFloat} = _linspace(T, start, stop, len, one(start))
 function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T<:IEEEFloat
     len < 2 && return _linspace1(T, start_n/den, stop_n/den, len)
     start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len, 1)

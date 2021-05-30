@@ -454,6 +454,17 @@ end
     target = J * A * alpha + C * beta
     @test mul!(copy(C), J, A, alpha, beta) ≈ target
     @test mul!(copy(C), A, J, alpha, beta) ≈ target
+
+    a = randn()
+    C = randn(3, 3)
+    target_5mul = a*alpha*J + beta*C
+    @test mul!(copy(C), a, J, alpha, beta) ≈ target_5mul
+    @test mul!(copy(C), J, a, alpha, beta) ≈ target_5mul
+    target_5mul = beta*C # alpha = 0
+    @test mul!(copy(C), a, J, 0, beta) ≈ target_5mul
+    target_5mul = a*alpha*Matrix(J, 3, 3) # beta = 0
+    @test mul!(copy(C), a, J, alpha, 0) ≈ target_5mul
+
 end
 
 @testset "Construct Diagonal from UniformScaling" begin
@@ -489,7 +500,7 @@ end
 
 @testset "Factorization solutions" begin
     J = complex(randn(),randn()) * I
-    qrp = A -> qr(A, Val(true))
+    qrp = A -> qr(A, ColumnNorm())
 
     # thin matrices
     X = randn(3,2)

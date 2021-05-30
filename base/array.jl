@@ -9,7 +9,7 @@ The objects called do not have matching dimensionality. Optional argument `msg` 
 descriptive error string.
 """
 struct DimensionMismatch <: Exception
-    msg::AbstractString
+    msg::String
 end
 DimensionMismatch() = DimensionMismatch("")
 
@@ -499,7 +499,7 @@ function zeros end
     ones([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
-See also: [`fill`](@ref), [`zeros`](@ref).
+See also [`fill`](@ref), [`zeros`](@ref).
 
 # Examples
 ```jldoctest
@@ -834,16 +834,20 @@ function getindex end
 @eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for UnitRange and Colon
-function getindex(A::Array, I::UnitRange{Int})
+function getindex(A::Array, I::AbstractUnitRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
-    X = similar(A, lI)
+    X = similar(A, axes(I))
     if lI > 0
-        unsafe_copyto!(X, 1, A, first(I), lI)
+        copyto!(X, firstindex(X), A, first(I), lI)
     end
     return X
 end
+
+# getindex for carrying out logical indexing for AbstractUnitRange{Bool} as Bool <: Integer
+getindex(a::Array, r::AbstractUnitRange{Bool}) = getindex(a, to_index(r))
+
 function getindex(A::Array, c::Colon)
     lI = length(A)
     X = similar(A, lI)
@@ -961,7 +965,7 @@ function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
     _growend!(a, 1)
-    a[end] = itemT
+    @inbounds a[end] = itemT
     return a
 end
 

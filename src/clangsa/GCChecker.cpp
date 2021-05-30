@@ -26,12 +26,7 @@
 #define USED_FUNC
 #endif
 
-#if LLVM_VERSION_MAJOR >= 10
 using std::make_unique;
-#else
-using llvm::make_unique;
-#define PathSensitiveBugReport BugReport
-#endif
 
 namespace {
 using namespace clang;
@@ -42,11 +37,7 @@ using namespace ento;
 
 static const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
 {
-#if LLVM_VERSION_MAJOR >= 10
     return N->getStmtForDiagnostics();
-#else
-    return PathDiagnosticLocation::getStmt(N);
-#endif
 }
 
 

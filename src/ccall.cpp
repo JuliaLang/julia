@@ -493,7 +493,7 @@ static Value *julia_to_native(
         assert(!byRef); // don't expect any ABI to pass pointers by pointer
         return boxed(ctx, jvinfo);
     }
-    assert(jl_is_datatype(jlto) && julia_struct_has_layout((jl_datatype_t*)jlto, jlto_env));
+    assert(jl_is_datatype(jlto) && julia_struct_has_layout((jl_datatype_t*)jlto));
 
     typeassert_input(ctx, jvinfo, jlto, jlto_env, argn);
     if (!byRef)
@@ -1065,7 +1065,7 @@ std::string generate_func_sig(const char *fname)
                 }
             }
 
-            t = _julia_struct_to_llvm(ctx, tti, unionall_env, &isboxed, llvmcall);
+            t = _julia_struct_to_llvm(ctx, tti, &isboxed, llvmcall);
             if (t == NULL || t == T_void) {
                 return make_errmsg(fname, i + 1, " doesn't correspond to a C type");
             }
@@ -1211,7 +1211,7 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
         rt = (jl_value_t*)jl_any_type;
     }
 
-    lrt = _julia_struct_to_llvm(ctx, rt, unionall_env, &retboxed, llvmcall);
+    lrt = _julia_struct_to_llvm(ctx, rt, &retboxed, llvmcall);
     if (lrt == NULL)
         return "return type doesn't correspond to a C type";
 
@@ -1405,7 +1405,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             isboxed = false;
         }
         else {
-            largty = _julia_struct_to_llvm(&ctx.emission_context, tti, unionall, &isboxed, llvmcall);
+            largty = _julia_struct_to_llvm(&ctx.emission_context, tti, &isboxed, llvmcall);
         }
         if (isboxed) {
             ary = boxed(ctx, argv[0]);
@@ -1717,19 +1717,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
         ctx.builder.CreateMemCpy(
                 emit_inttoptr(ctx, destp, T_pint8),
-#if JL_LLVM_VERSION >= 100000
                 MaybeAlign(1),
-#else
-                1,
-#endif
                 emit_inttoptr(ctx,
                     emit_unbox(ctx, T_size, src, (jl_value_t*)jl_voidpointer_type),
                     T_pint8),
-#if JL_LLVM_VERSION >= 100000
                 MaybeAlign(0),
-#else
-                0,
-#endif
                 emit_unbox(ctx, T_size, n, (jl_value_t*)jl_ulong_type),
                 false);
         JL_GC_POP();

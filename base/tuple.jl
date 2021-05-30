@@ -104,8 +104,9 @@ state `itr_state`. Return a `Tuple`, if `collection` itself is a `Tuple`, a subt
 `AbstractVector`, if `collection` is an `AbstractArray`, a subtype of `AbstractString`
 if `collection` is an `AbstractString`, and an arbitrary iterator, falling back to
 `Iterators.rest(collection[, itr_state])`, otherwise.
-Can be overloaded for user-defined collection types to customize the behavior of slurping
-in assignments, like `a, b... = collection`.
+
+Can be overloaded for user-defined collection types to customize the behavior of [slurping
+in assignments](@ref destructuring-assignment), like `a, b... = collection`.
 
 !!! compat "Julia 1.6"
     `Base.rest` requires at least Julia 1.6.
@@ -356,10 +357,14 @@ filter(f, t::Any32) = Tuple(filter(f, collect(t)))
 
 ## comparison ##
 
-isequal(t1::Tuple, t2::Tuple) = (length(t1) == length(t2)) && _isequal(t1, t2)
-_isequal(t1::Tuple{}, t2::Tuple{}) = true
-_isequal(t1::Tuple{Any}, t2::Tuple{Any}) = isequal(t1[1], t2[1])
-_isequal(t1::Tuple, t2::Tuple) = isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
+isequal(t1::Tuple, t2::Tuple) = length(t1) == length(t2) && _isequal(t1, t2)
+_isequal(::Tuple{}, ::Tuple{}) = true
+function _isequal(t1::Tuple{Any,Vararg{Any,N}}, t2::Tuple{Any,Vararg{Any,N}}) where {N}
+    isequal(t1[1], t2[1]) || return false
+    t1, t2 = tail(t1), tail(t2)
+    # avoid dynamic dispatch by telling the compiler relational invariants
+    return isa(t1, Tuple{}) ? true : _isequal(t1, t2::Tuple{Any,Vararg{Any}})
+end
 function _isequal(t1::Any32, t2::Any32)
     for i = 1:length(t1)
         if !isequal(t1[i], t2[i])

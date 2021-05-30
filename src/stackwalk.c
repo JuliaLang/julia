@@ -335,7 +335,7 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 // interleaved.
 JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
 {
-    JL_TYPECHK(catch_stack, task, (jl_value_t*)task);
+    JL_TYPECHK(current_exceptions, task, (jl_value_t*)task);
     jl_ptls_t ptls = jl_get_ptls_states();
     if (task != ptls->current_task && task->_state == JL_TASK_STATE_RUNNABLE) {
         jl_error("Inspecting the exception stack of a task which might "
@@ -772,6 +772,11 @@ JL_DLLEXPORT void jlbacktracet(jl_task_t *t)
     for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
         jl_print_bt_entry_codeloc(bt_data + i);
     }
+}
+
+JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
+{
+    jlbacktrace();
 }
 
 #ifdef __cplusplus
