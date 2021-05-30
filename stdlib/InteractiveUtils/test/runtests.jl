@@ -575,7 +575,8 @@ end
     struct B41010
         a::A41010
     end
+    export B41010
 
-    ms = A41010 |> methodswith |> collect
+    ms = methodswith(A41010, @__MODULE__) |> collect
     @test ms[1].name == :B41010
 end
