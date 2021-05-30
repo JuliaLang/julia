@@ -85,8 +85,9 @@ struct Pass <: Result
     orig_expr
     data
     value
-    function Pass(test_type::Symbol, orig_expr, data, thrown)
-        return new(test_type, orig_expr, data, thrown isa String ? "String" : thrown)
+    source::Union{Nothing,LineNumberNode}
+    function Pass(test_type::Symbol, orig_expr, data, thrown, source)
+        return new(test_type, orig_expr, data, thrown isa String ? "String" : thrown, source)
     end
 end
 
@@ -236,6 +237,7 @@ function Serialization.serialize(s::Serialization.AbstractSerializer, t::Pass)
     Serialization.serialize(s, t.orig_expr === nothing ? nothing : string(t.orig_expr))
     Serialization.serialize(s, t.data === nothing ? nothing : string(t.data))
     Serialization.serialize(s, string(t.value))
+    Serialization.serialize(s, t.source === nothing ? nothing : t.source)
     nothing
 end
 
@@ -353,9 +355,12 @@ Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 ```jldoctest
 julia> @test true
 Test Passed
+  Expression: true
 
 julia> @test [1, 2] + [2, 1] == [3, 3]
 Test Passed
+  Expression: [1, 2] + [2, 1] == [3, 3]
+   Evaluated: [3, 3] == [3, 3]
 ```
 
 The `@test f(args...) key=val...` form is equivalent to writing
@@ -365,6 +370,8 @@ is a call using infix syntax such as approximate comparisons:
 ```jldoctest
 julia> @test π ≈ 3.14 atol=0.01
 Test Passed
+  Expression: ≈(π, 3.14, atol = 0.01)
+   Evaluated: ≈(π, 3.14; atol = 0.01)
 ```
 
 This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
@@ -393,6 +400,8 @@ Test Broken
 
 julia> @test 2 + 2 ≈ 5 atol=1 broken=false
 Test Passed
+  Expression: ≈(2 + 2, 5, atol = 1)
+   Evaluated: ≈(4, 5; atol = 1)
 
 julia> @test 2 + 2 == 5 skip=true
 Test Broken
@@ -400,6 +409,8 @@ Test Broken
 
 julia> @test 2 + 2 == 4 skip=false
 Test Passed
+  Expression: 2 + 2 == 4
+   Evaluated: 4 == 4
 ```
 
 !!! compat "Julia 1.7"
@@ -610,7 +621,7 @@ function do_test(result::ExecutionResult, orig_expr)
         value = result.value
         testres = if isa(value, Bool)
             # a true value Passes
-            value ? Pass(:test, nothing, nothing, value) :
+            value ? Pass(:test, orig_expr, result.data, value, result.source) :
                     Fail(:test, orig_expr, result.data, value, result.source)
         else
             # If the result is non-Boolean, this counts as an Error
@@ -652,10 +663,12 @@ Note that `@test_throws` does not support a trailing keyword form.
 ```jldoctest
 julia> @test_throws BoundsError [1, 2, 3][4]
 Test Passed
+  Expression: ([1, 2, 3])[4]
       Thrown: BoundsError
 
 julia> @test_throws DimensionMismatch [1, 2, 3] + [1, 2]
 Test Passed
+  Expression: [1, 2, 3] + [1, 2]
       Thrown: DimensionMismatch
 ```
 """
@@ -713,7 +726,7 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             end
         end
         if success
-            testres = Pass(:test_throws, nothing, nothing, exc)
+            testres = Pass(:test_throws, orig_expr, extype, exc, result.source)
         else
             testres = Fail(:test_throws_wrong, orig_expr, extype, exc, result.source)
         end

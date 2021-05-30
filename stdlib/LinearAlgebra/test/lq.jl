@@ -40,7 +40,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                 lqa   = lq(a)
                 x = lqa\b
                 l,q   = lqa.L, lqa.Q
-                qra   = qr(a, Val(true))
+                qra   = qr(a, ColumnNorm())
                 @testset "Basic ops" begin
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1
@@ -218,6 +218,24 @@ Q factor:
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0"""
+end
+
+@testset "adjoint of LQ" begin
+    n = 5
+
+    for b in (ones(n), ones(n, 2), ones(Complex{Float64}, n, 2))
+        for A in (
+            randn(n, n),
+            # Tall problems become least squares problems similarly to QR
+            randn(n - 2, n),
+            complex.(randn(n, n), randn(n, n)))
+
+            F = lq(A)
+            @test A'\b ≈ F'\b
+        end
+        @test_throws DimensionMismatch lq(randn(n, n + 2))'\b
+    end
+
 end
 
 end # module TestLQ

@@ -500,7 +500,7 @@ end
 
 @testset "Factorization solutions" begin
     J = complex(randn(),randn()) * I
-    qrp = A -> qr(A, Val(true))
+    qrp = A -> qr(A, ColumnNorm())
 
     # thin matrices
     X = randn(3,2)

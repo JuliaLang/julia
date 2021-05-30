@@ -363,22 +363,20 @@ exp10(x)
     end
 end
 
-# min and max arguments by base and type
+# min and max arguments for expm1 by type
 MAX_EXP(::Type{Float64}) =  709.7827128933845   # log 2^1023*(2-2^-52)
 MIN_EXP(::Type{Float64}) = -37.42994775023705   # log 2^-54
 MAX_EXP(::Type{Float32}) =  88.72284f0          # log 2^127 *(2-2^-23)
 MIN_EXP(::Type{Float32}) = -17.32868f0          # log 2^-25
+MAX_EXP(::Type{Float16}) =  Float16(11.09)      # log 2^15 *(2-2^-10)
+MIN_EXP(::Type{Float16}) = -Float16(8.32)       # log 2^-12
 
 Ln2INV(::Type{Float64}) = 1.4426950408889634
 Ln2(::Type{Float64}) = -0.6931471805599453
+Ln2INV(::Type{Float32}) = 1.442695f0
+Ln2(::Type{Float32}) = -0.6931472f0
 
 # log(.75) <= x <= log(1.25)
-function expm1_small(x::Float32)
-    p = evalpoly(x, (0.16666666f0, 0.041666627f0, 0.008333682f0,
-                     0.0013908712f0, 0.0001933096f0))
-    p2 = exthorner(x, (1f0, .5f0, p))
-    return fma(x, p2[1], x*p2[2])
-end
 @inline function expm1_small(x::Float64)
     p = evalpoly(x, (0.16666666666666632, 0.04166666666666556, 0.008333333333401227,
                      0.001388888889068783, 0.00019841269447671544, 2.480157691845342e-5,
@@ -386,8 +384,14 @@ end
     p2 = exthorner(x, (1.0, .5, p))
     return fma(x, p2[1], x*p2[2])
 end
+@inline function expm1_small(x::Float32)
+    p = evalpoly(x, (0.16666666f0, 0.041666627f0, 0.008333682f0,
+                     0.0013908712f0, 0.0001933096f0))
+    p2 = exthorner(x, (1f0, .5f0, p))
+    return fma(x, p2[1], x*p2[2])
+end
 
-@inline function expm1(x::Float64)
+function expm1(x::Float64)
     T = Float64
     if -0.2876820724517809 <= x <= 0.22314355131420976
         return expm1_small(x)
@@ -413,7 +417,9 @@ end
     return twopk*((jU-twopnk) + fma(jU, p, jL))
 end
 
-@inline function expm1(x::Float32)
+function expm1(x::Float32)
+    x > MAX_EXP(Float32) && return Inf32
+    x < MIN_EXP(Float32) && return -1f0
     if -0.2876821f0 <=x <= 0.22314355f0
         return expm1_small(x)
     end
@@ -425,8 +431,23 @@ end
                       0.008332997481506921, 0.0013966479175977883, 0.0002004037059220124))
     small_part = r*hi
     twopk = reinterpret(Float64, (N+1023) << 52)
-    x > MAX_EXP(Float32) && return Inf32
     return Float32(muladd(twopk, small_part, twopk-1.0))
+end
+
+function expm1(x::Float16)
+    x > MAX_EXP(Float16) && return Inf16
+    x < MIN_EXP(Float16) && return Float16(-1.0)
+    x = Float32(x)
+    if -0.2876821f0 <=x <= 0.22314355f0
+        return Float16(x*evalpoly(x, (1f0, .5f0, 0.16666628f0, 0.04166785f0, 0.008351848f0, 0.0013675707f0)))
+    end
+    N_float = round(x*Ln2INV(Float32))
+    N = unsafe_trunc(UInt32, N_float)
+    r = muladd(N_float, Ln2(Float32), x)
+    hi = evalpoly(r, (1f0, .5f0, 0.16666667f0, 0.041665863f0, 0.008333111f0, 0.0013981499f0, 0.00019983904f0))
+    small_part = r*hi
+    twopk = reinterpret(Float32, (N+Int32(127)) << Int32(23))
+    return Float16(muladd(twopk, small_part, twopk-1f0))
 end
 
 """

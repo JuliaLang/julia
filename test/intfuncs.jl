@@ -12,6 +12,7 @@ using Random
         @test gcd(T(0), T(15)) === T(15)
         @test gcd(T(15), T(0)) === T(15)
         if T <: Signed
+            @test gcd(T(-12)) === T(12)
             @test gcd(T(0), T(-15)) === T(15)
             @test gcd(T(-15), T(0)) === T(15)
             @test gcd(T(3), T(-15)) === T(3)
@@ -78,6 +79,7 @@ using Random
         @test lcm(T(0), T(3)) === T(0)
         @test lcm(T(0), T(0)) === T(0)
         if T <: Signed
+            @test lcm(T(-12)) === T(12)
             @test lcm(T(0), T(-4)) === T(0)
             @test lcm(T(-4), T(0)) === T(0)
             @test lcm(T(4), T(-6)) === T(12)
@@ -154,6 +156,7 @@ end
         @test gcd(T[3, 15]) === T(3)
         @test gcd(T[0, 15]) === T(15)
         if T <: Signed
+            @test gcd(T[-12]) === T(12)
             @test gcd(T[3,-15]) === T(3)
             @test gcd(T[-3,-15]) === T(3)
         end
@@ -163,12 +166,12 @@ end
         @test gcd(T[2, 4, 3, 5]) === T(1)
 
         @test lcm(T[]) === T(1)
-        @test lcm(T[2]) === T(2)
         @test lcm(T[2, 3]) === T(6)
         @test lcm(T[4, 6]) === T(12)
         @test lcm(T[3, 0]) === T(0)
         @test lcm(T[0, 0]) === T(0)
         if T <: Signed
+            @test lcm(T[-2]) === T(2)
             @test lcm(T[4, -6]) === T(12)
             @test lcm(T[-4, -6]) === T(12)
         end

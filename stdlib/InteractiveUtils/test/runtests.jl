@@ -442,23 +442,36 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
 
     rgx = r"%"
     buf = IOBuffer()
-    output = ""
     #test that the string output is at&t syntax by checking for occurrences of '%'s
     code_native(buf, linear_foo, (), syntax = :att, debuginfo = :none)
     output = String(take!(buf))
-
     @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
     code_native(buf, linear_foo, (), syntax = :intel, debuginfo = :none)
     output = String(take!(buf))
-
     @test !occursin(rgx, output)
 
     code_native(buf, linear_foo, ())
     output = String(take!(buf))
-
     @test occursin(rgx, output)
+
+    @testset "binary" begin
+        # check the RET instruction (opcode: C3)
+        ret = r"^; [0-9a-f]{4}: c3$"m
+
+        # without binary flag (default)
+        code_native(buf, linear_foo, ())
+        output = String(take!(buf))
+        @test !occursin(ret, output)
+
+        # with binary flag
+        for binary in false:true
+            code_native(buf, linear_foo, (), binary = binary)
+            output = String(take!(buf))
+            @test occursin(ret, output) == binary
+        end
+    end
 end
 
 @testset "error message" begin

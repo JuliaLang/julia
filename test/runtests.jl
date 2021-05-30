@@ -363,7 +363,7 @@ cd(@__DIR__) do
         elseif isa(resp, Test.TestSetException)
             fake = Test.DefaultTestSet(testname)
             for i in 1:resp.pass
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(@__LINE__, @__FILE__)))
             end
             for i in 1:resp.broken
                 Test.record(fake, Test.Broken(:test, nothing))

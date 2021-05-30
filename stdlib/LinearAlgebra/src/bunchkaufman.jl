@@ -196,16 +196,14 @@ julia> S.L*S.D*S.L' - A[S.p, S.p]
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
     bunchkaufman!(copy_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
 
-convert(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) where {T} = B
-convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =
+BunchKaufman{T}(B::BunchKaufman) where {T} =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)
-convert(::Type{Factorization{T}}, B::BunchKaufman{T}) where {T} = B
-convert(::Type{Factorization{T}}, B::BunchKaufman) where {T} = convert(BunchKaufman{T}, B)
+Factorization{T}(B::BunchKaufman) where {T} = BunchKaufman{T}(B)
 
 size(B::BunchKaufman) = size(getfield(B, :LD))
 size(B::BunchKaufman, d::Integer) = size(getfield(B, :LD), d)
 issymmetric(B::BunchKaufman) = B.symmetric
-ishermitian(B::BunchKaufman) = !B.symmetric
+ishermitian(B::BunchKaufman{T}) where T = T<:Real || !B.symmetric
 
 function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::AbstractChar, rook::Bool) where T
     require_one_based_indexing(v)
@@ -278,6 +276,14 @@ Base.propertynames(B::BunchKaufman, private::Bool=false) =
     (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
 
 issuccess(B::BunchKaufman) = B.info == 0
+
+function adjoint(B::BunchKaufman)
+    if ishermitian(B)
+        return B
+    else
+        throw(ArgumentError("adjoint not implemented for complex symmetric matrices"))
+    end
+end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)
     if issuccess(B)

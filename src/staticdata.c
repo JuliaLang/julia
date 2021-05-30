@@ -901,7 +901,7 @@ static void jl_write_values(jl_serializer_state *s)
                 write_padding(s->s, offset - tot);
                 tot = offset;
                 size_t fsz = jl_field_size(t, i);
-                if (t->mutabl && jl_is_cpointer_type(jl_field_type(t, i))) {
+                if (t->name->mutabl && jl_is_cpointer_type(jl_field_type(t, i))) {
                     // reset Ptr fields to C_NULL
                     assert(!jl_field_isptr(t, i));
                     write_pointer(s->s);

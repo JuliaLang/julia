@@ -192,10 +192,10 @@ end
         a = rand(n,n)
         atri = typ(a)
         b = rand(n,n)
-        qrb = qr(b,Val(true))
+        qrb = qr(b, ColumnNorm())
         @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
         @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        qrb = qr(b,Val(false))
+        qrb = qr(b, NoPivot())
         @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
         @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
     end

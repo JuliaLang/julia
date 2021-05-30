@@ -31,7 +31,7 @@ conjugated transpose right multiplication `A*G'`. The type doesn't have a `size`
 therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)` for
 `G*A` or `i2<=size(A,1)` for `A*G'`.
 
-See also: [`givens`](@ref)
+See also [`givens`](@ref).
 """
 struct Givens{T} <: AbstractRotation{T}
     i1::Int
@@ -282,7 +282,7 @@ y[i1] = r
 y[i2] = 0
 ```
 
-See also: [`LinearAlgebra.Givens`](@ref)
+See also [`LinearAlgebra.Givens`](@ref).
 """
 function givens(f::T, g::T, i1::Integer, i2::Integer) where T
     if i1 == i2
@@ -308,7 +308,7 @@ B[i1,j] = r
 B[i2,j] = 0
 ```
 
-See also: [`LinearAlgebra.Givens`](@ref)
+See also [`LinearAlgebra.Givens`](@ref).
 """
 givens(A::AbstractMatrix, i1::Integer, i2::Integer, j::Integer) =
     givens(A[i1,j], A[i2,j],i1,i2)
@@ -327,7 +327,7 @@ B[i1] = r
 B[i2] = 0
 ```
 
-See also: [`LinearAlgebra.Givens`](@ref)
+See also [`LinearAlgebra.Givens`](@ref).
 """
 givens(x::AbstractVector, i1::Integer, i2::Integer) =
     givens(x[i1], x[i2], i1, i2)
