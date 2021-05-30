@@ -403,6 +403,11 @@ Random.seed!(1)
 
 end
 
+@testset "rdiv! (#40887)" begin
+    @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
+    @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
+end
+
 @testset "kron (issue #40595)" begin
     # custom array type to test that kron on Diagonal matrices preserves types of the parents if possible
     struct KronTestArray{T, N, AT} <: AbstractArray{T, N}
