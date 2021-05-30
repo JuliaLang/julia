@@ -1470,6 +1470,12 @@ get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : de
 get(A::AbstractArray, I::Tuple{}, default) = checkbounds(Bool, A) ? A[] : default
 get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] : default
 
+# get(A::AbstractArray, I::CartesianIndex, default) = checkbounds(Bool, A, I) ? A[I] : default
+get(f::Callable, A::AbstractArray, i::Integer) = checkbounds(Bool, A, i) ? A[i] : f()
+get(f::Callable, A::AbstractArray, I::Tuple{}) = checkbounds(Bool, A) ? A[] : f()
+get(f::Callable, A::AbstractArray, I::Dims) = checkbounds(Bool, A, I...) ? A[I...] : f()
+# get(f::Callable, A::AbstractArray, I::CartesianIndex) = checkbounds(Bool, A, I) ? A[I] : f()
+
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
     ind = findall(in(axes1(A)), I)

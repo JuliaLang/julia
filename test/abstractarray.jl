@@ -598,6 +598,21 @@ function test_get(::Type{TestAbstractArray})
     @test get(TSlow([]), (), 0) == 0
     @test get(TSlow([1]), (), 0) == 1
     @test get(TSlow(fill(1)), (), 0) == 1
+
+    @test get(()-> A .+ 1, A, ()) == A .+ 1
+    @test get(()->0, B, ()) == 0
+    @test get(()->0, A, (1,)) == get(()->0, A, 1) == A[1] == 1
+    @test get(()->0, B, (1,)) == get(()->0, B, 1) == B[1] == 1
+    @test get(()-> A .+ 1, A, (25,)) == get(()-> A .+ 1, A, 25) == A .+ 1
+    @test get(()->0, B, (25,)) == get(()->0, B, 25) == 0
+    @test get(()->0, A, (1,1,1)) == A[1,1,1] == 1
+    @test get(()->0, B, (1,1,1)) == B[1,1,1] == 1
+    @test get(()-> A .+ 1 , A, (1,1,3)) == A .+ 1
+    @test get(()->0, B, (1,1,3)) == 0
+
+    @test get(()->0, TSlow([]), ()) == 0
+    @test get(()->0, TSlow([1]), ()) == 1
+    @test get(()->0, TSlow(fill(1)), ()) == 1
 end
 
 function test_cat(::Type{TestAbstractArray})
