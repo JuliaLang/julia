@@ -58,6 +58,7 @@ jl_options_t jl_options = { 0,    // quiet
                             0,    // method overwrite warning
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
+                            0,    // autoload
                             NULL, // trace_compile
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
@@ -208,6 +209,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_bug_report,
            opt_image_codegen,
            opt_rr_detach,
+           opt_autoload,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -231,6 +233,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "procs",           required_argument, 0, 'p' },
         { "threads",         required_argument, 0, 't' },
         { "machine-file",    required_argument, 0, opt_machine_file },
+        { "autoload",        no_argument,       0, opt_autoload },
         { "project",         optional_argument, 0, opt_project },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
@@ -445,6 +448,9 @@ restart_switch:
             break;
         case opt_project:
             jl_options.project = optarg ? strdup(optarg) : "@.";
+            break;
+        case opt_autoload:
+            jl_options.autoload=1;
             break;
         case opt_color:
             if (!strcmp(optarg, "yes"))

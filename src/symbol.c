@@ -120,6 +120,36 @@ JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void)
     return symtab;
 }
 
+void jl_reset_symbol_type(void) JL_GC_DISABLED
+{
+    if (!symtab)
+        return;
+    // The symbol type was reset by replacing the sysimage. Update the symtab.
+    // We could just drop the symtab entirely and let GC handle it, but it's
+    // much faster to keep the symtab, since allocating the symtab is one
+    // of the primary things startup does.
+    arraylist_t workqueue;
+    arraylist_new(&workqueue, 0);
+    jl_sym_t *item = symtab;
+    while (1) {
+        jl_set_typeof(item, (jl_value_t*)
+            (((uintptr_t)jl_symbol_type) | GC_OLD_MARKED));
+        if (item->left) {
+            if (item->right) {
+                arraylist_push(&workqueue, (void*)item->right);
+            }
+            item = item->left;
+            continue;
+        } else if (item->right) {
+            item = item->right;
+            continue;
+        }
+        if (workqueue.len == 0)
+            break;
+        item = (jl_sym_t*)arraylist_pop(&workqueue);
+    }
+}
+
 static uint32_t gs_ctr = 0;  // TODO: per-thread
 uint32_t jl_get_gs_ctr(void) { return gs_ctr; }
 void jl_set_gs_ctr(uint32_t ctr) { gs_ctr = ctr; }
