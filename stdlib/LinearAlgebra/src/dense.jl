@@ -1439,7 +1439,7 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         B[ind] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
         return B
     end
-    SVD         = svd(A, full = false)
+    SVD         = svd(A)
     tol         = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
     Sinv        = fill!(similar(A, Stype, length(SVD.S)), 0)

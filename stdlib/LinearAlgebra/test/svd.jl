@@ -23,6 +23,10 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
     @test F.U'F.U ≊ Matrix(I, 2, 2)
     @test F.Vt'*F.Vt ≊ [1]
     @test @inferred(svdvals(3:4)) ≊ [5]
+    A = Matrix(1.0I, 2, 2)
+    Z = svd(Hermitian(A); full=true)
+    @test Z.S ≈ ones(2)
+    @test Z.U'Z.U ≈ I(2)
 
     m1 = [2 0; 0 0]
     m2 = [2 -2; 1 1]/sqrt(2)
