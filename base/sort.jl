@@ -674,6 +674,10 @@ options are independent and can be used together in all possible combinations: i
 and `lt` are specified, the `lt` function is applied to the result of the `by` function;
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
 
+!!! warn
+    The `lt` function must be a "less than" function (as opposed to a "less than or equal" function),
+    i.e., for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return `true`.
+
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2]; sort!(v); v
