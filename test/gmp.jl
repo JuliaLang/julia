@@ -236,10 +236,15 @@ end
     g = parse(BigInt,"-1")
 
     @test +(a, b) == parse(BigInt,"327547")
+    @test 327547 == sum((a, b)) isa BigInt
     @test +(a, b, c) == parse(BigInt,"3426495623485904783805894")
+    @test 3426495623485904783805894 == sum((a, b, c)) isa BigInt
     @test +(a, b, c, d) == parse(BigInt,"3426495623485903384821764")
+    @test 3426495623485903384821764 == sum((a, b, c, d)) isa BigInt
     @test +(a, b, c, d, f) == parse(BigInt,"2413804710837418037418307081437318690130968843290370569228")
+    @test 2413804710837418037418307081437318690130968843290370569228 == sum((a, b, c, d, f)) isa BigInt
     @test +(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437318690130968843290370569227")
+    @test 2413804710837418037418307081437318690130968843290370569227 == sum((a, b, c, d, f, g)) isa BigInt
 
     @test *(a, b) == parse(BigInt,"3911455620")
     @test *(a, b, c) == parse(BigInt,"13402585563389346256121263521460140")
