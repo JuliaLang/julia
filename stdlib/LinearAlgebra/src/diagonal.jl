@@ -452,9 +452,9 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 
 ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
-ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
+ldiv!(adjD::Adjoint{<:Any,<:Diagonal}, B::AbstractVecOrMat) =
     (D = adjD.parent; ldiv!(conj(D), B))
-ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
+ldiv!(transD::Transpose{<:Any,<:Diagonal}, B::AbstractVecOrMat) =
     (D = transD.parent; ldiv!(D, B))
 
 function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
@@ -486,9 +486,9 @@ function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
     A
 end
 
-rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
+rdiv!(A::AbstractMatrix, adjD::Adjoint{<:Any,<:Diagonal}) =
     (D = adjD.parent; rdiv!(A, conj(D)))
-rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
+rdiv!(A::AbstractMatrix, transD::Transpose{<:Any,<:Diagonal}) =
     (D = transD.parent; rdiv!(A, D))
 
 (/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
