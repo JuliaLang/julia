@@ -435,7 +435,7 @@ function getpwuid(uid::Unsigned, throw_error::Bool=true)
     ref_pd = Ref(Cpasswd())
     ret = ccall(:jl_os_get_passwd, Cint, (Ref{Cpasswd}, UInt), ref_pd, uid)
     if ret != 0
-        throw_error && uv_error("getpwuid", ret)
+        throw_error && Base.uv_error("getpwuid", ret)
         return
     end
     pd = ref_pd[]
@@ -454,7 +454,7 @@ function getgrgid(gid::Unsigned, throw_error::Bool=true)
     ref_gp = Ref(Cgroup())
     ret = ccall(:jl_os_get_group, Cint, (Ref{Cgroup}, UInt), ref_gp, gid)
     if ret != 0
-        throw_error && uv_error("getgrgid", ret)
+        throw_error && Base.uv_error("getgrgid", ret)
         return
     end
     gp = ref_gp[]

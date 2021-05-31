@@ -412,30 +412,29 @@ JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, size_t gid)
     members++;
   }
 
-  grp->groupname = (char*)malloc(name_size + mem_size);
-
-  if (grp->groupname == NULL) {
+  gr_mem = (char*)malloc(name_size + mem_size);
+  if (gr_mem == NULL) {
     free(buf);
     return UV_ENOMEM;
   }
 
-  /* Copy the groupname */
-  memcpy(grp->groupname, gp.gr_name, name_size);
-
-  /* Copy the gid */
-  grp->gid = gp.gr_gid;
-
   /* Copy the members */
-  gr_mem = grp->groupname + name_size;
   grp->members = (char**) gr_mem;
   grp->members[members] = NULL;
   gr_mem = (char*) ((char**) gr_mem + members + 1);
   for (r = 0; r < members; r++) {
     grp->members[r] = gr_mem;
-    gr_mem = stpcpy(gr_mem, gp.gr_mem[r]);
+    gr_mem = stpcpy(gr_mem, gp.gr_mem[r]) + 1;
   }
+  assert(gr_mem == (char*)grp->members + mem_size);
 
-  assert(gr_mem == buf + name_size + mem_size);
+  /* Copy the groupname */
+  grp->groupname = gr_mem;
+  memcpy(grp->groupname, gp.gr_name, name_size);
+  gr_mem += name_size;
+
+  /* Copy the gid */
+  grp->gid = gp.gr_gid;
 
   free(buf);
 
@@ -450,12 +449,12 @@ JL_DLLEXPORT void jl_os_free_group(jl_group_t *grp)
 
   /*
     The memory for is allocated in a single uv__malloc() call. The base of the
-    pointer is stored in grp->groupname, so that is the only field that needs
+    pointer is stored in grp->members, so that is the only field that needs
     to be freed.
   */
-  free(grp->groupname);
-  grp->groupname = NULL;
+  free(grp->members);
   grp->members = NULL;
+  grp->groupname = NULL;
 }
 
 // --- buffer manipulation ---
