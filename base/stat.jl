@@ -26,6 +26,7 @@ export
     uperm
 
 struct StatStruct
+    desc    :: Union{String, OS_HANDLE} # for show method, not included in equality or hash
     device  :: UInt
     inode   :: UInt
     mode    :: UInt
@@ -39,10 +40,26 @@ struct StatStruct
     mtime   :: Float64
     ctime   :: Float64
 end
+const StatFieldTypes = Union{UInt,Int,Int64,Float64}
 
-StatStruct() = StatStruct(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
+    for i = 2:nfields(x)
+        xi = getfield(x, i)::StatFieldTypes
+        xi === getfield(y, i) || return false
+    end
+    return true
+end
+function Base.hash(obj::StatStruct, h::UInt)
+    for i = 2:nfields(obj)
+        h = hash(getfield(obj, i)::StatFieldTypes, h)
+    end
+    return h
+end
 
-StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
+StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct("", buf)
+StatStruct(desc::Union{AbstractString, OS_HANDLE}, buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
+    desc isa OS_HANDLE ? desc : String(desc),
     ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
     ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),
     ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf),
@@ -57,7 +74,72 @@ StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
     ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
 )
 
-show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(string(filemode(st), base = 8, pad = 6)), size=$(filesize(st)))")
+function iso_datetime_with_relative(t, tnow)
+    str = Libc.strftime("%FT%T%z", t)
+    secdiff = t - tnow
+    for (d, name) in ((24*60*60, "day"), (60*60, "hour"), (60, "minute"), (1, "second"))
+        tdiff = round(Int, div(abs(secdiff), d))
+        if tdiff != 0 # find first unit difference
+            plural = tdiff == 1 ? "" : "s"
+            when = secdiff < 0 ? "ago" : "in the future"
+            return "$str ($tdiff $name$plural $when)"
+        end
+    end
+    return "$str (just now)"
+end
+
+
+function getusername(uid::Unsigned)
+    pwd = Libc.getpwuid(uid, false)
+    pwd === nothing && return
+    isempty(pwd.username) && return
+    return pwd.username
+end
+
+function getgroupname(gid::Unsigned)
+    gp = Libc.getgrgid(gid, false)
+    gp === nothing && return
+    isempty(gp.groupname) && return
+    return gp.groupname
+end
+
+function show_statstruct(io::IO, st::StatStruct, oneline::Bool)
+    print(io, oneline ? "StatStruct(" : "StatStruct for ")
+    show(io, st.desc)
+    oneline || print("\n  ")
+    print(io, " size: ", st.size, " bytes")
+    oneline || print("\n")
+    print(io, " device: ", st.device)
+    oneline || print("\n ")
+    print(io, " inode: ", st.inode)
+    oneline || print("\n  ")
+    print(io, " mode: 0o", string(filemode(st), base = 8, pad = 6), " (", filemode_string(st), ")")
+    oneline || print("\n ")
+    print(io, " nlink: ", st.nlink)
+    oneline || print("\n   ")
+    print(io, " uid: $(st.uid)")
+    username = getusername(st.uid)
+    username === nothing || print(io, " (", username, ")")
+    oneline || print("\n   ")
+    print(io, " gid: ", st.gid)
+    groupname = getgroupname(st.gid)
+    groupname === nothing || print(io, " (", groupname, ")")
+    oneline || print("\n  ")
+    print(io, " rdev: ", st.rdev)
+    oneline || print("\n ")
+    print(io, " blksz: ", st.blksize)
+    oneline || print("\n")
+    print(io, " blocks: ", st.blocks)
+    tnow = round(UInt, time())
+    oneline || print("\n ")
+    print(io, " mtime: ", iso_datetime_with_relative(st.mtime, tnow))
+    oneline || print("\n ")
+    print(io, " ctime: ", iso_datetime_with_relative(st.ctime, tnow))
+    print(io, oneline ? ")" : "\n")
+end
+
+show(io::IO, st::StatStruct) = show_statstruct(io, st, true)
+show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false)
 
 # stat & lstat functions
 
@@ -66,9 +148,9 @@ macro stat_call(sym, arg1type, arg)
         stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
-            uv_error(string("stat(",repr($(esc(arg))),")"), r)
+            uv_error(string("stat(", repr($(esc(arg))), ")"), r)
         end
-        st = StatStruct(stat_buf)
+        st = StatStruct($(esc(arg)), stat_buf)
         if ispath(st) != (r == 0)
             error("stat returned zero type for a valid path")
         end
@@ -92,6 +174,7 @@ The fields of the structure are:
 
 | Name    | Description                                                        |
 |:--------|:-------------------------------------------------------------------|
+| desc    | The path or OS file descriptor                                     |
 | size    | The size (in bytes) of the file                                    |
 | device  | ID of the device that contains the file                            |
 | inode   | The inode number of the file                                       |
@@ -120,12 +203,73 @@ lstat(path...) = lstat(joinpath(path...))
 
 # some convenience functions
 
+const filemode_table = (
+    [
+        (S_IFLNK, "l"),
+        (S_IFSOCK, "s"),  # Must appear before IFREG and IFDIR as IFSOCK == IFREG | IFDIR
+        (S_IFREG, "-"),
+        (S_IFBLK, "b"),
+        (S_IFDIR, "d"),
+        (S_IFCHR, "c"),
+        (S_IFIFO, "p")
+    ],
+    [
+        (S_IRUSR, "r"),
+    ],
+    [
+        (S_IWUSR, "w"),
+    ],
+    [
+        (S_IXUSR|S_ISUID, "s"),
+        (S_ISUID, "S"),
+        (S_IXUSR, "x")
+    ],
+    [
+        (S_IRGRP, "r"),
+    ],
+    [
+        (S_IWGRP, "w"),
+    ],
+    [
+        (S_IXGRP|S_ISGID, "s"),
+        (S_ISGID, "S"),
+        (S_IXGRP, "x")
+    ],
+    [
+        (S_IROTH, "r"),
+    ],
+    [
+        (S_IWOTH, "w"),
+    ],
+    [
+        (S_IXOTH|S_ISVTX, "t"),
+        (S_ISVTX, "T"),
+        (S_IXOTH, "x")
+    ]
+)
+
 """
     filemode(file)
 
 Equivalent to `stat(file).mode`.
 """
 filemode(st::StatStruct) = st.mode
+filemode_string(st::StatStruct) = filemode_string(st.mode)
+function filemode_string(mode)
+    str = IOBuffer()
+    for table in filemode_table
+        complete = true
+        for (bit, char) in table
+            if mode & bit == bit
+                write(str, char)
+                complete = false
+                break
+            end
+        end
+        complete && write(str, "-")
+    end
+    return String(take!(str))
+end
 
 """
     filesize(path...)
