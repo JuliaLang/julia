@@ -321,7 +321,7 @@ protected:
     }
 
 private:
-    CallInst *ptlsStates;
+    CallInst *pgcstack;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
@@ -1148,7 +1148,7 @@ static bool isLoadFromConstGV(Value *v, bool &task_local)
         if (callee && callee->getName() == "julia.typeof") {
             return true;
         }
-        if (callee && callee->getName() == "julia.ptls_states") {
+        if (callee && callee->getName() == "julia.get_pgcstack") {
             task_local = true;
             return true;
         }
@@ -1514,7 +1514,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Known functions emitted in codegen that are not safepoints
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
-                        callee == ptls_getter ||
+                        callee == pgcstack_getter ||
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
@@ -2519,7 +2519,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
-        pushGcframe->insertAfter(ptlsStates);
+        pushGcframe->insertAfter(pgcstack);
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
@@ -2616,11 +2616,11 @@ bool LateLowerGCFrame::runOnFunction(Function &F) {
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!ptls_getter)
+    if (!pgcstack_getter)
         return CleanupIR(F);
 
-    ptlsStates = getPtls(F);
-    if (!ptlsStates)
+    pgcstack = getPGCstack(F);
+    if (!pgcstack)
         return CleanupIR(F);
 
     State S = LocalScan(F);

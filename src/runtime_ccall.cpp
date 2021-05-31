@@ -340,8 +340,8 @@ jl_value_t *jl_get_cfunction_trampoline(
             ((void**)result)[1] = (void*)fobj;
         }
         if (!permanent) {
-            jl_ptls_t ptls = jl_get_ptls_states();
-            jl_gc_add_ptr_finalizer(ptls, result, (void*)(uintptr_t)&trampoline_deleter);
+            jl_task_t *ct = jl_current_task;
+            jl_gc_add_ptr_finalizer(ct->ptls, result, (void*)(uintptr_t)&trampoline_deleter);
             ((void**)result)[2] = (void*)cache;
             ((void**)result)[3] = (void*)nval;
         }

@@ -1287,22 +1287,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     };
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
 
-    static jl_ptls_t (*ptls_getter)(void) = [] {
-    // directly accessing the address of an ifunc can cause compile-time linker issues
-    // on some configurations (e.g. AArch64 + -Bsymbolic-functions), so we guard the
-    // `&jl_get_ptls_states` within this `#ifdef` guard, and use a more roundabout
-    // method involving `jl_dlsym()` on Linux platforms instead.
-#ifdef _OS_LINUX_
-        jl_ptls_t (*p)(void);
-        void *handle = jl_dlopen(nullptr, 0);
-        jl_dlsym(handle, "jl_get_ptls_states", (void **)&p, 0);
-        jl_dlclose(handle);
-        return p;
-#else
-        return &jl_get_ptls_states;
-#endif
-    }();
-
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);
     for (size_t i = 0; i < nccallargs; i++) {
@@ -1475,27 +1459,27 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
         emit_signal_fence(ctx);
-        ctx.builder.CreateLoad(T_size, ctx.signalPage, true);
+        ctx.builder.CreateLoad(T_size, get_current_signal_page(ctx), true);
         emit_signal_fence(ctx);
         return ghostValue(jl_nothing_type);
     }
-    else if (_is_libjulia_func((uintptr_t)ptls_getter, "jl_get_ptls_states")) {
+    else if (is_libjulia_func("jl_get_ptls_states")) {
         assert(lrt == T_size);
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx,
-            ctx.builder.CreatePtrToInt(ctx.ptlsStates, lrt),
+            ctx.builder.CreatePtrToInt(get_current_ptls(ctx), lrt),
             retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_threadid)) {
         assert(lrt == T_int16);
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        Value *ptls_i16 = emit_bitcast(ctx, ctx.ptlsStates, T_pint16);
-        const int tid_offset = offsetof(jl_tls_states_t, tid);
-        Value *ptid = ctx.builder.CreateInBoundsGEP(ptls_i16, ConstantInt::get(T_size, tid_offset / 2));
+        Value *ptask_i16 = emit_bitcast(ctx, get_current_task(ctx), T_pint16);
+        const int tid_offset = offsetof(jl_task_t, tid);
+        Value *ptid = ctx.builder.CreateInBoundsGEP(ptask_i16, ConstantInt::get(T_size, tid_offset / sizeof(int16_t)));
         LoadInst *tid = ctx.builder.CreateAlignedLoad(ptid, Align(sizeof(int16_t)));
-        tbaa_decorate(tbaa_const, tid);
+        tbaa_decorate(tbaa_gcframe, tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_gc_disable_finalizers_internal)
@@ -1504,7 +1488,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 #endif
              ) {
         JL_GC_POP();
-        Value *ptls_i32 = emit_bitcast(ctx, ctx.ptlsStates, T_pint32);
+        Value *ptls_i32 = emit_bitcast(ctx, get_current_ptls(ctx), T_pint32);
         const int finh_offset = offsetof(jl_tls_states_t, finalizers_inhibited);
         Value *pfinh = ctx.builder.CreateInBoundsGEP(ptls_i32, ConstantInt::get(T_size, finh_offset / 4));
         LoadInst *finh = ctx.builder.CreateAlignedLoad(pfinh, Align(sizeof(int32_t)));
@@ -1524,18 +1508,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == T_prjlvalue);
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        Value *ptls_pv = emit_bitcast(ctx, ctx.ptlsStates, T_pprjlvalue);
-        const int ct_offset = offsetof(jl_tls_states_t, current_task);
-        Value *pct = ctx.builder.CreateInBoundsGEP(ptls_pv, ConstantInt::get(T_size, ct_offset / sizeof(void*)));
-        LoadInst *ct = ctx.builder.CreateAlignedLoad(pct, Align(sizeof(void*)));
-        tbaa_decorate(tbaa_const, ct);
+        auto ct = track_pjlvalue(ctx, emit_bitcast(ctx, get_current_task(ctx), T_pjlvalue));
         return mark_or_box_ccall_result(ctx, ct, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_set_next_task)) {
         assert(lrt == T_void);
         assert(!isVa && !llvmcall && nccallargs == 1);
         JL_GC_POP();
-        Value *ptls_pv = emit_bitcast(ctx, ctx.ptlsStates, T_ppjlvalue);
+        Value *ptls_pv = emit_bitcast(ctx, get_current_ptls(ctx), T_ppjlvalue);
         const int nt_offset = offsetof(jl_tls_states_t, next_task);
         Value *pnt = ctx.builder.CreateInBoundsGEP(ptls_pv, ConstantInt::get(T_size, nt_offset / sizeof(void*)));
         ctx.builder.CreateStore(emit_pointer_from_objref(ctx, boxed(ctx, argv[0])), pnt);
@@ -1576,7 +1556,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 checkBB, contBB);
         ctx.builder.SetInsertPoint(checkBB);
         ctx.builder.CreateLoad(
-                ctx.builder.CreateConstInBoundsGEP1_32(T_size, ctx.signalPage, -1),
+                ctx.builder.CreateConstInBoundsGEP1_32(T_size, get_current_signal_page(ctx), -1),
                 true);
         ctx.builder.CreateBr(contBB);
         ctx.f->getBasicBlockList().push_back(contBB);

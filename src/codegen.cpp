@@ -428,11 +428,12 @@ static const auto jlboxed_uint8_cache = new JuliaVariable{
     [](LLVMContext &C) { return (Type*)ArrayType::get(T_pjlvalue, 256); },
 };
 
-static const auto jltls_states_func = new JuliaFunction{
-    "julia.ptls_states",
+static const auto jlpgcstack_func = new JuliaFunction{
+    "julia.get_pgcstack",
     [](LLVMContext &C) { return FunctionType::get(PointerType::get(T_ppjlvalue, 0), false); },
     nullptr,
 };
+
 
 
 // important functions
@@ -1092,8 +1093,7 @@ public:
     int nvargs = -1;
     bool is_opaque_closure = false;
 
-    CallInst *ptlsStates = NULL;
-    Value *signalPage = NULL;
+    CallInst *pgcstack = NULL;
     Value *world_age_field = NULL;
 
     bool debug_enabled = false;
@@ -1129,6 +1129,9 @@ static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name,
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const std::string &msg);
 static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0);
+static Value *get_current_task(jl_codectx_t &ctx);
+static Value *get_current_ptls(jl_codectx_t &ctx);
+static Value *get_current_signal_page(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
                              jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
@@ -1202,7 +1205,7 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
 
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty)
 {
-    return new AllocaInst(lty, 0, "", /*InsertBefore=*/ctx.ptlsStates);
+    return new AllocaInst(lty, 0, "", /*InsertBefore=*/ctx.pgcstack);
 }
 
 static void undef_derived_strct(IRBuilder<> &irbuilder, Value *ptr, jl_datatype_t *sty, MDNode *tbaa)
@@ -2016,9 +2019,9 @@ static jl_value_t *static_apply_type(jl_codectx_t &ctx, const jl_cgval_t *args, 
         v[i] = args[i].constant;
     }
     assert(v[0] == jl_builtin_apply_type);
-    size_t last_age = jl_get_ptls_states()->world_age;
+    size_t last_age = jl_current_task->world_age;
     // call apply_type, but ignore errors. we know that will work in world 1.
-    jl_get_ptls_states()->world_age = 1;
+    jl_current_task->world_age = 1;
     jl_value_t *result;
     JL_TRY {
         result = jl_apply(v, nargs);
@@ -2026,7 +2029,7 @@ static jl_value_t *static_apply_type(jl_codectx_t &ctx, const jl_cgval_t *args, 
     JL_CATCH {
         result = NULL;
     }
-    jl_get_ptls_states()->world_age = last_age;
+    jl_current_task->world_age = last_age;
     return result;
 }
 
@@ -2102,9 +2105,9 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                             return NULL;
                         }
                     }
-                    size_t last_age = jl_get_ptls_states()->world_age;
+                    size_t last_age = jl_current_task->world_age;
                     // here we know we're calling specific builtin functions that work in world 1.
-                    jl_get_ptls_states()->world_age = 1;
+                    jl_current_task->world_age = 1;
                     jl_value_t *result;
                     JL_TRY {
                         result = jl_apply(v, n+1);
@@ -2112,7 +2115,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                     JL_CATCH {
                         result = NULL;
                     }
-                    jl_get_ptls_states()->world_age = last_age;
+                    jl_current_task->world_age = last_age;
                     JL_GC_POP();
                     return result;
                 }
@@ -4744,20 +4747,58 @@ JL_GCC_IGNORE_STOP
 static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0)
 {
     // TODO: requires the runtime, but is generated unconditionally
-
     // allocate a placeholder gc instruction
-    ctx.ptlsStates = ctx.builder.CreateCall(prepare_call(jltls_states_func));
-    int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void*);
-    ctx.signalPage = emit_nthptr_recast(ctx, ctx.ptlsStates, nthfield, tbaa_const,
-                                        PointerType::get(T_psize, 0));
+    ctx.pgcstack = ctx.builder.CreateCall(prepare_call(jlpgcstack_func));
 }
 
+static Value *get_current_task(jl_codectx_t &ctx)
+{
+    const int ptls_offset = offsetof(jl_task_t, gcstack);
+    return ctx.builder.CreateInBoundsGEP(
+        T_pjlvalue, emit_bitcast(ctx, ctx.pgcstack, T_ppjlvalue),
+        ConstantInt::get(T_size, -ptls_offset / sizeof(void *)),
+        "current_task");
+}
+
+// Get PTLS through current task.
+static Value *get_current_ptls(jl_codectx_t &ctx)
+{
+    const int ptls_offset = offsetof(jl_task_t, ptls);
+    Value *pptls = ctx.builder.CreateInBoundsGEP(
+        T_pjlvalue, get_current_task(ctx),
+        ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
+        "ptls_field");
+    LoadInst *ptls_load = ctx.builder.CreateAlignedLoad(
+        emit_bitcast(ctx, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
+    // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
+    tbaa_decorate(tbaa_gcframe, ptls_load);
+    // Using `CastInst::Create` to get an `Instruction*` without explicit cast:
+    auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
+    ctx.builder.Insert(ptls);
+    return ptls;
+}
+
+// Store world age at the entry block of the function. This function should be
+// called right after `allocate_gc_frame` and there should be no context switch.
 static void emit_last_age_field(jl_codectx_t &ctx)
 {
+    auto ptls = get_current_task(ctx);
+    assert(ctx.builder.GetInsertBlock() == ctx.pgcstack->getParent());
     ctx.world_age_field = ctx.builder.CreateInBoundsGEP(
             T_size,
-            ctx.builder.CreateBitCast(ctx.ptlsStates, T_psize),
-            ConstantInt::get(T_size, offsetof(jl_tls_states_t, world_age) / sizeof(size_t)));
+            ctx.builder.CreateBitCast(ptls, T_psize),
+            ConstantInt::get(T_size, offsetof(jl_task_t, world_age) / sizeof(size_t)),
+            "world_age");
+}
+
+// Get signal page through current task.
+static Value *get_current_signal_page(jl_codectx_t &ctx)
+{
+    // return ctx.builder.CreateCall(prepare_call(reuse_signal_page_func));
+    auto ptls = get_current_ptls(ctx);
+    int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void *);
+    return emit_nthptr_recast(ctx, ptls, nthfield, tbaa_const,
+                              PointerType::get(T_psize, 0));
 }
 
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_codegen_params_t &params)
@@ -4985,14 +5026,11 @@ static Function* gen_cfun_wrapper(
     emit_last_age_field(ctx);
 
     Value *dummy_world = ctx.builder.CreateAlloca(T_size);
-    Value *have_tls = ctx.builder.CreateIsNotNull(ctx.ptlsStates);
+    Value *have_tls = ctx.builder.CreateIsNotNull(ctx.pgcstack);
     // TODO: in the future, try to initialize a full TLS context here
     // for now, just use a dummy field to avoid a branch in this function
     ctx.world_age_field = ctx.builder.CreateSelect(have_tls, ctx.world_age_field, dummy_world);
     Value *last_age = tbaa_decorate(tbaa_gcframe, ctx.builder.CreateAlignedLoad(ctx.world_age_field, Align(sizeof(size_t))));
-    Value *valid_tls = ctx.builder.CreateIsNotNull(last_age);
-    have_tls = ctx.builder.CreateAnd(have_tls, valid_tls);
-    ctx.world_age_field = ctx.builder.CreateSelect(valid_tls, ctx.world_age_field, dummy_world);
     Value *world_v = ctx.builder.CreateAlignedLoad(prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
     // TODO: cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Monotonic);
 
@@ -6345,9 +6383,9 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             (va && (int)i == ctx.vaSlot) || // or it's the va arg tuple
             i == 0) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(T_prjlvalue, 0,
-                jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
+                jl_symbol_name(s), /*InsertBefore*/ctx.pgcstack);
             StoreInst *SI = new StoreInst(V_rnull, av, false, Align(sizeof(void*)));
-            SI->insertAfter(ctx.ptlsStates);
+            SI->insertAfter(ctx.pgcstack);
             varinfo.boxroot = av;
             if (ctx.debug_enabled && varinfo.dinfo) {
                 DIExpression *expr;
@@ -7775,7 +7813,7 @@ static void init_jit_functions(void)
     global_jlvalue_to_llvm(new JuliaVariable{"jl_undefref_exception", true, get_pjlvalue}, &jl_undefref_exception);
     add_named_global(jlgetworld_global, &jl_world_counter);
     add_named_global("__stack_chk_fail", &__stack_chk_fail);
-    add_named_global(jltls_states_func, (void*)NULL);
+    add_named_global(jlpgcstack_func, (void*)NULL);
     add_named_global(jlerror_func, &jl_error);
     add_named_global(jlthrow_func, &jl_throw);
     add_named_global(jlundefvarerror_func, &jl_undefined_var_error);

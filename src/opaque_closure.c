@@ -5,12 +5,12 @@ JL_DLLEXPORT jl_value_t *jl_invoke_opaque_closure(jl_opaque_closure_t *oc, jl_va
 {
     jl_value_t *ret = NULL;
     JL_GC_PUSH1(&ret);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    size_t last_age = ptls->world_age;
-    ptls->world_age = oc->world;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = oc->world;
     ret = jl_interpret_opaque_closure(oc, args, nargs);
     jl_typeassert(ret, jl_tparam1(jl_typeof(oc)));
-    ptls->world_age = last_age;
+    ct->world_age = last_age;
     JL_GC_POP();
     return ret;
 }
@@ -25,14 +25,14 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isv
     JL_TYPECHK(new_opaque_closure, type, rt_lb);
     JL_TYPECHK(new_opaque_closure, type, rt_ub);
     JL_TYPECHK(new_opaque_closure, method, source);
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_value_t *oc_type JL_ALWAYS_LEAFTYPE;
     oc_type = jl_apply_type2((jl_value_t*)jl_opaque_closure_type, (jl_value_t*)argt, rt_ub);
     JL_GC_PROMISE_ROOTED(oc_type);
     jl_value_t *captures = NULL;
     JL_GC_PUSH1(&captures);
     captures = jl_f_tuple(NULL, env, nenv);
-    jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ptls, sizeof(jl_opaque_closure_t), oc_type);
+    jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ct->ptls, sizeof(jl_opaque_closure_t), oc_type);
     JL_GC_POP();
     oc->source = (jl_method_t*)source;
     oc->isva = jl_unbox_bool(isva);

@@ -109,7 +109,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     // checks that the syscall is made in the signal handler and that
     // the ucontext address is valid. Hopefully the value of the ucontext
     // will not be part of the validation...
-    if (!ptls->signal_stack) {
+    if (!ptls || !ptls->signal_stack) {
         sigset_t sset;
         sigemptyset(&sset);
         sigaddset(&sset, sig);
@@ -196,26 +196,29 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
 #endif
 }
 
-static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, int sig, void *sigctx)
+static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *e, int sig, void *sigctx)
 {
-    if (!ptls->safe_restore)
-        ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx), ptls->pgcstack);
-    ptls->sig_exception = e;
+    jl_ptls_t ptls = ct->ptls;
+    if (!jl_get_safe_restore()) {
+        ptls->bt_size =
+            rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, jl_to_bt_context(sigctx),
+                              ct->gcstack);
+        ptls->sig_exception = e;
+    }
     jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
 }
 
 static pthread_t signals_thread;
 
-static int is_addr_on_stack(jl_ptls_t ptls, void *addr)
+static int is_addr_on_stack(jl_task_t *ct, void *addr)
 {
-    jl_task_t *t = ptls->current_task;
-    if (t->copy_stack)
+    if (ct->copy_stack) {
+        jl_ptls_t ptls = ct->ptls;
         return ((char*)addr > (char*)ptls->stackbase - ptls->stacksize &&
                 (char*)addr < (char*)ptls->stackbase);
-    else
-        return ((char*)addr > (char*)t->stkbuf &&
-                (char*)addr < (char*)t->stkbuf + t->bufsz);
+    }
+    return ((char*)addr > (char*)ct->stkbuf &&
+            (char*)addr < (char*)ct->stkbuf + ct->bufsz);
 }
 
 static void sigdie_handler(int sig, siginfo_t *info, void *context)
@@ -305,26 +308,34 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
 
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    if (jl_get_safe_restore()) { // restarting jl_ or profile
+        jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
+        return;
+    }
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL) {
+        sigdie_handler(sig, info, context);
+        return;
+    }
     assert(sig == SIGSEGV || sig == SIGBUS);
     if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
         jl_set_gc_and_wait();
         // Do not raise sigint on worker thread
-        if (ptls->tid != 0)
+        if (ct->tid != 0)
             return;
-        if (ptls->defer_signal) {
+        if (ct->ptls->defer_signal) {
             jl_safepoint_defer_sigint();
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ptls, jl_interrupt_exception, sig, context);
+            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, context);
         }
         return;
     }
-    if (ptls->safe_restore || is_addr_on_stack(ptls, info->si_addr)) { // stack overflow, or restarting jl_
-        jl_throw_in_ctx(ptls, jl_stackovf_exception, sig, context);
+    if (is_addr_on_stack(ct, info->si_addr)) { // stack overflow
+        jl_throw_in_ctx(ct, jl_stackovf_exception, sig, context);
     }
-    else if (jl_is_on_sigstack(ptls, info->si_addr, context)) {
+    else if (jl_is_on_sigstack(ct->ptls, info->si_addr, context)) {
         // This mainly happens when one of the finalizers during final cleanup
         // on the signal stack has a deep/infinite recursion.
         // There isn't anything more we can do
@@ -334,11 +345,11 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         _exit(sig + 128);
     }
     else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context)) {  // writing to read-only memory (e.g., mmap)
-        jl_throw_in_ctx(ptls, jl_readonlymemory_exception, sig, context);
+        jl_throw_in_ctx(ct, jl_readonlymemory_exception, sig, context);
     }
     else {
 #ifdef SEGV_EXCEPTION
-        jl_throw_in_ctx(ptls, jl_segv_exception, sig, context);
+        jl_throw_in_ctx(ct, jl_segv_exception, sig, context);
 #else
         sigdie_handler(sig, info, context);
 #endif
@@ -433,7 +444,10 @@ static void jl_exit_thread0(int state, jl_bt_element_t *bt_data, size_t bt_size)
 // 3: exit with `thread0_exit_state`
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL)
+        return;
+    jl_ptls_t ptls = ct->ptls;
     int errno_save = errno;
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
 #if !defined(JL_DISABLE_LIBUNWIND)
@@ -457,11 +471,11 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
             // Force a throw
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ptls, jl_interrupt_exception, sig, ctx);
+            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, ctx);
         }
     }
     else if (request == 3) {
-        jl_call_in_ctx(ptls, jl_exit_thread0_cb, sig, ctx);
+        jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
     }
     errno = errno_save;
 }
@@ -753,11 +767,10 @@ static void *signal_listener(void *arg)
                 else {
                     // unwinding can fail, so keep track of the current state
                     // and restore from the SEGV handler if anything happens.
-                    jl_ptls_t ptls = jl_get_ptls_states();
-                    jl_jmp_buf *old_buf = ptls->safe_restore;
+                    jl_jmp_buf *old_buf = jl_get_safe_restore();
                     jl_jmp_buf buf;
 
-                    ptls->safe_restore = &buf;
+                    jl_set_safe_restore(&buf);
                     if (jl_setjmp(buf, 0)) {
                         jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
                     } else {
@@ -765,7 +778,7 @@ static void *signal_listener(void *arg)
                         bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
                                 bt_size_max - bt_size_cur - 1, signal_context, NULL);
                     }
-                    ptls->safe_restore = old_buf;
+                    jl_set_safe_restore(old_buf);
 
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++].uintptr = 0;
@@ -832,8 +845,15 @@ void restore_signals(void)
 static void fpe_handler(int sig, siginfo_t *info, void *context)
 {
     (void)info;
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_throw_in_ctx(ptls, jl_diverror_exception, sig, context);
+    if (jl_get_safe_restore()) { // restarting jl_ or profile
+        jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
+        return;
+    }
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL) // exception on foreign thread is fatal
+        sigdie_handler(sig, info, context);
+    else
+        jl_throw_in_ctx(ct, jl_diverror_exception, sig, context);
 }
 
 static void sigint_handler(int sig)

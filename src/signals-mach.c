@@ -84,7 +84,6 @@ extern boolean_t exc_server(mach_msg_header_t *, mach_msg_header_t *);
 void *mach_segv_listener(void *arg)
 {
     (void)arg;
-    (void)jl_get_ptls_states();
     while (1) {
         int ret = mach_msg_server(exc_server, 2048, segv_port, MACH_MSG_TIMEOUT_NONE);
         jl_safe_printf("mach_msg_server: %s\n", mach_error_string(ret));
@@ -167,7 +166,7 @@ static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
 #else
 #error "julia: throw-in-context not supported on this platform"
 #endif
-    if (ptls2->signal_stack == NULL || is_addr_on_sigstack(ptls2, (void*)rsp)) {
+    if (ptls2 == NULL || ptls2->signal_stack == NULL || is_addr_on_sigstack(ptls2, (void*)rsp)) {
         rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
     }
     else {
@@ -210,10 +209,11 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     kern_return_t ret = thread_get_state(thread, THREAD_STATE, (thread_state_t)&state, &count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
-    if (!ptls2->safe_restore) {
+    if (!jl_get_safe_restore()) {
         assert(exception);
-        ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
-                                           (bt_context_t*)&state, ptls2->pgcstack);
+        ptls2->bt_size =
+            rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)&state,
+                              NULL /*current_task?*/);
         ptls2->sig_exception = exception;
     }
     jl_call_in_state(ptls2, &state, &jl_sig_throw);
@@ -223,9 +223,10 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
 
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     assert(sig == SIGSEGV || sig == SIGBUS);
-    if (ptls->safe_restore) { // restarting jl_ or jl_unwind_stepn
+    if (jl_get_safe_restore()) { // restarting jl_ or jl_unwind_stepn
+        jl_task_t *ct = jl_get_current_task();
+        jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
         jl_call_in_state(ptls, (host_thread_state_t*)jl_to_bt_context(context), &jl_sig_throw);
     }
     else {
@@ -291,7 +292,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         }
         return KERN_SUCCESS;
     }
-    if (ptls2->safe_restore) {
+    if (jl_get_safe_restore()) {
         jl_throw_in_thread(tid, thread, jl_stackovf_exception);
         return KERN_SUCCESS;
     }
@@ -301,7 +302,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) == 0) { // check if this was a valid address
 #endif
         jl_value_t *excpt;
-        if (is_addr_on_stack(ptls2, (void*)fault_addr)) {
+        if (is_addr_on_stack(ptls2->current_task, (void*)fault_addr)) {
             excpt = jl_stackovf_exception;
         }
 #ifdef SEGV_EXCEPTION

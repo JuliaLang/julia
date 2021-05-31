@@ -510,7 +510,6 @@ extern "C" JL_DLLEXPORT
 jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo, char binary)
 {
     assert(fptr != 0);
-    jl_ptls_t ptls = jl_get_ptls_states();
     std::string code;
     raw_string_ostream stream(code);
 
@@ -538,6 +537,7 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
     }
 
     // Dump assembly code
+    jl_ptls_t ptls = jl_current_task->ptls;
     int8_t gc_state = jl_gc_safe_enter(ptls);
     jl_dump_asm_internal(
             fptr, symsize, slide,

@@ -539,14 +539,14 @@ void gc_scrub_record_task(jl_task_t *t)
 
 static void gc_scrub_range(char *low, char *high)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     if (jl_setjmp(buf, 0)) {
-        ptls->safe_restore = old_buf;
+        jl_set_safe_restore(old_buf);
         return;
     }
-    ptls->safe_restore = &buf;
+    jl_set_safe_restore(&buf);
     low = (char*)((uintptr_t)low & ~(uintptr_t)15);
     for (char **stack_p = ((char**)high) - 1; stack_p > (char**)low; stack_p--) {
         char *p = *stack_p;
@@ -570,13 +570,13 @@ static void gc_scrub_range(char *low, char *high)
         // set mark to GC_MARKED (young and marked)
         tag->bits.gc = GC_MARKED;
     }
-    ptls->safe_restore = old_buf;
+    jl_set_safe_restore(old_buf);
 }
 
 static void gc_scrub_task(jl_task_t *ta)
 {
     int16_t tid = ta->tid;
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_current_task->ptls;
     jl_ptls_t ptls2 = NULL;
     if (tid != -1)
         ptls2 = jl_all_tls_states[tid];
@@ -1252,12 +1252,12 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
 // `pc_offset` will be added to `sp` for convenience in the debugger.
 NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset)
 {
-    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
-    ptls->safe_restore = &buf;
+    jl_set_safe_restore(&buf);
     if (jl_setjmp(buf, 0) != 0) {
         jl_safe_printf("\n!!! ERROR when unwinding gc mark loop -- ABORTING !!!\n");
-        ptls->safe_restore = old_buf;
+        jl_set_safe_restore(old_buf);
         return;
     }
     void **top = sp.pc + pc_offset;
@@ -1378,7 +1378,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
             break;
         }
     }
-    ptls->safe_restore = old_buf;
+    jl_set_safe_restore(old_buf);
 }
 
 #ifdef __cplusplus

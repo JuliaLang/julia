@@ -340,9 +340,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
 
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_method_instance_t *li =
-        (jl_method_instance_t*)jl_gc_alloc(ptls, sizeof(jl_method_instance_t),
+        (jl_method_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_instance_t),
                                            jl_method_instance_type);
     li->def.value = NULL;
     li->specTypes = NULL;
@@ -357,9 +357,9 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_code_info_t *src =
-        (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
+        (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     src->code = NULL;
     src->codelocs = NULL;
@@ -467,15 +467,15 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     jl_code_info_t *func = NULL;
     jl_value_t *ex = NULL;
     JL_GC_PUSH2(&ex, &func);
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     int last_lineno = jl_lineno;
-    int last_in = ptls->in_pure_callback;
-    size_t last_age = jl_get_ptls_states()->world_age;
+    int last_in = ct->ptls->in_pure_callback;
+    size_t last_age = ct->world_age;
 
     JL_TRY {
-        ptls->in_pure_callback = 1;
+        ct->ptls->in_pure_callback = 1;
         // and the right world
-        ptls->world_age = def->primary_world;
+        ct->world_age = def->primary_world;
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
@@ -492,7 +492,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
-                    ptls->in_pure_callback = 0;
+                    ct->ptls->in_pure_callback = 0;
                     jl_toplevel_eval(def->module, (jl_value_t*)func);
                 }
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
@@ -510,13 +510,13 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             }
         }
 
-        ptls->in_pure_callback = last_in;
+        ct->ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
-        ptls->world_age = last_age;
+        ct->world_age = last_age;
         jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
     }
     JL_CATCH {
-        ptls->in_pure_callback = last_in;
+        ct->ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         jl_rethrow();
     }
@@ -526,9 +526,9 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_code_info_t *newsrc =
-        (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
+        (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     *newsrc = *src;
     return newsrc;
@@ -655,9 +655,9 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_method_t *m =
-        (jl_method_t*)jl_gc_alloc(ptls, sizeof(jl_method_t), jl_method_type);
+        (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type);
     m->specializations = jl_emptysvec;
     m->speckeyset = (jl_array_t*)jl_an_empty_vec_any;
     m->sig = NULL;

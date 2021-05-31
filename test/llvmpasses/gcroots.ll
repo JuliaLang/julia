@@ -4,12 +4,14 @@
 declare void @boxed_simple({} addrspace(10)*, {} addrspace(10)*)
 declare {} addrspace(10)* @jl_box_int64(i64)
 declare {}*** @julia.ptls_states()
+declare {}*** @julia.get_pgcstack()
 declare void @jl_safepoint()
 declare {} addrspace(10)* @jl_apply_generic({} addrspace(10)*, {} addrspace(10)**, i32)
 
 define void @simple(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @simple
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 ; CHECK: call {} addrspace(10)* @jl_box_int64
@@ -33,6 +35,7 @@ define void @leftover_alloca({} addrspace(10)* %a) {
 ; relying on mem2reg to catch simple cases such as this earlier
 ; CHECK-LABEL: @leftover_alloca
 ; CHECK: %var = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %var = alloca {} addrspace(10)*
     store {} addrspace(10)* %a, {} addrspace(10)** %var
@@ -47,6 +50,7 @@ declare void @union_arg({{} addrspace(10)*, i8})
 
 define void @simple_union() {
 ; CHECK-LABEL: @simple_union
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
 ; CHECK: %a = call { {} addrspace(10)*, i8 } @union_ret()
     %a = call { {} addrspace(10)*, i8 } @union_ret()
@@ -61,6 +65,7 @@ declare void @one_arg_boxed({} addrspace(10)*)
 
 define void @select_simple(i64 %a, i64 %b) {
 ; CHECK-LABEL: @select_simple
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
     %bboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %b)
@@ -74,6 +79,7 @@ define void @phi_simple(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @phi_simple
 ; CHECK:   %gcframe = alloca {} addrspace(10)*, i32 3
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %cmp = icmp eq i64 %a, %b
     br i1 %cmp, label %alabel, label %blabel
@@ -96,6 +102,7 @@ declare void @one_arg_decayed(i64 addrspace(12)*)
 define void @select_lift(i64 %a, i64 %b) {
 ; CHECK-LABEL: @select_lift
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
     %adecayed = addrspacecast {} addrspace(10)* %aboxed to i64 addrspace(12)*
@@ -112,6 +119,7 @@ define void @phi_lift(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @phi_lift
 ; CHECK: %gclift = phi {} addrspace(10)* [ %aboxed, %alabel ], [ %bboxed, %blabel ], [ %gclift, %common ]
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %cmp = icmp eq i64 %a, %b
     br i1 %cmp, label %alabel, label %blabel
@@ -133,6 +141,7 @@ common:
 define void @phi_lift_union(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @phi_lift_union
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %cmp = icmp eq i64 %a, %b
     br i1 %cmp, label %alabel, label %blabel
@@ -158,6 +167,7 @@ define void @live_if_live_out(i64 %a, i64 %b) {
 ; CHECK-LABEL: @live_if_live_out
 top:
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
 ; The failure case is failing to realize that `aboxed` is live across the first
 ; one_arg_boxed safepoint and putting bboxed in the same root slot
@@ -175,6 +185,7 @@ succ:
 define {} addrspace(10)* @ret_use(i64 %a, i64 %b) {
 ; CHECK-LABEL: @ret_use
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
 ; CHECK: store {} addrspace(10)* %aboxed
@@ -185,6 +196,7 @@ define {} addrspace(10)* @ret_use(i64 %a, i64 %b) {
 define {{} addrspace(10)*, i8} @ret_use_struct() {
 ; CHECK-LABEL: @ret_use_struct
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
 ; CHECK: %aunion = call { {} addrspace(10)*, i8 } @union_ret()
     %aunion = call { {} addrspace(10)*, i8 } @union_ret()
@@ -201,6 +213,7 @@ define i8 @nosafepoint({} addrspace(10)* dereferenceable(16)) {
 ; CHECK-LABEL: @nosafepoint
 ; CHECK-NOT: %gcframe
 top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %1 = call {}*** @julia.ptls_states()
   %2 = bitcast {}*** %1 to {} addrspace(10)**
   %3 = getelementptr {} addrspace(10)*, {} addrspace(10)** %2, i64 3
@@ -219,6 +232,7 @@ top:
 define void @global_ref() {
 ; CHECK-LABEL: @global_ref
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %loaded = load {} addrspace(10)*, {} addrspace(10)** getelementptr ({} addrspace(10)*, {} addrspace(10)** inttoptr (i64 140540744325952 to {} addrspace(10)**), i64 1)
 ; CHECK: store {} addrspace(10)* %loaded, {} addrspace(10)**
@@ -230,6 +244,7 @@ define {} addrspace(10)* @no_redundant_rerooting(i64 %a, i1 %cond) {
 ; CHECK-LABEL: @no_redundant_rerooting
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
 ; CHECK: store {} addrspace(10)* %aboxed
@@ -254,6 +269,7 @@ define void @memcpy_use(i64 %a, i64 *%aptr) {
 ; CHECK-LABEL: @memcpy_use
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
 ; CHECK: store {} addrspace(10)* %aboxed
@@ -270,6 +286,7 @@ define void @gc_preserve(i64 %a) {
 ; CHECK-LABEL: @gc_preserve
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
 ; CHECK: store {} addrspace(10)* %aboxed
@@ -291,6 +308,7 @@ define void @gc_preserve_vec([2 x <2 x {} addrspace(10)*>] addrspace(11)* nocapt
 ; CHECK-LABEL: @gc_preserve_vec
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 6
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %v = load [2 x <2 x {} addrspace(10)*>], [2 x <2 x {} addrspace(10)*>] addrspace(11)* %0, align 8
 ; CHECK-DAG: [[EXTRACT11:%.*]] = extractvalue [2 x <2 x {} addrspace(10)*>] %v, 0
@@ -318,6 +336,7 @@ define {} addrspace(10)* @gv_const() {
 ; CHECK-LABEL: @gv_const
 ; CHECK-NOT: %gcframe
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %v10 = load {}*, {}** @gv1, !tbaa !2
     %v1 = addrspacecast {}* %v10 to {} addrspace(10)*
@@ -331,6 +350,7 @@ top:
 define {} addrspace(10)* @vec_jlcallarg({} addrspace(10)*, {} addrspace(10)**, i32) {
 ; CHECK-LABEL: @vec_jlcallarg
 ; CHECK-NOT: %gcframe
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %v4 = call {}*** @julia.ptls_states()
   %v5 = bitcast {} addrspace(10)** %1 to <2 x {} addrspace(10)*>*
   %v6 = load <2 x {} addrspace(10)*>, <2 x {} addrspace(10)*>* %v5, align 8
@@ -343,6 +363,7 @@ declare {} addrspace(10) *@alloc()
 define {} addrspace(10)* @vec_loadobj() {
 ; CHECK-LABEL: @vec_loadobj
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %v4 = call {}*** @julia.ptls_states()
   %obj = call {} addrspace(10) *@alloc()
   %v1 = bitcast {} addrspace(10) * %obj to {} addrspace(10)* addrspace(10)*
@@ -356,6 +377,7 @@ define {} addrspace(10)* @vec_loadobj() {
 define {} addrspace(10)* @vec_gep() {
 ; CHECK-LABEL: @vec_gep
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %v4 = call {}*** @julia.ptls_states()
   %obj = call {} addrspace(10) *@alloc()
   %obj1 = bitcast {} addrspace(10) * %obj to {} addrspace(10)* addrspace(10)*
@@ -371,6 +393,7 @@ define void @loopyness(i1 %cond1, {} addrspace(10) *%arg) {
 ; CHECK-LABEL: @loopyness
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     br label %header
 
@@ -402,6 +425,7 @@ define {} addrspace(10)* @phi_union(i1 %cond) {
 ; CHECK-LABEL: @phi_union
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
 top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   br i1 %cond, label %a, label %b
 
@@ -426,6 +450,7 @@ define {} addrspace(10)* @select_union(i1 %cond) {
 ; CHECK-LABEL: @select_union
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
 top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %obj = call {} addrspace(10) *@alloc()
   %aobj = insertvalue {{} addrspace(10)*, i8} undef, {} addrspace(10)* %obj, 0
@@ -441,6 +466,7 @@ define i8 @simple_arrayptr() {
 ; CHECK-LABEL: @simple_arrayptr
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 top:
+   %pgcstack = call {}*** @julia.get_pgcstack()
    %ptls = call {}*** @julia.ptls_states()
    %obj1 = call {} addrspace(10) *@alloc()
    %obj2 = call {} addrspace(10) *@alloc()
@@ -457,6 +483,7 @@ define {} addrspace(10)* @vecstoreload(<2 x {} addrspace(10)*> *%arg) {
 ; CHECK-LABEL: @vecstoreload
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %loaded = load <2 x {} addrspace(10)*>, <2 x {} addrspace(10)*> *%arg
     call void @jl_safepoint()
@@ -470,6 +497,7 @@ define void @vecphi(i1 %cond, <2 x {} addrspace(10)*> *%arg) {
 ; CHECK-LABEL: @vecphi
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     br i1 %cond, label %A, label %B
 
@@ -495,6 +523,7 @@ define i8 @phi_arrayptr(i1 %cond) {
 ; CHECK-LABEL: @phi_arrayptr
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     br i1 %cond, label %A, label %B
 
@@ -533,6 +562,7 @@ define void @vecselect(i1 %cond, <2 x {} addrspace(10)*> *%arg) {
 ; CHECK-LABEL: @vecselect
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %loaded = load <2 x {} addrspace(10)*>, <2 x {} addrspace(10)*> *%arg
     call void @jl_safepoint()
@@ -548,6 +578,7 @@ top:
 define void @vecselect_lift(i1 %cond, <2 x {} addrspace(10)*> *%arg) {
 ; CHECK-LABEL: @vecselect_lift
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %loaded = load <2 x {} addrspace(10)*>, <2 x {} addrspace(10)*> *%arg
     %decayed = addrspacecast <2 x {} addrspace(10)*> %loaded to <2 x i64 addrspace(12)*>
@@ -565,6 +596,7 @@ define void @vecselect_lift(i1 %cond, <2 x {} addrspace(10)*> *%arg) {
 define void @vecvecselect_lift(<2 x i1> %cond, <2 x {} addrspace(10)*> *%arg) {
 ; CHECK-LABEL: @vecvecselect_lift
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %loaded = load <2 x {} addrspace(10)*>, <2 x {} addrspace(10)*> *%arg
     %decayed = addrspacecast <2 x {} addrspace(10)*> %loaded to <2 x i64 addrspace(12)*>
@@ -582,6 +614,7 @@ define void @vecvecselect_lift(<2 x i1> %cond, <2 x {} addrspace(10)*> *%arg) {
 define void @vecscalarselect_lift(<2 x i1> %cond, i64 %a) {
 ; CHECK-LABEL: @vecscalarselect_lift
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
     %adecayed = addrspacecast {} addrspace(10)* %aboxed to i64 addrspace(12)*
@@ -600,6 +633,7 @@ define void @vecscalarselect_lift(<2 x i1> %cond, i64 %a) {
 define void @scalarvecselect_lift(i1 %cond, i64 %a) {
 ; CHECK-LABEL: @scalarvecselect_lift
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
     %adecayed = addrspacecast {} addrspace(10)* %aboxed to i64 addrspace(12)*
@@ -619,6 +653,7 @@ define i8 @select_arrayptr(i1 %cond) {
 ; CHECK-LABEL: @select_arrayptr
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %obj1 = call {} addrspace(10) *@alloc()
     %obj2 = call {} addrspace(10) *@alloc()
@@ -648,6 +683,7 @@ define i8 @vector_arrayptrs() {
 ; CHECK: store {} addrspace(10)* %obj1, {} addrspace(10)** [[GEP0]]
 ;
 top:
+   %pgcstack = call {}*** @julia.get_pgcstack()
    %ptls = call {}*** @julia.ptls_states()
    %obj1 = call {} addrspace(10) *@alloc()
    %decayed = addrspacecast {} addrspace(10) *%obj1 to {} addrspace(11) *
@@ -669,6 +705,7 @@ define i8 @masked_arrayptrs() {
 ; CHECK: store {} addrspace(10)* %obj1, {} addrspace(10)** [[GEP0]]
 ;
 top:
+   %pgcstack = call {}*** @julia.get_pgcstack()
    %ptls = call {}*** @julia.ptls_states()
    %obj1 = call {} addrspace(10) *@alloc()
    %decayed = addrspacecast {} addrspace(10) *%obj1 to {} addrspace(11) *
@@ -690,6 +727,7 @@ define i8 @gather_arrayptrs() {
 ; CHECK: store {} addrspace(10)* %obj1, {} addrspace(10)** [[GEP0]]
 ;
 top:
+   %pgcstack = call {}*** @julia.get_pgcstack()
    %ptls = call {}*** @julia.ptls_states()
    %obj1 = call {} addrspace(10) *@alloc()
    %decayed = addrspacecast {} addrspace(10) *%obj1 to {} addrspace(11)*
@@ -710,6 +748,7 @@ define i8 @gather_arrayptrs_alltrue() {
 ; CHECK: store {} addrspace(10)* %obj1, {} addrspace(10)** [[GEP0]]
 ;
 top:
+   %pgcstack = call {}*** @julia.get_pgcstack()
    %ptls = call {}*** @julia.ptls_states()
    %obj1 = call {} addrspace(10) *@alloc()
    %decayed = addrspacecast {} addrspace(10) *%obj1 to {} addrspace(11)*
@@ -728,6 +767,7 @@ define i8 @lost_select_decayed(i1 %arg1) {
 ; CHECK: [[GEP0:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
 ; CHECK: store {} addrspace(10)* [[SOMETHING:%.*]], {} addrspace(10)** [[GEP0]]
 top:
+    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %obj1 = call {} addrspace(10) *@alloc()
     %decayed = addrspacecast {} addrspace(10) *%obj1 to {} addrspace(11)*

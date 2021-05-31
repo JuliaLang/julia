@@ -24,7 +24,7 @@ JuliaPassContext::JuliaPassContext()
     : T_size(nullptr), T_int8(nullptr), T_int32(nullptr),
         T_pint8(nullptr), T_jlvalue(nullptr), T_prjlvalue(nullptr),
         T_ppjlvalue(nullptr), T_pjlvalue(nullptr), T_pjlvalue_der(nullptr),
-        T_ppjlvalue_der(nullptr), ptls_getter(nullptr), gc_flush_func(nullptr),
+        T_ppjlvalue_der(nullptr), pgcstack_getter(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr), module(nullptr)
@@ -40,7 +40,7 @@ void JuliaPassContext::initFunctions(Module &M)
 {
     module = &M;
 
-    ptls_getter = M.getFunction("julia.ptls_states");
+    pgcstack_getter = M.getFunction("julia.get_pgcstack");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
@@ -69,14 +69,15 @@ void JuliaPassContext::initAll(Module &M)
     T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
     T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
     T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+    T_pppjlvalue = PointerType::get(T_ppjlvalue, 0);
 }
 
-llvm::CallInst *JuliaPassContext::getPtls(llvm::Function &F) const
+llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
     for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
-         ptls_getter && I != E; ++I) {
+         pgcstack_getter && I != E; ++I) {
         if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
-            if (callInst->getCalledOperand() == ptls_getter) {
+            if (callInst->getCalledOperand() == pgcstack_getter) {
                 return callInst;
             }
         }

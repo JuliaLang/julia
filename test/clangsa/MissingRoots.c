@@ -409,14 +409,6 @@ void stack_rooted(jl_value_t *lb JL_MAYBE_UNROOTED, jl_value_t *ub JL_MAYBE_UNRO
     JL_GC_POP();
 }
 
-void JL_NORETURN throw_internal(jl_value_t *e JL_MAYBE_UNROOTED)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->sig_exception = e;
-    jl_gc_unsafe_enter(ptls);
-    look_at_value(e);
-}
-
 JL_DLLEXPORT jl_value_t *jl_totally_used_function(int i)
 {
     jl_value_t *v = jl_box_int32(i); // expected-note{{Started tracking value here}}

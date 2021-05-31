@@ -405,13 +405,14 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 {
     jl_handler_t __eh;
     size_t ns = jl_array_len(stmts);
+    jl_task_t *ct = jl_current_task;
 
     while (1) {
         s->ip = ip;
         if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         if (toplevel)
-            jl_get_ptls_states()->world_age = jl_world_counter;
+            ct->world_age = jl_world_counter;
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;
@@ -516,8 +517,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 int hand_n_leave = jl_unbox_long(jl_exprarg(stmt, 0));
                 assert(hand_n_leave > 0);
                 // equivalent to jl_pop_handler(hand_n_leave), but retaining eh for longjmp:
-                jl_ptls_t ptls = jl_get_ptls_states();
-                jl_handler_t *eh = ptls->current_task->eh;
+                jl_handler_t *eh = ct->eh;
                 while (--hand_n_leave > 0)
                     eh = eh->prev;
                 jl_eh_restore_state(eh);
@@ -714,9 +714,10 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->continue_at = 0;
     s->mi = NULL;
     JL_GC_ENABLEFRAME(s);
-    size_t last_age = jl_get_ptls_states()->world_age;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
     jl_value_t *r = eval_body(stmts, s, 0, 1);
-    jl_get_ptls_states()->world_age = last_age;
+    ct->world_age = last_age;
     JL_GC_POP();
     return r;
 }
