@@ -632,7 +632,9 @@ function gcdx(a::BigInt, b::BigInt)
     g, s, t
 end
 
-sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, arr; init=BigInt(0))
++(x::BigInt, y::BigInt, rest::BigInt...) = sum(tuple(x, y, rest...))
+sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}) =
+    foldl(MPZ.add!, arr; init=BigInt(0))
 # Note: a similar implementation for `prod` won't be efficient:
 # 1) the time complexity of the allocations is negligible compared to the multiplications
 # 2) assuming arr contains similarly sized BigInts, the multiplications are much more
