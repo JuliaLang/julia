@@ -176,12 +176,24 @@ Random.seed!(1)
             @test Array(a*D) ≈ a*DM
             @test Array(D*a) ≈ DM*a
             @test Array(D/a) ≈ DM/a
-            if relty <: BlasFloat
-                for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
-                    @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                    @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                    @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
-                end
+            if elty <: Real
+                @test Array(abs.(D)^a) ≈ abs.(DM)^a
+            else
+                @test Array(D^a) ≈ DM^a
+            end
+            @test Diagonal(1:100)^2 == Diagonal((1:100).^2)
+            p = 3
+            @test Diagonal(1:100)^p == Diagonal((1:100).^p)
+            @test Diagonal(1:100)^(-1) == Diagonal(inv.(1:100))
+            @test Diagonal(1:100)^2.0 == Diagonal((1:100).^2.0)
+            @test Diagonal(1:100)^(2.0+0im) == Diagonal((1:100).^(2.0+0im))
+        end
+
+        if relty <: BlasFloat
+            for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
