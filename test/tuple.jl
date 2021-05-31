@@ -179,6 +179,15 @@ end
         @test_throws MethodError (1,)[]
         @test_throws MethodError (1,1,1)[1,1]
     end
+
+    @testset "get() method for Tuple (Issue #40809)" begin
+        @test get((5, 6, 7), 1, 0) == 5
+        @test get((), 5, 0) == 0
+        @test get((1,), 3, 0) == 0
+        @test get(()->0, (5, 6, 7), 1) == 5
+        @test get(()->0, (), 4) == 0
+        @test get(()->0, (1,), 3) == 0
+    end
 end
 
 @testset "fill to length" begin
