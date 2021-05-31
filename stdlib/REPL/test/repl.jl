@@ -1346,6 +1346,14 @@ end
         @test mods == [:Foo]
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
         @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base: nope"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Main"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
+        @test isempty(mods)
 
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("# comment"))
         @test isempty(mods)
