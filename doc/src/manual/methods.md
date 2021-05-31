@@ -1127,16 +1127,22 @@ julia> h(4.0)
 1.0
 ```
 
-However, you may *not* define local methods conditionally, as in
+However, you should *not* define local methods conditionally or subject to control flow, as in
 ```julia
-function f(inc)
+function f2(inc)
     if inc
         g(x) = x + 1
     else
         g(x) = x - 1
     end
 end
+
+function f3()
+    function g end
+    return g
+    g() = 0
+end
 ```
-as this prevents various compiler optimizations.
+as this leads to undefined behavior.
 
 [^Clarke61]: Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
