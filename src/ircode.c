@@ -699,7 +699,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     jl_ircode_state s = {
         &dest,
         m,
-        jl_get_ptls_states()
+        jl_current_task->ptls
     };
 
     uint8_t flags = (code->aggressive_constprop << 4)
@@ -783,7 +783,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     jl_ircode_state s = {
         &src,
         m,
-        jl_get_ptls_states()
+        jl_current_task->ptls
     };
 
     jl_code_info_t *code = jl_new_code_info_uninit();

@@ -718,24 +718,24 @@ JL_CALLABLE(jl_f__apply_iterate)
 // this is like `_apply`, but with quasi-exact checks to make sure it is pure
 JL_CALLABLE(jl_f__apply_pure)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    int last_in = ptls->in_pure_callback;
+    jl_task_t *ct = jl_current_task;
+    int last_in = ct->ptls->in_pure_callback;
     jl_value_t *ret = NULL;
     JL_TRY {
-        ptls->in_pure_callback = 1;
+        ct->ptls->in_pure_callback = 1;
         // because this function was declared pure,
         // we should be allowed to run it in any world
         // so we run it in the newest world;
         // because, why not :)
         // and `promote` works better this way
-        size_t last_age = ptls->world_age;
-        ptls->world_age = jl_world_counter;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_world_counter;
         ret = do_apply(args, nargs, NULL);
-        ptls->world_age = last_age;
-        ptls->in_pure_callback = last_in;
+        ct->world_age = last_age;
+        ct->ptls->in_pure_callback = last_in;
     }
     JL_CATCH {
-        ptls->in_pure_callback = last_in;
+        ct->ptls->in_pure_callback = last_in;
         jl_rethrow();
     }
     return ret;
@@ -744,12 +744,12 @@ JL_CALLABLE(jl_f__apply_pure)
 // this is like a regular call, but always runs in the newest world
 JL_CALLABLE(jl_f__call_latest)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    size_t last_age = ptls->world_age;
-    if (!ptls->in_pure_callback)
-        ptls->world_age = jl_world_counter;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    if (!ct->ptls->in_pure_callback)
+        ct->world_age = jl_world_counter;
     jl_value_t *ret = jl_apply(args, nargs);
-    ptls->world_age = last_age;
+    ct->world_age = last_age;
     return ret;
 }
 
@@ -758,15 +758,15 @@ JL_CALLABLE(jl_f__call_latest)
 JL_CALLABLE(jl_f__call_in_world)
 {
     JL_NARGSV(_apply_in_world, 2);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    size_t last_age = ptls->world_age;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
     JL_TYPECHK(_apply_in_world, ulong, args[0]);
     size_t world = jl_unbox_ulong(args[0]);
     world = world <= jl_world_counter ? world : jl_world_counter;
-    if (!ptls->in_pure_callback)
-        ptls->world_age = world;
+    if (!ct->ptls->in_pure_callback)
+        ct->world_age = world;
     jl_value_t *ret = jl_apply(&args[1], nargs - 1);
-    ptls->world_age = last_age;
+    ct->world_age = last_age;
     return ret;
 }
 
@@ -781,8 +781,8 @@ JL_CALLABLE(jl_f_tuple)
     JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
     if (tt->instance != NULL)
         return tt->instance;
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(tt), tt);
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(tt), tt);
     for (i = 0; i < nargs; i++)
         set_nth_field(tt, (void*)jv, i, args[i]);
     return jv;
@@ -1061,7 +1061,7 @@ JL_CALLABLE(jl_f_apply_type)
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
-    size_t world = jl_get_ptls_states()->world_age;
+    size_t world = jl_current_task->world_age;
     return jl_method_lookup(args, nargs, world) != NULL ? jl_true : jl_false;
 }
 
@@ -1127,10 +1127,10 @@ JL_CALLABLE(jl_f_invoke_kwsorter)
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_array_t *ar = jl_alloc_vec_any(n);
     JL_GC_PUSH1(&ar);
-    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
+    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ct->ptls, sizeof(jl_expr_t),
                                             jl_expr_type);
     ex->head = head;
     ex->args = ar;
@@ -1140,14 +1140,14 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 
 JL_CALLABLE(jl_f__expr)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);
     jl_array_t *ar = jl_alloc_vec_any(nargs-1);
     JL_GC_PUSH1(&ar);
     for(size_t i=0; i < nargs-1; i++)
         jl_array_ptr_set(ar, i, args[i+1]);
-    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
+    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ct->ptls, sizeof(jl_expr_t),
                                             jl_expr_type);
     ex->head = (jl_sym_t*)args[0];
     ex->args = ar;
@@ -1162,8 +1162,8 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
         jl_type_error_rt("TypeVar", "lower bound", (jl_value_t *)jl_type_type, lb);
     if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub))
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ptls, sizeof(jl_tvar_t), jl_tvar_type);
+    jl_task_t *ct = jl_current_task;
+    jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
     tv->name = name;
     tv->lb = lb;
     tv->ub = ub;
