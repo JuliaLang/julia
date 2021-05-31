@@ -1254,7 +1254,7 @@ Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-function sincosd(x::Real)
+function sincosd(x)
     if isinf(x)
         return throw(DomainError(x, "sincosd(x) is only defined for finite `x`."))
     elseif isnan(x)
