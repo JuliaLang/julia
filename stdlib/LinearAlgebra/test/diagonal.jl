@@ -801,4 +801,11 @@ end
     @test dot(A, B) ≈ conj(dot(B, A))
 end
 
+@testset "eltype relaxation(#41015)" begin
+    A = rand(3,3)
+    for trans in (identity, Adjoint, Transpose)
+        @test ldiv!(trans(I(3)), A) == A
+        @test rdiv!(A, trans(I(3))) == A
+    end
+end
 end # module TestDiagonal
