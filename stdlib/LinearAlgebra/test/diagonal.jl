@@ -796,5 +796,4 @@ end
         @test rdiv!(A, trans(I(3))) == A
     end
 end
-                                           
 end # module TestDiagonal
