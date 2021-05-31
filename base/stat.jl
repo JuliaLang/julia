@@ -66,7 +66,7 @@ macro stat_call(sym, arg1type, arg)
         stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
-            throw(_UVError("stat", r, "for file ", repr($(esc(arg)))))
+            uv_error(string("stat(",repr($(esc(arg))),")"), r)
         end
         st = StatStruct(stat_buf)
         if ispath(st) != (r == 0)
@@ -103,7 +103,7 @@ The fields of the structure are:
 | blksize | The file-system preferred block size for the file                  |
 | blocks  | The number of such blocks allocated                                |
 | mtime   | Unix timestamp of when the file was last modified                  |
-| ctime   | Unix timestamp of when the file was created                        |
+| ctime   | Unix timestamp of when the file's metadata was changed             |
 
 """
 stat(path...) = stat(joinpath(path...))
@@ -187,7 +187,7 @@ julia> isdir("not/a/directory")
 false
 ```
 
-See also: [`isfile`](@ref) and [`ispath`](@ref).
+See also [`isfile`](@ref) and [`ispath`](@ref).
 """
 isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
@@ -216,7 +216,7 @@ true
 julia> close(f); rm("test_file.txt")
 ```
 
-See also: [`isdir`](@ref) and [`ispath`](@ref).
+See also [`isdir`](@ref) and [`ispath`](@ref).
 """
 isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 

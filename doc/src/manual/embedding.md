@@ -45,7 +45,7 @@ gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib -Wl,-rpath,$JULIA_
 ```
 
 Alternatively, look at the `embedding.c` program in the Julia source tree in the `test/embedding/` folder.
-The file `ui/repl.c` program is another simple example of how to set `jl_options` options while
+The file `cli/loader_exe.c` program is another simple example of how to set `jl_options` options while
 linking against `libjulia`.
 
 The first thing that has to be done before calling any other Julia C function is to initialize

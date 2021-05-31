@@ -89,8 +89,8 @@ B265(x::Any, dummy::Nothing) = B265{UInt8}(x, dummy)
 @test (B265_(2)::B265{Float64}).field1 === 2.0e0
 @test (B265_(3)::B265{UInt8}).field1 === 0x03
 
-@test Base.return_types(B265_, (Int,)) == Any[B265]
-@test Core.Compiler.return_type(B265_, (Int,)) == B265
+@test B265{UInt8} <: only(Base.return_types(B265_, (Int,))) <: B265
+@test B265{UInt8} <: Core.Compiler.return_type(B265_, (Int,)) <: B265
 
 
 # test oldworld call / inference
@@ -200,6 +200,14 @@ notify(c26506_1)
 wait(c26506_2)
 @test result26506[1] == 3
 
+# issue #38435
+f38435(::Int, ::Any) = 1
+f38435(::Any, ::Int) = 2
+g38435(x) = f38435(x, x)
+@test_throws MethodError(f38435, (1, 1), Base.get_world_counter()) g38435(1)
+f38435(::Int, ::Int) = 3.0
+@test g38435(1) === 3.0
+
 
 ## Invalidation tests
 
@@ -211,9 +219,9 @@ function instance(f, types)
     if isa(specs, Nothing)
     elseif isa(specs, Core.SimpleVector)
         for i = 1:length(specs)
-            if isassigned(specs, i)
-                mi = specs[i]::Core.MethodInstance
-                if mi.specTypes === tt
+            mi = specs[i]
+            if mi isa Core.MethodInstance
+                if mi.specTypes <: tt && tt <: mi.specTypes
                     inst = mi
                     break
                 end
@@ -274,12 +282,12 @@ applyf35855(Any[1])
 @test worlds(instance(applyf35855, (Vector{Float64},))) == wfloat
 wany3 = worlds(instance(applyf35855, (Vector{Any},)))
 src3 = code_typed(applyf35855, (Vector{Any},))[1]
-@test (wany3 == wany2) == equal(src3, src2)   # don't invalidate unless you also change the code
-f35855(::AbstractVector) = 4         # next test would pass if this were ::Vector{Int}
+@test !(wany3 == wany2) || equal(src3, src2) # code doesn't change unless you invalidate
+f35855(::AbstractVector) = 4
 applyf35855(Any[1])
 wany4 = worlds(instance(applyf35855, (Vector{Any},)))
 src4 = code_typed(applyf35855, (Vector{Any},))[1]
-@test_broken (wany4 == wany3) == equal(src4, src3)
+@test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
 f35855(::Dict) = 5
 applyf35855(Any[1])
 wany5 = worlds(instance(applyf35855, (Vector{Any},)))
@@ -289,12 +297,24 @@ f35855(::Set) = 6    # with current settings, this shouldn't invalidate
 applyf35855(Any[1])
 wany6 = worlds(instance(applyf35855, (Vector{Any},)))
 src6 = code_typed(applyf35855, (Vector{Any},))[1]
-@test (wany6 == wany5) == equal(src6, src5)
+@test wany6 == wany5
+@test equal(src6, src5)
+
+applyf35855_2(c) = f35855_2(c[1])
+f35855_2(::Int) = 1
+f35855_2(::Float64) = 2
+applyf35855_2(Any[1])
+wany3 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src3 = code_typed(applyf35855_2, (Vector{Any},))[1]
+f35855_2(::AbstractVector) = 4
+applyf35855_2(Any[1])
+wany4 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src4 = code_typed(applyf35855_2, (Vector{Any},))[1]
+@test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
 
 ## ambiguities do not trigger invalidation
-using Printf
-Printf.gen("%f")
-mi = instance(+, (AbstractChar, UInt8))
+m = which(+, (Char, UInt8))
+mi = Core.Compiler.specialize_method(m, Tuple{typeof(+), AbstractChar, UInt8}, Core.svec())
 w = worlds(mi)
 
 abstract type FixedPoint35855{T <: Integer} <: Real end
@@ -302,12 +322,36 @@ struct Normed35855 <: FixedPoint35855{UInt8}
     i::UInt8
     Normed35855(i::Integer, _) = new(i % UInt8)
 end
-(::Type{X})(x::Real) where X<:FixedPoint35855{T} where T = X(round(T, typemax(T)*x), 0)
-
-@test_broken worlds(mi) == w
+(::Type{X})(x::Real) where {T, X<:FixedPoint35855{T}} = X(round(T, typemax(T)*x), 0)
+@test worlds(mi) == w
 
 mi = instance(convert, (Type{Nothing}, String))
 w = worlds(mi)
 abstract type Colorant35855 end
-Base.convert(::Type{C}, c) where C<:Colorant35855 = false
-@test_broken worlds(mi) == w
+Base.convert(::Type{C}, c) where {C<:Colorant35855} = false
+@test worlds(mi) == w
+
+# NamedTuple and extensions of eltype
+outer(anyc) = inner(anyc[])
+inner(s::Union{Vector,Dict}; kw=false) = inneri(s, kwi=maximum(s), kwb=kw)
+inneri(s, args...; kwargs...) = inneri(IOBuffer(), s, args...; kwargs...)
+inneri(io::IO, s::Union{Vector,Dict}; kwi=0, kwb=false) = (print(io, first(s), " "^kwi, kwb); String(take!(io)))
+@test outer(Ref{Any}([1,2,3])) == "1   false"
+mi = instance(Core.kwfunc(inneri), (NamedTuple{(:kwi,:kwb),TT} where TT<:Tuple{Any,Bool}, typeof(inneri), Vector{T} where T))
+w = worlds(mi)
+abstract type Container{T} end
+Base.eltype(::Type{C}) where {T,C<:Container{T}} = T
+@test worlds(mi) == w
+
+# invoke_in_world
+f_inworld(x) = "world one; x=$x"
+g_inworld(x; y) = "world one; x=$x, y=$y"
+wc_aiw1 = get_world_counter()
+# redefine f_inworld, g_inworld, and check that we can invoke both versions
+f_inworld(x) = "world two; x=$x"
+g_inworld(x; y) = "world two; x=$x, y=$y"
+wc_aiw2 = get_world_counter()
+@test Base.invoke_in_world(wc_aiw1, f_inworld, 2) == "world one; x=2"
+@test Base.invoke_in_world(wc_aiw2, f_inworld, 2) == "world two; x=2"
+@test Base.invoke_in_world(wc_aiw1, g_inworld, 2, y=3) == "world one; x=2, y=3"
+@test Base.invoke_in_world(wc_aiw2, g_inworld, 2, y=3) == "world two; x=2, y=3"

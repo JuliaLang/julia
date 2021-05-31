@@ -1,4 +1,5 @@
 #!/bin/bash
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # We need a URL
 if [[ -z "$1" ]]; then
@@ -12,8 +13,17 @@ if [[ -z "${APPLEID}" ]] || [[ -z "${APPLEID_PASSWORD}" ]]; then
     exit 1
 fi
 
+# Translate from `s3://` URL to `https://` url:
+URL="$1"
+if [[ "$URL" == s3://* ]]; then
+    # Chop off `s3://`
+    URL="${URL:5}"
+    # Split into bucket.s3.aws.com/path
+    URL="https://${URL%%/*}.s3.amazonaws.com/${URL#*/}"
+fi
+
 # Download .dmg
-curl -L "$1" -O
+curl -L "${URL}" -O
 
 # Unpack dmg into our `dmg` folder
 rm -rf dmg
@@ -27,6 +37,11 @@ cp -Ra /Volumes/Julia-* dmg
 DMG_NAME=$(basename "$1")
 APP_NAME=$(basename dmg/*.app)
 VOL_NAME=$(basename /Volumes/Julia-*)
+
+if [[ ! -d dmg/${APP_NAME} ]]; then
+    echo "ERORR: Unable to auto-detect APP_NAME, check dmg folder!" >&2
+    exit 1
+fi
 # Unmount everything again
 for j in /Volumes/Julia-*; do hdiutil detach "${j}"; done
 

@@ -23,11 +23,11 @@ default: all
 
 $(TESTS):
 	@cd $(SRCDIR) && \
-	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
+	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
 
 $(addprefix revise-, $(TESTS)): revise-% :
 	@cd $(SRCDIR) && \
-    $(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl --revise $*)
+    $(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
 
 embedding:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)
@@ -35,8 +35,11 @@ embedding:
 gcext:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(GCEXT_ARGS)
 
+clangsa:
+	@$(MAKE) -C $(SRCDIR)/$@
+
 clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 
-.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) embedding gcext clean
+.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) embedding gcext clangsa clean

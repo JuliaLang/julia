@@ -54,6 +54,9 @@ end
 # On Windows we use the MAX_PATH = 260 value on Win32.
 const AVG_PATH = Sys.iswindows() ? 260 : 512
 
+# helper function to clean up libuv request
+uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+
 include("path.jl")
 include("stat.jl")
 include("file.jl")
@@ -83,8 +86,8 @@ function open(path::AbstractString, flags::Integer, mode::Integer=0)
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32, Int32, Ptr{Cvoid}),
                     C_NULL, req, path, flags, mode, C_NULL)
         handle = ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req)
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-        uv_error("open", ret)
+        uv_fs_req_cleanup(req)
+        ret < 0 && uv_error("open($(repr(path)), $flags, $mode)", ret)
     finally # conversion to Cstring could cause an exception
         Libc.free(req)
     end
@@ -219,26 +222,26 @@ const SEEK_END = Int32(2)
 
 function seek(f::File, n::Integer)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_SET)
-    systemerror("seek", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seek")
     return f
 end
 
 function seekend(f::File)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, 0, SEEK_END)
-    systemerror("seekend", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seekend")
     return f
 end
 
 function skip(f::File, n::Integer)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_CUR)
-    systemerror("skip", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("skip")
     return f
 end
 
 function position(f::File)
     check_open(f)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, 0, SEEK_CUR)
-    systemerror("lseek", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("lseek")
     return ret
 end
 

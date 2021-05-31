@@ -210,7 +210,8 @@
         ((atom? v) '())
         (else
          (case (car v)
-           ((... kw |::| =) (try-arg-name (cadr v)))
+           ((|::|) (if (length= v 2) '() (try-arg-name (cadr v))))
+           ((... kw =) (try-arg-name (cadr v)))
            ((escape) (list v))
            ((hygienic-scope) (try-arg-name (cadr v)))
            ((meta)  ;; allow certain per-argument annotations
@@ -280,6 +281,14 @@
                             (cdr e))))
     (else (other e))))
 
+;; given the LHS of e.g. `x::Int -> y`, wrap the signature in `tuple` to normalize
+(define (tuple-wrap-arrow-sig e)
+  (cond ((atom? e)             `(tuple ,e))
+        ((eq? (car e) 'where)  `(where ,(tuple-wrap-arrow-arglist (cadr e)) ,@(cddr e)))
+        ((eq? (car e) 'tuple)  e)
+        ((eq? (car e) 'escape) `(escape ,(tuple-wrap-arrow-sig (cadr e))))
+        (else                  `(tuple ,e))))
+
 (define (new-expansion-env-for x env (outermost #f))
   (let ((introduced (pattern-expand1 vars-introduced-by-patterns x)))
     (if (or (atom? x)
@@ -316,7 +325,7 @@
    m parent-scope inarg))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
-  (cond ((or (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal))
+  (cond ((or (eq? e 'begin) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal) (underscore-symbol? e))
          e)
         ((symbol? e)
          (let ((a (assq e env)))
@@ -370,8 +379,12 @@
                            (resolve-expansion-vars- x env m parent-scope #f)))
                        (cdr e))))
 
-           ((= function ->)
-            (if (and (pair? (cadr e)) (function-def? e))
+           ((->)
+            `(-> ,(resolve-in-function-lhs (tuple-wrap-arrow-sig (cadr e)) env m parent-scope inarg)
+                 ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
+
+           ((= function)
+            (if (and (pair? (cadr e)) (function-def? e) (length> e 2))
                 ;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
                 `(,(car e) ,(resolve-in-function-lhs (cadr e) env m parent-scope inarg)
                   ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg))

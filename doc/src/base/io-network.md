@@ -19,6 +19,7 @@ Base.read!
 Base.readbytes!
 Base.unsafe_read
 Base.unsafe_write
+Base.readeach
 Base.peek
 Base.position
 Base.seek
@@ -35,6 +36,7 @@ Base.iswritable
 Base.isreadable
 Base.isopen
 Base.fd
+Base.redirect_stdio
 Base.redirect_stdout
 Base.redirect_stdout(::Function, ::Any)
 Base.redirect_stderr

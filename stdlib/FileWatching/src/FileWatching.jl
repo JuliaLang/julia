@@ -254,6 +254,10 @@ mutable struct _FDWatcher
     end
 end
 
+function iswaiting(fwd::_FDWatcher, t::Task)
+    return fwd.notify.waitq === t.queue
+end
+
 mutable struct FDWatcher
     watcher::_FDWatcher
     readable::Bool
@@ -653,10 +657,10 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
     try
         if timeout_s >= 0
             result::FDEvent = FDEvent()
-            timer = Timer(timeout_s) do t
-                notify(wt)
-            end
-            @async begin
+            t = @async begin
+                timer = Timer(timeout_s) do t
+                    notify(wt)
+                end
                 try
                     result = wait(fdw, readable=readable, writable=writable)
                 catch e
@@ -666,6 +670,12 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
                 notify(wt)
             end
             wait(wt)
+            # It's possible that both the timer and the poll fired on the same
+            # libuv loop. In that case, which event we see here first depends
+            # on task schedule order. If we can see that the task isn't waiting
+            # on the file watcher anymore, just let it finish so we can see
+            # the modification to `result`
+            iswaiting(fdw, t) || wait(t)
             return result
         else
             return wait(fdw, readable=readable, writable=writable)
@@ -688,7 +698,7 @@ giving the result of watching the file.
 This behavior of this function varies slightly across platforms. See
 <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
 """
-function watch_file(s::AbstractString, timeout_s::Real=-1)
+function watch_file(s::String, timeout_s::Float64=-1.0)
     fm = FileMonitor(s)
     local timer
     try
@@ -703,6 +713,7 @@ function watch_file(s::AbstractString, timeout_s::Real=-1)
         @isdefined(timer) && close(timer)
     end
 end
+watch_file(s::AbstractString, timeout_s::Real=-1) = watch_file(String(s), Float64(timeout_s))
 
 """
     watch_folder(path::AbstractString, timeout_s::Real=-1)

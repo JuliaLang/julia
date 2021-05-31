@@ -69,7 +69,7 @@ methods; for example, if the available MIME formats depend on the *value* of `x`
 julia> showable(MIME("text/plain"), rand(5))
 true
 
-julia> showable("img/png", rand(5))
+julia> showable("image/png", rand(5))
 false
 ```
 """
@@ -141,7 +141,7 @@ the value of `x` would be entered in Julia.
 julia> A = [1 2; 3 4];
 
 julia> repr("text/plain", A)
-"2×2 Array{Int64,2}:\\n 1  2\\n 3  4"
+"2×2 Matrix{Int64}:\\n 1  2\\n 3  4"
 ```
 """
 repr(m::MIME, x; context=nothing) = istextmime(m) ? _textrepr(m, x, context) : _binrepr(m, x, context)
@@ -176,7 +176,7 @@ data except for a set of types known to be text data (possibly Unicode).
 julia> istextmime(MIME("text/plain"))
 true
 
-julia> istextmime(MIME("img/png"))
+julia> istextmime(MIME("image/png"))
 false
 ```
 """

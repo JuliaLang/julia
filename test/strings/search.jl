@@ -355,6 +355,9 @@ end
 # occursin with a String and Char needle
 @test occursin("o", "foo")
 @test occursin('o', "foo")
+# occursin in curried form
+@test occursin("foo")("o")
+@test occursin("foo")('o')
 
 # contains
 @test contains("foo", "o")
@@ -388,6 +391,36 @@ s_18109 = "fooα🐨βcd3"
     @test findall("αβ", "blαh blαβ blαββy") == findall("αβ", "blαh blαβ blαββy", overlap=true) == [9:11, 16:18]
     @test findall("aa", "aaaaaa") == [1:2, 3:4, 5:6]
     @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
+end
+
+# issue 37280
+@testset "UInt8, Int8 vector" begin
+    for T in [Int8, UInt8], VT in [Int8, UInt8]
+        A = T[0x40, 0x52, 0x62, 0x52, 0x62]
+
+        @test findfirst(VT[0x30], A) === nothing
+        @test findfirst(VT[0x52], A) === 2:2
+        @test findlast(VT[0x30], A) === nothing
+        @test findlast(VT[0x52], A) === 4:4
+
+        pattern = VT[0x52, 0x62]
+
+        @test findfirst(pattern, A) === 2:3
+        @test findnext(pattern, A, 2) === 2:3
+        @test findnext(pattern, A, 3) === 4:5
+        # 1 idx too far is allowed
+        @test findnext(pattern, A, length(A)+1) === nothing
+        @test_throws BoundsError findnext(pattern, A, -3)
+        @test_throws BoundsError findnext(pattern, A, length(A)+2)
+
+        @test findlast(pattern, A) === 4:5
+        @test findprev(pattern, A, 3) === 2:3
+        @test findprev(pattern, A, 5) === 4:5
+        @test findprev(pattern, A, 2) === nothing
+        @test findprev(pattern, A, length(A)+1) == findlast(pattern, A)
+        @test findprev(pattern, A, length(A)+2) == findlast(pattern, A)
+        @test_throws BoundsError findprev(pattern, A, -3)
+    end
 end
 
 # issue 32568

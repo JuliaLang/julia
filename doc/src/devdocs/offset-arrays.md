@@ -56,7 +56,7 @@ the cause try running julia with the option `--check-bounds=yes`.)
 
 ### Using `axes` for bounds checks and loop iteration
 
-`axes(A)` (reminiscent of `size(A)`) returns a tuple of `AbstractUnitRange` objects, specifying
+`axes(A)` (reminiscent of `size(A)`) returns a tuple of `AbstractUnitRange{<:Integer}` objects, specifying
 the range of valid indices along each dimension of `A`.  When `A` has unconventional indexing,
 the ranges may not start at 1.  If you just want the range for a particular dimension `d`, there
 is `axes(A, d)`.

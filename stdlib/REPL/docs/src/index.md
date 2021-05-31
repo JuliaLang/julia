@@ -22,7 +22,7 @@ and a `julia>` prompt.
 
 ### The Julian mode
 
-The REPL has four main modes of operation. The first and most common is the Julian prompt. It
+The REPL has five main modes of operation. The first and most common is the Julian prompt. It
 is the default mode of operation; each new line initially starts with `julia>`. It is here that
 you can enter Julia expressions. Hitting return or enter after a complete expression has been
 entered will evaluate the entry and show the result of the last expression.
@@ -45,7 +45,7 @@ julia> ans
 
 In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting
 text that starts with `julia> ` into the REPL. In that case, only expressions starting with
-`julia> ` are parsed, others are removed. This makes it is possible to paste a chunk of code
+`julia> ` are parsed, others are removed. This makes it possible to paste a chunk of code
 that has been copied from a REPL session without having to scrub away prompts and outputs. This
 feature is enabled by default but can be disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`.
 If it is enabled, you can try it out by pasting the code block above this paragraph straight into
@@ -187,6 +187,14 @@ C:\Users\elm>dir
 29/01/2020  22:15    <DIR>          ..
 02/02/2020  08:06    <DIR>          .atom
 ```
+
+### Pkg mode
+
+The Package manager mode accepts specialized commands for loading and updating packages. It is entered
+by pressing the `]` key at the Julian REPL prompt and exited by pressing CTRL-C or pressing the backspace key
+at the beginning of the line. The prompt for this mode is `pkg>`. It supports its own help-mode, which is
+entered by pressing `?` at the beginning  of the line of the `pkg>` prompt. The Package manager mode is
+documented in the Pkg manual, available at [https://julialang.github.io/Pkg.jl/v1/](https://julialang.github.io/Pkg.jl/v1/).
 
 ### Search modes
 
@@ -610,6 +618,7 @@ Aside from the overall `charset` option, for `RadioMenu` the configurable option
  - `cursor::Char='>'|'→'`: character to use for cursor
  - `up_arrow::Char='^'|'↑'`: character to use for up arrow
  - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `updown_arrow::Char='I'|'↕'`: character to use for up/down arrow in one-line page
  - `scroll_wrap::Bool=false`: optionally wrap-around at the beginning/end of a menu
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
 

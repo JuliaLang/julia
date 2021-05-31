@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-export threadid, nthreads, @threads
+export threadid, nthreads, @threads, @spawn
 
 """
     Threads.threadid()
@@ -15,6 +15,10 @@ threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
 Get the number of threads available to the Julia process. This is the inclusive upper bound
 on [`threadid()`](@ref).
+
+See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
+[`LinearAlgebra`](@ref man-linalg) standard library, and `nprocs()` in the
+[`Distributed`](@ref man-distributed) standard library.
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
@@ -114,6 +118,10 @@ The default schedule (used when no `schedule` argument is present) is subject to
 
 !!! compat "Julia 1.5"
     The `schedule` argument is available as of Julia 1.5.
+
+See also: [`@spawn`](@ref Threads.@spawn), [`nthreads()`](@ref Threads.nthreads),
+[`threadid()`](@ref Threads.threadid), `pmap` in [`Distributed`](@ref man-distributed),
+`BLAS.set_num_threads` in [`LinearAlgebra`](@ref man-linalg).
 """
 macro threads(args...)
     na = length(args)
@@ -146,13 +154,14 @@ end
 """
     Threads.@spawn expr
 
-Create and run a [`Task`](@ref) on any available thread. To wait for the task to
-finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref)
-to wait and then obtain its return value.
+Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available thread.
+The task is allocated to a thread after it becomes available. To wait for the task
+to finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref) to
+wait and then obtain its return value.
 
 Values can be interpolated into `@spawn` via `\$`, which copies the value directly into the
 constructed underlying closure. This allows you to insert the _value_ of a variable,
-isolating the aysnchronous code from changes to the variable's value in the current task.
+isolating the asynchronous code from changes to the variable's value in the current task.
 
 !!! note
     See the manual chapter on threading for important caveats.

@@ -69,6 +69,18 @@ ee = typemax(Int64)
             @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
         end
     end
+    @testset "division" begin
+        oz = big(1 // 0)
+        zo = big(0 // 1)
+
+        @test_throws DivideError() oz / oz
+        @test oz == oz / one(oz)
+        @test -oz == oz / (-one(oz))
+        @test zero(oz) == one(oz) / oz
+        @test_throws DivideError() zo / zo
+        @test one(zo) / zo == big(1//0)
+        @test -one(zo) / zo == big(-1//0)
+    end
 end
 @testset "div, fld, mod, rem" begin
     for i = -10:10, j = [-10:-1; 1:10]
@@ -241,6 +253,12 @@ end
     @test xor(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
     @test xor(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
 
+    @test nand(a, b) == parse(BigInt,"-125")
+    @test ⊼(a, b) == parse(BigInt,"-125")
+
+    @test nor(a, b) == parse(BigInt,"-327424")
+    @test ⊽(a, b) == parse(BigInt,"-327424")
+
     @test (&)(a, b) == parse(BigInt,"124")
     @test (&)(a, b, c) == parse(BigInt,"72")
     @test (&)(a, b, c, d) == parse(BigInt,"8")
@@ -291,6 +309,16 @@ let s, n = bigfib(1000001)
     @test length(s) == 208988
     @test endswith(s, "359244926937501")
     @test startswith(s, "316047687386689")
+end
+
+@testset "digits" begin
+    n = Int64(2080310129088201558)
+    N = big(n)
+    for base in (2,7,10,11,16,30,50,62,64,100), pad in (0,1,10,100)
+        @test digits(n; base, pad) == digits(N; base, pad)
+        @test digits(-n; base, pad) == digits(-N; base, pad)
+        @test digits!(Vector{Int}(undef, pad), n; base) == digits!(Vector{Int}(undef, pad), N; base)
+    end
 end
 
 # serialization (#5133)

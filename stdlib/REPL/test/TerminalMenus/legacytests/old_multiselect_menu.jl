@@ -1,13 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # This file tests the legacy Julia 1.0-1.5 extension interface of TerminalMenus
 # They are run with `warn=false` to avoid triggering test failures.
 
 # Check to make sure types are imported properly
 @test MultiSelectMenu <: TerminalMenus.AbstractMenu
-
-# Invalid Menu Params
-@test_throws ErrorException MultiSelectMenu(["one"], warn=false)
-@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1, warn=false)
 
 # Constructor
 @test MultiSelectMenu(["one", "two", "three"], warn=false).pagesize == 3
@@ -37,3 +34,5 @@ TerminalMenus.writeLine(buf, multi_menu, 1, true)
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10), warn=false)
 @test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
+multi_menu = MultiSelectMenu(["single option"], warn=false)
+@test simulate_input(Set([1]), multi_menu, :up, :up, :down, :enter, 'd')

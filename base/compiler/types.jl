@@ -17,7 +17,6 @@ All AbstractInterpreters are expected to provide at least the following methods:
 """
 abstract type AbstractInterpreter; end
 
-
 """
     InferenceResult
 
@@ -29,9 +28,10 @@ mutable struct InferenceResult
     overridden_by_const::BitVector
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
-    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing)
+    valid_worlds::WorldRange # if inference and optimization is finished
+    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing, va_override=false)
+        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes, va_override)
+        return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
     end
 end
 
@@ -45,7 +45,8 @@ struct OptimizationParams
     inlining::Bool              # whether inlining is enabled
     inline_cost_threshold::Int  # number of CPU cycles beyond which it's not worth inlining
     inline_nonleaf_penalty::Int # penalty for dynamic dispatch
-    inline_tupleret_bonus::Int  # extra willingness for non-isbits tuple return types
+    inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
+    inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
 
     # Duplicating for now because optimizer inlining requires it.
     # Keno assures me this will be removed in the near future
@@ -53,23 +54,29 @@ struct OptimizationParams
     MAX_TUPLE_SPLAT::Int
     MAX_UNION_SPLITTING::Int
 
+    unoptimize_throw_blocks::Bool
+
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
             inline_cost_threshold::Int = 100,
             inline_nonleaf_penalty::Int = 1000,
-            inline_tupleret_bonus::Int = 400,
-            max_methods::Int = 4,
+            inline_tupleret_bonus::Int = 250,
+            inline_error_path_cost::Int = 20,
+            max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
+            unoptimize_throw_blocks::Bool = true,
         )
         return new(
             inlining,
             inline_cost_threshold,
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
+            inline_error_path_cost,
             max_methods,
             tuple_splat,
             union_splitting,
+            unoptimize_throw_blocks,
         )
     end
 end
@@ -82,6 +89,7 @@ Parameters that control type inference operation.
 struct InferenceParams
     ipo_constant_propagation::Bool
     aggressive_constant_propagation::Bool
+    unoptimize_throw_blocks::Bool
 
     # don't consider more than N methods. this trades off between
     # compiler performance and generated code performance.
@@ -94,20 +102,21 @@ struct InferenceParams
     # before computing the set of matching methods
     MAX_UNION_SPLITTING::Int
     # the maximum number of union-tuples to swap / expand
-    # when inferring a call to _apply
+    # when inferring a call to _apply_iterate
     MAX_APPLY_UNION_ENUM::Int
 
     # parameters limiting large (tuple) types
     TUPLE_COMPLEXITY_LIMIT_DEPTH::Int
 
-    # when attempting to inlining _apply, abort the optimization if the tuple
-    # contains more than this many elements
+    # when attempting to inline _apply_iterate, abort the optimization if the
+    # tuple contains more than this many elements
     MAX_TUPLE_SPLAT::Int
 
     function InferenceParams(;
             ipo_constant_propagation::Bool = true,
             aggressive_constant_propagation::Bool = false,
-            max_methods::Int = 4,
+            unoptimize_throw_blocks::Bool = true,
+            max_methods::Int = 3,
             union_splitting::Int = 4,
             apply_union_enum::Int = 8,
             tupletype_depth::Int = 3,
@@ -116,6 +125,7 @@ struct InferenceParams
         return new(
             ipo_constant_propagation,
             aggressive_constant_propagation,
+            unoptimize_throw_blocks,
             max_methods,
             union_splitting,
             apply_union_enum,
@@ -189,3 +199,29 @@ lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference =
     See lock_mi_inference
 """
 unlock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)
+
+"""
+Emit an analysis remark during inference for the current line (`sv.pc`). These annotations are ignored
+by the native interpreter, but can be used by external tooling to annotate
+inference results.
+"""
+add_remark!(ni::NativeInterpreter, sv, s) = nothing
+
+may_optimize(ni::NativeInterpreter) = true
+may_compress(ni::NativeInterpreter) = true
+may_discard_trees(ni::NativeInterpreter) = true
+verbose_stmt_info(ni::NativeInterpreter) = false
+
+method_table(ai::AbstractInterpreter) = InternalMethodTable(get_world_counter(ai))
+inlining_policy(ai::AbstractInterpreter) = default_inlining_policy
+
+# define inference bail out logic
+# `NativeInterpreter` bails out from inference when
+# - a lattice element grows up to `Any` (inter-procedural call, abstract apply)
+# - a lattice element gets down to `Bottom` (statement inference, local frame inference)
+# - inferring non-concrete toplevel call sites
+bail_out_call(interp::AbstractInterpreter, @nospecialize(t), sv)      = t === Any
+bail_out_apply(interp::AbstractInterpreter, @nospecialize(t), sv)     = t === Any
+function bail_out_toplevel_call(interp::AbstractInterpreter, @nospecialize(sig), sv)
+    return isa(sv.linfo.def, Module) && !isdispatchtuple(sig)
+end
