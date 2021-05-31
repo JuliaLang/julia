@@ -1933,3 +1933,13 @@ end
     @test (10:-1:1) * 0.1 == 1:-0.1:0.1
     @test 0.2 * (-2:2:2) == [-0.4, 0, 0.4]
 end
+
+@testset "Indexing OneTo with IdentityUnitRange" begin
+    for endpt in Any[10, big(10), UInt(10)]
+        r = Base.OneTo(endpt)
+        inds = Base.IdentityUnitRange(3:5)
+        rs = r[inds]
+        @test rs === inds
+        @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+    end
+end
