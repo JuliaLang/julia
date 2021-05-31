@@ -185,4 +185,15 @@ end
     @test Base.propertynames(F, true) == (:Q, :H, :μ, :τ, :factors, :uplo)
 end
 
+@testset "adjoint of Hessenberg" begin
+    Ar = randn(5, 5)
+    Ac = complex.(randn(5, 5), randn(5, 5))
+    b = ones(size(Ar, 1))
+
+    for A in (Ar, Ac)
+        F = hessenberg(A)
+        @test A'\b ≈ F'\b
+    end
+end
+
 end # module TestHessenberg

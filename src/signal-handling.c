@@ -106,17 +106,16 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
 void jl_show_sigill(void *_ctx);
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
-    ptls->safe_restore = &buf;
+    jl_set_safe_restore(&buf);
     volatile size_t i = 0;
     if (!jl_setjmp(buf, 0)) {
-        for (;i < len;i++) {
+        for (; i < len; i++) {
             out[i] = ptr[i];
         }
     }
-    ptls->safe_restore = old_buf;
+    jl_set_safe_restore(old_buf);
     return i;
 }
 
@@ -235,18 +234,16 @@ void jl_show_sigill(void *_ctx)
 void jl_critical_error(int sig, bt_context_t *context)
 {
 
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_bt_element_t *bt_data = ptls->bt_data;
-    size_t *bt_size = &ptls->bt_size;
+    jl_task_t *ct = jl_current_task;
+    jl_bt_element_t *bt_data = ct->ptls->bt_data;
+    size_t *bt_size = &ct->ptls->bt_size;
     size_t i, n = *bt_size;
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
-        ptls->pgcstack = NULL;
-        ptls->safe_restore = NULL;
-        if (ptls->current_task) {
-            ptls->current_task->eh = NULL;
-            ptls->current_task->excstack = NULL;
-        }
+        jl_set_safe_restore(NULL);
+        ct->gcstack = NULL;
+        ct->eh = NULL;
+        ct->excstack = NULL;
 #ifndef _OS_WINDOWS_
         sigset_t sset;
         sigemptyset(&sset);

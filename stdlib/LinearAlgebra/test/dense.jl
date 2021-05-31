@@ -88,8 +88,19 @@ bimg  = randn(n,2)/2
                 @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
                 @test nullspace(zeros(eltya,n), 0.1) == Matrix(I, 1, 1)
                 # test empty cases
-                @test nullspace(zeros(n, 0)) == Matrix(I, 0, 0)
-                @test nullspace(zeros(0, n)) == Matrix(I, n, n)
+                @test @inferred(nullspace(zeros(n, 0))) == Matrix(I, 0, 0)
+                @test @inferred(nullspace(zeros(0, n))) == Matrix(I, n, n)
+                # test vector cases
+                @test size(@inferred nullspace(a[:, 1])) == (1, 0)
+                @test size(@inferred nullspace(zero(a[:, 1]))) == (1, 1)
+                @test nullspace(zero(a[:, 1]))[1,1] == 1
+                # test adjortrans vectors, including empty ones
+                @test size(@inferred nullspace(a[:, 1]')) == (n, n - 1)
+                @test @inferred(nullspace(a[1:0, 1]')) == Matrix(I, 0, 0)
+                @test size(@inferred nullspace(b[1, :]')) == (2, 1)
+                @test @inferred(nullspace(b[1, 1:0]')) == Matrix(I, 0, 0)
+                @test size(@inferred nullspace(transpose(a[:, 1]))) == (n, n - 1)
+                @test size(@inferred nullspace(transpose(b[1, :]))) == (2, 1)
             end
         end
     end # for eltyb

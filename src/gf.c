@@ -32,15 +32,15 @@ JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT size_t jl_get_tls_world_age(void) JL_NOTSAFEPOINT
 {
-    return jl_get_ptls_states()->world_age;
+    return jl_current_task->world_age;
 }
 
 /// ----- Handling for Julia callbacks ----- ///
 
 JL_DLLEXPORT int8_t jl_is_in_pure_context(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    return ptls->in_pure_callback;
+    jl_task_t *ct = jl_current_task;
+    return ct->ptls->in_pure_callback;
 }
 
 tracer_cb jl_newmeth_tracer = NULL;
@@ -51,15 +51,15 @@ JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *trace
 
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    int last_in = ptls->in_pure_callback;
+    jl_task_t *ct = jl_current_task;
+    int last_in = ct->ptls->in_pure_callback;
     JL_TRY {
-        ptls->in_pure_callback = 1;
+        ct->ptls->in_pure_callback = 1;
         callback(tracee);
-        ptls->in_pure_callback = last_in;
+        ct->ptls->in_pure_callback = last_in;
     }
     JL_CATCH {
-        ptls->in_pure_callback = last_in;
+        ct->ptls->in_pure_callback = last_in;
         jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: tracer callback function threw an error:\n");
         jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
@@ -282,13 +282,13 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
         jl_printf(JL_STDERR, "\n");
     }
 #endif
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    size_t last_age = ptls->world_age;
-    ptls->world_age = jl_typeinf_world;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_typeinf_world;
     mi->inInference = 1;
     in_inference++;
     JL_TRY {
@@ -301,7 +301,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
         jlbacktrace(); // written to STDERR_FILENO
         src = NULL;
     }
-    ptls->world_age = last_age;
+    ct->world_age = last_age;
     in_inference--;
     mi->inInference = 0;
 #ifdef _OS_WINDOWS_
@@ -319,11 +319,11 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
 
 JL_DLLEXPORT jl_value_t *jl_call_in_typeinf_world(jl_value_t **args, int nargs)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    size_t last_age = ptls->world_age;
-    ptls->world_age = jl_typeinf_world;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_typeinf_world;
     jl_value_t *ret = jl_apply(args, nargs);
-    ptls->world_age = last_age;
+    ct->world_age = last_age;
     return ret;
 }
 
@@ -368,9 +368,9 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         int32_t const_flags, size_t min_world, size_t max_world
         /*, jl_array_t *edges, int absolute_max*/)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     assert(min_world <= max_world && "attempting to set invalid world constraints");
-    jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_gc_alloc(ptls, sizeof(jl_code_instance_t),
+    jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_instance_t),
             jl_code_instance_type);
     codeinst->def = mi;
     codeinst->min_world = min_world;
@@ -1335,15 +1335,16 @@ static void invalidate_external(jl_method_instance_t *mi, size_t max_world) {
             args[1] = (jl_value_t*)mi;
             args[2] = jl_box_uint32(max_world);
 
-            size_t last_age = jl_get_ptls_states()->world_age;
-            jl_get_ptls_states()->world_age = jl_get_world_counter();
+            jl_task_t *ct = jl_current_task;
+            size_t last_age = ct->world_age;
+            ct->world_age = jl_get_world_counter();
 
             jl_value_t **cbs = (jl_value_t**)jl_array_ptr_data(callbacks);
             for (i = 0; i < l; i++) {
                 args[0] = cbs[i];
                 jl_apply(args, 3);
             }
-            jl_get_ptls_states()->world_age = last_age;
+            ct->world_age = last_age;
             JL_GC_POP();
         }
         JL_CATCH {
@@ -1821,7 +1822,7 @@ static void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args,
         jl_printf((JL_STREAM*)STDERR_FILENO, "A method error occurred before the base MethodError type was defined. Aborting...\n");
         jl_static_show((JL_STREAM*)STDERR_FILENO,(jl_value_t*)f); jl_printf((JL_STREAM*)STDERR_FILENO," world %u\n", (unsigned)world);
         jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
-        jl_ptls_t ptls = jl_get_ptls_states();
+        jl_ptls_t ptls = jl_current_task->ptls;
         ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
         jl_critical_error(0, NULL);
         abort();
@@ -2246,7 +2247,7 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
 
 JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
-    size_t world = jl_get_ptls_states()->world_age;
+    size_t world = jl_current_task->world_age;
     return _jl_invoke(F, args, nargs, mfunc, world);
 }
 
@@ -2417,7 +2418,7 @@ have_entry:
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
-    size_t world = jl_get_ptls_states()->world_age;
+    size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
                                                      world);
@@ -2471,7 +2472,7 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, size_t wo
 // NOTE: assumes argument type is a subtype of the lookup type.
 jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t *gf, jl_value_t **args, size_t nargs)
 {
-    size_t world = jl_get_ptls_states()->world_age;
+    size_t world = jl_current_task->world_age;
     jl_value_t *types = NULL;
     JL_GC_PUSH1(&types);
     types = jl_argtype_with_function(gf, types0);
@@ -2520,7 +2521,7 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     }
     JL_GC_PROMISE_ROOTED(mfunc);
-    size_t world = jl_get_ptls_states()->world_age;
+    size_t world = jl_current_task->world_age;
     return _jl_invoke(gf, args, nargs - 1, mfunc, world);
 }
 
@@ -2607,8 +2608,8 @@ enum SIGNATURE_FULLY_COVERS {
 
 static jl_method_match_t *make_method_match(jl_tupletype_t *spec_types, jl_svec_t *sparams, jl_method_t *method, enum SIGNATURE_FULLY_COVERS fully_covers)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_method_match_t *match = (jl_method_match_t*)jl_gc_alloc(ptls, sizeof(jl_method_match_t), jl_method_match_type);
+    jl_task_t *ct = jl_current_task;
+    jl_method_match_t *match = (jl_method_match_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_match_t), jl_method_match_type);
     match->spec_types = spec_types;
     match->sparams = sparams;
     match->method = method;

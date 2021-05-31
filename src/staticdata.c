@@ -159,7 +159,6 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_emptytuple);
         INSERT_TAG(jl_false);
         INSERT_TAG(jl_true);
-        INSERT_TAG(jl_nothing);
         INSERT_TAG(jl_an_empty_string);
         INSERT_TAG(jl_an_empty_vec_any);
         INSERT_TAG(jl_module_init_order);
@@ -338,9 +337,13 @@ static void jl_load_sysimg_so(void)
         jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 1);
         sysimg_gvars_offsets += 1;
         assert(sysimg_fptrs.base);
-        uintptr_t *tls_getter_slot;
-        jl_dlsym(jl_sysimg_handle, "jl_get_ptls_states_slot", (void **)&tls_getter_slot, 1);
-        *tls_getter_slot = (uintptr_t)jl_get_ptls_states_getter();
+
+        void *pgcstack_func_slot;
+        jl_dlsym(jl_sysimg_handle, "jl_pgcstack_func_slot", &pgcstack_func_slot, 1);
+        void *pgcstack_key_slot;
+        jl_dlsym(jl_sysimg_handle, "jl_pgcstack_key_slot", &pgcstack_key_slot, 1);
+        jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
+
         size_t *tls_offset_idx;
         jl_dlsym(jl_sysimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
@@ -411,7 +414,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
 static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recursive)
 {
     // ignore items that are given a special representation
-    if (v == NULL || jl_is_symbol(v)) {
+    if (v == NULL || jl_is_symbol(v) || v == jl_nothing) {
         return;
     }
     else if (jl_typeis(v, jl_task_type)) {
@@ -572,19 +575,22 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPO
     else if (v == (jl_value_t*)s->ptls->root_task) {
         return (uintptr_t)TagRef << RELOC_TAG_OFFSET;
     }
+    else if (v == jl_nothing) {
+        return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + 1;
+    }
     else if (jl_typeis(v, jl_int64_type)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
-            return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i64 + 1;
+            return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i64 + 2;
     }
     else if (jl_typeis(v, jl_int32_type)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
         if ((uint32_t)i32 < NBOX_C)
-            return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i32 + 1 + NBOX_C;
+            return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i32 + 2 + NBOX_C;
     }
     else if (jl_typeis(v, jl_uint8_type)) {
         uint8_t u8 = *(uint8_t*)v;
-        return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 1 + NBOX_C + NBOX_C;
+        return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
     }
     if (idx == HT_NOTFOUND) {
         idx = ptrhash_get(&backref_table, v);
@@ -1041,7 +1047,7 @@ static void jl_write_gv_syms(jl_serializer_state *s, jl_sym_t *v)
         jl_write_gv_syms(s, v->right);
 }
 
-static void jl_write_gv_int(jl_serializer_state *s, jl_value_t *v)
+static void jl_write_gv_tagref(jl_serializer_state *s, jl_value_t *v)
 {
     int32_t gv = jl_get_llvm_gv(native_functions, (jl_value_t*)v);
     if (gv != 0) {
@@ -1050,7 +1056,7 @@ static void jl_write_gv_int(jl_serializer_state *s, jl_value_t *v)
         record_gvar(s, gv, item);
     }
 }
-static void jl_write_gv_ints(jl_serializer_state *s)
+static void jl_write_gv_tagrefs(jl_serializer_state *s)
 {
     // this also ensures all objects referenced in the code have
     // references in the system image to their global variable
@@ -1058,12 +1064,15 @@ static void jl_write_gv_ints(jl_serializer_state *s)
     // they might not have had a reference anywhere in the code
     // image other than here
     size_t i;
+    jl_write_gv_tagref(s, (jl_value_t*)s->ptls->root_task);
+    jl_write_gv_tagref(s, s->ptls->root_task->tls);
+    jl_write_gv_tagref(s, jl_nothing);
     for (i = 0; i < NBOX_C; i++) {
-        jl_write_gv_int(s, jl_box_int32((int32_t)i - NBOX_C / 2));
-        jl_write_gv_int(s, jl_box_int64((int64_t)i - NBOX_C / 2));
+        jl_write_gv_tagref(s, jl_box_int32((int32_t)i - NBOX_C / 2));
+        jl_write_gv_tagref(s, jl_box_int64((int64_t)i - NBOX_C / 2));
     }
     for (i = 0; i < 256; i++) {
-        jl_write_gv_int(s, jl_box_uint8(i));
+        jl_write_gv_tagref(s, jl_box_uint8(i));
     }
 }
 
@@ -1114,7 +1123,7 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
             assert(offset < nsym_tag && "corrupt relocation item id");
             break;
         case TagRef:
-            assert(offset < 2 * NBOX_C + 257 && "corrupt relocation item id");
+            assert(offset < 2 * NBOX_C + 258 && "corrupt relocation item id");
             break;
         case BindingRef:
             assert(offset == 0 && "corrupt relocation offset");
@@ -1154,7 +1163,9 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
     case TagRef:
         if (offset == 0)
             return (uintptr_t)s->ptls->root_task;
-        offset -= 1;
+        if (offset == 1)
+            return (uintptr_t)jl_nothing;
+        offset -= 2;
         if (offset < NBOX_C)
             return (uintptr_t)jl_box_int64((int64_t)offset - NBOX_C / 2);
         offset -= NBOX_C;
@@ -1510,7 +1521,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
     s.relocs = &relocs;
     s.gvar_record = &gvar_record;
     s.fptr_record = &fptr_record;
-    s.ptls = jl_get_ptls_states();
+    s.ptls = jl_current_task->ptls;
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
     jl_value_t **const*const tags = get_tags();
@@ -1566,7 +1577,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         jl_write_values(&s);
         jl_write_relocations(&s);
         jl_write_gv_syms(&s, jl_get_root_symbol());
-        jl_write_gv_ints(&s);
+        jl_write_gv_tagrefs(&s);
     }
 
     if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET) ||
@@ -1695,7 +1706,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     s.relocs = &relocs;
     s.gvar_record = &gvar_record;
     s.fptr_record = &fptr_record;
-    s.ptls = jl_get_ptls_states();
+    s.ptls = jl_current_task->ptls;
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
     jl_value_t **const*const tags = get_tags();
@@ -1738,9 +1749,11 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
         jl_value_t **tag = tags[i];
         *tag = jl_read_value(&s);
     }
-    s.ptls->root_task = (jl_task_t*)jl_gc_alloc(s.ptls, sizeof(jl_task_t), jl_task_type);
-    memset(s.ptls->root_task, 0, sizeof(jl_task_t));
+    // set typeof extra-special values now that we have the type set by tags above
+    jl_astaggedvalue(jl_current_task)->header = (uintptr_t)jl_task_type | jl_astaggedvalue(jl_current_task)->header;
+    jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;
     s.ptls->root_task->tls = jl_read_value(&s);
+    jl_gc_wb(s.ptls->root_task, s.ptls->root_task->tls);
     jl_init_int32_int64_cache();
     jl_init_box_caches();
 
@@ -1794,7 +1807,6 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     }
 
     s.s = &sysimg;
-    jl_init_codegen();
     jl_update_all_fptrs(&s); // fptr relocs and registration
     // reinit ccallables, which require codegen to be initialized
     s.s = f;

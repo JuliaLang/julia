@@ -436,7 +436,6 @@
     XX(jl_set_module_uuid) \
     XX(jl_set_next_task) \
     XX(jl_set_nth_field) \
-    XX(jl_set_ptls_states_getter) \
     XX(jl_set_safe_restore) \
     XX(jl_set_sysimg_so) \
     XX(jl_set_task_tid) \

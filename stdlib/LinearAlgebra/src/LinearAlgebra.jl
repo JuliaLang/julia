@@ -397,6 +397,63 @@ const ⋅ = dot
 const × = cross
 export ⋅, ×
 
+## convenience methods
+## return only the solution of a least squares problem while avoiding promoting
+## vectors to matrices.
+_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
+_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+
+## append right hand side with zeros if necessary
+_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
+_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
+
+# General fallback definition for handling under- and overdetermined system as well as square problems
+# While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
+# which is required by LAPACK but not SuiteSpase which allows real-complex solves in some cases. Hence,
+# we restrict this method to only the LAPACK factorizations in LinearAlgebra.
+# The definition is put here since it explicitly references all the Factorizion structs so it has
+# to be located after all the files that define the structs.
+const LAPACKFactorizations{T,S} = Union{
+    BunchKaufman{T,S},
+    Cholesky{T,S},
+    LQ{T,S},
+    LU{T,S},
+    QR{T,S},
+    QRCompactWY{T,S},
+    QRPivoted{T,S},
+    SVD{T,<:Real,S}}
+function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorizations}}, B::AbstractVecOrMat)
+    require_one_based_indexing(B)
+    m, n = size(F)
+    if m != size(B, 1)
+        throw(DimensionMismatch("arguments must have the same number of rows"))
+    end
+
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    FF = Factorization{TFB}(F)
+
+    # For wide problem we (often) compute a minimum norm solution. The solution
+    # is larger than the right hand side so we use size(F, 2).
+    BB = _zeros(TFB, B, n)
+
+    if n > size(B, 1)
+        # Underdetermined
+        copyto!(view(BB, 1:m, :), B)
+    else
+        copyto!(BB, B)
+    end
+
+    ldiv!(FF, BB)
+
+    # For tall problems, we compute a least squares solution so only part
+    # of the rhs should be returned from \ while ldiv! uses (and returns)
+    # the complete rhs
+    return _cut_B(BB, 1:n)
+end
+# disambiguate
+(\)(F::LAPACKFactorizations{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    invoke(\, Tuple{Factorization{T}, VecOrMat{Complex{T}}}, F, B)
+
 """
     LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
 
