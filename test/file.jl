@@ -702,7 +702,7 @@ let
     @test a_stat.size == b_stat.size
     @test a_stat.size == c_stat.size
 
-    @test parse(Int, match(r"mode=(.*),", sprint(show, a_stat)).captures[1]) == a_stat.mode
+    @test parse(Int, split(sprint(show, a_stat),"mode: ")[2][1:8]) == a_stat.mode
 
     close(af)
     rm(afile)
@@ -1604,4 +1604,33 @@ if Sys.iswindows()
     tmp = mkdir(tempname("C:\\"))
     @test rm(tmp) === nothing
 end
+end
+
+@testset "StatStruct show's extended details" begin
+    f, io = mktemp()
+    s = stat(f)
+    stat_show_str = sprint(show, s)
+    @test occursin(f, stat_show_str)
+    if Sys.iswindows()
+        @test occursin("mode: 0o100666 (-rw-rw-rw-)", stat_show_str)
+    else
+        @test occursin("mode: 0o100600 (-rw-------)", stat_show_str)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
+    d = mktempdir()
+    s = stat(d)
+    stat_show_str = sprint(show, s)
+    @test occursin(d, stat_show_str)
+    if Sys.iswindows()
+        @test occursin("mode: 0o040666 (drw-rw-rw-)", stat_show_str)
+    else
+        @test occursin("mode: 0o040700 (drwx------)", stat_show_str)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
 end
