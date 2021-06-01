@@ -1731,7 +1731,16 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     else if (is_libjulia_func(jl_object_id) && nccallargs == 1 &&
             rt == (jl_value_t*)jl_ulong_type) {
         jl_cgval_t val = argv[0];
-        if (!val.isboxed) {
+        if (val.typ == (jl_value_t*)jl_symbol_type) {
+            JL_GC_POP();
+            const int hash_offset = offsetof(jl_sym_t, hash);
+            Value *ph1 = emit_bitcast(ctx, boxed(ctx, val), T_psize);
+            Value *ph2 = ctx.builder.CreateInBoundsGEP(ph1, ConstantInt::get(T_size, hash_offset / sizeof(size_t)));
+            LoadInst *hashval = ctx.builder.CreateAlignedLoad(ph2, Align(sizeof(size_t)));
+            tbaa_decorate(tbaa_const, hashval);
+            return mark_or_box_ccall_result(ctx, hashval, retboxed, rt, unionall, static_rt);
+        }
+        else if (!val.isboxed) {
             // If the value is not boxed, try to compute the object id without
             // reboxing it.
             auto T_pint8_derived = PointerType::get(T_int8, AddressSpace::Derived);
