@@ -504,6 +504,7 @@ Process(`echo 1`, ProcessExited(0))
 ```
 """
 macro cmd(str)
+    str = escape_raw_string(str, '`')
     cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
     return :(cmd_gen($(esc(cmd_ex))))
 end

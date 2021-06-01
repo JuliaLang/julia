@@ -1402,3 +1402,21 @@ end
     GC.gc(true); yield()
     @test in_fin[]
 end
+
+@testset "cmd literals with escaped backslashes" begin
+    @test ``       == Cmd(String[])
+    @test `\\`     == Cmd(["\\"])
+    @test `\\\\`   == Cmd(["\\\\"])
+    @test `\\\\\\` == Cmd(["\\\\\\"])
+
+    @test `"\\"`     == Cmd(["\\"])
+    @test `"\\\\"`   == Cmd(["\\\\"])
+    @test `"\\\\\\"` == Cmd(["\\\\\\"])
+
+    @test `'\\'`     == Cmd(["\\\\"])
+    @test `'\\\\'`   == Cmd(["\\\\\\\\"])
+
+    @test `\`\\\``     == Cmd(["`\\`"])
+    @test `\`\\\\\``   == Cmd(["`\\\\`"])
+    @test `\`\\\\\\\`` == Cmd(["`\\\\\\`"])
+end
