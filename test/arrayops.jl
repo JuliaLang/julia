@@ -1173,7 +1173,6 @@ end
     @test mapslices(prod,["1"],dims=1) == ["1"]
 
     # issue #5177
-
     c = fill(1,2,3,4)
     m1 = mapslices(_ -> fill(1,2,3), c, dims=[1,2])
     m2 = mapslices(_ -> fill(1,2,4), c, dims=[1,3])
@@ -1203,10 +1202,16 @@ end
     # issue #21123
     @test mapslices(nnz, sparse(1.0I, 3, 3), dims=1) == [1 1 1]
 
+    # path which doesn't re-use Aslice
+    r = rand(Int8, 2,3,4)
+    @test mapslices(transpose, r, dims=(1,3)) == permutedims(r, (3,2,1))
+    @test vec(mapslices(repr, r, dims=(2,1))) == map(repr, eachslice(r, dims=3))
+
     # re-write, #40996
     @test_throws ArgumentError mapslices(identity, rand(2,3), dims=(1,3)) # previously BoundsError
     @test_throws DimensionMismatch mapslices(x -> x * x', rand(2,3), dims=1) # explicitly caught
     @test mapslices(hcat, [1 2; 3 4], dims=1) == [1 2; 3 4] # previously an error, now allowed
+    @test mapslices(identity, [1 2; 3 4], dims=(2,2)) == [1 2; 3 4] # previously an error
 end
 
 @testset "single multidimensional index" begin
