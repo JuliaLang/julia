@@ -364,6 +364,17 @@ true
 """
 function match end
 
+function _create_match(str::Union{SubString{String}, String}, re::Regex, data::Ptr{Cvoid})
+    n = div(PCRE.ovec_length(data), 2) - 1
+    p = PCRE.ovec_ptr(data)
+    mat = SubString(str, unsafe_load(p, 1)+1, prevind(str, unsafe_load(p, 2)+1))
+    cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
+                                        SubString(str, unsafe_load(p,2i+1)+1,
+                                                  prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
+    off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
+    RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
+end
+
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
                add_opts::UInt32=UInt32(0))
     compile(re)
@@ -373,14 +384,7 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
         PCRE.free_match_data(data)
         return nothing
     end
-    n = div(PCRE.ovec_length(data), 2) - 1
-    p = PCRE.ovec_ptr(data)
-    mat = SubString(str, unsafe_load(p, 1)+1, prevind(str, unsafe_load(p, 2)+1))
-    cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
-                                        SubString(str, unsafe_load(p,2i+1)+1,
-                                                  prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
-    off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
-    result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
+    result = _create_match(str, re, data)
     PCRE.free_match_data(data)
     return result
 end
@@ -666,6 +670,15 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
             i = nextind(repl, i)
         end
     end
+end
+
+struct RegexReplacer
+    f::Function
+end
+
+function _replace(io, repl::RegexReplacer, str, r, re::RegexAndMatchData)
+    match = _create_match(str, re.re, re.match_data)
+    print(io, repl.f(match))
 end
 
 struct RegexMatchIterator

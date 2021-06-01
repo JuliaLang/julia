@@ -310,6 +310,8 @@ end
     # Issue 36953
     @test replace("abc", "" => "_", count=1) == "_abc"
 
+    # test replace with a RegexReplacer
+    @test replace("ax ay bx by", r"([ab])([xy])" => RegexReplacer(m -> uppercase(m[1]) * m[2])) === "Ax Ay Bx By"
 end
 
 @testset "replace many" begin
