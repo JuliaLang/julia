@@ -204,6 +204,12 @@ function view(r1::LinRange, r2::OrdinalRange{<:Integer})
     getindex(r1, r2)
 end
 
+# getindex(r::AbstractRange, ::Colon) returns a copy of the range, and we may do the same for a view
+function view(r1::AbstractRange, c::Colon)
+    @_propagate_inbounds_meta
+    getindex(r1, c)
+end
+
 function unsafe_view(A::AbstractArray, I::Vararg{ViewIndex,N}) where {N}
     @_inline_meta
     SubArray(A, I)

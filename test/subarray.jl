@@ -718,3 +718,22 @@ end
     s = @view v[1]
     @test copy(s) == fill([1])
 end
+
+@testset "issue 40314: views of CartesianIndices" begin
+    c = CartesianIndices((1:2, 1:4))
+    @test (@view c[c]) === c
+    for inds in Any[(1:1, 1:2), (1:1:1, 1:2)]
+        c2 = @view c[inds...]
+        @test c2 isa CartesianIndices{2}
+        for i2 in inds[2], i1 in inds[1]
+            @test c2[i1, i2] == c[i1, i2]
+        end
+    end
+    for inds in Any[(Colon(), 1:2), (Colon(), 1:1:2)]
+        c2 = @view c[inds...]
+        @test c2 isa CartesianIndices{2}
+        for i2 in inds[2], i1 in axes(c, 1)
+            @test c2[i1, i2] == c[i1, i2]
+        end
+    end
+end
