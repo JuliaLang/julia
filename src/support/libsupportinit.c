@@ -75,10 +75,6 @@ void libsupport_init(void)
       } while (min + 1 < max);
     }
   }
-  // Ignore SIGPIPE
-  RegisterSignalHandler(SIGPIPE, SIG_IGN);
-  RegisterSignalHandler(SIGINT, SignalExit);
-  RegisterSignalHandler(SIGTERM, SignalExit);
 #endif
     
 #ifdef __cplusplus
