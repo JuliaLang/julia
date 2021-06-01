@@ -2838,6 +2838,13 @@ true
 function mapslices(f, A::AbstractArray; dims)
     isempty(dims) && return map(f, A)
 
+    for d in dims
+        # Indexing a matrix M[:,1,:] produces a matrix, but dims=(1,3) here would 
+        # otherwise ignore 3. Previously this gave error:
+        # BoundsError: attempt to access 2-element Vector{Any} at index [3]
+        d > ndims(A) && throw(ArgumentError("mapslices does not accept dims > ndims(A)"))
+    end
+
     # Apply the function to the first slice in order to determine the next steps
     idx1 = ntuple(d -> d in dims ? (:) : firstindex(A,d), ndims(A))
     Aslice = A[idx1...]

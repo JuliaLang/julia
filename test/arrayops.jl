@@ -1199,6 +1199,12 @@ end
     m = mapslices(x->tuple(x), [1 2; 3 4], dims=1)
     @test m[1,1] == ([1,3],)
     @test m[1,2] == ([2,4],)
+
+    # issue #21123
+    @test mapslices(nnz, sparse(1.0I, 3, 3), dims=1) == [1 1 1]
+
+    # re-write, #40996
+    @test_throws ArgumentError mapslices(identity, rand(2,3), dims=(1,3)) # previously BoundsError
 end
 
 @testset "single multidimensional index" begin
