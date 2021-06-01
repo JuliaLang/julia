@@ -2839,6 +2839,7 @@ function mapslices(f, A::AbstractArray; dims)
     isempty(dims) && return map(f, A)
 
     for d in dims
+        d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
         # Indexing a matrix M[:,1,:] produces a 1-column matrix, but dims=(1,3) here
         # would otherwise ignore 3, and slice M[:,i]. Previously this gave error:
         # BoundsError: attempt to access 2-element Vector{Any} at index [3]
