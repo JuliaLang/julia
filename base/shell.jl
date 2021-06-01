@@ -87,7 +87,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
                 i = consume_upto!(arg, s, i, j)
-            elseif c == '\\'
+            elseif !in_single_quotes && c == '\\'
                 if !isempty(st) && peek(st)[2] == '\n'
                     i = consume_upto!(arg, s, i, j) + 1
                     _ = popfirst!(st)
