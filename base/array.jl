@@ -871,8 +871,6 @@ end
 
 Store the given value at the given key or index within a collection. The syntax `a[i,j,...] =
 x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
-
-See also [`get!`](@ref), [`setindex`](@ref).
 """
 function setindex! end
 
