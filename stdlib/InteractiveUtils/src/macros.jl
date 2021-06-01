@@ -187,7 +187,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
             if length(x.args) != 2
                 return Expr(:call, :error, "Invalid keyword argument: $x")
             end
-            push!(kws, Expr(:kw, x.args[1], x.args[2]))
+            push!(kws, Expr(:kw, esc(x.args[1]), esc(x.args[2])))
         else
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
