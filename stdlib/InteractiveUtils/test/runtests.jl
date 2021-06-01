@@ -580,3 +580,9 @@ end
     ms = methodswith(A41010, @__MODULE__) |> collect
     @test ms[1].name == :B41010
 end
+
+# macro options should accept both literals and variables
+let
+    opt = false
+    @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
+end
