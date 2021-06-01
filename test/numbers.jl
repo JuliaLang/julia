@@ -2310,12 +2310,18 @@ end
 @testset "get(x::Number, ...)" begin
     for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
         @test get(x, 1, 99) == x
+        @test get(x, (), 99) == x
+        @test get(x, (1,), 99) == x
         @test get(x, 2, 99) == 99
         @test get(x, 0, pi) == pi
+        @test get(x, (1,2), pi) == pi
         c = Ref(0)
         @test get(() -> c[]+=1, x, 1) == x
+        @test get(() -> c[]+=1, x, ()) == x
+        @test get(() -> c[]+=1, x, (1,1,1)) == x
         @test get(() -> c[]+=1, x, 2) == 1
         @test get(() -> c[]+=1, x, -1) == 2
+        @test get(() -> c[]+=1, x, (3,2,1)) == 3
     end
 end
 @testset "copysign and flipsign" begin
