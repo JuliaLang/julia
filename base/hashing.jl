@@ -24,6 +24,8 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 hash(@nospecialize(x), h::UInt) = hash_uint(3h - objectid(x))
 
+hash(x::Symbol) = objectid(x)
+
 ## core data hashing functions ##
 
 function hash_64_64(n::UInt64)
