@@ -98,7 +98,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                         i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)
                     end
-                elseif !in_single_quotes
+                else
                     isempty(st) && error("dangling backslash")
                     i = consume_upto!(arg, s, i, j)
                     _ = popfirst!(st)
