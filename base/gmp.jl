@@ -637,12 +637,18 @@ sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}) =
     foldl(MPZ.add!, arr; init=BigInt(0))
 
 function prod(arr::AbstractArray{BigInt})
-    # compute first the needed number of limbs for the result,
-    # to avoid re-allocations
-    nlimbs = sum(arr; init=0) do x
-        abs(x.size)
+    # compute first the needed number of bits for the result,
+    # to avoid re-allocations;
+    # GMP will always request n+m limbs for the result in MPZ.mul!,
+    # if the arguments have n and m limbs; so we add all the bits
+    # taken by the array elements, and add BITS_PER_LIMB to that,
+    # to account for the rounding to limbs in MPZ.mul!
+    # (BITS_PER_LIMB-1 would typically be enough, to which we add
+    # 1 for the initial multiplication by init=1 in foldl)
+    nbits = GC.@preserve arr sum(arr; init=BITS_PER_LIMB) do x
+        abs(x.size) * BITS_PER_LIMB - leading_zeros(unsafe_load(x.d))
     end
-    init = BigInt(; nbits=BITS_PER_LIMB*nlimbs)
+    init = BigInt(; nbits)
     MPZ.set_si!(init, 1)
     foldl(MPZ.mul!, arr; init)
 end
