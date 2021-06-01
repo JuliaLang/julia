@@ -1254,7 +1254,11 @@ Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-function sincosd(x)
+sincosd(x) = (sind(x), cosd(x))
+# It turns out that calling these functions separately yields better
+# performance than considering each case and calling `sincos_kernel`.
+
+function deleteremainder()
     if isinf(x)
         return throw(DomainError(x, "sincosd(x) is only defined for finite `x`."))
     elseif isnan(x)
