@@ -1254,7 +1254,7 @@ Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-sincosd(x) = (sind(x), cosd(x))
+sincosd(x::Number) = (sind(x), cosd(x))
 # It turns out that calling these functions separately yields better
 # performance than considering each case and calling `sincos_kernel`.
 
