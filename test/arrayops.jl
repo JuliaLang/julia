@@ -1205,6 +1205,8 @@ end
 
     # re-write, #40996
     @test_throws ArgumentError mapslices(identity, rand(2,3), dims=(1,3)) # previously BoundsError
+    @test_throws DimensionMismatch mapslices(x -> x * x', rand(2,3), dims=1) # explicitly caught
+    @test mapslices(hcat, [1 2; 3 4], dims=1) == [1 2; 3 4] # previously an error, now allowed
 end
 
 @testset "single multidimensional index" begin

@@ -2844,6 +2844,7 @@ function mapslices(f, A::AbstractArray; dims)
         # BoundsError: attempt to access 2-element Vector{Any} at index [3]
         d > ndims(A) && throw(ArgumentError("mapslices does not accept dims > ndims(A)"))
     end
+    dim_mask = ntuple(d -> d in dims, ndims(A))
 
     # Apply the function to the first slice in order to determine the next steps
     idx1 = ntuple(d -> d in dims ? (:) : firstindex(A,d), ndims(A))
@@ -2851,10 +2852,11 @@ function mapslices(f, A::AbstractArray; dims)
     r1 = f(Aslice)
 
     if r1 isa AbstractArray && ndims(r1) > 0
-        # Could easily allow for ndims(res1) > length(dims), at least when size is 1,
-        # but for now we don't, to match old behaviour:
-        ndims(r1) > length(dims) && throw(DimensionMismatch(
-            "got ndims(f(x)) = $(ndims(r1)), expected no larger than length(dims) = $(length(dims))"))
+        n = sum(dim_mask)
+        if ndims(r1) > n && prod(d -> size(r1,d), n+1:ndims(r1)) > 1
+            s = size(r1)[1:n]
+            throw(DimensionMismatch("cannot assign slice f(x) of size $(size(r1)) into output of size $s"))
+        end
         res1 = r1
     else
         # If the result of f on a single slice is a scalar then we add singleton
@@ -2877,7 +2879,6 @@ function mapslices(f, A::AbstractArray; dims)
 
     # Determine iteration space. It will be convenient in the loop to mask N-dimensional
     # CartesianIndices, with some trivial dimensions:
-    dim_mask = ntuple(d -> d in dims, ndims(A))
     itershape = ifelse.(dim_mask, Ref(Base.OneTo(1)), axes(A))
     indices = Iterators.drop(CartesianIndices(itershape), 1)
 
@@ -2892,11 +2893,11 @@ function mapslices(f, A::AbstractArray; dims)
     safe_for_reuse = isa(Aslice, StridedArray) &&
                      (isa(r1, Number) || (isa(r1, AbstractArray) && eltype(r1) <: Number))
 
-    inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
+    _inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
     return R
 end
 
-@noinline function inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
+@noinline function _inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
     must_extend = any(dim_mask .& size(R) .> 1)
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
