@@ -908,8 +908,8 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
     if (__unlikely(reqmaxsize > a->maxsize)) {
         size_t nb1 = idx * elsz;
         size_t nbinc = inc * elsz;
-        // if the requested size is more than 2x current maxsize, grow exactly
-        // otherwise double the maxsize
+        // grow either by our computed overallocation factor or exactly the requested size,
+        // whichever is larger
         size_t newmaxsize = overallocation(a->maxsize);
         if (newmaxsize < reqmaxsize)
             newmaxsize = reqmaxsize;
