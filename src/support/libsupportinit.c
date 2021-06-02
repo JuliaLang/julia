@@ -74,7 +74,7 @@ void libsupport_init(void)
                 } while (min + 1 < max);
             }
         }
-#endif        
+#endif       
         if (ctype)
             free(ctype);
     }
