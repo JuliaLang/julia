@@ -486,12 +486,34 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
+function is_v1_format_manifest(raw_manifest::Dict)
+    if haskey(raw_manifest, "manifest_format")
+        if raw_manifest["manifest_format"] isa Dict && haskey(raw_manifest["manifest_format"], "uuid")
+            # the off-chance where an old format manifest has a dep called "manifest_format"
+            return true
+        end
+        return false
+    else
+        return true
+    end
+end
+
+# returns a deps list for both old and new manifest formats
+function get_deps(raw_manifest::Dict)
+    if is_v1_format_manifest(raw_manifest)
+        return raw_manifest
+    else
+        # if the manifest has no deps, there won't be a `deps` field
+        return get(Dict{String, Any}, raw_manifest, "deps")
+    end
+end
+
 # find `where` stanza and return the PkgId for `name`
 # return `nothing` if it did not find `where` (indicating caller should continue searching)
 function explicit_manifest_deps_get(project_file::String, where::UUID, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
-    d = parsed_toml(manifest_file)
+    d = get_deps(parsed_toml(manifest_file))
     found_where = false
     found_name = false
     for (dep_name, entries) in d
@@ -539,7 +561,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # no manifest, skip env
 
-    d = parsed_toml(manifest_file)
+    d = get_deps(parsed_toml(manifest_file))
     entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
     entries === nothing && return nothing # TODO: allow name to mismatch?
     for entry in entries
