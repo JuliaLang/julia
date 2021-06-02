@@ -1529,10 +1529,10 @@ vcat(X::T...) where {T<:Number} = T[ X[i] for i=1:length(X) ]
 hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
 hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
 
-vcat(X::Number...) = hvcat_fill(Vector{promote_typeof(X...)}(undef, length(X)), X)
-hcat(X::Number...) = hvcat_fill(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
-typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Vector{T}(undef, length(X)), X)
-typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Matrix{T}(undef, 1,length(X)), X)
+vcat(X::Number...) = hvcat_fill!(Vector{promote_typeof(X...)}(undef, length(X)), X)
+hcat(X::Number...) = hvcat_fill!(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
+typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill!(Vector{T}(undef, length(X)), X)
+typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill!(Matrix{T}(undef, 1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
@@ -1993,9 +1993,13 @@ function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     a
 end
 
-function hvcat_fill(a::Array, xs::Tuple)
-    k = 1
+function hvcat_fill!(a::Array, xs::Tuple)
     nr, nc = size(a,1), size(a,2)
+    len = length(xs)
+    if nr*nc != len
+        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
+    end
+    k = 1
     for i=1:nr
         @inbounds for j=1:nc
             a[i,j] = xs[k]
@@ -2016,11 +2020,7 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
             throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
         end
     end
-    len = length(xs)
-    if nr*nc != len
-        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
-    end
-    hvcat_fill(Matrix{T}(undef, nr, nc), xs)
+    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
 end
 
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
@@ -2136,9 +2136,9 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     if row_first
         nr, nc = size(A, 1), size(A, 2)
         nrc = nr * nc
-        @inbounds na = prod(size(A)[3:end])
+        na = prod(size(A)[3:end])
         k = 1
-        @inbounds for d ∈ 1:na
+        for d ∈ 1:na
             dd = nrc * (d - 1)
             for i ∈ 1:nr
                 Ai = dd + i
@@ -2150,7 +2150,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
             end
         end
     else
-        @inbounds for k ∈ eachindex(xs)
+        for k ∈ eachindex(xs)
             A[k] = xs[k]
         end
     end
@@ -2162,7 +2162,7 @@ _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntup
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
     # conditions: the elements must all have 1- or 0-length dimensions above N
-    @inbounds for a ∈ as
+    for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
             return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
     end
@@ -2170,16 +2170,16 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     nd = max(N, ndims(as[1]))
 
     Ndim = 0
-    @inbounds for i ∈ 1:lastindex(as)
+    for i ∈ 1:lastindex(as)
         Ndim += cat_size(as[i], N)
         for d ∈ 1:N - 1
             cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
         end
     end
 
-    @inbounds A = Array{T, nd}(undef, ntuple(d -> cat_size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
+    A = Array{T, nd}(undef, ntuple(d -> cat_size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
     k = 1
-    @inbounds for a ∈ as
+    for a ∈ as
         for i ∈ eachindex(a)
             A[k] = a[i]
             k += 1
@@ -2196,7 +2196,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # into the destination
     nd = N
     Ndim = 0
-    @inbounds for a ∈ as
+    for a ∈ as
         if a isa AbstractArray
             cat_size(a, N) == length(a) ||
                 throw(ArgumentError("all dimensions of elements other than $N must be of length 1"))
@@ -2205,10 +2205,10 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
         Ndim += cat_size(a, N)
     end
 
-    @inbounds A = Array{T, nd}(undef, ntuple(x -> 1, N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
+    A = Array{T, nd}(undef, ntuple(x -> 1, N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
 
     k = 1
-    @inbounds for a ∈ as
+    for a ∈ as
         if a isa AbstractArray
             lena = length(a)
             copyto!(A, k, a, 1, lena)
@@ -2226,17 +2226,17 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     d2 = row_first ? 1 : 2
 
     # discover dimensions
-    @inbounds nd = max(N, cat_ndims(as[1]))
+    nd = max(N, cat_ndims(as[1]))
     outdims = zeros(Int, nd)
 
     # discover number of rows or columns
-    @inbounds for i ∈ 1:dims[d1]
+    for i ∈ 1:dims[d1]
         outdims[d1] += cat_size(as[i], d1)
     end
 
     currentdims = zeros(Int, nd)
     blockcount = 0
-    @inbounds for i ∈ eachindex(as)
+    for i ∈ eachindex(as)
         currentdims[d1] += cat_size(as[i], d1)
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
@@ -2287,18 +2287,18 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
     shape = collect(shape) # saves allocations later
-    @inbounds shapelength = shape[end][1]
+    shapelength = shape[end][1]
     lengthas = length(as)
     shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
 
     # discover dimensions
-    @inbounds nd = max(N, cat_ndims(as[1]))
+    nd = max(N, cat_ndims(as[1]))
     outdims = zeros(Int, nd)
     currentdims = zeros(Int, nd)
     blockcounts = zeros(Int, nd)
     shapepos = ones(Int, nd)
 
-    @inbounds for i ∈ eachindex(as)
+    for i ∈ eachindex(as)
         wasstartblock = false
         for d ∈ 1:N
             ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
@@ -2328,7 +2328,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     end
 
     if row_first
-        @inbounds outdims[1], outdims[2] = outdims[2], outdims[1]
+        outdims[1], outdims[2] = outdims[2], outdims[1]
     end
 
     # @assert all(==(0), currentdims)
@@ -2340,11 +2340,11 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     return A
 end
 
-@inline function hvncat_fill!(A::Array{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
+function hvncat_fill!(A::Array{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
     outdims = size(A)
     offsets = scratch1
     inneroffsets = scratch2
-    @inbounds for a ∈ as
+    for a ∈ as
         if isa(a, AbstractArray)
             for ai ∈ a
                 Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
