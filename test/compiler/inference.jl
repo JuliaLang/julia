@@ -3313,3 +3313,7 @@ end |> first === Tuple{Int, String}
 
 # issue #40742
 @test Base.return_types(string, (Vector{Tuple{:x}},)) == Any[String]
+
+# issue #40804
+@test Base.return_types(()) do; ===(); end == Any[Union{}]
+@test Base.return_types(()) do; typeassert(); end == Any[Union{}]
