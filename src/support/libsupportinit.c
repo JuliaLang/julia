@@ -52,7 +52,7 @@ void libsupport_init(void)
     }
 }
 
-#ifdef __POSIX__
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
   // Raise the open file descriptor limit.
   {
     struct rlimit rl;
