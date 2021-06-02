@@ -1610,7 +1610,7 @@ end
     f, io = mktemp()
     s = stat(f)
     stat_show_str = sprint(show, s)
-    @test occursin(f, stat_show_str)
+    @test occursin(repr(f), stat_show_str)
     if Sys.iswindows()
         @test occursin("mode: 0o100666 (-rw-rw-rw-)", stat_show_str)
     else
@@ -1623,7 +1623,7 @@ end
     d = mktempdir()
     s = stat(d)
     stat_show_str = sprint(show, s)
-    @test occursin(d, stat_show_str)
+    @test occursin(repr(d), stat_show_str)
     if Sys.iswindows()
         @test occursin("mode: 0o040666 (drw-rw-rw-)", stat_show_str)
     else
