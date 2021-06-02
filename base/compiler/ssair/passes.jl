@@ -537,7 +537,7 @@ function getfield_elim_pass!(ir::IRCode)
         elseif is_known_call(stmt, isa, compact)
             # TODO
             continue
-        elseif is_known_call(stmt, typeassert, compact)
+        elseif is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
             # Canonicalize
             #   X = typeassert(Y, T)::S
             # into
@@ -557,7 +557,7 @@ function getfield_elim_pass!(ir::IRCode)
                 compact.result[idx][:line], true)
             compact.ssa_rename[compact.idx-1] = pi
             continue
-        elseif is_known_call(stmt, (===), compact)
+        elseif is_known_call(stmt, (===), compact) && length(stmt.args) == 3
             c1 = compact_exprtype(compact, stmt.args[2])
             c2 = compact_exprtype(compact, stmt.args[3])
             if !(isa(c1, Const) || isa(c2, Const))

@@ -2990,3 +2990,7 @@ f28971() = (1, [2,3]...)::Tuple{Int,Int,Int}
 let f() = sin{Int}()
     @test Base.return_types(f, ()) == Any[Union{}]
 end
+
+# issue #40804
+@test Base.return_types(()) do; ===(); end == Any[Union{}]
+@test Base.return_types(()) do; typeassert(); end == Any[Union{}]
