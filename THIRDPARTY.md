@@ -1,4 +1,7 @@
-Julia includes code from the following projects, which have their own licenses:
+The Julia language is licensed under the MIT License. The "language" consists
+of the compiler (the contents of src/), most of the standard library (base/),
+and some utilities (most of the rest of the files in this repository). See below
+for exceptions.
 
 - [crc32c.c](https://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software) (CRC-32c checksum code by Mark Adler) [[ZLib](https://opensource.org/licenses/Zlib)].
 - [LDC](https://github.com/ldc-developers/ldc/blob/master/LICENSE) (for ccall/cfunction ABI definitions) [BSD-3]. The portion of code that Julia uses from LDC is [BSD-3] licensed.
