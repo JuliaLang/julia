@@ -40,20 +40,20 @@ struct StatStruct
     mtime   :: Float64
     ctime   :: Float64
 end
-const StatFieldTypes = Union{UInt,Int,Int64,Float64}
 
-function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
-    for i = 2:nfields(x)
-        xi = getfield(x, i)::StatFieldTypes
-        xi === getfield(y, i) || return false
-    end
-    return true
+@eval function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
+  $(let ex = true
+        for fld in fieldnames(StatStruct)[2:end]
+            ex = :(getfield(x, $(QuoteNode(fld))) === getfield(y, $(QuoteNode(fld))) && $ex)
+        end
+        Expr(:return, ex)
+    end)
 end
-function Base.hash(obj::StatStruct, h::UInt)
-    for i = 2:nfields(obj)
-        h = hash(getfield(obj, i)::StatFieldTypes, h)
-    end
-    return h
+@eval function Base.hash(obj::StatStruct, h::UInt)
+  $(quote
+        $(Any[:(h = hash(getfield(obj, $(QuoteNode(fld))), h)) for fld in fieldnames(StatStruct)[2:end]]...)
+        return h
+    end)
 end
 
 StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
