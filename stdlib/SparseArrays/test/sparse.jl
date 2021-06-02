@@ -78,6 +78,24 @@ end
     @test Array(SparseMatrixCSC{eltype(a), Int8}(a)) == Array(a)
 end
 
+@testset "conversion to special LinearAlgebra types" begin
+    # issue 40924
+    @test convert(Diagonal, sparse(Diagonal(1:2))) isa Diagonal
+    @test convert(Diagonal, sparse(Diagonal(1:2))) == Diagonal(1:2)
+    @test convert(Tridiagonal, sparse(Tridiagonal(1:3, 4:7, 8:10))) isa Tridiagonal
+    @test convert(Tridiagonal, sparse(Tridiagonal(1:3, 4:7, 8:10))) == Tridiagonal(1:3, 4:7, 8:10)
+    @test convert(SymTridiagonal, sparse(SymTridiagonal(1:4, 5:7))) isa SymTridiagonal
+    @test convert(SymTridiagonal, sparse(SymTridiagonal(1:4, 5:7))) == SymTridiagonal(1:4, 5:7)
+
+    lt = LowerTriangular([1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0])
+    @test convert(LowerTriangular, sparse(lt)) isa LowerTriangular
+    @test convert(LowerTriangular, sparse(lt)) == lt
+
+    ut = UpperTriangular([1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0])
+    @test convert(UpperTriangular, sparse(ut)) isa UpperTriangular
+    @test convert(UpperTriangular, sparse(ut)) == ut
+end
+
 @testset "sparse matrix construction" begin
     @test (A = fill(1.0+im,5,5); isequal(Array(sparse(A)), A))
     @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
@@ -1724,7 +1742,7 @@ end
     local A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 2, 2, 3, 4, 5, 5, 6, 8, 10, 13]
+    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 1, 1, 1, 3, 3, 5, 6, 8, 11, 12]
     @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 

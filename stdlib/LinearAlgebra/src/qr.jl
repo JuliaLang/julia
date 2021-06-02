@@ -472,6 +472,8 @@ end
 Base.propertynames(F::QRPivoted, private::Bool=false) =
     (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
+adjoint(F::Union{QR,QRPivoted,QRCompactWY}) = Adjoint(F)
+
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 
 inv(Q::AbstractQ) = Q'
@@ -939,28 +941,35 @@ function ldiv!(A::QRPivoted, B::StridedMatrix)
     B
 end
 
-# convenience methods
-## return only the solution of a least squares problem while avoiding promoting
-## vectors to matrices.
-_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
-_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+function _apply_permutation!(F::QRPivoted, B::AbstractVecOrMat)
+    # Apply permutation but only to the top part of the solution vector since
+    # it's padded with zeros for underdetermined problems
+    B[1:length(F.p), :] = B[F.p, :]
+    return B
+end
+_apply_permutation!(F::Factorization, B::AbstractVecOrMat) = B
 
-## append right hand side with zeros if necessary
-_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
-_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
-
-function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
+function ldiv!(Fadj::Adjoint{<:Any,<:Union{QR,QRCompactWY,QRPivoted}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
-    S = promote_type(TA,TB)
-    m, n = size(A)
-    m == size(B,1) || throw(DimensionMismatch("Both inputs should have the same number of rows"))
+    m, n = size(Fadj)
 
-    AA = Factorization{S}(A)
+    # We don't allow solutions overdetermined systems
+    if m > n
+        throw(DimensionMismatch("overdetermined systems are not supported"))
+    end
+    if n != size(B, 1)
+        throw(DimensionMismatch("inputs should have the same number of rows"))
+    end
+    F = parent(Fadj)
 
-    X = _zeros(S, B, n)
-    X[1:size(B, 1), :] = B
-    ldiv!(AA, X)
-    return _cut_B(X, 1:n)
+    B = _apply_permutation!(F, B)
+
+    # For underdetermined system, the triangular solve should only be applied to the top
+    # part of B that contains the rhs. For square problems, the view corresponds to B itself
+    ldiv!(LowerTriangular(adjoint(F.R)), view(B, 1:size(F.R, 2), :))
+    lmul!(F.Q, B)
+
+    return B
 end
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret the complex

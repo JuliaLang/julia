@@ -683,6 +683,17 @@ Array(S::AbstractSparseMatrixCSC) = Matrix(S)
 
 convert(T::Type{<:AbstractSparseMatrixCSC}, m::AbstractMatrix) = m isa T ? m : T(m)
 
+convert(T::Type{<:Diagonal},       m::AbstractSparseMatrixCSC) = m isa T ? m :
+    isdiag(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as Diagonal"))
+convert(T::Type{<:SymTridiagonal}, m::AbstractSparseMatrixCSC) = m isa T ? m :
+    issymmetric(m) && isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
+convert(T::Type{<:Tridiagonal},    m::AbstractSparseMatrixCSC) = m isa T ? m :
+    isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
+convert(T::Type{<:LowerTriangular}, m::AbstractSparseMatrixCSC) = m isa T ? m :
+    istril(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
+convert(T::Type{<:UpperTriangular}, m::AbstractSparseMatrixCSC) = m isa T ? m :
+    istriu(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
+
 float(S::SparseMatrixCSC) = SparseMatrixCSC(size(S, 1), size(S, 2), copy(getcolptr(S)), copy(rowvals(S)), float.(nonzeros(S)))
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(size(S, 1), size(S, 2), copy(getcolptr(S)), copy(rowvals(S)), complex(copy(nonzeros(S))))
 
@@ -1598,13 +1609,14 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(1234))
 julia> sprand(Bool, 2, 2, 0.5)
-2×2 SparseMatrixCSC{Bool, Int64} with 1 stored entry:
+2×2 SparseMatrixCSC{Bool, Int64} with 2 stored entries:
  ⋅  ⋅
- ⋅  1
+ 1  1
 
 julia> sprand(Float64, 3, 0.75)
-3-element SparseVector{Float64, Int64} with 1 stored entry:
-  [3]  =  0.298614
+3-element SparseVector{Float64, Int64} with 2 stored entries:
+  [1]  =  0.523355
+  [2]  =  0.0890391
 ```
 """
 function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat, rfn::Function, ::Type{T}=eltype(rfn(r, 1))) where T
@@ -1645,9 +1657,9 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest; setup = :(using Random; Random.seed!(0))
 julia> sprandn(2, 2, 0.75)
-2×2 SparseMatrixCSC{Float64, Int64} with 2 stored entries:
-  ⋅   0.586617
-  ⋅   0.297336
+2×2 SparseMatrixCSC{Float64, Int64} with 3 stored entries:
+ -1.92631  -0.858041
+   ⋅        0.0213808
 ```
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) =

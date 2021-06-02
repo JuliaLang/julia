@@ -1841,8 +1841,8 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
             jl_type_error_rt("Vararg", "type", (jl_value_t*)jl_type_type, t);
         }
     }
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_vararg_t *vm = (jl_vararg_t *)jl_gc_alloc(ptls, sizeof(jl_vararg_t), jl_vararg_type);
+    jl_task_t *ct = jl_current_task;
+    jl_vararg_t *vm = (jl_vararg_t *)jl_gc_alloc(ct->ptls, sizeof(jl_vararg_t), jl_vararg_type);
     vm->T = t;
     vm->N = n;
     return vm;
@@ -1943,7 +1943,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_symbol_type = jl_new_uninitialized_datatype();
     jl_simplevector_type = jl_new_uninitialized_datatype();
     jl_methtable_type = jl_new_uninitialized_datatype();
-    jl_nothing = jl_gc_permobj(0, NULL);
 
     jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
@@ -2525,7 +2524,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(10,
+                        jl_perm_symsvec(14,
                                         "next",
                                         "queue",
                                         "storage",
@@ -2535,8 +2534,12 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "code",
                                         "_state",
                                         "sticky",
-                                        "_isexception"),
-                        jl_svec(10,
+                                        "_isexception",
+                                        "rngState0",
+                                        "rngState1",
+                                        "rngState2",
+                                        "rngState3"),
+                        jl_svec(14,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -2546,10 +2549,15 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_uint8_type,
                                 jl_bool_type,
-                                jl_bool_type),
+                                jl_bool_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type),
                         0, 1, 6);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
+    jl_astaggedvalue(jl_current_task)->header = (uintptr_t)jl_task_type | jl_astaggedvalue(jl_current_task)->header;
 
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
 

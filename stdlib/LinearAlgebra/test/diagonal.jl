@@ -176,12 +176,24 @@ Random.seed!(1)
             @test Array(a*D) ≈ a*DM
             @test Array(D*a) ≈ DM*a
             @test Array(D/a) ≈ DM/a
-            if relty <: BlasFloat
-                for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
-                    @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                    @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                    @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
-                end
+            if elty <: Real
+                @test Array(abs.(D)^a) ≈ abs.(DM)^a
+            else
+                @test Array(D^a) ≈ DM^a
+            end
+            @test Diagonal(1:100)^2 == Diagonal((1:100).^2)
+            p = 3
+            @test Diagonal(1:100)^p == Diagonal((1:100).^p)
+            @test Diagonal(1:100)^(-1) == Diagonal(inv.(1:100))
+            @test Diagonal(1:100)^2.0 == Diagonal((1:100).^2.0)
+            @test Diagonal(1:100)^(2.0+0im) == Diagonal((1:100).^(2.0+0im))
+        end
+
+        if relty <: BlasFloat
+            for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
@@ -401,6 +413,11 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+end
+
+@testset "rdiv! (#40887)" begin
+    @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
+    @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
 end
 
 @testset "kron (issue #40595)" begin
@@ -784,4 +801,11 @@ end
     @test dot(A, B) ≈ conj(dot(B, A))
 end
 
+@testset "eltype relaxation(#41015)" begin
+    A = rand(3,3)
+    for trans in (identity, Adjoint, Transpose)
+        @test ldiv!(trans(I(3)), A) == A
+        @test rdiv!(A, trans(I(3))) == A
+    end
+end
 end # module TestDiagonal

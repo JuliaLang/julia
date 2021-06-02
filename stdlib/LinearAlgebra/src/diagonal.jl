@@ -191,6 +191,12 @@ end
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
 (\)(x::Number, D::Diagonal) = Diagonal(x \ D.diag)
+(^)(D::Diagonal, a::Number) = Diagonal(D.diag .^ a)
+(^)(D::Diagonal, a::Real) = Diagonal(D.diag .^ a) # for disambiguation
+(^)(D::Diagonal, a::Integer) = Diagonal(D.diag .^ a) # for disambiguation
+Base.literal_pow(::typeof(^), D::Diagonal, valp::Val) =
+    Diagonal(Base.literal_pow.(^, D.diag, valp)) # for speed
+Base.literal_pow(::typeof(^), D::Diagonal, ::Val{-1}) = inv(D) # for disambiguation
 
 function (*)(Da::Diagonal, Db::Diagonal)
     nDa, mDb = size(Da, 2), size(Db, 1)
@@ -446,9 +452,9 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 
 ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
-ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
+ldiv!(adjD::Adjoint{<:Any,<:Diagonal}, B::AbstractVecOrMat) =
     (D = adjD.parent; ldiv!(conj(D), B))
-ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
+ldiv!(transD::Transpose{<:Any,<:Diagonal}, B::AbstractVecOrMat) =
     (D = transD.parent; ldiv!(D, B))
 
 function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
@@ -456,7 +462,7 @@ function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
     A
 end
 
-function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+function rdiv!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
     dd = D.diag
     m, n = size(A)
@@ -480,21 +486,13 @@ function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
     A
 end
 
-rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
+rdiv!(A::AbstractMatrix, adjD::Adjoint{<:Any,<:Diagonal}) =
     (D = adjD.parent; rdiv!(A, conj(D)))
-rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
+rdiv!(A::AbstractMatrix, transD::Transpose{<:Any,<:Diagonal}) =
     (D = transD.parent; rdiv!(A, D))
 
 (/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
     rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
-
-(\)(F::Factorization, D::Diagonal) =
-    ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
-\(adjF::Adjoint{<:Any,<:Factorization}, D::Diagonal) =
-    (F = adjF.parent; ldiv!(adjoint(F), Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
-(\)(A::Union{QR,QRCompactWY,QRPivoted}, B::Diagonal) =
-    invoke(\, Tuple{Union{QR,QRCompactWY,QRPivoted}, AbstractVecOrMat}, A, B)
-
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
     valA = A.diag; nA = length(valA)

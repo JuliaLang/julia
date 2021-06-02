@@ -414,7 +414,7 @@ static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsig
 
 static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     intrinsic_u1_t op = select_intrinsic_u1(osize2, (const intrinsic_u1_t*)voidlist);
     uint64_t cnt = op(osize * host_char_bit, pa);
     // TODO: the following assume little-endian
@@ -422,7 +422,7 @@ static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsign
     if (osize <= sizeof(cnt)) {
         return jl_new_bits(ty, &cnt);
     }
-    jl_value_t *newv = jl_gc_alloc(ptls, osize, ty);
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, osize, ty);
     // perform zext, if needed
     memset((char*)jl_data_ptr(newv) + sizeof(cnt), 0, osize - sizeof(cnt));
     memcpy(jl_data_ptr(newv), &cnt, sizeof(cnt));
@@ -478,13 +478,13 @@ typedef void (fintrinsic_op1)(unsigned, void*, void*);
 
 static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name, fintrinsic_op1 *halfop, fintrinsic_op1 *floatop, fintrinsic_op1 *doubleop)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     if (!jl_is_primitivetype(jl_typeof(a)))
         jl_errorf("%s: value is not a primitive type", name);
     if (!jl_is_primitivetype(ty))
         jl_errorf("%s: type is not a primitive type", name);
     unsigned sz2 = jl_datatype_size(ty);
-    jl_value_t *newv = jl_gc_alloc(ptls, sz2, ty);
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz2, ty);
     void *pa = jl_data_ptr(a), *pr = jl_data_ptr(newv);
     unsigned sz = jl_datatype_size(jl_typeof(a));
     switch (sz) {
@@ -645,8 +645,8 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     params[1] = (jl_value_t*)jl_bool_type;
     jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
     JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALAWYS_LEAFTYPE)
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)tuptyp)->size, tuptyp);
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, ((jl_datatype_t*)tuptyp)->size, tuptyp);
 
     intrinsic_checked_t op = select_intrinsic_checked(sz2, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
@@ -673,14 +673,14 @@ static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa
     bi_intrinsic_ctype(OP, name, 64, double) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
-    jl_ptls_t ptls = jl_get_ptls_states();\
+    jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty) \
         jl_error(#name ": types of a and b must match"); \
     if (!jl_is_primitivetype(ty)) \
         jl_error(#name ": values are not primitive types"); \
     int sz = jl_datatype_size(ty); \
-    jl_value_t *newv = jl_gc_alloc(ptls, sz, ty);          \
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pr = jl_data_ptr(newv); \
     switch (sz) { \
     /* choose the right size c-type operation */ \
@@ -736,14 +736,14 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     ter_intrinsic_ctype(OP, name, 64, double) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) \
 { \
-    jl_ptls_t ptls = jl_get_ptls_states();\
+    jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty || jl_typeof(c) != ty) \
         jl_error(#name ": types of a, b, and c must match"); \
     if (!jl_is_primitivetype(ty)) \
         jl_error(#name ": values are not primitive types"); \
-    int sz = jl_datatype_size(ty);                                      \
-    jl_value_t *newv = jl_gc_alloc(ptls, sz, ty);                       \
+    int sz = jl_datatype_size(ty); \
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pc = jl_data_ptr(c), *pr = jl_data_ptr(newv); \
     switch (sz) { \
     /* choose the right size c-type operation */ \

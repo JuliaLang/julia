@@ -42,9 +42,9 @@ static jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_methtable_t *mt =
-        (jl_methtable_t*)jl_gc_alloc(ptls, sizeof(jl_methtable_t),
+        (jl_methtable_t*)jl_gc_alloc(ct->ptls, sizeof(jl_methtable_t),
                                      jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
@@ -62,9 +62,9 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
 
 JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *module, int abstract, int mutabl)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_typename_t *tn =
-        (jl_typename_t*)jl_gc_alloc(ptls, sizeof(jl_typename_t),
+        (jl_typename_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typename_t),
                                     jl_typename_type);
     tn->name = name;
     tn->module = module;
@@ -91,8 +91,8 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module, jl_dat
 
 jl_datatype_t *jl_new_uninitialized_datatype(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ptls, sizeof(jl_datatype_t), jl_datatype_type);
+    jl_task_t *ct = jl_current_task;
+    jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ct->ptls, sizeof(jl_datatype_t), jl_datatype_type);
     t->hash = 0;
     t->hasfreetypevars = 0;
     t->isdispatchtuple = 0;
@@ -232,7 +232,8 @@ STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
     if (jl_is_datatype_make_singleton(st)) {
         // It's possible for st to already have an ->instance if it was redefined
         if (!st->instance) {
-            st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
+            jl_task_t *ct = jl_current_task;
+            st->instance = jl_gc_alloc(ct->ptls, 0, st);
             jl_gc_wb(st, st->instance);
         }
     }
@@ -665,7 +666,6 @@ JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
 {
     // data may not have the alignment required by the size
     // but will always have the alignment required by the datatype
-    jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
@@ -682,7 +682,8 @@ JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
     if (bt == jl_uint16_type)  return jl_box_uint16(*(uint16_t*)data);
     if (bt == jl_char_type)    return jl_box_char(*(uint32_t*)data);
 
-    jl_value_t *v = jl_gc_alloc(ptls, nb, bt);
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *v = jl_gc_alloc(ct->ptls, nb, bt);
     switch (nb) {
     case  1: *(uint8_t*) v = *(uint8_t*)data;    break;
     case  2: *(uint16_t*)v = jl_load_unaligned_i16(data);   break;
@@ -700,7 +701,8 @@ JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
 JL_DLLEXPORT jl_value_t *jl_typemax_uint(jl_value_t *bt)
 {
     uint64_t data = 0xffffffffffffffffULL;
-    jl_value_t *v = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t), bt);
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *v = jl_gc_alloc(ct->ptls, sizeof(size_t), bt);
     memcpy(v, &data, sizeof(size_t));
     return v;
 }
@@ -760,14 +762,14 @@ UNBOX_FUNC(float64, double)
 UNBOX_FUNC(voidpointer, void*)
 UNBOX_FUNC(uint8pointer, uint8_t*)
 
-#define BOX_FUNC(typ,c_type,pfx,nw)                             \
-    JL_DLLEXPORT jl_value_t *pfx##_##typ(c_type x)              \
-    {                                                           \
-        jl_ptls_t ptls = jl_get_ptls_states();                  \
-        jl_value_t *v = jl_gc_alloc(ptls, nw * sizeof(void*),   \
-                                    jl_##typ##_type);           \
-        *(c_type*)jl_data_ptr(v) = x;                           \
-        return v;                                               \
+#define BOX_FUNC(typ,c_type,pfx,nw)                                     \
+    JL_DLLEXPORT jl_value_t *pfx##_##typ(c_type x)                      \
+    {                                                                   \
+        jl_task_t *ct = jl_current_task;                                \
+        jl_value_t *v = jl_gc_alloc(ct->ptls, nw * sizeof(void*),       \
+                                    jl_##typ##_type);                   \
+        *(c_type*)jl_data_ptr(v) = x;                                   \
+        return v;                                                       \
     }
 BOX_FUNC(float32, float,  jl_box, 1)
 BOX_FUNC(voidpointer, void*,  jl_box, 1)
@@ -781,29 +783,29 @@ BOX_FUNC(float64, double, jl_box, 2)
 #define NBOX_C 1024
 
 #define SIBOX_FUNC(typ,c_type,nw)\
-    static jl_value_t *boxed_##typ##_cache[NBOX_C];             \
-    JL_DLLEXPORT jl_value_t *jl_box_##typ(c_type x)             \
-    {                                                           \
-        jl_ptls_t ptls = jl_get_ptls_states();                  \
-        c_type idx = x+NBOX_C/2;                                \
-        if ((u##c_type)idx < (u##c_type)NBOX_C)                 \
-            return boxed_##typ##_cache[idx];                    \
-        jl_value_t *v = jl_gc_alloc(ptls, nw * sizeof(void*),   \
-                                    jl_##typ##_type);           \
-        *(c_type*)jl_data_ptr(v) = x;                           \
-        return v;                                               \
+    static jl_value_t *boxed_##typ##_cache[NBOX_C];                     \
+    JL_DLLEXPORT jl_value_t *jl_box_##typ(c_type x)                     \
+    {                                                                   \
+        jl_task_t *ct = jl_current_task;                                \
+        c_type idx = x+NBOX_C/2;                                        \
+        if ((u##c_type)idx < (u##c_type)NBOX_C)                         \
+            return boxed_##typ##_cache[idx];                            \
+        jl_value_t *v = jl_gc_alloc(ct->ptls, nw * sizeof(void*),       \
+                                    jl_##typ##_type);                   \
+        *(c_type*)jl_data_ptr(v) = x;                                   \
+        return v;                                                       \
     }
-#define UIBOX_FUNC(typ,c_type,nw)                               \
-    static jl_value_t *boxed_##typ##_cache[NBOX_C];             \
-    JL_DLLEXPORT jl_value_t *jl_box_##typ(c_type x)             \
-    {                                                           \
-        jl_ptls_t ptls = jl_get_ptls_states();                  \
-        if (x < NBOX_C)                                         \
-            return boxed_##typ##_cache[x];                      \
-        jl_value_t *v = jl_gc_alloc(ptls, nw * sizeof(void*),   \
-                                    jl_##typ##_type);           \
-        *(c_type*)jl_data_ptr(v) = x;                           \
-        return v;                                               \
+#define UIBOX_FUNC(typ,c_type,nw)                                       \
+    static jl_value_t *boxed_##typ##_cache[NBOX_C];                     \
+    JL_DLLEXPORT jl_value_t *jl_box_##typ(c_type x)                     \
+    {                                                                   \
+        jl_task_t *ct = jl_current_task;                                \
+        if (x < NBOX_C)                                                 \
+            return boxed_##typ##_cache[x];                              \
+        jl_value_t *v = jl_gc_alloc(ct->ptls, nw * sizeof(void*),       \
+                                    jl_##typ##_type);                   \
+        *(c_type*)jl_data_ptr(v) = x;                                   \
+        return v;                                                       \
     }
 SIBOX_FUNC(int16,  int16_t, 1)
 SIBOX_FUNC(int32,  int32_t, 1)
@@ -822,11 +824,11 @@ UIBOX_FUNC(uint64, uint64_t, 2)
 static jl_value_t *boxed_char_cache[128];
 JL_DLLEXPORT jl_value_t *jl_box_char(uint32_t x)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     uint32_t u = bswap_32(x);
     if (u < 128)
         return boxed_char_cache[(uint8_t)u];
-    jl_value_t *v = jl_gc_alloc(ptls, sizeof(void*), jl_char_type);
+    jl_value_t *v = jl_gc_alloc(ct->ptls, sizeof(void*), jl_char_type);
     *(uint32_t*)jl_data_ptr(v) = x;
     return v;
 }
@@ -889,12 +891,12 @@ JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
 
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     if (type->instance != NULL) return type->instance;
     va_list args;
     size_t nf = jl_datatype_nfields(type);
     va_start(args, type);
-    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
+    jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(type), type);
     for (size_t i = 0; i < nf; i++) {
         set_nth_field(type, (void*)jv, i, va_arg(args, jl_value_t*));
     }
@@ -913,7 +915,7 @@ static void init_struct_tail(jl_datatype_t *type, jl_value_t *jv, size_t na) JL_
 
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     if (!jl_is_datatype(type) || type->layout == NULL) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     }
@@ -926,7 +928,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
     }
     if (type->instance != NULL)
         return type->instance;
-    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
+    jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(type), type);
     for (size_t i = 0; i < na; i++) {
         set_nth_field(type, (void*)jv, i, args[i]);
     }
@@ -936,7 +938,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
 
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     if (!jl_is_tuple(tup))
         jl_type_error("new", (jl_value_t*)jl_tuple_type, tup);
     if (!jl_is_datatype(type) || type->layout == NULL)
@@ -955,7 +957,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
         }
         return type->instance;
     }
-    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
+    jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(type), type);
     jl_value_t *fi = NULL;
     if (type->layout->npointers > 0) {
         // if there are references, zero the space first to prevent the GC
@@ -977,10 +979,10 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
 
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     if (type->instance != NULL) return type->instance;
     size_t size = jl_datatype_size(type);
-    jl_value_t *jv = jl_gc_alloc(ptls, size, type);
+    jl_value_t *jv = jl_gc_alloc(ct->ptls, size, type);
     if (size > 0)
         memset(jl_data_ptr(jv), 0, size);
     return jv;
