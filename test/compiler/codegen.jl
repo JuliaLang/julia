@@ -570,3 +570,13 @@ struct A40855
 end
 g() = string(A40855(X40855, 1))
 @test g() == "$(@__MODULE__).A40855($(@__MODULE__).X40855, 1)"
+
+# issue #40612
+f40612(a, b) = a|b === a|b
+g40612(a, b) = a[]|a[] === b[]|b[]
+@test f40612(true, missing)
+@test !g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[true])
+@test !g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[missing])
+@test g40612(Union{Bool,Missing}[true], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[false])

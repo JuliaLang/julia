@@ -2442,11 +2442,18 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
 {
     assert(jl_egal(arg1.typ, arg2.typ) && arg1.TIndex && arg2.TIndex && jl_is_uniontype(arg1.typ) && "unimplemented");
     Value *tindex = arg1.TIndex;
+    tindex = ctx.builder.CreateAnd(tindex, ConstantInt::get(T_int8, 0x7f));
+    Value *tindex2 = arg2.TIndex;
+    tindex2 = ctx.builder.CreateAnd(tindex2, ConstantInt::get(T_int8, 0x7f));
+    Value *typeeq = ctx.builder.CreateICmpEQ(tindex, tindex2);
+    tindex = ctx.builder.CreateSelect(typeeq, tindex, ConstantInt::get(T_int8, 0x00));
     BasicBlock *defaultBB = BasicBlock::Create(jl_LLVMContext, "unionbits_is_boxed", ctx.f);
     SwitchInst *switchInst = ctx.builder.CreateSwitch(tindex, defaultBB);
     BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_unionbits_is", ctx.f);
     ctx.builder.SetInsertPoint(postBB);
     PHINode *phi = ctx.builder.CreatePHI(T_int1, 2);
+    switchInst->addCase(ConstantInt::get(T_int8, 0), postBB);
+    phi->addIncoming(ConstantInt::get(T_int1, 0), switchInst->getParent());
     unsigned counter = 0;
     bool allunboxed = for_each_uniontype_small(
         [&](unsigned idx, jl_datatype_t *jt) {
@@ -2470,7 +2477,7 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
     ctx.builder.CreateCall(trap_func);
     ctx.builder.CreateUnreachable();
     ctx.builder.SetInsertPoint(postBB);
-    return ctx.builder.CreateAnd(phi, ctx.builder.CreateICmpEQ(arg1.TIndex, arg2.TIndex));
+    return phi;
 }
 
 static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2)
