@@ -1515,6 +1515,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
                         callee == pgcstack_getter ||
+                        callee->getName() == "jl_lock_value" || callee->getName() == "jl_unlock_value" ||
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }

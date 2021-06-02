@@ -1099,9 +1099,9 @@ end
 let strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
-    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
-    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
-    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
     @test strct.line === 0
     @test strct.error == "bad"
@@ -1123,7 +1123,7 @@ let mstrct = TestMutable("melm", 1, nothing)
     @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
 end
 let strct = LoadError("yofile", 0, "bad")
-    @test_throws(ErrorException("setfield! immutable struct of type LoadError cannot be changed"),
+    @test_throws(ErrorException("setfield!: immutable struct of type LoadError cannot be changed"),
                  ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), strct, 0, ""))
 end
 let mstrct = TestMutable("melm", 1, nothing)

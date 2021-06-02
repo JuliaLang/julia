@@ -20,27 +20,31 @@ extern "C" {
 
 #define JL_ARRAY_ALIGN(jl_value, nbytes) LLT_ALIGN(jl_value, nbytes)
 
-// this is a version of memcpy that preserves atomic memory ordering
-// which makes it safe to use for objects that can contain memory references
-// without risk of creating pointers out of thin air
-// TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
-//       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
-static void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOTSAFEPOINT
+static inline void arrayassign_safe(int hasptr, jl_value_t *parent, char *dst, const jl_value_t *src, size_t nb) JL_NOTSAFEPOINT
 {
-    size_t i;
-    if (dstp < srcp || dstp > srcp + n) {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstp + i, jl_atomic_load_relaxed(srcp + i));
-        }
+    // array can assume more alignment than a field would normally have
+    assert(nb >= jl_datatype_size(jl_typeof(src))); // nb might move some undefined bits, but we should be okay with that
+    if (hasptr) {
+        size_t nptr = nb / sizeof(void*);
+        memmove_refs((void**)dst, (void**)src, nptr);
+        jl_gc_multi_wb(parent, src);
     }
     else {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
+        switch (nb) {
+        case  0: break;
+        case  1: *(uint8_t*)dst  = *(uint8_t*)src;  break;
+        case  2: *(uint16_t*)dst = *(uint16_t*)src; break;
+        case  4: *(uint32_t*)dst = *(uint32_t*)src; break;
+        case  8: *(uint64_t*)dst = *(uint64_t*)src; break;
+        case 16:
+            memcpy(jl_assume_aligned(dst, 16), jl_assume_aligned(src, 16), 16);
+            break;
+        default: memcpy(dst, src, nb);
         }
     }
 }
 
-static void memmove_safe(int hasptr, char *dst, const char *src, size_t nb) JL_NOTSAFEPOINT
+static inline void memmove_safe(int hasptr, char *dst, const char *src, size_t nb) JL_NOTSAFEPOINT
 {
     if (hasptr)
         memmove_refs((void**)dst, (void**)src, nb / sizeof(void*));
@@ -594,7 +598,10 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
         if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
             return ((jl_datatype_t*)eltype)->instance;
     }
-    return undefref_check((jl_datatype_t*)eltype, jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]));
+    jl_value_t *r = undefref_check((jl_datatype_t*)eltype, jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]));
+    if (__unlikely(r == NULL))
+        jl_throw(jl_undefref_exception);
+    return r;
 }
 
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
@@ -622,6 +629,7 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
         JL_GC_POP();
     }
     if (!a->flags.ptrarray) {
+        int hasptr;
         if (jl_is_uniontype(eltype)) {
             uint8_t *psel = &((uint8_t*)jl_array_typetagdata(a))[i];
             unsigned nth = 0;
@@ -630,15 +638,12 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
             *psel = nth;
             if (jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(rhs)))
                 return;
-        }
-        if (a->flags.hasptr) {
-            memmove_refs((void**)&((char*)a->data)[i * a->elsize], (void**)rhs, a->elsize / sizeof(void*));
+            hasptr = 0;
         }
         else {
-            jl_assign_bits(&((char*)a->data)[i * a->elsize], rhs);
+            hasptr = a->flags.hasptr;
         }
-        if (a->flags.hasptr)
-            jl_gc_multi_wb(jl_array_owner(a), rhs);
+        arrayassign_safe(hasptr, jl_array_owner(a), &((char*)a->data)[i * a->elsize], rhs, a->elsize);
     }
     else {
         jl_atomic_store_relaxed(((jl_value_t**)a->data) + i, rhs);
