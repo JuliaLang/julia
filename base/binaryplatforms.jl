@@ -706,7 +706,7 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         libstdcxx_version = get_field(m, libstdcxx_version_mapping)
         cxxstring_abi = get_field(m, cxxstring_abi_mapping)
         function split_tags(tagstr)
-            tag_fields = filter(!isempty, split(tagstr, "-"))
+            tag_fields = split(tagstr, "-"; keepempty=false)
             if isempty(tag_fields)
                 return Pair{String,String}[]
             end

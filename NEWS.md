@@ -16,6 +16,7 @@ New language features
   in `[A; B]` has always described concatenating along the first dimension (vertically), now two
   semicolons `[A;; B]` do so in the second dimension (horizontally), three semicolons `;;;` in the
   third, and so on. ([#33697])
+* New function `eachsplit(str)` for iteratively performing `split(str)`.
 
 Language changes
 ----------------
