@@ -26,6 +26,8 @@ Language changes
 * Destructuring will no longer mutate values on the left hand side while iterating through values on the right hand side. In the example
   of an array `x`, `x[2], x[1] = x` will now swap the first and second entry of `x`, whereas it used to fill both entries with `x[1]`
   because `x[2]` was mutated during the iteration of `x`. ([#40737])
+* The default random number generator has changed, so all random numbers will be different (even with the
+  same seed) unless an explicit RNG object is used. See the section on the `Random` standard library below.
 
 Compiler/Runtime improvements
 -----------------------------
@@ -39,7 +41,12 @@ Command-line option changes
 
 Multi-threading changes
 -----------------------
+
 * If the `JULIA_NUM_THREADS` environment variable is set to `auto`, then the number of threads will be set to the number of CPU threads ([#38952])
+* Every `Task` object has a local random number generator state, providing reproducible (schedule-independent) execution
+  of parallel simulation code by default. The default generator is also significantly faster in parallel than in
+  previous versions.
+
 
 Build system changes
 --------------------
@@ -130,6 +137,9 @@ Standard library changes
 
 #### Random
 
+* The default random number generator has been changed from Mersenne Twister to [Xoshiro256++](https://prng.di.unimi.it/).
+  The new generator has smaller state, better performance, and superior statistical properties.
+  This generator is the one used for reproducible Task-local randomness.
 
 #### REPL
 
