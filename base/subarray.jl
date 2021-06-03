@@ -67,7 +67,13 @@ similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
 sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
 
-copy(V::SubArray) = V.parent[V.indices...]
+function Base.copy(V::SubArray)
+    v = V.parent[V.indices...]
+    ndims(V) == 0 || return v
+    x = similar(V) # ensure proper type of x
+    x[] = v
+    return x
+end
 
 parent(V::SubArray) = V.parent
 parentindices(V::SubArray) = V.indices
@@ -134,6 +140,10 @@ it may cause a segmentation fault.
 Some immutable parent arrays (like ranges) may choose to simply
 recompute a new array in some circumstances instead of returning
 a `SubArray` if doing so is efficient and provides compatible semantics.
+
+!!! compat "Julia 1.6"
+    In Julia 1.6 or later, `view` can be called on an `AbstractString`, returning a
+    `SubString`.
 
 # Examples
 ```jldoctest

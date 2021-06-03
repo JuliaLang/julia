@@ -73,11 +73,13 @@ function test_jl_dump_compiles_toplevel_thunks()
     # Make sure to cause compilation of the eval function
     # before calling it below.
     Core.eval(Main, Any[:(nothing)][1])
+    GC.enable(false)  # avoid finalizers to be compiled
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
     close(io)
+    GC.enable(true)
     tstats = stat(tfile)
     tempty = tstats.size == 0
     rm(tfile)
@@ -551,3 +553,30 @@ end
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
 end
+
+# issue #32843
+function f32843(vals0, v)
+    (length(vals0) > 1) && (vals = v[1])
+    (length(vals0) == 1 && vals0[1]==1) && (vals = 1:2)
+    vals
+end
+@test_throws UndefVarError f32843([6], Vector[[1]])
+
+# issue #40855, struct constants with union fields
+@enum T40855 X40855
+struct A40855
+    d::Union{Nothing, T40855}
+    b::Union{Nothing, Int}
+end
+g() = string(A40855(X40855, 1))
+@test g() == "$(@__MODULE__).A40855($(@__MODULE__).X40855, 1)"
+
+# issue #40612
+f40612(a, b) = a|b === a|b
+g40612(a, b) = a[]|a[] === b[]|b[]
+@test f40612(true, missing)
+@test !g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[true])
+@test !g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[missing])
+@test g40612(Union{Bool,Missing}[true], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[false])

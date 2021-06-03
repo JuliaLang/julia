@@ -14,46 +14,55 @@ Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
 
 """
+    Diagonal(V::AbstractVector)
+
+Construct a matrix with `V` as its diagonal.
+
+See also [`diag`](@ref), [`diagm`](@ref).
+
+# Examples
+```jldoctest
+julia> Diagonal([1, 10, 100])
+3×3 Diagonal{$Int, Vector{$Int}}:
+ 1   ⋅    ⋅
+ ⋅  10    ⋅
+ ⋅   ⋅  100
+
+julia> diagm([7, 13])
+2×2 Matrix{$Int}:
+ 7   0
+ 0  13
+```
+"""
+Diagonal(V::AbstractVector)
+
+"""
     Diagonal(A::AbstractMatrix)
 
 Construct a matrix from the diagonal of `A`.
 
 # Examples
 ```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Matrix{Int64}:
- 1  2  3
- 4  5  6
- 7  8  9
+julia> A = permutedims(reshape(1:15, 5, 3))
+3×5 Matrix{Int64}:
+  1   2   3   4   5
+  6   7   8   9  10
+ 11  12  13  14  15
 
 julia> Diagonal(A)
-3×3 Diagonal{Int64, Vector{Int64}}:
- 1  ⋅  ⋅
- ⋅  5  ⋅
- ⋅  ⋅  9
+3×3 Diagonal{$Int, Vector{$Int}}:
+ 1  ⋅   ⋅
+ ⋅  7   ⋅
+ ⋅  ⋅  13
+
+julia> diag(A, 2)
+3-element Vector{$Int}:
+  3
+  9
+ 15
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
-
-"""
-    Diagonal(V::AbstractVector)
-
-Construct a matrix with `V` as its diagonal.
-
-# Examples
-```jldoctest
-julia> V = [1, 2]
-2-element Vector{Int64}:
- 1
- 2
-
-julia> Diagonal(V)
-2×2 Diagonal{Int64, Vector{Int64}}:
- 1  ⋅
- ⋅  2
-```
-"""
-Diagonal(V::AbstractVector)
 
 Diagonal(D::Diagonal) = D
 Diagonal{T}(D::Diagonal{T}) where {T} = D
@@ -62,6 +71,13 @@ Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 Matrix(D::Diagonal) = diagm(0 => D.diag)
 Array(D::Diagonal) = Matrix(D)
+
+"""
+    Diagonal{T}(undef, n)
+
+Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
+"""
+Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
 
 # For D<:Diagonal, similar(D[, neweltype]) should yield a Diagonal matrix.
 # On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
@@ -174,6 +190,13 @@ end
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
+(\)(x::Number, D::Diagonal) = Diagonal(x \ D.diag)
+(^)(D::Diagonal, a::Number) = Diagonal(D.diag .^ a)
+(^)(D::Diagonal, a::Real) = Diagonal(D.diag .^ a) # for disambiguation
+(^)(D::Diagonal, a::Integer) = Diagonal(D.diag .^ a) # for disambiguation
+Base.literal_pow(::typeof(^), D::Diagonal, valp::Val) =
+    Diagonal(Base.literal_pow.(^, D.diag, valp)) # for speed
+Base.literal_pow(::typeof(^), D::Diagonal, ::Val{-1}) = inv(D) # for disambiguation
 
 function (*)(Da::Diagonal, Db::Diagonal)
     nDa, mDb = size(Da, 2), size(Db, 1)
@@ -203,12 +226,20 @@ end
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
+    nA, nD = size(A, 2), length(D.diag)
+    if nA != nD
+        throw(DimensionMismatch("second dimension of A, $nA, does not match the first of D, $nD"))
+    end
     A .= A .* permutedims(D.diag)
     return A
 end
 
 function lmul!(D::Diagonal, B::AbstractVecOrMat)
     require_one_based_indexing(B)
+    nB, nD = size(B, 1), length(D.diag)
+    if nB != nD
+        throw(DimensionMismatch("second dimension of D, $nD, does not match the first of B, $nB"))
+    end
     B .= D.diag .* B
     return B
 end
@@ -419,40 +450,11 @@ mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:Rea
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 
-function ldiv!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
-    if length(v) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
-    end
-    for i = 1:length(D.diag)
-        d = D.diag[i]
-        if iszero(d)
-            throw(SingularException(i))
-        end
-        v[i] = d\v[i]
-    end
-    v
-end
-function ldiv!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
-    require_one_based_indexing(V)
-    if size(V,1) != length(D.diag)
-        throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
-    end
-    for i = 1:length(D.diag)
-        d = D.diag[i]
-        if iszero(d)
-            throw(SingularException(i))
-        end
-        for j = 1:size(V,2)
-            @inbounds V[i,j] = d\V[i,j]
-        end
-    end
-    V
-end
 ldiv!(x::AbstractArray, A::Diagonal, b::AbstractArray) = (x .= A.diag .\ b)
 
-ldiv!(adjD::Adjoint{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
+ldiv!(adjD::Adjoint{<:Any,<:Diagonal}, B::AbstractVecOrMat) =
     (D = adjD.parent; ldiv!(conj(D), B))
-ldiv!(transD::Transpose{<:Any,<:Diagonal{T}}, B::AbstractVecOrMat{T}) where {T} =
+ldiv!(transD::Transpose{<:Any,<:Diagonal}, B::AbstractVecOrMat) =
     (D = transD.parent; ldiv!(D, B))
 
 function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
@@ -460,7 +462,7 @@ function ldiv!(D::Diagonal, A::Union{LowerTriangular,UpperTriangular})
     A
 end
 
-function rdiv!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+function rdiv!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
     dd = D.diag
     m, n = size(A)
@@ -484,30 +486,21 @@ function rdiv!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal)
     A
 end
 
-rdiv!(A::AbstractMatrix{T}, adjD::Adjoint{<:Any,<:Diagonal{T}}) where {T} =
+rdiv!(A::AbstractMatrix, adjD::Adjoint{<:Any,<:Diagonal}) =
     (D = adjD.parent; rdiv!(A, conj(D)))
-rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
+rdiv!(A::AbstractMatrix, transD::Transpose{<:Any,<:Diagonal}) =
     (D = transD.parent; rdiv!(A, D))
 
 (/)(A::Union{StridedMatrix, AbstractTriangular}, D::Diagonal) =
     rdiv!((typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A), D)
 
-(\)(F::Factorization, D::Diagonal) =
-    ldiv!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
-\(adjF::Adjoint{<:Any,<:Factorization}, D::Diagonal) =
-    (F = adjF.parent; ldiv!(adjoint(F), Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D)))
-(\)(A::Union{QR,QRCompactWY,QRPivoted}, B::Diagonal) =
-    invoke(\, Tuple{Union{QR,QRCompactWY,QRPivoted}, AbstractVecOrMat}, A, B)
-
-
-@inline function kron!(C::AbstractMatrix{T}, A::Diagonal, B::Diagonal) where T
-    fill!(C, zero(T))
+@inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
     valA = A.diag; nA = length(valA)
     valB = B.diag; nB = length(valB)
     nC = checksquare(C)
     @boundscheck nC == nA*nB ||
         throw(DimensionMismatch("expect C to be a $(nA*nB)x$(nA*nB) matrix, got size $(nC)x$(nC)"))
-
+    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
     @inbounds for i = 1:nA, j = 1:nB
         idx = (i-1)*nB+j
         C[idx, idx] = valA[i] * valB[j]
@@ -515,19 +508,16 @@ rdiv!(A::AbstractMatrix{T}, transD::Transpose{<:Any,<:Diagonal{T}}) where {T} =
     return C
 end
 
-function kron(A::Diagonal{T1}, B::Diagonal{T2}) where {T1<:Number, T2<:Number}
-    valA = A.diag; nA = length(valA)
-    valB = B.diag; nB = length(valB)
-    valC = Vector{typeof(zero(T1)*zero(T2))}(undef,nA*nB)
-    C = Diagonal(valC)
-    return @inbounds kron!(C, A, B)
-end
+kron(A::Diagonal{<:Number}, B::Diagonal{<:Number}) = Diagonal(kron(A.diag, B.diag))
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     Base.require_one_based_indexing(B)
-    (mA, nA) = size(A); (mB, nB) = size(B); (mC, nC) = size(C);
+    (mA, nA) = size(A)
+    (mB, nB) = size(B)
+    (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch("expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
+    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
     m = 1
     @inbounds for j = 1:nA
         A_jj = A[j,j]
@@ -545,9 +535,12 @@ end
 
 @inline function kron!(C::AbstractMatrix, A::AbstractMatrix, B::Diagonal)
     require_one_based_indexing(A)
-    (mA, nA) = size(A); (mB, nB) = size(B); (mC, nC) = size(C);
+    (mA, nA) = size(A)
+    (mB, nB) = size(B)
+    (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch("expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
+    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
     m = 1
     @inbounds for j = 1:nA
         for l = 1:mB
@@ -563,23 +556,13 @@ end
     return C
 end
 
-function kron(A::Diagonal{T}, B::AbstractMatrix{S}) where {T<:Number, S<:Number}
-    (mA, nA) = size(A); (mB, nB) = size(B)
-    R = zeros(Base.promote_op(*, T, S), mA * mB, nA * nB)
-    return @inbounds kron!(R, A, B)
-end
-
-function kron(A::AbstractMatrix{T}, B::Diagonal{S}) where {T<:Number, S<:Number}
-    (mA, nA) = size(A); (mB, nB) = size(B)
-    R = zeros(promote_op(*, T, S), mA * mB, nA * nB)
-    return @inbounds kron!(R, A, B)
-end
-
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
 adjoint(D::Diagonal{<:Number}) = conj(D)
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
+Base.permutedims(D::Diagonal) = D
+Base.permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
 function diag(D::Diagonal, k::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
@@ -601,7 +584,7 @@ function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
 end
 
 # Matrix functions
-for f in (:exp, :log, :sqrt,
+for f in (:exp, :cis, :log, :sqrt,
           :cos, :sin, :tan, :csc, :sec, :cot,
           :cosh, :sinh, :tanh, :csch, :sech, :coth,
           :acos, :asin, :atan, :acsc, :asec, :acot,
@@ -609,8 +592,13 @@ for f in (:exp, :log, :sqrt,
     @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
 end
 
-#Linear solver
-function ldiv!(D::Diagonal, B::StridedVecOrMat)
+(\)(D::Diagonal, A::AbstractMatrix) =
+    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
+
+(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
+(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
+
+function ldiv!(D::Diagonal, B::AbstractVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
@@ -627,11 +615,6 @@ function ldiv!(D::Diagonal, B::StridedVecOrMat)
     end
     return B
 end
-(\)(D::Diagonal, A::AbstractMatrix) =
-    ldiv!(D, (typeof(oneunit(eltype(D))/oneunit(eltype(A)))).(A))
-
-(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
-(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
@@ -695,6 +678,14 @@ end
 *(x::Adjoint{<:Any,<:AbstractVector},   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 *(x::Transpose{<:Any,<:AbstractVector}, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
+
+dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
+function dot(D::Diagonal, B::AbstractMatrix)
+    size(D) == size(B) || throw(DimensionMismatch("Matrix sizes $(size(D)) and $(size(B)) differ"))
+    return dot(D.diag, view(B, diagind(B)))
+end
+
+dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
     if isempty(x) && isempty(D) && isempty(y)

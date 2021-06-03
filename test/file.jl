@@ -702,7 +702,7 @@ let
     @test a_stat.size == b_stat.size
     @test a_stat.size == c_stat.size
 
-    @test parse(Int, match(r"mode=(.*),", sprint(show, a_stat)).captures[1]) == a_stat.mode
+    @test parse(Int, split(sprint(show, a_stat),"mode: ")[2][1:8]) == a_stat.mode
 
     close(af)
     rm(afile)
@@ -1451,6 +1451,31 @@ let n = tempname()
     rm(n)
 end
 
+# PR #39906
+if !Sys.iswindows()
+    @testset "rm empty directories without read permissions" begin
+        mktempdir() do d
+            mkdir(joinpath(d, "nonempty"))
+            touch(joinpath(d, "nonempty", "a"))
+            mkdir(joinpath(d, "empty_outer"))
+            mkdir(joinpath(d, "empty_outer", "empty_inner"))
+
+            chmod(joinpath(d, "nonempty"), 0o333)
+            chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
+
+            # Test that an empty directory, even when we can't read its contents, is deletable
+            rm(joinpath(d, "empty_outer"); recursive=true, force=true)
+            @test !isdir(joinpath(d, "empty_outer"))
+
+            # But a non-empty directory is not
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            chmod(joinpath(d, "nonempty"), 0o777)
+            rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test !isdir(joinpath(d, "nonempty"))
+        end
+    end
+end
+
 @test_throws ArgumentError mkpath("fakepath", mode = -1)
 
 @testset "mktempdir 'prefix' argument" begin
@@ -1579,4 +1604,33 @@ if Sys.iswindows()
     tmp = mkdir(tempname("C:\\"))
     @test rm(tmp) === nothing
 end
+end
+
+@testset "StatStruct show's extended details" begin
+    f, io = mktemp()
+    s = stat(f)
+    stat_show_str = sprint(show, s)
+    @test occursin(repr(f), stat_show_str)
+    if Sys.iswindows()
+        @test occursin("mode: 0o100666 (-rw-rw-rw-)", stat_show_str)
+    else
+        @test occursin("mode: 0o100600 (-rw-------)", stat_show_str)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
+    d = mktempdir()
+    s = stat(d)
+    stat_show_str = sprint(show, s)
+    @test occursin(repr(d), stat_show_str)
+    if Sys.iswindows()
+        @test occursin("mode: 0o040666 (drw-rw-rw-)", stat_show_str)
+    else
+        @test occursin("mode: 0o040700 (drwx------)", stat_show_str)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
 end

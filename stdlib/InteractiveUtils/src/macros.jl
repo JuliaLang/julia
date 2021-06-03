@@ -4,7 +4,7 @@
 
 import Base: typesof, insert!
 
-separate_kwargs(args...; kwargs...) = (args, kwargs.data)
+separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
 """
 Transform a dot expression into one where each argument has been replaced by a
@@ -187,7 +187,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
             if length(x.args) != 2
                 return Expr(:call, :error, "Invalid keyword argument: $x")
             end
-            push!(kws, Expr(:kw, x.args[1], x.args[2]))
+            push!(kws, Expr(:kw, esc(x.args[1]), esc(x.args[2])))
         else
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
@@ -247,7 +247,9 @@ It calls out to the `functionloc` function.
 Applied to a function or macro call, it evaluates the arguments to the specified call, and
 returns the `Method` object for the method that would be called for those arguments. Applied
 to a variable, it returns the module in which the variable was bound. It calls out to the
-`which` function.
+[`which`](@ref) function.
+
+See also: [`@less`](@ref), [`@edit`](@ref).
 """
 :@which
 
@@ -256,6 +258,8 @@ to a variable, it returns the module in which the variable was bound. It calls o
 
 Evaluates the arguments to the function or macro call, determines their types, and calls the `less`
 function on the resulting expression.
+
+See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
 """
 :@less
 
@@ -264,6 +268,8 @@ function on the resulting expression.
 
 Evaluates the arguments to the function or macro call, determines their types, and calls the `edit`
 function on the resulting expression.
+
+See also: [`@less`](@ref), [`@which`](@ref).
 """
 :@edit
 

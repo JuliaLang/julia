@@ -194,8 +194,8 @@ _nt_names(::Type{T}) where {names,T<:NamedTuple{names}} = names
 
 hash(x::NamedTuple, h::UInt) = xor(objectid(_nt_names(x)), hash(Tuple(x), h))
 
+(<)(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) < Tuple(b)
 isless(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = isless(Tuple(a), Tuple(b))
-# TODO: case where one argument's names are a prefix of the other's
 
 same_names(::NamedTuple{names}...) where {names} = true
 same_names(::NamedTuple...) = false
@@ -267,7 +267,7 @@ merge(a::NamedTuple,     b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple)     = b
 
-merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
+merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, getfield(b, :data))
 
 merge(a::NamedTuple, b::Iterators.Zip{<:Tuple{Any,Any}}) = merge(a, NamedTuple{Tuple(b.is[1])}(b.is[2]))
 

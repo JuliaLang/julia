@@ -4,6 +4,11 @@ module TestTridiagonal
 
 using Test, LinearAlgebra, SparseArrays, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -584,7 +589,60 @@ end
     A2 = SymTridiagonal(fill(1.0, 3), fill(-1.0, 2))
     F2 = eigen(A2)
     test_approx_eq_modphase(F.vectors, F2.vectors)
-    @test F.values ≈ F2.values
+    @test F.values ≈ F2.values ≈ eigvals(A) ≈ eigvals(A2)
+    @test eigvecs(A) ≈ eigvecs(A2)
+    @test eigvecs(A, eigvals(A)[1:1]) ≈ eigvecs(A2, eigvals(A2)[1:1])
+end
+
+@testset "non-commutative algebra (#39701)" begin
+    for A in (SymTridiagonal(Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4))),
+              Tridiagonal(Quaternion.(randn(4), randn(4), randn(4), randn(4)), Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4))))
+        c = Quaternion(1,2,3,4)
+        @test A * c ≈ Matrix(A) * c
+        @test A / c ≈ Matrix(A) / c
+        @test c * A ≈ c * Matrix(A)
+        @test c \ A ≈ c \ Matrix(A)
+    end
+end
+
+@testset "adjoint of LDLt" begin
+    Sr = SymTridiagonal(randn(5), randn(4))
+    Sc = SymTridiagonal(complex.(randn(5)) .+ 1im, complex.(randn(4), randn(4)))
+    b = ones(size(Sr, 1))
+
+    F = ldlt(Sr)
+    @test F\b == F'\b
+
+    F = ldlt(Sc)
+    @test copy(Sc')\b == F'\b
+end
+
+@testset "symmetric and hermitian tridiagonals" begin
+    A = [im 0; 0 -im]
+    @test issymmetric(A)
+    @test !ishermitian(A)
+
+    # real
+    A = SymTridiagonal(randn(5), randn(4))
+    @test issymmetric(A)
+    @test ishermitian(A)
+
+    A = Tridiagonal(A.ev, A.dv, A.ev .+ 1)
+    @test !issymmetric(A)
+    @test !ishermitian(A)
+
+    # complex
+    S = SymTridiagonal(randn(5) .+ 1im, randn(4) .+ 1im)
+    @test issymmetric(S)
+    @test !ishermitian(S)
+
+    S = Tridiagonal(S.ev, S.dv, adjoint.(S.ev))
+    @test !issymmetric(S)
+    @test !ishermitian(S)
+
+    S = Tridiagonal(S.dl, real.(S.d) .+ 0im, S.du)
+    @test !issymmetric(S)
+    @test ishermitian(S)
 end
 
 end # module TestTridiagonal

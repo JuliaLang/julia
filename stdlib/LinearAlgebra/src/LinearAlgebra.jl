@@ -15,9 +15,10 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
-using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
+using Base: IndexLinear, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
 using Base.Broadcast: Broadcasted, broadcasted
+import Libdl
 
 export
 # Modules
@@ -34,6 +35,7 @@ export
     BunchKaufman,
     Cholesky,
     CholeskyPivoted,
+    ColumnNorm,
     Eigen,
     GeneralizedEigen,
     GeneralizedSVD,
@@ -41,12 +43,14 @@ export
     Hessenberg,
     LU,
     LDLt,
+    NoPivot,
     QR,
     QRPivoted,
     LQ,
     Schur,
     SVD,
     Hermitian,
+    RowMaximum,
     Symmetric,
     LowerTriangular,
     UpperTriangular,
@@ -163,6 +167,10 @@ abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
 
+abstract type PivotingStrategy end
+struct NoPivot <: PivotingStrategy end
+struct RowMaximum <: PivotingStrategy end
+struct ColumnNorm <: PivotingStrategy end
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
@@ -282,14 +290,14 @@ julia> ldiv!(Y, qr(A), X);
 julia> Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
+ -0.051652892561983806
+  0.10020661157024781
 
 julia> A\\X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+ -0.05165289256198342
+  0.1002066115702479
 ```
 """
 ldiv!(Y, A, B)
@@ -319,14 +327,14 @@ julia> ldiv!(qr(A), X);
 julia> X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
+ -0.051652892561983806
+  0.10020661157024781
 
 julia> A\\Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+ -0.05165289256198342
+  0.1002066115702479
 ```
 """
 ldiv!(A, B)
@@ -373,6 +381,7 @@ include("cholesky.jl")
 include("lu.jl")
 include("bunchkaufman.jl")
 include("diagonal.jl")
+include("symmetriceigen.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
 include("hessenberg.jl")
@@ -387,6 +396,63 @@ include("deprecated.jl")
 const ⋅ = dot
 const × = cross
 export ⋅, ×
+
+## convenience methods
+## return only the solution of a least squares problem while avoiding promoting
+## vectors to matrices.
+_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
+_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+
+## append right hand side with zeros if necessary
+_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
+_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
+
+# General fallback definition for handling under- and overdetermined system as well as square problems
+# While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
+# which is required by LAPACK but not SuiteSpase which allows real-complex solves in some cases. Hence,
+# we restrict this method to only the LAPACK factorizations in LinearAlgebra.
+# The definition is put here since it explicitly references all the Factorizion structs so it has
+# to be located after all the files that define the structs.
+const LAPACKFactorizations{T,S} = Union{
+    BunchKaufman{T,S},
+    Cholesky{T,S},
+    LQ{T,S},
+    LU{T,S},
+    QR{T,S},
+    QRCompactWY{T,S},
+    QRPivoted{T,S},
+    SVD{T,<:Real,S}}
+function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorizations}}, B::AbstractVecOrMat)
+    require_one_based_indexing(B)
+    m, n = size(F)
+    if m != size(B, 1)
+        throw(DimensionMismatch("arguments must have the same number of rows"))
+    end
+
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    FF = Factorization{TFB}(F)
+
+    # For wide problem we (often) compute a minimum norm solution. The solution
+    # is larger than the right hand side so we use size(F, 2).
+    BB = _zeros(TFB, B, n)
+
+    if n > size(B, 1)
+        # Underdetermined
+        copyto!(view(BB, 1:m, :), B)
+    else
+        copyto!(BB, B)
+    end
+
+    ldiv!(FF, BB)
+
+    # For tall problems, we compute a least squares solution so only part
+    # of the rhs should be returned from \ while ldiv! uses (and returns)
+    # the complete rhs
+    return _cut_B(BB, 1:n)
+end
+# disambiguate
+(\)(F::LAPACKFactorizations{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    invoke(\, Tuple{Factorization{T}, VecOrMat{Complex{T}}}, F, B)
 
 """
     LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
@@ -424,27 +490,51 @@ end
 
 
 function versioninfo(io::IO=stdout)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() === :openblas || BLAS.vendor() === :openblas64
-        openblas_config = BLAS.openblas_get_config()
-        println(io, "BLAS: libopenblas (", openblas_config, ")")
-    else
-        println(io, "BLAS: ",Base.libblas_name)
+    config = BLAS.get_config()
+    println(io, "BLAS: $(BLAS.libblastrampoline) ($(join(string.(config.build_flags), ", ")))")
+    for lib in config.loaded_libs
+        println(io, " --> $(lib.libname) ($(uppercase(string(lib.interface))))")
     end
-    println(io, "LAPACK: ",Base.liblapack_name)
+    return nothing
+end
+
+function find_library_path(name)
+    shlib_ext = string(".", Libdl.dlext)
+    if !endswith(name, shlib_ext)
+        name_ext = string(name, shlib_ext)
+    end
+
+    # On windows, we look in `bin` and never in `lib`
+    @static if Sys.iswindows()
+        path = joinpath(Sys.BINDIR, name_ext)
+        isfile(path) && return path
+    else
+        # On other platforms, we check `lib/julia` first, and if that doesn't exist, `lib`.
+        path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", name_ext)
+        isfile(path) && return path
+
+        path = joinpath(Sys.BINDIR, Base.LIBDIR, name_ext)
+        isfile(path) && return path
+    end
+
+    # If we can't find it by absolute path, we'll try just passing this straight through to `dlopen()`
+    return name
 end
 
 function __init__()
     try
-        BLAS.check()
-        if BLAS.vendor() === :mkl
-            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
+        libblas_path = find_library_path(Base.libblas_name)
+        liblapack_path = find_library_path(Base.liblapack_name)
+        BLAS.lbt_forward(libblas_path; clear=true)
+        if liblapack_path != libblas_path
+            BLAS.lbt_forward(liblapack_path)
         end
+        BLAS.check()
         Threads.resize_nthreads!(Abuf)
         Threads.resize_nthreads!(Bbuf)
         Threads.resize_nthreads!(Cbuf)
     catch ex
-        Base.showerror_nostdio(ex,
-            "WARNING: Error during initialization of module LinearAlgebra")
+        Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
     end
     # register a hook to disable BLAS threading
     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))

@@ -290,11 +290,13 @@ end
         @test e.ex isa ErrorException
     end
 
+    # Validate that `timedwait` actually waits. Ideally we should also test that `timedwait`
+    # doesn't exceed a maximum duration but that would require guarantees from the OS.
     duration = @elapsed timedwait(alwaysfalse, 1)  # Using default pollint of 0.1
-    @test duration ≈ 1 atol=0.4
+    @test duration >= 1
 
     duration = @elapsed timedwait(alwaysfalse, 0; pollint=1)
-    @test duration ≈ 1 atol=0.4
+    @test duration >= 1
 end
 
 @testset "timedwait on multiple channels" begin
@@ -331,7 +333,7 @@ end
     # interpreting the calling function.
     @noinline garbage_finalizer(f) = (finalizer(f, "gar" * "bage"); nothing)
     run = Ref(0)
-    garbage_finalizer(x -> nothing) # warmup
+    garbage_finalizer(Returns(nothing)) # warmup
     @test GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch
     garbage_finalizer((x) -> (run[] += 1; sleep(1)))
@@ -531,7 +533,7 @@ end
 
 # make sure that we don't accidentally create a one-shot timer
 let
-    t = Timer(t->nothing, 10, interval=0.00001)
+    t = Timer(Returns(nothing), 10, interval=0.00001)
     @test ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 1
     close(t)
 end

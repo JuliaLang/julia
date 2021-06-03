@@ -13,9 +13,9 @@ extern "C" {
 
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     const jl_uuid_t uuid_zero = {0, 0};
-    jl_module_t *m = (jl_module_t*)jl_gc_alloc(ptls, sizeof(jl_module_t),
+    jl_module_t *m = (jl_module_t*)jl_gc_alloc(ct->ptls, sizeof(jl_module_t),
                                                jl_module_type);
     assert(jl_is_symbol(name));
     m->name = name;
@@ -133,9 +133,9 @@ JL_DLLEXPORT uint8_t jl_istopmod(jl_module_t *mod)
 
 static jl_binding_t *new_binding(jl_sym_t *name)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     assert(jl_is_symbol(name));
-    jl_binding_t *b = (jl_binding_t*)jl_gc_alloc_buf(ptls, sizeof(jl_binding_t));
+    jl_binding_t *b = (jl_binding_t*)jl_gc_alloc_buf(ct->ptls, sizeof(jl_binding_t));
     b->name = name;
     b->value = NULL;
     b->owner = NULL;
@@ -150,7 +150,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int error)
 {
-    JL_LOCK_NOGC(&m->lock);
+    JL_LOCK(&m->lock);
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     jl_binding_t *b = *bp;
 
@@ -160,7 +160,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
                 b->owner = m;
             }
             else if (error) {
-                JL_UNLOCK_NOGC(&m->lock);
+                JL_UNLOCK(&m->lock);
                 jl_errorf("cannot assign a value to variable %s.%s from module %s",
                           jl_symbol_name(b->owner->name), jl_symbol_name(var), jl_symbol_name(m->name));
             }
@@ -170,10 +170,11 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
         b = new_binding(var);
         b->owner = m;
         *bp = b;
+        JL_GC_PROMISE_ROOTED(b);
         jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
     }
 
-    JL_UNLOCK_NOGC(&m->lock);
+    JL_UNLOCK(&m->lock);
     return b;
 }
 
@@ -208,7 +209,7 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 // like jl_get_binding_wr, but has different error paths
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
-    JL_LOCK_NOGC(&m->lock);
+    JL_LOCK(&m->lock);
     jl_binding_t **bp = _jl_get_module_binding_bp(m, var);
     jl_binding_t *b = *bp;
 
@@ -218,7 +219,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
                 b->owner = m;
             }
             else {
-                JL_UNLOCK_NOGC(&m->lock);
+                JL_UNLOCK(&m->lock);
                 jl_binding_t *b2 = jl_get_binding(b->owner, b->name);
                 if (b2 == NULL || b2->value == NULL)
                     jl_errorf("invalid method definition: imported function %s.%s does not exist",
@@ -239,7 +240,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
         jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
     }
 
-    JL_UNLOCK_NOGC(&m->lock);
+    JL_UNLOCK(&m->lock);
     return b;
 }
 
@@ -583,33 +584,33 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    JL_LOCK_NOGC(&m->lock);
+    JL_LOCK(&m->lock);
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
-    JL_UNLOCK_NOGC(&m->lock);
+    JL_UNLOCK(&m->lock);
     return b != HT_NOTFOUND && (b->exportp || b->owner==m);
 }
 
-JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    JL_LOCK_NOGC(&m->lock);
+    JL_LOCK(&m->lock);
     jl_binding_t *b = _jl_get_module_binding(m, var);
-    JL_UNLOCK_NOGC(&m->lock);
+    JL_UNLOCK(&m->lock);
     return b != HT_NOTFOUND && b->exportp;
 }
 
-JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
-    JL_LOCK_NOGC(&m->lock);
+    JL_LOCK(&m->lock);
     jl_binding_t *b = _jl_get_module_binding(m, var);
-    JL_UNLOCK_NOGC(&m->lock);
+    JL_UNLOCK(&m->lock);
     return b != HT_NOTFOUND && b->owner != NULL;
 }
 
-JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var)
 {
-    JL_LOCK_NOGC(&m->lock);
+    JL_LOCK(&m->lock);
     jl_binding_t *b = _jl_get_module_binding(m, var);
-    JL_UNLOCK_NOGC(&m->lock);
+    JL_UNLOCK(&m->lock);
     return b == HT_NOTFOUND ? NULL : b;
 }
 
@@ -626,7 +627,6 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
     JL_TYPECHK(jl_set_global, module, (jl_value_t*)m);
     JL_TYPECHK(jl_set_global, symbol, (jl_value_t*)var);
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    JL_GC_PROMISE_ROOTED(bp);
     jl_checked_assignment(bp, val);
 }
 
@@ -634,8 +634,10 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     if (bp->value == NULL) {
-        if (jl_atomic_bool_compare_exchange(&bp->constp, 0, 1)) {
-            if (jl_atomic_bool_compare_exchange(&bp->value, NULL, val)) {
+        uint8_t constp = 0;
+        if (jl_atomic_cmpswap(&bp->constp, &constp, 1)) {
+            jl_value_t *old = NULL;
+            if (jl_atomic_cmpswap(&bp->value, &old, val)) {
                 jl_gc_wb_binding(bp, val);
                 return;
             }
@@ -759,8 +761,8 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
     if (b->constp) {
-        jl_value_t *old = jl_atomic_compare_exchange(&b->value, NULL, rhs);
-        if (old == NULL) {
+        jl_value_t *old = NULL;
+        if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
             jl_gc_wb_binding(b, rhs);
             return;
         }

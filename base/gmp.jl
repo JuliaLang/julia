@@ -4,13 +4,13 @@ module GMP
 
 export BigInt
 
-import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
+import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, digits!
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -308,21 +308,21 @@ BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
-    x == 0 && return BigInt(Culong(0))
+    # On 64-bit Windows, `Clong` is `Int32`, not `Int64`, so construction of
+    # `Int64` constants, e.g. `BigInt(3)`, uses this method.
+    isbits(x) && typemin(Clong) <= x <= typemax(Clong) && return BigInt((x % Clong)::Clong)
     nd = ndigits(x, base=2)
     z = MPZ.realloc2(nd)
-    s = sign(x)
-    s == -1 && (x = -x)
-    x = unsigned(x)
+    ux = unsigned(x < 0 ? -x : x)
     size = 0
     limbnbits = sizeof(Limb) << 3
     while nd > 0
         size += 1
-        unsafe_store!(z.d, x % Limb, size)
-        x >>>= limbnbits
+        unsafe_store!(z.d, ux % Limb, size)
+        ux >>= limbnbits
         nd -= limbnbits
     end
-    z.size = s*size
+    z.size = x < 0 ? -size : size
     z
 end
 
@@ -343,6 +343,7 @@ end
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
 isodd(x::BigInt) = MPZ.tstbit(x, 0)
+iseven(x::BigInt) = !isodd(x)
 
 function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
@@ -631,7 +632,9 @@ function gcdx(a::BigInt, b::BigInt)
     g, s, t
 end
 
-sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, arr; init=BigInt(0))
++(x::BigInt, y::BigInt, rest::BigInt...) = sum(tuple(x, y, rest...))
+sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}) =
+    foldl(MPZ.add!, arr; init=BigInt(0))
 # Note: a similar implementation for `prod` won't be efficient:
 # 1) the time complexity of the allocations is negligible compared to the multiplications
 # 2) assuming arr contains similarly sized BigInts, the multiplications are much more
@@ -768,8 +771,11 @@ end
 
 if Limb === UInt
     # this condition is true most (all?) of the time, and in this case we can define
-    # an optimized version of the above hash_integer(::Integer, ::UInt) method for BigInt
-    # used e.g. for Rational{BigInt}
+    # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
+    # and of hash
+
+    using .Base: hash_uint
+
     function hash_integer(n::BigInt, h::UInt)
         GC.@preserve n begin
             s = n.size
@@ -799,7 +805,7 @@ if Limb === UInt
                 limb <= typemin(Int) % UInt && return hash(-(limb % Int), h)
             end
             pow = trailing_zeros(x)
-            nd = ndigits0z(x, 2)
+            nd = Base.ndigits0z(x, 2)
             idx = _divLimb(pow) + 1
             shift = _modLimb(pow) % UInt
             upshift = BITS_PER_LIMB - shift
@@ -931,7 +937,7 @@ function Base.://(x::Rational{BigInt}, y::Rational{BigInt})
         if iszero(x.num)
             throw(DivideError())
         end
-        return (isneg(x.num) ? -one(BigFloat) : one(BigFloat)) // y.num
+        return (isneg(x.num) ? -one(BigInt) : one(BigInt)) // y.num
     end
     zq = _MPQ()
     ccall((:__gmpq_div, :libgmp), Cvoid,

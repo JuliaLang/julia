@@ -3,13 +3,20 @@
 In the following sections, we briefly go through a few techniques that can help make your Julia
 code run as fast as possible.
 
+## Performance critical code should be inside a function
+
+Any code that is performance critical should be inside a function. Code inside functions tends to run much faster than top level code, due to how Julia's compiler works.
+
+The use of functions is not only important for performance: functions are more reusable and testable, and clarify what steps are being done and what their inputs and outputs are, [Write functions, not just scripts](@ref) is also a recommendation of Julia's Styleguide.
+
+The functions should take arguments, instead of operating directly on global variables, see the next point.
+
 ## Avoid global variables
 
 A global variable might have its value, and therefore its type, change at any point. This makes
 it difficult for the compiler to optimize code using global variables. Variables should be local,
 or passed as arguments to functions, whenever possible.
 
-Any code that is performance critical or being benchmarked should be inside a function.
 
 We find that global names are frequently constants, and declaring them as such greatly improves
 performance:
@@ -70,12 +77,12 @@ julia> function sum_global()
        end;
 
 julia> @time sum_global()
-  0.009639 seconds (7.36 k allocations: 300.310 KiB, 98.32% compilation time)
-496.84883432553846
+  0.026328 seconds (9.30 k allocations: 416.747 KiB, 36.50% gc time, 99.48% compilation time)
+508.39048990953665
 
 julia> @time sum_global()
-  0.000140 seconds (3.49 k allocations: 70.313 KiB)
-496.84883432553846
+  0.000075 seconds (3.49 k allocations: 70.156 KiB)
+508.39048990953665
 ```
 
 On the first call (`@time sum_global()`) the function gets compiled. (If you've not yet used [`@time`](@ref)
@@ -106,12 +113,12 @@ julia> function sum_arg(x)
        end;
 
 julia> @time sum_arg(x)
-  0.006202 seconds (4.18 k allocations: 217.860 KiB, 99.72% compilation time)
-496.84883432553846
+  0.010298 seconds (4.23 k allocations: 226.021 KiB, 99.81% compilation time)
+508.39048990953665
 
 julia> @time sum_arg(x)
   0.000005 seconds (1 allocation: 16 bytes)
-496.84883432553846
+508.39048990953665
 ```
 
 The 1 allocation seen is from running the `@time` macro itself in global scope. If we instead run
@@ -122,7 +129,7 @@ julia> time_sum(x) = @time sum_arg(x);
 
 julia> time_sum(x)
   0.000001 seconds
-496.84883432553846
+508.39048990953665
 ```
 
 In some situations, your function may need to allocate memory as part of its operation, and this
@@ -1507,7 +1514,7 @@ The following examples may help you interpret expressions marked as containing n
         element accesses
 
   * `Base.getfield(%%x, :(:data))::ARRAY{FLOAT64,N} WHERE N`
-      * Interpretation: getting a field that is of non-leaf type. In this case, `ArrayContainer` had a
+      * Interpretation: getting a field that is of non-leaf type. In this case, the type of `x`, say `ArrayContainer`, had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
@@ -1593,11 +1600,3 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
-
-## Checking for equality with a singleton
-
-When checking if a value is equal to some singleton it can be
-better for performance to check for identicality (`===`) instead of
-equality (`==`). The same advice applies to using `!==` over `!=`.
-These type of checks frequently occur e.g. when implementing the iteration
-protocol and checking if `nothing` is returned from [`iterate`](@ref).

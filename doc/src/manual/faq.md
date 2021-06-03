@@ -18,6 +18,33 @@ For similar reasons, automated translation to Julia would also typically generat
 
 On the other hand, language *interoperability* is extremely useful: we want to exploit existing high-quality code in other languages from Julia (and vice versa)!  The best way to enable this is not a transpiler, but rather via easy inter-language calling facilities.  We have worked hard on this, from the built-in `ccall` intrinsic (to call C and Fortran libraries) to [JuliaInterop](https://github.com/JuliaInterop) packages that connect Julia to Python, Matlab, C++, and more.
 
+## [Public API](@id man-api)
+
+### How does Julia define its public API?
+
+The only interfaces that are stable with respect to [SemVer](https://semver.org/) of `julia`
+version are the Julia `Base` and standard libraries interfaces described in
+[the documentation](https://docs.julialang.org/) and not marked as unstable (e.g.,
+experimental and internal).  Functions, types, and constants are not part of the public
+API if they are not included in the documentation, _even if they have docstrings_.
+
+### There is a useful undocumented function/type/constant. Can I use it?
+
+Updating Julia may break your code if you use non-public API.  If the code is
+self-contained, it may be a good idea to copy it into your project.  If you want to rely on
+a complex non-public API, especially when using it from a stable package, it is a good idea
+to open an [issue](https://github.com/JuliaLang/julia/issues) or
+[pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
+into a public API.  However, we do not discourage the attempt to create packages that expose
+stable public interfaces while relying on non-public implementation details of `julia` and
+buffering the differences across different `julia` versions.
+
+### The documentation is not accurate enough. Can I rely on the existing behavior?
+
+Please open an [issue](https://github.com/JuliaLang/julia/issues) or
+[pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning the
+existing behavior into a public API.
+
 ## Sessions and the REPL
 
 ### How do I delete an object in memory?
@@ -293,23 +320,23 @@ julia> threefloat()
 and similarly:
 
 ```jldoctest
-julia> function threetup()
-           x, y = [3, 3]
+julia> function twothreetup()
+           x, y = [2, 3] # assigns 2 to x and 3 to y
            x, y # returns a tuple
        end
-threetup (generic function with 1 method)
+twothreetup (generic function with 1 method)
 
-julia> function threearr()
-           x, y = [3, 3] # returns an array
+julia> function twothreearr()
+           x, y = [2, 3] # returns an array
        end
-threearr (generic function with 1 method)
+twothreearr (generic function with 1 method)
 
-julia> threetup()
-(3, 3)
+julia> twothreetup()
+(2, 3)
 
-julia> threearr()
+julia> twothreearr()
 2-element Vector{Int64}:
- 3
+ 2
  3
 ```
 
@@ -714,6 +741,32 @@ julia> remotecall_fetch(anon_bar, 2)
 1
 ```
 
+## Troubleshooting "method not matched": parametric type invariance and `MethodError`s
+
+### Why doesn't it work to declare `foo(bar::Vector{Real}) = 42` and then call `foo([1])`?
+
+As you'll see if you try this, the result is a `MethodError`:
+
+```jldoctest
+julia> foo(x::Vector{Real}) = 42
+foo (generic function with 1 method)
+
+julia> foo([1])
+ERROR: MethodError: no method matching foo(::Vector{Int64})
+Closest candidates are:
+  foo(!Matched::Vector{Real}) at none:1
+```
+
+This is because `Vector{Real}` is not a supertype of `Vector{Int}`! You can solve this problem with something
+like `foo(bar::Vector{T}) where {T<:Real}` (or the short form `foo(bar::Vector{<:Real})` if the static parameter `T`
+is not needed in the body of the function). The `T` is a wild card: you first specify that it must be a
+subtype of Real, then specify the function takes a Vector of with elements of that type.
+
+This same issue goes for any composite type `Comp`, not just `Vector`. If `Comp` has a parameter declared of
+type `Y`, then another type `Comp2` with a parameter of type `X<:Y` is not a subtype of `Comp`. This is
+type-invariance (by contrast, Tuple is type-covariant in its parameters). See [Parametric Composite
+Types](@ref man-parametric-composite-types) for more explanation of these.
+
 ### Why does Julia use `*` for string concatenation? Why not `+` or something else?
 
 The [main argument](@ref man-concatenation) against `+` is that string concatenation is not
@@ -959,15 +1012,15 @@ The Stable version of Julia is the latest released version of Julia, this is the
 It has the latest features, including improved performance.
 The Stable version of Julia is versioned according to [SemVer](https://semver.org/) as v1.x.y.
 A new minor release of Julia corresponding to a new Stable version is made approximately every 4-5 months after a few weeks of testing as a release candidate.
-Unlike the LTS version the a Stable version will not normally recieve bugfixes after another Stable version of Julia has been released.
+Unlike the LTS version the a Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.
 The current LTS version of Julia is versioned according to SemVer as v1.0.x;
-this branch will continue to recieve bugfixes until a new LTS branch is chosen, at which point the v1.0.x series will no longer recieved regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
+this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.0.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
 As a package developer, you may prefer to develop for the LTS version, to maximize the number of users who can use your package.
 As per SemVer, code written for v1.0 will continue to work for all future LTS and Stable versions.
-In general, even if targetting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).
+In general, even if targeting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).
 
 You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don't mind if the version available today occasionally doesn't actually work.
 As the name implies, releases to the nightly version are made roughly every night (depending on build infrastructure stability).

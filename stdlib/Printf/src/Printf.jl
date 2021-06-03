@@ -56,6 +56,9 @@ formatted string directly to `io`.
 
 For convenience, the `Printf.format"..."` string macro form can be used for building
 a `Printf.Format` object at macro-expansion-time.
+
+!!! compat "Julia 1.6"
+    `Printf.Format` requires Julia 1.6 or later.
 """
 struct Format{S, T}
     str::S # original full format string as CodeUnits
@@ -375,6 +378,9 @@ For arbitrary precision numerics, you might extend the method like:
 ```julia
 Printf.tofloat(x::MyArbitraryPrecisionType) = BigFloat(x)
 ```
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 tofloat(x) = Float64(x)
 tofloat(x::Base.IEEEFloat) = x
@@ -415,11 +421,30 @@ const __BIG_FLOAT_MAX__ = 8192
     elseif T == Val{'f'} || T == Val{'F'}
         newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
     elseif T == Val{'g'} || T == Val{'G'}
+        # C11-compliant general format
         prec = prec == 0 ? 1 : prec
-        x = round(x, sigdigits=prec)
-        newpos = Ryu.writeshortest(buf, pos, x, plus, space, hash, prec, T == Val{'g'} ? UInt8('e') : UInt8('E'), true, UInt8('.'))
+        # format the value in scientific notation and parse the exponent part
+        exp = let p = Ryu.writeexp(buf, pos, x, prec)
+            b1, b2, b3, b4 = buf[p-4], buf[p-3], buf[p-2], buf[p-1]
+            Z = UInt8('0')
+            if b1 == UInt8('e')
+                # two-digit exponent
+                sign = b2 == UInt8('+') ? 1 : -1
+                exp = 10 * (b3 - Z) + (b4 - Z)
+            else
+                # three-digit exponent
+                sign = b1 == UInt8('+') ? 1 : -1
+                exp = 100 * (b2 - Z) + 10 * (b3 - Z) + (b4 - Z)
+            end
+            flipsign(exp, sign)
+        end
+        if -4 ≤ exp < prec
+            newpos = Ryu.writefixed(buf, pos, x, prec - (exp + 1), plus, space, hash, UInt8('.'), !hash)
+        else
+            newpos = Ryu.writeexp(buf, pos, x, prec - 1, plus, space, hash, T == Val{'g'} ? UInt8('e') : UInt8('E'), UInt8('.'), !hash)
+        end
     elseif T == Val{'a'} || T == Val{'A'}
-        x, neg = x < 0 ? (-x, true) : (x, false)
+        x, neg = x < 0 || x === -Base.zero(x) ? (-x, true) : (x, false)
         newpos = pos
         if neg
             buf[newpos] = UInt8('-')
@@ -450,6 +475,8 @@ const __BIG_FLOAT_MAX__ = 8192
                 buf[newpos] = UInt8('0')
                 newpos += 1
                 if prec > 0
+                    buf[newpos] = UInt8('.')
+                    newpos += 1
                     while prec > 0
                         buf[newpos] = UInt8('0')
                         newpos += 1
@@ -459,6 +486,7 @@ const __BIG_FLOAT_MAX__ = 8192
                 buf[newpos] = T <: Val{'a'} ? UInt8('p') : UInt8('P')
                 buf[newpos + 1] = UInt8('+')
                 buf[newpos + 2] = UInt8('0')
+                newpos += 3
             else
                 if prec > -1
                     s, p = frexp(x)
@@ -541,7 +569,7 @@ const __BIG_FLOAT_MAX__ = 8192
 end
 
 # pointers
-fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, Int(arg), ptrfmt(spec, arg))
+fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
 
 # old Printf compat
 function fix_dec end
@@ -815,7 +843,7 @@ Use shorter of decimal or scientific 1.23 1.23e+07
 ```
 
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
-See also: [`@sprintf`](@ref).
+See also [`@sprintf`](@ref).
 
 # Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,

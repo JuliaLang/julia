@@ -104,11 +104,12 @@ function invoke_api(li::CodeInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)
 end
 
-function get_staged(li::MethodInstance)
-    may_invoke_generator(li) || return nothing
+function get_staged(mi::MethodInstance)
+    may_invoke_generator(mi) || return nothing
     try
         # user code might throw errors – ignore them
-        return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
+        ci = ccall(:jl_code_for_staged, Any, (Any,), mi)::CodeInfo
+        return ci
     catch
         return nothing
     end

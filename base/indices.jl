@@ -239,6 +239,9 @@ setindex_shape_check(X::AbstractArray) =
 setindex_shape_check(X::AbstractArray, i::Integer) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
+setindex_shape_check(X::AbstractArray{<:Any, 0}, i::Integer...) =
+    (length(X) == prod(i) || throw_setindex_mismatch(X, i))
+
 setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
     (length(X)==i || throw_setindex_mismatch(X, (i,)))
 
@@ -256,7 +259,7 @@ function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
 end
 
 setindex_shape_check(::Any...) =
-    throw(ArgumentError("indexed assignment with a single value to many locations is not supported; perhaps use broadcasting `.=` instead?"))
+    throw(ArgumentError("indexed assignment with a single value to possibly many locations is not supported; perhaps use broadcasting `.=` instead?"))
 
 # convert to a supported index type (array or Int)
 """
@@ -396,6 +399,10 @@ getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta
 getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
+
+# For OneTo, the values and indices of the values are identical, so this may be defined in Base.
+# In general such an indexing operation would produce offset ranges
+getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}}) = (@_inline_meta; @boundscheck checkbounds(S, I); I)
 
 """
     LinearIndices(A::AbstractArray)

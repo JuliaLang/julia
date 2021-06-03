@@ -5,6 +5,11 @@ module TestBidiagonal
 using Test, LinearAlgebra, SparseArrays, Random
 using LinearAlgebra: BlasReal, BlasFloat
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
@@ -633,6 +638,15 @@ end
     @test lbd .+ ubd isa Bidiagonal
     @test ubd * 5 == ubd
     @test ubd .* 3 == ubd
+end
+
+@testset "non-commutative algebra (#39701)" begin
+    A = Bidiagonal(Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4)), :U)
+    c = Quaternion(1,2,3,4)
+    @test A * c ≈ Matrix(A) * c
+    @test A / c ≈ Matrix(A) / c
+    @test c * A ≈ c * Matrix(A)
+    @test c \ A ≈ c \ Matrix(A)
 end
 
 end # module TestBidiagonal

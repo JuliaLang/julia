@@ -6,10 +6,13 @@ using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
-             MethodInstance, CodeInstance, MethodMatch
+             MethodInstance, CodeInstance, MethodMatch, PartialOpaque
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
+const swapproperty! = Core.swapfield!
+const modifyproperty! = Core.modifyfield!
+const replaceproperty! = Core.replacefield!
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
@@ -19,9 +22,14 @@ eval(m, x) = Core.eval(m, x)
 include(x) = Core.include(Compiler, x)
 include(mod, x) = Core.include(mod, x)
 
-#############
-# from Base #
-#############
+# The real @inline macro is not available until after array.jl, so this
+# internal macro splices the meta Expr directly into the function body.
+macro _inline_meta()
+    Expr(:meta, :inline)
+end
+macro _noinline_meta()
+    Expr(:meta, :noinline)
+end
 
 # essential files and libraries
 include("essentials.jl")
@@ -98,6 +106,10 @@ include("ordering.jl")
 using .Order
 include("sort.jl")
 using .Sort
+
+# We don't include some.jl, but this definition is still useful.
+something(x::Nothing, y...) = something(y...)
+something(x::Any, y...) = x
 
 ############
 # compiler #

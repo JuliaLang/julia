@@ -214,6 +214,14 @@ function TwicePrecision{T}(nd::Tuple{I,I}, nb::Integer) where {T,I}
     twiceprecision(TwicePrecision{T}(nd), nb)
 end
 
+# Fix #39798
+# See steprangelen_hp(::Type{Float64}, ref::Tuple{Integer,Integer},
+#                         step::Tuple{Integer,Integer}, nb::Integer,
+#                         len::Integer, offset::Integer)
+function TwicePrecision{T}(nd::Tuple{Integer,Integer}, nb::Integer) where T
+    twiceprecision(TwicePrecision{T}(nd), nb)
+end
+
 # Truncating constructors. Useful for generating values that can be
 # exactly multiplied by small integers.
 function twiceprecision(val::T, nb::Integer) where {T<:IEEEFloat}
@@ -448,6 +456,7 @@ end
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
     @_inline_meta
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     u = i - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
@@ -455,6 +464,7 @@ function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i
 end
 
 function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Integer)
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     u = i - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
@@ -462,20 +472,34 @@ function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecisio
     TwicePrecision(x_hi, x_lo)
 end
 
-function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{<:Integer}) where T
+function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{S}) where {T, S<:Integer}
     @boundscheck checkbounds(r, s)
-    soffset = 1 + round(Int, (r.offset - first(s))/step(s))
-    soffset = clamp(soffset, 1, length(s))
-    ioffset = first(s) + (soffset-1)*step(s)
-    if step(s) == 1 || length(s) < 2
-        newstep = r.step
+    if S === Bool
+        if length(s) == 0
+            return StepRangeLen(r.ref, r.step, 0, 1)
+        elseif length(s) == 1
+            if first(s)
+                return StepRangeLen(r.ref, r.step, 1, 1)
+            else
+                return StepRangeLen(r.ref, r.step, 0, 1)
+            end
+        else # length(s) == 2
+            return StepRangeLen(r[2], step(r), 1, 1)
+        end
     else
-        newstep = twiceprecision(r.step*step(s), nbitslen(T, length(s), soffset))
-    end
-    if ioffset == r.offset
-        StepRangeLen(r.ref, newstep, length(s), max(1,soffset))
-    else
-        StepRangeLen(r.ref + (ioffset-r.offset)*r.step, newstep, length(s), max(1,soffset))
+        soffset = 1 + round(Int, (r.offset - first(s))/step(s))
+        soffset = clamp(soffset, 1, length(s))
+        ioffset = first(s) + (soffset-1)*step(s)
+        if step(s) == 1 || length(s) < 2
+            newstep = r.step
+        else
+            newstep = twiceprecision(r.step*step(s), nbitslen(T, length(s), soffset))
+        end
+        if ioffset == r.offset
+            return StepRangeLen(r.ref, newstep, length(s), max(1,soffset))
+        else
+            return StepRangeLen(r.ref + (ioffset-r.offset)*r.step, newstep, length(s), max(1,soffset))
+        end
     end
 end
 
@@ -657,7 +681,7 @@ end
 
 # range for rational numbers, start = start_n/den, stop = stop_n/den
 # Note this returns a StepRangeLen
-_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEEFloat} = _linspace(T, start, stop, len, 1)
+_linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEEFloat} = _linspace(T, start, stop, len, one(start))
 function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T<:IEEEFloat
     len < 2 && return _linspace1(T, start_n/den, stop_n/den, len)
     start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len, 1)

@@ -16,6 +16,7 @@
     XX(jl_array_type) \
     XX(jl_array_typename) \
     XX(jl_array_uint8_type) \
+    XX(jl_atomicerror_type) \
     XX(jl_base_module) \
     XX(jl_bool_type) \
     XX(jl_bottom_type) \
@@ -71,6 +72,8 @@
     XX(jl_nothing_type) \
     XX(jl_number_type) \
     XX(jl_partial_struct_type) \
+    XX(jl_partial_opaque_type) \
+    XX(jl_interconditional_type) \
     XX(jl_phicnode_type) \
     XX(jl_phinode_type) \
     XX(jl_pinode_type) \
