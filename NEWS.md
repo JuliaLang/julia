@@ -171,7 +171,7 @@ Standard library changes
 
 
 #### Distributed
-
+* `RemoteChannel` is now iterable ([#33555]).
 
 #### UUIDs
 
