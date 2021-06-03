@@ -2575,7 +2575,6 @@ julia> foreach((x, y) -> println(x, " with ", y), tri, 'a':'z')
 7 with c
 ```
 """
-foreach(f) = (f(); nothing)
 foreach(f, itr) = (for x in itr; f(x); end; nothing)
 foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
 
