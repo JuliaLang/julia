@@ -1410,3 +1410,23 @@ end
     @test_throws ArgumentError keepat!(a, [2, 1])
     @test isempty(keepat!(a, []))
 end
+
+@testset "reshape may mix axes, Integers and colon" begin
+    for a in Any[1:3, collect(1:3), reshape(collect(1:3), 1, 1, 3)]
+        r13 = reshape(a, 1, 3)
+        r31 = reshape(a, 3, 1)
+        @test reshape(a, Int8(1), Int8(3)) == r13
+        @test reshape(a, 1, Int8(3)) == r13
+        @test reshape(a, 1, Base.OneTo(3)) == r13
+        @test reshape(a, 1, Base.OneTo(Int8(3))) == r13
+        @test reshape(a, 1, :) == r13
+        @test reshape(a, :, 1) == r31
+        @test reshape(a, Base.OneTo(1), :) == r13
+        @test reshape(a, :, Base.OneTo(1)) == r31
+        @test reshape(a, Base.OneTo(Int8(1)), :) == r13
+        @test reshape(a, Base.OneTo(1), Int8(3)) == r13
+        @test reshape(a, Base.OneTo(Int8(1)), Int8(3)) == r13
+    end
+    a = 1:3
+    @test reshape(a, axes(a, 1), axes(a,2)) == reshape(a, size(a, 1), size(a,2))
+end
