@@ -108,8 +108,8 @@ promote_shape(::Tuple{}, ::Tuple{}) = ()
 
 # Consistent error message for promote_shape mismatch, hiding implementation details like
 # OneTo. When b ≡ nothing, it is omitted; i can be supplied for an index.
-function throw_promote_shape_mismatch(a::Tuple{Vararg{T}},
-                                      b::Union{Nothing,Tuple{Vararg{T}}},
+function throw_promote_shape_mismatch(a::Tuple{T,Vararg{T}},
+                                      b::Union{Nothing,Tuple{T,Vararg{T}}},
                                       i = nothing) where {T}
     _has_axes = T <: AbstractUnitRange
     _normalize(d) = map(x -> _has_axes ? (firstindex(x):lastindex(x)) : x, d)
