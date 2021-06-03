@@ -87,15 +87,18 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
                 i = consume_upto!(arg, s, i, j)
-            elseif c == '\\'
-                if in_double_quotes
+            elseif !in_single_quotes && c == '\\'
+                if !isempty(st) && peek(st)[2] == '\n'
+                    i = consume_upto!(arg, s, i, j) + 1
+                    _ = popfirst!(st)
+                elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
                     k, c′ = peek(st)
                     if c′ == '"' || c′ == '$' || c′ == '\\'
                         i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)
                     end
-                elseif !in_single_quotes
+                else
                     isempty(st) && error("dangling backslash")
                     i = consume_upto!(arg, s, i, j)
                     _ = popfirst!(st)

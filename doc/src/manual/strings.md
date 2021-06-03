@@ -166,6 +166,14 @@ julia> """Contains "quote" characters"""
 "Contains \"quote\" characters"
 ```
 
+Long lines in strings can be broken up by preceding the newline with a backslash (`\`):
+
+```jldoctest
+julia> "This is a long \
+       line"
+"This is a long line"
+```
+
 If you want to extract a character from a string, you index into it:
 
 ```jldoctest helloworldstring
@@ -637,6 +645,15 @@ julia> """
          Hello,
          world."""
 "Hello,\nworld."
+```
+
+If the newline is removed using a backslash, dedentation will be respected as well:
+
+```jldoctest
+julia> """
+         Averylong\
+         word"""
+"Averylongword"
 ```
 
 Trailing whitespace is left unaltered.

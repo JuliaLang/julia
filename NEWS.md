@@ -16,6 +16,9 @@ New language features
   in `[A; B]` has always described concatenating along the first dimension (vertically), now two
   semicolons `[A;; B]` do so in the second dimension (horizontally), three semicolons `;;;` in the
   third, and so on. ([#33697])
+* A backslash (`\`) before a newline inside a string literal now removes the newline while also
+  respecting indentation. This can be used to split up long strings without newlines into multiple
+  lines of code. ([#40753])
 
 Language changes
 ----------------
@@ -114,6 +117,8 @@ Standard library changes
 * `@lock` is now exported from Base ([#39588]).
 * The experimental function `Base.catch_stack()` has been renamed to `current_exceptions()`, exported from Base and given a more specific return type ([#29901])
 * Some degree trigonometric functions, `sind`, `cosd`, `tand`, `asind`, `acosd`, `asecd`, `acscd`, `acotd`, `atand` now accept an square matrix ([#39758]).
+* A backslash before a newline in command literals now always removes the newline, similar to standard string
+  literals, whereas the result was not well-defined before. ([#40753])
 
 #### Package Manager
 

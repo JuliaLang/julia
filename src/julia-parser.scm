@@ -311,6 +311,9 @@
 (define (numchk n s)
   (or n (error (string "invalid numeric constant \"" s "\""))))
 
+(define (string-lastchar s)
+  (string.char s (string.dec s (length s))))
+
 (define (read-number port leadingdot neg)
   (let ((str  (open-output-string))
         (pred char-numeric?)
@@ -412,7 +415,7 @@
                    (string.sub s 1)
                    s)
                r is-float32-literal)))
-      (if (and (eqv? #\. (string.char s (string.dec s (length s))))
+      (if (and (eqv? #\. (string-lastchar s))
                (let ((nxt (peek-char port)))
                  (and (not (eof-object? nxt))
                       (or (identifier-start-char? nxt)
@@ -2182,16 +2185,35 @@
 (define (unescape-parsed-string-literal strs)
   (map-at even? unescape-string strs))
 
+;; remove `\` followed by a newline
+(define (strip-escaped-newline s)
+  (let ((in  (open-input-string s))
+        (out (open-output-string)))
+    (define (loop preceding-backslash?)
+          (let ((c (read-char in)))
+            (cond ((eof-object? c))
+                  (preceding-backslash?
+                   (if (not (eqv? c #\newline))
+                       (begin (write-char #\\ out) (write-char c out)))
+                   (loop #f))
+                  ((eqv? c #\\) (loop #t))
+                  (else (write-char c out) (loop #f)))))
+    (loop #f)
+    (io.tostring! out)))
+
 (define (parse-string-literal s delim raw)
-  (let ((p (ts:port s)))
-    ((if raw identity unescape-parsed-string-literal)
-     (if (eqv? (peek-char p) delim)
-         (if (eqv? (peek-char (take-char p)) delim)
-             (map-first strip-leading-newline
-                        (dedent-triplequoted-string
-                         (parse-string-literal- 2 (take-char p) s delim raw)))
-             (list ""))
-         (parse-string-literal- 0 p s delim raw)))))
+  (let* ((p (ts:port s))
+         (str (if (eqv? (peek-char p) delim)
+                  (if (eqv? (peek-char (take-char p)) delim)
+                      (map-first strip-leading-newline
+                                 (dedent-triplequoted-string
+                                   (parse-string-literal- 2 (take-char p) s delim raw)))
+                      (list ""))
+                  (parse-string-literal- 0 p s delim raw))))
+    (if raw str (unescape-parsed-string-literal
+                  (map (lambda (s)
+                         (if (string? s) (strip-escaped-newline s) s))
+                       str)))))
 
 (define (strip-leading-newline s)
   (let ((n (sizeof s)))
