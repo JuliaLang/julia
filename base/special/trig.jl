@@ -1258,18 +1258,6 @@ sincosd(x) = (sind(x), cosd(x))
 # It turns out that calling these functions separately yields better
 # performance than considering each case and calling `sincos_kernel`.
 
-function deleteremainder()
-    if isinf(x)
-        return throw(DomainError(x, "sincosd(x) is only defined for finite `x`."))
-    elseif isnan(x)
-        return (oftype(x,NaN), oftype(x,NaN))
-    end
-
-    # It turns out that calling those functions separately yielded better
-    # performance than considering each case and calling `sincos_kernel`.
-    return (sind(x), cosd(x))
-end
-
 sincosd(::Missing) = (missing, missing)
 
 for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan, "tangent"))
