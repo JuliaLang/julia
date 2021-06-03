@@ -214,5 +214,74 @@ end
         @test Dates.dayofquarter(Dates.DateTime(y, 12, 31)) == 92
     end
 end
+@testset "isweekday" begin
+	@test Dates.isweekday(Nov; locale = 1) == true
+	@test Dates.isweekday(Jan; locale = 1) == true
+	@test Dates.isweekday(Dec; locale = 1) == true
+	@test Dates.isweekday(Apr; locale = 1) == true
+	@test Dates.isweekday(Jun; locale = 1) == true
+	@test Dates.isweekday(Feb; locale = 1) == false
+	@test Dates.isweekday(Mar; locale = 1) == false
+	
+	@test Dates.isweekday(Nov; locale = 2) == true
+	@test Dates.isweekday(Jan; locale = 2) == true
+	@test Dates.isweekday(Dec; locale = 2) == true
+	@test Dates.isweekday(Apr; locale = 2) == true
+	@test Dates.isweekday(Jun; locale = 2) == false
+	@test Dates.isweekday(Feb; locale = 2) == false
+	@test Dates.isweekday(Mar; locale = 2) == true
+	
+	@test Dates.isweekday(Nov; locale = 3) == true
+	@test Dates.isweekday(Jan; locale = 3) == true
+	@test Dates.isweekday(Dec; locale = 3) == true
+	@test Dates.isweekday(Apr; locale = 3) == true
+	@test Dates.isweekday(Jun; locale = 3) == true
+	@test Dates.isweekday(Feb; locale = 3) == true
+	@test Dates.isweekday(Mar; locale = 3) == false
+	
+	@test Dates.isweekday(Nov; locale = 4) == true
+	@test Dates.isweekday(Jan; locale = 4) == true
+	@test Dates.isweekday(Dec; locale = 4) == true
+	@test Dates.isweekday(Apr; locale = 4) == true
+	@test Dates.isweekday(Jun; locale = 4) == false
+	@test Dates.isweekday(Feb; locale = 4) == true
+	@test Dates.isweekday(Mar; locale = 4) == true
+	
+end
+
+@testset "isweekend" begin
+	@test Dates.isweekend(Nov; locale = 1) == false 
+	@test Dates.isweekend(Jan; locale = 1) == false 
+	@test Dates.isweekend(Dec; locale = 1) == false 
+	@test Dates.isweekend(Apr; locale = 1) == false 
+	@test Dates.isweekend(Jun; locale = 1) == false 
+	@test Dates.isweekend(Feb; locale = 1) == true 
+	@test Dates.isweekend(Mar; locale = 1) == true 
+	
+	@test Dates.isweekend(Nov; locale = 2) == false 
+	@test Dates.isweekend(Jan; locale = 2) == false 
+	@test Dates.isweekend(Dec; locale = 2) == false 
+	@test Dates.isweekend(Apr; locale = 2) == false 
+	@test Dates.isweekend(Jun; locale = 2) == true 
+	@test Dates.isweekend(Feb; locale = 2) == true 
+	@test Dates.isweekend(Mar; locale = 2) == false 
+	
+	@test Dates.isweekend(Nov; locale = 3) == false 
+	@test Dates.isweekend(Jan; locale = 3) == false 
+	@test Dates.isweekend(Dec; locale = 3) == false 
+	@test Dates.isweekend(Apr; locale = 3) == false 
+	@test Dates.isweekend(Jun; locale = 3) == false 
+	@test Dates.isweekend(Feb; locale = 3) == false 
+	@test Dates.isweekend(Mar; locale = 3) == true
+	
+	@test Dates.isweekend(Nov; locale = 4) == false 
+	@test Dates.isweekend(Jan; locale = 4) == false 
+	@test Dates.isweekend(Dec; locale = 4) == false 
+	@test Dates.isweekend(Apr; locale = 4) == false 
+	@test Dates.isweekend(Jun; locale = 4) == true
+	@test Dates.isweekend(Feb; locale = 4) == false 
+	@test Dates.isweekend(Mar; locale = 4) == false 
+	
+end
 
 end
