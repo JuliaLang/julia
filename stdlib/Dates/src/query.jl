@@ -199,6 +199,79 @@ isfriday(dt::TimeType) = dayofweek(dt) == Fri
 issaturday(dt::TimeType) = dayofweek(dt) == Sat
 issunday(dt::TimeType) = dayofweek(dt) == Sun
 
+# Convenience methods for checking weekdays and weekends
+"""
+    isweekday(dt::TimeType; locale::Int = 1) -> Bool
+
+Return `true` if the day of `dt` falls on a locale's weekday. Contains four
+locales that define weekdays for different regions of the world:
+
+1: Monday - Friday
+
+2: Sunday - Thursday
+
+3: Monday - Saturday
+
+4: Saturday - Thursday
+
+# Examples
+```jldoctest
+julia> Dates.isweekday(Date("2021-1-1"))
+true
+
+julia> Dates.isweekday(Date("2021-1-1"; locale = 2))
+false
+```
+"""
+function isweekday(dt::TimeType; locale::Int64 = 1)
+	day = dayofweek(dt)
+	if locale == 1
+		return 1 <= day <= 5
+	elseif locale == 2
+		return day == 7 ? true : 1 <= day <= 4
+	elseif locale == 3
+		return 1 <= day <= 6
+	elseif locale == 4
+		return 6 <= day <= 7 || 1 <= day <= 4
+	end
+end
+
+"""
+    isweekend(dt::TimeType; locale::Int = 1) -> Bool
+
+Return `true` if the day of `dt` falls on a locale's weekend. Contains four
+locales that define weekends for different regions of the world:
+
+1: Saturday - Sunday
+
+2: Sunday - Monday
+
+3: Saturday
+
+4: Friday
+
+# Examples
+```jldoctest
+julia> Dates.isweekend(Date("2021-1-1"))
+false
+
+julia> Dates.isweekend(Date("2021-1-1"; locale = 2))
+true
+```
+"""
+function isweekend(dt::TimeType; locale::Int64 = 1)
+	day = dayofweek(dt)
+	if locale == 1
+		return 6 <= day <= 7
+	elseif locale == 2
+		return  5 <= day <= 6
+	elseif locale == 3
+		return day == 7
+	elseif locale == 4
+		return day == 5
+	end
+end
+
 # i.e. 1st Monday? 2nd Monday? 3rd Wednesday? 5th Sunday?
 """
     dayofweekofmonth(dt::TimeType) -> Int
