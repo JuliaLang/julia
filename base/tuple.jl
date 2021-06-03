@@ -327,7 +327,11 @@ function _totuple(T, itr, s...)
     @_inline_meta
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    return (convert(fieldtype(T, 1), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
+    t1 = convert(fieldtype(T, 1), y[1])
+    # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
+    rT = tuple_type_tail(T)
+    ts = _totuple(rT, itr, y[2])::rT
+    return (t1, ts...)
 end
 
 # use iterative algorithm for long tuples
