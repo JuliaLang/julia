@@ -261,6 +261,12 @@ end
     @test (Printf.@sprintf "%-.3s" "test") == "tes"
     @test (Printf.@sprintf "%#-.3s" "test") == "\"te"
 
+    # issue #41068
+    @test Printf.@sprintf("%.2s", "föó") == "fö"
+    @test Printf.@sprintf("%5s", "föó") == "  föó"
+    @test Printf.@sprintf("%6s", "😍🍕") == "  😍🍕"
+    @test Printf.@sprintf("%2c", '🍕') == "🍕"
+    @test Printf.@sprintf("%3c", '🍕') == " 🍕"
 end
 
 @testset "chars" begin
