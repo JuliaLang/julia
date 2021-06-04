@@ -103,6 +103,42 @@ struct LBTConfig
     end
 end
 
+Base.show(io::IO, lbt::LBTLibraryInfo) = print(io, "LBTLibraryInfo(", basename(lbt.libname), ", ", lbt.interface, ")")
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTLibraryInfo)
+    summary(io, lbt); println(io)
+    println(io, "├ Library: ", basename(lbt.libname))
+    println(io, "├ Interface: ", lbt.interface)
+      print(io, "└ F2C: ", lbt.f2c)
+end
+
+function Base.show(io::IO, lbt::LBTConfig)
+    if length(lbt.loaded_libs) <= 3
+        print(io, "LBTConfig(")
+        gen = (string("[", uppercase(string(l.interface)), "] ",
+            basename(l.libname)) for l in lbt.loaded_libs)
+        print(io, join(gen, ", "))
+        print(io, ")")
+    else
+        print(io, "LBTConfig(...)")
+    end
+end
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
+    summary(io, lbt); println(io)
+    println(io, "Libraries: ")
+    for (i,l) in enumerate(lbt.loaded_libs)
+        char = i == length(lbt.loaded_libs) ? "└" : "├"
+        interface_str = if l.interface == :ilp64
+            "ILP64"
+        elseif l.interface == :lp64
+            " LP64"
+        else
+            "UNKWN"
+        end
+        print(io, char, " [", interface_str,"] ", basename(l.libname))
+        i !== length(lbt.loaded_libs) && println()
+    end
+end
+
 function lbt_get_config()
     config_ptr = ccall((:lbt_get_config, libblastrampoline), Ptr{lbt_config_t}, ())
     return LBTConfig(unsafe_load(config_ptr))

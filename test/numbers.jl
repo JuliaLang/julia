@@ -38,6 +38,24 @@ const ≣ = isequal # convenient for comparing NaNs
     @test xor(true,  false) == true
     @test xor(false, true)  == true
     @test xor(true,  true)  == false
+
+    @test false ⊼ false == true
+    @test true ⊼ false == true
+    @test false ⊼ true == true
+    @test true ⊼ true == false
+    @test nand(false, false) == true
+    @test nand(true, false) == true
+    @test nand(false, true) == true
+    @test nand(true, true) == false
+
+    @test false ⊽ false == true
+    @test true ⊽ false == false
+    @test false ⊽ true == false
+    @test true ⊽ true == false
+    @test nor(false, false) == true
+    @test nor(true, false) == false
+    @test nor(false, true) == false
+    @test nor(true, true) == false
 end
 @testset "bool operator" begin
     @test Bool(false) == false
@@ -2287,6 +2305,23 @@ end
         @test_throws BoundsError getindex([x x],0)
         @test_throws BoundsError getindex([x x],length([x,x])+1)
         @test_throws BoundsError getindex(x, 1, 0)
+    end
+end
+@testset "get(x::Number, ...)" begin
+    for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
+        @test get(x, 1, 99) == x
+        @test get(x, (), 99) == x
+        @test get(x, (1,), 99) == x
+        @test get(x, 2, 99) == 99
+        @test get(x, 0, pi) == pi
+        @test get(x, (1,2), pi) == pi
+        c = Ref(0)
+        @test get(() -> c[]+=1, x, 1) == x
+        @test get(() -> c[]+=1, x, ()) == x
+        @test get(() -> c[]+=1, x, (1,1,1)) == x
+        @test get(() -> c[]+=1, x, 2) == 1
+        @test get(() -> c[]+=1, x, -1) == 2
+        @test get(() -> c[]+=1, x, (3,2,1)) == 3
     end
 end
 @testset "copysign and flipsign" begin

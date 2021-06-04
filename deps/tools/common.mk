@@ -174,7 +174,6 @@ UNINSTALL_$(strip $1) := $2 staged-uninstaller
 
 $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix)/manifest
 	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
-	mkdir -p $$(build_prefix)
 	$(UNTAR) $$< -C $$(build_prefix)
 	$6
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
@@ -236,6 +235,6 @@ endif
 
 ## phony targets ##
 
-.PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall \
+.PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall version-check \
 	get-* extract-* configure-* compile-* fastcheck-* check-* install-* uninstall-* reinstall-* clean-* distclean-* \
 	update-llvm

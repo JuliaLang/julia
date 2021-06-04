@@ -683,7 +683,7 @@ end
 
 @noinline function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted,
                                   ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
-    if ifirst.j + blksize > ilast.j
+    if ilast.j - ifirst.j < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[SCI(2,ifirst.j)]
@@ -702,7 +702,7 @@ end
         return v
     else
         # pairwise portion
-        jmid = (ifirst.j + ilast.j) >> 1
+        jmid = ifirst.j + (ilast.j - ifirst.j) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, SCI(K,jmid), blksize)
         v2 = mapreduce_impl(f, op, A, SCI(1,jmid+1), ilast, blksize)
         return op(v1, v2)

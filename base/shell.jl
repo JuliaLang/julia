@@ -87,15 +87,18 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
                 i = consume_upto!(arg, s, i, j)
-            elseif c == '\\'
-                if in_double_quotes
+            elseif !in_single_quotes && c == '\\'
+                if !isempty(st) && peek(st)[2] == '\n'
+                    i = consume_upto!(arg, s, i, j) + 1
+                    _ = popfirst!(st)
+                elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
                     k, c′ = peek(st)
                     if c′ == '"' || c′ == '$' || c′ == '\\'
                         i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)
                     end
-                elseif !in_single_quotes
+                else
                     isempty(st) && error("dangling backslash")
                     i = consume_upto!(arg, s, i, j)
                     _ = popfirst!(st)
@@ -322,7 +325,7 @@ run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
 With an I/O stream parameter `io`, the result will be written there,
 rather than returned as a string.
 
-See also: [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref)
+See also [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref).
 
 # Example
 ```jldoctest
@@ -376,7 +379,7 @@ It joins command-line arguments to be passed to a Windows
 C/C++/Julia application into a command line, escaping or quoting the
 meta characters space, TAB, double quote and backslash where needed.
 
-See also: [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref)
+See also [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref).
 """
 function escape_microsoft_c_args(io::IO, args::AbstractString...)
     # http://daviddeley.com/autohotkey/parameters/parameters.htm#WINCRULES

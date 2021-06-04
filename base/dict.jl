@@ -488,6 +488,9 @@ end
 Return the value stored for the given key, or the given default value if no mapping for the
 key is present.
 
+!!! compat "Julia 1.7"
+    For tuples and numbers, this function requires at least Julia 1.7.
+
 # Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2);
@@ -792,12 +795,20 @@ function get(dict::ImmutableDict, key, default)
     return default
 end
 
+function get(default::Callable, dict::ImmutableDict, key)
+    while isdefined(dict, :parent)
+        isequal(dict.key, key) && return dict.value
+        dict = dict.parent
+    end
+    return default()
+end
+
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
 function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
     !isdefined(t, :parent) && return nothing
     (Pair{K,V}(t.key, t.value), t.parent)
 end
-length(t::ImmutableDict) = count(x->true, t)
+length(t::ImmutableDict) = count(Returns(true), t)
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 

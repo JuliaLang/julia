@@ -224,7 +224,7 @@ let ex = :(a + b)
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825(::Array{T, N}, ::Array, ::Vector{T} where T)")
+                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} in")
 
 mutable struct TLayout
     x::Int8
@@ -883,6 +883,7 @@ _test_at_locals2(1,1,0.5f0)
     _dump_function(f31687_parent, Tuple{},
                    #=native=#false, #=wrapper=#false, #=strip=#false,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
+                   #=binary=#false,
                    params)
 end
 

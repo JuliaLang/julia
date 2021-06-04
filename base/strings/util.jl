@@ -10,7 +10,7 @@ const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:Ab
 Return `true` if `s` starts with `prefix`. If `prefix` is a vector or set
 of characters, test whether the first character of `s` belongs to that set.
 
-See also [`endswith`](@ref).
+See also [`endswith`](@ref), [`contains`](@ref).
 
 # Examples
 ```jldoctest
@@ -30,7 +30,7 @@ startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::Abs
 Return `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
 characters, test whether the last character of `s` belongs to that set.
 
-See also [`startswith`](@ref).
+See also [`startswith`](@ref), [`contains`](@ref).
 
 # Examples
 ```jldoctest
@@ -76,6 +76,8 @@ end
 Return `true` if `haystack` contains `needle`.
 This is the same as `occursin(needle, haystack)`, but is provided for consistency with
 `startswith(haystack, needle)` and `endswith(haystack, needle)`.
+
+See also [`occursin`](@ref), [`in`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest
@@ -166,6 +168,8 @@ The call `chop(s)` removes the last character from `s`.
 If it is requested to remove more characters than `length(s)`
 then an empty string is returned.
 
+See also [`chomp`](@ref), [`startswith`](@ref), [`first`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = "March"
@@ -195,6 +199,8 @@ end
     chomp(s::AbstractString) -> SubString
 
 Remove a single trailing newline from a string.
+
+See also [`chop`](@ref).
 
 # Examples
 ```jldoctest
@@ -233,6 +239,8 @@ The default behaviour is to remove leading whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
+See also [`strip`](@ref) and [`rstrip`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = lpad("March", 20)
@@ -265,6 +273,8 @@ The default behaviour is to remove trailing whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
+See also [`strip`](@ref) and [`lstrip`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = rpad("March", 20)
@@ -295,6 +305,8 @@ The default behaviour is to remove leading and trailing whitespace and delimiter
 
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, vector or set of characters.
+
+See also [`lstrip`](@ref) and [`rstrip`](@ref).
 
 !!! compat "Julia 1.2"
     The method which accepts a predicate function requires Julia 1.2 or later.
@@ -595,14 +607,19 @@ replace(s::AbstractString, pat_f::Pair; count=typemax(Int)) =
 # hex <-> bytes conversion
 
 """
-    hex2bytes(s::Union{AbstractString,AbstractVector{UInt8}})
+    hex2bytes(itr)
 
-Given a string or array `s` of ASCII codes for a sequence of hexadecimal digits, returns a
+Given an iterable `itr` of ASCII codes for a sequence of hexadecimal digits, returns a
 `Vector{UInt8}` of bytes  corresponding to the binary representation: each successive pair
-of hexadecimal digits in `s` gives the value of one byte in the return vector.
+of hexadecimal digits in `itr` gives the value of one byte in the return vector.
 
-The length of `s` must be even, and the returned array has half of the length of `s`.
+The length of `itr` must be even, and the returned array has half of the length of `itr`.
 See also [`hex2bytes!`](@ref) for an in-place version, and [`bytes2hex`](@ref) for the inverse.
+
+!!! compat "Julia 1.7"
+    Calling hex2bytes with iterables producing UInt8 requires
+    version 1.7. In earlier versions, you can collect the iterable
+    before calling instead.
 
 # Examples
 ```jldoctest
@@ -632,46 +649,64 @@ julia> hex2bytes(a)
 """
 function hex2bytes end
 
-hex2bytes(s::AbstractString) = hex2bytes(String(s))
-hex2bytes(s::Union{String,AbstractVector{UInt8}}) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
+hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
 
-_firstbyteidx(s::String) = 1
-_firstbyteidx(s::AbstractVector{UInt8}) = first(eachindex(s))
-_lastbyteidx(s::String) = sizeof(s)
-_lastbyteidx(s::AbstractVector{UInt8}) = lastindex(s)
+# special case - valid bytes are checked in the generic implementation
+function hex2bytes!(dest::AbstractArray{UInt8}, s::String)
+    sizeof(s) != length(s) && throw(ArgumentError("input string must consist of hexadecimal characters only"))
 
-"""
-    hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
-
-Convert an array `s` of bytes representing a hexadecimal string to its binary
-representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
-in `d`.   The length of `s` must be exactly twice the length of `d`.
-"""
-function hex2bytes!(d::AbstractVector{UInt8}, s::Union{String,AbstractVector{UInt8}})
-    if 2length(d) != sizeof(s)
-        isodd(sizeof(s)) && throw(ArgumentError("input hex array must have even length"))
-        throw(ArgumentError("output array must be half length of input array"))
-    end
-    j = first(eachindex(d)) - 1
-    for i = _firstbyteidx(s):2:_lastbyteidx(s)
-        @inbounds d[j += 1] = number_from_hex(_nthbyte(s,i)) << 4 + number_from_hex(_nthbyte(s,i+1))
-    end
-    return d
+    hex2bytes!(dest, transcode(UInt8, s))
 end
 
-@inline number_from_hex(c) =
-    (UInt8('0') <= c <= UInt8('9')) ? c - UInt8('0') :
-    (UInt8('A') <= c <= UInt8('F')) ? c - (UInt8('A') - 0x0a) :
-    (UInt8('a') <= c <= UInt8('f')) ? c - (UInt8('a') - 0x0a) :
+"""
+    hex2bytes!(dest::AbstractVector{UInt8}, itr)
+
+Convert an iterable `itr` of bytes representing a hexadecimal string to its binary
+representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
+to `dest`. The length of `dest` must be half the length of `itr`.
+
+!!! compat "Julia 1.7"
+    Calling hex2bytes! with iterators producing UInt8 requires
+    version 1.7. In earlier versions, you can collect the iterable
+    before calling instead.
+"""
+function hex2bytes!(dest::AbstractArray{UInt8}, itr)
+    isodd(length(itr)) && throw(ArgumentError("length of iterable must be even"))
+    @boundscheck 2*length(dest) != length(itr) && throw(ArgumentError("length of output array must be half of the length of input iterable"))
+    iszero(length(itr)) && return dest
+
+    next = iterate(itr)
+    @inbounds for i in eachindex(dest)
+        x,state = next::NTuple{2,Any}
+        y,state = iterate(itr, state)::NTuple{2,Any}
+        next = iterate(itr, state)
+        dest[i] = number_from_hex(x) << 4 + number_from_hex(y)
+    end
+
+    return dest
+end
+
+@inline number_from_hex(c::AbstractChar) = number_from_hex(Char(c))
+@inline number_from_hex(c::Char) = number_from_hex(UInt8(c))
+@inline function number_from_hex(c::UInt8)
+    UInt8('0') <= c <= UInt8('9') && return c - UInt8('0')
+    c |= 0b0100000
+    UInt8('a') <= c <= UInt8('f') && return c - UInt8('a') + 0x0a
     throw(ArgumentError("byte is not an ASCII hexadecimal digit"))
+end
 
 """
-    bytes2hex(a::AbstractArray{UInt8}) -> String
-    bytes2hex(io::IO, a::AbstractArray{UInt8})
+    bytes2hex(itr) -> String
+    bytes2hex(io::IO, itr)
 
-Convert an array `a` of bytes to its hexadecimal string representation, either
-returning a `String` via `bytes2hex(a)` or writing the string to an `io` stream
-via `bytes2hex(io, a)`.  The hexadecimal characters are all lowercase.
+Convert an iterator `itr` of bytes to its hexadecimal string representation, either
+returning a `String` via `bytes2hex(itr)` or writing the string to an `io` stream
+via `bytes2hex(io, itr)`.  The hexadecimal characters are all lowercase.
+
+!!! compat "Julia 1.7"
+    Calling bytes2hex with iterators producing UInt8 requires
+    version 1.7. In earlier versions, you can collect the iterable
+    before calling instead.
 
 # Examples
 ```jldoctest
@@ -689,17 +724,19 @@ julia> bytes2hex(b)
 """
 function bytes2hex end
 
-function bytes2hex(a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
-    b = Base.StringVector(2*length(a))
-    @inbounds for (i, x) in enumerate(a)
+function bytes2hex(itr)
+    eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
+    b = Base.StringVector(2*length(itr))
+    @inbounds for (i, x) in enumerate(itr)
         b[2i - 1] = hex_chars[1 + x >> 4]
         b[2i    ] = hex_chars[1 + x & 0xf]
     end
     return String(b)
 end
 
-function bytes2hex(io::IO, a::Union{Tuple{Vararg{UInt8}}, AbstractArray{UInt8}})
-    for x in a
+function bytes2hex(io::IO, itr)
+    eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
+    for x in itr
         print(io, Char(hex_chars[1 + x >> 4]), Char(hex_chars[1 + x & 0xf]))
     end
 end

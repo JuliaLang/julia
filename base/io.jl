@@ -15,7 +15,7 @@ struct EOFError <: Exception end
 A system call failed with an error code (in the `errno` global variable).
 """
 struct SystemError <: Exception
-    prefix::AbstractString
+    prefix::String
     errnum::Int32
     extrainfo
     SystemError(p::AbstractString, e::Integer, extrainfo) = new(p, e, extrainfo)
@@ -1034,7 +1034,7 @@ end
 
 Return an iterable object yielding [`read(io, T)`](@ref).
 
-See also: [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref)
+See also [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref).
 
 !!! compat "Julia 1.6"
     `readeach` requires Julia 1.6 or later.

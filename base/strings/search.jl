@@ -616,7 +616,7 @@ julia> occursin(r"a.a", "abba")
 false
 ```
 
-See also: [`contains`](@ref).
+See also [`contains`](@ref).
 """
 occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
     _searchindex(haystack, needle, firstindex(haystack)) != 0

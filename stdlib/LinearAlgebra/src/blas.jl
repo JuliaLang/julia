@@ -91,7 +91,7 @@ get_config() = lbt_get_config()
 # We hard-lock `vendor()` to `openblas(64)` here to satisfy older code, but all new code should use
 # `get_config()` since it is now possible to have multiple vendors loaded at once.
 function vendor()
-    Base.depwarn("`vendor()` is deprecated, use `BLAS.get_config()` and inspect the output instead", :vendor)
+    Base.depwarn("`vendor()` is deprecated, use `BLAS.get_config()` and inspect the output instead", :vendor; force=true)
     if USE_BLAS64
         return :openblas64
     else
@@ -218,15 +218,21 @@ end
 
 """
     scal!(n, a, X, incx)
+    scal!(a, X)
 
 Overwrite `X` with `a*X` for the first `n` elements of array `X` with stride `incx`. Returns `X`.
+
+If `n` and `incx` are not provided, `length(X)` and `stride(X,1)` are used.
 """
 function scal! end
 
 """
     scal(n, a, X, incx)
+    scal(a, X)
 
 Return `X` scaled by `a` for the first `n` elements of array `X` with stride `incx`.
+
+If `n` and `incx` are not provided, `length(X)` and `stride(X,1)` are used.
 """
 function scal end
 
@@ -242,9 +248,12 @@ for (fname, elty) in ((:dscal_,:Float64),
                   n, DA, DX, incx)
             DX
         end
+
+        scal!(DA::$elty, DX::AbstractArray{$elty}) = scal!(length(DX),DA,DX,stride(DX,1))
     end
 end
 scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
+scal(DA, DX) = scal!(DA, copy(DX))
 
 ## dot
 

@@ -132,7 +132,12 @@ const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
 const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
 
-const IR_FLAG_INBOUNDS = 0x01
+# This statement was marked as @inbounds by the user. If replaced by inlining,
+# any contained boundschecks may be removed
+const IR_FLAG_INBOUNDS       = 0x01
+# This statement may be removed if its result is unused. In particular it must
+# thus be both pure and effect free.
+const IR_FLAG_EFFECT_FREE    = 0x01 << 4
 
 # known to be always effect-free (in particular nothrow)
 const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
@@ -350,6 +355,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
+            elseif (f === Core.arrayref || f === Core.const_arrayref || f === Core.arrayset) && length(ex.args) >= 3
+                atyp = argextype(ex.args[3], src, sptypes, slottypes)
+                return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+            elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes, slottypes)))
+                return 1
             elseif f === Core.isa
                 # If we're in a union context, we penalize type computations
                 # on union types. In such cases, it is usually better to perform
@@ -357,13 +367,10 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 if union_penalties && isa(argextype(ex.args[2],  src, sptypes, slottypes), Union)
                     return params.inline_nonleaf_penalty
                 end
-            elseif (f === Core.arrayref || f === Core.const_arrayref) && length(ex.args) >= 3
-                atyp = argextype(ex.args[3], src, sptypes, slottypes)
-                return isknowntype(atyp) ? 4 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
             end
             fidx = find_tfunc(f)
             if fidx === nothing
-                # unknown/unhandled builtin or anonymous function
+                # unknown/unhandled builtin
                 # Use the generic cost of a direct function call
                 return 20
             end

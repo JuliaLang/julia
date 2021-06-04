@@ -286,8 +286,8 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of getrusage(2) on Linux and FreeBSD.
-    - windows api `GetProcessMemoryInfo`
+    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
@@ -516,7 +516,7 @@ function which(program_name::String)
             program_path = joinpath(path_dir, pname)
             # If we find something that matches our name and we can execute
             if isfile(program_path) && isexecutable(program_path)
-                return realpath(program_path)
+                return program_path
             end
         end
     end

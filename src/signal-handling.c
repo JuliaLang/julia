@@ -106,17 +106,16 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
 void jl_show_sigill(void *_ctx);
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
-    ptls->safe_restore = &buf;
+    jl_set_safe_restore(&buf);
     volatile size_t i = 0;
     if (!jl_setjmp(buf, 0)) {
-        for (;i < len;i++) {
+        for (; i < len; i++) {
             out[i] = ptr[i];
         }
     }
-    ptls->safe_restore = old_buf;
+    jl_set_safe_restore(old_buf);
     return i;
 }
 
@@ -231,15 +230,42 @@ void jl_show_sigill(void *_ctx)
 #endif
 }
 
-// what to do on a critical error
-void jl_critical_error(int sig, bt_context_t *context, jl_bt_element_t *bt_data, size_t *bt_size)
+// what to do on a critical error on a thread
+void jl_critical_error(int sig, bt_context_t *context)
 {
-    // This function is not allowed to reference any TLS variables.
-    // We need to explicitly pass in the TLS buffer pointer when
-    // we make `jl_filename` and `jl_lineno` thread local.
+
+    jl_task_t *ct = jl_current_task;
+    jl_bt_element_t *bt_data = ct->ptls->bt_data;
+    size_t *bt_size = &ct->ptls->bt_size;
     size_t i, n = *bt_size;
-    if (sig)
+    if (sig) {
+        // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
+        jl_set_safe_restore(NULL);
+        ct->gcstack = NULL;
+        ct->eh = NULL;
+        ct->excstack = NULL;
+#ifndef _OS_WINDOWS_
+        sigset_t sset;
+        sigemptyset(&sset);
+        // n.b. In `abort()`, Apple's libSystem "helpfully" blocks all signals
+        // on all threads but SIGABRT. But we also don't know what the thread
+        // was doing, so unblock all critical signals so that they will crash
+        // hard, and not just get stuck.
+        sigaddset(&sset, SIGSEGV);
+        sigaddset(&sset, SIGBUS);
+        sigaddset(&sset, SIGILL);
+        // also unblock fatal signals now, so we won't get back here twice
+        sigaddset(&sset, SIGTERM);
+        sigaddset(&sset, SIGABRT);
+        sigaddset(&sset, SIGQUIT);
+        // and the original signal is now fatal too, in case it wasn't
+        // something already listed (?)
+        if (sig != SIGINT)
+            sigaddset(&sset, sig);
+        pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+#endif
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
+    }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
