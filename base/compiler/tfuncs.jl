@@ -550,7 +550,7 @@ function typeof_tfunc(@nospecialize(t))
     end
     return DataType # typeof(anything)::DataType
 end
-add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
+add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
 
 function typeassert_tfunc(@nospecialize(v), @nospecialize(t))
     t = instanceof_tfunc(t)[1]
