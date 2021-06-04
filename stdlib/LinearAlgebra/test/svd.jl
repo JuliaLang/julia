@@ -225,7 +225,7 @@ end
     F = svd(randn(2, 2))
     b = randn(2)
     x = ldiv!(F, b)
-    @test x == b
+    @test x === b
 end
 
 @testset "adjoint of SVD" begin
