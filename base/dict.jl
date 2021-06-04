@@ -731,10 +731,6 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
         i = ht_keyindex2!(d1, k)
         if i > 0
             d1.vals[i] = combine(d1.vals[i], v)
-            # We don't use @inbounds in front of the whole formula
-            # because we don't know what the combine function does.
-            # Using @inbounds only for array access seems to slow
-            # things down for simple functions like integer addition.
         else
             if !isequal(k, convert(K, k))
                 throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
