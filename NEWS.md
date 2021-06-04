@@ -44,7 +44,7 @@ Standard library changes
 #### Markdown
 
 #### Printf
-* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41068]).
+* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
 #### Random
 
