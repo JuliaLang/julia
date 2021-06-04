@@ -369,7 +369,7 @@ end
 
 quote_spaces(x) = any(isspace, x) ? "'" * x * "'" : x
 
-function repl_search(io::IO, s::Union{Symbol,String})
+function repl_search(io::IO, s::String)
     pre = "search:"
     print(io, pre)
     printmatches(io, s, map(quote_spaces, doc_completions(s)), cols = _displaysize(io)[2] - length(pre))
@@ -452,13 +452,21 @@ function repl_latex(io::IO, s::String)
 end
 repl_latex(s::String) = repl_latex(stdout, s)
 
+function normalize_symbol(s::Symbol)
+    # parse to apply string->normsymbol
+    normalized = Meta.parse(string(s), raise = false, depwarn = false)
+    normalized isa Symbol ? normalized : s
+end
+
 macro repl(ex, brief::Bool=false) repl(ex; brief=brief) end
 macro repl(io, ex, brief) repl(io, ex; brief=brief) end
 
 function repl(io::IO, s::Symbol; brief::Bool=true)
+    str_orig = string(s)
+    s = normalize_symbol(s)
     str = string(s)
     quote
-        repl_latex($io, $str)
+        repl_latex($io, $str_orig)
         repl_search($io, $str)
         $(if !isdefined(Main, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str))
