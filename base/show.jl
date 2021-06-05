@@ -1330,9 +1330,10 @@ julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
 ```
 """
 function isidentifier(s::AbstractString)
-    isempty(s) && return false
+    x = Iterators.peel(s)
+    isnothing(x) && return false
     (s == "true" || s == "false") && return false
-    c, rest = Iterators.peel(s)
+    c, rest = x
     is_id_start_char(c) || return false
     return all(is_id_char, rest)
 end
