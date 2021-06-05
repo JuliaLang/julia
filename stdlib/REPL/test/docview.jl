@@ -20,10 +20,23 @@ import Markdown
             String(take!(buf))
         end, "\"ᵞ₁₂₃¹²³α\" can be typed by \\^gamma<tab>\\_123<tab>\\^123<tab>\\alpha<tab>\n")
 
+    # Check symbol completion for a symbol that gets normalized by the parser
+    @test startswith(let buf = IOBuffer()
+            Core.eval(Main, REPL.helpmode(buf, "\u2212"))
+            String(take!(buf))
+        end, "\"−\" can be typed by \\minus<tab>\n")
+
     # Check that all symbols with several completions have a canonical mapping (#39148)
     symbols = values(REPLCompletions.latex_symbols)
     duplicates = [v for v in unique(symbols) if count(==(v), symbols) > 1]
     @test all(duplicates .∈ Ref(keys(REPLCompletions.symbols_latex_canonical)))
+end
+
+@testset "unicode normalization" begin
+    @test contains(let buf = IOBuffer()
+            Core.eval(Main, REPL.helpmode(buf, "\u2212"))
+            String(take!(buf))
+        end, "\nsearch: - ")
 end
 
 @testset "quoting in doc search" begin
