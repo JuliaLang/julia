@@ -554,6 +554,11 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
+If the iterator is empty return `nothing` (like `iterate`).
+
+!!! compat "Julia 1.7"
+    Prior versions throw a BoundsError if the iterator is empty.
+
 See also: [`Iterators.drop`](@ref), [`Iterators.take`](@ref).
 
 # Examples
@@ -571,7 +576,7 @@ julia> collect(rest)
 """
 function peel(itr)
     y = iterate(itr)
-    y === nothing && throw(BoundsError())
+    y === nothing && return y
     val, s = y
     val, rest(itr, s)
 end

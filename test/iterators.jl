@@ -853,3 +853,11 @@ end
 @testset "proper patition for non-1-indexed vector" begin
     @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
 end
+
+@testset "Iterators.peel" begin
+    @test Iterators.peel([]) == nothing
+    @test Iterators.peel(1:10)[1] == 1
+    @test Iterators.peel(1:10)[2] |> collect == 2:10
+    @test Iterators.peel(x^2 for x in 2:4)[1] == 4
+    @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
+end
