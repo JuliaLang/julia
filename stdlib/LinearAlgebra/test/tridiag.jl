@@ -632,6 +632,12 @@ end
     @test !ishermitian(A)
 
     # complex
+    # https://github.com/JuliaLang/julia/pull/41037#discussion_r645524081
+    S = SymTridiagonal(randn(5) .+ 0im, randn(5) .+ 0im)
+    S.ev[end] = im
+    @test issymmetric(S)
+    @test ishermitian(S)
+
     S = SymTridiagonal(randn(5) .+ 1im, randn(4) .+ 1im)
     @test issymmetric(S)
     @test !ishermitian(S)
