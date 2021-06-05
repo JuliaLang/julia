@@ -749,6 +749,13 @@ end
 
 end
 
+@testset "%n" begin
+    x = Ref{Int}()
+    @test (Printf.@sprintf("%d4%n", 123, x); x[] == 4)
+    @test (Printf.@sprintf("%s%n", "😉", x); x[] == 4)
+    @test (Printf.@sprintf("%s%n", "1234", x); x[] == 4)
+
+
 @testset "dynamic" begin
 
     # dynamic width and precision
@@ -1094,6 +1101,13 @@ end
     @test Printf.@sprintf("%*.X", 20, 305441741) == Printf.@sprintf("%20.X",  305441741)
     @test Printf.@sprintf("%*.0X", 20, UInt(3989525555)) == Printf.@sprintf("%20.0X",  UInt(3989525555))
     @test Printf.@sprintf("%*.X", 20, UInt(0)) == Printf.@sprintf("%20.X",  UInt(0))
+
+@testset "%n" begin
+    x = Ref{Int}()
+    y = Ref{Int}()    
+    @test (Printf.@sprintf("%10s%n", "😉", x); Printf.@sprintf("%*s%n", 10, "😉", y); x[] == y[])
+    @test (Printf.@sprintf("%10s%n", "1234", x); Printf.@sprintf("%*s%n", 10, "1234", y); x[] == y[])
+
 end
 
 end # @testset "Printf"
