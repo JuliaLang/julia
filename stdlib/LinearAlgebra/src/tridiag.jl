@@ -170,7 +170,7 @@ adjoint(S::SymTridiagonal) = Adjoint(S)
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
 Base.copy(S::Transpose{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(transpose.(x)), (S.parent.dv, S.parent.ev))...)
 
-ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(S.ev)
+ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(@view S.ev[begin:length(S.dv) - 1])
 issymmetric(S::SymTridiagonal) = true
 
 function diag(M::SymTridiagonal{<:Number}, n::Integer=0)
