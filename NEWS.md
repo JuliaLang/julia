@@ -31,6 +31,7 @@ Language changes
   because `x[2]` was mutated during the iteration of `x`. ([#40737])
 * The default random number generator has changed, so all random numbers will be different (even with the
   same seed) unless an explicit RNG object is used. See the section on the `Random` standard library below.
+* `Iterators.peel(itr)` now returns `nothing` when `itr` is empty rather than throwing a `BoundsError`. ([#39569])
 
 Compiler/Runtime improvements
 -----------------------------
