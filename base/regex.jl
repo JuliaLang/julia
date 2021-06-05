@@ -532,6 +532,8 @@ end
 Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
+See also [`RegexReplacer`](@ref).
+
 ```jldoctest
 julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
 s"Hello \\g<name>, it's \\1"
@@ -567,6 +569,8 @@ end
 Construct a substitution string, used for regular expression substitutions.  Within the
 string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
 `\\g<groupname>` refers to a named capture group with name `groupname`.
+
+See also [`RegexReplacer`](@ref).
 
 ```jldoctest
 julia> msg = "#Hello# from Julia";
@@ -672,6 +676,33 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     end
 end
 
+"""
+    RegexReplacer(f::Function)
+
+Create a `RegexReplacer` that can be used to
+[`replace`](@ref replace(::AbstractString, ::Pair))
+[`Regex`](@ref)-matched text using the given function `f`
+with access to the current match and capture groups.
+
+`f` must be callable with a [`RegexMatch`](@ref) and return a [`print`](@ref)-able object.
+
+See also [`SubstitutionString`](@ref), [`@s_str`](@ref).
+
+# Examples
+```jldoctest
+julia> s = "ax ay az bx by bz";
+
+julia> replace(s, r"([ab])([xy])" => RegexReplacer(match -> uppercase(match[1]) * match[2]))
+"Ax Ay az Bx By bz"
+
+julia> template = "the {animal} is {activity}";
+
+julia> variables = Dict("animal" => "fox", "activity" => "running");
+
+julia> replace(template, r"{(.*?)}" => RegexReplacer(match -> variables[match[1]]))
+"the fox is running"
+```
+"""
 struct RegexReplacer
     f::Function
 end

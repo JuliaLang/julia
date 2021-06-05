@@ -604,6 +604,8 @@ where `s` is the matched substring (when `pat` is a `AbstractPattern` or `Abstra
 character (when `pat` is an `AbstractChar` or a collection of `AbstractChar`).
 If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then capture group
 references in `r` are replaced with the corresponding matched text.
+If `pat` is a regular expression and `r` is a [`RegexReplacer`](@ref),
+then the matched substring is replaced with `r.f(m)` where `m` is a [`RegexMatch`](@ref).
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
 
 Multiple patterns can be specified, and they will be applied left-to-right

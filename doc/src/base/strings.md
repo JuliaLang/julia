@@ -35,6 +35,7 @@ Base.match
 Base.eachmatch
 Base.RegexMatch
 Base.keys(::RegexMatch)
+Base.RegexReplacer
 Base.isless(::AbstractString, ::AbstractString)
 Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
