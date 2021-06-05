@@ -2323,7 +2323,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
                             qualified=false, hasfirst=true)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
-        print(io, demangle ? demangle_function_name(name) : name, "(...)")
+        print_within_stacktrace(io, demangle ? demangle_function_name(name) : name, "(…)", bold=true)
         return
     end
     tv = Any[]
