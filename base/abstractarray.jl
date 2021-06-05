@@ -1923,10 +1923,30 @@ julia> hvcat((2,2,2), a,b,c,d,e,f)
 If the first argument is a single integer `n`, then all block rows are assumed to have `n`
 block columns.
 """
-hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_hvcat(T, rows, xs...)
+hvcat(::Tuple{}) = []
+hvcat(::Tuple{}, xs...) = []
+hvcat(::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...) # methods assume 2+ dimensions
+hvcat(rows::Tuple{Vararg{Int}}, xs...) = _hvcat(rows, xs...)
 
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T
+_hvcat(::Tuple{Vararg{Int}}) = []
+_hvcat(rows::Tuple{Vararg{Int}}, xs...) = _typed_hvncat(promote_eltypeof(xs...), (length(rows), rows[1]), true, xs...)
+_hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number = _typed_hvcat(T, rows, xs...)
+_hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = _typed_hvcat(promote_typeof(xs...), rows, xs...)
+_hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = _typed_hvcat(promote_eltype(xs...), rows, xs...)
+_hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where T = _typed_hvcat(T, rows, xs...)
+_hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), (length(rows), rows[1]), true, xs...)
+_hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where T = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
+
+typed_hvcat(::Type{T}, ::Tuple{}) where T = Vector{T}()
+typed_hvcat(::Type{T}, ::Tuple{}, xs...) where T = Vector{T}()
+typed_hvcat(T::Type, ::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = typed_vcat(T, xs...)
+typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs...) = _typed_hvcat(T, rows, xs...)
+
+_typed_hvcat(::Type{T}, ::Tuple{}) where T = Vector{T}()
+_typed_hvcat(::Type{T}, ::Tuple{}, xs...) where T = Vector{T}()
+_typed_hvcat(::Type{T}, ::Tuple{}, xs::Number...) where T = Vector{T}()
+
+function _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T
     nbr = length(rows)  # number of block rows
 
     nc = 0
@@ -1969,28 +1989,15 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat..
     out
 end
 
-hvcat(rows::Tuple{Vararg{Int}}) = []
-typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}) where {T} = Vector{T}()
-
-function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
+function _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
     nr = length(rows)
     nc = rows[1]
-
-    a = Matrix{T}(undef, nr, nc)
-    if length(a) != length(xs)
-        throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
-    end
-    k = 1
-    @inbounds for i=1:nr
+    for i = 2:nr
         if nc != rows[i]
             throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
         end
-        for j=1:nc
-            a[i,j] = xs[k]
-            k += 1
-        end
     end
-    a
+    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
 end
 
 function hvcat_fill!(a::Array, xs::Tuple)
@@ -2009,21 +2016,11 @@ function hvcat_fill!(a::Array, xs::Tuple)
     a
 end
 
-hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
+_typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs...) = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
+_typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs::AbstractArray...) = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
+_typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where T = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
 
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
-    nr = length(rows)
-    nc = rows[1]
-    for i = 2:nr
-        if nc != rows[i]
-            throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
-        end
-    end
-    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
-end
-
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
+function _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     nbr = length(rows)  # number of block rows
     rs = Vector{Any}(undef, nbr)
     a = 1
@@ -2187,9 +2184,6 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     end
     return A
 end
-
-cat_ndims(a) = 0
-cat_ndims(a::AbstractArray) = ndims(a)
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
@@ -2382,8 +2376,10 @@ end
     Ai
 end
 
-cat_length(a::AbstractArray) = length(a)
+cat_ndims(a) = 0
+cat_ndims(a::AbstractArray) = ndims(a)
 cat_length(::Any) = 1
+cat_length(a::AbstractArray) = length(a)
 
 ## Reductions and accumulates ##
 
