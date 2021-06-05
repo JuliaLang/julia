@@ -527,7 +527,7 @@ julia> f2()
     As noted there, the caller must verify—using information they can access—that
     their accesses are valid before using `@inbounds`. For indexing into your
     [`AbstractArray`](@ref) subclasses, for example, this involves checking the
-    indices against its [`size`](@ref). Therefore, `@boundscheck` annotations
+    indices against its [`axes`](@ref). Therefore, `@boundscheck` annotations
     should only be added to a [`getindex`](@ref) or [`setindex!`](@ref)
     implementation after you are certain its behavior is correct.
 """
