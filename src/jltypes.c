@@ -2265,6 +2265,12 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_perm_symsvec(2, "cond", "dest"),
                         jl_svec(2, jl_any_type, jl_long_type), 0, 0, 2);
 
+    jl_switchnode_type =
+        jl_new_datatype(jl_symbol("SwitchNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(4, "cond", "default", "labels", "edges"),
+                        jl_svec(4, jl_any_type, jl_long_type, jl_array_int32_type, jl_array_int32_type),
+                        0, 0, 4);
+
     jl_returnnode_type =
         jl_new_datatype(jl_symbol("ReturnNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "val"),

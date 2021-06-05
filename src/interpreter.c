@@ -429,6 +429,39 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 jl_type_error("if", (jl_value_t*)jl_bool_type, cond);
             }
         }
+        else if (jl_is_switchnode(stmt)) {
+            jl_value_t *cond = eval_value(jl_switchnode_cond(stmt), s);
+            if (!jl_typeis(cond, jl_int32_type)) {
+                jl_type_error("switch", (jl_value_t*)jl_int32_type, cond);
+            }
+            int32_t branch_to = jl_unbox_int32(cond);
+
+            jl_array_t *labels = jl_switchnode_labels(stmt);
+            jl_array_t *edges = jl_switchnode_edges(stmt);
+            int32_t switch_default = jl_switchnode_default(stmt);
+
+            assert(jl_array_len(labels) == jl_array_len(edges));
+            for (size_t i = 0; i < jl_array_len(labels); ++i) {
+               if (branch_to == ((int32_t*)jl_array_data(labels))[i]) {
+                   next_ip = ((int32_t*)jl_array_data(edges))[i] - 1;
+                   goto switch_done;
+               }
+            }
+
+            // None matched, evaluate fallback
+            {
+                if (switch_default == 0) {
+                    // This is considered undefined behavior. In codegen, this
+                    // might crash. Here we given a more informative error to
+                    // help people debug their code, but this error is not part
+                    // of the specification of this IR statement.
+                    jl_error("Internal Error (Undefined Behavior): Fell through switch statement.");
+                }
+
+                next_ip = switch_default - 1;
+            }
+            switch_done:;
+        }
         else if (jl_is_returnnode(stmt)) {
             return eval_value(jl_returnnode_value(stmt), s);
         }

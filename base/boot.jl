@@ -124,6 +124,13 @@
 #    dest::Int
 #end
 
+#struct SwitchNode
+#    cond::Any
+#    default::Int32
+#    labels::Vector{Int32}
+#    edges::Vector{Int32}
+#end
+
 #struct ReturnNode
 #    val::Any
 #end
@@ -404,6 +411,8 @@ _new(:Argument, :Int)
 _new(:ReturnNode, :Any)
 eval(Core, :(ReturnNode() = $(Expr(:new, :ReturnNode)))) # unassigned val indicates unreachable
 eval(Core, :(GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))))
+eval(Core, :(SwitchNode(@nospecialize(cond), default::Int32, labels::Array{Int32, 1}, edges::Array{Int32, 1}) =
+    $(Expr(:new, :SwitchNode, :cond, :default, :labels, :edges))))
 eval(Core, :(LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
 eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
 LineNumberNode(l::Int, f::String) = LineNumberNode(l, Symbol(f))

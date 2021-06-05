@@ -7031,6 +7031,55 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             find_next_stmt(cursor + 1);
             continue;
         }
+        else if (jl_is_switchnode(stmt)) {
+            jl_value_t *cond_expr = jl_switchnode_cond(stmt);
+            jl_cgval_t cond_val = emit_expr(ctx, cond_expr);
+
+            if (cond_val.typ != (jl_value_t*)jl_int32_type) {
+                emit_typecheck(ctx, cond_val, (jl_value_t*)jl_int32_type, "switch");
+            }
+
+            Value *cond = emit_unbox(ctx, T_int32, cond_val, (jl_value_t*)jl_int32_type);
+            mallocVisitStmt(debuginfoloc, nullptr);
+            come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
+
+            int32_t default_dest = (int32_t)jl_switchnode_default(stmt);
+            jl_array_t *labels = jl_switchnode_labels(stmt);
+            jl_array_t *edges = jl_switchnode_edges(stmt);
+
+            BasicBlock *switch_default = nullptr;
+            if (default_dest == 0) {
+                // Fallthrough is undefined behavior. For now we just trap.
+                switch_default = BasicBlock::Create(jl_LLVMContext, "switch_default", ctx.f);
+            } else {
+                switch_default = BB[default_dest];
+                workstack.push_back(default_dest - 1);
+            }
+
+            SwitchInst *sw = ctx.builder.CreateSwitch(cond, switch_default,
+                jl_array_len(labels));
+
+            assert(jl_array_len(labels) == jl_array_len(edges));
+
+            int next_stmt = default_dest;
+            for (size_t i = 0; i < jl_array_len(labels); ++i) {
+                int32_t label = ((int32_t*)jl_array_data(labels))[i];
+                int32_t edge = ((int32_t*)jl_array_data(edges))[i];
+                sw->addCase(ConstantInt::get(T_int32, label), BB[edge]);
+                workstack.push_back(label - 1);
+                if (!next_stmt) {
+                    next_stmt = edge;
+                }
+            }
+
+            if (default_dest == 0) {
+                ctx.builder.SetInsertPoint(switch_default);
+                CreateTrap(ctx.builder);
+            }
+
+            find_next_stmt(next_stmt - 1);
+            continue;
+        }
         else if (expr && expr->head == enter_sym) {
             jl_value_t **args = (jl_value_t**)jl_array_data(expr->args);
 

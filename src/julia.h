@@ -726,6 +726,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_globalref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotoifnot_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_switchnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_returnnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_phinode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_pinode_type JL_GLOBALLY_ROOTED;
@@ -1001,6 +1002,10 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 #define jl_gotonode_label(x) (((intptr_t*)(x))[0])
 #define jl_gotoifnot_cond(x) (((jl_value_t**)(x))[0])
 #define jl_gotoifnot_label(x) (((intptr_t*)(x))[1])
+#define jl_switchnode_cond(x) (((jl_value_t**)(x))[0])
+#define jl_switchnode_default(x) (((intptr_t*)(x))[1])
+#define jl_switchnode_labels(x) (((jl_array_t**)(x))[2])
+#define jl_switchnode_edges(x) (((jl_array_t**)(x))[3])
 #define jl_globalref_mod(s) (*(jl_module_t**)(s))
 #define jl_globalref_name(s) (((jl_sym_t**)(s))[1])
 #define jl_quotenode_value(x) (((jl_value_t**)x)[0])
@@ -1160,6 +1165,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_globalref(v)   jl_typeis(v,jl_globalref_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_gotoifnot(v)   jl_typeis(v,jl_gotoifnot_type)
+#define jl_is_switchnode(v)  jl_typeis(v,jl_switchnode_type)
 #define jl_is_returnnode(v)  jl_typeis(v,jl_returnnode_type)
 #define jl_is_argument(v)    jl_typeis(v,jl_argument_type)
 #define jl_is_pinode(v)      jl_typeis(v,jl_pinode_type)
