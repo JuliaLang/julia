@@ -1923,10 +1923,49 @@ julia> hvcat((2,2,2), a,b,c,d,e,f)
 If the first argument is a single integer `n`, then all block rows are assumed to have `n`
 block columns.
 """
-hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_hvcat(T, rows, xs...)
+hvcat(::Tuple{}) = []
+hvcat(::Tuple{}, xs...) = []
 
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T
+hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number = typed_hvcat(T, rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVector...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where T = typed_hvcat(T, rows, xs...)
+
+# dispatch to hvncat methods when it performs better
+rows_to_dimshape(rows::Tuple{Vararg{Int}}) = all(==(rows[1]), rows) ? (length(rows), rows[1]) : (rows, (sum(rows),))
+hvcat(rows::Tuple{Vararg{Int}}, xs...) = _hvncat(rows_to_dimshape(rows), true, xs...)
+
+typed_hvcat(::Type{T}, ::Tuple{}) where T = Vector{T}()
+typed_hvcat(::Type{T}, ::Tuple{}, xs...) where T = Vector{T}()
+
+function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
+    nr = length(rows)
+    nc = rows[1]
+    for i = 2:nr
+        if nc != rows[i]
+            throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
+        end
+    end
+    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
+end
+
+function hvcat_fill!(a::Array, xs::Tuple)
+    nr, nc = size(a,1), size(a,2)
+    len = length(xs)
+    if nr*nc != len
+        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
+    end
+    k = 1
+    for i=1:nr
+        @inbounds for j=1:nc
+            a[i,j] = xs[k]
+            k += 1
+        end
+    end
+    a
+end
+
+function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVector...) where T
     nbr = length(rows)  # number of block rows
 
     nc = 0
@@ -1969,70 +2008,7 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat..
     out
 end
 
-hvcat(rows::Tuple{Vararg{Int}}) = []
-typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}) where {T} = Vector{T}()
-
-function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
-    nr = length(rows)
-    nc = rows[1]
-
-    a = Matrix{T}(undef, nr, nc)
-    if length(a) != length(xs)
-        throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
-    end
-    k = 1
-    @inbounds for i=1:nr
-        if nc != rows[i]
-            throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
-        end
-        for j=1:nc
-            a[i,j] = xs[k]
-            k += 1
-        end
-    end
-    a
-end
-
-function hvcat_fill!(a::Array, xs::Tuple)
-    nr, nc = size(a,1), size(a,2)
-    len = length(xs)
-    if nr*nc != len
-        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
-    end
-    k = 1
-    for i=1:nr
-        @inbounds for j=1:nc
-            a[i,j] = xs[k]
-            k += 1
-        end
-    end
-    a
-end
-
-hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
-
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
-    nr = length(rows)
-    nc = rows[1]
-    for i = 2:nr
-        if nc != rows[i]
-            throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
-        end
-    end
-    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
-end
-
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
-    nbr = length(rows)  # number of block rows
-    rs = Vector{Any}(undef, nbr)
-    a = 1
-    for i = 1:nbr
-        rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
-        a += rows[i]
-    end
-    T[rs...;]
-end
+typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs...) = _typed_hvncat(T, rows_to_dimshape(rows), true, xs...)
 
 # nd concatenation
 
@@ -2187,9 +2163,6 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     end
     return A
 end
-
-cat_ndims(a) = 0
-cat_ndims(a::AbstractArray) = ndims(a)
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
@@ -2382,8 +2355,10 @@ end
     Ai
 end
 
-cat_length(a::AbstractArray) = length(a)
+cat_ndims(a) = 0
+cat_ndims(a::AbstractArray) = ndims(a)
 cat_length(::Any) = 1
+cat_length(a::AbstractArray) = length(a)
 
 ## Reductions and accumulates ##
 
