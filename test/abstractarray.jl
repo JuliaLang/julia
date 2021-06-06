@@ -1389,7 +1389,14 @@ end
         @test [v v;;; fill(v, 1, 2)] == fill(v, 1, 2, 2)
     end
 
-    @test_throws BoundsError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
+    # ensure that a shape with greater dimensionality than the concatenation expression is supported #41047
+    x = [1 2 ; 3 4 ;;;; 5 6 ; 7 8]
+    y = [x x]
+    @test [x x ;;; y] == [y ;;; x x]
+
+    # zero-length arrays as arguments aren't supported #41047
+    @test_throws ArgumentError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
+    @test_throws ArgumentError hvncat(((1, 2), (3,)), false, zeros(Int, 0), 7, 8)
 
     #41047 - ensure zero-length arrays do not cause a segfault
     for v in (fill(1, 0), fill(1, 0, 0), fill(1, 0, 0, 0), fill(1, 0, 0, 0))
