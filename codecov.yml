@@ -1,0 +1,10 @@
+ignore:
+  # ignore all external stdlibs (i.e. stdlibs that live in external repos)
+  - "stdlib/ArgTools"
+  - "stdlib/Downloads"
+  - "stdlib/LibCURL"
+  - "stdlib/NetworkOptions"
+  - "stdlib/Pkg"
+  - "stdlib/Statistics"
+  - "stdlib/SuiteSparse"
+  - "stdlib/Tar"
