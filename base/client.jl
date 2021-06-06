@@ -119,7 +119,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 print(color_normal)
             end
             if lasterr !== nothing
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, ExceptionStack(lasterr))
+                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
