@@ -2057,28 +2057,47 @@ true
 """
 hvcat(::Tuple{}) = []
 hvcat(::Tuple{}, xs...) = []
-hvcat(::Tuple{Vararg{Int, 1}}, xs...) = vcat(xs...) # methods assume 2+ dimensions
-hvcat(rows::Tuple{Vararg{Int}}, xs...) = _hvcat(rows, xs...)
 
-_hvcat(::Tuple{Vararg{Int}}) = []
-_hvcat(rows::Tuple{Vararg{Int}}, xs...) = _typed_hvncat(promote_eltypeof(xs...), (length(rows), rows[1]), true, xs...)
-_hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number = _typed_hvcat(T, rows, xs...)
-_hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = _typed_hvcat(promote_typeof(xs...), rows, xs...)
-_hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = _typed_hvcat(promote_eltype(xs...), rows, xs...)
-_hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where T = _typed_hvcat(T, rows, xs...)
-_hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), (length(rows), rows[1]), true, xs...)
-_hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where T = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number = typed_hvcat(T, rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVector...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where T = typed_hvcat(T, rows, xs...)
+
+# dispatch to hvncat methods when it performs better
+rows_to_dimshape(rows::Tuple{Vararg{Int}}) = all(==(rows[1]), rows) ? (length(rows), rows[1]) : (rows, (sum(rows),))
+hvcat(rows::Tuple{Vararg{Int}}, xs...) = _hvncat(rows_to_dimshape(rows), true, xs...)
 
 typed_hvcat(::Type{T}, ::Tuple{}) where T = Vector{T}()
 typed_hvcat(::Type{T}, ::Tuple{}, xs...) where T = Vector{T}()
-typed_hvcat(T::Type, ::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = typed_vcat(T, xs...)
-typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs...) = _typed_hvcat(T, rows, xs...)
 
-_typed_hvcat(::Type{T}, ::Tuple{}) where T = Vector{T}()
-_typed_hvcat(::Type{T}, ::Tuple{}, xs...) where T = Vector{T}()
-_typed_hvcat(::Type{T}, ::Tuple{}, xs::Number...) where T = Vector{T}()
+function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
+    nr = length(rows)
+    nc = rows[1]
+    for i = 2:nr
+        if nc != rows[i]
+            throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
+        end
+    end
+    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
+end
 
-function _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T
+function hvcat_fill!(a::Array, xs::Tuple)
+    nr, nc = size(a,1), size(a,2)
+    len = length(xs)
+    if nr*nc != len
+        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
+    end
+    k = 1
+    for i=1:nr
+        @inbounds for j=1:nc
+            a[i,j] = xs[k]
+            k += 1
+        end
+    end
+    a
+end
+
+function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVector...) where T
     nbr = length(rows)  # number of block rows
 
     nc = 0
@@ -2121,36 +2140,7 @@ function _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat.
     out
 end
 
-function _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
-    nr = length(rows)
-    nc = rows[1]
-    for i = 2:nr
-        if nc != rows[i]
-            throw(DimensionMismatch("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
-        end
-    end
-    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
-end
-
-function hvcat_fill!(a::Array, xs::Tuple)
-    nr, nc = size(a,1), size(a,2)
-    len = length(xs)
-    if nr*nc != len
-        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
-    end
-    k = 1
-    for i=1:nr
-        @inbounds for j=1:nc
-            a[i,j] = xs[k]
-            k += 1
-        end
-    end
-    a
-end
-
-_typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs...) = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
-_typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs::AbstractArray...) = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
-_typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where T = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
+typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs...) = _typed_hvncat(T, rows_to_dimshape(rows), true, xs...)
 
 function _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     nbr = length(rows)  # number of block rows
