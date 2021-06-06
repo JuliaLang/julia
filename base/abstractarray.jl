@@ -2196,8 +2196,11 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # into the destination
     nd = N
     Ndim = 0
-    for a ∈ as
+    for i ∈ eachindex(as)
+        a = as[i]
         if a isa AbstractArray
+            length(a) > 0 ||
+                throw(ArgumentError("element $i has no elements"))
             cat_size(a, N) == length(a) ||
                 throw(ArgumentError("all dimensions of elements other than $N must be of length 1"))
             nd = max(nd, cat_ndims(a))
