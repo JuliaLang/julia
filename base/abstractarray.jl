@@ -2304,7 +2304,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     for i ∈ eachindex(as)
         length(as[i]) > 0 || ArgumentError("argument $i has no elements") |> throw
         wasstartblock = false
-        for d ∈ 1:N
+        for d ∈ 1:nd
             ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
             dsize = cat_size(as[i], ad)
             blockcounts[d] += 1
