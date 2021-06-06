@@ -2020,17 +2020,6 @@ _typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs...) = _typed_hvncat(T, (lengt
 _typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs::AbstractArray...) = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
 _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where T = _typed_hvncat(T, (length(rows), rows[1]), true, xs...)
 
-function _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
-    nbr = length(rows)  # number of block rows
-    rs = Vector{Any}(undef, nbr)
-    a = 1
-    for i = 1:nbr
-        rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
-        a += rows[i]
-    end
-    T[rs...;]
-end
-
 # nd concatenation
 
 """
