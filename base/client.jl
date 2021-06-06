@@ -103,14 +103,14 @@ show(io::IO, exs::ExceptionInfo) = display_error(io, exs.errors)
 function display_error(io::IO, er, bt, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false)), er, bt; backtrace = bt!==nothing)
+    showerror(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), er, bt; backtrace = bt!==nothing)
     println(io)
 end
 
 function display_error(io::IO, stack::ExceptionStack, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
-    show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false)), bt)
+    show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), bt)
     println(io)
 end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)
