@@ -631,3 +631,6 @@ f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
     @test_throws BoundsError (1, 2)[0:2]
     @test_throws ArgumentError (1, 2)[OffsetArrays.IdOffsetRange(1:2, -1)]
 end
+
+# https://github.com/JuliaLang/julia/issues/40814
+@test Base.return_types(NTuple{3,Int}, (Vector{Int},)) == Any[NTuple{3,Int}]
