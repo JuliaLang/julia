@@ -2300,7 +2300,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     currentdims = zeros(Int, nd)
     blockcounts = zeros(Int, nd)
     shapepos = ones(Int, nd)
-    
+
     for i ∈ eachindex(as)
         length(as[i]) > 0 || ArgumentError("argument $i has no elements") |> throw
         wasstartblock = false
