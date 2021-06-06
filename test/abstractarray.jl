@@ -1390,6 +1390,28 @@ end
     end
 
     @test_throws BoundsError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
+
+    #41047 - ensure zero-length arrays do not cause a segfault
+    for v in (fill(1, 0), fill(1, 0, 0), fill(1, 0, 0, 0), fill(1, 0, 0, 0))
+        @test_throws ArgumentError [v ;; 1]
+        @test_throws ArgumentError [v ;;; 1]
+        @test_throws ArgumentError [v ;;;; 1]
+        @test_throws ArgumentError [1 ;; v]
+        @test_throws ArgumentError [1 ;;; v]
+        @test_throws ArgumentError [1 ;;;; v]
+        @test_throws ArgumentError [v ;; 1; 2]
+        @test_throws ArgumentError [v ;;; 1 2]
+        @test_throws ArgumentError [v ;;; 1;; 2]
+        @test_throws ArgumentError [v ;;;; 1;; 2]
+        @test_throws ArgumentError [1; 2 ;; v]
+        @test_throws ArgumentError [1 2 ;;; v]
+        @test_throws ArgumentError [1;; 2 ;;; v]
+        @test_throws ArgumentError [1;; 2 ;;;; v]
+        @test_throws ArgumentError [v; v;; 1; 2]
+        @test_throws ArgumentError [v v;;; 1 2]
+        @test_throws ArgumentError [v;; v;;; 1;; 2]
+        @test_throws ArgumentError [v;; v ;;;; 1;; 2]
+    end
 end
 
 @testset "keepat!" begin
