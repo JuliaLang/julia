@@ -575,69 +575,187 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
 end
 
 import Base.StackTraces.top_level_scope_sym
+
+is_base_not_repl(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
+is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
+is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
+is_stdlib(path) = contains(path, r"[/\\]julia[/\\]stdlib")
+is_private_not_julia(path) = contains(path, r"[/\\].*[/\\]") && !contains(path, r"[/\\].julia[/\\]")
+is_broadcast(path) = startswith(path, r".[/\\]broadcast.jl")
+
+function find_external_frames(trace::Vector)
+    # select frames from user-controlled code
+    is = findall(trace) do frame
+        file = String(frame[1].file)
+        !is_base_not_repl(file) &&
+        !is_registry_pkg(file) &&
+        !is_stdlib(file) &&
+        !is_private_not_julia(file) ||
+        is_dev_pkg(file) ||
+        (is_top_level_frame(frame[1]) && startswith(file, "REPL"))
+    end
+
+    # get list of visible modules
+    visible_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[is])))
+    Main ∈ visible_modules || push!(visible_modules, Main)
+
+    # find the highest contiguous internal frames evaluted in the context of a visible module
+    internali = setdiff!(findall(trace) do frame
+        parentmodule(frame[1]) ∈ visible_modules
+    end, is)
+    setdiff!(internali, internali .+ 1)
+
+    # include the next immediate hidden frame called into from user-controlled code
+    filter!(>(0), sort!(union!(is, union!(is .- 1, internali .- 1))))
+
+    # for each appearance of an already-visible `materialize` broadcast frame, include
+    # the next immediate hidden frame after the last `broadcast` frame
+    broadcasti = []
+    for i ∈ is
+        trace[i][1].func == :materialize || continue
+        push!(broadcasti, findlast(trace[1:i - 1]) do frame
+            !is_broadcast(String(frame[1].file))
+        end)
+    end
+    sort!(union!(is, filter!(!isnothing, broadcasti)))
+
+    if length(is) > 0 && is[end] == length(trace)
+        # remove REPL-based top-level
+        # note: file field for top-level is different from the rest, doesn't include ./
+        startswith(String(trace[end][1].file), "REPL") && pop!(is)
+    end
+
+    if length(is) == 1 && trace[only(is)][1].func == :materialize
+        # remove a materialize frame if it is the only visible frame
+        pop!(is)
+    end
+
+    return is
+end
+
 function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     #= Show the lowest stackframe and display a message telling user how to
     retrieve the full trace =#
-
     num_frames = length(trace)
-    ndigits_max = ndigits(num_frames)
+    ndigits_max = ndigits(num_frames) * 2 + 1
 
     modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     function print_omitted_modules(i, j)
         # Find modules involved in intermediate frames and print them
-        modules = filter(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
-        length(modules) > 0 || return
-        print(io, repeat(' ', ndigits_max + 2))
-        for m ∈ modules
-            modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
-            printstyled(io, m, color = modulecolor)
+        modules = filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[i:j]))
+        if i < j
+            print(io, " " ^ (ndigits_max - ndigits(i) - ndigits(j)))
+            print(io, "[" * string(i) * "-" * string(j) * "] ")
+        else
+            print(io, " " ^ (ndigits_max - ndigits(i) + 1))
+            print(io, "[" * string(i) * "] ")
+        end
+        printstyled(io, "⋮ ", bold = true)
+        printstyled(io, "internal", color = :light_black)
+        if !parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))
+            println(io)
+            print(io, " " ^ (ndigits_max + 2))
+        else
             print(io, " ")
         end
+        printstyled(io, "@ ", color = :light_black)
+        if length(modules) > 0
+            for (i, m) ∈ enumerate(modules)
+                modulecolor = get_modulecolor!(modulecolordict, m, modulecolorcycler)
+                printstyled(io, m, color = modulecolor)
+                i < length(modules) && print(io, ", ")
+            end
+        end
+        # indicate presence of inlined methods which lack module information
+        # (they all do right now)
+        if any(isnothing(parentmodule(t[1])) for t ∈ @view trace[i:j])
+            length(modules) > 0 && print(io, ", ")
+            printstyled(io, "Unknown", color = :light_black)
+        end
+
         println(io)
     end
 
-    # find all frames that aren't in Julia base, stdlib, or an added package
+    # select frames from user-controlled code
     is = findall(trace) do frame
         file = String(frame[1].file)
-        !contains(file, r"[/\\].julia[/\\]packages[/\\]|[/\\]julia[/\\]stdlib") &&
-        (!startswith(file, r".[/\\]") || startswith(file, r".[/\\]REPL")) &&
-        (frame[1].func != top_level_scope_sym)
+        !is_base_not_repl(file) &&
+        !is_registry_pkg(file) &&
+        !is_stdlib(file) &&
+        !is_private_not_julia(file) ||
+        is_dev_pkg(file) ||
+        (is_top_level_frame(frame[1]) && startswith(file, "REPL"))
     end
 
-    # include one frame lower
-    is = sort(union(is, is .- 1))
+    # get list of visible modules
+    visible_modules = convert(Vector{Module}, filter!(!isnothing, unique(t[1] |> parentmodule for t ∈ @view trace[is])))
+    Main ∈ visible_modules || push!(visible_modules, Main)
 
-    if length(is) > 0
+    # find the highest contiguous internal frames evaluted in the context of a visible module
+    internali = setdiff!(findall(trace) do frame
+        parentmodule(frame[1]) ∈ visible_modules
+    end, is)
+    setdiff!(internali, internali .+ 1)
+
+    # include the next immediate hidden frame called into from user-controlled code
+    filter!(>(0), sort!(union!(is, union!(is .- 1, internali .- 1))))
+
+    # for each appearance of an already-visible `materialize` broadcast frame, include
+    # the next immediate hidden frame after the last `broadcast` frame
+    broadcasti = []
+    for i ∈ is
+        trace[i][1].func == :materialize || continue
+        push!(broadcasti, findlast(trace[1:i - 1]) do frame
+            !is_broadcast(String(frame[1].file))
+        end)
+    end
+    sort!(union!(is, filter!(!isnothing, broadcasti)))
+    
+    if length(is) > 0 && is[end] == num_frames
+        # remove REPL-based top-level
+        # note: file field for top-level is different from the rest, doesn't include ./
+        startswith(String(trace[end][1].file), "REPL") && pop!(is)
+    end
+
+    if length(is) == 1 && trace[only(is)][1].func == :materialize
+        # remove a materialize frame if it is the only visible frame
+        pop!(is)
+    end
+    
+    num_vis_frames = length(is)
+
+    if num_vis_frames > 0
         println(io, "\nStacktrace:")
 
-        if is[1] > 0
-            print_omitted_modules(1, is[1])
-            println(io, repeat(' ', ndigits_max + 2) * "⋮")
+        if is[1] > 1
+            print_omitted_modules(1, is[1] - 1)
         end
 
         lasti = first(is)
         @views for i ∈ is
-            if i > 0
-                if i > lasti + 1
-                    println(io, repeat(' ', ndigits_max + 2) * "⋮")
-                    print_omitted_modules(lasti + 1, i - 1)
-                    println(io, repeat(' ', ndigits_max + 2) * "⋮")
-                end
-                print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
-                if i < num_frames
-                    println(io)
-                    print_linebreaks && println(io)
-                end
+            if i > lasti + 1
+                print_omitted_modules(lasti + 1, i - 1)
+            end
+            print_stackframe(io, i, trace[i][1], trace[i][2], ndigits_max, modulecolordict, modulecolorcycler)
+            if i < num_frames - 1
+                println(io)
+                print_linebreaks && println(io)
             end
             lasti = i
         end
-    else
-        println(io)
-    end
 
-    length(trace) > length(is) && print(io, "Use `err` to retrieve the full stack trace.")
+        # print if frames other than top-level were omitted
+        if num_frames - 1 > num_vis_frames
+            if lasti < num_frames - 1
+                print_omitted_modules(lasti + 1, num_frames - 1)
+            else
+                println(io)
+            end
+            print(io, "Use `err` to retrieve the full stack trace.")
+        end
+    end
 end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
@@ -774,10 +892,14 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     if n > 1
         printstyled(io, " (repeats $n times)"; color=:light_black)
     end
-    println(io)
+
+    if !(get(io, :compacttrace, false) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false"))) #get(io, :minimaltrace, false))
+        println(io)
+        print(io, " " ^ (digit_align_width + 1))
+    end
 
     # @
-    printstyled(io, " " ^ (digit_align_width + 2) * "@ ", color = :light_black)
+    printstyled(io, " " * "@ ", color = :light_black)
 
     # module
     if modul !== nothing
@@ -966,10 +1088,13 @@ Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 size(s::ExceptionStack) = size(s.stack)
 getindex(s::ExceptionStack, i::Int) = s.stack[i]
 
-function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
+function show(io::IO, ::MIME"text/plain", stack::ExceptionStack; show_repl_frames = false)
     nexc = length(stack)
     printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
+    if !show_repl_frames
+        stack = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
+    end
     show_exception_stack(io, stack)
 end
-show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
+show(io::IO, stack::ExceptionStack; kwargs...) = show(io, MIME("text/plain"), stack; kwargs...)
 

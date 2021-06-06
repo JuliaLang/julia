@@ -304,7 +304,9 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    Base.invokelatest(Base.display_error, errio, current_exceptions())
+                    stack = current_exceptions()
+                    ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
+                    Base.invokelatest(Base.display_error, errio, stack)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.

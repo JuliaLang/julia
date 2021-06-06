@@ -87,6 +87,8 @@ function scrub_repl_backtrace(bt)
         bt = stacktrace(bt)
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
+        # some sysimages don't have `eval`, but do have `eval_user_input`
+        eval_ind === nothing && (eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval_user_input, bt))
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
@@ -101,14 +103,14 @@ show(io::IO, exs::ExceptionInfo) = display_error(io, exs.errors)
 function display_error(io::IO, er, bt, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true), er, bt; backtrace = bt!==nothing, compacttrace)
+    showerror(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false)), er, bt; backtrace = bt!==nothing)
     println(io)
 end
 
 function display_error(io::IO, stack::ExceptionStack, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
-    show_exception_stack(IOContext(io, :limit => true), bt, compacttrace)
+    show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false)), bt)
     println(io)
 end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)
