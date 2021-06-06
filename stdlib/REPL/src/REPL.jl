@@ -306,7 +306,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 try
                     stack = current_exceptions()
                     ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
-                    Base.invokelatest(Base.display_error, errio, stack)
+                    Base.invokelatest(Base.display_error, errio, stack, true)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.

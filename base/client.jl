@@ -95,22 +95,12 @@ function scrub_repl_backtrace(bt)
 end
 
 function display_error(io::IO, stack::ExceptionStack, compacttrace::Bool = false)
-
-function display_error(io::IO, er, bt, compacttrace = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), er, bt; backtrace = bt!==nothing)
+    stack = ExceptionStack([ (exception = x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack ])
+    show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), stack)
     println(io)
 end
-
-function display_error(io::IO, stack::ExceptionStack, compacttrace = false)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
-    show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), bt)
-    println(io)
-end
-display_error(stack::ExceptionStack) = display_error(stderr, stack)
-display_error(er, bt=nothing) = display_error(stderr, er, bt)
+display_error(stack::ExceptionStack, compacttrace = false) = display_error(stderr, stack, compacttrace)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
@@ -123,7 +113,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             if lasterr !== nothing
                 ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
-                invokelatest(display_error, errio, lasterr)
+                invokelatest(display_error, errio, lasterr, true)
                 errcount = 0
                 lasterr = nothing
             else
@@ -146,7 +136,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             break
         catch
             if errcount > 0
-                @error "SYSTEM: display_error(errio, lasterr) caused an error"
+                @error "SYSTEM: display_error(errio, lasterr, true) caused an error"
             end
             errcount += 1
             lasterr = current_exceptions()

@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base.StackTraces:
+    is_top_level_frame
+
 """
     showerror(io, e)
 
@@ -574,8 +577,6 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     end
 end
 
-import Base.StackTraces.top_level_scope_sym
-
 is_base_not_repl(path) = startswith(path, r".[/\\]") && !startswith(path, r".[/\\]REPL")
 is_registry_pkg(path) = contains(path, r"[/\\].julia[/\\]packages[/\\]")
 is_dev_pkg(path) = contains(path, r"[/\\].julia[/\\]dev[/\\]")
@@ -1092,7 +1093,7 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack; show_repl_frame
     nexc = length(stack)
     printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
     if !show_repl_frames
-        stack = Any[ (x.exception, scrub_repl_backtrace(x.backtrace)) for x in stack ]
+        stack = ExceptionStack([ (exception = x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack ])
     end
     show_exception_stack(io, stack)
 end
