@@ -54,7 +54,7 @@ remote exception and a serializable form of the call stack when the exception wa
 RemoteException(captured) = RemoteException(myid(), captured)
 function showerror(io::IO, re::RemoteException)
     (re.pid != myid()) && print(io, "On worker ", re.pid, ":\n")
-    showerror(IOContext(io, :compacttrace = false), re.captured)
+    showerror(IOContext(io, :compacttrace => false), re.captured)
 end
 
 function run_work_thunk(thunk, print_error)
