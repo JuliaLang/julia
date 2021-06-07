@@ -214,7 +214,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     # If we didn't transform the src for caching, we may have to transform
     # it anyway for users like typeinf_ext. Do that here.
     opt = caller.src
-    if may_optimize(interp) && opt isa OptimizationState
+    if opt isa OptimizationState # implies `may_optimize(interp) === true`
         if opt.ir !== nothing
             caller.src = ir_to_codeinf!(opt)
         end
@@ -249,7 +249,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     empty!(frames)
     for (caller, _, _) in results
         opt = caller.src
-        if may_optimize(interp) && opt isa OptimizationState
+        if opt isa OptimizationState # implies `may_optimize(interp) === true`
             result_type = caller.result
             @assert !(result_type isa LimitedAccuracy)
             optimize(interp, opt, OptimizationParams(interp), result_type)
@@ -472,7 +472,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # either because we are the outermost code, or we might use this later
         doopt = (me.cached || me.parent !== nothing)
         type_annotate!(me, doopt)
-        if doopt
+        if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
@@ -845,8 +845,8 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     frame === nothing && return (nothing, Any)
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
-        result.src = OptimizationState(frame, opt_params, interp)
-        optimize(interp, result.src, opt_params, ignorelimited(result.result))
+        result.src = src = OptimizationState(frame, opt_params, interp)
+        optimize(interp, src, opt_params, ignorelimited(result.result))
         frame.src = finish!(interp, result)
     end
     ccall(:jl_typeinf_end, Cvoid, ())

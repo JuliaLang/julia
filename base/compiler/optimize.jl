@@ -105,7 +105,7 @@ function OptimizationState(linfo::MethodInstance, params::OptimizationParams, in
 end
 
 function ir_to_codeinf!(opt::OptimizationState)
-    replace_code_newstyle!(opt.src, opt.ir, opt.nargs - 1)
+    replace_code_newstyle!(opt.src, opt.ir::IRCode, opt.nargs - 1)
     opt.ir = nothing
     let src = opt.src::CodeInfo
         widen_all_consts!(src)
@@ -198,7 +198,7 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
 end
 
 # Convert IRCode back to CodeInfo and compute inlining cost and sideeffects
-function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir, @nospecialize(result))
+function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir::IRCode, @nospecialize(result))
     def = opt.linfo.def
     nargs = Int(opt.nargs) - 1
 
