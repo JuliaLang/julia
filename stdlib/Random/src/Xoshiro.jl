@@ -23,6 +23,9 @@ mutable struct Xoshiro <: AbstractRNG
     s1::UInt64
     s2::UInt64
     s3::UInt64
+
+    Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer) = new(s0, s1, s2, s3)
+    Xoshiro(seed) = seed!(new(), seed)
 end
 
 Xoshiro(::Nothing) = Xoshiro()
