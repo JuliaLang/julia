@@ -334,10 +334,9 @@ string is returned. Pad with spaces by default.
 ```jldoctest
 julia> lpad("March", 10)
 "     March"
-
+```
 !!! compat "Julia 1.7"
     In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
-```
 """
 lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = lpad(string(s)::AbstractString, n, string(p))
 
@@ -365,10 +364,9 @@ string is returned. Pad with spaces by default.
 ```jldoctest
 julia> rpad("March", 20)
 "March               "
-
+```
 !!! compat "Julia 1.7"
     In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
-```
 """
 rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = rpad(string(s)::AbstractString, n, string(p))
 
