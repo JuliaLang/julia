@@ -197,7 +197,7 @@ end
     A = rand(3, 3)
     B = schur(A', A)
     C = B.left*B.S*B.right'
-    D = schur(adjoint(A), A)
+    D = schur(transpose(A), A)
     E = D.left*D.S*D.right'
     @test A' ≈ C ≈ E
 end  
