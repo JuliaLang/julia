@@ -190,10 +190,6 @@ function schur(A::Bidiagonal{T}) where {T}
         return Schur(Matrix{t}(Bidiagonal(dv, ev, 'U')), J, dv)
     end
 end
-function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
-    S = promote_type(eigtype(TA), TB)
-    return schur!(copy_oftype(A, S), copy_oftype(B, S))
-end
 
 function getproperty(F::Schur, d::Symbol)
     if d === :Schur
@@ -356,6 +352,10 @@ Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 """
 schur(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schur!(copy(A),copy(B))
 function schur(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return schur!(copy_oftype(A, S), copy_oftype(B, S))
+end
+function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
     return schur!(copy_oftype(A, S), copy_oftype(B, S))
 end
