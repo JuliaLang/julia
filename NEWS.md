@@ -100,6 +100,7 @@ Standard library changes
 * `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
 * `keys(::Generator)` is now defined to return the iterator's keys ([#34678])
 * `RegexMatch` now iterate to give their captures. ([#34355]).
+* `lpad/rpad` are now defined in terms of `textwidth` ([#39044])
 * `Test.@test` now accepts `broken` and `skip` boolean keyword arguments, which
   mimic `Test.@test_broken` and `Test.@test_skip` behavior, but allows skipping
   tests failing only under certain conditions.  For example
