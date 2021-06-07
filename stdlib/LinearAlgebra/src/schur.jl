@@ -190,6 +190,10 @@ function schur(A::Bidiagonal{T}) where {T}
         return Schur(Matrix{t}(Bidiagonal(dv, ev, 'U')), J, dv)
     end
 end
+function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return schur!(copy_oftype(A, S), copy_oftype(B, S))
+end
 
 function getproperty(F::Schur, d::Symbol)
     if d === :Schur
