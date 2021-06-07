@@ -303,7 +303,6 @@ end
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
 function ht_keyindex2!(h::Dict{K,V}, key) where V where K
-    age0 = h.age
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
@@ -720,7 +719,7 @@ end
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
-    # @inbounds is here so the it gets propagated to isslotfiled
+    # @inbounds is here so that it gets propagated to isslotfilled
     @inbounds for i = dict.idxfloor:lastindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])
