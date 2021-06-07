@@ -1139,7 +1139,7 @@ mat_vec_scalar(A::AdjOrTransAbsVec, x::StridedVector, γ) = (A * x) * γ
 function _mat_vec_scalar(A, x, γ)
     T = promote_type(eltype(A), eltype(x), typeof(γ))
     C = similar(A, T, axes(A,1))
-    mul!(C, A, x, γ, zero(γ))
+    mul!(C, A, x, γ, false)
 end
 
 mat_mat_scalar(A, B, γ) = (A*B) .* γ # fallback
@@ -1149,7 +1149,7 @@ mat_mat_scalar(A::StridedMaybeAdjOrTransMat, B::StridedMaybeAdjOrTransMat, γ) =
 function _mat_mat_scalar(A, B, γ)
     T = promote_type(eltype(A), eltype(B), typeof(γ))
     C = similar(A, T, axes(A,1), axes(B,2))
-    mul!(C, A, B, γ, zero(γ))
+    mul!(C, A, B, γ, false)
 end
 
 mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
