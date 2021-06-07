@@ -1,5 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# XXX: We kind of need a selector upon a second tab push…
+
+# From REPL.jl:
+# XXX: LaTeX completions are separate? Hmm…
+# XXX: Looks like the Shell is the same, confirm?
+# XXX: Not separate, but oddly we seem to get it “all” through completions… Why?
+# XXX: I think they are
+# XXX: Bold the part that is matched? Fish does not do this though.
+# XXX: Will need to update doc: https://docs.julialang.org/en/v1/stdlib/REPL/#Tab-completion
+
 module REPLCompletions
 
 export completions, shell_completions, bslash_completions, completion_text
@@ -8,32 +18,111 @@ using Base.Meta
 using Base: propertynames, something
 
 abstract type Completion end
+abstract type Match end
+
+struct ExactMatch <: Match end
+struct PrefixMatch <: Match end
+struct CaseInsensitiveExactMatch <: Match end
+struct CaseInsensitivePrefixMatch <: Match end
+struct SubstringMatch <: Match end
+struct CaseInsensitiveSubstringMatch <: Match end
+struct SubsequenceMatch <: Match end
+struct NoMatch <: Match end
+
+let
+    # Matches in order of priority.
+    ts = [ExactMatch, PrefixMatch, CaseInsensitiveExactMatch,
+        CaseInsensitivePrefixMatch, SubstringMatch,
+        CaseInsensitiveSubstringMatch, SubsequenceMatch, NoMatch]
+    for (i, t) in enumerate(ts), (j, t′) in enumerate(ts)
+        @eval isprioritized(::$t, ::$t′) = @eval $i <= $j
+    end
+end
+
+function issubsequence(needle, haystack)
+    length(needle) <= length(haystack) || return false
+    i = firstindex(needle)
+    j = firstindex(haystack)
+    while i <= length(needle) && j <= length(haystack)
+        if needle[i] != haystack[j]
+            j = nextind(haystack, j)
+            continue
+        end
+        i = nextind(needle, i)
+        j = nextind(haystack, j)
+    end
+    (i - 1) == length(needle)
+end
+# Algorithm reverse-engineered from fish shell behaviour.
+function fuzzymatch(needle, haystack)
+    needle == haystack           && return ExactMatch()
+    startswith(haystack, needle) && return PrefixMatch()
+    lcneedle   = lowercase(needle)
+    lchaystack = lowercase(haystack)
+    lcneedle == lchaystack           && return CaseInsensitiveExactMatch()
+    startswith(lchaystack, lcneedle) && return CaseInsensitivePrefixMatch()
+    occursin(needle, haystack)       && return SubstringMatch()
+    occursin(lcneedle, lchaystack)   && return CaseInsensitiveSubstringMatch()
+    issubsequence(needle, haystack)  && return SubsequenceMatch()
+    NoMatch()
+end
+function fuzzymatches(query, strings)
+    # XXX: Could either short circuit the `fuzzymatch` call or use global information to improve efficiency here.
+    xs = [(match=fuzzymatch(query, s), string=s) for s in strings]
+    # Filter non-matches so that we return an empty list for no matches.
+    filter!(x->!(typeof(x.match)<:NoMatch), xs)
+    sort!(xs; lt=isprioritized, by=x->x.match)
+    # Filter matches not considered equally good to the highest priority match.
+    filter!(x->isprioritized(x.match, first(xs).match), xs)
+    sort!(xs; by=x->x.string)
+end
+using Test
+if false
+    f(a, b) = [m.string for m in fuzzymatches(a, b)]
+
+    const STRINGS = ["foobar", "foo", "bar", "baz", "qux", "quux", "quuz"]
+
+    @test f("foo", STRINGS) == ["foo"]
+    @test f("fo", STRINGS) == sort(["foobar", "foo"])
+    @test f("BAR", STRINGS) == ["bar"]
+    @test f("BA", STRINGS) == sort(["bar", "baz"])
+    @test f("ux", STRINGS) == sort(["qux", "quux"])
+    @test f("qx", STRINGS) == sort(["qux", "quux"])
+    @test f("foobaz", STRINGS) == []
+end
 
 struct KeywordCompletion <: Completion
     keyword::String
+    match::Match
 end
 
 struct PathCompletion <: Completion
     path::String
+    # XXX: Collects strings independently and then constructs, needs a bit of rework.
+    # XXX: match::Match
 end
 
 struct ModuleCompletion <: Completion
     parent::Module
     mod::String
+    match::Match
 end
 
 struct PackageCompletion <: Completion
     package::String
+    # XXX: match::Match
 end
 
 struct PropertyCompletion <: Completion
     value
     property::Symbol
+    match::Match
 end
 
 struct FieldCompletion <: Completion
     typ::DataType
     field::Symbol
+    match::Match
 end
 
 struct MethodCompletion <: Completion
@@ -41,12 +130,15 @@ struct MethodCompletion <: Completion
     input_types::Type
     method::Method
     orig_method::Union{Nothing,Method} # if `method` is a keyword method, keep the original method for sensible printing
+    # XXX: match::Match
 end
 
 struct BslashCompletion <: Completion
     bslash::String
+    # XXX: match::Match
 end
 
+# XXX: DEAD CODE!
 struct ShellCompletion <: Completion
     text::String
 end
@@ -54,6 +146,7 @@ end
 struct DictCompletion <: Completion
     dict::AbstractDict
     key::String
+    #match::Match
 end
 
 # interface definition
@@ -99,9 +192,10 @@ completion_text(c) = _completion_text(c)::String
 
 const Completions = Tuple{Vector{Completion}, UnitRange{Int}, Bool}
 
-function completes_global(x, name)
-    return startswith(x, name) && !('#' in x)
-end
+# XXX: Called once, just inline it.
+#function completes_global(x, name)
+#    return startswith(x, name) && !('#' in x)
+#end
 
 function appendmacro!(syms, macros, needle, endchar)
     for s in macros
@@ -120,8 +214,9 @@ function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, 
     macros =  filter(x -> startswith(x, "@" * name), syms)
     appendmacro!(syms, macros, "_str", "\"")
     appendmacro!(syms, macros, "_cmd", "`")
-    filter!(x->completes_global(x, name), syms)
-    return [ModuleCompletion(mod, sym) for sym in syms]
+    #filter!(x->completes_global(x, name), syms)
+    filter!(x->!('#' in x), syms)
+    Completion[ModuleCompletion(mod, m.string, m.match) for m in fuzzymatches(name, syms)]
 end
 
 # REPL Symbol Completions
@@ -177,8 +272,9 @@ function complete_symbol(sym::String, ffunc, context_module::Module=Main)
     elseif val !== nothing # looking for a property of an instance
         for property in propertynames(val, false)
             # TODO: support integer arguments (#36872)
-            if property isa Symbol && startswith(string(property), name)
-                push!(suggestions, PropertyCompletion(val, property))
+            if property isa Symbol
+                m = fuzzymatch(name, string(property))
+                push!(suggestions, PropertyCompletion(val, property, m))
             end
         end
     else
@@ -192,18 +288,22 @@ function complete_symbol(sym::String, ffunc, context_module::Module=Main)
             if isconcretetype(t)
                 fields = fieldnames(t)
                 for field in fields
-                    s = string(field)
-                    if startswith(s, name)
-                        push!(suggestions, FieldCompletion(t, field))
-                    end
+                    m = fuzzymatch(name, string(field))
+                    push!(suggestions, FieldCompletion(t, field, m))
                 end
             end
         end
     end
-    suggestions
+    # Re-sort and re-filter as we could have received “inferior” matches from
+    # other types.
+    filter!(x->!(typeof(x.match)<:NoMatch), suggestions)
+    sort!(suggestions; lt=isprioritized, by=x->x.match)
+    filter!(x->isprioritized(x.match, first(suggestions).match), suggestions)
+    sort!(suggestions; by=completion_text)
 end
 
-const sorted_keywords = [
+# TODO: Could be moved into function now.
+const keywords = [
     "abstract type", "baremodule", "begin", "break", "catch", "ccall",
     "const", "continue", "do", "else", "elseif", "end", "export", "false",
     "finally", "for", "function", "global", "if", "import",
@@ -212,14 +312,7 @@ const sorted_keywords = [
     "true", "try", "using", "while"]
 
 function complete_keyword(s::Union{String,SubString{String}})
-    r = searchsorted(sorted_keywords, s)
-    i = first(r)
-    n = length(sorted_keywords)
-    while i <= n && startswith(sorted_keywords[i],s)
-        r = first(r):i
-        i += 1
-    end
-    Completion[KeywordCompletion(kw) for kw in sorted_keywords[r]]
+    Completion[KeywordCompletion(m.string, m.match) for m in fuzzymatches(s, keywords)]
 end
 
 function complete_path(path::AbstractString, pos::Int; use_envpath=false, shell_escape=false)
@@ -387,24 +480,14 @@ get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.val
 get_value(sym::GlobalRef, fn) = get_value(sym.name, sym.mod)
 get_value(sym, fn) = (sym, true)
 
-# Return the type of a getfield call expression
-function get_type_getfield(ex::Expr, fn::Module)
-    length(ex.args) == 3 || return Any, false # should never happen, but just for safety
-    obj, x = ex.args[2:3]
-    objt, found = get_type(obj, fn)
-    objt isa DataType || return Any, false
-    found || return Any, false
-    if x isa QuoteNode
-        fld = x.value
-    elseif isexpr(x, :quote) || isexpr(x, :inert)
-        fld = x.args[1]
-    else
-        fld = nothing # we don't know how to get the value of variable `x` here
-    end
-    fld isa Symbol || return Any, false
-    hasfield(objt, fld) || return Any, false
-    return fieldtype(objt, fld), true
+# Return the value of a getfield call expression
+function get_value_getfield(ex::Expr, fn)
+    # Example :((top(getfield))(Base,:max))
+    val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
+    (found && length(ex.args) >= 3) || return (nothing, false)
+    return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
 end
+get_value_getfield(sym, fn) = get_value(sym, fn)
 
 # Determines the return type with Base.return_types of a function call using the type information of the arguments.
 function get_type_call(expr::Expr)
@@ -434,7 +517,7 @@ function get_type_call(expr::Expr)
     return (return_type, true)
 end
 
-# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (SubString{String}, true)
+# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
 function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
     found && return Core.Typeof(val), found
@@ -442,8 +525,10 @@ function try_get_type(sym::Expr, fn::Module)
         # getfield call is special cased as the evaluation of getfield provides good type information,
         # is inexpensive and it is also performed in the complete_symbol function.
         a1 = sym.args[1]
-        if a1 === :getfield || a1 === GlobalRef(Core, :getfield)
-            return get_type_getfield(sym, fn)
+        if isa(a1,GlobalRef) && isconst(a1.mod,a1.name) && isdefined(a1.mod,a1.name) &&
+            eval(a1) === Core.getfield
+            val, found = get_value_getfield(sym, Main)
+            return found ? Core.Typeof(val) : Any, found
         end
         return get_type_call(sym)
     elseif sym.head === :thunk
