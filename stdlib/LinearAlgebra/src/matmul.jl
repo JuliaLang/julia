@@ -1081,3 +1081,141 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
     end # inbounds
     C
 end
+
+const RealOrComplex = Union{Real,Complex}
+
+# Three-argument *
+"""
+    *(A, B::AbstractMatrix, C)
+    A * B * C * D
+
+Chained multiplication of 3 or 4 matrices is done in the most efficient sequence,
+based on the sizes of the arrays. That is, the number of scalar multiplications needed
+for `(A * B) * C` (with 3 dense matrices) is compared to that for `A * (B * C)`
+to choose which of these to execute.
+
+If the last factor is a vector, or the first a transposed vector, then it is efficient
+to deal with these first. In particular `x' * B * y` means `(x' * B) * y`
+for an ordinary column-major `B::Matrix`. Unlike `dot(x, B, y)`, this
+allocates an intermediate array.
+
+If the first or last factor is a number, this will be fused with the matrix
+multiplication, using 5-arg [`mul!`](@ref).
+
+See also [`muladd`](@ref), [`dot`](@ref).
+
+!!! compat "Julia 1.7"
+    These optimisations require at least Julia 1.7.
+"""
+*(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector) = A * (B*x)
+
+*(tu::AdjOrTransAbsVec, B::AbstractMatrix, v::AbstractVector) = (tu*B) * v
+*(tu::AdjOrTransAbsVec, B::AdjOrTransAbsMat, v::AbstractVector) = tu * (B*v)
+
+*(A::AbstractMatrix, x::AbstractVector, γ::Number) = mat_vec_scalar(A,x,γ)
+*(A::AbstractMatrix, B::AbstractMatrix, γ::Number) = mat_mat_scalar(A,B,γ)
+*(α::RealOrComplex, B::AbstractMatrix{<:RealOrComplex}, C::AbstractVector{<:RealOrComplex}) =
+    mat_vec_scalar(B,C,α)
+*(α::RealOrComplex, B::AbstractMatrix{<:RealOrComplex}, C::AbstractMatrix{<:RealOrComplex}) =
+    mat_mat_scalar(B,C,α)
+
+*(α::Number, u::AbstractVector, tv::AdjOrTransAbsVec) = broadcast(*, α, u, tv)
+*(u::AbstractVector, tv::AdjOrTransAbsVec, γ::Number) = broadcast(*, u, tv, γ)
+*(u::AbstractVector, tv::AdjOrTransAbsVec, C::AbstractMatrix) = u * (tv*C)
+
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix) = _tri_matmul(A,B,C)
+*(tv::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix) = (tv*B) * C
+
+function _tri_matmul(A,B,C,δ=nothing)
+    n,m = size(A)
+    # m,k == size(B)
+    k,l = size(C)
+    costAB_C = n*m*k + n*k*l  # multiplications, allocations n*k + n*l
+    costA_BC = m*k*l + n*m*l  #                              m*l + n*l
+    if costA_BC < costAB_C
+        isnothing(δ) ? A * (B*C) : A * mat_mat_scalar(B,C,δ)
+    else
+        isnothing(δ) ? (A*B) * C : mat_mat_scalar(A*B, C, δ)
+    end
+end
+
+# Fast path for two arrays * one scalar is opt-in, via mat_vec_scalar and mat_mat_scalar.
+
+mat_vec_scalar(A, x, γ) = A * (x .* γ)  # fallback
+mat_vec_scalar(A::StridedMaybeAdjOrTransMat, x::StridedVector, γ) = _mat_vec_scalar(A, x, γ)
+mat_vec_scalar(A::AdjOrTransAbsVec, x::StridedVector, γ) = (A * x) * γ
+
+function _mat_vec_scalar(A, x, γ)
+    T = promote_type(eltype(A), eltype(x), typeof(γ))
+    C = similar(A, T, axes(A,1))
+    mul!(C, A, x, γ, false)
+end
+
+mat_mat_scalar(A, B, γ) = (A*B) .* γ # fallback
+mat_mat_scalar(A::StridedMaybeAdjOrTransMat, B::StridedMaybeAdjOrTransMat, γ) =
+    _mat_mat_scalar(A, B, γ)
+
+function _mat_mat_scalar(A, B, γ)
+    T = promote_type(eltype(A), eltype(B), typeof(γ))
+    C = similar(A, T, axes(A,1), axes(B,2))
+    mul!(C, A, B, γ, false)
+end
+
+mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
+mat_mat_scalar(A::AdjointAbsVec{<:RealOrComplex}, B::StridedMaybeAdjOrTransMat{<:RealOrComplex}, γ::RealOrComplex) =
+    mat_vec_scalar(B', A', γ')'
+
+mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
+mat_mat_scalar(A::TransposeAbsVec{<:RealOrComplex}, B::StridedMaybeAdjOrTransMat{<:RealOrComplex}, γ::RealOrComplex) =
+    transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
+
+
+# Four-argument *, by type
+*(α::Number, β::Number, C::AbstractMatrix, x::AbstractVector) = (α*β) * C * x
+*(α::Number, β::Number, C::AbstractMatrix, D::AbstractMatrix) = (α*β) * C * D
+*(α::Number, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = α * B * (C*x)
+*(α::Number, vt::AdjOrTransAbsVec, C::AbstractMatrix, x::AbstractVector) = α * (vt*C*x)
+*(α::RealOrComplex, vt::AdjOrTransAbsVec{<:RealOrComplex}, C::AbstractMatrix{<:RealOrComplex}, D::AbstractMatrix{<:RealOrComplex}) =
+    (α*vt*C) * D # solves an ambiguity
+
+*(A::AbstractMatrix, x::AbstractVector, γ::Number, δ::Number) = A * x * (γ*δ)
+*(A::AbstractMatrix, B::AbstractMatrix, γ::Number, δ::Number) = A * B * (γ*δ)
+*(A::AbstractMatrix, B::AbstractMatrix, x::AbstractVector, δ::Number, ) = A * (B*x*δ)
+*(vt::AdjOrTransAbsVec, B::AbstractMatrix, x::AbstractVector, δ::Number) = (vt*B*x) * δ
+*(vt::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix, δ::Number) = (vt*B) * C * δ
+
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = A * B * (C*x)
+*(vt::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) = (vt*B) * C * D
+*(vt::AdjOrTransAbsVec, B::AbstractMatrix, C::AbstractMatrix, x::AbstractVector) = vt * B * (C*x)
+
+# Four-argument *, by size
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, δ::Number) = _tri_matmul(A,B,C,δ)
+*(α::RealOrComplex, B::AbstractMatrix{<:RealOrComplex}, C::AbstractMatrix{<:RealOrComplex}, D::AbstractMatrix{<:RealOrComplex}) =
+    _tri_matmul(B,C,D,α)
+*(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, D::AbstractMatrix) =
+    _quad_matmul(A,B,C,D)
+
+function _quad_matmul(A,B,C,D)
+    c1 = _mul_cost((A,B),(C,D))
+    c2 = _mul_cost(((A,B),C),D)
+    c3 = _mul_cost(A,(B,(C,D)))
+    c4 = _mul_cost((A,(B,C)),D)
+    c5 = _mul_cost(A,((B,C),D))
+    cmin = min(c1,c2,c3,c4,c5)
+    if c1 == cmin
+        (A*B) * (C*D)
+    elseif c2 == cmin
+        ((A*B) * C) * D
+    elseif c3 == cmin
+        A * (B * (C*D))
+    elseif c4 == cmin
+        (A * (B*C)) * D
+    else
+        A * ((B*C) * D)
+    end
+end
+@inline _mul_cost(A::AbstractMatrix) = 0
+@inline _mul_cost((A,B)::Tuple) = _mul_cost(A,B)
+@inline _mul_cost(A,B) = _mul_cost(A) + _mul_cost(B) + *(_mul_sizes(A)..., last(_mul_sizes(B)))
+@inline _mul_sizes(A::AbstractMatrix) = size(A)
+@inline _mul_sizes((A,B)::Tuple) = first(_mul_sizes(A)), last(_mul_sizes(B))
