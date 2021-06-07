@@ -1381,5 +1381,5 @@ fake_repl() do stdin_write, stdout_read, repl
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
     @test readline(stdout_read) == "ERROR: UndefVarError: foobar not defined"
-    @test readline(stdout_read) == ""
+    @test readline(stdout_read) == "Stacktrace:"
 end
