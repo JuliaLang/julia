@@ -29,16 +29,14 @@ const DATATYPE_PARAMETERS_FIELDINDEX = fieldindex(DataType, :parameters)
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
 const DATATYPE_INSTANCE_FIELDINDEX = fieldindex(DataType, :instance)
-const DATATYPE_NAMES_FIELDINDEX = fieldindex(DataType, :names)
 const DATATYPE_HASH_FIELDINDEX = fieldindex(DataType, :hash)
 
 const TYPENAME_NAME_FIELDINDEX = fieldindex(Core.TypeName, :name)
 const TYPENAME_MODULE_FIELDINDEX = fieldindex(Core.TypeName, :module)
 const TYPENAME_NAMES_FIELDINDEX = fieldindex(Core.TypeName, :names)
 const TYPENAME_WRAPPER_FIELDINDEX = fieldindex(Core.TypeName, :wrapper)
-const TYPENAME_MUTABLE_FIELDINDEX = fieldindex(Core.TypeName, :mutable)
-const TYPENAME_ABSTRACT_FIELDINDEX = fieldindex(Core.TypeName, :abstract)
 const TYPENAME_HASH_FIELDINDEX = fieldindex(Core.TypeName, :hash)
+const TYPENAME_FLAGS_FIELDINDEX = fieldindex(Core.TypeName, :flags)
 
 ##########
 # tfuncs #
@@ -90,7 +88,7 @@ function instanceof_tfunc(@nospecialize(t))
             # a real instance must be within the declared bounds of the type,
             # so we can intersect with the original wrapper.
             tr = typeintersect(tr, t′′.name.wrapper)
-            isconcrete = !t′′.name.abstract
+            isconcrete = !isabstracttype(t′′)
             if tr === Union{}
                 # runtime unreachable (our inference Type{T} where S is
                 # uninhabited with any runtime T that exists)
@@ -274,7 +272,7 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
         return Bool
     end
     a1 = unwrap_unionall(a1)
-    if isa(a1, DataType) && !a1.name.abstract
+    if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
             Symbol <: widenconst(sym) || return Bottom
             if isa(sym, Const) && isa(sym.val, Symbol) && isa(arg1, Const) && isdefined(arg1.val, sym.val)
@@ -289,7 +287,7 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             else
                 return Bottom
             end
-            if 1 <= idx <= a1.ninitialized
+            if 1 <= idx <= datatype_min_ninitialized(a1)
                 return Const(true)
             elseif a1.name === _NAMEDTUPLE_NAME
                 if isconcretetype(a1)
@@ -407,7 +405,7 @@ function nfields_tfunc(@nospecialize(x))
     isa(x, Conditional) && return Const(0)
     x = unwrap_unionall(widenconst(x))
     isconstType(x) && return Const(nfields(x.parameters[1]))
-    if isa(x, DataType) && !x.name.abstract
+    if isa(x, DataType) && !isabstracttype(x)
         if !(x.name === Tuple.name && isvatuple(x)) &&
            !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
             return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
@@ -536,7 +534,7 @@ function typeof_tfunc(@nospecialize(t))
         return typeof_tfunc(t.ub)
     elseif isa(t, UnionAll)
         u = unwrap_unionall(t)
-        if isa(u, DataType) && !u.name.abstract
+        if isa(u, DataType) && !isabstracttype(u)
             if u.name === Tuple.name
                 uu = typeof_concrete_vararg(u)
                 if uu !== nothing
@@ -620,7 +618,6 @@ is_dt_const_field(fld::Int) = (
      fld == DATATYPE_TYPES_FIELDINDEX ||
      fld == DATATYPE_SUPER_FIELDINDEX ||
      fld == DATATYPE_INSTANCE_FIELDINDEX ||
-     fld == DATATYPE_NAMES_FIELDINDEX ||
      fld == DATATYPE_HASH_FIELDINDEX
     )
 function const_datatype_getfield_tfunc(@nospecialize(sv), fld::Int)
@@ -655,7 +652,7 @@ function fieldcount_noerror(@nospecialize t)
         end
         abstr = true
     else
-        abstr = t.name.abstract || (t.name === Tuple.name && isvatuple(t))
+        abstr = isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
     end
     if abstr
         return nothing
@@ -734,18 +731,18 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
                getfield_nothrow(rewrap(s.b, s00), name, boundscheck)
     elseif isa(s, DataType)
         # Can't say anything about abstract types
-        s.name.abstract && return false
+        isabstracttype(s) && return false
         s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
         # If all fields are always initialized, and bounds check is disabled, we can assume
         # we don't throw
-        if !boundscheck && !isvatuple(s) && s.name !== NamedTuple.body.body.name && fieldcount(s) == s.ninitialized
+        if !boundscheck && s.name.n_uninitialized == 0
             return true
         end
         # Else we need to know what the field is
         isa(name, Const) || return false
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false
-        field <= s.ninitialized && return true
+        field <= datatype_min_ninitialized(s) && return true
         # `try_compute_fieldidx` already check for field index bound.
         !isvatuple(s) && isbitstype(fieldtype(s0, field)) && return true
     end
@@ -793,9 +790,8 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                 if (fld == TYPENAME_NAME_FIELDINDEX ||
                     fld == TYPENAME_MODULE_FIELDINDEX ||
                     fld == TYPENAME_WRAPPER_FIELDINDEX ||
-                    fld == TYPENAME_MUTABLE_FIELDINDEX ||
-                    fld == TYPENAME_ABSTRACT_FIELDINDEX ||
                     fld == TYPENAME_HASH_FIELDINDEX ||
+                    fld == TYPENAME_FLAGS_FIELDINDEX ||
                     (fld == TYPENAME_NAMES_FIELDINDEX && isdefined(sv, fld)))
                     return Const(getfield(sv, fld))
                 end
@@ -820,7 +816,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         s = widenconst(s)
     end
-    if isType(s) || !isa(s, DataType) || s.name.abstract
+    if isType(s) || !isa(s, DataType) || isabstracttype(s)
         return Any
     end
     s = s::DataType
@@ -835,7 +831,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     end
     # If no value has this type, then this statement should be unreachable.
     # Bail quickly now.
-    s.has_concrete_subtype || return Union{}
+    has_concrete_subtype(s) || return Union{}
     if s.name === _NAMEDTUPLE_NAME && !isconcretetype(s)
         if isa(name, Const) && isa(name.val, Symbol)
             if isa(s.parameters[1], Tuple)
@@ -961,7 +957,7 @@ function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
         return exact ? (a || b) : (a && b)
     end
     u isa DataType || return false
-    u.name.abstract && return false
+    isabstracttype(u) && return false
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
         # TODO: better approximate inference
         return false
@@ -1023,7 +1019,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
                       _fieldtype_tfunc(rewrap(u.b, s), exact, name))
     end
     u isa DataType || return Any
-    if u.name.abstract
+    if isabstracttype(u)
         # Abstract types have no fields
         exact && return Bottom
         # Type{...} without free typevars has no subtypes, so it is actually

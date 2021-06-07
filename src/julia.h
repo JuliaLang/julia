@@ -437,13 +437,14 @@ typedef struct {
     jl_value_t *wrapper;
     jl_svec_t *cache;        // sorted array
     jl_svec_t *linearcache;  // unsorted array
-    intptr_t hash;
-    uint8_t abstract;
-    uint8_t mutabl;
-    uint8_t references_self;
-    uint8_t mayinlinealloc;
     struct _jl_methtable_t *mt;
     jl_array_t *partial;     // incomplete instantiations of this type
+    intptr_t hash;
+    int32_t n_uninitialized;
+    // type properties
+    uint8_t abstract:1;
+    uint8_t mutabl:1;
+    uint8_t mayinlinealloc:1;
 } jl_typename_t;
 
 typedef struct {
@@ -496,20 +497,18 @@ typedef struct _jl_datatype_t {
     struct _jl_datatype_t *super;
     jl_svec_t *parameters;
     jl_svec_t *types;
-    jl_svec_t *names;
     jl_value_t *instance;  // for singletons
     const jl_datatype_layout_t *layout;
     int32_t size; // TODO: move to _jl_datatype_layout_t
-    int32_t ninitialized;
-    uint32_t hash;
     // memoized properties
-    uint8_t hasfreetypevars; // majority part of isconcrete computation
-    uint8_t isconcretetype; // whether this type can have instances
-    uint8_t isdispatchtuple; // aka isleaftupletype
-    uint8_t isbitstype; // relevant query for C-api and type-parameters
-    uint8_t zeroinit; // if one or more fields requires zero-initialization
-    uint8_t has_concrete_subtype; // If clear, no value will have this datatype
-    uint8_t cached_by_hash; // stored in hash-based set cache (instead of linear cache)
+    uint32_t hash;
+    uint8_t hasfreetypevars:1; // majority part of isconcrete computation
+    uint8_t isconcretetype:1; // whether this type can have instances
+    uint8_t isdispatchtuple:1; // aka isleaftupletype
+    uint8_t isbitstype:1; // relevant query for C-api and type-parameters
+    uint8_t zeroinit:1; // if one or more fields requires zero-initialization
+    uint8_t has_concrete_subtype:1; // If clear, no value will have this datatype
+    uint8_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {
@@ -1035,14 +1034,7 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
 #define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
-    jl_svec_t *names = st->names;
-    if (!names)
-        names = st->name->names;
-    return names;
-}
-STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i) JL_NOTSAFEPOINT
-{
-    return (jl_sym_t*)jl_svecref(jl_field_names(st), i);
+    return st->name->names;
 }
 STATIC_INLINE jl_value_t *jl_field_type(jl_datatype_t *st JL_PROPAGATES_ROOT, size_t i)
 {
