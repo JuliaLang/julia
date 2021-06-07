@@ -162,11 +162,12 @@ in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
-    if isempty(t)
+    x = Iterators.peel(t)
+    if isnothing(x)
         return 1 <= i <= nextind(s,lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = Iterators.peel(t)
+    t1, trest = x
     while true
         i = findnext(isequal(t1),s,i)
         if i === nothing return 0 end
@@ -420,7 +421,7 @@ function _rsearchindex(s::AbstractString,
         return 1 <= i <= nextind(s, lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = Iterators.peel(Iterators.reverse(t))
+    t1, trest = Iterators.peel(Iterators.reverse(t))::NTuple{2,Any}
     while true
         i = findprev(isequal(t1), s, i)
         i === nothing && return 0
