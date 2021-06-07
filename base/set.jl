@@ -621,7 +621,6 @@ replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, 
 replace!(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b, c)))
 replace(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b)))
 replace(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b, c)))
-replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b, c)))
 
 ### replace! for AbstractDict/AbstractSet
 
