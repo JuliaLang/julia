@@ -933,6 +933,8 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
                 jl_array_ptr_ref(new_code, i)
             ));
         }
+        new_ci->code = new_code;
+        jl_gc_wb(new_ci, new_code);
         new_ci->slotnames = jl_array_copy(new_ci->slotnames);
         jl_gc_wb(new_ci, new_ci->slotnames);
         new_ci->slotflags = jl_array_copy(new_ci->slotflags);
