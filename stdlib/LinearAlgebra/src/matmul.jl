@@ -1087,13 +1087,21 @@ const RealOrComplex = Union{Real,Complex}
 # Three-argument *
 """
     *(A, B::AbstractMatrix, C)
+    A * B * C * D
 
-Most 3- and 4-argument `*` calls containing matrices or vectors are done in an
-efficient way, rather than the left-to-right default of `*(x,y,z...)`.
+Chained multiplication of 3 or 4 matrices is done in the most efficient order,
+i.e. the order which minimises the total number of scalar multiplications involved,
+based on the sizes of the arrays.
 
-This can mean performing `B*C` first if `C::AbstractVector`, using five-argument
-`mul!` to fuse the scalar `A::Number` with the matrix multiplication `B*C`,
-or examining `size.((A,B,C,D))` to choose which to multiply first.
+If the last factor is a vector, or the first a transposed vector,
+it is efficient to do these first. In particular `x' * B * y` means `(x' * B) * y`
+for an ordinary colum-major `B`. This is usually faster than `dot(x, B, y)`,
+although it allocates an intermediate array.
+
+If the first or last factor is a number, this will be fused with the matrix
+multiplication, using 5-arg [`mul!`](@ref).
+
+See also [`dot`](@ref), [`muladd`](@ref).
 
 !!! compat "Julia 1.7"
     These optimisations require at least Julia 1.7.
@@ -1121,8 +1129,8 @@ function _tri_matmul(A,B,C,δ=nothing)
     n,m = size(A)
     # m,k == size(B)
     k,l = size(C)
-    costAB_C = n*m*k + n*k*l
-    costA_BC = m*k*l + n*m*l
+    costAB_C = n*m*k + n*k*l  # multiplications, allocations n*k + n*l
+    costA_BC = m*k*l + n*m*l  #                              m*l + n*l
     if costA_BC < costAB_C
         isnothing(δ) ? A * (B*C) : A * mat_mat_scalar(B,C,δ)
     else
