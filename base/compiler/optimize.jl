@@ -593,14 +593,23 @@ function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int})
     return renumber_ir_elements!(body, changemap, changemap)
 end
 
-function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, labelchangemap::Vector{Int})
-    for i = 2:length(labelchangemap)
-        labelchangemap[i] += labelchangemap[i - 1]
-    end
-    if ssachangemap !== labelchangemap
-        for i = 2:length(ssachangemap)
-            ssachangemap[i] += ssachangemap[i - 1]
+function cumsum_ssamap!(ssamap::Vector{Int})
+    rel_change = 0
+    for i = 1:length(ssamap)
+        rel_change += ssamap[i]
+        if ssamap[i] == -1
+            # Keep a marker that this statement was deleted
+            ssamap[i] = typemin(Int)
+        else
+            ssamap[i] = rel_change
         end
+    end
+end
+
+function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, labelchangemap::Vector{Int})
+    cumsum_ssamap!(labelchangemap)
+    if ssachangemap !== labelchangemap
+        cumsum_ssamap!(ssachangemap)
     end
     if labelchangemap[end] == 0 && ssachangemap[end] == 0
         return
@@ -621,6 +630,24 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])
+        elseif isa(el, PhiNode)
+            i = 1
+            edges = el.edges
+            values = el.values
+            while i <= length(edges)
+                was_deleted = ssachangemap[edges[i]] == typemin(Int)
+                if was_deleted
+                    deleteat!(edges, i)
+                    deleteat!(values, i)
+                else
+                    edges[i] += ssachangemap[edges[i]]
+                    val = values[i]
+                    if isa(val, SSAValue)
+                        values[i] = SSAValue(val.id + ssachangemap[val.id])
+                    end
+                    i += 1
+                end
+            end
         elseif isa(el, Expr)
             if el.head === :(=) && el.args[2] isa Expr
                 el = el.args[2]::Expr
