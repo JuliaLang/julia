@@ -2289,25 +2289,35 @@ _typed_hvncat(T::Type, shape::Tuple{Vararg{Tuple, 1}}, row_first::Bool, xs...) =
         _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
 
 function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Bool, as...) where {T, N}
-    all(x -> length(x) > 0, shape) || throw(ArgumentError("each level of `shape` argument must have at least one value"))
-    all(x -> all(y -> y > 0, x), shape) || throw(ArgumentError("`shape` argument must consist of positive integers"))
+    all(>(0), tuple((shape...)...)) || throw(ArgumentError("`shape` argument must consist of positive integers"))
+    
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
-    shape = collect(shape) # saves allocations later
-    shapelength = shape[end][1]
-    lengthas = length(as)
-    shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
 
     # discover dimensions
     nd = max(N, cat_ndims(as[1]))
     outdims = zeros(Int, nd)
     currentdims = zeros(Int, nd)
     blockcounts = zeros(Int, nd)
+    shapev = Vector{Tuple{Vararg{Int}}}(undef, nd)
+    for i ∈ eachindex(shape)
+        shapev[i] = shape[i]
+    end
+    for i ∈ N+1:nd
+        shapev[i] = shapev[N]
+    end
     shapepos = ones(Int, nd)
+
+    length(shapev[end]) == 1 || throw(ArgumentError("last level of shape must be one integer equal to the input length"))
+    shapelength = shapev[end][1]
+    lengthas = length(as)
+    shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
+    all(!isempty, shapev) || throw(ArgumentError("each level of `shape` argument must have at least one value"))
+    sum(tuple((shape...)...)) == N * shapelength || throw(ArgumentError("all levels of `shape` argument must sum to the same value"))
 
     for i ∈ eachindex(as)
         wasstartblock = false
-        for d ∈ 1:N
+        for d ∈ 1:nd
             ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
             dsize = cat_size(as[i], ad)
             blockcounts[d] += 1
@@ -2320,7 +2330,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
 
             wasstartblock = blockcounts[d] == 1 # remember for next dimension
 
-            isendblock = blockcounts[d] == shape[d][shapepos[d]]
+            isendblock = blockcounts[d] == shapev[d][shapepos[d]]
             if isendblock
                 if outdims[d] == 0
                     outdims[d] = currentdims[d]
@@ -2330,7 +2340,6 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
                 currentdims[d] = 0
                 blockcounts[d] = 0
                 shapepos[d] += 1
-
             end
         end
     end
