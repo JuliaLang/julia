@@ -101,6 +101,8 @@ function display_error(io::IO, stack::ExceptionStack, compacttrace::Bool = false
     println(io)
 end
 display_error(stack::ExceptionStack, compacttrace = false) = display_error(stderr, stack, compacttrace)
+display_error(io::IO, er, bt, compacttrace = false) = display_error(io, ExceptionStack([exception = er, backtrace = bt]), compacttrace)
+display_error(er, bt, compacttrace = false) = display_error(stderr, er, bt, compacttrace)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
