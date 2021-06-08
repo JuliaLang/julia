@@ -327,7 +327,7 @@ strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
     lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
 
 Stringify `s` and pad the resulting string on the left with `p` to make it `n`
-characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
+characters long (in [`textwidth`](@ref), or in [`length`](@ref) if `p` has zero `textwidth`). If `s` is already `n` characters long, an equal
 string is returned. Pad with spaces by default.
 
 # Examples
@@ -346,9 +346,15 @@ function lpad(
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
     n = Int(n)::Int
-    m = signed(n) - Int(textwidth(s))::Int
-    m ≤ 0 && return string(s)
     l = textwidth(p)
+    if iszero(l)
+        l = length(p)
+        w = length(s)
+    else
+        w = textwidth(s)
+    end
+    m = n - w
+    m ≤ 0 && return string(s)
     q, r = divrem(m, l)
     r == 0 ? string(p^q, s) : string(p^q, first(p, r), s)
 end
@@ -357,7 +363,7 @@ end
     rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
 
 Stringify `s` and pad the resulting string on the right with `p` to make it `n`
-characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
+characters long (in [`textwidth`](@ref), or in [`length`](@ref) if `p` has zero `textwidth`). If `s` is already `n` characters long, an equal
 string is returned. Pad with spaces by default.
 
 # Examples
@@ -376,7 +382,14 @@ function rpad(
     p::Union{AbstractChar,AbstractString}=' ',
 ) :: String
     n = Int(n)::Int
-    m = signed(n) - Int(textwidth(s))::Int
+    l = textwidth(p)
+    if iszero(l)
+        l = length(p)
+        w = length(s)
+    else
+        w = textwidth(s)
+    end
+    m = n - w
     m ≤ 0 && return string(s)
     l = textwidth(p)
     q, r = divrem(m, l)
