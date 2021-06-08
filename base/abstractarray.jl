@@ -1635,11 +1635,24 @@ cat_size(A::AbstractArray) = size(A)
 cat_size(A, d) = 1
 cat_size(A::AbstractArray, d) = size(A, d)
 
+cat_length(::Any) = 1
+cat_length(a::AbstractArray) = length(a)
+
+cat_ndims(a) = 0
+cat_ndims(a::AbstractArray) = ndims(a)
+
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
 
-cat_similar(A, ::Type{T}, shape) where T = Array{T}(undef, shape)
-cat_similar(A::AbstractArray, ::Type{T}, shape) where T = similar(A, T, shape)
+cat_similar(A, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
+cat_similar(A, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
+cat_similar(A, ::Type{T}, shape::Int...) where T = Array{T}(undef, shape...)
+cat_similar(A::Array, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
+cat_similar(A::Array, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
+cat_similar(A::Array, ::Type{T}, shape::Int...) where T = Array{T}(undef, shape...)
+cat_similar(A::AbstractArray, ::Type{T}, shape::Tuple) where T = similar(A, T, shape)
+cat_similar(A::AbstractArray, ::Type{T}, shape::Vector) where T = similar(A, T, shape...)
+cat_similar(A::AbstractArray, ::Type{T}, shape::Int...) where T = similar(A, T, shape...)
 
 # These are for backwards compatibility (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
@@ -2177,7 +2190,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         end
     end
 
-    A = Array{T, nd}(undef, ntuple(d -> cat_size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
+    A = cat_similar(as[1], T, ntuple(d -> cat_size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
     k = 1
     for a ∈ as
         for i ∈ eachindex(a)
@@ -2188,8 +2201,34 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     return A
 end
 
-cat_ndims(a) = 0
-cat_ndims(a::AbstractArray) = ndims(a)
+function _typed_hvncat1(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
+    # optimization for arrays that can be concatenated by copying them linearly into the destination
+    # conditions: the elements must all have 1- or 0-length dimensions above N
+    for a ∈ as
+        ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
+            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
+    end
+
+    nd = max(N, ndims(as[1]))
+
+    Ndim = 0
+    for i ∈ 1:lastindex(as)
+        Ndim += cat_size(as[i], N)
+        for d ∈ 1:N - 1
+            cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
+        end
+    end
+
+    A = cat_similar(as[1], T, (ntuple(d -> cat_size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
+    k = 1
+    for a ∈ as
+        for i ∈ eachindex(a)
+            A[k] = a[i]
+            k += 1
+        end
+    end
+    return A
+end
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
@@ -2276,7 +2315,7 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     len == outlen || ArgumentError("too many elements in arguments; expected $(outlen), got $(len)") |> throw
 
     # copy into final array
-    A = Array{T, nd}(undef, outdims...)
+    A = cat_similar(as[1], T, outdims)
     # @assert all(==(0), currentdims)
     outdims .= 0
     hvncat_fill!(A, currentdims, outdims, d1, d2, as)
@@ -2335,12 +2374,13 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     # @assert all(==(0), blockcounts)
 
     # copy into final array
-    A = Array{T, nd}(undef, outdims...)
+    # A = Array{T, nd}(undef, outdims...)
+    A = cat_similar(as[1], T, outdims)
     hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
     return A
 end
 
-function hvncat_fill!(A::Array{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
+function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
     outdims = size(A)
     offsets = scratch1
     inneroffsets = scratch2
@@ -2381,9 +2421,6 @@ end
     end
     Ai
 end
-
-cat_length(a::AbstractArray) = length(a)
-cat_length(::Any) = 1
 
 ## Reductions and accumulates ##
 
