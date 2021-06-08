@@ -284,7 +284,6 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
         try
             Base.sigatomic_end()
             if iserr
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, val)
                 Base.invokelatest(Base.display_error, errio, val)
             else
                 if val !== nothing && show_value
