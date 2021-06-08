@@ -240,7 +240,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, the standard operators over a matrix type are matrix operations, whereas, in Python, the standard operators are element-wise operations. When both `A` and `B` are matrices, `A * B` in Julia performs matrix multiplication, not element-wise multiplication as in Python. `A * B` in Julia is equivalent with `A @ B` in Python, whereas `A * B` in Python is equivalent with `A .* B` in Julia.
   * The adjoint operator `'` in Julia returns an adjoint of a vector (a lazy representation of row vector), whereas the transpose operator `.T` over a vector in Python returns the original vector (non-op).
   * In Julia, a function may contain multiple concrete implementations (called *methods*), which are selected via multiple dispatch based on the types of all arguments to the call, as compared to functions in Python, which have a single implementation and no polymorphism (as opposed to Python method calls which use a different syntax and allows dispatch on the receiver of the method).
-  * There are no classes in Julia. Instead they are structures (mutable or immutable), containing data but no methods.
+  * There are no classes in Julia. Instead there are structures (mutable or immutable), containing data but no methods.
   * Calling a method of a class instance in Python (`x = MyClass(*args); x.f(y)`) corresponds to a function call in Julia, e.g. `x = MyType(args...); f(x, y)`. In general, multiple dispatch is more flexible and powerful than the Python class system.
   * Julia structures may have exactly one abstract supertype, whereas Python classes can inherit from one or more (abstract or concrete) superclasses.
   * The logical Julia program structure (Packages and Modules) is independent of the file structure (`include` for additional files), whereas the Python code structure is defined by directories (Packages) and files (Modules).
@@ -310,7 +310,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     parenthesis may be required.
   * Julia's [`^`](@ref) is exponentiation (pow), not bitwise XOR as in C/C++ (use [`⊻`](@ref xor), or
     [`xor`](@ref), in Julia)
-  * Julia has two right-shift operators, `>>` and `>>>`.  `>>>` performs an arithmetic shift, `>>`
+  * Julia has two right-shift operators, `>>` and `>>>`.  `>>` performs an arithmetic shift, `>>>`
     always performs a logical shift, unlike C/C++, where the meaning of `>>` depends on the type of
     the value being shifted.
   * Julia's `->` creates an anonymous function, it does not access a member via a pointer.
@@ -353,7 +353,13 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 - The typical Julia workflow for prototyping also uses continuous manipulation of the image, implemented with the [Revise.jl](https://github.com/timholy/Revise.jl) package.
 
-- Bignums are supported, but conversion is not automatic; ordinary integers [overflow](@ref faq-integer-arithmetic).
+- For performance, Julia prefers that operations have [type stability](@ref man-type-stability). Where Common Lisp abstracts away from the underlying machine operations, Julia cleaves closer to them. For example:
+  - Integer division using `/` always returns a floating-point result, even if the computation is exact.
+    - `//` always returns a rational result
+    - `÷` always returns a (truncated) integer result
+  - Bignums are supported, but conversion is not automatic; ordinary integers [overflow](@ref faq-integer-arithmetic).
+  - Complex numbers are supported, but to get complex results, [you need complex inputs](@ref faq-domain-errors).
+  - There are multiple Complex and Rational types, with different component types.
 
 - Modules (namespaces) can be hierarchical. [`import`](@ref) and [`using`](@ref) have a dual role: they load the code and make it available in the namespace. `import` for only the module name is possible (roughly equivalent to `ASDF:LOAD-OP`). Slot names don't need to be exported separately. Global variables can't be assigned to from outside the module (except with `eval(mod, :(var = val))` as an escape hatch).
 

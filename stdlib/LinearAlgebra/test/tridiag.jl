@@ -589,7 +589,9 @@ end
     A2 = SymTridiagonal(fill(1.0, 3), fill(-1.0, 2))
     F2 = eigen(A2)
     test_approx_eq_modphase(F.vectors, F2.vectors)
-    @test F.values ≈ F2.values
+    @test F.values ≈ F2.values ≈ eigvals(A) ≈ eigvals(A2)
+    @test eigvecs(A) ≈ eigvecs(A2)
+    @test eigvecs(A, eigvals(A)[1:1]) ≈ eigvecs(A2, eigvals(A2)[1:1])
 end
 
 @testset "non-commutative algebra (#39701)" begin
@@ -601,6 +603,52 @@ end
         @test c * A ≈ c * Matrix(A)
         @test c \ A ≈ c \ Matrix(A)
     end
+end
+
+@testset "adjoint of LDLt" begin
+    Sr = SymTridiagonal(randn(5), randn(4))
+    Sc = SymTridiagonal(complex.(randn(5)) .+ 1im, complex.(randn(4), randn(4)))
+    b = ones(size(Sr, 1))
+
+    F = ldlt(Sr)
+    @test F\b == F'\b
+
+    F = ldlt(Sc)
+    @test copy(Sc')\b == F'\b
+end
+
+@testset "symmetric and hermitian tridiagonals" begin
+    A = [im 0; 0 -im]
+    @test issymmetric(A)
+    @test !ishermitian(A)
+
+    # real
+    A = SymTridiagonal(randn(5), randn(4))
+    @test issymmetric(A)
+    @test ishermitian(A)
+
+    A = Tridiagonal(A.ev, A.dv, A.ev .+ 1)
+    @test !issymmetric(A)
+    @test !ishermitian(A)
+
+    # complex
+    # https://github.com/JuliaLang/julia/pull/41037#discussion_r645524081
+    S = SymTridiagonal(randn(5) .+ 0im, randn(5) .+ 0im)
+    S.ev[end] = im
+    @test issymmetric(S)
+    @test ishermitian(S)
+
+    S = SymTridiagonal(randn(5) .+ 1im, randn(4) .+ 1im)
+    @test issymmetric(S)
+    @test !ishermitian(S)
+
+    S = Tridiagonal(S.ev, S.dv, adjoint.(S.ev))
+    @test !issymmetric(S)
+    @test !ishermitian(S)
+
+    S = Tridiagonal(S.dl, real.(S.d) .+ 0im, S.du)
+    @test !issymmetric(S)
+    @test ishermitian(S)
 end
 
 end # module TestTridiagonal

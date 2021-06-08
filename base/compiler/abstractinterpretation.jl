@@ -137,12 +137,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                rt, edgecycle, edge = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
+                result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
+                rt, edge = result.rt, result.edge
                 if edge !== nothing
                     push!(edges, edge)
                 end
                 this_argtypes = applicable_argtypes === nothing ? argtypes : applicable_argtypes[i]
-                const_rt, const_result = abstract_call_method_with_const_args(interp, rt, f, this_argtypes, match, sv, edgecycle, false)
+                const_rt, const_result = abstract_call_method_with_const_args(interp, result, f, this_argtypes, match, sv, false)
                 if const_rt !== rt && const_rt ⊑ rt
                     rt = const_rt
                 end
@@ -156,14 +157,15 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
             end
         else
-            this_rt, edgecycle, edge = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
+            result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
+            this_rt, edge = result.rt, result.edge
             if edge !== nothing
                 push!(edges, edge)
             end
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
             this_argtypes = applicable_argtypes === nothing ? argtypes : applicable_argtypes[i]
-            const_this_rt, const_result = abstract_call_method_with_const_args(interp, this_rt, f, this_argtypes, match, sv, edgecycle, false)
+            const_this_rt, const_result = abstract_call_method_with_const_args(interp, result, f, this_argtypes, match, sv, false)
             if const_this_rt !== this_rt && const_this_rt ⊑ this_rt
                 this_rt = const_this_rt
             end
@@ -184,7 +186,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
             condval = maybe_extract_const_bool(this_conditional)
             for i = 1:length(argtypes)
-                fargs[i] isa Slot || continue
+                fargs[i] isa SlotNumber || continue
                 if this_conditional isa InterConditional && this_conditional.slot == i
                     vtype = this_conditional.vtype
                     elsetype = this_conditional.elsetype
@@ -222,7 +224,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # find the first argument which supports refinment,
             # and intersect all equvalent arguments with it
             arg = fargs[i]
-            arg isa Slot || continue # can't refine
+            arg isa SlotNumber || continue # can't refine
             old = argtypes[i]
             old isa Type || continue # unlikely to refine
             id = slot_id(arg)
@@ -284,9 +286,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     return CallMeta(rettype, info)
 end
 
-widenwrappedconditional(@nospecialize(typ))   = widenconditional(typ)
-widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
-
 function add_call_backedges!(interp::AbstractInterpreter,
                              @nospecialize(rettype),
                              edges::Vector{MethodInstance},
@@ -310,29 +309,70 @@ function add_call_backedges!(interp::AbstractInterpreter,
 end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
+const RECURSION_MSG = "Bounded recursion detected. Call was widened to force convergence."
 
 function abstract_call_method(interp::AbstractInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         add_remark!(interp, sv, "Refusing to infer into `depwarn`")
-        return Any, false, nothing
+        return MethodCallResult(Any, false, false, nothing)
     end
     topmost = nothing
     # Limit argument type tuple growth of functions:
     # look through the parents list to see if there's a call to the same method
     # and from the same method.
     # Returns the topmost occurrence of that repeated edge.
-    cyclei = 0
-    infstate = sv
     edgecycle = false
+    edgelimited = false
     # The `method_for_inference_heuristics` will expand the given method's generator if
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
-    method2 = method_for_inference_heuristics(method, sig, sparams) # Union{Method, Nothing}
+    callee_method2 = method_for_inference_heuristics(method, sig, sparams) # Union{Method, Nothing}
     sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
     sv_method2 isa Method || (sv_method2 = nothing) # Union{Method, Nothing}
-    while !(infstate === nothing)
-        infstate = infstate::InferenceState
+
+    function matches_sv(parent::InferenceState)
+        parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
+        parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
+        return parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+    end
+
+    function edge_matches_sv(frame::InferenceState)
+        inf_method2 = frame.src.method_for_inference_limit_heuristics # limit only if user token match
+        inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
+        if callee_method2 !== inf_method2
+            return false
+        end
+        if !hardlimit
+            # if this is a soft limit,
+            # also inspect the parent of this edge,
+            # to see if they are the same Method as sv
+            # in which case we'll need to ensure it is convergent
+            # otherwise, we don't
+
+            # check in the cycle list first
+            # all items in here are mutual parents of all others
+            if !_any(matches_sv, frame.callers_in_cycle)
+                let parent = frame.parent
+                    parent !== nothing || return false
+                    parent = parent::InferenceState
+                    (parent.cached || parent.parent !== nothing) || return false
+                    matches_sv(parent) || return false
+                end
+            end
+
+            # If the method defines a recursion relation, give it a chance
+            # to tell us that this recursion is actually ok.
+            if isdefined(method, :recursion_relation)
+                if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, frame.linfo.specTypes])
+                    return false
+                end
+            end
+        end
+        return true
+    end
+
+    for infstate in InfStackUnwind(sv)
         if method === infstate.linfo.def
             if infstate.linfo.specTypes == sig
                 # avoid widening when detecting self-recursion
@@ -343,66 +383,26 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                     # we have a self-cycle in the call-graph, but not in the inference graph (typically):
                     # break this edge now (before we record it) by returning early
                     # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                    return Any, true, nothing
+                    return MethodCallResult(Any, true, true, nothing)
                 end
                 topmost = nothing
                 edgecycle = true
                 break
             end
-            inf_method2 = infstate.src.method_for_inference_limit_heuristics # limit only if user token match
-            inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
-            if topmost === nothing && method2 === inf_method2
-                if hardlimit
-                    topmost = infstate
-                    edgecycle = true
-                else
-                    # if this is a soft limit,
-                    # also inspect the parent of this edge,
-                    # to see if they are the same Method as sv
-                    # in which case we'll need to ensure it is convergent
-                    # otherwise, we don't
-                    for parent in infstate.callers_in_cycle
-                        # check in the cycle list first
-                        # all items in here are mutual parents of all others
-                        parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
-                        parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                        if parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
-                            topmost = infstate
-                            edgecycle = true
-                            break
-                        end
-                    end
-                    let parent = infstate.parent
-                        # then check the parent link
-                        if topmost === nothing && parent !== nothing
-                            parent = parent::InferenceState
-                            parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
-                            parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-                            if (parent.cached || parent.parent !== nothing) && parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
-                                topmost = infstate
-                                edgecycle = true
-                            end
-                        end
-                    end
-                end
+            topmost === nothing || continue
+            if edge_matches_sv(infstate)
+                topmost = infstate
+                edgecycle = true
             end
-        end
-        # iterate through the cycle before walking to the parent
-        if cyclei < length(infstate.callers_in_cycle)
-            cyclei += 1
-            infstate = infstate.callers_in_cycle[cyclei]
-        else
-            cyclei = 0
-            infstate = infstate.parent
         end
     end
 
-    if !(topmost === nothing)
-        topmost = topmost::InferenceState
+    if topmost !== nothing
         sigtuple = unwrap_unionall(sig)::DataType
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
         ls = length(sigtuple.parameters)
+
         if method === sv.linfo.def
             # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
@@ -412,6 +412,13 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         else
             comparison = method.sig
         end
+
+        if isdefined(method, :recursion_relation)
+            # We don't recquire the recursion_relation to be transitive, so
+            # apply a hard limit
+            hardlimit = true
+        end
+
         # see if the type is actually too big (relative to the caller), and limit it if required
         newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
@@ -425,13 +432,15 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 # since it's very unlikely that we'll try to inline this,
                 # or want make an invoke edge to its calling convention return type.
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                return Any, true, nothing
+                return MethodCallResult(Any, true, true, nothing)
             end
+            add_remark!(interp, sv, RECURSION_MSG)
             topmost = topmost::InferenceState
             parentframe = topmost.parent
             poison_callstack(sv, parentframe === nothing ? topmost : parentframe)
             sig = newsig
             sparams = svec()
+            edgelimited = true
         end
     end
 
@@ -463,39 +472,45 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
 
     rt, edge = typeinf_edge(interp, method, sig, sparams, sv)
     if edge === nothing
-        edgecycle = true
+        edgecycle = edgelimited = true
     end
-    return rt, edgecycle, edge
+    return MethodCallResult(rt, edgecycle, edgelimited, edge)
 end
 
-function abstract_call_method_with_const_args(interp::AbstractInterpreter, @nospecialize(rettype),
+# keeps result and context information of abstract method call, will be used by succeeding constant-propagation
+struct MethodCallResult
+    rt
+    edgecycle::Bool
+    edgelimited::Bool
+    edge::Union{Nothing,MethodInstance}
+    function MethodCallResult(@nospecialize(rt),
+                              edgecycle::Bool,
+                              edgelimited::Bool,
+                              edge::Union{Nothing,MethodInstance})
+        return new(rt, edgecycle, edgelimited, edge)
+    end
+end
+
+function abstract_call_method_with_const_args(interp::AbstractInterpreter, result::MethodCallResult,
                                               @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
-                                              sv::InferenceState, edgecycle::Bool,
-                                              va_override::Bool)
-    mi = maybe_get_const_prop_profitable(interp, rettype, f, argtypes, match, sv, edgecycle)
+                                              sv::InferenceState, va_override::Bool)
+    mi = maybe_get_const_prop_profitable(interp, result, f, argtypes, match, sv)
     mi === nothing && return Any, nothing
     # try constant prop'
     inf_cache = get_inference_cache(interp)
     inf_result = cache_lookup(mi, argtypes, inf_cache)
     if inf_result === nothing
-        if edgecycle
-            # if there might be a cycle, check to make sure we don't end up
-            # calling ourselves here.
-            infstate = sv
-            cyclei = 0
-            while !(infstate === nothing)
-                if match.method === infstate.linfo.def && any(infstate.result.overridden_by_const)
-                    add_remark!(interp, sv, "[constprop] Edge cycle encountered")
-                    return Any, nothing
-                end
-                if cyclei < length(infstate.callers_in_cycle)
-                    cyclei += 1
-                    infstate = infstate.callers_in_cycle[cyclei]
-                else
-                    cyclei = 0
-                    infstate = infstate.parent
-                end
+        # if there might be a cycle, check to make sure we don't end up
+        # calling ourselves here.
+        if result.edgecycle && _any(InfStackUnwind(sv)) do infstate
+                # if the type complexity limiting didn't decide to limit the call signature (`result.edgelimited = false`)
+                # we can relax the cycle detection by comparing `MethodInstance`s and allow inference to
+                # propagate different constant elements if the recursion is finite over the lattice
+                return (result.edgelimited ? match.method === infstate.linfo.def : mi === infstate.linfo) &&
+                        any(infstate.result.overridden_by_const)
             end
+            add_remark!(interp, sv, "[constprop] Edge cycle encountered")
+            return Any, nothing
         end
         inf_result = InferenceResult(mi, argtypes, va_override)
         frame = InferenceState(inf_result, #=cache=#false, interp)
@@ -513,17 +528,17 @@ end
 
 # if there's a possibility we could get a better result (hopefully without doing too much work)
 # returns `MethodInstance` with constant arguments, returns nothing otherwise
-function maybe_get_const_prop_profitable(interp::AbstractInterpreter, @nospecialize(rettype),
+function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::MethodCallResult,
                                          @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
-                                         sv::InferenceState, edgecycle::Bool)
-    const_prop_entry_heuristic(interp, rettype, sv, edgecycle) || return nothing
+                                         sv::InferenceState)
+    const_prop_entry_heuristic(interp, result, sv) || return nothing
     method = match.method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
     if length(argtypes) < nargs
         return nothing
     end
-    const_prop_argument_heuristic(interp, argtypes) || const_prop_rettype_heuristic(interp, rettype) || return nothing
+    const_prop_argument_heuristic(interp, argtypes) || const_prop_rettype_heuristic(interp, result.rt) || return nothing
     allconst = is_allconst(argtypes)
     force = force_const_prop(interp, f, method)
     force || const_prop_function_heuristic(interp, f, argtypes, nargs, allconst) || return nothing
@@ -541,9 +556,9 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, @nospecial
     return mi
 end
 
-function const_prop_entry_heuristic(interp::AbstractInterpreter, @nospecialize(rettype), sv::InferenceState, edgecycle::Bool)
-    call_result_unused(sv) && edgecycle && return false
-    return is_improvable(rettype) && InferenceParams(interp).ipo_constant_propagation
+function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, sv::InferenceState)
+    call_result_unused(sv) && result.edgecycle && return false
+    return is_improvable(result.rt) && InferenceParams(interp).ipo_constant_propagation
 end
 
 # see if propagating constants may be worthwhile
@@ -986,10 +1001,10 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
                 a = ssa_def_slot(fargs[3], sv)
                 b = ssa_def_slot(fargs[4], sv)
-                if isa(a, Slot) && slot_id(cnd.var) == slot_id(a)
+                if isa(a, SlotNumber) && slot_id(cnd.var) == slot_id(a)
                     tx = (cnd.vtype ⊑ tx ? cnd.vtype : tmeet(tx, widenconst(cnd.vtype)))
                 end
-                if isa(b, Slot) && slot_id(cnd.var) == slot_id(b)
+                if isa(b, SlotNumber) && slot_id(cnd.var) == slot_id(b)
                     ty = (cnd.elsetype ⊑ ty ? cnd.elsetype : tmeet(ty, widenconst(cnd.elsetype)))
                 end
                 return tmerge(tx, ty)
@@ -1010,7 +1025,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
             a = ssa_def_slot(fargs[2], sv)
-            if isa(a, Slot)
+            if isa(a, SlotNumber)
                 aty = widenconst(argtypes[2])
                 if rt === Const(false)
                     return Conditional(a, Union{}, aty)
@@ -1033,7 +1048,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
             aty = argtypes[2]
             bty = argtypes[3]
             # if doing a comparison to a singleton, consider returning a `Conditional` instead
-            if isa(aty, Const) && isa(b, Slot)
+            if isa(aty, Const) && isa(b, SlotNumber)
                 if rt === Const(false)
                     aty = Union{}
                 elseif rt === Const(true)
@@ -1043,7 +1058,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 end
                 return Conditional(b, aty, bty)
             end
-            if isa(bty, Const) && isa(a, Slot)
+            if isa(bty, Const) && isa(a, SlotNumber)
                 if rt === Const(false)
                     bty = Union{}
                 elseif rt === Const(true)
@@ -1054,10 +1069,10 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                 return Conditional(a, bty, aty)
             end
             # narrow the lattice slightly (noting the dependency on one of the slots), to promote more effective smerge
-            if isa(b, Slot)
+            if isa(b, SlotNumber)
                 return Conditional(b, rt === Const(false) ? Union{} : bty, rt === Const(true) ? Union{} : bty)
             end
-            if isa(a, Slot)
+            if isa(a, SlotNumber)
                 return Conditional(a, rt === Const(false) ? Union{} : aty, rt === Const(true) ? Union{} : aty)
             end
         elseif f === Core.Compiler.not_int
@@ -1131,7 +1146,7 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     end
     method, valid_worlds = result
     update_valid_age!(sv, valid_worlds)
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     rt, edge = typeinf_edge(interp, method, ti, env, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     return CallMeta(rt, InvokeCallInfo(MethodMatch(ti, env, method, argtype <: method.sig)))
@@ -1234,20 +1249,20 @@ end
 function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::PartialOpaque, argtypes::Vector{Any}, sv::InferenceState)
     pushfirst!(argtypes, closure.env)
     sig = argtypes_to_type(argtypes)
-    rt, edgecycle, edge = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, sv)
+    (; rt, edge) = result = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, sv)
     edge !== nothing && add_backedge!(edge, sv)
     tt = closure.typ
     sigT = unwrap_unionall(tt).parameters[1]
     match = MethodMatch(sig, Core.svec(), closure.source::Method, sig <: rewrap_unionall(sigT, tt))
     info = OpaqueClosureCallInfo(match)
-    if !edgecycle
-        const_rettype, result = abstract_call_method_with_const_args(interp, rt, closure, argtypes,
-            match, sv, edgecycle, closure.isva)
+    if !result.edgecycle
+        const_rettype, const_result = abstract_call_method_with_const_args(interp, result, closure, argtypes,
+            match, sv, closure.isva)
         if const_rettype ⊑ rt
            rt = const_rettype
         end
-        if result !== nothing
-            info = ConstCallInfo(info, Union{Nothing,InferenceResult}[result])
+        if const_result !== nothing
+            info = ConstCallInfo(info, Union{Nothing,InferenceResult}[const_result])
         end
     end
     return CallMeta(rt, info)
@@ -1361,7 +1376,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
         return Const((e::QuoteNode).value)
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
-    elseif isa(e, Slot) || isa(e, Argument)
+    elseif isa(e, SlotNumber) || isa(e, Argument)
         return (vtypes[slot_id(e)]::VarState).typ
     elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name)
@@ -1413,7 +1428,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         end
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
-        if isconcretetype(t) && !t.mutable
+        if isconcretetype(t) && !ismutabletype(t)
             args = Vector{Any}(undef, length(e.args)-1)
             ats = Vector{Any}(undef, length(e.args)-1)
             anyconst = false
@@ -1450,12 +1465,12 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         end
     elseif e.head === :splatnew
         t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
-        if length(e.args) == 2 && isconcretetype(t) && !t.mutable
+        if length(e.args) == 2 && isconcretetype(t) && !ismutabletype(t)
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
-            if isa(at, Const) && (val = at.val; isa(val, Tuple)) && n == length(val) &&
-                let t = t, val = val; _all(i->val[i] isa fieldtype(t, i), 1:n); end
-                t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, val))
+            if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val) &&
+                let t = t; _all(i->getfield(at.val, i) isa fieldtype(t, i), 1:n); end
+                t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
             elseif isa(at, PartialStruct) && at ⊑ Tuple && n == length(at.fields) &&
                 let t = t, at = at; _all(i->at.fields[i] ⊑ fieldtype(t, i), 1:n); end
                 t = PartialStruct(t, at.fields)
@@ -1505,7 +1520,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     elseif e.head === :isdefined
         sym = e.args[1]
         t = Bool
-        if isa(sym, Slot)
+        if isa(sym, SlotNumber)
             vtyp = vtypes[slot_id(sym)]
             if vtyp.typ === Bottom
                 t = Const(false) # never assigned previously
@@ -1637,7 +1652,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    s = frame.stmt_types
+    states = frame.stmt_types
     n = frame.nstmts
     nargs = frame.nargs
     def = frame.linfo.def
@@ -1662,7 +1677,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             edges === nothing || empty!(edges)
             frame.stmt_info[pc] = nothing
             stmt = frame.src.code[pc]
-            changes = s[pc]::VarTable
+            changes = states[pc]::VarTable
             t = nothing
 
             hd = isa(stmt, Expr) ? stmt.head : nothing
@@ -1673,12 +1688,16 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
             elseif isa(stmt, GotoIfNot)
-                condt = abstract_eval_value(interp, stmt.cond, changes, frame)
+                condx = stmt.cond
+                condt = abstract_eval_value(interp, condx, changes, frame)
                 if condt === Bottom
                     empty!(frame.pclimitations)
-                end
-                if condt === Bottom
                     break
+                end
+                if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
+                    # if this non-`Conditional` object is a slot, we form and propagate
+                    # the conditional constraint on it
+                    condt = Conditional(condx, Const(true), Const(false))
                 end
                 condval = maybe_extract_const_bool(condt)
                 l = stmt.dest::Int
@@ -1701,14 +1720,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         changes_else = conditional_changes(changes_else, condt.elsetype, condt.var)
                         changes      = conditional_changes(changes,      condt.vtype,    condt.var)
                     end
-                    newstate_else = stupdate!(s[l], changes_else)
+                    newstate_else = stupdate!(states[l], changes_else)
                     if newstate_else !== nothing
                         # add else branch to active IP list
                         if l < frame.pc´´
                             frame.pc´´ = l
                         end
                         push!(W, l)
-                        s[l] = newstate_else
+                        states[l] = newstate_else
                     end
                 end
             elseif isa(stmt, ReturnNode)
@@ -1756,16 +1775,16 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 l = stmt.args[1]::Int
                 frame.cur_hand = Pair{Any,Any}(l, frame.cur_hand)
                 # propagate type info to exception handler
-                old = s[l]
+                old = states[l]
                 newstate_catch = stupdate!(old, changes)
                 if newstate_catch !== nothing
                     if l < frame.pc´´
                         frame.pc´´ = l
                     end
                     push!(W, l)
-                    s[l] = newstate_catch
+                    states[l] = newstate_catch
                 end
-                typeassert(s[l], VarTable)
+                typeassert(states[l], VarTable)
                 frame.handler_at[l] = frame.cur_hand
             elseif hd === :leave
                 for i = 1:((stmt.args[1])::Int)
@@ -1779,12 +1798,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     end
                     frame.src.ssavaluetypes[pc] = t
                     lhs = stmt.args[1]
-                    if isa(lhs, Slot)
+                    if isa(lhs, SlotNumber)
                         changes = StateUpdate(lhs, VarState(t, false), changes, false)
                     end
                 elseif hd === :method
                     fname = stmt.args[1]
-                    if isa(fname, Slot)
+                    if isa(fname, SlotNumber)
                         changes = StateUpdate(fname, VarState(Any, false), changes, false)
                     end
                 elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect
@@ -1805,7 +1824,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # the handling for Expr(:enter) propagates all changes from before the try/catch
                     # so this only needs to propagate any changes
                     l = frame.cur_hand.first::Int
-                    if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
+                    if stupdate1!(states[l]::VarTable, changes::StateUpdate) !== false
                         if l < frame.pc´´
                             frame.pc´´ = l
                         end
@@ -1823,19 +1842,19 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
             pc´ > n && break # can't proceed with the fast-path fall-through
             frame.handler_at[pc´] = frame.cur_hand
-            newstate = stupdate!(s[pc´], changes)
+            newstate = stupdate!(states[pc´], changes)
             if isa(stmt, GotoNode) && frame.pc´´ < pc´
                 # if we are processing a goto node anyways,
                 # (such as a terminator for a loop, if-else, or try block),
                 # consider whether we should jump to an older backedge first,
                 # to try to traverse the statements in approximate dominator order
                 if newstate !== nothing
-                    s[pc´] = newstate
+                    states[pc´] = newstate
                 end
                 push!(W, pc´)
                 pc = frame.pc´´
             elseif newstate !== nothing
-                s[pc´] = newstate
+                states[pc´] = newstate
                 pc = pc´
             elseif pc´ in W
                 pc = pc´
@@ -1848,8 +1867,13 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     nothing
 end
 
-function conditional_changes(changes::VarTable, @nospecialize(typ), var::Slot)
-    if typ ⊑ (changes[slot_id(var)]::VarState).typ
+function conditional_changes(changes::VarTable, @nospecialize(typ), var::SlotNumber)
+    oldtyp = (changes[slot_id(var)]::VarState).typ
+    # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
+    # since we probably formed these types with `typesubstract`, the comparison is likely simple
+    if ignorelimited(typ) ⊑ ignorelimited(oldtyp)
+        # typ is better unlimited, but we may still need to compute the tmeet with the limit "causes" since we ignored those in the comparison
+        oldtyp isa LimitedAccuracy && (typ = tmerge(typ, LimitedAccuracy(Bottom, oldtyp.causes)))
         return StateUpdate(var, VarState(typ, false), changes, true)
     end
     return changes

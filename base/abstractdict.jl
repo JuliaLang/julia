@@ -234,12 +234,14 @@ Dict{Int64, Int64} with 3 entries:
 ```
 """
 function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
-    for other in others
-        for (k,v) in other
-            d[k] = haskey(d, k) ? combine(d[k], v) : v
-        end
+    foldl(mergewith!(combine), others; init = d)
+end
+
+function mergewith!(combine, d1::AbstractDict, d2::AbstractDict)
+    for (k, v) in d2
+        d1[k] = haskey(d1, k) ? combine(d1[k], v) : v
     end
-    return d
+    return d1
 end
 
 mergewith!(combine) = (args...) -> mergewith!(combine, args...)
@@ -249,7 +251,7 @@ merge!(combine::Callable, args...) = mergewith!(combine, args...)
 """
     keytype(type)
 
-Get the key type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the key type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -263,7 +265,7 @@ keytype(a::AbstractDict) = keytype(typeof(a))
 """
     valtype(type)
 
-Get the value type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the value type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest

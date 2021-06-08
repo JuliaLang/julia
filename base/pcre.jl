@@ -228,7 +228,10 @@ function substring_length_bynumber(match_data, number)
     s = RefValue{Csize_t}()
     rc = ccall((:pcre2_substring_length_bynumber_8, PCRE_LIB), Cint,
                (Ptr{Cvoid}, Cint, Ref{Csize_t}), match_data, number, s)
-    rc < 0 && error("PCRE error: $(err_message(rc))")
+    if rc < 0
+        rc == ERROR_UNSET && return 0
+        error("PCRE error: $(err_message(rc))")
+    end
     return Int(s[])
 end
 

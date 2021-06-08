@@ -914,6 +914,12 @@ end
     # hit the `foldl` branch:
     @test IndexStyle(bcraw) == IndexCartesian()
     @test reduce(paren, bcraw) == foldl(paren, xs)
+
+    # issue #41055
+    bc = Broadcast.instantiate(Broadcast.broadcasted(Base.literal_pow, Ref(^), [1,2], Ref(Val(2))))
+    @test sum(bc, dims=1, init=0) == [5]
+    bc = Broadcast.instantiate(Broadcast.broadcasted(*, ['a','b'], 'c'))
+    @test prod(bc, dims=1, init="") == ["acbc"]
 end
 
 # treat Pair as scalar:
@@ -950,6 +956,35 @@ p0 = copy(p)
 @test map(.+, [[1,2], [3,4]], [5, 6]) == [[6,7], [9,10]]
 @test repr(.!) == "Base.Broadcast.BroadcastFunction(!)"
 @test eval(:(.+)) == Base.BroadcastFunction(+)
+
+@testset "Issue #5187: Broadcasting of short-circuiting ops" begin
+    ex = Meta.parse("A .< 1 .|| A .> 2")
+    @test ex == :((A .< 1) .|| (A .> 2))
+    @test ex.head == :.||
+    ex = Meta.parse("A .< 1 .&& A .> 2")
+    @test ex == :((A .< 1) .&& (A .> 2))
+    @test ex.head == :.&&
+
+    A = -1:4
+    @test (A .< 1 .|| A .> 2) == [true, true, false, false, true, true]
+    @test (A .>= 1 .&& A .<= 2) == [false, false, true, true, false, false]
+
+    mutable struct F5187; x; end
+    (f::F5187)(x) = (f.x += x)
+    @test (iseven.(1:4) .&& (F5187(0)).(ones(4))) == [false, 1, false, 2]
+    @test (iseven.(1:4) .|| (F5187(0)).(ones(4))) == [1, true, 2, true]
+    r = 1:4; o = ones(4); f = F5187(0);
+    @test (@. iseven(r) && f(o)) == [false, 1, false, 2]
+    @test (@. iseven(r) || f(o)) == [3, true, 4, true]
+
+    @test (iseven.(1:8) .&& iseven.((F5187(0)).(ones(8))) .&& (F5187(0)).(ones(8))) == [false,false,false,1,false,false,false,2]
+    @test (iseven.(1:8) .|| iseven.((F5187(0)).(ones(8))) .|| (F5187(0)).(ones(8))) == [1,true,true,true,2,true,true,true]
+    r = 1:8; o = ones(8); f1 = F5187(0); f2 = F5187(0)
+    @test (@. iseven(r) && iseven(f1(o)) && f2(o)) == [false,false,false,1,false,false,false,2]
+    @test (@. iseven(r) || iseven(f1(o)) || f2(o)) == [3,true,true,true,4,true,true,true]
+    @test (iseven.(1:8) .&& iseven.((F5187(0)).(ones(8))) .&& (F5187(0)).(ones(8))) == [false,false,false,1,false,false,false,2]
+    @test (iseven.(1:8) .|| iseven.((F5187(0)).(ones(8))) .|| (F5187(0)).(ones(8))) == [1,true,true,true,2,true,true,true]
+end
 
 @testset "Issue #28382: inferrability of broadcast with Union eltype" begin
     @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
@@ -1014,4 +1049,10 @@ end
         a_ .*= c
         @test a_ == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
     end
+end
+
+@testset "Issue #40309: still gives a range after #40320" begin
+    @test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
+    @test Broadcast.BroadcastFunction(+)(2:3, 2:3) == 4:2:6
+    @test Broadcast.BroadcastFunction(+)(2:3, 2:3) isa AbstractRange
 end

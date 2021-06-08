@@ -391,22 +391,22 @@ end
 
 @testset "findmin(f, domain)" begin
     @test findmin(-, 1:10) == (-10, 10)
-    @test findmin(identity, [1, 2, 3, missing]) === (missing, missing)
-    @test findmin(identity, [1, NaN, 3, missing]) === (missing, missing)
-    @test findmin(identity, [1, missing, NaN, 3]) === (missing, missing)
-    @test findmin(identity, [1, NaN, 3]) === (NaN, NaN)
-    @test findmin(identity, [1, 3, NaN]) === (NaN, NaN)
-    @test all(findmin(cos, 0:π/2:2π) .≈ (-1.0, π))
+    @test findmin(identity, [1, 2, 3, missing]) === (missing, 4)
+    @test findmin(identity, [1, NaN, 3, missing]) === (missing, 4)
+    @test findmin(identity, [1, missing, NaN, 3]) === (missing, 2)
+    @test findmin(identity, [1, NaN, 3]) === (NaN, 2)
+    @test findmin(identity, [1, 3, NaN]) === (NaN, 3)
+    @test findmin(cos, 0:π/2:2π) == (-1.0, 3)
 end
 
 @testset "findmax(f, domain)" begin
     @test findmax(-, 1:10) == (-1, 1)
-    @test findmax(identity, [1, 2, 3, missing]) === (missing, missing)
-    @test findmax(identity, [1, NaN, 3, missing]) === (missing, missing)
-    @test findmax(identity, [1, missing, NaN, 3]) === (missing, missing)
-    @test findmax(identity, [1, NaN, 3]) === (NaN, NaN)
-    @test findmax(identity, [1, 3, NaN]) === (NaN, NaN)
-    @test findmax(cos, 0:π/2:2π) == (1.0, 0.0)
+    @test findmax(identity, [1, 2, 3, missing]) === (missing, 4)
+    @test findmax(identity, [1, NaN, 3, missing]) === (missing, 4)
+    @test findmax(identity, [1, missing, NaN, 3]) === (missing, 2)
+    @test findmax(identity, [1, NaN, 3]) === (NaN, 2)
+    @test findmax(identity, [1, 3, NaN]) === (NaN, 3)
+    @test findmax(cos, 0:π/2:2π) == (1.0, 1)
 end
 
 @testset "argmin(f, domain)" begin
@@ -460,8 +460,8 @@ end
 @test reduce((a, b) -> a .& b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .& b, fill(falses(5), 24)) == falses(5)
 
-@test_throws TypeError any(x->0, [false])
-@test_throws TypeError all(x->0, [false])
+@test_throws TypeError any(Returns(0), [false])
+@test_throws TypeError all(Returns(0), [false])
 
 # short-circuiting any and all
 
@@ -646,3 +646,13 @@ end
 
 # issue #39281
 @test @inferred(extrema(rand(2), dims=1)) isa Vector{Tuple{Float64,Float64}}
+
+# issue #38627
+@testset "overflow in mapreduce" begin
+    # at len = 16 and len = 1025 there is a change in codepath
+    for len in [0, 1, 15, 16, 1024, 1025, 2048, 2049]
+        oa = OffsetArray(repeat([1], len), typemax(Int)-len)
+        @test sum(oa) == reduce(+, oa) == len
+        @test mapreduce(+, +, oa, oa) == 2len
+    end
+end

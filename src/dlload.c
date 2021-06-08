@@ -120,7 +120,6 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
         needsSymRefreshModuleList = 1;
     return lib;
 #else
-    dlerror(); /* Reset error status. */
     return dlopen(filename,
                   (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
                   | JL_RTLD(flags, LOCAL)
@@ -144,16 +143,20 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
 JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
-    if (!handle) return -1;
+    if (!handle) {
+        return -1;
+    }
     return !FreeLibrary((HMODULE) handle);
 #else
-    dlerror(); /* Reset error status. */
-    if (!handle) return -1;
+    if (!handle) {
+        dlerror(); /* Reset error status. */
+        return -1;
+    }
     return dlclose(handle);
 #endif
 }
 
-JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err) JL_NOTSAFEPOINT // (or throw)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
 {
     char path[PATHBUF], relocated[PATHBUF];
     int i;
@@ -175,20 +178,12 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                 (LPCWSTR)(uintptr_t)(&jl_load_dynamic_library),
                                 (HMODULE*)&handle)) {
-#ifndef __clang_analyzer__
-            // Hide the error throwing from the analyser since there isn't a way to express
-            // "safepoint only when throwing error" currently.
             jl_error("could not load base module");
-#endif
         }
 #else
         Dl_info info;
         if (!dladdr((void*)(uintptr_t)&jl_load_dynamic_library, &info) || !info.dli_fname) {
-#ifndef __clang_analyzer__
-            // Hide the error throwing from the analyser since there isn't a way to express
-            // "safepoint only when throwing error" currently.
             jl_error("could not load base module");
-#endif
         }
         handle = dlopen(info.dli_fname, RTLD_NOW);
 #endif
@@ -271,11 +266,7 @@ notfound:
 #else
         const char *reason = dlerror();
 #endif
-#ifndef __clang_analyzer__
-        // Hide the error throwing from the analyser since there isn't a way to express
-        // "safepoint only when throwing error" currently.
         jl_errorf("could not load library \"%s\"\n%s", modname, reason);
-#endif
     }
     handle = NULL;
 
@@ -291,19 +282,26 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 #ifdef _OS_WINDOWS_
     *value = GetProcAddress((HMODULE) handle, symbol);
 #else
-    dlerror(); /* Reset error status. */
     *value = dlsym(handle, symbol);
 #endif
 
-    /* Next, check for errors.  On Windows, a NULL pointer means the symbol
-     * was not found.  On everything else, we can have NULL symbols, so we check
-     * for non-NULL returns from dlerror().  Note that means we unconditionally
-     * call dlerror() on POSIX systems.*/
-#ifdef _OS_WINDOWS_
+    /* Next, check for errors. On Windows, a NULL pointer means the symbol was
+     * not found. On everything else, we can have NULL symbols, so we check for
+     * non-NULL returns from dlerror(). Since POSIX doesn't require `dlerror`
+     * to be implemented safely, FreeBSD doesn't (unlike everyone else, who
+     * realized decades ago that threads are here to stay), so we avoid calling
+     * `dlerror` unless we need to get the error message.
+     * https://github.com/freebsd/freebsd-src/blob/12db51d20823a5e3b9e5f8a2ea73156fe1cbfc28/libexec/rtld-elf/rtld.c#L198
+     */
     symbol_found = *value != NULL;
-#else
-    const char *err = dlerror();
-    symbol_found = err == NULL;
+#ifndef _OS_WINDOWS_
+    const char *err;
+    if (!symbol_found) {
+        dlerror(); /* Reset error status. */
+        *value = dlsym(handle, symbol);
+        err = dlerror();
+        symbol_found = *value != NULL || err == NULL;
+    }
 #endif
 
     if (!symbol_found && throw_err) {

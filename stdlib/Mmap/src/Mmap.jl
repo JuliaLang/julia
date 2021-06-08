@@ -13,7 +13,7 @@ const PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:j
 
 # for mmaps not backed by files
 mutable struct Anonymous <: IO
-    name::AbstractString
+    name::String
     readonly::Bool
     create::Bool
 end

@@ -5,7 +5,7 @@
 .global CNAME(name); \
 .cfi_startproc; \
 CNAME(name)##:; \
-    ldr ip, CONCAT(.L,CNAME(name)); \
+    ldr ip, CONCAT(.L,CNAMEADDR(name)); \
 CONCAT(.L,CNAME(name)): ;\
     add ip, pc, ip; \
     ldr pc, [ip]; \

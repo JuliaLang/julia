@@ -16,20 +16,15 @@ struct ABI_AArch64Layout : AbiLayout {
 Type *get_llvm_vectype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
+    // `!dt->name->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
     if (dt->layout == NULL || jl_is_layout_opaque(dt->layout))
         return nullptr;
     size_t nfields = dt->layout->nfields;
     assert(nfields > 0);
     if (nfields < 2)
         return nullptr;
-#if JL_LLVM_VERSION >= 110000
     static Type *T_vec64 = FixedVectorType::get(T_int32, 2);
     static Type *T_vec128 = FixedVectorType::get(T_int32, 4);
-#else
-    static Type *T_vec64 = VectorType::get(T_int32, 2);
-    static Type *T_vec128 = VectorType::get(T_int32, 4);
-#endif
     Type *lltype;
     // Short vector should be either 8 bytes or 16 bytes.
     // Note that there are only two distinct fundamental types for
@@ -67,7 +62,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
 Type *get_llvm_fptype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields == 0`
+    // `!dt->name->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields == 0`
     Type *lltype;
     // Check size first since it's cheaper.
     switch (jl_datatype_size(dt)) {
@@ -93,7 +88,7 @@ Type *get_llvm_fptype(jl_datatype_t *dt) const
 Type *get_llvm_fp_or_vectype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->mutabl || dt->layout->npointers || dt->layout->haspadding)
+    if (dt->name->mutabl || dt->layout->npointers || dt->layout->haspadding)
         return nullptr;
     return dt->layout->nfields ? get_llvm_vectype(dt) : get_llvm_fptype(dt);
 }

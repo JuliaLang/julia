@@ -41,3 +41,9 @@ end
     # https://github.com/JuliaLang/julia/issues/37757
     @test REPL.insert_hlines(IOBuffer(), nothing) === nothing
 end
+
+@testset "fuzzy score" begin
+    # https://github.com/JunoLab/FuzzyCompletions.jl/issues/7
+    # shouldn't throw when there is a space in a middle of query
+    @test (REPL.matchinds("a ", "a file.txt"); true)
+end

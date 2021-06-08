@@ -314,6 +314,11 @@ module NotPkgModule; end
         @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
         @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
         @test pkgdir(NotPkgModule) === nothing
+
+        @test pkgdir(Foo, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(Foo.SubFoo1, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(Foo.SubFoo2, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(NotPkgModule, "src") === nothing
     end
 
 end
@@ -716,5 +721,38 @@ import .Foo.Libdl; import Libdl
             @test Meta.isexpr(exprs[2], :macrocall) &&
                   exprs[2].args[[1,3]] == [Symbol("@test"), :(1 == 2)]
         end
+    end
+end
+
+@testset "`Base.project_names` and friends" begin
+    # Some functions in Pkg assumes that these tuples have the same length
+    n = length(Base.project_names)
+    @test length(Base.manifest_names) == n
+    @test length(Base.preferences_names) == n
+end
+
+@testset "Manifest formats" begin
+    deps = Dict{String,Any}(
+        "Serialization" => Any[Dict{String, Any}("uuid"=>"9e88b42a-f829-5b0c-bbe9-9e923198166b")],
+        "Random"        => Any[Dict{String, Any}("deps"=>["Serialization"], "uuid"=>"9a3f8284-a2c9-5f02-9a11-845980a1fd5c")],
+        "Logging"       => Any[Dict{String, Any}("uuid"=>"56ddb016-857b-54e1-b83d-db4d58db5568")]
+    )
+
+    @testset "v1.0" begin
+        env_dir = joinpath(@__DIR__, "manifest", "v1.0")
+        manifest_file = joinpath(env_dir, "Manifest.toml")
+        isfile(manifest_file) || error("Reference manifest is missing")
+        raw_manifest = Base.parsed_toml(manifest_file)
+        @test Base.is_v1_format_manifest(raw_manifest)
+        @test Base.get_deps(raw_manifest) == deps
+    end
+
+    @testset "v2.0" begin
+        env_dir = joinpath(@__DIR__, "manifest", "v2.0")
+        manifest_file = joinpath(env_dir, "Manifest.toml")
+        isfile(manifest_file) || error("Reference manifest is missing")
+        raw_manifest = Base.parsed_toml(manifest_file)
+        @test Base.is_v1_format_manifest(raw_manifest) == false
+        @test Base.get_deps(raw_manifest) == deps
     end
 end

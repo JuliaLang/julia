@@ -193,13 +193,13 @@ Let's first create a simple server:
 ```julia-repl
 julia> using Sockets
 
-julia> @async begin
+julia> errormonitor(@async begin
            server = listen(2000)
            while true
                sock = accept(server)
                println("Hello World\n")
            end
-       end
+       end)
 Task (runnable) @0x00007fd31dc11ae0
 ```
 
@@ -265,7 +265,7 @@ printed the message and waited for the next client. Reading and writing works in
 To see this, consider the following simple echo server:
 
 ```julia-repl
-julia> @async begin
+julia> errormonitor(@async begin
            server = listen(2001)
            while true
                sock = accept(server)
@@ -273,15 +273,15 @@ julia> @async begin
                    write(sock, readline(sock, keep=true))
                end
            end
-       end
+       end)
 Task (runnable) @0x00007fd31dc12e60
 
 julia> clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
-julia> @async while isopen(clientside)
+julia> errormonitor(@async while isopen(clientside)
            write(stdout, readline(clientside, keep=true))
-       end
+       end)
 Task (runnable) @0x00007fd31dc11870
 
 julia> println(clientside,"Hello World from the Echo Server")

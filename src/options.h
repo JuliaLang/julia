@@ -114,7 +114,7 @@
 #endif
 
 // allow a suspended Task to restart on a different thread
-//#define MIGRATE_TASKS
+#define MIGRATE_TASKS
 
 // threading options ----------------------------------------------------------
 

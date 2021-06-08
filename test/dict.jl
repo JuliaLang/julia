@@ -684,6 +684,7 @@ import Base.ImmutableDict
     d4 = ImmutableDict(d3, k2 => v1)
     dnan = ImmutableDict{String, Float64}(k2, NaN)
     dnum = ImmutableDict(dnan, k2 => 1)
+    f(x) = x^2
 
     @test isempty(collect(d))
     @test !isempty(collect(d1))
@@ -729,6 +730,18 @@ import Base.ImmutableDict
     @test get(d4, "key1", :default) === v2
     @test get(d4, "foo", :default) === :default
     @test get(d, k1, :default) === :default
+    @test get(d1, "key1") do
+        f(2)
+    end === v1
+    @test get(d4, "key1") do
+        f(4)
+    end === v2
+    @test get(d4, "foo") do
+        f(6)
+    end === 36
+    @test get(d, k1) do
+        f(8)
+    end === 64
     @test d1["key1"] === v1
     @test d4["key1"] === v2
     @test empty(d3) === d
@@ -1055,6 +1068,26 @@ end
       Dict(2=>Complex(1.0, 1.0), 1=>Complex(2.0, 0.0)))
     check_merge([Dict(1=>2), Dict(3=>4)], Dict(3=>4, 1=>2))
     check_merge([Dict(3=>4), Dict(:a=>5)], Dict(:a => 5, 3 => 4))
+end
+
+@testset "AbstractDict mergewith!" begin
+# we use IdDict to test the mergewith! implementation for AbstractDict
+    d1 = IdDict(1 => 1, 2 => 2)
+    d2 = IdDict(2 => 3, 3 => 4)
+    d3 = IdDict{Int, Float64}(1 => 5, 3 => 6)
+    d = copy(d1)
+    @inferred mergewith!(-, d, d2)
+    @test d == IdDict(1 => 1, 2 => -1, 3 => 4)
+    d = copy(d1)
+    @inferred mergewith!(-, d, d3)
+    @test d == IdDict(1 => -4, 2 => 2, 3 => 6)
+    d = copy(d1)
+    @inferred mergewith!(+, d, d2, d3)
+    @test d == IdDict(1 => 6, 2 => 5, 3 => 10)
+    @inferred mergewith(+, d1, d2, d3)
+    d = mergewith(+, d1, d2, d3)
+    @test d isa Dict{Int, Float64}
+    @test d == Dict(1 => 6, 2 => 5, 3 => 10)
 end
 
 @testset "misc error/io" begin

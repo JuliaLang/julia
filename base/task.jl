@@ -77,9 +77,14 @@ function showerror(io::IO, ex::TaskFailedException, bt = nothing; backtrace=true
 end
 
 function show_task_exception(io::IO, t::Task; indent = true)
-    stack = catch_stack(t)
+    stack = current_exceptions(t)
     b = IOBuffer()
-    show_exception_stack(IOContext(b, io), stack)
+    if isempty(stack)
+        # exception stack buffer not available; probably a serialized task
+        showerror(IOContext(b, io), t.result)
+    else
+        show_exception_stack(IOContext(b, io), stack)
+    end
     str = String(take!(b))
     if indent
         str = replace(str, "\n" => "\n    ")
@@ -157,7 +162,7 @@ end
         end
     elseif field === :backtrace
         # TODO: this field name should be deprecated in 2.0
-        return catch_stack(t)[end][2]
+        return current_exceptions(t)[end][2]
     elseif field === :exception
         # TODO: this field name should be deprecated in 2.0
         return t._isexception ? t.result : nothing
@@ -417,6 +422,43 @@ macro async(expr)
     end
 end
 
+"""
+    errormonitor(t::Task)
+
+Print an error log to `stderr` if task `t` fails.
+"""
+function errormonitor(t::Task)
+    t2 = Task() do
+        if istaskfailed(t)
+            local errs = stderr
+            try # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Unhandled Task ")
+                display_error(errio, current_exceptions(t))
+                write(errs, errio)
+            catch
+                try # try to display the secondary error atomically
+                    errio = IOContext(PipeBuffer(), errs::IO)
+                    print(errio, "\nSYSTEM: caught exception while trying to print a failed Task notice: ")
+                    display_error(errio, current_exceptions())
+                    write(errs, errio)
+                    flush(errs)
+                    # and then the actual error, as best we can
+                    Core.print(Core.stderr, "while handling: ")
+                    Core.println(Core.stderr, current_exceptions(t)[end][1])
+                catch e
+                    # give up
+                    Core.print(Core.stderr, "\nSYSTEM: caught exception of type ", typeof(e).name.name,
+                            " while trying to print a failed Task notice; giving up\n")
+                end
+            end
+        end
+        nothing
+    end
+    _wait2(t, t2)
+    return t
+end
+
 # Capture interpolated variables in $() and move them to let-block
 function _lift_one_interp!(e)
     letargs = Any[]  # store the new gensymed arguments
@@ -577,19 +619,22 @@ function enq_work(t::Task)
     # 1. The Task's stack is currently being used by the scheduler for a certain thread.
     # 2. There is only 1 thread.
     # 3. The multiq is full (can be fixed by making it growable).
-    if t.sticky || tid != 0 || Threads.nthreads() == 1
+    if t.sticky || Threads.nthreads() == 1
         if tid == 0
             tid = Threads.threadid()
             ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
         end
         push!(Workqueues[tid], t)
     else
-        tid = 0
         if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
             # if multiq is full, give to a random thread (TODO fix)
-            tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            if tid == 0
+                tid = mod(time_ns() % Int, Threads.nthreads()) + 1
+                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            end
             push!(Workqueues[tid], t)
+        else
+            tid = 0
         end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)

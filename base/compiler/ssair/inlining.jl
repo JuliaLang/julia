@@ -103,7 +103,7 @@ function CFGInliningState(ir::IRCode)
 end
 
 # Tells the inliner that we're now inlining into block `block`, meaning
-# all previous blocks have been proceesed and can be added to the new cfg
+# all previous blocks have been processed and can be added to the new cfg
 function inline_into_block!(state::CFGInliningState, block::Int)
     if state.first_bb != block
         new_range = state.first_bb+1:block
@@ -555,12 +555,16 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
                     compact.active_result_bb -= 1
                     refinish = true
                 end
-                # At the moment we will allow globalrefs in argument position, turn those into ssa values
+                # It is possible for GlobalRefs and Exprs to be in argument position
+                # at this point in the IR, though in that case they are required
+                # to be effect-free. However, we must still move them out of argument
+                # position, since `Argument` is allowed in PhiNodes, but `GlobalRef`
+                # and `Expr` are not, so a substitution could anger the verifier.
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
-                    if isa(aexpr, Expr)
-                        argexprs[aidx] = insert_node_here!(compact,
-                            NewInstruction(aexpr, compact_exprtype(compact, aexpr), compact.result[idx][:line]))
+                    if isa(aexpr, Expr) || isa(aexpr, GlobalRef)
+                        ninst = effect_free(NewInstruction(aexpr, compact_exprtype(compact, aexpr), compact.result[idx][:line]))
+                        argexprs[aidx] = insert_node_here!(compact, ninst)
                     end
                 end
                 if isa(item, InliningTodo)
@@ -706,7 +710,7 @@ function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::Meth
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult)
-    mi = specialize_method(result.linfo.def, result.linfo.specTypes,
+    mi = specialize_method(result.linfo.def::Method, result.linfo.specTypes,
         result.linfo.sparam_vals, false, true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     return mi
@@ -742,8 +746,10 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
         end
     end
 
-    if isconst && state.et !== nothing
-        push!(state.et, todo.mi)
+    et = state.et
+
+    if isconst && et !== nothing
+        push!(et, todo.mi)
         return ConstantCase(src)
     end
 
@@ -752,14 +758,13 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
     end
 
     if src === nothing
-        return compileable_specialization(state.et, spec.match)
+        return compileable_specialization(et, spec.match)
     end
 
     if isa(src, IRCode)
         src = copy(src)
     end
 
-    et = state.et
     et !== nothing && push!(et, todo.mi)
     return InliningTodo(todo.mi, src)
 end

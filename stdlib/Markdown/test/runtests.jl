@@ -1213,3 +1213,20 @@ end
         |  $x  |
         """)
 end
+
+@testset "issue 40080: empty list item breaks display()" begin
+    d = TextDisplay(devnull)
+    display(d, md"""
+               1. hello
+               2.
+               """)
+end
+
+@testset "issue #37232: linebreaks" begin
+    s = @md_str """
+       Misc:\\
+       - line\\
+       """
+    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line"
+end
+

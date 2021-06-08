@@ -303,7 +303,6 @@ end
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
 function ht_keyindex2!(h::Dict{K,V}, key) where V where K
-    age0 = h.age
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
@@ -487,6 +486,9 @@ end
 
 Return the value stored for the given key, or the given default value if no mapping for the
 key is present.
+
+!!! compat "Julia 1.7"
+    For tuples and numbers, this function requires at least Julia 1.7.
 
 # Examples
 ```jldoctest
@@ -717,13 +719,28 @@ end
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
-    # @inbounds is here so the it gets propagated to isslotfiled
+    # @inbounds is here so that it gets propagated to isslotfilled
     @inbounds for i = dict.idxfloor:lastindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])
         end
     end
     return iter
+end
+
+function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
+    for (k, v) in d2
+        i = ht_keyindex2!(d1, k)
+        if i > 0
+            d1.vals[i] = combine(d1.vals[i], v)
+        else
+            if !isequal(k, convert(K, k))
+                throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+            end
+            @inbounds _setindex!(d1, convert(V, v), k, -i)
+        end
+    end
+    return d1
 end
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
@@ -792,12 +809,20 @@ function get(dict::ImmutableDict, key, default)
     return default
 end
 
+function get(default::Callable, dict::ImmutableDict, key)
+    while isdefined(dict, :parent)
+        isequal(dict.key, key) && return dict.value
+        dict = dict.parent
+    end
+    return default()
+end
+
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
 function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
     !isdefined(t, :parent) && return nothing
     (Pair{K,V}(t.key, t.value), t.parent)
 end
-length(t::ImmutableDict) = count(x->true, t)
+length(t::ImmutableDict) = count(Returns(true), t)
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
