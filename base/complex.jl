@@ -569,8 +569,8 @@ See also [`cis`](@ref), [`sincospi`](@ref), [`exp`](@ref), [`angle`](@ref).
 
 # Examples
 ```jldoctest
-julia> cispi(1)
--1.0 + 0.0im
+julia> cispi(10000)
+1.0 + 0.0im
 
 julia> cispi(0.25 + 1im)
 0.030556854645952924 + 0.030556854645952924im
