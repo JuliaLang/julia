@@ -2113,7 +2113,6 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
 """
 hvncat(::Tuple{}, ::Bool) = []
 hvncat(::Tuple{}, ::Bool, xs...) = []
-hvncat(::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
 hvncat(dim::Int, xs...) = _hvncat(dim, true, xs...)
 
@@ -2126,7 +2125,7 @@ _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray{T}...) 
 
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-typed_hvncat(T::Type, ::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
+typed_hvncat(T::Type, dimsshape::Tuple{Vararg{Any, 1}}, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, Val(row_first), xs...)
 typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 
@@ -2171,10 +2170,18 @@ end
 
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
 _typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
-_typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...)
+_typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
+_typed_hvncat(::Type{T}, ::Val{0}, x::Number) where T = fill(T(x))
+_typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
+_typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = 
+    N > 0 ?
+        _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...) :
+        throw(ArgumentError("concatenation dimension must be a positive integer"))
+
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
     # conditions: the elements must all have 1- or 0-length dimensions above N
+    N > 0 || throw(ArgumentError("concatenation dimension must be a positive integer"))
     for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
             return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
@@ -2201,38 +2208,10 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     return A
 end
 
-function _typed_hvncat1(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
-    # optimization for arrays that can be concatenated by copying them linearly into the destination
-    # conditions: the elements must all have 1- or 0-length dimensions above N
-    for a ∈ as
-        ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
-            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
-    end
-
-    nd = max(N, ndims(as[1]))
-
-    Ndim = 0
-    for i ∈ 1:lastindex(as)
-        Ndim += cat_size(as[i], N)
-        for d ∈ 1:N - 1
-            cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
-        end
-    end
-
-    A = cat_similar(as[1], T, (ntuple(d -> cat_size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
-    k = 1
-    for a ∈ as
-        for i ∈ eachindex(a)
-            A[k] = a[i]
-            k += 1
-        end
-    end
-    return A
-end
-
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
     # into the destination
+    N > 0 || throw(ArgumentError("concatenation dimension must be a positive integer"))
     nd = N
     Ndim = 0
     for a ∈ as
@@ -2258,6 +2237,13 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
         end
     end
     return A
+end
+
+function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, ::Bool, as...) where T
+    lengthas = length(as)
+    d = only(dims)
+    lengthas == d && ArgumentError("number of elements does not match `dims` argument; expected $d, got $lengthas") |> throw
+    return typed_vcat(T, as...)
 end
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
@@ -2322,7 +2308,18 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     return A
 end
 
+function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, 1}}, ::Val{row_first}, as...) where {T, row_first}
+    length(dims[1]) > 0 || throw(ArgumentError("each level of `shape` argument must have at least one value"))
+    lengthas = length(as)
+    d = only(only(dims))
+    lengthas == d || throw(ArgumentError("number of elements does not match `dims` argument; expected $d, got $lengthas"))
+    return row_first ?
+        typed_hcat(T, as...) :
+        typed_vcat(T, as...)
+end
+
 function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Bool, as...) where {T, N}
+    all(x -> length(x) > 0, dims) || throw(ArgumentError("each level of `shape` argument must have at least one value"))
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
     shape = collect(shape) # saves allocations later
@@ -2362,6 +2359,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
                 currentdims[d] = 0
                 blockcounts[d] = 0
                 shapepos[d] += 1
+
             end
         end
     end
