@@ -54,14 +54,14 @@ CachedMethodTable(table::T) where T =
         table)
 
 """
-    findall(sig::Type{<:Tuple}, view::MethodTableView; limit=typemax(Int))
+    findall(sig::Type, view::MethodTableView; limit=typemax(Int))
 
 Find all methods in the given method table `view` that are applicable to the
 given signature `sig`. If no applicable methods are found, an empty result is
 returned. If the number of applicable methods exceeded the specified limit,
 `missing` is returned.
 """
-function findall(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable; limit::Int=typemax(Int))
+function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=typemax(Int))
     _min_val = RefValue{UInt}(typemin(UInt))
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
@@ -72,7 +72,7 @@ function findall(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable; 
     return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
-function findall(@nospecialize(sig::Type{<:Tuple}), table::OverlayMethodTable; limit::Int=typemax(Int))
+function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=typemax(Int))
     _min_val = RefValue{UInt}(typemin(UInt))
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
@@ -91,7 +91,7 @@ function findall(@nospecialize(sig::Type{<:Tuple}), table::OverlayMethodTable; l
     return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
-function findall(@nospecialize(sig::Type{<:Tuple}), table::CachedMethodTable; limit::Int=typemax(Int))
+function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=typemax(Int))
     box = Core.Box(sig)
     return get!(table.cache, sig) do
         findall(box.contents, table.table; limit=limit)
@@ -99,7 +99,7 @@ function findall(@nospecialize(sig::Type{<:Tuple}), table::CachedMethodTable; li
 end
 
 """
-    findsup(sig::Type{<:Tuple}, view::MethodTableView)::Union{Tuple{MethodMatch, WorldRange}, Nothing}
+    findsup(sig::Type, view::MethodTableView)::Union{Tuple{MethodMatch, WorldRange}, Nothing}
 
 Find the (unique) method `m` such that `sig <: m.sig`, while being more
 specific than any other method with the same property. In other words, find
@@ -112,7 +112,7 @@ Such a method `m` need not exist. It is possible that no method is an
 upper bound of `sig`, or it is possible that among the upper bounds, there
 is no least element. In both cases `nothing` is returned.
 """
-function findsup(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable)
+function findsup(@nospecialize(sig::Type), table::InternalMethodTable)
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
     result = ccall(:jl_gf_invoke_lookup_worlds, Any, (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
@@ -122,4 +122,4 @@ function findsup(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable)
 end
 
 # This query is not cached
-findsup(sig::Type{<:Tuple}, table::CachedMethodTable) = findsup(sig, table.table)
+findsup(@nospecialize(sig::Type), table::CachedMethodTable) = findsup(sig, table.table)

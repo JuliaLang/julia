@@ -275,6 +275,15 @@ macro overlay(mt, def)
     esc(def)
 end
 
+let new_mt(name::Symbol, mod::Module) = begin
+        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, name)
+        ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
+    end
+    @eval macro MethodTable(name::Symbol)
+        esc(:(const $name = $$new_mt($(quot(name)), $(__module__))))
+    end
+end
+
 """
     Experimental.@MethodTable(name)
 
@@ -282,10 +291,6 @@ Create a new MethodTable in the current module, bound to `name`. This method tab
 used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
 adding them to the global method table.
 """
-macro MethodTable(name::Symbol)
-    esc(quote
-        const $name = ccall(:jl_new_method_table, Any, (Any, Any), $(quot(name)), $(__module__))
-    end)
-end
+:@MethodTable
 
 end
