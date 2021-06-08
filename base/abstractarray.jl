@@ -2374,7 +2374,6 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     # @assert all(==(0), blockcounts)
 
     # copy into final array
-    # A = Array{T, nd}(undef, outdims...)
     A = cat_similar(as[1], T, outdims)
     hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
     return A
