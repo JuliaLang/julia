@@ -32,11 +32,13 @@ import Markdown
     @test all(duplicates .∈ Ref(keys(REPLCompletions.symbols_latex_canonical)))
 end
 
-@testset "unicode normalization" begin
+@testset "unicode operators" begin
     @test contains(let buf = IOBuffer()
             Core.eval(Main, REPL.helpmode(buf, "\u2212"))
             String(take!(buf))
         end, "\nsearch: - ")
+
+    @test REPL.lookup_doc(:⊻=) == Markdown.parse("`x ⊻= y` is a synonym for `x = x ⊻ y`")
 end
 
 @testset "quoting in doc search" begin

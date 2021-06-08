@@ -25,6 +25,45 @@ helpmode(line::AbstractString) = helpmode(stdout, line)
 
 const extended_help_on = Ref{Any}(nothing)
 
+function _helpmode_parse(line::AbstractString)
+    line = strip(line)
+    # interpret anything starting with # or #= as asking for help on comments
+    if startswith(line, "#")
+        if startswith(line, "#=")
+            line = "#="
+        else
+            line = "#"
+        end
+    end
+    x = Meta.parse(line, raise = false, depwarn = false)
+    if Meta.isexpr(x, :error)
+        # handle operators like +=
+        asinfix = Meta.parse("x $line x", raise = false, depwarn = false)
+        if asinfix isa Expr && length(asinfix.args) == 2 && asinfix.args[1] == asinfix.args[2] == :x
+            x = asinfix.head
+        end
+    end
+    if Meta.isexpr(x, :.) && length(x.args) == 1 && x.args[1] isa Symbol
+        # handle broadcast operators
+        x = Symbol(string(x.head) * string(x.args[1]))
+    end
+    assym = Symbol(line)
+    if haskey(keywords, assym) || isexpr(x, :error) || isexpr(x, :invalid) || isexpr(x, :incomplete)
+        # Docs for keywords must be treated separately since trying to parse a single
+        # keyword such as `function` would throw a parse error due to the missing `end`.
+        assym
+    elseif isexpr(x, (:using, :import))
+        (x::Expr).head
+    else
+        # Retrieving docs for macros requires us to make a distinction between the text
+        # `@macroname` and `@macroname()`. These both parse the same, but are used by
+        # the docsystem to return different results. The first returns all documentation
+        # for `@macroname`, while the second returns *only* the docs for the 0-arg
+        # definition if it exists.
+        (isexpr(x, :macrocall, 1) && !endswith(line, "()")) ? quot(x) : x
+    end
+end
+
 function _helpmode(io::IO, line::AbstractString)
     line = strip(line)
     ternary_operator_help = (line == "?" || line == "?:")
@@ -36,35 +75,13 @@ function _helpmode(io::IO, line::AbstractString)
         extended_help_on[] = nothing
         brief = true
     end
-    # interpret anything starting with # or #= as asking for help on comments
-    if startswith(line, "#")
-        if startswith(line, "#=")
-            line = "#="
-        else
-            line = "#"
-        end
-    end
-    x = Meta.parse(line, raise = false, depwarn = false)
-    assym = Symbol(line)
-    expr =
-        if haskey(keywords, Symbol(line)) || Base.isoperator(assym) || isexpr(x, :error) ||
-            isexpr(x, :invalid) || isexpr(x, :incomplete)
-            # Docs for keywords must be treated separately since trying to parse a single
-            # keyword such as `function` would throw a parse error due to the missing `end`.
-            assym
-        elseif isexpr(x, (:using, :import))
-            (x::Expr).head
-        else
-            # Retrieving docs for macros requires us to make a distinction between the text
-            # `@macroname` and `@macroname()`. These both parse the same, but are used by
-            # the docsystem to return different results. The first returns all documentation
-            # for `@macroname`, while the second returns *only* the docs for the 0-arg
-            # definition if it exists.
-            (isexpr(x, :macrocall, 1) && !endswith(line, "()")) ? quot(x) : x
-        end
+    expr = _helpmode_parse(line)
     # the following must call repl(io, expr) via the @repl macro
     # so that the resulting expressions are evaluated in the Base.Docs namespace
-    :($REPL.@repl $io $expr $brief)
+    quote
+        $REPL.repl_latex($io, $line)
+        $REPL.@repl $io $expr $brief
+    end
 end
 _helpmode(line::AbstractString) = _helpmode(stdout, line)
 
@@ -221,7 +238,7 @@ function lookup_doc(ex)
         str = string(ex)
         isdotted = startswith(str, ".")
         if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment && ex !== :(:=)
-            op = str[1:end-1]
+            op = str[1:prevind(str, end, 1)]
             eq = isdotted ? ".=" : "="
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
         elseif isdotted && ex !== :(..)
@@ -402,7 +419,7 @@ function symbol_latex(s::String)
 
     return get(symbols_latex, s, "")
 end
-function repl_latex(io::IO, s::String)
+function repl_latex(io::IO, s::AbstractString)
     # decompose NFC-normalized identifier to match tab-completion input
     s = normalize(s, :NFD)
     latex = symbol_latex(s)
@@ -450,23 +467,14 @@ function repl_latex(io::IO, s::String)
         println(io, '\n')
     end
 end
-repl_latex(s::String) = repl_latex(stdout, s)
-
-function normalize_symbol(s::Symbol)
-    # parse to apply string->normsymbol
-    normalized = Meta.parse(string(s), raise = false, depwarn = false)
-    normalized isa Symbol ? normalized : s
-end
+repl_latex(s::AbstractString) = repl_latex(stdout, s)
 
 macro repl(ex, brief::Bool=false) repl(ex; brief=brief) end
 macro repl(io, ex, brief) repl(io, ex; brief=brief) end
 
 function repl(io::IO, s::Symbol; brief::Bool=true)
-    str_orig = string(s)
-    s = normalize_symbol(s)
     str = string(s)
     quote
-        repl_latex($io, $str_orig)
         repl_search($io, $str)
         $(if !isdefined(Main, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str))
