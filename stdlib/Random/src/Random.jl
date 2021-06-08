@@ -13,6 +13,7 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
+import SHA
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
