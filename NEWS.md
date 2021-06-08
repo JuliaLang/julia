@@ -158,15 +158,16 @@ Standard library changes
 * `pkg> rm`, `pin`, and `free` now accept the `--all` argument to call the action on all packages.
 * Registries downloaded from the Pkg Server (not git) are no longer uncompressed into files but instead
   read directly from the compressed tarball into memory. This improves performance on
-  filesystems which do not handle a large number of files well. To turn this feature off, set the environment
-  variable `JULIA_PKG_UNPACK_REGISTRY=true`.
-* It is now possible to use an external `git` executable instead of the default libgit2 library for
-  the downloads that happen via the Git protocol by setting the environment variable `JULIA_PKG_USE_CLI_GIT=true`.
-* Registries downloaded from the Pkg Server (not git) is now assumed to be immutable. Manual changes to their files
-  might not be picked up by a running Pkg session.
-* Adding packages by folder name in the REPL mode now requires a prepending a `./` to the folder name package folder
-  is in the current folder, e.g. `add ./Package` is required instead of `add Pacakge`. This is to avoid confusion
-  between the package name `Package` and the local directory `Package`.
+  filesystems which do not handle a large number of files well. To turn this feature off, set the
+  environment variable `JULIA_PKG_UNPACK_REGISTRY=true`.
+* It is now possible to use an external `git` executable instead of the default libgit2 library
+  for the downloads that happen via the Git protocol by setting the environment variable
+  `JULIA_PKG_USE_CLI_GIT=true`.
+* Registries downloaded from the Pkg Server (not git) is now assumed to be immutable. Manual changes
+  to their files might not be picked up by a running Pkg session.
+* Adding packages by directory name in the REPL mode now requires prepending `./` to the name if the
+  package is in the current directory; e.g. `add ./Package` is required instead of `add Package`.
+  This is to avoid confusion between the package name `Package` and the local directory `Package`.
 * The `mode` keyword for `PackageSpec` has been removed.
 
 #### LinearAlgebra
@@ -228,11 +229,18 @@ Standard library changes
 
 #### Downloads
 
-* If a cookie header is set in a redirected request, the cookie will now be sent in following requests (<https://github.com/JuliaLang/Downloads.jl/pull/98>).
-* If a `~/.netrc` file exists, it is used to get passwords for authenticated websites (<https://github.com/JuliaLang/Downloads.jl/pull/98>).
-* [Sever Name Indication](https://en.wikipedia.org/wiki/Server_Name_Indication) is now sent with all TLS connections, even when the server's identity is not verified (see [NetworkOptions](https://github.com/JuliaLang/NetworkOptions.jl); <https://github.com/JuliaLang/Downloads.jl/pull/114>).
-* When verifying TLS connections on Windows, if the certificate revocation server cannot be reached, the connection is allowed; this matches what other applications do and how revocation is performed on macOS (<https://github.com/JuliaLang/Downloads.jl/pull/115>).
-* There is now a 30-second connection timeout and a 20-second timeout if no data is sent; in combination, this guarantees that connections must make some progress or they will timeout in under a minute (<https://github.com/JuliaLang/Downloads.jl/pull/126>).
+* If a cookie header is set in a redirected request, the cookie will now be sent in following
+  requests (<https://github.com/JuliaLang/Downloads.jl/pull/98>).
+* If a `~/.netrc` file exists, it is used to get passwords for authenticated websites
+  (<https://github.com/JuliaLang/Downloads.jl/pull/98>).
+* [Server Name Indication](https://en.wikipedia.org/wiki/Server_Name_Indication) is now sent with
+  all TLS connections, even when the server's identity is not verified (see [NetworkOptions](https://github.com/JuliaLang/NetworkOptions.jl); <https://github.com/JuliaLang/Downloads.jl/pull/114>).
+* When verifying TLS connections on Windows, if the certificate revocation server cannot be
+  reached, the connection is allowed; this matches what other applications do and how revocation
+  is performed on macOS (<https://github.com/JuliaLang/Downloads.jl/pull/115>).
+* There is now a 30-second connection timeout and a 20-second timeout if no data is sent; in
+  combination, this guarantees that connections must make some progress or they will timeout in
+  under a minute (<https://github.com/JuliaLang/Downloads.jl/pull/126>).
 
 #### Statistics
 
@@ -242,11 +250,23 @@ Standard library changes
 
 #### Tar
 
-* `Tar.extract` now ignores the exact permission mode in a tarball and normalizes modes in the same way that `Tar.create` does, which is, in turn the same way that `git` normalizes them (<https://github.com/JuliaIO/Tar.jl/pull/99>).
-* Functions that consume tarballs now handle hard links: the link target must be a previously seen file; `Tar.list` lists the entry with `:hardlink` type and `.link` field giving the path to the target; other functions — `Tar.extracct`, `Tar.rewrite`, `Tar.tree_hash` — treat a hard link as a copy of the target file (<https://github.com/JuliaIO/Tar.jl/pull/102>).
-* The standard format generated by `Tar.create` and `Tar.rewrite` now includes entries for non-empty directories; this shouldn't be neccessary, but some tools that consume tarballs (including docker) are confused by the absence of these directory entries (<https://github.com/JuliaIO/Tar.jl/pull/106>).
-* `Tar` now accepts tarballs with leading spaces in octal integer header fields: this is technically not a valid format according to the POSIX spec, but old Solaris `tar` commands produced tarballs like this so this format does occur in the wild, and it seems harmless to accept it (<https://github.com/JuliaIO/Tar.jl/pull/116>).
-* `Tar.extract` now takes a `set_permissions` keyword argument, which defaults to `true`; if `false` is passed instead, the permissions of extracted files are not modified on extraction (<https://github.com/JuliaIO/Tar.jl/pull/113>).
+* `Tar.extract` now ignores the exact permission mode in a tarball and normalizes modes in the
+  same way that `Tar.create` does, which is, in turn the same way that `git` normalizes them
+  (<https://github.com/JuliaIO/Tar.jl/pull/99>).
+* Functions that consume tarballs now handle hard links: the link target must be a previously seen
+  file; `Tar.list` lists the entry with `:hardlink` type and `.link` field giving the path to the
+  target; other functions — `Tar.extract`, `Tar.rewrite`, `Tar.tree_hash` — treat a hard link as a
+  copy of the target file (<https://github.com/JuliaIO/Tar.jl/pull/102>).
+* The standard format generated by `Tar.create` and `Tar.rewrite` now includes entries for non-empty
+  directories; this shouldn't be neccessary, but some tools that consume tarballs (including docker)
+  are confused by the absence of these directory entries (<https://github.com/JuliaIO/Tar.jl/pull/106>).
+* `Tar` now accepts tarballs with leading spaces in octal integer header fields: this is technically
+  not a valid format according to the POSIX spec, but old Solaris `tar` commands produced tarballs like
+  this so this format does occur in the wild, and it seems harmless to accept it
+  (<https://github.com/JuliaIO/Tar.jl/pull/116>).
+* `Tar.extract` now takes a `set_permissions` keyword argument, which defaults to `true`; if `false` is
+  passed instead, the permissions of extracted files are not modified on extraction
+  (<https://github.com/JuliaIO/Tar.jl/pull/113>).
 
 #### Distributed
 
