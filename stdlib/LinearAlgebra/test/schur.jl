@@ -200,6 +200,6 @@ end
     D = schur(transpose(A), A)
     E = D.left*D.S*D.right'
     @test A' ≈ C ≈ E
-end  
+end
 
 end # module TestSchur
