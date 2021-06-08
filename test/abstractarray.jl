@@ -1430,16 +1430,16 @@ end
     @test hvncat((2,), false, 1, 1) == [1; 1]
     @test typed_hvncat(Float64, (2,), false, 1, 1) == Float64[1.0; 1.0]
     # shape form
-    @test hvncat((2,), true, 1, 1) == [1 1]
-    @test hvncat((2,), true, [1], [1]) == [1 1]
+    @test hvncat(((2,),), true, 1, 1) == [1 1]
+    @test hvncat(((2,),), true, [1], [1]) == [1 1]
     @test_throws ArgumentError hvncat((2,), true, 1)
-    @test hvncat((2,), false, 1, 1) == [1; 1]
-    @test hvncat((2,), false, [1], [1]) == [1; 1]
-    @test typed_hvncat(Float64, (2,), true, 1, 1) == Float64[1.0 1.0]
-    @test typed_hvncat(Float64, (2,), true, [1], [1]) == Float64[1.0 1.0]
+    @test hvncat(((2,),), false, 1, 1) == [1; 1]
+    @test hvncat(((2,),), false, [1], [1]) == [1; 1]
+    @test typed_hvncat(Float64, ((2,),), true, 1, 1) == Float64[1.0 1.0]
+    @test typed_hvncat(Float64, ((2,),), true, [1], [1]) == Float64[1.0 1.0]
     @test_throws ArgumentError typed_hvncat(Float64, (2,), true, 1)
-    @test typed_hvncat(Float64, (2,), false, 1, 1) == Float64[1.0; 1.0]
-    @test typed_hvncat(Float64, (2,), false, [1], [1]) == Float64[1.0; 1.0]
+    @test typed_hvncat(Float64, ((2,),), false, 1, 1) == Float64[1.0; 1.0]
+    @test typed_hvncat(Float64, ((2,),), false, [1], [1]) == Float64[1.0; 1.0]
 
     # reject dimension < 0
     @test hvncat(-1) == []

@@ -2116,7 +2116,7 @@ hvncat(::Tuple{}, ::Bool, xs...) = []
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
 hvncat(dim::Int, xs...) = _hvncat(dim, true, xs...)
 
-_hvncat(::Union{Tuple, Int}, ::Bool) = []
+_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool) = _typed_hvncat(Any, dimsshape, true)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), dimsshape, row_first, xs...)
@@ -2169,19 +2169,21 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
 end
 
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
-_typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
+_typed_hvncat(::Type{T}, ::Val{0}) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::Number) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
-_typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = 
-    N > 0 ?
-        _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...) :
-        throw(ArgumentError("concatenation dimension must be a positive integer"))
+_typed_hvncat(::Type, ::Val{0}, ::Any...) =
+    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+
+_typed_hvncat(::Type{T}, ::Val{N}) where {T, N} =
+    (N < 0 && throw(ArgumentError("concatenation dimension must be nonnegative"))) ||
+    Vector{T}()
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
     # conditions: the elements must all have 1- or 0-length dimensions above N
-    N > 0 || throw(ArgumentError("concatenation dimension must be a positive integer"))
+    N < 0 && throw(ArgumentError("concatenation dimension must be nonnegative"))
     for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
             return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
@@ -2211,7 +2213,7 @@ end
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
     # into the destination
-    N > 0 || throw(ArgumentError("concatenation dimension must be a positive integer"))
+    N < 0 && throw(ArgumentError("concatenation dimension must be nonnegative"))
     nd = N
     Ndim = 0
     for a ∈ as
