@@ -44,11 +44,6 @@
     # Issue #32160 (unsigned underflow in lpad/rpad)
     @test lpad("xx", UInt(1), " ") == "xx"
     @test rpad("xx", UInt(1), " ") == "xx"
-    # Issue #38256 (lpad/rpad defined in terms of textwidth)
-    @test lpad("⟨k|H₁|k̃⟩", 12) |> textwidth == 12
-    @test rpad("⟨k|H₁|k̃⟩", 12) |> textwidth == 12
-    @test lpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
-    @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
 end
 
 # string manipulation
