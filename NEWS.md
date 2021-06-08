@@ -232,7 +232,7 @@ Standard library changes
 * If a `~/.netrc` file exists, it is used to get passwords for authenticated websites (<https://github.com/JuliaLang/Downloads.jl/pull/98>).
 * [Sever Name Indication](https://en.wikipedia.org/wiki/Server_Name_Indication) is now sent with all TLS connections, even when the server's identity is not verified (see [NetworkOptions](https://github.com/JuliaLang/NetworkOptions.jl); <https://github.com/JuliaLang/Downloads.jl/pull/114>).
 * When verifying TLS connections on Windows, if the certificate revocation server cannot be reached, the connection is allowed; this matches what other applications do and how revocation is performed on macOS (<https://github.com/JuliaLang/Downloads.jl/pull/115>).
-* There is now a 30 second connection timeout a 20 second timeout if no data is sent; in combination, this guarantees that connections must make some progress or they will timeout in under a minute (<https://github.com/JuliaLang/Downloads.jl/pull/126>).
+* There is now a 30-second connection timeout and a 20-second timeout if no data is sent; in combination, this guarantees that connections must make some progress or they will timeout in under a minute (<https://github.com/JuliaLang/Downloads.jl/pull/126>).
 
 #### Statistics
 
