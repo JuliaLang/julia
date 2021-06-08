@@ -49,6 +49,9 @@
     @test rpad("⟨k|H₁|k̃⟩", 12) |> textwidth == 12
     @test lpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
     @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
+    # lpad/rpad with zero-textwidth padding:
+    @test lpad("foo", 6, '\0') == "\0\0\0foo"
+    @test rpad("foo", 6, '\0') == "foo\0\0\0"
 end
 
 # string manipulation
