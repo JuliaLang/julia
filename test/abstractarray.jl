@@ -1398,7 +1398,7 @@ end
     @test typed_hvncat(Float64, 0) == Float64[]
     @test typed_hvncat(Float64, 0, 1) == fill(1.0)
     @test typed_hvncat(Float64, 0, [1]) == Float64[1.0]
-    @test_throws ArgumentError hvncat(0, 1, 1)
+    @test_throws ArgumentError typed_hvncat(Float64, 0, 1, 1)
     @test hvncat((), true) == []
     @test hvncat((), true, 1) == fill(1)
     @test hvncat((), true, [1]) == [1]
@@ -1432,20 +1432,20 @@ end
     # shape form
     @test hvncat(((2,),), true, 1, 1) == [1 1]
     @test hvncat(((2,),), true, [1], [1]) == [1 1]
-    @test_throws ArgumentError hvncat((2,), true, 1)
+    @test_throws ArgumentError hvncat(((2,),), true, 1)
     @test hvncat(((2,),), false, 1, 1) == [1; 1]
     @test hvncat(((2,),), false, [1], [1]) == [1; 1]
     @test typed_hvncat(Float64, ((2,),), true, 1, 1) == Float64[1.0 1.0]
     @test typed_hvncat(Float64, ((2,),), true, [1], [1]) == Float64[1.0 1.0]
-    @test_throws ArgumentError typed_hvncat(Float64, (2,), true, 1)
+    @test_throws ArgumentError typed_hvncat(Float64, ((2,),), true, 1)
     @test typed_hvncat(Float64, ((2,),), false, 1, 1) == Float64[1.0; 1.0]
     @test typed_hvncat(Float64, ((2,),), false, [1], [1]) == Float64[1.0; 1.0]
 
     # reject dimension < 0
-    @test hvncat(-1) == []
+    @test_throws ArgumentError hvncat(-1)
     @test_throws ArgumentError hvncat(-1, 1)
     @test_throws ArgumentError hvncat(-1, [1])
-    @test typed_hvncat(Float64, -1) == []
+    @test_throws ArgumentError typed_hvncat(Float64, -1)
     @test_throws ArgumentError typed_hvncat(Float64, -1, 1)
     @test_throws ArgumentError typed_hvncat(Float64, -1, [1])
 
@@ -1465,10 +1465,11 @@ end
 
     # reject shape with negative values
     for v1 ∈ (-1, 0, 1)
-    for v2 ∈ (-1, 0, 1)
-        v1 == v2 == 1 && continue
-        @test_throws ArgumentError hvncat(((v1,), (v2,)), true, 1)
-        @test_throws ArgumentError typed_hvncat(Float64, ((v1,), (v2,)), true, 1)
+        for v2 ∈ (-1, 0, 1)
+            v1 == v2 == 1 && continue
+            @test_throws ArgumentError hvncat(((v1,), (v2,)), true, 1)
+            @test_throws ArgumentError typed_hvncat(Float64, ((v1,), (v2,)), true, 1)
+        end
     end
 
     @test_throws BoundsError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
