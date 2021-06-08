@@ -170,7 +170,11 @@ end
     @test eigmax(A') == eigmax(copy(A'))
 end
 
-A = randn(3, 3)
-@test eigen(A) == eigen(A)
+@testset "equality of eigen factorizations" begin
+    A = randn(3, 3)
+    @test eigen(A) == eigen(A)
+    @test hash(A) == hash(A)
+    @test isequal(A, A)
+end
 
 end # module TestEigen
