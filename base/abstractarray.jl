@@ -2111,68 +2111,24 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4  5  6
 ```
 """
-hvncat(::Tuple{}, ::Bool) = []
-hvncat(::Tuple{}, ::Bool, xs...) = []
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
 hvncat(dim::Int, xs...) = _hvncat(dim, true, xs...)
 
-_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool) = _typed_hvncat(Any, dimsshape, true)
+_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool) = _typed_hvncat(Any, dimsshape, row_first)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dimsshape, row_first, xs...)
 
-typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
-typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-typed_hvncat(T::Type, dimsshape::Tuple{Vararg{Any, 1}}, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, Val(row_first), xs...)
+typed_hvncat(T::Type, dimsshape::Tuple{Vararg{Any, 1}}, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
-
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs::Number...) where T = Vector{T}()
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
-    A = Array{T, N}(undef, dims...)
-    lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
-    lengthx = length(xs) # Cuts from 3 allocations to 1.
-    if lengtha != lengthx
-       throw(ArgumentError("argument count does not match specified shape (expected $lengtha, got $lengthx)"))
-    end
-    hvncat_fill!(A, row_first, xs)
-    return A
-end
-
-function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
-    # putting these in separate functions leads to unnecessary allocations
-    if row_first
-        nr, nc = size(A, 1), size(A, 2)
-        nrc = nr * nc
-        na = prod(size(A)[3:end])
-        k = 1
-        for d ∈ 1:na
-            dd = nrc * (d - 1)
-            for i ∈ 1:nr
-                Ai = dd + i
-                for j ∈ 1:nc
-                    A[Ai] = xs[k]
-                    k += 1
-                    Ai += nr
-                end
-            end
-        end
-    else
-        for k ∈ eachindex(xs)
-            A[k] = xs[k]
-        end
-    end
-end
 
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
 _typed_hvncat(::Type{T}, ::Val{0}) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Val{0}, x::Number) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
+_typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x) # could reduce broadcast overhead?
 _typed_hvncat(::Type, ::Val{0}, ::Any...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 
@@ -2241,11 +2197,29 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     return A
 end
 
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, 1}}, ::Bool, as...) where T
-    lengthas = length(as)
-    d = only(dims)
-    lengthas == d && ArgumentError("number of elements does not match `dims` argument; expected $d, got $lengthas") |> throw
-    return typed_vcat(T, as...)
+
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = T.(x) # could reduce broadcast overhead?
+_typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
+    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+_typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
+    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+
+_typed_hvncat(T::Type, dims::Tuple{Vararg{Int, 1}}, ::Bool, xs::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), xs...)
+_typed_hvncat(T::Type, dims::Tuple{Vararg{Int, 1}}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
+
+function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
+    all(x -> x > 0, dims) || throw(ArgumentError("`dims` argument must contain positive integers"))
+    A = Array{T, N}(undef, dims...)
+    lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
+    lengthx = length(xs) # Cuts from 3 allocations to 1.
+    if lengtha != lengthx
+       throw(ArgumentError("argument count does not match specified shape (expected $lengtha, got $lengthx)"))
+    end
+    hvncat_fill!(A, row_first, xs)
+    return A
 end
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
@@ -2310,18 +2284,13 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     return A
 end
 
-function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, 1}}, ::Val{row_first}, as...) where {T, row_first}
-    length(dims[1]) > 0 || throw(ArgumentError("each level of `shape` argument must have at least one value"))
-    lengthas = length(as)
-    d = only(only(dims))
-    lengthas == d || throw(ArgumentError("number of elements does not match `dims` argument; expected $d, got $lengthas"))
-    return row_first ?
-        typed_hcat(T, as...) :
-        typed_vcat(T, as...)
-end
+_typed_hvncat(T::Type, shape::Tuple{Vararg{Tuple, 1}}, row_first::Bool, xs...) =
+    (length(shape[1]) == 0 && throw(ArgumentError("each level of `shape` argument must have at least one value"))) ||
+        _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
 
 function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Bool, as...) where {T, N}
-    all(x -> length(x) > 0, dims) || throw(ArgumentError("each level of `shape` argument must have at least one value"))
+    all(x -> length(x) > 0, shape) || throw(ArgumentError("each level of `shape` argument must have at least one value"))
+    all(x -> all(y -> y > 0, x), shape) || throw(ArgumentError("`shape` argument must consist of positive integers"))
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
     shape = collect(shape) # saves allocations later
@@ -2377,6 +2346,40 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     A = cat_similar(as[1], T, outdims)
     hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
     return A
+end
+
+function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T, row_first}
+    lengthas = length(as)
+    ds > 0 || throw(ArgumentError("`dimsshape` argument must consist of positive integers"))
+    lengthas == ds || throw(ArgumentError("number of elements does not match `dimshape` argument; expected $ds, got $lengthas"))
+    return row_first ?
+        _typed_hvncat(T, Val(2), as...) :
+        _typed_hvncat(T, Val(1), as...)
+end
+
+function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
+    # putting these in separate functions leads to unnecessary allocations
+    if row_first
+        nr, nc = size(A, 1), size(A, 2)
+        nrc = nr * nc
+        na = prod(size(A)[3:end])
+        k = 1
+        for d ∈ 1:na
+            dd = nrc * (d - 1)
+            for i ∈ 1:nr
+                Ai = dd + i
+                for j ∈ 1:nc
+                    A[Ai] = xs[k]
+                    k += 1
+                    Ai += nr
+                end
+            end
+        end
+    else
+        for k ∈ eachindex(xs)
+            A[k] = xs[k]
+        end
+    end
 end
 
 function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
