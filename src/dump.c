@@ -652,7 +652,8 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             jl_methtable_t *mt = (jl_methtable_t*)m->external_mt;
             jl_serialize_value(s, mt->module);
             jl_serialize_value(s, mt->name);
-        } else {
+        }
+        else {
             jl_serialize_value(s, (jl_value_t*)m->external_mt);
         }
         if (!(serialization_mode & METHOD_INTERNAL))
@@ -1489,7 +1490,8 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         m->external_mt = jl_get_global(mt_mod, mt_name);
         jl_gc_wb(m, m->external_mt);
         assert(jl_typeis(m->external_mt, jl_methtable_type));
-    } else {
+    }
+    else {
         m->external_mt = jl_deserialize_value(s, &m->external_mt);
         jl_gc_wb(m, m->external_mt);
     }

@@ -282,8 +282,7 @@ Create a new MethodTable in the current module, bound to `name`. This method tab
 used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
 adding them to the global method table.
 """
-macro MethodTable(name)
-    isa(name, Symbol) || error("name must be a symbol")
+macro MethodTable(name::Symbol)
     esc(quote
         const $name = ccall(:jl_new_method_table, Any, (Any, Any), $(quot(name)), $(__module__))
     end)
