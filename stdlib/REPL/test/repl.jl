@@ -1367,7 +1367,7 @@ end
     end
 end
 
-# err should reprint error
+# err should reprint error if deeper than top-level
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin
         REPL.run_repl(repl)
@@ -1378,6 +1378,11 @@ fake_repl() do stdin_write, stdout_read, repl
     @test readline(stdout_read) == ""
     readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "err\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: err not defined"
+    readuntil(stdout_read, "julia> ", keep=true)
+    write(stdin_write, "foo() = foobar\n")
+    write(stdin_write, "foo()\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
     @test readline(stdout_read) == "ERROR: UndefVarError: foobar not defined"
