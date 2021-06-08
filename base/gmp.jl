@@ -758,14 +758,7 @@ Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
 Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
 Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
-function Base.deepcopy_internal(x::BigInt, stackdict::IdDict)
-    if haskey(stackdict, x)
-        return stackdict[x]
-    end
-    y = MPZ.set(x)
-    stackdict[x] = y
-    return y
-end
+Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)
 
 ## streamlined hashing for BigInt, by avoiding allocation from shifts ##
 
