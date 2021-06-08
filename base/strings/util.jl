@@ -391,7 +391,6 @@ function rpad(
     end
     m = n - w
     m ≤ 0 && return string(s)
-    l = textwidth(p)
     q, r = divrem(m, l)
     r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
 end
