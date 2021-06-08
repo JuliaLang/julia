@@ -95,12 +95,16 @@ end
 function display_error(io::IO, er, bt)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
+    istrivial = length(stack) == 1 && length(bt) ≤ 1 # frame 1 = top level
+    !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
     showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     println(io)
 end
 function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
+    istrivial = length(stack) == 1 && length(stack[1].backtrace) ≤ 1 # frame 1 = top level
+    !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
     show_exception_stack(IOContext(io, :limit => true), bt)
     println(io)
 end
@@ -117,7 +121,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 print(color_normal)
             end
             if lasterr !== nothing
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
