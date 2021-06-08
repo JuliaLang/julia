@@ -2258,12 +2258,12 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
                     elseif currentdims[d] < outdims[d] # dimension in progress
                         break
                     else # exceeded dimension
-                        ArgumentError("argument $i has too many elements along axis $d") |> throw
+                        throw(ArgumentError("argument $i has too many elements along axis $d"))
                     end
                 end
             end
         elseif currentdims[d1] > outdims[d1] # exceeded dimension
-            ArgumentError("argument $i has too many elements along axis $d1") |> throw
+            throw(ArgumentError("argument $i has too many elements along axis $d1"))
         end
     end
 
@@ -2273,8 +2273,8 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
         len += cat_length(a)
     end
     outlen = prod(outdims)
-    outlen == 0 && ArgumentError("too few elements in arguments, unable to infer dimensions") |> throw
-    len == outlen || ArgumentError("too many elements in arguments; expected $(outlen), got $(len)") |> throw
+    outlen == 0 && throw(ArgumentError("too few elements in arguments, unable to infer dimensions"))
+    len == outlen || throw(ArgumentError("too many elements in arguments; expected $(outlen), got $(len)"))
 
     # copy into final array
     A = cat_similar(as[1], T, outdims)
@@ -2315,7 +2315,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
             if d == 1 || i == 1 || wasstartblock
                 currentdims[d] += dsize
             elseif dsize != cat_size(as[i - 1], ad)
-                ArgumentError("argument $i has a mismatched number of elements along axis $ad; expected $(cat_size(as[i - 1], ad)), got $dsize") |> throw
+                throw(ArgumentError("argument $i has a mismatched number of elements along axis $ad; expected $(cat_size(as[i - 1], ad)), got $dsize"))
             end
 
             wasstartblock = blockcounts[d] == 1 # remember for next dimension
@@ -2325,7 +2325,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
                 if outdims[d] == 0
                     outdims[d] = currentdims[d]
                 elseif outdims[d] != currentdims[d]
-                    ArgumentError("argument $i has a mismatched number of elements along axis $ad; expected $(abs(outdims[d] - (currentdims[d] - dsize))), got $dsize") |> throw
+                    throw(ArgumentError("argument $i has a mismatched number of elements along axis $ad; expected $(abs(outdims[d] - (currentdims[d] - dsize))), got $dsize"))
                 end
                 currentdims[d] = 0
                 blockcounts[d] = 0
