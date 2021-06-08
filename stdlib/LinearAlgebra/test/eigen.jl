@@ -170,5 +170,7 @@ end
     @test eigmax(A') == eigmax(copy(A'))
 end
 
+A = randn(3, 3)
+@test eigen(A) == eigen(A)
 
 end # module TestEigen

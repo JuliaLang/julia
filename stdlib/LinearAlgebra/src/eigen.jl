@@ -685,6 +685,10 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
     nothing
 end
 
+function Base.:(==)(A::Eigen, B::Eigen)
+    return A.values == B.values && A.vectors == B.vectors
+end
+
 # Conversion methods
 
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
