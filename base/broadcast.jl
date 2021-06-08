@@ -343,6 +343,47 @@ cat_nested(t::Any, rest...) = (t, cat_nested(rest...)...)
 cat_nested() = ()
 
 """
+    RecursiveInliningEnforcerA
+
+A helper type for the `make_makeargs` function that is used to break
+method recursion that sometimes prevents inlining which results in increased
+compilation and execution times. See issue
+https://github.com/JuliaLang/julia/issues/41090 for details.
+"""
+struct RecursiveInliningEnforcerA{T}
+    makeargs::T
+end
+
+"""
+    RecursiveInliningEnforcerB
+
+A helper type for the `make_makeargs` function. See `RecursiveInliningEnforcerA`
+for details.
+"""
+struct RecursiveInliningEnforcerB{TMT,TMH,TT,TH,TF}
+    makeargs_tail::TMT
+    makeargs_head::TMH
+    headargs::TH
+    tailargs::TT
+    f::TF
+end
+
+for UB in [Any, RecursiveInliningEnforcerA]
+    @eval @inline function (bb::RecursiveInliningEnforcerB{TMT,TMH,TT,TH,TF})(args::Vararg{Any,N}) where {N,TMT,TMH<:$UB,TT,TH,TF}
+        args1 = bb.makeargs_head(args...)
+        a = bb.headargs(args1...)
+        b = bb.makeargs_tail(bb.tailargs(args1...)...)
+        return (bb.f(a...), b...)
+    end
+end
+
+for UB in [Any, RecursiveInliningEnforcerB]
+    @eval @inline function (a::RecursiveInliningEnforcerA{TTA})(head::TH, tail::Vararg{Any,N}) where {TTA<:$UB,TH,N}
+        return (head, a.makeargs(tail...)...)
+    end
+end
+
+"""
     make_makeargs(makeargs_tail::Function, t::Tuple) -> Function
 
 Each element of `t` is one (consecutive) node in a broadcast tree.
@@ -358,7 +399,7 @@ by `t`).
 @inline make_makeargs(makeargs_tail, t::Tuple{}) = makeargs_tail
 @inline function make_makeargs(makeargs_tail, t::Tuple)
     makeargs = make_makeargs(makeargs_tail, tail(t))
-    (head, tail...)->(head, makeargs(tail...)...)
+    return RecursiveInliningEnforcerA(makeargs)
 end
 function make_makeargs(makeargs_tail, t::Tuple{<:Broadcasted, Vararg{Any}})
     bc = t[1]
@@ -377,11 +418,7 @@ function make_makeargs(makeargs_tail, t::Tuple{<:Broadcasted, Vararg{Any}})
         # args is flattened (i.e. our children have not been evaluated
         # yet).
         headargs, tailargs = make_headargs(bc.args), make_tailargs(bc.args)
-        return @inline function(args::Vararg{Any,N}) where N
-            args1 = makeargs_head(args...)
-            a, b = headargs(args1...), makeargs_tail(tailargs(args1...)...)
-            (f(a...), b...)
-        end
+        return RecursiveInliningEnforcerB(makeargs_tail, makeargs_head, headargs, tailargs, f)
     end
 end
 
