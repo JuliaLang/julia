@@ -2254,7 +2254,7 @@ function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as...) 
 
     currentdims = zeros(Int, nd)
     blockcount = 0
-    for i ∈ eachindex(as)
+    @inbounds for i ∈ eachindex(as)
         currentdims[d1] += cat_size(as[i], d1)
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
