@@ -69,5 +69,5 @@ end
     @test roundtrip(s)
 
     d = Dict("str" => string(Char(0xd800)))
-    @test_throws ErrorException TOML.print(d)
+    @test_throws ErrorException TOML.print(devnull, d)
 end
