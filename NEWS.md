@@ -1,4 +1,4 @@
-Julia v1.7 Release Notes
+Julia v1.8 Release Notes
 ========================
 
 
