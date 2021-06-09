@@ -2315,7 +2315,7 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
     all(!isempty, shapev) || throw(ArgumentError("each level of `shape` argument must have at least one value"))
     sum(tuple((shape...)...)) == N * shapelength || throw(ArgumentError("all levels of `shape` argument must sum to the same value"))
 
-    for i ∈ eachindex(as)
+    @inbounds for i ∈ eachindex(as)
         wasstartblock = false
         for d ∈ 1:nd
             ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
@@ -2390,13 +2390,13 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
             end
         end
     else
-        for k ∈ eachindex(xs)
+        @inbounds for k ∈ eachindex(xs)
             A[k] = xs[k]
         end
     end
 end
 
-function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
+@inline function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple) where {T, N}
     length(scratch1) == length(scratch2) == N ||
         throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
     0 < d1 < 3 && 0 < d2 < 3 && d1 != d2 ||
@@ -2410,7 +2410,7 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
                 Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
                 A[Ai] = ai
 
-                for j ∈ 1:N
+                @inbounds for j ∈ 1:N
                     inneroffsets[j] += 1
                     inneroffsets[j] < cat_size(a, j) && break
                     inneroffsets[j] = 0
@@ -2421,7 +2421,7 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
             A[Ai] = a
         end
 
-        for j ∈ (d1, d2, 3:N...)
+        @inbounds for j ∈ (d1, d2, 3:N...)
             offsets[j] += cat_size(a, j)
             offsets[j] < outdims[j] && break
             offsets[j] = 0
@@ -2429,10 +2429,9 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
     end
 end
 
-@propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int},
-                                              outdims::Tuple{Vararg{Int}}, nd::Int)
+@inline function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int}, outdims::Tuple{Vararg{Int}}, nd::Int)
     Ai = inneroffsets[1] + offsets[1] + 1
-    for j ∈ 2:nd
+    @inbounds for j ∈ 2:nd
         increment = inneroffsets[j] + offsets[j]
         for k ∈ 1:j-1
             increment *= outdims[k]
