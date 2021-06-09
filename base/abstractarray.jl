@@ -2227,6 +2227,7 @@ _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
 # balanced dimensions hvncat methods
 
 _typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
+_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
 
 function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {T, N}
     length(xs) > 0 || throw(ArgumentError("must have at least one element"))
