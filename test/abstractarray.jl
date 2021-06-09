@@ -1342,6 +1342,7 @@ end
     end
 end
 
+import Base.typed_hvncat
 @testset "hvncat" begin
     a = fill(1, (2,3,2,4,5))
     b = fill(2, (1,1,2,4,5))
@@ -1443,11 +1444,9 @@ end
     for v ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
         # reject dimension < 0
         @test_throws ArgumentError hvncat(-1, v...)
-        @test_throws ArgumentError typed_hvncat(Float64, -1, v...)
 
         # reject shape tuple with no elements
         @test_throws ArgumentError hvncat(((),), true, v...)
-        @test_throws ArgumentError typed_hvncat(Float64, ((),), true, v...)
     end
 
     # reject dims or shape with negative or zero values
@@ -1456,9 +1455,7 @@ end
             v1 == v2 == 1 && continue
             for v3 ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
                 @test_throws ArgumentError hvncat((v1, v2), true, v3...)
-                @test_throws ArgumentError typed_hvncat(Float64, (v1, v2), true, v3...)
                 @test_throws ArgumentError hvncat(((v1,), (v2,)), true, v3...)
-                @test_throws ArgumentError typed_hvncat(Float64, ((v1,), (v2,)), true, v3...)
             end
         end
     end
@@ -1466,13 +1463,11 @@ end
     for v ∈ ((1, [1]), ([1], 1), ([1], [1]))
         # reject shape with more than one end value
         @test_throws ArgumentError hvncat(((1, 1),), true, v...)
-        @test_throws ArgumentError typed_hvncat(Float64, ((1, 1),), true, v...)
     end
 
     for v ∈ ((1, 2, 3), (1, 2, [3]), ([1], [2], [3]))
         # reject shape with more values in later level
         @test_throws ArgumentError hvncat(((2, 1), (1, 1, 1)), true, v...)
-        @test_throws ArgumentError typed_hvncat(Float64, ((2, 1), (1, 1, 1)), true, v...)
     end
 
     # reject bad shapes and accept valid ones
@@ -1506,8 +1501,6 @@ end
                             if isbad
                                 @test_throws ArgumentError hvncat(shape, true, 1:6...)
                                 @test_throws ArgumentError hvncat(shape, true, Base.vect.(1:6)...)
-                                @test_throws ArgumentError typed_hvncat(Float64, shape, true, 1:6...)
-                                @test_throws ArgumentError typed_hvncat(Float64, shape, true, Base.vect.(1:6)...)
                             end
                         end
                     end
