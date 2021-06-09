@@ -2047,22 +2047,23 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     T[rs...;]
 end
 
-# nd concatenation
+## N-dimensional concatenation ##
 
 """
+    hvncat(dim::Int, row_first, values...)
     hvncat(dims::Tuple{Vararg{Int}}, row_first, values...)
     hvncat(shape::Tuple{Vararg{Tuple}}, row_first, values...)
 
 Horizontal, vertical, and n-dimensional concatenation of many `values` in one call.
 
-This function is called
-for block matrix syntax. The first argument either specifies the shape of the concatenation,
-similar to `hvcat`, as a tuple of tuples, or the dimensions that specify the key number of
-elements along each axis, and is used to determine the output dimensions. The `dims` form
-is more performant, and is used by default when the concatenation operation has the same
-number of elements along each axis (e.g., [a b; c d;;; e f ; g h]). The `shape` form is used
-when the number of elements along each axis is unbalanced (e.g., [a b ; c]). Unbalanced
-syntax needs additional validation overhead.
+This function is called for block matrix syntax. The first argument either specifies the
+shape of the concatenation, similar to `hvcat`, as a tuple of tuples, or the dimensions that
+specify the key number of elements along each axis, and is used to determine the output
+dimensions. The `dims` form is more performant, and is used by default when the concatenation
+operation has the same number of elements along each axis (e.g., [a b; c d;;; e f ; g h]).
+The `shape` form is used when the number of elements along each axis is unbalanced
+(e.g., [a b ; c]). Unbalanced syntax needs additional validation overhead. The `dim` form
+is an optimization for concatenation along just one dimension.
 
 # Examples
 ```jldoctest
@@ -2111,8 +2112,18 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4  5  6
 ```
 """
+function hvncat end
+
+# top-level methods
+
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
 hvncat(dim::Int, xs...) = _hvncat(dim, true, xs...)
+
+typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
+typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
+
+
+# intermediary methods from `hvncat` which determine a suitable element type
 
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool) = _typed_hvncat(Any, dimsshape, row_first)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dimsshape, row_first, xs...)
@@ -2121,10 +2132,16 @@ _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::Number...) = _typed_h
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dimsshape, row_first, xs...)
 
-typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
-typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
+# strip boolean from routing Int form through _hvncat
 
-_typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
+_typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...)
+
+
+## core hvncat implementations
+
+
+# 1-dimensional hvncat methods
+
 _typed_hvncat(::Type{T}, ::Val{0}) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x) # could reduce broadcast overhead?
@@ -2196,21 +2213,21 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
     return A
 end
 
+# 0-dimensional cases for balanced and unbalanced hvncat methods
 
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = T.(x) # could reduce broadcast overhead?
-_typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
-    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 
-_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, xs::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), xs...)
+
+# balanced dimensions hvncat methods
+
 _typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
 
 function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {T, N}
-    all(x -> x > 0, dims) || throw(ArgumentError("`dims` argument must contain positive integers"))
+    all(>(0), dims) || throw(ArgumentError("`dims` argument must contain positive integers"))
     A = Array{T, N}(undef, dims...)
     lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
     lengthx = length(xs) # Cuts from 3 allocations to 1.
@@ -2282,6 +2299,8 @@ function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as...) 
     hvncat_fill!(A, currentdims, outdims, d1, d2, as)
     return A
 end
+
+# unbalanced dimensions hvncat methods
 
 _typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...) =
     (length(shape[1]) == 0 && throw(ArgumentError("each level of `shape` argument must have at least one value"))) ||
