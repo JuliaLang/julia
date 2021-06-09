@@ -2121,7 +2121,7 @@ _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::Number...) = _typed_h
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dimsshape, row_first, xs...)
 
-typed_hvncat(T::Type, dimsshape::Tuple{Vararg{Any, 1}}, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
+typed_hvncat(T::Type, dimsshape::NTuple{1}, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 
@@ -2207,10 +2207,10 @@ _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 
-_typed_hvncat(T::Type, dims::Tuple{Vararg{Int, 1}}, ::Bool, xs::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), xs...)
-_typed_hvncat(T::Type, dims::Tuple{Vararg{Int, 1}}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
+_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, xs::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), xs...)
+_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
 
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
+function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {T, N}
     all(x -> x > 0, dims) || throw(ArgumentError("`dims` argument must contain positive integers"))
     A = Array{T, N}(undef, dims...)
     lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
@@ -2222,7 +2222,7 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     return A
 end
 
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
+function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as...) where {T, N}
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
@@ -2245,7 +2245,7 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
                 currentdims[d] += cat_size(as[i], d)
                 if outdims[d] == 0 # unfixed dimension
                     blockcount += 1
-                    if blockcount == (d > length(dims) ? 1 : dims[d]) # last expected member of dimension
+                    if blockcount == (d > N ? 1 : dims[d]) # last expected member of dimension
                         outdims[d] = currentdims[d]
                         currentdims[d] = 0
                         blockcount = 0
@@ -2284,11 +2284,11 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     return A
 end
 
-_typed_hvncat(T::Type, shape::Tuple{Vararg{Tuple, 1}}, row_first::Bool, xs...) =
+_typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...) =
     (length(shape[1]) == 0 && throw(ArgumentError("each level of `shape` argument must have at least one value"))) ||
         _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
 
-function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Bool, as...) where {T, N}
+function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {T, N}
     all(>(0), tuple((shape...)...)) || throw(ArgumentError("`shape` argument must consist of positive integers"))
     
     d1 = row_first ? 2 : 1
