@@ -2239,6 +2239,7 @@ function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Num
 end
 
 function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as...) where {T, N}
+    all(>(0), dims) || throw(ArgumentError("`dims` argument must contain positive integers"))
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
@@ -2393,14 +2394,12 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
         nr, nc = size(A, 1), size(A, 2)
         nrc = nr * nc
         na = prod(size(A)[3:end])
-        len = length(xs)
-
         k = 1
         @inbounds for d ∈ 1:na
             dd = nrc * (d - 1)
             for i ∈ 1:nr
                 Ai = dd + i
-                for j ∈ 1:nc
+                for _ ∈ 1:nc
                     A[Ai] = xs[k]
                     k += 1
                     Ai += nr
