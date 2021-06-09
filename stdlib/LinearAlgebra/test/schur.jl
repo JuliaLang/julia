@@ -193,4 +193,13 @@ end
     end
 end
 
+@testset "adjoint and transpose for schur (#40941)" begin
+    A = rand(3, 3)
+    B = schur(A', A)
+    C = B.left*B.S*B.right'
+    D = schur(transpose(A), A)
+    E = D.left*D.S*D.right'
+    @test A' ≈ C ≈ E
+end
+
 end # module TestSchur
