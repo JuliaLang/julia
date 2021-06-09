@@ -2302,7 +2302,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     shapepos = ones(Int, nd)
 
     for i ∈ eachindex(as)
-        length(as[i]) > 0 || ArgumentError("argument $i has no elements") |> throw
+        length(as[i]) > 0 || throw(ArgumentError("argument $i has no elements"))
         wasstartblock = false
         for d ∈ 1:nd
             ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
@@ -2317,7 +2317,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
 
             wasstartblock = blockcounts[d] == 1 # remember for next dimension
 
-            isendblock = blockcounts[d] == shape[d > N ? end : d][shapepos[d]]
+            isendblock = blockcounts[d] == shape[min(end, d)][shapepos[d]]
             if isendblock
                 if outdims[d] == 0
                     outdims[d] = currentdims[d]
