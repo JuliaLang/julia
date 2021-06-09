@@ -722,18 +722,27 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
         end
     elseif isa(before, OldSSAValue)
         pos = before.id
-        if pos > length(compact.ir.stmts)
-            #@assert attach_after
-            info = compact.pending_nodes.info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
-            pos, attach_after = info.pos, info.attach_after
+        if pos < compact.idx
+            renamed = compact.ssa_rename[pos]
+            count_added_node!(compact, inst.stmt)
+            line = something(inst.line, compact.result[renamed.id][:line])
+            node = add!(compact.new_new_nodes, renamed.id, attach_after)
+            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
+            return NewSSAValue(node.idx)
+        else
+            if pos > length(compact.ir.stmts)
+                #@assert attach_after
+                info = compact.pending_nodes.info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
+                pos, attach_after = info.pos, info.attach_after
+            end
+            line = something(inst.line, compact.ir.stmts[pos][:line])
+            node = add_pending!(compact, pos, attach_after)
+            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
+            os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
+            push!(compact.ssa_rename, os)
+            push!(compact.used_ssas, 0)
+            return os
         end
-        line = something(inst.line, compact.ir.stmts[pos][:line])
-        node = add_pending!(compact, pos, attach_after)
-        node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
-        os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
-        push!(compact.ssa_rename, os)
-        push!(compact.used_ssas, 0)
-        return os
     elseif isa(before, NewSSAValue)
         before_entry = compact.new_new_nodes.info[before.id]
         line = something(inst.line, compact.new_new_nodes.stmts[before.id][:line])
