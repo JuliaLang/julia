@@ -1472,7 +1472,7 @@ end
         end
     end
 
-    @test_throws BoundsError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
+    @test_throws ArgumentError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
 end
 
 @testset "keepat!" begin
