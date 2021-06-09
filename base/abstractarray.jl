@@ -2254,7 +2254,7 @@ function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as...) 
 
     currentdims = zeros(Int, nd)
     blockcount = 0
-    @inbounds for i ∈ eachindex(as)
+    for i ∈ eachindex(as)
         currentdims[d1] += cat_size(as[i], d1)
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
@@ -2334,7 +2334,7 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
     all(!isempty, shapev) || throw(ArgumentError("each level of `shape` argument must have at least one value"))
     sum(tuple((shape...)...)) == N * shapelength || throw(ArgumentError("all levels of `shape` argument must sum to the same value"))
 
-    @inbounds for i ∈ eachindex(as)
+    for i ∈ eachindex(as)
         wasstartblock = false
         for d ∈ 1:nd
             ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
@@ -2424,7 +2424,7 @@ end
     for a ∈ as
         if isa(a, AbstractArray)
             for ai ∈ a
-                Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
+                @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
                 A[Ai] = ai
 
                 @inbounds for j ∈ 1:N
@@ -2434,7 +2434,7 @@ end
                 end
             end
         else
-            Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
+            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
             A[Ai] = a
         end
 
@@ -2446,9 +2446,9 @@ end
     end
 end
 
-@inline function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int}, outdims::Tuple{Vararg{Int}}, nd::Int)
+@propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int}, outdims::Tuple{Vararg{Int}}, nd::Int)
     Ai = inneroffsets[1] + offsets[1] + 1
-    @inbounds for j ∈ 2:nd
+    for j ∈ 2:nd
         increment = inneroffsets[j] + offsets[j]
         for k ∈ 1:j-1
             increment *= outdims[k]
