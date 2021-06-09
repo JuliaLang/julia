@@ -392,6 +392,7 @@ rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
 for T in (:(SamplerTrivial{UInt52Raw{UInt64}}),
           :(SamplerTrivial{UInt2x52Raw{UInt128}}),
           :(SamplerTrivial{UInt104Raw{UInt128}}),
+          :(SamplerTrivial{CloseOpen01_64}),
           :(SamplerTrivial{CloseOpen12_64}),
           :(SamplerUnion(Int64, UInt64, Int128, UInt128)),
           :(SamplerUnion(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)),

@@ -805,6 +805,13 @@ end
     # issue #33170
     @test Sampler(GLOBAL_RNG, 2:4, Val(1)) isa SamplerRangeNDL
     @test Sampler(GLOBAL_RNG, 2:4, Val(Inf)) isa SamplerRangeNDL
+
+    rng = copy(GLOBAL_RNG)
+    # make sure _GLOBAL_RNG and the underlying implementation use the same code path
+    @test rand(rng) == rand(GLOBAL_RNG)
+    @test rand(rng) == rand(GLOBAL_RNG)
+    @test rand(rng) == rand(GLOBAL_RNG)
+    @test rand(rng) == rand(GLOBAL_RNG)
 end
 
 @testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
