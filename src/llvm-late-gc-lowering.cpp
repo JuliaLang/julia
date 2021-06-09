@@ -396,13 +396,14 @@ CountTrackedPointers::CountTrackedPointers(Type *T) {
         }
         if (isa<ArrayType>(T))
             count *= cast<ArrayType>(T)->getNumElements();
-        else if (isa<VectorType>(T))
+        else if (isa<VectorType>(T)) {
 #if JL_LLVM_VERSION >= 120000
             ElementCount EC = cast<VectorType>(T)->getElementCount();
             count *= EC.getKnownMinValue();
 #else
             count *= cast<VectorType>(T)->getNumElements();
 #endif
+        }
     }
     if (count == 0)
         all = false;
@@ -413,13 +414,14 @@ unsigned getCompositeNumElements(Type *T) {
         return ST->getNumElements();
     else if (auto *AT = dyn_cast<ArrayType>(T))
         return AT->getNumElements();
-    else
+    else {
 #if JL_LLVM_VERSION >= 120000
         ElementCount EC = cast<VectorType>(T)->getElementCount();
         return EC.getKnownMinValue();
 #else
         return cast<VectorType>(T)->getNumElements();
 #endif
+    }
 }
 
 // Walk through a Type, and record the element path to every tracked value inside
@@ -635,13 +637,14 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
     }
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
-    if (auto VTy = dyn_cast<VectorType>(SI->getType()))
+    if (auto VTy = dyn_cast<VectorType>(SI->getType())) {
 #if JL_LLVM_VERSION >= 120000
         ElementCount EC = VTy->getElementCount();
         Numbers.resize(EC.getKnownMinValue(), -1);
 #else
         Numbers.resize(VTy->getNumElements(), -1);
 #endif
+    }
     else
         assert(isa<PointerType>(SI->getType()) && "unimplemented");
     assert(!isTrackedValue(SI));
