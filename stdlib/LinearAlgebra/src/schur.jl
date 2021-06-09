@@ -355,6 +355,10 @@ function schur(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
     return schur!(copy_oftype(A, S), copy_oftype(B, S))
 end
+function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return schur!(copy_oftype(A, S), copy_oftype(B, S))
+end
 
 """
     ordschur!(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur
