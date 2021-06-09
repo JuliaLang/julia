@@ -2368,12 +2368,17 @@ end
 
 function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     # putting these in separate functions leads to unnecessary allocations
+    lenxs = length(xs)
+    lena = length(A)
+    lenxs == lena || throw(ArgumentError("number of elements don't match specified shape"))
     if row_first
         nr, nc = size(A, 1), size(A, 2)
         nrc = nr * nc
         na = prod(size(A)[3:end])
+        len = length(xs)
+        
         k = 1
-        for d ∈ 1:na
+        @inbounds for d ∈ 1:na
             dd = nrc * (d - 1)
             for i ∈ 1:nr
                 Ai = dd + i
@@ -2392,6 +2397,10 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
 end
 
 function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
+    length(scratch1) == length(scratch2) == N ||
+        throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
+    0 < d1 < 3 && 0 < d2 < 3 && d1 != d2 ||
+        throw(ArgumentError("d1 and d2 must be either 1 or 2, exclusive."))
     outdims = size(A)
     offsets = scratch1
     inneroffsets = scratch2
