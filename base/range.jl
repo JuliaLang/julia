@@ -640,7 +640,15 @@ function checked_length(r::OrdinalRange{T}) where T
     if s == zero(s) || isempty(r)
         return Integer(start - start + zero(s))
     end
-    return Integer(div(checked_add(checked_sub(last(r), start), s, s)))
+    stop = last(r)
+    if isless(s, zero(s))
+        diff = checked_sub(start, stop)
+        s = -s
+    else
+        diff = checked_sub(stop, start)
+    end
+    a = Integer(div(diff, s))
+    return checked_add(a, one(a))
 end
 
 function checked_length(r::AbstractUnitRange{T}) where T
@@ -649,7 +657,7 @@ function checked_length(r::AbstractUnitRange{T}) where T
         return Integer(first(r) - first(r))
     end
     a = Integer(checked_add(checked_sub(last(r), first(r))))
-    return a + one(a)
+    return checked_add(a, one(a))
 end
 
 function length(r::OrdinalRange{T}) where T
@@ -659,8 +667,17 @@ function length(r::OrdinalRange{T}) where T
     if s == zero(s) || isempty(r)
         return Integer(start - start + zero(s))
     end
-    return Integer(div(last(r) - start + s, s))
+    stop = last(r)
+    if isless(s, zero(s))
+        diff = start - stop
+        s = -s
+    else
+        diff = stop - start
+    end
+    a = Integer(div(diff, s))
+    return a + one(a)
 end
+
 
 function length(r::AbstractUnitRange{T}) where T
     @_inline_meta
@@ -673,7 +690,7 @@ length(r::StepRangeLen) = r.len
 length(r::LinRange) = r.len
 
 let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
-    global length
+    global length, checked_length
     # compile optimization for which promote_type(T, Int) == T
     length(r::OneTo{T}) where {T<:bigints} = r.stop
     # slightly more accurate length and checked_length in extreme cases
@@ -720,11 +737,14 @@ end
 let smallints = (Int === Int64 ?
                 Union{Int8, UInt8, Int16, UInt16, Int32, UInt32} :
                 Union{Int8, UInt8, Int16, UInt16})
-    global length
+    global length, checked_length
     # n.b. !(step isa T)
-    length(r::OrdinalRange{<:smallints}) = div(Int(last(r)) - Int(first(r)) + step(r), step(r))
+    length(r::OrdinalRange{<:smallints}) = div(Int(last(r)) - Int(first(r)), step(r)) + 1
     length(r::AbstractUnitRange{<:smallints}) = Int(last(r)) - Int(first(r)) + 1
     length(r::OneTo{<:smallints}) = Int(r.stop)
+    checked_length(r::OrdinalRange{<:smallints}) = length(r)
+    checked_length(r::AbstractUnitRange{<:smallints}) = length(r)
+    checked_length(r::OneTo{<:smallints}) = length(r)
 end
 
 first(r::OrdinalRange{T}) where {T} = convert(T, r.start)

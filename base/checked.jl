@@ -353,7 +353,7 @@ checked_cld(x::T, y::T) where {T<:Integer} = cld(x, y) # Base.cld already checks
     Base.checked_length(r)
 
 Calculates `length(r)`, but may check for overflow errors where applicable when
-the result doesn't fit into `Union{eltype(r),Int}`.
+the result doesn't fit into `Union{Integer(eltype(r)),Int}`.
 """
 checked_length(r) = length(r) # for most things, length doesn't error
 
