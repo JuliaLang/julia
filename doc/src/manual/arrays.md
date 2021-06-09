@@ -695,6 +695,12 @@ julia> A[:, 3]
  13
  15
  17
+
+julia> A[:, 3:3]
+3×1 Matrix{Int64}:
+ 13
+ 15
+ 17
 ```
 
 ### Cartesian indices
