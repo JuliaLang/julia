@@ -1607,7 +1607,7 @@ function detect_ambiguities(mods::Module...;
         for m in Base.MethodList(mt)
             is_in_mods(m.module, recursive, mods) || continue
             ambig = Int32[0]
-            ms = Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+            ms = Base._methods_by_ftype(m.sig, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
             ambig[1] == 0 && continue
             isa(ms, Bool) && continue
             for match2 in ms

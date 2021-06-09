@@ -573,7 +573,7 @@ static const auto jlinvoke_func = new JuliaFunction{
 static const auto jlmethod_func = new JuliaFunction{
     "jl_method_def",
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
-                {T_prjlvalue, T_prjlvalue, T_pjlvalue}, false); },
+                {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_pjlvalue}, false); },
     nullptr,
 };
 static const auto jlgenericfunction_func = new JuliaFunction{
@@ -4530,58 +4530,62 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         return emit_sparam(ctx, jl_unbox_long(args[0]) - 1);
     }
     else if (head == method_sym) {
-        jl_value_t *mn = args[0];
-        assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(mn) || jl_is_slot(mn));
+        if (jl_expr_nargs(ex) == 1) {
+            jl_value_t *mn = args[0];
+            assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(mn) || jl_is_slot(mn));
 
-        Value *bp = NULL, *name, *bp_owner = V_null;
-        jl_binding_t *bnd = NULL;
-        bool issym = jl_is_symbol(mn);
-        bool isglobalref = !issym && jl_is_globalref(mn);
-        jl_module_t *mod = ctx.module;
-        if (issym || isglobalref) {
-            if (isglobalref) {
-                mod = jl_globalref_mod(mn);
-                mn = (jl_value_t*)jl_globalref_name(mn);
+            Value *bp = NULL, *name, *bp_owner = V_null;
+            jl_binding_t *bnd = NULL;
+            bool issym = jl_is_symbol(mn);
+            bool isglobalref = !issym && jl_is_globalref(mn);
+            jl_module_t *mod = ctx.module;
+            if (issym || isglobalref) {
+                if (isglobalref) {
+                    mod = jl_globalref_mod(mn);
+                    mn = (jl_value_t*)jl_globalref_name(mn);
+                }
+                JL_TRY {
+                    if (jl_symbol_name((jl_sym_t*)mn)[0] == '@')
+                        jl_errorf("macro definition not allowed inside a local scope");
+                    name = literal_pointer_val(ctx, mn);
+                    bnd = jl_get_binding_for_method_def(mod, (jl_sym_t*)mn);
+                }
+                JL_CATCH {
+                    jl_value_t *e = jl_current_exception();
+                    // errors. boo. root it somehow :(
+                    bnd = jl_get_binding_wr(ctx.module, (jl_sym_t*)jl_gensym(), 1);
+                    bnd->value = e;
+                    bnd->constp = 1;
+                    raise_exception(ctx, literal_pointer_val(ctx, e));
+                    return ghostValue(jl_nothing_type);
+                }
+                bp = julia_binding_gv(ctx, bnd);
+                bp_owner = literal_pointer_val(ctx, (jl_value_t*)mod);
             }
-            JL_TRY {
-                if (jl_symbol_name((jl_sym_t*)mn)[0] == '@')
-                    jl_errorf("macro definition not allowed inside a local scope");
-                name = literal_pointer_val(ctx, mn);
-                bnd = jl_get_binding_for_method_def(mod, (jl_sym_t*)mn);
+            else if (jl_is_slot(mn) || jl_is_argument(mn)) {
+                int sl = jl_slot_number(mn)-1;
+                jl_varinfo_t &vi = ctx.slots[sl];
+                bp = vi.boxroot;
+                name = literal_pointer_val(ctx, (jl_value_t*)slot_symbol(ctx, sl));
             }
-            JL_CATCH {
-                jl_value_t *e = jl_current_exception();
-                // errors. boo. root it somehow :(
-                bnd = jl_get_binding_wr(ctx.module, (jl_sym_t*)jl_gensym(), 1);
-                bnd->value = e;
-                bnd->constp = 1;
-                raise_exception(ctx, literal_pointer_val(ctx, e));
-                return ghostValue(jl_nothing_type);
-            }
-            bp = julia_binding_gv(ctx, bnd);
-            bp_owner = literal_pointer_val(ctx, (jl_value_t*)mod);
-        }
-        else if (jl_is_slot(mn) || jl_is_argument(mn)) {
-            int sl = jl_slot_number(mn)-1;
-            jl_varinfo_t &vi = ctx.slots[sl];
-            bp = vi.boxroot;
-            name = literal_pointer_val(ctx, (jl_value_t*)slot_symbol(ctx, sl));
-        }
-        if (bp) {
-            Value *mdargs[5] = { name, literal_pointer_val(ctx, (jl_value_t*)mod), bp,
-                                 bp_owner, literal_pointer_val(ctx, bnd) };
-            jl_cgval_t gf = mark_julia_type(
-                    ctx,
-                    ctx.builder.CreateCall(prepare_call(jlgenericfunction_func), makeArrayRef(mdargs)),
-                    true,
-                    jl_function_type);
-            if (jl_expr_nargs(ex) == 1)
+            if (bp) {
+                Value *mdargs[5] = { name, literal_pointer_val(ctx, (jl_value_t*)mod), bp,
+                                    bp_owner, literal_pointer_val(ctx, bnd) };
+                jl_cgval_t gf = mark_julia_type(
+                        ctx,
+                        ctx.builder.CreateCall(prepare_call(jlgenericfunction_func), makeArrayRef(mdargs)),
+                        true,
+                        jl_function_type);
                 return gf;
+            }
+            emit_error(ctx, "method: invalid declaration");
+            return jl_cgval_t();
         }
         Value *a1 = boxed(ctx, emit_expr(ctx, args[1]));
         Value *a2 = boxed(ctx, emit_expr(ctx, args[2]));
-        Value *mdargs[3] = {
+        Value *mdargs[4] = {
             /*argdata*/a1,
+            ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)),
             /*code*/a2,
             /*module*/literal_pointer_val(ctx, (jl_value_t*)ctx.module)
         };
