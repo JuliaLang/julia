@@ -157,7 +157,7 @@ sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby
 """
     eigen!(A, [B]; permute, scale, sortby)
 
-came as [`eigen`](@ref), but saves space by overwriting the input `A` (and
+Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
 """
 function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby, jvl::Bool=false, jvr::Bool=true, jce::Bool=false, jcv::Bool=false) where T<:BlasReal
