@@ -129,7 +129,7 @@ function _fieldnames(@nospecialize t)
             throw(ArgumentError("type does not have definite field names"))
         end
     end
-    isdefined(t, :names) ? t.names : t.name.names
+    return t.name.names
 end
 
 """
@@ -154,7 +154,7 @@ function fieldname(t::DataType, i::Integer)
     end
     throw_need_pos_int(i) = throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
 
-    t.name.abstract && throw_not_def_field()
+    isabstracttype(t) && throw_not_def_field()
     names = _fieldnames(t)
     n_fields = length(names)::Int
     i > n_fields && throw_field_access(t, i, n_fields)
@@ -471,7 +471,7 @@ true
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
 """
-ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).name.mutable)
+ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).name.flags & 0x2 == 0x2)
 
 
 """
@@ -486,7 +486,7 @@ Determine whether type `T` was declared as a mutable type
 function ismutabletype(@nospecialize(t::Type))
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.name.mutable
+    return isa(t, DataType) && t.name.flags & 0x2 == 0x2
 end
 
 
@@ -502,7 +502,7 @@ function isstructtype(@nospecialize(t::Type))
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
     hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return hasfield || (t.size == 0 && !t.name.abstract)
+    return hasfield || (t.size == 0 && !isabstracttype(t))
 end
 
 """
@@ -517,7 +517,7 @@ function isprimitivetype(@nospecialize(t::Type))
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
     hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return !hasfield && t.size != 0 && !t.name.abstract
+    return !hasfield && t.size != 0 && !isabstracttype(t)
 end
 
 """
@@ -543,14 +543,14 @@ julia> isbitstype(Complex)
 false
 ```
 """
-isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && t.isbitstype)
+isbitstype(@nospecialize(t::Type)) = (@_pure_meta; isa(t, DataType) && (t.flags & 0x8) == 0x8)
 
 """
     isbits(x)
 
 Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 """
-isbits(@nospecialize x) = (@_pure_meta; typeof(x).isbitstype)
+isbits(@nospecialize x) = (@_pure_meta; typeof(x).flags & 0x8 == 0x8)
 
 """
     isdispatchtuple(T)
@@ -559,7 +559,7 @@ Determine whether type `T` is a tuple "leaf type",
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 """
-isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isdispatchtuple)
+isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && (t.flags & 0x4) == 0x4)
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
@@ -602,7 +602,7 @@ julia> isconcretetype(Union{Int,String})
 false
 ```
 """
-isconcretetype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isconcretetype)
+isconcretetype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && (t.flags & 0x2) == 0x2)
 
 """
     isabstracttype(T)
@@ -623,7 +623,7 @@ function isabstracttype(@nospecialize(t))
     @_pure_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.name.abstract
+    return isa(t, DataType) && (t.name.flags & 0x1) == 0x1
 end
 
 """
@@ -749,7 +749,7 @@ function fieldcount(@nospecialize t)
         throw(TypeError(:fieldcount, DataType, t))
     end
     if t.name === NamedTuple_typename
-        names, types = t.parameters
+        names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
             return length(names)
         end
@@ -758,7 +758,7 @@ function fieldcount(@nospecialize t)
         end
         abstr = true
     else
-        abstr = t.name.abstract || (t.name === Tuple.name && isvatuple(t))
+        abstr = isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
     end
     if abstr
         throw(ArgumentError("type does not have a definite number of fields"))
@@ -896,13 +896,16 @@ function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt)
 end
 
 function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt)
-    return _methods_by_ftype(t, lim, world, false, RefValue{UInt}(typemin(UInt)), RefValue{UInt}(typemax(UInt)), Ptr{Int32}(C_NULL))
+    return _methods_by_ftype(t, nothing, lim, world)
 end
-function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool, min::Array{UInt,1}, max::Array{UInt,1}, has_ambig::Array{Int32,1})
-    return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
+function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt)
+    return _methods_by_ftype(t, mt, lim, world, false, RefValue{UInt}(typemin(UInt)), RefValue{UInt}(typemax(UInt)), Ptr{Int32}(C_NULL))
 end
-function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, ambig::Bool, min::Ref{UInt}, max::Ref{UInt}, has_ambig::Ref{Int32})
-    return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
+function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt, ambig::Bool, min::Array{UInt,1}, max::Array{UInt,1}, has_ambig::Array{Int32,1})
+    return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
+end
+function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt, ambig::Bool, min::Ref{UInt}, max::Ref{UInt}, has_ambig::Ref{Int32})
+    return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
 end
 
 function _method_by_ftype(args...)
@@ -970,7 +973,7 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     world = typemax(UInt)
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
-    ms = _methods_by_ftype(tt, -1, world, true, min, max, Ptr{Int32}(C_NULL))
+    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))
     isa(ms, Bool) && return ms
     return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
 end
@@ -1532,7 +1535,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = UInt[typemin(UInt)]
         max = UInt[typemax(UInt)]
         has_ambig = Int32[0]
-        ms = _methods_by_ftype(ti, -1, typemax(UInt), true, min, max, has_ambig)::Vector
+        ms = _methods_by_ftype(ti, nothing, -1, typemax(UInt), true, min, max, has_ambig)::Vector
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
             filter!(ms) do m::Core.MethodMatch

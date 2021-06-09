@@ -1021,14 +1021,14 @@ set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, :libmpfr), Cint, (Clong
 set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, :libmpfr), Cint, (Clong,), x))
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
-    haskey(stackdict, x) && return stackdict[x]
-    # d = copy(x._d)
-    d = x._d
-    d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
-    y = _BigFloat(x.prec, x.sign, x.exp, d′)
-    #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
-    stackdict[x] = y
-    return y
+    get!(stackdict, x) do
+        # d = copy(x._d)
+        d = x._d
+        d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
+        y = _BigFloat(x.prec, x.sign, x.exp, d′)
+        #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
+        return y
+    end
 end
 
 function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
