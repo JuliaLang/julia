@@ -221,10 +221,11 @@
 
 (define (method-expr-name m)
   (let ((name (cadr m)))
+     (let ((name (if (or (length= m 2) (not (pair? name)) (not (quoted? name))) name (cadr name))))
        (cond ((not (pair? name)) name)
              ((eq? (car name) 'outerref) (cadr name))
              ;((eq? (car name) 'globalref) (caddr name))
-             (else name))))
+             (else name)))))
 
 ;; extract static parameter names from a (method ...) expression
 (define (method-expr-static-parameters m)
@@ -251,6 +252,13 @@
             (or (atom? (cadr e)) (sym-ref? (cadr e)))
             (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
             (symbol? (cadr (caddr e))))))
+
+(define (overlay? e)
+  (and (pair? e) (eq? (car e) 'overlay)))
+
+(define (sym-ref-or-overlay? e)
+  (or (overlay? e)
+      (sym-ref? e)))
 
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
@@ -341,14 +349,15 @@
    (let* ((names (map car sparams))
           (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
           (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
-          (ename (if (nodot-sym-ref? name) name `(null))))
+          (ename (if (nodot-sym-ref? name) name
+                    (if (overlay? name) (cadr name) `(null)))))
      (if (has-dups unused_anames)
          (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
          (error "function static parameter names not unique"))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
          (error "function argument and static parameter names must be distinct"))
-     (if (or (and name (not (sym-ref? name))) (not (valid-name? name)))
+     (if (or (and name (not (sym-ref-or-overlay? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((loc (maybe-remove-functionloc! body))
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
@@ -1143,13 +1152,14 @@
                   (argl-stmts (lower-destructuring-args argl))
                   (argl       (car argl-stmts))
                   (name       (check-dotop (car argl)))
+                  (argname    (if (overlay? name) (caddr name) name))
                   ;; fill in first (closure) argument
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| |#self#| ,(cadr n))
                                             n)))
-                  (farg    (if (decl? name)
-                               (adj-decl name)
-                               `(|::| |#self#| (call (core Typeof) ,name))))
+                  (farg    (if (decl? argname)
+                               (adj-decl argname)
+                               `(|::| |#self#| (call (core Typeof) ,argname))))
                   (body       (insert-after-meta body (cdr argl-stmts)))
                   (argl    (cdr argl))
                   (argl    (fix-arglist
