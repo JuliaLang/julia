@@ -3172,4 +3172,12 @@ end
     end
 end
 
+@testset "issue #41135" begin
+    @test repr(SparseMatrixCSC([1;;])) == "[1;;]"
+    @test repr(SparseMatrixCSC([1 0; 0 2])) == "[1 0; 0 2]"
+    @test summary(SparseMatrixCSC([1;;])) == "1×1 SparseMatrixCSC{$Int, $Int} with 1 stored entry"
+    m = sprand(100, 100, .1)
+    @test repr(m) == join(split(repr(MIME("text/plain"), m), '\n')[2:end], '\n')
+end
+
 end # module
