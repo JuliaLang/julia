@@ -2290,7 +2290,7 @@ _typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...) =
 
 function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {T, N}
     all(>(0), tuple((shape...)...)) || throw(ArgumentError("`shape` argument must consist of positive integers"))
-    
+
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
@@ -2376,7 +2376,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
         nrc = nr * nc
         na = prod(size(A)[3:end])
         len = length(xs)
-        
+
         k = 1
         @inbounds for d ∈ 1:na
             dd = nrc * (d - 1)
