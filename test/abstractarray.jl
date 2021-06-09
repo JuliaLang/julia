@@ -1440,34 +1440,79 @@ end
     @test typed_hvncat(Float64, ((2,),), false, 1, 1) == Float64[1.0; 1.0]
     @test typed_hvncat(Float64, ((2,),), false, [1], [1]) == Float64[1.0; 1.0]
 
-    # reject dimension < 0
-    @test_throws ArgumentError hvncat(-1)
-    @test_throws ArgumentError hvncat(-1, 1)
-    @test_throws ArgumentError hvncat(-1, [1])
-    @test_throws ArgumentError typed_hvncat(Float64, -1)
-    @test_throws ArgumentError typed_hvncat(Float64, -1, 1)
-    @test_throws ArgumentError typed_hvncat(Float64, -1, [1])
+    for v ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
+        # reject dimension < 0
+        @test_throws ArgumentError hvncat(-1, v...)
+        @test_throws ArgumentError typed_hvncat(Float64, -1, v...)
 
-    # reject shape tuple with no elements
-    @test_throws ArgumentError hvncat(((),), true)
-    @test_throws ArgumentError hvncat(((),), true, 1)
-    @test_throws ArgumentError hvncat(((),), true, 1, 1)
-    @test_throws ArgumentError typed_hvncat(Float64, ((),), true)
-    @test_throws ArgumentError typed_hvncat(Float64, ((),), true, 1)
-    @test_throws ArgumentError typed_hvncat(Float64, ((),), true, 1, 1)
-
-    # reject dims with negative or zero values
-    for v ∈ ((-1, 1), (1, -1), (0, 1), (1, 0))
-        @test_throws ArgumentError hvncat(v, true, 1)
-        @test_throws ArgumentError typed_hvncat(Float64, v, true, 1)
+        # reject shape tuple with no elements
+        @test_throws ArgumentError hvncat(((),), true, v...)
+        @test_throws ArgumentError typed_hvncat(Float64, ((),), true, v...)
     end
 
-    # reject shape with negative values
+    # reject dims or shape with negative or zero values
     for v1 ∈ (-1, 0, 1)
         for v2 ∈ (-1, 0, 1)
             v1 == v2 == 1 && continue
-            @test_throws ArgumentError hvncat(((v1,), (v2,)), true, 1)
-            @test_throws ArgumentError typed_hvncat(Float64, ((v1,), (v2,)), true, 1)
+            for v3 ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
+                @test_throws ArgumentError hvncat((v1, v2), true, v3...)
+                @test_throws ArgumentError typed_hvncat(Float64, (v1, v2), true, v3...)
+                @test_throws ArgumentError hvncat(((v1,), (v2,)), true, v3...)
+                @test_throws ArgumentError typed_hvncat(Float64, ((v1,), (v2,)), true, v3...)
+            end
+        end
+    end
+
+    for v ∈ ((1, [1]), ([1], 1), ([1], [1]))
+        # reject shape with more than one end value
+        @test_throws ArgumentError hvncat(((1, 1),), true, v...)
+        @test_throws ArgumentError typed_hvncat(Float64, ((1, 1),), true, v...)
+    end
+
+    for v ∈ ((1, 2, 3), (1, 2, [3]), ([1], [2], [3]))
+        # reject shape with more values in later level
+        @test_throws ArgumentError hvncat(((2, 1), (1, 1, 1)), true, v...)
+        @test_throws ArgumentError typed_hvncat(Float64, ((2, 1), (1, 1, 1)), true, v...)
+    end
+
+    # reject bad shapes and accept valid ones
+    # valid shapes have:
+    #   - each level sum to the same value,
+    #   - the number of elements in a higher level is equal to or less than the lower level,
+    #   - the counts in a lower level must evenly split into the counts in the higher levels
+    #     e.g. (1, 2, 1), (2, 2) is not valid because the first two elements of level 1 cannot
+    #     fit in the first element of level 2.
+    for s1 ∈ 1:5
+        for s2 ∈ 1:5
+            for s3 ∈ 1:5
+                for s4 ∈ 1:5
+                    for s5 ∈ 1:5
+                        for s6 ∈ 1:5
+                            shape = ((s1, s2, s3), (s4, s5), (s6,))
+                            shapetest = collect(collect.(shape))
+                            isbad = false
+                            if all(>(0), tuple((shape...)...)) && all(x -> sum(x) == s6, shape)
+                                for i ∈ length(shapetest) - 1
+                                    while length(shapetest[i]) > 1 && (s = popfirst!(shapetest[i])) < shapetest[i + 1][1]
+                                        shapetest[i][1] += s
+                                    end
+                                    if shapetest[i][1] != shapetest[i + 1][1]
+                                        isbad = true
+                                    end
+                                end
+                            else
+                                isbad = true
+                            end
+                            if isbad
+                                @test_throws ArgumentError hvncat(shape, true, 1:6...)
+                                @test_throws ArgumentError hvncat(shape, true, Base.vect.(1:6)...)
+                                @test_throws ArgumentError typed_hvncat(Float64, shape, true, 1:6...)
+                                @test_throws ArgumentError typed_hvncat(Float64, shape, true, Base.vect.(1:6)...)
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
 
