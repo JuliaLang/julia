@@ -481,36 +481,30 @@ ops = collect(values(Main.Tokenize.Tokens.UNICODE_OPS_REVERSE))
 
 for op in ops
     op in (:isa, :in, :where, Symbol('\''), :?, :(:)) && continue
-    strs1 = [
-        "$(op)b",
-        ".$(op)b",
-    ]
-    strs2 = [
-        "a $op b",
-        "a .$op b",
-        "a $(op)₁ b",
-        "a $(op)\U0304 b",
-        "a .$(op)₁ b"
+    strs = [
+        1 => [ # unary
+            "$(op)b",
+            ".$(op)b",
+        ],
+        2 => [ # binary
+            "a $op b",
+            "a .$op b",
+            "a $(op)₁ b",
+            "a $(op)\U0304 b",
+            "a .$(op)₁ b"
+        ]
     ]
 
-    for str in strs1
-        expr = Meta.parse(str, raise = false)
-        if expr isa Expr && (expr.head != :error && expr.head != :incomplete)
-            tokens = collect(tokenize(str))
-            exop = expr.head == :call ? expr.args[1] : expr.head
-            @test Symbol(Tokenize.Tokens.untokenize(tokens[1])) == exop
-        else
-            break
-        end
-    end
-    for str in strs2
-        expr = Meta.parse(str, raise = false)
-        if expr isa Expr && (expr.head != :error && expr.head != :incomplete)
-            tokens = collect(tokenize(str))
-            exop = expr.head == :call ? expr.args[1] : expr.head
-            @test Symbol(Tokenize.Tokens.untokenize(tokens[3])) == exop
-        else
-            break
+    for (arity, container) in strs
+        for str in container
+            expr = Meta.parse(str, raise = false)
+            if expr isa Expr && (expr.head != :error && expr.head != :incomplete)
+                tokens = collect(tokenize(str))
+                exop = expr.head == :call ? expr.args[1] : expr.head
+                @test Symbol(Tokenize.Tokens.untokenize(tokens[arity == 1 ? 1 : 3])) == exop
+            else
+                break
+            end
         end
     end
 end
