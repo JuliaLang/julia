@@ -2063,7 +2063,9 @@ dimensions. The `dims` form is more performant, and is used by default when the 
 operation has the same number of elements along each axis (e.g., [a b; c d;;; e f ; g h]).
 The `shape` form is used when the number of elements along each axis is unbalanced
 (e.g., [a b ; c]). Unbalanced syntax needs additional validation overhead. The `dim` form
-is an optimization for concatenation along just one dimension.
+is an optimization for concatenation along just one dimension. `row_first` indicates how
+`values` are ordered. The meaning of the first and second elements of `shape` are also
+swapped based on `row_first`.
 
 # Examples
 ```jldoctest
@@ -2111,6 +2113,24 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
 [:, :, 2] =
  4  5  6
 ```
+
+# Examples for construction of the arguments:
+[a b c ; d e f ;;;
+ g h i ; j k l ;;;
+ m n o ; p q r ;;;
+ s t u ; v w x]
+=> dims = (2, 3, 4)
+
+[a b ; c ;;; d ;;;;]
+ ___   _     _
+ 2     1     1 = elements in each row (2, 1, 1)
+ _______     _
+ 3           1 = elements in each column (3, 1)
+ _____________
+ 4             = elements in each 3d slice (4,)
+ _____________
+ 4             = elements in each 4d slice (4,)
+ => shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `rowfirst` = true
 """
 function hvncat end
 
@@ -2376,7 +2396,7 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
             #     throw(1)
             elseif dsize != cat_size(as[i - 1], ad)
                 throw(ArgumentError("""argument $i has a mismatched number of elements along axis $ad; \
-                                     expected $(cat_size(as[i - 1], ad)), got $dsize"""))
+                                    expected $(cat_size(as[i - 1], ad)), got $dsize"""))
             end
 
             wasstartblock = blockcounts[d] == 1 # remember for next dimension
@@ -2387,14 +2407,14 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
                     outdims[d] = currentdims[d]
                 elseif outdims[d] != currentdims[d]
                     throw(ArgumentError("""argument $i has a mismatched number of elements along axis $ad; \
-                                         expected $(abs(outdims[d] - (currentdims[d] - dsize))), got $dsize"""))
+                                        expected $(abs(outdims[d] - (currentdims[d] - dsize))), got $dsize"""))
                 end
                 currentdims[d] = 0
                 blockcounts[d] = 0
                 shapepos[d] += 1
                 d > 1 && (blockcounts[d - 1] == 0 ||
                     throw(ArgumentError("""shape in level $d is inconsistent; level counts must nest \
-                                         evenly into each other""")))
+                                        evenly into each other""")))
             end
         end
     end
