@@ -354,8 +354,12 @@ function optakessuffix(k)
         k == Tokens.DDDOT ||
         Tokens.begin_assignments <= k <= Tokens.end_assignments ||
         k == Tokens.CONDITIONAL ||
-        k == Tokens.LAZY_OR ||
-        k == Tokens.LAZY_AND ||
+        @static(if Meta.parse("a .&& b").args[1] == :.&
+            k == Tokens.LAZY_OR ||
+            k == Tokens.LAZY_AND
+        else
+            false
+        end) ||
         k == Tokens.ISSUBTYPE ||
         k == Tokens.ISSUPERTYPE ||
         k == Tokens.IN ||
