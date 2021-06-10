@@ -2386,7 +2386,7 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
     lengthas = length(as)
     shapelength == lengthas ||
         throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
-    
+
     for i ∈ eachindex(as)
         wasstartblock = false
         for d ∈ 1:nd
