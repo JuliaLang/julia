@@ -282,7 +282,7 @@ macro overlay(mt, def)
 end
 
 let new_mt(name::Symbol, mod::Module) = begin
-        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, name)
+        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "@MethodTable")
         ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
     end
     @eval macro MethodTable(name::Symbol)
