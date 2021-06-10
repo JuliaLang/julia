@@ -1,5 +1,11 @@
 module Lexers
 
+@static if Meta.parse("a .&& b").args[1] != :.&
+    const CAN_DOT_LAZY_AND_OR = true
+else
+    const CAN_DOT_LAZY_AND_OR = false
+end
+
 include("utilities.jl")
 
 import ..Tokens
@@ -940,7 +946,7 @@ function lex_dot(l::Lexer)
             if accept(l, "=")
                 return emit(l, Tokens.AND_EQ)
             else
-                @static if Meta.parse("a .&& b").args[1] != :.&
+                @static if CAN_DOT_LAZY_AND_OR
                     if accept(l, "&")
                         return emit(l, Tokens.LAZY_AND)
                     end
@@ -956,14 +962,14 @@ function lex_dot(l::Lexer)
             readchar(l)
             return lex_equal(l)
         elseif pc == '|'
-            @static if Meta.parse("a .&& b").args[1] == :.&
+            @static if !CAN_DOT_LAZY_AND_OR
                 if dpc == '|'
                     return emit(l, Tokens.DOT)
                 end
             end
             l.dotop = true
             readchar(l)
-            @static if Meta.parse("a .&& b").args[1] != :.&
+            @static if CAN_DOT_LAZY_AND_OR
                 if accept(l, "|")
                     return emit(l, Tokens.LAZY_OR)
                 end
