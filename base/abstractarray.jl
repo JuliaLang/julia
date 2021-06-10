@@ -2339,7 +2339,9 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
     lengthas = length(as)
     shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
     all(!isempty, shapev) || throw(ArgumentError("each level of `shape` argument must have at least one value"))
-    sum(tuple((shape...)...)) == N * shapelength || throw(ArgumentError("all levels of `shape` argument must sum to the same value"))
+    for i ∈ eachindex(shapev)
+        sum(shapev[i]) == shapelength || throw(ArgumentError("all levels of `shape` argument must sum to the same value"))
+    end
 
     for i ∈ eachindex(as)
         wasstartblock = false
@@ -2366,6 +2368,9 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
                 currentdims[d] = 0
                 blockcounts[d] = 0
                 shapepos[d] += 1
+                d > 1 && (blockcounts[d - 1] == 0 ||
+                    throw(ArgumentError("shape in level $d is inconsistent; level counts must nest \
+                                         evenly into each other")))
             end
         end
     end
