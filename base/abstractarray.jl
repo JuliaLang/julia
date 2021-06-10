@@ -2134,6 +2134,8 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
 """
 function hvncat end
 
+# if any methods seem redundant here, it is to resolve a multiple dispatch ambiguity
+
 # top-level methods
 
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
@@ -2165,6 +2167,8 @@ _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs.
 _typed_hvncat(::Type{T}, ::Val{0}) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
+_typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) =
+    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 _typed_hvncat(::Type, ::Val{0}, ::Any...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 
