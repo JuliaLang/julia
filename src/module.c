@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
+JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, uint8_t using_core)
 {
     jl_task_t *ct = jl_current_task;
     const jl_uuid_t uuid_zero = {0, 0};
@@ -36,7 +36,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     JL_GC_PUSH1(&m);
-    if (jl_core_module) {
+    if (jl_core_module && using_core) {
         jl_module_using(m, jl_core_module);
     }
     // export own name, so "using Foo" makes "Foo" itself visible
@@ -46,15 +46,20 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     return m;
 }
 
+JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
+{
+    return jl_new_module_(name, 1);
+}
+
 uint32_t jl_module_next_counter(jl_module_t *m)
 {
     return jl_atomic_fetch_add(&m->counter, 1);
 }
 
-JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
+JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports, uint8_t using_core)
 {
     // TODO: should we prohibit this during incremental compilation?
-    jl_module_t *m = jl_new_module(name);
+    jl_module_t *m = jl_new_module_(name, using_core);
     JL_GC_PUSH1(&m);
     m->parent = jl_main_module; // TODO: this is a lie
     jl_gc_wb(m, m->parent);

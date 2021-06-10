@@ -303,6 +303,8 @@ include(p) = Base.include(Mod, p)
 end
 ```
 
+If even `Core` is not wanted, a module that imports nothing at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref).
+
 ### Standard modules
 
 There are three important standard modules:
