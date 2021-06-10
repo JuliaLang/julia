@@ -2506,7 +2506,7 @@ end
     filter(f)
 
 Create a function that filters its arguments with function `f` using [`filter`](@ref), i.e.
-a function equivalent to `y -> filter(f, x)`.
+a function equivalent to `x -> filter(f, x)`.
 
 The returned function is of type `Base.Fix1{typeof(filter)}`, which can be
 used to implement specialized methods.
