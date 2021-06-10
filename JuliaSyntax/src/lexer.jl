@@ -327,7 +327,7 @@ Returns the next `Token`.
 function next_token(l::Lexer, start = true)
     start && start_token!(l)
     c = readchar(l)
-    if eof(c);
+    if eof(c)
         return emit(l, Tokens.ENDMARKER)
     elseif iswhitespace(c)
         readon(l)
@@ -940,6 +940,11 @@ function lex_dot(l::Lexer)
             if accept(l, "=")
                 return emit(l, Tokens.AND_EQ)
             else
+                @static if Meta.parse("a .&& b").args[1] != :.&
+                    if accept(l, "&")
+                        return emit(l, Tokens.LAZY_AND)
+                    end
+                end
                 return emit(l, Tokens.AND)
             end
         elseif pc =='%'
@@ -950,9 +955,19 @@ function lex_dot(l::Lexer)
             l.dotop = true
             readchar(l)
             return lex_equal(l)
-        elseif pc == '|' && dpc != '|'
+        elseif pc == '|'
+            @static if Meta.parse("a .&& b").args[1] == :.&
+                if dpc == '|'
+                    return emit(l, Tokens.DOT)
+                end
+            end
             l.dotop = true
             readchar(l)
+            @static if Meta.parse("a .&& b").args[1] != :.&
+                if accept(l, "|")
+                    return emit(l, Tokens.LAZY_OR)
+                end
+            end
             return lex_bar(l)
         elseif pc == '!' && dpc == '='
             l.dotop = true
@@ -970,9 +985,8 @@ function lex_dot(l::Lexer)
             l.dotop = true
             readchar(l)
             return lex_equal(l)
-        else
-            return emit(l, Tokens.DOT)
         end
+        return emit(l, Tokens.DOT)
     end
 end
 
