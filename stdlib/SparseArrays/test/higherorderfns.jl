@@ -637,7 +637,7 @@ end
     @test ((_, x) -> x).(Int, spzeros(3)) == spzeros(3)
     @test ((_, _, x) -> x).(Int, Int, spzeros(3)) == spzeros(3)
     @test ((_, _, _, x) -> x).(Int, Int, Int, spzeros(3)) == spzeros(3)
-    @test_broken ((_, _, _, _, x) -> x).(Int, Int, Int, Int, spzeros(3)) == spzeros(3)
+    @test ((_, _, _, _, x) -> x).(Int, Int, Int, Int, spzeros(3)) == spzeros(3)
 end
 
 using SparseArrays.HigherOrderFns: SparseVecStyle, SparseMatStyle
@@ -654,7 +654,7 @@ using SparseArrays.HigherOrderFns: SparseVecStyle, SparseMatStyle
     end
     @test err isa MethodError
     @test !occursin("is ambiguous", sprint(showerror, err))
-    @test occursin("no method matching _copy(::typeof(rand))", sprint(showerror, err))
+    @test occursin("no method matching _copy(::Type{Float64}, ::typeof(rand))", sprint(showerror, err))
 end
 
 @testset "Sparse outer product, for type $T and vector $op" for
@@ -724,6 +724,16 @@ end
     @test extrema(f, x; dims=1) == extrema(f, y; dims=1)
     @test_throws BoundsError extrema(sparse(z); dims=1)
     @test extrema(x; dims=[]) == extrema(y; dims=[])
+end
+
+@testset "issue #40901: broadcasting with type constructors" begin
+    f(x) = x + 1
+    A = sparse([1 2; 3 4])
+    @test Float64.(f.(A)) isa SparseMatrixCSC{Float64}
+    @test f.(Float64.(A)) isa SparseMatrixCSC{Float64}
+    B = sparse([1; 2])
+    @test Float64.(f.(B)) isa SparseVector{Float64}
+    @test f.(Float64.(B)) isa SparseVector{Float64}
 end
 
 end # module
