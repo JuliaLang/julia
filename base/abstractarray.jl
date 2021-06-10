@@ -2392,8 +2392,6 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
 
             if d == 1 || i == 1 || wasstartblock
                 currentdims[d] += dsize
-            # elseif blockcounts[d - 1] == 0
-            #     throw(1)
             elseif dsize != cat_size(as[i - 1], ad)
                 throw(ArgumentError("""argument $i has a mismatched number of elements along axis $ad; \
                                     expected $(cat_size(as[i - 1], ad)), got $dsize"""))
