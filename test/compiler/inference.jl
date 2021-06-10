@@ -1819,6 +1819,18 @@ end
         Meta.isexpr(x, :call) && return x # x::Expr
         return nothing
     end == Any[Union{Nothing,Expr}]
+
+    # handle the edge case
+    let ts = @eval Module() begin
+            edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
+            # create cache
+            Base.return_types(edgecase, (Any,))
+            Base.return_types((Any,)) do x
+                edgecase(x) ? x : nothing # ::Any
+            end
+        end
+        @test ts == Any[Any]
+    end
 end
 
 @testset "branching on conditional object" begin
