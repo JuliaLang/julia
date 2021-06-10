@@ -481,44 +481,36 @@ ops = collect(values(Main.Tokenize.Tokens.UNICODE_OPS_REVERSE))
 
 for op in ops
     op in (:isa, :in, :where, Symbol('\''), :?, :(:)) && continue
-    str1 = "$(op)b"
-    str2 = ".$(op)b"
-    str3 = "a $op b"
-    str4 = "a .$op b"
-    str5 = "a $(op)₁ b"
-    str5 = "a $(op)\U0304 b"
-    str6 = "a .$(op)₁ b"
-    ex1 = Meta.parse(str1, raise = false)
-    ex2 = Meta.parse(str2, raise = false)
-    ex3 = Meta.parse(str3, raise = false)
-    ex4 = Meta.parse(str4, raise = false)
-    ex5 = Meta.parse(str5, raise = false)
-    ex6 = Meta.parse(str6, raise = false)
-    if ex1 isa Expr && ex1.head != :error # unary
-        t1 = collect(tokenize(str1))
-        exop1 = ex1.head == :call ? ex1.args[1] : ex1.head
-        @test Symbol(Tokenize.Tokens.untokenize(t1[1])) == exop1
-        if ex2.head != :error
-            t2 = collect(tokenize(str2))
-            exop2 = ex2.head == :call ? ex2.args[1] : ex2.head
-            @test Symbol(Tokenize.Tokens.untokenize(t2[1])) == exop2
+    strs1 = [
+        "$(op)b",
+        ".$(op)b",
+    ]
+    strs2 = [
+        "a $op b",
+        "a .$op b",
+        "a $(op)₁ b",
+        "a $(op)\U0304 b",
+        "a .$(op)₁ b"
+    ]
+
+    for str in strs1
+        expr = Meta.parse(str, raise = false)
+        if expr isa Expr && (expr.head != :error && expr.head != :incomplete)
+            tokens = collect(tokenize(str))
+            exop = expr.head == :call ? expr.args[1] : expr.head
+            @test Symbol(Tokenize.Tokens.untokenize(tokens[1])) == exop
+        else
+            break
         end
-    elseif ex3.head != :error # binary
-        t3 = collect(tokenize(str3))
-        exop3 = ex3.head == :call ? ex3.args[1] : ex3.head
-        @test Symbol(Tokenize.Tokens.untokenize(t3[3])) == exop3
-        if ex4.head != :error
-            t4 = collect(tokenize(str4))
-            exop4 = ex4.head == :call ? ex4.args[1] : ex4.head
-            @test Symbol(Tokenize.Tokens.untokenize(t4[3])) == exop4
-        elseif ex5.head != :error
-            t5 = collect(tokenize(str5))
-            exop5 = ex5.head == :call ? ex5.args[1] : ex5.head
-            @test Symbol(Tokenize.Tokens.untokenize(t5[3])) == exop5
-        elseif ex6.head != :error
-            t6 = collect(tokenize(str6))
-            exop6 = ex6.head == :call ? ex6.args[1] : ex6.head
-            @test Symbol(Tokenize.Tokens.untokenize(t6[3])) == exop6
+    end
+    for str in strs2
+        expr = Meta.parse(str, raise = false)
+        if expr isa Expr && (expr.head != :error && expr.head != :incomplete)
+            tokens = collect(tokenize(str))
+            exop = expr.head == :call ? expr.args[1] : expr.head
+            @test Symbol(Tokenize.Tokens.untokenize(tokens[3])) == exop
+        else
+            break
         end
     end
 end
