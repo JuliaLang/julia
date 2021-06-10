@@ -1470,44 +1470,8 @@ import Base.typed_hvncat
         @test_throws ArgumentError hvncat(((2, 1), (1, 1, 1)), true, v...)
     end
 
-    # reject bad shapes and accept valid ones
-    # valid shapes have:
-    #   - each level sum to the same value,
-    #   - the number of elements in a higher level is equal to or less than the lower level,
-    #   - the counts in a lower level must evenly split into the counts in the higher levels
-    #     e.g. (1, 2, 1), (2, 2) is not valid because the first two elements of level 1 cannot
-    #     fit in the first element of level 2.
-    for s1 ∈ 1:5
-        for s2 ∈ 1:5
-            for s3 ∈ 1:5
-                for s4 ∈ 1:5
-                    for s5 ∈ 1:5
-                        for s6 ∈ 1:5
-                            shape = ((s1, s2, s3), (s4, s5), (s6,))
-                            shapetest = collect(collect.(shape))
-                            isbad = false
-                            if all(>(0), tuple((shape...)...)) && all(x -> sum(x) == s6, shape)
-                                for i ∈ length(shapetest) - 1
-                                    while length(shapetest[i]) > 1 && (s = popfirst!(shapetest[i])) < shapetest[i + 1][1]
-                                        shapetest[i][1] += s
-                                    end
-                                    if shapetest[i][1] != shapetest[i + 1][1]
-                                        isbad = true
-                                    end
-                                end
-                            else
-                                isbad = true
-                            end
-                            if isbad
-                                @test_throws ArgumentError hvncat(shape, true, 1:6...)
-                                @test_throws ArgumentError hvncat(shape, true, Base.vect.(1:6)...)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
+    # reject shapes that don't nest evenly between levels (e.g. 1 + 2 does not fit into 2)
+    @test_throws ArgumentError hvncat(((1, 2, 1), (2, 2), (4,)), true, [1 2], [3], [4], [1 2; 3 4])
 
     @test_throws ArgumentError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
 end
