@@ -96,17 +96,17 @@ function display_error(io::IO, er, bt)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
     stack = ExceptionStack([(exception = er, backtrace = bt)])
-    istrivial = length(stack) == 1 && length(bt) ≤ 1 # frame 1 = top level
+    istrivial = length(bt) ≤ 1 # frame 1 = top level
     !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
     showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     println(io)
 end
 function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
+    stack = ExceptionStack([(exception = x[1], backtrace = scrub_repl_backtrace(x[2])) for x in stack ])
     istrivial = length(stack) == 1 && length(stack[1].backtrace) ≤ 1 # frame 1 = top level
     !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
-    show_exception_stack(IOContext(io, :limit => true), bt)
+    show_exception_stack(IOContext(io, :limit => true), stack)
     println(io)
 end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)

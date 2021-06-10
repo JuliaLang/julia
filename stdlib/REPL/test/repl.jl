@@ -1382,6 +1382,8 @@ fake_repl() do stdin_write, stdout_read, repl
     @test readline(stdout_read) == "\e[0mERROR: UndefVarError: err not defined"
     readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "foo() = foobar\n")
+    readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "foo()\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
