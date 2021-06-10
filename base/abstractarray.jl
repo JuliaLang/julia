@@ -2144,7 +2144,7 @@ _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs.
 
 _typed_hvncat(::Type{T}, ::Val{0}) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x) # could reduce broadcast overhead?
+_typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
 _typed_hvncat(::Type, ::Val{0}, ::Any...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 
@@ -2220,7 +2220,7 @@ end
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = T.(x) # could reduce broadcast overhead?
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = T.(x)
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 
