@@ -704,15 +704,6 @@ broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted})
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
-## Computation of inferred result type, for empty and concretely inferred cases only
-_broadcast_getindex_eltype(bc::Broadcasted) = Base._return_type(bc.f, eltypes(bc.args))
-_broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
-
-eltypes(::Tuple{}) = Tuple{}
-eltypes(t::Tuple{Any}) = Tuple{_broadcast_getindex_eltype(t[1])}
-eltypes(t::Tuple{Any,Any}) = Tuple{_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2])}
-eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).types...}
-
 function promote_typejoin_union(::Type{T}) where T
     if T === Union{}
         return Union{}
@@ -756,10 +747,6 @@ end
     end
     return Base.rewrap_unionall(Tuple{c...}, T)
 end
-
-# Inferred eltype of result of broadcast(f, args...)
-combine_eltypes(f, args::Tuple) =
-    promote_typejoin_union(Base._return_type(f, eltypes(args)))
 
 ## Broadcasting core
 
@@ -923,7 +910,8 @@ copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
 @inline function copy(bc::Broadcasted{Style}) where {Style}
-    ElType = combine_eltypes(bc.f, bc.args)
+    ElType = promote_typejoin_union(Base._return_type(_broadcast_getindex,
+                                                      Tuple{typeof(bc), Int}))
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
         return copyto!(similar(bc, ElType), bc)
