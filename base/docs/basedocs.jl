@@ -2413,8 +2413,8 @@ julia> 4.5/2
 """
     ArgumentError(msg)
 
-The parameters to a function call do not match a valid signature. Argument `msg` is a
-descriptive error string.
+One or more arguments in a function call have invalid values (and/or types).
+`msg` is a descriptive error string.
 """
 ArgumentError
 
