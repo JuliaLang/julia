@@ -172,10 +172,10 @@ end
 
 ### BitInteger
 
-# there are three implemented samplers for unit ranges, the two first of which
-# assume that Float64 (i.e. 52 random bits) is the native type for the RNG:
-# 1) "Fast" (SamplerRangeFast), which is most efficient when the underlying RNG produces
-#    rand(Float64) "fast enough".
+# there are three implemented samplers for unit ranges, the second one
+# assumes that Float64 (i.e. 52 random bits) is the native type for the RNG:
+# 1) "Fast" (SamplerRangeFast), which is most efficient when the range length is close
+#    (or equal) to a power of 2 from below.
 #    The tradeoff is faster creation of the sampler, but more consumption of entropy bits.
 # 2) "Slow" (SamplerRangeInt) which tries to use as few entropy bits as possible, at the
 #    cost of a bigger upfront price associated with the creation of the sampler.
@@ -224,20 +224,32 @@ function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt32,T}) where T
     (x + a % UInt32) % T
 end
 
+has_fast_64(rng::AbstractRNG) = rng_native_52(rng) != Float64
+# for MersenneTwister, both options have very similar performance
+
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt64,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52 ? rand(rng, LessThan(m, Masked(mask, UInt52Raw()))) :
-                   rand(rng, LessThan(m, Masked(mask, uniform(UInt64))))
+    if !has_fast_64(rng) && bw <= 52
+        x = rand(rng, LessThan(m, Masked(mask, UInt52Raw())))
+    else
+        x = rand(rng, LessThan(m, Masked(mask, uniform(UInt64))))
+    end
     (x + a % UInt64) % T
 end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52  ?
-        rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, UInt52Raw()))) % UInt128 :
-    bw <= 104 ?
-        rand(rng, LessThan(m, Masked(mask, UInt104Raw()))) :
-        rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    if has_fast_64(rng)
+        x = bw <= 64 ?
+            rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, uniform(UInt64)))) % UInt128 :
+            rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    else
+        x = bw <= 52  ?
+            rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, UInt52Raw()))) % UInt128 :
+        bw <= 104 ?
+            rand(rng, LessThan(m, Masked(mask, UInt104Raw()))) :
+            rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    end
     x % T + a
 end
 
