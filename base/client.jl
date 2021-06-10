@@ -95,6 +95,7 @@ end
 function display_error(io::IO, er, bt)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     bt = scrub_repl_backtrace(bt)
+    stack = ExceptionStack([(exception = er, backtrace = bt)])
     istrivial = length(stack) == 1 && length(bt) ≤ 1 # frame 1 = top level
     !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
     showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
