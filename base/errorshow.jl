@@ -713,7 +713,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         end)
     end
     sort!(union!(is, filter!(!isnothing, broadcasti)))
-    
+
     if length(is) > 0 && is[end] == num_frames
         # remove REPL-based top-level
         # note: file field for top-level is different from the rest, doesn't include ./
@@ -724,7 +724,7 @@ function show_compact_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
         # remove a materialize frame if it is the only visible frame
         pop!(is)
     end
-    
+
     num_vis_frames = length(is)
 
     if num_vis_frames > 0
