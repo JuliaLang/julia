@@ -5,6 +5,7 @@ Julia v1.8 Release Notes
 New language features
 ---------------------
 
+* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
 
 Language changes
 ----------------
