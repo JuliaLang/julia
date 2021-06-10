@@ -310,7 +310,7 @@ end
     @test ts[1].val == strip(str)
     ts = collect(tokenize("""\"\$\""""))
     @test ts[1].kind == Tokens.STRING
-    
+
     # issue 73:
     t_err = tok("\"\$(fdsf\"")
     @test t_err.kind == Tokens.ERROR
@@ -486,6 +486,7 @@ for op in ops
     str3 = "a $op b"
     str4 = "a .$op b"
     str5 = "a $(op)₁ b"
+    str5 = "a $(op)\U0304 b"
     str6 = "a .$(op)₁ b"
     ex1 = Meta.parse(str1, raise = false)
     ex2 = Meta.parse(str2, raise = false)
