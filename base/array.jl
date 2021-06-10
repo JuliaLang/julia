@@ -2502,6 +2502,29 @@ function filter!(f, a::AbstractVector)
     return a
 end
 
+"""
+    filter(f)
+
+Create a function that filters its arguments with function `f` using [`filter`](@ref), i.e.
+a function equivalent to `y -> filter(f, x)`.
+
+The returned function is of type `Base.Fix1{typeof(filter)}`, which can be
+used to implement specialized methods.
+
+# Example usage:
+```jldoctest
+julia> -5:5 |> filter(<(-3))
+2-element Vector{Int64}:
+ -5
+ -4
+```
+!!! compat "Julia 1.8"
+This functionality requires at least Julia 1.8
+"""
+function filter(f)
+    Fix1(filter, f)
+end
+
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
