@@ -2178,7 +2178,7 @@ _typed_hvncat(::Type{T}, ::Val{N}) where {T, N} =
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
-    # conditions: the elements must all have 1- or 0-length dimensions above N
+    # conditions: the elements must all have 1-length dimensions above N
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     N < 0 &&
@@ -2188,13 +2188,13 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
             return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
     end
 
-    nd = max(N, ndims(as[1]))
-
+    nd = N
     Ndim = 0
-    for i ∈ 1:lastindex(as)
-        Ndim += cat_size(as[i], N)
+    for (i, a) ∈ enumerate(as)
+        Ndim += cat_size(a, N)
+        nd = max(nd, cat_ndims(a))
         for d ∈ 1:N - 1
-            cat_size(as[1], d) == cat_size(as[i], d) ||
+            cat_size(as[1], d) == cat_size(a, d) ||
                 throw(ArgumentError("mismatched size along axis $d in element $i"))
         end
     end
@@ -2219,13 +2219,11 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
         throw(ArgumentError("concatenation dimension must be nonnegative"))
     nd = N
     Ndim = 0
-    for a ∈ as
-        if a isa AbstractArray
-            cat_size(a, N) == length(a) ||
-                throw(ArgumentError("all dimensions of elements other than $N must be of length 1"))
-            nd = max(nd, cat_ndims(a))
-        end
+    for (i, a) ∈ enumerate(as)
         Ndim += cat_size(a, N)
+        nd = max(nd, cat_ndims(a))
+        cat_size(a, N) == length(a) ||
+            throw(ArgumentError("all dimensions of element $i other than $N must be of length 1"))
     end
 
     A = Array{T, nd}(undef, ntuple(x -> 1, N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
@@ -2285,7 +2283,7 @@ function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as...) 
     d2 = row_first ? 1 : 2
 
     # discover dimensions
-    nd = max(N, cat_ndims(as[1]))
+    nd = maximum(cat_ndims, as, init = N)
     outdims = zeros(Int, nd)
 
     # discover number of rows or columns
@@ -2361,7 +2359,7 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
     d2 = row_first ? 1 : 2
 
     # discover dimensions
-    nd = max(N, cat_ndims(as[1]))
+    nd = maximum(cat_ndims, as, init = N)
     outdims = zeros(Int, nd)
     currentdims = zeros(Int, nd)
     blockcounts = zeros(Int, nd)
