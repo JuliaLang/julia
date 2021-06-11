@@ -1481,8 +1481,8 @@ import Base.typed_hvncat
         @test [v1 v1 ;;; v3] == [1 1 ;;; 1 1 ;;;;]
         @test [v2 v1 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
         @test [v1 v1 ;;; v1 v2] == [1 1 ;;; 1 1 ;;;;]
-        @test [v1 ;;; 1] == [1 ;;; 1 ;;;;]
-        @test [1 ;;; v1] == [1 ;;; 1 ;;;;]
+        @test [v2 ;;; 1] == [1 ;;; 1 ;;;;]
+        @test [1 ;;; v2] == [1 ;;; 1 ;;;;]
         @test [v3 ;;; 1 v1] == [1 1 ;;; 1 1 ;;;;]
         @test [v1 1 ;;; v3] == [1 1 ;;; 1 1 ;;;;]
         @test [v2 1 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
@@ -1492,7 +1492,28 @@ import Base.typed_hvncat
     # reject shapes that don't nest evenly between levels (e.g. 1 + 2 does not fit into 2)
     @test_throws ArgumentError hvncat(((1, 2, 1), (2, 2), (4,)), true, [1 2], [3], [4], [1 2; 3 4])
 
-    @test_throws ArgumentError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
+    # zero-length arrays are handled appropriately
+    @test [zeros(Int, 1, 2, 0) ;;; 1 3] == [1 3;;;]
+    @test [[] ;;; [] ;;; []] == Array{Any}(undef, 0, 1, 3)
+    @test [[] ; 1 ;;; 2 ; []] == [1 ;;; 2]
+    @test [[] ; [] ;;; [] ; []] == Array{Any}(undef, 0, 1, 2)
+    @test [[] ; 1 ;;; 2] == [1 ;;; 2]
+    @test [[] ; [] ;;; [] ;;; []] == Array{Any}(undef, 0, 1, 3)
+    z = zeros(Int, 0, 0, 0)
+    [z z ; z ;;; z ;;; z] == Array{Int}(undef, 0, 0, 0)
+
+    for v1 ∈ (zeros(Int, 0, 0), zeros(Int, 0, 0, 0), zeros(Int, 0, 0, 0, 0), zeros(Int, 0, 0, 0, 0, 0, 0, 0))
+        for v2 ∈ (1, [1])
+            for v3 ∈ (2, [2])
+                @test_throws ArgumentError [v1 ;;; v2]
+                @test_throws ArgumentError [v1 ;;; v2 v3]
+                @test_throws ArgumentError [v1 v1 ;;; v2 v3]
+            end
+        end
+    end
+
+    @test_throws ArgumentError [zeros(Int, 0, 0, 0) ;;; 1 3]    # fails
+    @test_throws ArgumentError [zeros(Int, 0, 0, 0) ;;; [1] [3]]     # fails
 end
 
 @testset "keepat!" begin

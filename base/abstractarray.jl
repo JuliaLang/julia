@@ -2344,16 +2344,9 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         end
     end
 
-    # calling sum() leads to 3 extra allocations
-    len = 0
-    for a ∈ as
-        len += cat_length(a)
-    end
     outlen = prod(outdims)
-    outlen == 0 &&
-        throw(ArgumentError("too few elements in arguments, unable to infer dimensions"))
-    len == outlen ||
-        throw(ArgumentError("too many elements in arguments; expected $(outlen), got $(len)"))
+    elementcount == outlen ||
+        throw(ArgumentError("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     # copy into final array
     A = cat_similar(as[1], T, outdims)
@@ -2415,7 +2408,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
         for d ∈ 1:N
             ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
             dsize = cat_size(as[i], ad)
-            blockcounts[d] += 1
+            blockcounts[d] += cat_length(as[i]) > 0 ? 1 : 0
 
             if d == 1 || i == 1 || wasstartblock
                 currentdims[d] += dsize
@@ -2443,6 +2436,10 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
             end
         end
     end
+
+    outlen = prod(outdims)
+    elementcount == outlen ||
+        throw(ArgumentError("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     if row_first
         outdims[1], outdims[2] = outdims[2], outdims[1]
