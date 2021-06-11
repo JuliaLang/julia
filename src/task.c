@@ -649,8 +649,8 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     throw_internal(ct, NULL);
 }
 
-/* This is xoshiro256++ 1.0, used for tasklocal random number generation in Julia.     
-   This implementation is intended for embedders and internal use by the runtime, and is     
+/* This is xoshiro256++ 1.0, used for tasklocal random number generation in Julia.
+   This implementation is intended for embedders and internal use by the runtime, and is
    based on the reference implementation at https://prng.di.unimi.it
 
    Credits go to David Blackman and Sebastiano Vigna for coming up with this PRNG.
