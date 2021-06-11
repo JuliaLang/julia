@@ -475,6 +475,21 @@ Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.
 
 See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
 
+## Property destructuring
+
+Instead of destructuring based on iteration, the right side of assignments can also be destructured using property names. 
+This follows the syntax for NamedTuples, and works by assigning to each variable on the left a 
+property of the right side of the assignment with the same name using `getproperty`:
+
+```julia
+julia> (; b, a) = (a=1, b=2, c=3)
+julia> (a = 1, b = 2, c = 3)
+julia> a
+1
+julia> b
+2
+```
+
 ## Argument destructuring
 
 The destructuring feature can also be used within a function argument.
@@ -490,29 +505,6 @@ julia> gap(minmax(10, 2))
 8
 ```
 
-Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
-would be a two-argument function, and this example would not work.
-
-For anonymous functions, destructuring a single tuple requires an extra comma:
-
-```
-julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
-2-element Array{Int64,1}:
- 3
- 7
-```
-## Property destructuring
-
-`(; a, b) = x` can be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
-and similarly for `b`.
-
-```julia
-julia> f(; a, b) = a, b
-julia> f((b=5, a=6))
-(6, 5)
-```
-This can also be used to simultaneously dispatch on and unpack the fields of `A` like in the following example:
-
 ```julia
 julia> struct A
            x
@@ -522,7 +514,20 @@ julia> foo((; x, y)::A) = x + y
 julia> foo(A(1, 2))
 3
 ```
-Note that this will throw an error if `foo((x=1, y=2))` is called instead of `foo(A(1, 2))`.
+
+Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
+would be a two-argument function, and this example would not work. Also `foo((1, 2))`
+would throw an error if called instead of `foo(A(1, 2)`.
+
+
+For anonymous functions, destructuring a single tuple requires an extra comma:
+
+```
+julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
+2-element Array{Int64,1}:
+ 3
+ 7
+```
 
 ## Varargs Functions
 
