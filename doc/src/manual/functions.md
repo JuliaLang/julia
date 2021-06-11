@@ -483,9 +483,11 @@ property of the right side of the assignment with the same name using `getproper
 
 ```julia
 julia> (; b, a) = (a=1, b=2, c=3)
-julia> (a = 1, b = 2, c = 3)
+(a = 1, b = 2, c = 3)
+
 julia> a
 1
+
 julia> b
 2
 ```
@@ -505,22 +507,28 @@ julia> gap(minmax(10, 2))
 8
 ```
 
+Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
+would be a two-argument function, and this example would not work.
+
+Similarly, property destructuring can also be used for function arguments:
+
 ```julia
+julia> foo((; x, y)) = x + y
+foo (generic function with 1 method)
+
+julia> foo((x=1, y=2))
+3
+
 julia> struct A
            x
            y
        end
-julia> foo((; x, y)::A) = x + y
-julia> foo(A(1, 2))
-3
+
+julia> foo(A(3, 4))
+7
 ```
 
-Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
-would be a two-argument function, and this example would not work. Also `foo((1, 2))`
-would throw an error if called instead of `foo(A(1, 2)`.
-
-
-For anonymous functions, destructuring a single tuple requires an extra comma:
+For anonymous functions, destructuring a single argument requires an extra comma:
 
 ```
 julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
