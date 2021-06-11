@@ -1342,6 +1342,7 @@ end
     end
 end
 
+import Base.typed_hvncat
 @testset "hvncat" begin
     a = fill(1, (2,3,2,4,5))
     b = fill(2, (1,1,2,4,5))
@@ -1390,6 +1391,58 @@ end
     end
 
     @test_throws BoundsError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
+
+    # dims form
+    for v ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
+        # reject dimension < 0
+        @test_throws ArgumentError hvncat(-1, v...)
+
+        # reject shape tuple with no elements
+        @test_throws ArgumentError hvncat(((),), true, v...)
+    end
+
+    # reject dims or shape with negative or zero values
+    for v1 ∈ (-1, 0, 1)
+        for v2 ∈ (-1, 0, 1)
+            v1 == v2 == 1 && continue
+            for v3 ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
+                @test_throws ArgumentError hvncat((v1, v2), true, v3...)
+                @test_throws ArgumentError hvncat(((v1,), (v2,)), true, v3...)
+            end
+        end
+    end
+
+    for v ∈ ((1, [1]), ([1], 1), ([1], [1]))
+        # reject shape with more than one end value
+        @test_throws ArgumentError hvncat(((1, 1),), true, v...)
+    end
+
+    for v ∈ ((1, 2, 3), (1, 2, [3]), ([1], [2], [3]))
+        # reject shape with more values in later level
+        @test_throws ArgumentError hvncat(((2, 1), (1, 1, 1)), true, v...)
+    end
+
+    # output dimensions are maximum of input dimensions and concatenation dimension
+    begin
+        v1 = fill(1, 1, 1)
+        v2 = fill(1, 1, 1, 1, 1)
+        v3 = fill(1, 1, 2, 1, 1)
+        @test [v1 ;;; v2] == [1 ;;; 1 ;;;;]
+        @test [v2 ;;; v1] == [1 ;;; 1 ;;;;]
+        @test [v3 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 v1 ;;; v3] == [1 1 ;;; 1 1 ;;;;]
+        @test [v2 v1 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 v1 ;;; v1 v2] == [1 1 ;;; 1 1 ;;;;]
+        @test [v2 ;;; 1] == [1 ;;; 1 ;;;;]
+        @test [1 ;;; v2] == [1 ;;; 1 ;;;;]
+        @test [v3 ;;; 1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 1 ;;; v3] == [1 1 ;;; 1 1 ;;;;]
+        @test [v2 1 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 1 ;;; v1 v2] == [1 1 ;;; 1 1 ;;;;]
+    end
+
+    # reject shapes that don't nest evenly between levels (e.g. 1 + 2 does not fit into 2)
+    @test_throws ArgumentError hvncat(((1, 2, 1), (2, 2), (4,)), true, [1 2], [3], [4], [1 2; 3 4])
 end
 
 @testset "keepat!" begin
