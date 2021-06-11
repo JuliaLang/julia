@@ -2189,7 +2189,11 @@ _typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
 _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...)
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
-    # conditions: the elements must all have 1- or 0-length dimensions above N
+    # conditions: the elements must all have 1-length dimensions above N
+    length(as) > 0 ||
+        throw(ArgumentError("must have at least one element"))
+    N < 0 &&
+        throw(ArgumentError("concatenation dimension must be nonnegative"))
     for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
             return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
@@ -2198,10 +2202,13 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     nd = max(N, ndims(as[1]))
 
     Ndim = 0
-    for i ∈ 1:lastindex(as)
-        Ndim += cat_size(as[i], N)
-        for d ∈ 1:N - 1
-            cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
+    for i ∈ eachindex(as)
+        a = as[i]
+        Ndim += size(a, N)
+        nd = max(nd, ndims(a))
+        for d ∈ 1:N-1
+            size(a, d) == size(as[1], d) ||
+                throw(ArgumentError("all dimensions of element $i other than $N must be of length 1"))
         end
     end
 
@@ -2217,17 +2224,20 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
 end
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
-    # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
-    # into the destination
+    length(as) > 0 ||
+        throw(ArgumentError("must have at least one element"))
+    N < 0 &&
+        throw(ArgumentError("concatenation dimension must be nonnegative"))
     nd = N
     Ndim = 0
-    for a ∈ as
-        if a isa AbstractArray
-            cat_size(a, N) == length(a) ||
-                throw(ArgumentError("all dimensions of elements other than $N must be of length 1"))
-            nd = max(nd, cat_ndims(a))
-        end
+    for i ∈ eachindex(as)
+        a = as[i]
         Ndim += cat_size(a, N)
+        nd = max(nd, cat_ndims(a))
+        for d ∈ 1:N-1
+            cat_size(a, d) == 1 ||
+                throw(ArgumentError("all dimensions of element $i other than $N must be of length 1"))
+        end
     end
 
     A = Array{T, nd}(undef, ntuple(x -> 1, N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
@@ -2261,7 +2271,9 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
 
     currentdims = zeros(Int, nd)
     blockcount = 0
+    elementcount = 0
     for i ∈ eachindex(as)
+        elementcount += cat_length(as[i])
         currentdims[d1] += cat_size(as[i], d1)
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
@@ -2291,14 +2303,9 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
         end
     end
 
-    # calling sum() leads to 3 extra allocations
-    len = 0
-    for a ∈ as
-        len += cat_length(a)
-    end
     outlen = prod(outdims)
-    outlen == 0 && throw(ArgumentError("too few elements in arguments, unable to infer dimensions"))
-    len == outlen || throw(ArgumentError("too many elements in arguments; expected $(outlen), got $(len)"))
+    elementcount == outlen ||
+        throw(ArgumentError("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     # copy into final array
     A = cat_similar(as[1], T, outdims)
@@ -2323,7 +2330,9 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     blockcounts = zeros(Int, nd)
     shapepos = ones(Int, nd)
 
+    elementcount = 0
     for i ∈ eachindex(as)
+        elementcount += cat_length(as[i])
         wasstartblock = false
         for d ∈ 1:N
             ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
@@ -2350,9 +2359,16 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
                 currentdims[d] = 0
                 blockcounts[d] = 0
                 shapepos[d] += 1
+                d > 1 && (blockcounts[d - 1] == 0 ||
+                    throw(ArgumentError("""shape in level $d is inconsistent; level counts must nest \
+                                        evenly into each other""")))
             end
         end
     end
+
+    outlen = prod(outdims)
+    elementcount == outlen ||
+        throw(ArgumentError("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     if row_first
         outdims[1], outdims[2] = outdims[2], outdims[1]
