@@ -1408,6 +1408,7 @@ end
         @test [v2 1 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
         @test [v1 1 ;;; v1 v2] == [1 1 ;;; 1 1 ;;;;]
     end
+end
 
 @testset "keepat!" begin
     a = [1:6;]
