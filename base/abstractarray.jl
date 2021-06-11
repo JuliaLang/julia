@@ -2257,7 +2257,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
 
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
-    
+
     outdims = zeros(Int, N)
 
     # discover number of rows or columns
