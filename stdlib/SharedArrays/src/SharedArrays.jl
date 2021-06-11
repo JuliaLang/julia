@@ -507,9 +507,9 @@ end
 Array(S::SharedArray) = S.s
 
 # pass through getindex and setindex! - unlike DArrays, these always work on the complete array
-getindex(S::SharedArray, i::Real) = getindex(S.s, i)
+Base.@propagate_inbounds getindex(S::SharedArray, i::Real) = getindex(S.s, i)
 
-setindex!(S::SharedArray, x, i::Real) = setindex!(S.s, x, i)
+Base.@propagate_inbounds setindex!(S::SharedArray, x, i::Real) = setindex!(S.s, x, i)
 
 function fill!(S::SharedArray, v)
     vT = convert(eltype(S), v)
