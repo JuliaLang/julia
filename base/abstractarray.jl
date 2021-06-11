@@ -2534,28 +2534,61 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     return A
 end
 
-function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
+function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
+    # putting these in separate functions leads to unnecessary allocations
+    lenxs = length(xs)
+    lena = length(A)
+    lenxs == lena || throw(ArgumentError("number of elements don't match specified shape"))
+    if row_first
+        nr, nc = size(A, 1), size(A, 2)
+        nrc = nr * nc
+        na = prod(size(A)[3:end])
+        k = 1
+        @inbounds for d ∈ 1:na
+            dd = nrc * (d - 1)
+            for i ∈ 1:nr
+                Ai = dd + i
+                for _ ∈ 1:nc
+                    A[Ai] = xs[k]
+                    k += 1
+                    Ai += nr
+                end
+            end
+        end
+    else
+        @inbounds for k ∈ eachindex(xs)
+            A[k] = xs[k]
+        end
+    end
+end
+
+@inline function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int},
+                              d1::Int, d2::Int, as::Tuple) where {T, N}
+    length(scratch1) == length(scratch2) == N ||
+        throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
+    0 < d1 < 3 && 0 < d2 < 3 && d1 != d2 ||
+        throw(ArgumentError("d1 and d2 must be either 1 or 2, exclusive."))
     outdims = size(A)
     offsets = scratch1
     inneroffsets = scratch2
     for a ∈ as
         if isa(a, AbstractArray)
             for ai ∈ a
-                Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
+                @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
                 A[Ai] = ai
 
-                for j ∈ 1:N
+                @inbounds for j ∈ 1:N
                     inneroffsets[j] += 1
                     inneroffsets[j] < cat_size(a, j) && break
                     inneroffsets[j] = 0
                 end
             end
         else
-            Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
+            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
             A[Ai] = a
         end
 
-        for j ∈ (d1, d2, 3:N...)
+        @inbounds for j ∈ (d1, d2, 3:N...)
             offsets[j] += cat_size(a, j)
             offsets[j] < outdims[j] && break
             offsets[j] = 0
