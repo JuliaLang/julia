@@ -2146,6 +2146,7 @@ typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 # 1-dimensional hvncat methods
 
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
+_typed_hvncat(::Type{T}, ::Val{0}, x::Number) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
 _typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
@@ -2156,9 +2157,16 @@ _typed_hvncat(::Type{T}, ::Val{N}) where {T, N} =
     (N < 0 && throw(ArgumentError("concatenation dimension must be nonnegative"))) ||
     Vector{T}()
 
+# 0-dimensional cases for balanced and unbalanced hvncat methods
+
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs::Number...) where T = Vector{T}()
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = T.(x)
+_typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
+    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+_typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
+    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
     A = Array{T, N}(undef, dims...)
@@ -2268,6 +2276,22 @@ _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+
+# balanced dimensions hvncat methods
+
+_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
+_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
+
+function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T, row_first}
+    lengthas = length(as)
+    ds > 0 ||
+        throw(ArgumentError("`dimsshape` argument must consist of positive integers"))
+    lengthas == ds ||
+        throw(ArgumentError("number of elements does not match `dimshape` argument; expected $ds, got $lengthas"))
+    return row_first ?
+        _typed_hvncat(T, Val(2), as...) :
+        _typed_hvncat(T, Val(1), as...)
+end
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
     d1 = row_first ? 2 : 1
