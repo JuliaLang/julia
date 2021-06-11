@@ -2149,9 +2149,9 @@ _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::Number) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
 _typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) =
-    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 _typed_hvncat(::Type, ::Val{0}, ::Any...) =
-    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
 _typed_hvncat(::Type{T}, ::Val{N}) where {T, N} =
     (N < 0 && throw(ArgumentError("concatenation dimension must be nonnegative"))) ||
@@ -2164,9 +2164,9 @@ _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = convert.(T, x)
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
-    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
-    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
     A = Array{T, N}(undef, dims...)
@@ -2273,9 +2273,9 @@ _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = convert.(T, x)
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
-    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
-    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
+    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
 # balanced dimensions hvncat methods
 
