@@ -276,8 +276,6 @@ function lmul!(D::Diagonal, B::UnitUpperTriangular)
 end
 
 *(D::Adjoint{<:Any,<:Diagonal}, B::Diagonal) = Diagonal(adjoint.(D.parent.diag) .* B.diag)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
@@ -286,8 +284,6 @@ function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
 end
 
 *(D::Transpose{<:Any,<:Diagonal}, B::Diagonal) = Diagonal(transpose.(D.parent.diag) .* B.diag)
-*(A::Transpose{<:Any,<:AbstractTriangular}, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
 function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
@@ -296,8 +292,6 @@ function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
 end
 
 *(D::Diagonal, B::Adjoint{<:Any,<:Diagonal}) = Diagonal(D.diag .* adjoint.(B.parent.diag))
-*(D::Diagonal, B::Adjoint{<:Any,<:AbstractTriangular}) =
-    lmul!(D, copyto!(similar(B, promote_op(*, eltype(B), eltype(D.diag))), B))
 *(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; rmul!(Array(D), adjoint(Q)))
 function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
     A = adjA.parent
@@ -307,8 +301,6 @@ function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
 end
 
 *(D::Diagonal, B::Transpose{<:Any,<:Diagonal}) = Diagonal(D.diag .* transpose.(B.parent.diag))
-*(D::Diagonal, B::Transpose{<:Any,<:AbstractTriangular}) =
-    lmul!(D, copyto!(similar(B, promote_op(*, eltype(B), eltype(D.diag))), B))
 function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
     A = transA.parent
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
@@ -415,29 +407,8 @@ end
 
 # ambiguities with Symmetric/Hermitian
 # RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
-*(A::Diagonal, transB::Transpose{<:Any,<:RealHermSymComplexSym}) = A * transB.parent
-*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, B::Diagonal) = transA.parent * B
-*(A::Diagonal, adjB::Adjoint{<:Any,<:RealHermSymComplexHerm}) = A * adjB.parent
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Diagonal) = adjA.parent * B
-*(transA::Transpose{<:Any,<:RealHermSymComplexSym}, transD::Transpose{<:Any,<:Diagonal}) = transA.parent * transD
-*(transD::Transpose{<:Any,<:Diagonal}, transA::Transpose{<:Any,<:RealHermSymComplexSym}) = transD * transA.parent
-*(adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}, adjD::Adjoint{<:Any,<:Diagonal}) = adjA.parent * adjD
-*(adjD::Adjoint{<:Any,<:Diagonal}, adjA::Adjoint{<:Any,<:RealHermSymComplexHerm}) = adjD * adjA.parent
 mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym}) = C .= adjoint.(A.parent.diag) .* B
 mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexHerm}) = C .= transpose.(A.parent.diag) .* B
-
-@inline mul!(C::AbstractMatrix,
-             A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSym},
-             alpha::Number, beta::Number) = mul!(C, A, B.parent, alpha, beta)
-@inline mul!(C::AbstractMatrix,
-             A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexHerm},
-             alpha::Number, beta::Number) = mul!(C, A, B.parent, alpha, beta)
-@inline mul!(C::AbstractMatrix,
-             A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSym},
-             alpha::Number, beta::Number) = mul!(C, A, B.parent, alpha, beta)
-@inline mul!(C::AbstractMatrix,
-             A::Transpose{<:Any,<:Diagonal}, B::Transpose{<:Any,<:RealHermSymComplexSym},
-             alpha::Number, beta::Number) = mul!(C, A, B.parent, alpha, beta)
 
 @inline mul!(C::AbstractMatrix,
              A::Adjoint{<:Any,<:Diagonal}, B::Adjoint{<:Any,<:RealHermSymComplexSym},
