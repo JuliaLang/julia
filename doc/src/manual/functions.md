@@ -477,8 +477,8 @@ See [`Base.rest`](@ref) for details on the precise handling and customization fo
 
 ## Property destructuring
 
-Instead of destructuring based on iteration, the right side of assignments can also be destructured using property names. 
-This follows the syntax for NamedTuples, and works by assigning to each variable on the left a 
+Instead of destructuring based on iteration, the right side of assignments can also be destructured using property names.
+This follows the syntax for NamedTuples, and works by assigning to each variable on the left a
 property of the right side of the assignment with the same name using `getproperty`:
 
 ```julia
