@@ -246,13 +246,14 @@ function Base.print_array(io::IO, S::AbstractSparseMatrixCSC)
 end
 
 # called by `show(io, ::AbstractSparseMatrixCSC)`
+# always show matrices as `sparse(I, J, K)`
 function Base._show_nonempty(io::IO, S::AbstractSparseMatrixCSC, prefix::String)
     _checkbuffers(S)
-    if max(size(S)...) < 16
-        Base._show_nonempty(io, Base.inferencebarrier(S), prefix, false, axes(S))
-    else
-        _show_with_braille_patterns(io, S)
-    end
+    # can't use `findnz`, because that expects all values not to be #undef
+    I = rowvals(S)
+    J = [col for col = 1 : size(S, 2) for k = getcolptr(S)[col] : (getcolptr(S)[col+1]-1)]
+    K = nonzeros(S)
+    print(io, "sparse(", I, ", ", J, ", ", K, ")")
 end
 
 const brailleBlocks = UInt16['⠁', '⠂', '⠄', '⡀', '⠈', '⠐', '⠠', '⢀']
