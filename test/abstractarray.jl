@@ -1390,7 +1390,24 @@ end
     end
 
     @test_throws BoundsError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
-end
+    # output dimensions are maximum of input dimensions and concatenation dimension
+    begin
+        v1 = fill(1, 1, 1)
+        v2 = fill(1, 1, 1, 1, 1)
+        v3 = fill(1, 1, 2, 1, 1)
+        @test [v1 ;;; v2] == [1 ;;; 1 ;;;;]
+        @test [v2 ;;; v1] == [1 ;;; 1 ;;;;]
+        @test [v3 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 v1 ;;; v3] == [1 1 ;;; 1 1 ;;;;]
+        @test [v2 v1 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 v1 ;;; v1 v2] == [1 1 ;;; 1 1 ;;;;]
+        @test [v2 ;;; 1] == [1 ;;; 1 ;;;;]
+        @test [1 ;;; v2] == [1 ;;; 1 ;;;;]
+        @test [v3 ;;; 1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 1 ;;; v3] == [1 1 ;;; 1 1 ;;;;]
+        @test [v2 1 ;;; v1 v1] == [1 1 ;;; 1 1 ;;;;]
+        @test [v1 1 ;;; v1 v2] == [1 1 ;;; 1 1 ;;;;]
+    end
 
 @testset "keepat!" begin
     a = [1:6;]
