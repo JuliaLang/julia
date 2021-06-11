@@ -2162,7 +2162,7 @@ _typed_hvncat(::Type{T}, ::Val{N}) where {T, N} =
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = T.(x)
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = convert.(T, x)
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
@@ -2271,7 +2271,7 @@ end
 
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = T.(x)
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = convert.(T, x)
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
