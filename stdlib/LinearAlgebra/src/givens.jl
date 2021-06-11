@@ -11,7 +11,6 @@ function (*)(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     lmul!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
 (*)(A::AbstractVector, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
-(*)(A::AbstractMatrix, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
 function _absvecormat_mul_adjrot(A::AbstractVecOrMat{T}, adjR::Adjoint{<:Any,<:AbstractRotation{S}}) where {T,S}
     R = adjR.parent
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
