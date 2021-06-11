@@ -501,6 +501,28 @@ julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
  3
  7
 ```
+## Property destructuring
+
+`(; a, b) = x` can be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
+and similarly for `b`.
+
+```julia
+julia> f(; a, b) = a, b
+julia> f((b=5, a=6))
+(6, 5)
+```
+This can also be used to simultaneously dispatch on and unpack the fields of `A` like in the following example:
+
+```julia
+julia> struct A
+           x
+           y
+       end
+julia> foo((; x, y)::A) = x + y
+julia> foo(A(1, 2))
+3
+```
+Note that this will throw an error if `foo((x=1, y=2))` is called instead of `foo(A(1, 2))`.
 
 ## Varargs Functions
 
