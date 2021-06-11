@@ -1342,7 +1342,7 @@ end
     end
 end
 
-import Base.typed_hvncat
+using Base.typed_hvncat
 @testset "hvncat" begin
     a = fill(1, (2,3,2,4,5))
     b = fill(2, (1,1,2,4,5))

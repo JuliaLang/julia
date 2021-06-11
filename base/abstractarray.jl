@@ -2288,9 +2288,11 @@ function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T,
         throw(ArgumentError("`dimsshape` argument must consist of positive integers"))
     lengthas == ds ||
         throw(ArgumentError("number of elements does not match `dimshape` argument; expected $ds, got $lengthas"))
-    return row_first ?
-        _typed_hvncat(T, Val(2), as...) :
-        _typed_hvncat(T, Val(1), as...)
+    if row_first
+        return _typed_hvncat(T, Val(2), as...)
+    else
+        return _typed_hvncat(T, Val(1), as...)
+    end
 end
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
@@ -2358,10 +2360,11 @@ end
 
 # unbalanced dimensions hvncat methods
 
-_typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...) =
-    (length(shape[1]) == 0 &&
-        throw(ArgumentError("each level of `shape` argument must have at least one value"))) ||
-            _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
+function _typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...)
+    if (length(shape[1]) == 0
+        throw(ArgumentError("each level of `shape` argument must have at least one value")))
+    return _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
+end
 
 function _typed_hvncat(T::Type, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {N}
     d1 = row_first ? 2 : 1
