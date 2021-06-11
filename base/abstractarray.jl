@@ -2159,12 +2159,6 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     return A
 end
 
-_typed_hvncat(::Type{T}, ::Val{0}) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
-_typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) =
-    throw(ArgumentError("a 0-dimensional array may not have more than one element"))
-
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
 _typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
 _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...)
