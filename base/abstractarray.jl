@@ -2143,15 +2143,8 @@ typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs::Number...) where T = Vector{T}()
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
-    A = Array{T, N}(undef, dims...)
-    lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
 # 1-dimensional hvncat methods
-    if lengtha != lengthx
-       throw(ArgumentError("argument count does not match specified shape (expected $lengtha, got $lengthx)"))
+
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
 _typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) =
@@ -2162,6 +2155,25 @@ _typed_hvncat(::Type, ::Val{0}, ::Any...) =
 _typed_hvncat(::Type{T}, ::Val{N}) where {T, N} =
     (N < 0 && throw(ArgumentError("concatenation dimension must be nonnegative"))) ||
     Vector{T}()
+
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs::Number...) where T = Vector{T}()
+
+function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
+    A = Array{T, N}(undef, dims...)
+    lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
+    lengthx = length(xs) # Cuts from 3 allocations to 1.
+    if lengtha != lengthx
+       throw(ArgumentError("argument count does not match specified shape (expected $lengtha, got $lengthx)"))
+    end
+    hvncat_fill!(A, row_first, xs)
+    return A
+end
+
+function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
+    # putting these in separate functions leads to unnecessary allocations
+    if row_first
         nr, nc = size(A, 1), size(A, 2)
         nrc = nr * nc
         na = prod(size(A)[3:end])
@@ -2257,6 +2269,7 @@ _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
     throw(ArgumentError("a 0-dimensional array may not have more than one element"))
 
+function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
