@@ -2157,17 +2157,6 @@ _typed_hvncat(::Type{T}, ::Val{N}) where {T, N} =
     (N < 0 && throw(ArgumentError("concatenation dimension must be nonnegative"))) ||
     Vector{T}()
 
-# 0-dimensional cases for balanced and unbalanced hvncat methods
-
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = convert.(T, x)
-_typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
-    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
-_typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
-    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
-
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
     A = Array{T, N}(undef, dims...)
     lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
@@ -2205,7 +2194,6 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
 end
 
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
-_typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
 _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...)
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
@@ -2276,6 +2264,7 @@ _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
+
 
 # balanced dimensions hvncat methods
 
