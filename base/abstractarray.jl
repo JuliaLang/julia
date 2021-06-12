@@ -2126,7 +2126,6 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4             = elements in each 4d slice (4,)
  => shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `rowfirst` = true
 """
-hvncat(::Tuple{}, ::Bool) = []
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
 hvncat(dim::Int, xs...) = _hvncat(dim, true, xs...)
 
@@ -2137,24 +2136,23 @@ _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::Number...) = _typed_h
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dimsshape, row_first, xs...)
 _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dimsshape, row_first, xs...)
 
-typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 
 # 1-dimensional hvncat methods
 
-_typed_hvncat(::Type{T}, ::Val{0}) where T = Vector{T}()
+_typed_hvncat(::Type, ::Val{0}) = _typed_hvncat_0d_only_one()
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(convert(T, x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::Number) where T = fill(convert(T, x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = convert.(T, x)
-_typed_hvncat(::Type, ::Val{0}, ::Any...) = _typed_hvncat_0d_too_many()
-_typed_hvncat(::Type, ::Val{0}, ::Number...) = _typed_hvncat_0d_too_many()
-_typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_too_many()
+_typed_hvncat(::Type, ::Val{0}, ::Any...) = _typed_hvncat_0d_only_one()
+_typed_hvncat(::Type, ::Val{0}, ::Number...) = _typed_hvncat_0d_only_one()
+_typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_only_one()
 
-_typed_hvncat_0d_too_many() =
+_typed_hvncat_0d_only_one() =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
-_typed_hvncat(::Type{T}, ::Val{N}) where {T, N} = Vector{T}()
+_typed_hvncat(::Type{T}, ::Val{N}) where {T, N} = Array{T, N}(undef, ntuple(x -> 0, Val(N)))
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
     A = Array{T, N}(undef, dims...)

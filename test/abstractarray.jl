@@ -1,3 +1,4 @@
+using Core: Argument
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random, LinearAlgebra, SparseArrays
@@ -1391,19 +1392,21 @@ using Base: typed_hvncat
     end
 
     # 0-dimension behaviors
-    @test hvncat(0) == []
+    # exactly one argument, placed in an array
+    # if already an array, copy, with type conversion as necessary
+    @test_throws ArgumentError hvncat(0)
     @test hvncat(0, 1) == fill(1)
     @test hvncat(0, [1]) == [1]
     @test_throws ArgumentError hvncat(0, 1, 1)
-    @test typed_hvncat(Float64, 0) == Float64[]
+    @test_throws ArgumentError typed_hvncat(Float64, 0)
     @test typed_hvncat(Float64, 0, 1) == fill(1.0)
     @test typed_hvncat(Float64, 0, [1]) == Float64[1.0]
     @test_throws ArgumentError typed_hvncat(Float64, 0, 1, 1)
-    @test hvncat((), true) == []
+    @test_throws ArgumentError hvncat((), true) == []
     @test hvncat((), true, 1) == fill(1)
     @test hvncat((), true, [1]) == [1]
     @test_throws ArgumentError hvncat((), true, 1, 1)
-    @test typed_hvncat(Float64, (), true) == Float64[]
+    @test_throws ArgumentError typed_hvncat(Float64, (), true) == Float64[]
     @test typed_hvncat(Float64, (), true, 1) == fill(1.0)
     @test typed_hvncat(Float64, (), true, [1]) == [1.0]
     @test_throws ArgumentError typed_hvncat(Float64, (), true, 1, 1)
@@ -1440,6 +1443,15 @@ using Base: typed_hvncat
     @test_throws ArgumentError typed_hvncat(Float64, ((2,),), true, 1)
     @test typed_hvncat(Float64, ((2,),), false, 1, 1) == Float64[1.0; 1.0]
     @test typed_hvncat(Float64, ((2,),), false, [1], [1]) == Float64[1.0; 1.0]
+
+    # zero-value behaviors for int form above dimension zero
+    # e.g. [;;], [;;;], though that isn't valid syntax
+    @test hvncat(1) == []
+    @test hvncat(2) == Array{Int, 2}(undef, 0, 0)
+    @test hvncat(3) == Array{Int, 3}(undef, 0, 0, 0)
+    @test typed_hvncat(Int, 1) == []
+    @test typed_hvncat(Int, 2) == Array{Int, 2}(undef, 0, 0)
+    @test typed_hvncat(Int, 3) == Array{Int, 3}(undef, 0, 0, 0)
 end
 
 @testset "keepat!" begin
