@@ -2344,13 +2344,13 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
     shapev = collect(shape) # saves allocations later
-    shapelength = shapev[end][1]
-    lengthas = length(as)
-    shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
     all(!isempty, shapev) ||
         throw(ArgumentError("each level of `shape` argument must have at least one value"))
     length(shapev[end]) == 1 ||
         throw(ArgumentError("last level of shape must contain only one integer"))
+    shapelength = shapev[end][1]
+    lengthas = length(as)
+    shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
     # discover dimensions
     nd = max(N, cat_ndims(as[1]))
     outdims = zeros(Int, nd)
