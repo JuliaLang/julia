@@ -2327,8 +2327,8 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
         throw(ArgumentError("`shape` argument must consist of positive integers"))
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
-    shape = collect(shape) # saves allocations later
-    shapelength = shape[end][1]
+    shapev = collect(shape) # saves allocations later
+    shapelength = shapev[end][1]
     lengthas = length(as)
     shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
     all(!isempty, shapev) ||
@@ -2360,7 +2360,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
 
             wasstartblock = blockcounts[d] == 1 # remember for next dimension
 
-            isendblock = blockcounts[d] == shape[d][shapepos[d]]
+            isendblock = blockcounts[d] == shapev[d][shapepos[d]]
             if isendblock
                 if outdims[d] == 0
                     outdims[d] = currentdims[d]
