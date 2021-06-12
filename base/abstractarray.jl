@@ -2257,6 +2257,11 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
 end
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
+    length(as) > 0 ||
+        throw(ArgumentError("must have at least one element"))
+    all(>(0), dims) ||
+        throw(ArgumentError("`dims` argument must contain positive integers"))
+
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
@@ -2316,13 +2321,20 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
 end
 
 function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Bool, as...) where {T, N}
+    length(as) > 0 ||
+        throw(ArgumentError("must have at least one element"))
+    all(>(0), tuple((shape...)...)) ||
+        throw(ArgumentError("`shape` argument must consist of positive integers"))
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
     shape = collect(shape) # saves allocations later
     shapelength = shape[end][1]
     lengthas = length(as)
     shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
-
+    all(!isempty, shapev) ||
+        throw(ArgumentError("each level of `shape` argument must have at least one value"))
+    length(shapev[end]) == 1 ||
+        throw(ArgumentError("last level of shape must contain only one integer"))
     # discover dimensions
     nd = max(N, cat_ndims(as[1]))
     outdims = zeros(Int, nd)
