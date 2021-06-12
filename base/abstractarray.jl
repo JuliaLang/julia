@@ -2342,7 +2342,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     return A
 end
 
-function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
+@inline function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     # putting these in separate functions leads to unnecessary allocations
     lenxs = length(xs)
     lena = length(A)
