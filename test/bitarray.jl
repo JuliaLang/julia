@@ -1707,7 +1707,7 @@ end
 
 @testset "multidimensional concatenation returns BitArrays" begin
     a = BitVector(ones(5))
-    typeof([a ;;; a]) <: BitArray
-    typeof([a a ;;; a a]) <: BitArray
-    typeof([a a ;;; [a a]]) <: BitArray
+    @test typeof([a ;;; a]) <: BitArray
+    @test typeof([a a ;;; a a]) <: BitArray
+    @test typeof([a a ;;; [a a]]) <: BitArray
 end
