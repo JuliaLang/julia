@@ -1642,8 +1642,8 @@ cat_similar(A, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
 cat_similar(A, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
 cat_similar(A::Array, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
 cat_similar(A::Array, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
-cat_similar(A::AbstractArray, T::Type, shape::Tuple) where T = similar(A, T, shape)
-cat_similar(A::AbstractArray, T::Type, shape::Vector) where T = similar(A, T, shape...)
+cat_similar(A::AbstractArray, T::Type, shape::Tuple) = similar(A, T, shape)
+cat_similar(A::AbstractArray, T::Type, shape::Vector) = similar(A, T, shape...)
 
 # These are for backwards compatibility (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
