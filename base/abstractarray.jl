@@ -2145,7 +2145,7 @@ typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 
 # 1-dimensional hvncat methods
 
-_typed_hvncat(::Type{T}, ::Val{0}) = Vector{T}()
+_typed_hvncat(::Type{T}, ::Val{0}) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(convert(T, x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::Number) where T = fill(convert(T, x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = convert.(T, x)
