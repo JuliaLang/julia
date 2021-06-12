@@ -1640,13 +1640,10 @@ cat_indices(A::AbstractArray, d) = axes(A, d)
 
 cat_similar(A, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
 cat_similar(A, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
-cat_similar(A, ::Type{T}, shape::Int...) where T = Array{T}(undef, shape...)
 cat_similar(A::Array, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
 cat_similar(A::Array, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
-cat_similar(A::Array, ::Type{T}, shape::Int...) where T = Array{T}(undef, shape...)
-cat_similar(A::AbstractArray, ::Type{T}, shape::Tuple) where T = similar(A, T, shape)
-cat_similar(A::AbstractArray, ::Type{T}, shape::Vector) where T = similar(A, T, shape...)
-cat_similar(A::AbstractArray, ::Type{T}, shape::Int...) where T = similar(A, T, shape...)
+cat_similar(A::AbstractArray, T::Type, shape::Tuple) where T = similar(A, T, shape)
+cat_similar(A::AbstractArray, T::Type, shape::Vector) where T = similar(A, T, shape...)
 
 # These are for backwards compatibility (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
@@ -2184,7 +2181,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         end
     end
 
-    A = cat_similar(as[1], T, ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
+    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
     k = 1
     for a ∈ as
         for i ∈ eachindex(a)
