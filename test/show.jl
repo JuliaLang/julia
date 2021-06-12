@@ -728,14 +728,14 @@ Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
-    @test repr(B) == "sparse([1, 2, 3], [1, 2, 3], T12960[#undef, #undef, #undef])"
+    @test repr(B) == "sparse([1, 2, 3], [1, 2, 3], $T12960[#undef, #undef, #undef])"
     @test occursin(
         "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
         repr(MIME("text/plain"), B),
     )
 
     B[1,2] = T12960()
-    @test repr(B)  == "sparse([1, 1, 2, 3], [1, 2, 2, 3], T12960[#undef, T12960(), #undef, #undef])"
+    @test repr(B)  == "sparse([1, 1, 2, 3], [1, 2, 2, 3], $T12960[#undef, $T12960(), #undef, #undef])"
     @test occursin(
         "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
         repr(MIME("text/plain"), B),
