@@ -2159,6 +2159,8 @@ _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs::Number...) where T = Vector{T}()
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
+    all(>(0), dims) ||
+        throw(ArgumentError("`dims` argument must contain positive integers"))
     A = Array{T, N}(undef, dims...)
     lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
     lengthx = length(xs) # Cuts from 3 allocations to 1.
