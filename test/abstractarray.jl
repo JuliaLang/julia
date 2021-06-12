@@ -1390,8 +1390,6 @@ import Base.typed_hvncat
         @test [v v;;; fill(v, 1, 2)] == fill(v, 1, 2, 2)
     end
 
-    @test_throws BoundsError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
-
     # dims form
     for v ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
         # reject dimension < 0
