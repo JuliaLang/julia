@@ -236,6 +236,10 @@ function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
     copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
 end
 
+function Base.round(x::AbstractFloat, ::typeof(RoundFromZero))
+    signbit(x) ? round(x, RoundDown) : round(x, RoundUp)
+end
+
 # isapprox: approximate equality of numbers
 """
     isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
