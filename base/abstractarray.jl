@@ -2148,9 +2148,11 @@ typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 _typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::Number) where T = fill(T(x))
 _typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = T.(x)
-_typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) =
-    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
-_typed_hvncat(::Type, ::Val{0}, ::Any...) =
+_typed_hvncat(::Type, ::Val{0}, ::Number...) = _typed_hvncat_0d_too_many()
+_typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_too_many()
+_typed_hvncat(::Type, ::Val{0}, ::Any...) = _typed_hvncat_0d_too_many()
+    
+_typed_hvncat_0d_too_many() =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
 _typed_hvncat(::Type{T}, ::Val{N}) where {T, N} =
