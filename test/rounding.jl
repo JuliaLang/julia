@@ -128,6 +128,16 @@ end
             else
                 @test u === r
             end
+
+            r = round(u, RoundFromZero)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test signbit(u) ? (r == floor(u)) : (r == ceil(u))
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
         end
     end
 end
@@ -171,6 +181,7 @@ end
                 @test round.(y) ≈ t[(i+1+isodd(i>>2))>>2 for i in r]
                 @test broadcast(x -> round(x, RoundNearestTiesAway), y) ≈ t[(i+1+(i>=0))>>2 for i in r]
                 @test broadcast(x -> round(x, RoundNearestTiesUp), y) ≈ t[(i+2)>>2 for i in r]
+                @test broadcast(x -> round(x, RoundFromZero), y) ≈ t[(i+3*(i>=0))>>2 for i in r]
             end
         end
     end
@@ -190,6 +201,10 @@ end
     @test round(Int,-2.5,RoundNearestTiesUp) == -2
     @test round(Int,-1.5,RoundNearestTiesUp) == -1
     @test round(Int,-1.9) == -2
+    @test round(Int,nextfloat(1.0),RoundFromZero) == 2
+    @test round(Int,-nextfloat(1.0),RoundFromZero) == -2
+    @test round(Int,prevfloat(1.0),RoundFromZero) == 1
+    @test round(Int,-prevfloat(1.0),RoundFromZero) == -1
     @test_throws InexactError round(Int64, 9.223372036854776e18)
     @test       round(Int64, 9.223372036854775e18) == 9223372036854774784
     @test_throws InexactError round(Int64, -9.223372036854778e18)
