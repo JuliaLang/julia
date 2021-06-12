@@ -2141,7 +2141,20 @@ _hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray{T}...) 
 
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
 typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-typed_hvncat(T::Type, ::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
+function typed_hvncat(T::Type, shape::Tuple{Vararg{Tuple, 1}}, ::Bool, xs...) # methods assume 2+ dimensions
+    all(!isempty, shape) ||
+        throw(ArgumentError("each level of `shape` argument must have at least one value"))
+    all(>(0), tuple((shape...)...)) ||
+        throw(ArgumentError("`shape` argument must consist of positive integers"))
+    length(shapev[end]) == 1 ||
+        throw(ArgumentError("last level of shape must contain only one integer"))
+    return typed_vcat(T, xs...)
+end
+function typed_hvncat(T::Type, dims::Tuple{Vararg{Int, 1}}, ::Bool, xs...)
+    all(>(0), dims) ||
+        throw(ArgumentError("`dims` argument must consist of positive integers"))
+    return typed_vcat(T, xs...)
+end
 typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 
