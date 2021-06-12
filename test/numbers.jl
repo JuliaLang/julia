@@ -2511,18 +2511,22 @@ end
     @test rem(T(1), T(2), RoundNearest) == 1
     @test rem(T(1), T(2), RoundDown)    == 1
     @test rem(T(1), T(2), RoundUp)      == -1
+    @test rem(T(1), T(2), RoundFromZero) == -1
     @test rem(T(1.5), T(2), RoundToZero)  == 1.5
     @test rem(T(1.5), T(2), RoundNearest) == -0.5
     @test rem(T(1.5), T(2), RoundDown)    == 1.5
     @test rem(T(1.5), T(2), RoundUp)      == -0.5
+    @test rem(T(1.5), T(2), RoundFromZero) == -0.5
     @test rem(T(-1), T(2), RoundToZero)  == -1
     @test rem(T(-1), T(2), RoundNearest) == -1
     @test rem(T(-1), T(2), RoundDown)    == 1
     @test rem(T(-1), T(2), RoundUp)      == -1
+    @test rem(T(-1), T(2), RoundFromZero) == 1
     @test rem(T(-1.5), T(2), RoundToZero)  == -1.5
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+    @test rem(T(-1.5), T(2), RoundFromZero) == 0.5
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
