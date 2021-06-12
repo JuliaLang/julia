@@ -2257,8 +2257,8 @@ end
 
 # 0-dimensional cases for balanced and unbalanced hvncat methods
 
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(T(x))
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(T(x))
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(convert(T, x))
+_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(convert(T, x))
 _typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = convert.(T, x)
 _typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
