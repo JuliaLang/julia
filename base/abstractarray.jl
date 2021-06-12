@@ -2566,7 +2566,9 @@ end
                               d1::Int, d2::Int, as::Tuple) where {T, N}
     length(scratch1) == length(scratch2) == N ||
         throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
-    0 < d1 < 3 && 0 < d2 < 3 && d1 != d2 ||
+    0 < d1 < 3 &&
+    0 < d2 < 3 &&
+    d1 != d2 ||
         throw(ArgumentError("d1 and d2 must be either 1 or 2, exclusive."))
     outdims = size(A)
     offsets = scratch1
