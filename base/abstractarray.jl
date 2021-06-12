@@ -2350,7 +2350,7 @@ end
 # unbalanced dimensions hvncat methods
 
 function _typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...)
-    if length(shape[1]) == 0
+    length(shape[1]) > 0 ||
         throw(ArgumentError("each level of `shape` argument must have at least one value"))
     return _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
 end
