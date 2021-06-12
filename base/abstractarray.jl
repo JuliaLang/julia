@@ -2333,8 +2333,8 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     currentdims = zeros(Int, N)
     blockcounts = zeros(Int, N)
     shapepos = ones(Int, N)
-    shape = collect(shape)
-    shapelength = shape[end][1]
+    shapev = collect(shape)
+    shapelength = shapev[end][1]
     lengthas = length(as)
     shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
 
