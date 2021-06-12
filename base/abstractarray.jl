@@ -2156,9 +2156,7 @@ _typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_too_many(
 _typed_hvncat_0d_too_many() =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
-_typed_hvncat(::Type{T}, ::Val{N}) where {T, N} =
-    (N < 0 && throw(ArgumentError("concatenation dimension must be nonnegative"))) ||
-    Vector{T}()
+_typed_hvncat(::Type{T}, ::Val{N}) where {T, N} = Vector{T}()
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
     A = Array{T, N}(undef, dims...)
