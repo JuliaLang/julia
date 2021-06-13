@@ -299,6 +299,9 @@ let a = ARefxy(1, -1)
     @test 1 === @atomic a.x
     @test 2 === @atomic :sequentially_consistent a.x = 2
     @test 3 === @atomic :monotonic a.x = 3
+    local four = 4
+    @test 4 === @atomic :monotonic a.x = four
+    @test 3 === @atomic :monotonic a.x = four - 1
     @test_throws ConcurrencyViolationError @atomic :not_atomic a.x = 2
     @test_throws ConcurrencyViolationError @atomic :not_atomic a.x
     @test_throws ConcurrencyViolationError @atomic :not_atomic a.x += 1
