@@ -173,8 +173,8 @@ end
 @testset "equality of eigen factorizations" begin
     A = randn(3, 3)
     @test eigen(A) == eigen(A)
-    @test hash(A) == hash(A)
-    @test isequal(A, A)
+    @test hash(eigen(A)) == hash(eigen(A))
+    @test isequal(eigen(A), eigen(A))
 end
 
 end # module TestEigen
