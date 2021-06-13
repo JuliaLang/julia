@@ -964,6 +964,19 @@ end
     GC.safepoint()
 end
 
+@testset "gc_compatible_pointer" begin
+    @testset for T in [Ref, Ref{Any}, Some, Some{Any}, identity]
+        value = T(123)
+        xs = Any[nothing]
+        handle, ptr = Base.Experimental.gc_compatible_pointer(value)
+        GC.gc()
+        GC.@preserve xs handle begin
+            unsafe_store!(Ptr{Ptr{Cvoid}}(pointer(xs, 1)), ptr)
+        end
+        @test xs[1] === value
+    end
+end
+
 @testset "fieldtypes Module" begin
     @test fieldtypes(Module) === ()
 end

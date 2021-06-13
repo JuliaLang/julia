@@ -531,6 +531,7 @@
     XX(jl_undefined_var_error) \
     XX(jl_valueof) \
     XX(jl_value_ptr) \
+    XX(jl__gc_compatible_pointer) \
     XX(jl_ver_is_release) \
     XX(jl_ver_major) \
     XX(jl_ver_minor) \

@@ -293,4 +293,45 @@ adding them to the global method table.
 """
 :@MethodTable
 
+struct _Handle
+    value::Any
+end
+
+mutable struct _HandleAndPtr
+    handle::_Handle
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    Experimental.gc_compatible_pointer(value) -> (handle, ptr::Ptr{Cvoid})
+
+Return a pointer `ptr` of a `value` that can be stored into locations of
+GC-managed object using `unsafe_store!(_::Ptr{Ptr{Cvoid}}, ptr)`.  The caller is
+responsible for preserving the opaque object `handle` during `unsafe_store!`.
+
+This is equivalent to `value -> (value, pointer_from_objref(value))` for mutable
+`value`s.  However, this function also works when `value` is an immutable type.
+
+See also: [`unsafe_store!`](@ref), [`GC.@preserve`](@ref)
+
+# Examples
+```jldoctest
+julia> handle, ptr = Base.Experimental.gc_compatible_pointer(Some(1));
+
+julia> xs = Any[nothing];
+
+julia> GC.@preserve xs handle begin
+           unsafe_store!(Ptr{Ptr{Cvoid}}(pointer(xs, 1)), ptr)
+       end;
+
+julia> xs[1]
+Some(1)
+```
+"""
+function gc_compatible_pointer(value)
+    ref = _HandleAndPtr(_Handle(0), Ptr{Cvoid}())
+    ccall(:jl__gc_compatible_pointer, Cvoid, (_HandleAndPtr, Any), ref, value)
+    return (ref.handle, ref.ptr)
+end
+
 end

@@ -356,6 +356,11 @@ JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 {
     return a;
 }
+JL_DLLEXPORT jl_value_t *jl__gc_compatible_pointer(jl_value_t *a)
+{
+    assert("jl__gc_compatible_pointer must be ccall'ed" && 0);
+    return a;
+}
 
 // optimization of setfield which bypasses boxing of the idx (and checking field type validity)
 JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)

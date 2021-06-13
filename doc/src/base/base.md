@@ -431,6 +431,7 @@ Base.GC.gc
 Base.GC.enable
 Base.GC.@preserve
 Base.GC.safepoint
+Base.Experimental.gc_compatible_pointer
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)

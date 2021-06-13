@@ -1415,6 +1415,33 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                     retboxed, rt, unionall, static_rt);
         }
     }
+    else if (is_libjulia_func(jl__gc_compatible_pointer)) {
+        assert(lrt == T_void);
+        assert(!isVa && !llvmcall && nccallargs == 2);
+        jl_datatype_t *sty = (jl_datatype_t *)argv[0].typ;
+        assert(jl_is_datatype(sty) && jl_datatype_nfields(sty) == 2 &&
+               jl_datatype_size(sty) == sizeof(void *) * 2);
+        jl_value_t *f0ty = jl_field_type(sty, 0);
+        assert(jl_is_datatype(f0ty) && jl_is_immutable(f0ty));
+        Type *lf0ty = julia_type_to_llvm(ctx, f0ty);
+        Value *boxedvalue = boxed(ctx, argv[1]);
+        Value *handle = emit_static_alloca(ctx, lf0ty);
+        Value *fieldptr = ctx.builder.CreateConstInBoundsGEP2_32(lf0ty, handle, 0, 0);
+        assert(boxedvalue->getType() == fieldptr->getType()->getPointerElementType());
+        ctx.builder.CreateAlignedStore(boxedvalue, fieldptr, Align(sizeof(void *)));
+        Value *ptrint = ctx.builder.CreatePtrToInt(
+            emit_pointer_from_objref(ctx, emit_bitcast(ctx, boxedvalue, T_prjlvalue)),
+            T_size);
+        emit_setfield(ctx, sty, argv[0], 0,
+                      mark_julia_type(ctx,
+                                      ctx.builder.CreateAddrSpaceCast(handle, T_prjlvalue),
+                                      true, f0ty),
+                      true, true, AtomicOrdering::NotAtomic);
+        emit_setfield(ctx, sty, argv[0], 1,
+                      mark_julia_type(ctx, ptrint, false, jl_ulong_type), true, false,
+                      AtomicOrdering::NotAtomic);
+        return ghostValue(jl_nothing_type);
+    }
     else if (is_libjulia_func(jl_cpu_pause)) {
         // Keep in sync with the julia_threads.h version
         assert(lrt == T_void);
