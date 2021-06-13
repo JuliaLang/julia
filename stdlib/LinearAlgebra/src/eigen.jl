@@ -686,7 +686,7 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
 end
 
 function Base.hash(F::Eigen, h::UInt)
-    return hash(F.values, hash(F.vectors, h))
+    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
 end
 function Base.:(==)(A::Eigen, B::Eigen)
     return A.values == B.values && A.vectors == B.vectors
