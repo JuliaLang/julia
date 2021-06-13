@@ -698,6 +698,40 @@ end
     end
 end
 
+@testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin
+    seeds = Any[0, rand(UInt128), rand(UInt64, 4), Tuple(rand(UInt64, 4))]
+
+    for seed=seeds
+        Random.seed!(seed)
+        @test Random.GLOBAL_SEED === seed
+    end
+    # two separate loops as otherwise we are no sure that the second call (with GLOBAL_RNG)
+    # actually sets GLOBAL_SEED
+    for seed=seeds
+        Random.seed!(Random.GLOBAL_RNG, seed)
+        @test Random.GLOBAL_SEED === seed
+    end
+
+    Random.seed!(nothing)
+    seed1 = Random.GLOBAL_SEED
+    @test seed1 isa Vector{UInt64} # could change, but must not be nothing
+
+    Random.seed!(Random.GLOBAL_RNG, nothing)
+    seed2 = Random.GLOBAL_SEED
+    @test seed2 isa Vector{UInt64}
+    @test seed2 != seed1
+
+    Random.seed!()
+    seed3 = Random.GLOBAL_SEED
+    @test seed3 isa Vector{UInt64}
+    @test seed3 != seed2
+
+    Random.seed!(Random.GLOBAL_RNG)
+    seed4 = Random.GLOBAL_SEED
+    @test seed4 isa Vector{UInt64}
+    @test seed4 != seed3
+end
+
 struct RandomStruct23964 end
 @testset "error message when rand not defined for a type" begin
     @test_throws ArgumentError rand(nothing)
