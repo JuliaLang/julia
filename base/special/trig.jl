@@ -26,7 +26,7 @@ end
 # Trigonometric functions
 # sin methods
 @noinline sin_domain_error(x) = throw(DomainError(x, "sin(x) is only defined for finite x."))
-function sin(x::T) where T<:Union{Float32, Float64}
+function jl_sin(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4 #|x| ~<= pi/4, no need for reduction
         if absx < sqrt(eps(T))
@@ -49,6 +49,40 @@ function sin(x::T) where T<:Union{Float32, Float64}
     else
         return -cos_kernel(y)
     end
+end
+
+Base.@ccallable function jl_sin64(x::Float64)::Float64
+    return jl_sin(x)
+end
+
+function sin(x::Float64)
+    func = """declare double @llvm.sin.f64(double)
+        define double @entry(double) #0 {
+        1:
+        %2 = call double @llvm.sin.f64(double %0) #1
+        ret double %2
+        }
+        attributes #0 = { alwaysinline }
+        attributes #1 = { "replace_jl_sin64"}
+    """
+   return Base.llvmcall((func, "entry"), Float64, Tuple{Float64}, x)
+end
+
+Base.@ccallable function jl_sin32(x::Float32)::Float32
+    return jl_sin(x)
+end
+
+function sin(x::Float32)
+    func = """declare float @llvm.sin.f32(float) #1
+        define float @entry(float) #0 {
+        1:
+        %2 = call float @llvm.sin.f32(float %0) #1
+        ret float %2
+        }
+        attributes #0 = { alwaysinline }
+        attributes #1 = { "replace_jl_sin32"}
+    """
+   return Base.llvmcall((func, "entry"), Float32, Tuple{Float32}, x)
 end
 
 # Coefficients in 13th order polynomial approximation on [0; π/4]
@@ -435,7 +469,7 @@ function asin(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx >= T(1.0) # |x|>= 1
         if absx == T(1.0)
-            return flipsign(T(pi)/2, x)
+            return copysign(T(pi)/2, x)
         end
         asin_domain_error(x)
     elseif absx < T(1.0)/2
@@ -600,7 +634,7 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
             return -T(pi) # atan(-0, -anything) =-pi
         end
     elseif iszero(x)
-        return flipsign(T(pi)/2, y)
+        return copysign(T(pi)/2, y)
     end
 
     if isinf(x)

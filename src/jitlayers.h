@@ -229,6 +229,7 @@ extern JuliaOJIT *jl_ExecutionEngine;
 
 Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createCombineMulAddPass();
+Pass *createReplaceCallPass();
 Pass *createFinalLowerGCPass();
 Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
