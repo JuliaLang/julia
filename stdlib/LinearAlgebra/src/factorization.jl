@@ -64,9 +64,17 @@ Factorization{T}(A::Adjoint{<:Any,<:Factorization}) where {T} =
     adjoint(Factorization{T}(parent(A)))
 inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n)))
 
-Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, 1:nfields(F); init=h)
-Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
-Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))::Bool
+function Base.hash(F::Factorization, h::UInt)
+    return mapreduce(f -> hash(getfield(F, f)), hash, 1:nfields(F); init=hash(typeof(F).name.wrapper, h))
+end
+function Base.:(==)(F::Factorization, G::Factorization)
+    typeof(F).name.wrapper == typeof(G).name.wrapper || return false
+    return all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
+end
+function Base.isequal(F::Factorization, G::Factorization)
+    typeof(F).name.wrapper == typeof(G).name.wrapper || return false
+    return all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))::Bool
+end
 
 function Base.show(io::IO, x::Adjoint{<:Any,<:Factorization})
     print(io, "Adjoint of ")
