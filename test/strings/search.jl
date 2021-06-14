@@ -98,6 +98,7 @@ for str in [astr]
     @test findlast(',', str) == 6
     @test findprev(',', str, 5) == nothing
     @test findlast(str, "") == nothing
+    @test findlast(str^2, str) == nothing
     @test findlast('\n', str) == 14
 end
 
