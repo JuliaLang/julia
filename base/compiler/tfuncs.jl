@@ -1568,6 +1568,10 @@ end
 
 # Query whether the given intrinsic is nothrow
 
+_iszero(x) = x === Intrinsics.xor_int(x, x)
+_isneg1(x) = _iszero(Intrinsics.not_int(x))
+_istypemin(x) = !_iszero(x) && Intrinsics.neg_int(x) === x
+
 function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
     # First check that we have the correct number of arguments
     iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
@@ -1594,11 +1598,10 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
             return false
         end
         den_val = argtypes[2].val
-        den_val !== zero(typeof(den_val)) || return false
+        _iszero(den_val) && return false
         f !== Intrinsics.checked_sdiv_int && return true
         # Nothrow as long as we additionally don't do typemin(T)/-1
-        return den_val !== -1 || (isa(argtypes[1], Const) &&
-            argtypes[1].val !== typemin(typeof(den_val)))
+        return !_isneg1(den_val) || (isa(argtypes[1], Const) && !_istypemin(argtypes[1].val))
     end
     if f === Intrinsics.pointerref
         # Nothrow as long as the types are ok. N.B.: dereferencability is not
