@@ -59,7 +59,7 @@ julia> randstring(MersenneTwister(3), 'a':'z', 6)
 "ocucay"
 
 julia> randstring("ACGT")
-"CTAAGCGG"
+"CAAACACC"
 ```
 
 !!! note

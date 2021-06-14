@@ -77,12 +77,12 @@ julia> function sum_global()
        end;
 
 julia> @time sum_global()
-  0.011051 seconds (9.31 k allocations: 433.575 KiB, 98.79% compilation time)
-502.05430098033355
+  0.026328 seconds (9.30 k allocations: 416.747 KiB, 36.50% gc time, 99.48% compilation time)
+508.39048990953665
 
 julia> @time sum_global()
-  0.000076 seconds (3.49 k allocations: 70.156 KiB)
-502.05430098033355
+  0.000075 seconds (3.49 k allocations: 70.156 KiB)
+508.39048990953665
 ```
 
 On the first call (`@time sum_global()`) the function gets compiled. (If you've not yet used [`@time`](@ref)
@@ -113,12 +113,12 @@ julia> function sum_arg(x)
        end;
 
 julia> @time sum_arg(x)
-  0.010221 seconds (4.22 k allocations: 237.974 KiB, 99.85% compilation time)
-502.05430098033355
+  0.010298 seconds (4.23 k allocations: 226.021 KiB, 99.81% compilation time)
+508.39048990953665
 
 julia> @time sum_arg(x)
   0.000005 seconds (1 allocation: 16 bytes)
-502.05430098033355
+508.39048990953665
 ```
 
 The 1 allocation seen is from running the `@time` macro itself in global scope. If we instead run
@@ -129,7 +129,7 @@ julia> time_sum(x) = @time sum_arg(x);
 
 julia> time_sum(x)
   0.000001 seconds
-502.05430098033355
+508.39048990953665
 ```
 
 In some situations, your function may need to allocate memory as part of its operation, and this
@@ -648,10 +648,10 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Vector{Int64}:
- 2
- 2
- 2
+3-element Vector{Float64}:
+ 2.0
+ 2.0
+ 2.0
 ```
 
 This should be written as:
@@ -670,10 +670,10 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Vector{Int64}:
- 2
- 2
- 2
+3-element Vector{Float64}:
+ 2.0
+ 2.0
+ 2.0
 ```
 
 Julia's compiler specializes code for argument types at function boundaries, so in the original
