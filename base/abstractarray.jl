@@ -1644,8 +1644,12 @@ cat_ndims(a::AbstractArray) = ndims(a)
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
 
-cat_similar(A, ::Type{T}, shape) where T = Array{T}(undef, shape)
-cat_similar(A::AbstractArray, ::Type{T}, shape) where T = similar(A, T, shape)
+cat_similar(A, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
+cat_similar(A, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
+cat_similar(A::Array, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
+cat_similar(A::Array, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
+cat_similar(A::AbstractArray, T::Type, shape::Tuple) = similar(A, T, shape)
+cat_similar(A::AbstractArray, T::Type, shape::Vector) = similar(A, T, shape...)
 
 # These are for backwards compatibility (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
@@ -2204,7 +2208,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         end
     end
 
-    A = Array{T, nd}(undef, ntuple(d -> cat_size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
+    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
     k = 1
     for a ∈ as
         for i ∈ eachindex(a)
@@ -2300,7 +2304,7 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     len == outlen || ArgumentError("too many elements in arguments; expected $(outlen), got $(len)") |> throw
 
     # copy into final array
-    A = Array{T, nd}(undef, outdims...)
+    A = cat_similar(as[1], T, outdims)
     # @assert all(==(0), currentdims)
     outdims .= 0
     hvncat_fill!(A, currentdims, outdims, d1, d2, as)
@@ -2361,12 +2365,12 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     # @assert all(==(0), blockcounts)
 
     # copy into final array
-    A = Array{T, nd}(undef, outdims...)
+    A = cat_similar(as[1], T, outdims)
     hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
     return A
 end
 
-function hvncat_fill!(A::Array{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
+function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
     outdims = size(A)
     offsets = scratch1
     inneroffsets = scratch2
