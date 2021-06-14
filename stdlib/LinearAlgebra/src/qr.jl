@@ -127,6 +127,16 @@ Base.iterate(S::QRCompactWY) = (S.Q, Val(:R))
 Base.iterate(S::QRCompactWY, ::Val{:R}) = (S.R, Val(:done))
 Base.iterate(S::QRCompactWY, ::Val{:done}) = nothing
 
+function Base.hash(F::QRCompactWY, h::UInt)
+    return hash(F.factors, hash(UpperTriangular(F.T), hash(QRCompactWY, h)))
+end
+function Base.:(==)(A::QRCompactWY, B::QRCompactWY)
+    return A.factors == B.factors && UpperTriangular(A.T) == UpperTriangular(B.T)
+end
+function Base.isequal(A::QRCompactWY, B::QRCompactWY)
+    return isequal(A.factors, B.factors) && isequal(UpperTriangular(A.T), UpperTriangular(B.T))
+end
+
 """
     QRPivoted <: Factorization
 
