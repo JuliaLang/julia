@@ -268,15 +268,21 @@ method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
 """
 macro overlay(mt, def)
     def = macroexpand(__module__, def) # to expand @inline, @generated, etc
-    if !isexpr(def, [:function, :(=)]) || !isexpr(def.args[1], :call)
+    if !isexpr(def, [:function, :(=)])
         error("@overlay requires a function Expr")
     end
-    def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
+    if isexpr(def.args[1], :call)
+        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
+    elseif isexpr(def.args[1], :where)
+        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    else
+        error("@overlay requires a function Expr")
+    end
     esc(def)
 end
 
 let new_mt(name::Symbol, mod::Module) = begin
-        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, name)
+        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "@MethodTable")
         ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
     end
     @eval macro MethodTable(name::Symbol)
