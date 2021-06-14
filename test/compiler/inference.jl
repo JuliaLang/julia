@@ -3319,3 +3319,7 @@ end |> first === Tuple{Int, String}
 # issue #40804
 @test Base.return_types(()) do; ===(); end == Any[Union{}]
 @test Base.return_types(()) do; typeassert(); end == Any[Union{}]
+
+primitive type UInt24ish 24 end
+f34288(x) = Core.Intrinsics.checked_sdiv_int(x, Core.Intrinsics.trunc_int(UInt24ish, 0))
+@test Base.return_types(f34288, (UInt24ish,)) == Any[UInt24ish]
