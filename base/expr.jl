@@ -534,7 +534,7 @@ function make_atomic(order, ex)
         elseif isexpr(ex, :call, 3)
             return make_atomic(order, ex.args[2], ex.args[1], ex.args[3])
         elseif ex.head === :(=)
-            l, r = ex.args[1], ex.args[2]
+            l, r = ex.args[1], esc(ex.args[2])
             if is_expr(l, :., 2)
                 ll, lr = esc(l.args[1]), esc(l.args[2])
                 return :(setproperty!($ll, $lr, $r, $order))
