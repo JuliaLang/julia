@@ -227,22 +227,37 @@ end
 Base.replace_in_print_matrix(A::AbstractSparseMatrix, i::Integer, j::Integer, s::AbstractString) =
     Base.isstored(A, i, j) ? s : Base.replace_with_centered_mark(s)
 
-function Base.show(io::IO, ::MIME"text/plain", S::AbstractSparseMatrixCSC)
+function Base.array_summary(io::IO, S::AbstractSparseMatrixCSC, dims::Tuple{Vararg{Base.OneTo}})
     _checkbuffers(S)
     xnnz = nnz(S)
     m, n = size(S)
     print(io, m, "×", n, " ", typeof(S), " with ", xnnz, " stored ",
               xnnz == 1 ? "entry" : "entries")
-    if !(m == 0 || n == 0)
-        print(io, ":")
-        show(IOContext(io, :typeinfo => eltype(S)), S)
+    nothing
+end
+
+# called by `show(io, MIME("text/plain"), ::AbstractSparseMatrixCSC)`
+function Base.print_array(io::IO, S::AbstractSparseMatrixCSC)
+    if max(size(S)...) < 16
+        Base.print_matrix(io, S)
+    else
+        _show_with_braille_patterns(io, S)
     end
 end
 
-Base.show(io::IO, S::AbstractSparseMatrixCSC) = Base.show(convert(IOContext, io), S::AbstractSparseMatrixCSC)
+# always show matrices as `sparse(I, J, K)`
+function Base.show(io::IO, S::AbstractSparseMatrixCSC)
+    _checkbuffers(S)
+    # can't use `findnz`, because that expects all values not to be #undef
+    I = rowvals(S)
+    J = [col for col = 1 : size(S, 2) for k = getcolptr(S)[col] : (getcolptr(S)[col+1]-1)]
+    K = nonzeros(S)
+    m, n = size(S)
+    print(io, "sparse(", I, ", ", J, ", ", K, ", ", m, ", ", n, ")")
+end
 
 const brailleBlocks = UInt16['⠁', '⠂', '⠄', '⡀', '⠈', '⠐', '⠠', '⢀']
-function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
+function _show_with_braille_patterns(io::IO, S::AbstractSparseMatrixCSC)
     m, n = size(S)
     (m == 0 || n == 0) && return show(io, MIME("text/plain"), S)
 
@@ -301,18 +316,6 @@ function _show_with_braille_patterns(io::IOContext, S::AbstractSparseMatrixCSC)
         end
     end
     foreach(c -> print(io, Char(c)), @view brailleGrid[1:end-1])
-end
-
-function Base.show(io::IOContext, S::AbstractSparseMatrixCSC)
-    _checkbuffers(S)
-    if max(size(S)...) < 16 && !(get(io, :compact, false)::Bool)
-        ioc = IOContext(io, :compact => true)
-        println(ioc)
-        Base.print_matrix(ioc, S)
-        return
-    end
-    println(io)
-    _show_with_braille_patterns(io, S)
 end
 
 ## Reshape
