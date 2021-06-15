@@ -809,9 +809,18 @@ end
         x = Random.SamplerTrivial(T())
         @test rand(GLOBAL_RNG, x) === rand(xo, x)
     end
-    for T in (Int64, UInt64, Int128, UInt128, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)
-        x = Random.SamplerType{T}()
-        @test rand(GLOBAL_RNG, x) === rand(xo, x)
+    for T in (Int64, UInt64, Int128, UInt128, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32,
+              Float16, Float32, Float64)
+        if T <: Integer
+            x = Random.SamplerType{T}()
+            @test rand(GLOBAL_RNG, x) === rand(xo, x)
+            @test rand(GLOBAL_RNG, x) === rand(xo, x)
+        end
+        @test rand(GLOBAL_RNG, T) === rand(xo, T)
+        @test rand(GLOBAL_RNG, T) === rand(xo, T)
+        @test rand(GLOBAL_RNG, T) === rand(xo, T)
+        @test rand(GLOBAL_RNG, T) === rand(xo, T)
+        @test rand(GLOBAL_RNG, T, 10) == rand(xo, T, 10)
     end
 
     A = fill(0.0, 100, 100)
