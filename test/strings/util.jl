@@ -163,6 +163,7 @@ end
     @test split("", "") == rsplit("", "") == [""]
     @test split("abc", "") == rsplit("abc", "") == ["a","b","c"]
     @test rsplit("abc", "", limit=2) == ["ab","c"]
+    @test rsplit("", "//") == [""]
     @test split("abc", "", limit=2) == ["a","bc"]
 
     @test split("", r"") == [""]
