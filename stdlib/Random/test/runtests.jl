@@ -885,28 +885,37 @@ end
 end
 
 @testset "show" begin
-    m = MersenneTwister(123)
-    @test string(m) == "MersenneTwister(123)"
-    Random.jump!(m, 2*big(10)^20)
-    @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
-    @test m == MersenneTwister(123, (200000000000000000000, 0))
-    rand(m)
-    @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
+    @testset "MersenneTwister" begin
+        m = MersenneTwister(123)
+        @test string(m) == "MersenneTwister(123)"
+        Random.jump!(m, 2*big(10)^20)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
+        @test m == MersenneTwister(123, (200000000000000000000, 0))
+        rand(m)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
 
-    @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
-    rand(m, Int64)
-    @test string(m) == "MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))"
-    @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
+        @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
+        rand(m, Int64)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))"
+        @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
 
-    m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
-    @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b)"
-    rand(m, Int64)
-    @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
-    @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
+        m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
+        @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b)"
+        rand(m, Int64)
+        @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
+        @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
 
-    m = MersenneTwister(0); rand(m, Int64); rand(m)
-    @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
-    @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
+        m = MersenneTwister(0); rand(m, Int64); rand(m)
+        @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
+        @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
+    end
+
+    @testset "RandomDevice" begin
+        @test string(RandomDevice()) == "RandomDevice()"
+        if !Sys.iswindows()
+            @test string(RandomDevice(unlimited=false)) == "RandomDevice(unlimited=false)"
+        end
+    end
 end
 
 @testset "rand[!] for BigInt/BigFloat" begin
