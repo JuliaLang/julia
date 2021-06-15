@@ -2538,7 +2538,7 @@ end
     # putting these in separate functions leads to unnecessary allocations
     lenxs = length(xs)
     lena = length(A)
-    lenxs == lena || throw(ArgumentError("number of elements don't match specified shape"))
+    lenxs == lena || throw(ArgumentError("number of elements doesn't match specified shape"))
     if row_first
         nr, nc = size(A, 1), size(A, 2)
         nrc = nr * nc
