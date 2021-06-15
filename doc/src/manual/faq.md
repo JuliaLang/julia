@@ -922,7 +922,7 @@ julia> @sync for i in 1:3
 
 ## Arrays
 
-### What are the differences between zero-dimensional arrays and scalars?
+### [What are the differences between zero-dimensional arrays and scalars?](@id faq-array-0dim)
 
 Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similar
 to scalars, but there are important differences. They deserve a special mention
