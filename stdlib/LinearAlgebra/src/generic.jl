@@ -1820,5 +1820,5 @@ julia> println(isLinearCombination(A, y))
 function isLinearCombination(A::AbstractMatrix, y::AbstractVector)
     r_a = rank(A)
     r_ay = rank([A'; y'])
-    return r_a == r_ay 
+    return r_a == r_ay
 end
