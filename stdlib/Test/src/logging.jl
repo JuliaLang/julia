@@ -178,13 +178,13 @@ macro test_logs(exs...)
                     $(esc(expression))
                 end
                 if didmatch
-                    testres = Pass(:test, nothing, nothing, value)
+                    testres = Pass(:test, $orig_expr, nothing, value, $sourceloc)
                 else
                     testres = LogTestFailure($orig_expr, $sourceloc,
                                              $(QuoteNode(exs[1:end-1])), logs)
                 end
             catch e
-                testres = Error(:test_error, $orig_expr, e, Base.catch_stack(), $sourceloc)
+                testres = Error(:test_error, $orig_expr, e, Base.current_exceptions(), $sourceloc)
             end
             Test.record(Test.get_testset(), testres)
             value

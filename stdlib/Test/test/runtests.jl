@@ -146,6 +146,8 @@ let fails = @testset NoThrowTestSet begin
         @test endswith(str1, str2)
         # 21 - Fail - contains
         @test contains(str1, str2)
+        # 22 - Fail - Type Comparison
+        @test typeof(1) <: typeof("julia")
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -255,6 +257,11 @@ let fails = @testset NoThrowTestSet begin
         @test occursin("Expression: contains(str1, str2)", str)
         @test occursin("Evaluated: contains(\"Hello\", \"World\")", str)
     end
+
+    let str = sprint(show, fails[22])
+        @test occursin("Expression: typeof(1) <: typeof(\"julia\")", str)
+        @test occursin("Evaluated: $(typeof(1)) <: $(typeof("julia"))", str)
+    end
 end
 
 let errors = @testset NoThrowTestSet begin
@@ -281,7 +288,7 @@ end
 
 let retval_tests = @testset NoThrowTestSet begin
         ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
-        pass_mock = Test.Pass(:test, 1, 2, LineNumberNode(0, "A Pass Mock"))
+        pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
         error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
         @test Test.record(ts, error_mock) isa Test.Error
@@ -846,7 +853,7 @@ let code = quote
 end
 
 @testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
-    # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_RNG.seed)` block
+    # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_SEED)` block
     seed = rand(UInt128)
     Random.seed!(seed)
     a = rand()
@@ -981,7 +988,7 @@ end
 
 let ex = :(something_complex + [1, 2, 3])
     b = PipeBuffer()
-    let t = Test.Pass(:test, (ex, 1), (ex, 2), (ex, 3))
+    let t = Test.Pass(:test, (ex, 1), (ex, 2), (ex, 3), LineNumberNode(@__LINE__, @__FILE__))
         serialize(b, t)
         @test string(t) == string(deserialize(b))
         @test eof(b)
@@ -1169,4 +1176,30 @@ end
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_1
     # Decorated LoadErrors are not unwrapped if a LoadError was thrown.
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
+end
+
+# Issue 25483
+mutable struct PassInformationTestSet <: Test.AbstractTestSet
+    results::Vector
+    PassInformationTestSet(desc) = new([])
+end
+Test.record(ts::PassInformationTestSet, t::Test.Result) = (push!(ts.results, t); t)
+Test.finish(ts::PassInformationTestSet) = ts
+@testset "Information in Pass result (Issue 25483)" begin
+    ts = @testset PassInformationTestSet begin
+        @test 1 == 1
+        @test_throws ErrorException throw(ErrorException("Msg"))
+    end
+    test_line_number = (@__LINE__) - 3
+    test_throws_line_number =  (@__LINE__) - 3
+    @test ts.results[1].test_type == :test
+    @test ts.results[1].orig_expr == :(1 == 1)
+    @test ts.results[1].data == Expr(:comparison, 1, :(==), 1)
+    @test ts.results[1].value == true
+    @test ts.results[1].source == LineNumberNode(test_line_number, @__FILE__)
+    @test ts.results[2].test_type == :test_throws
+    @test ts.results[2].orig_expr == :(throw(ErrorException("Msg")))
+    @test ts.results[2].data == ErrorException
+    @test ts.results[2].value == ErrorException("Msg")
+    @test ts.results[2].source == LineNumberNode(test_throws_line_number, @__FILE__)
 end

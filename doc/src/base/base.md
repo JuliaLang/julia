@@ -229,6 +229,7 @@ Base.isnothing
 Base.notnothing
 Base.Some
 Base.something
+Base.@something
 Base.Enums.Enum
 Base.Enums.@enum
 Core.Expr
@@ -243,6 +244,7 @@ Core.Module
 Core.Function
 Base.hasmethod
 Core.applicable
+Base.isambiguous
 Core.invoke
 Base.@invoke
 Base.invokelatest
@@ -252,6 +254,8 @@ Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
+Base.Fix1
+Base.Fix2
 ```
 
 ## Syntax
@@ -286,6 +290,7 @@ Base.@deprecate
 Base.Missing
 Base.missing
 Base.coalesce
+Base.@coalesce
 Base.ismissing
 Base.skipmissing
 Base.nonmissingtype
@@ -306,6 +311,7 @@ Base.ignorestatus
 Base.detach
 Base.Cmd
 Base.setenv
+Base.addenv
 Base.withenv
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
@@ -350,7 +356,7 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
-Base.catch_stack
+Base.current_exceptions
 Base.@assert
 Base.Experimental.register_error_hint
 Base.Experimental.show_error_hints

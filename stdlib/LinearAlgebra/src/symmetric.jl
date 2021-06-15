@@ -676,7 +676,7 @@ end
 inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), sym_uplo(A.uplo))
 inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), sym_uplo(A.uplo))
 
-function svd(A::RealHermSymComplexHerm, full::Bool=false)
+function svd(A::RealHermSymComplexHerm; full::Bool=false)
     vals, vecs = eigen(A)
     I = sortperm(vals; by=abs, rev=true)
     permute!(vals, I)

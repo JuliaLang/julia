@@ -38,7 +38,7 @@ const Parser = Internals.Parser
 Parse file `f` and return the resulting table (dictionary). Throw a
 [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.tryparsefile`](@ref)
+See also [`TOML.tryparsefile`](@ref).
 """
 parsefile(f::AbstractString) =
     Internals.parse(Parser(readstring(f); filepath=abspath(f)))
@@ -52,7 +52,7 @@ parsefile(p::Parser, f::AbstractString) =
 Parse file `f` and return the resulting table (dictionary). Return a
 [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.parsefile`](@ref)
+See also [`TOML.parsefile`](@ref).
 """
 tryparsefile(f::AbstractString) =
     Internals.tryparse(Parser(readstring(f); filepath=abspath(f)))
@@ -66,7 +66,7 @@ tryparsefile(p::Parser, f::AbstractString) =
 Parse the string  or stream `x`, and return the resulting table (dictionary).
 Throw a [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.tryparse`](@ref)
+See also [`TOML.tryparse`](@ref).
 """
 parse(str::AbstractString) =
     Internals.parse(Parser(String(str)))
@@ -82,7 +82,7 @@ parse(p::Parser, io::IO) = parse(p, read(io, String))
 Parse the string or stream `x`, and return the resulting table (dictionary).
 Return a [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.parse`](@ref)
+See also [`TOML.parse`](@ref).
 """
 tryparse(str::AbstractString) =
     Internals.tryparse(Parser(String(str)))

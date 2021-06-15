@@ -295,6 +295,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
+show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
 show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
 
 function inbase(m::Module)

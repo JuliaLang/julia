@@ -143,6 +143,7 @@ are treated as equivalent to the corresponding Greek letters. The middle dot
 `·` (U+00B7) and the Greek
 [interpunct](https://en.wikipedia.org/wiki/Interpunct) `·` (U+0387) are both
 treated as the mathematical dot operator `⋅` (U+22C5).
+The minus sign `−` (U+2212) is treated as equivalent to the hyphen-minus sign `-` (U+002D).
 
 ## Stylistic Conventions
 

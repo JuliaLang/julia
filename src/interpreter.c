@@ -78,28 +78,36 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
-    jl_sym_t *fname = (jl_sym_t*)args[0];
-    jl_module_t *modu = s->module;
-    if (jl_is_globalref(fname)) {
-        modu = jl_globalref_mod(fname);
-        fname = jl_globalref_name(fname);
-    }
-    assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(fname));
 
-    if (jl_is_symbol(fname)) {
+    if (jl_expr_nargs(ex) == 1) {
+        jl_value_t **args = jl_array_ptr_data(ex->args);
+        jl_sym_t *fname = (jl_sym_t*)args[0];
+        jl_module_t *modu = s->module;
+        if (jl_is_globalref(fname)) {
+            modu = jl_globalref_mod(fname);
+            fname = jl_globalref_name(fname);
+        }
+        if (!jl_is_symbol(fname)) {
+            jl_error("method: invalid declaration");
+        }
         jl_value_t *bp_owner = (jl_value_t*)modu;
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
         jl_value_t **bp = &b->value;
         jl_value_t *gf = jl_generic_function_def(b->name, b->owner, bp, bp_owner, b);
-        if (jl_expr_nargs(ex) == 1)
-            return gf;
+        return gf;
     }
 
-    jl_value_t *atypes = NULL, *meth = NULL;
-    JL_GC_PUSH2(&atypes, &meth);
+    jl_value_t *atypes = NULL, *meth = NULL, *fname = NULL;
+    JL_GC_PUSH3(&atypes, &meth, &fname);
+
+    fname = eval_value(args[0], s);
+    jl_methtable_t *mt = NULL;
+    if (jl_typeis(fname, jl_methtable_type)) {
+        mt = (jl_methtable_t*)fname;
+    }
     atypes = eval_value(args[1], s);
     meth = eval_value(args[2], s);
-    jl_method_def((jl_svec_t*)atypes, (jl_code_info_t*)meth, s->module);
+    jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
     JL_GC_POP();
     return jl_nothing;
 }
@@ -405,13 +413,14 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 {
     jl_handler_t __eh;
     size_t ns = jl_array_len(stmts);
+    jl_task_t *ct = jl_current_task;
 
     while (1) {
         s->ip = ip;
         if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         if (toplevel)
-            jl_get_ptls_states()->world_age = jl_world_counter;
+            ct->world_age = jl_world_counter;
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;
@@ -516,8 +525,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 int hand_n_leave = jl_unbox_long(jl_exprarg(stmt, 0));
                 assert(hand_n_leave > 0);
                 // equivalent to jl_pop_handler(hand_n_leave), but retaining eh for longjmp:
-                jl_ptls_t ptls = jl_get_ptls_states();
-                jl_handler_t *eh = ptls->current_task->eh;
+                jl_handler_t *eh = ct->eh;
                 while (--hand_n_leave > 0)
                     eh = eh->prev;
                 jl_eh_restore_state(eh);
@@ -714,9 +722,10 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->continue_at = 0;
     s->mi = NULL;
     JL_GC_ENABLEFRAME(s);
-    size_t last_age = jl_get_ptls_states()->world_age;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
     jl_value_t *r = eval_body(stmts, s, 0, 1);
-    jl_get_ptls_states()->world_age = last_age;
+    ct->world_age = last_age;
     JL_GC_POP();
     return r;
 }

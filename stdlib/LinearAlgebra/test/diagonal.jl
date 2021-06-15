@@ -176,12 +176,24 @@ Random.seed!(1)
             @test Array(a*D) ≈ a*DM
             @test Array(D*a) ≈ DM*a
             @test Array(D/a) ≈ DM/a
-            if relty <: BlasFloat
-                for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
-                    @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                    @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                    @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
-                end
+            if elty <: Real
+                @test Array(abs.(D)^a) ≈ abs.(DM)^a
+            else
+                @test Array(D^a) ≈ DM^a
+            end
+            @test Diagonal(1:100)^2 == Diagonal((1:100).^2)
+            p = 3
+            @test Diagonal(1:100)^p == Diagonal((1:100).^p)
+            @test Diagonal(1:100)^(-1) == Diagonal(inv.(1:100))
+            @test Diagonal(1:100)^2.0 == Diagonal((1:100).^2.0)
+            @test Diagonal(1:100)^(2.0+0im) == Diagonal((1:100).^(2.0+0im))
+        end
+
+        if relty <: BlasFloat
+            for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
@@ -403,6 +415,11 @@ Random.seed!(1)
 
 end
 
+@testset "rdiv! (#40887)" begin
+    @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
+    @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
+end
+
 @testset "kron (issue #40595)" begin
     # custom array type to test that kron on Diagonal matrices preserves types of the parents if possible
     struct KronTestArray{T, N, AT} <: AbstractArray{T, N}
@@ -565,7 +582,7 @@ end
     D = Diagonal(randn(5))
     Q = qr(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
-    Q = qr(randn(5, 5), Val(true)).Q
+    Q = qr(randn(5, 5), ColumnNorm()).Q
     @test_throws ArgumentError lmul!(Q, D)
 end
 
@@ -679,13 +696,15 @@ end
     @test yt*D*y == (yt*D)*y == (yt*A)*y
 end
 
-@testset "Multiplication of single element Diagonal (#36746)" begin
+@testset "Multiplication of single element Diagonal (#36746, #40726)" begin
     @test_throws DimensionMismatch Diagonal(randn(1)) * randn(5)
     @test_throws DimensionMismatch Diagonal(randn(1)) * Diagonal(randn(3, 3))
     A = [1 0; 0 2]
     v = [3, 4]
     @test Diagonal(A) * v == A * v
     @test Diagonal(A) * Diagonal(A) == A * A
+    @test_throws DimensionMismatch [1 0;0 1] * Diagonal([2 3])   # Issue #40726
+    @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
 end
 
 @testset "Triangular division by Diagonal #27989" begin
@@ -782,4 +801,11 @@ end
     @test dot(A, B) ≈ conj(dot(B, A))
 end
 
+@testset "eltype relaxation(#41015)" begin
+    A = rand(3,3)
+    for trans in (identity, Adjoint, Transpose)
+        @test ldiv!(trans(I(3)), A) == A
+        @test rdiv!(A, trans(I(3))) == A
+    end
+end
 end # module TestDiagonal

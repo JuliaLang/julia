@@ -885,8 +885,9 @@ end
 
 function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
-    isempty(target) && return ""
-    c, rest = Iterators.peel(target)
+    x = Iterators.peel(target)
+    isnothing(x) && return ""
+    c, rest = x
     if isempty(rest) && c <= '\x7f'
         return readuntil_string(io, c % UInt8, keep)
     end
@@ -1034,7 +1035,7 @@ end
 
 Return an iterable object yielding [`read(io, T)`](@ref).
 
-See also: [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref)
+See also [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref).
 
 !!! compat "Julia 1.6"
     `readeach` requires Julia 1.6 or later.

@@ -221,7 +221,7 @@ CartesianIndex(1, 2) d
 CartesianIndex(2, 2) e
 ```
 
-See also: [`IndexStyle`](@ref), [`axes`](@ref).
+See also [`IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
@@ -554,6 +554,11 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
+If the iterator is empty return `nothing` (like `iterate`).
+
+!!! compat "Julia 1.7"
+    Prior versions throw a BoundsError if the iterator is empty.
+
 See also: [`Iterators.drop`](@ref), [`Iterators.take`](@ref).
 
 # Examples
@@ -571,7 +576,7 @@ julia> collect(rest)
 """
 function peel(itr)
     y = iterate(itr)
-    y === nothing && throw(BoundsError())
+    y === nothing && return y
     val, s = y
     val, rest(itr, s)
 end
@@ -1171,15 +1176,15 @@ function length(itr::PartitionIterator)
     return cld(l, itr.n)
 end
 
-function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
-    state > length(itr.c) && return nothing
-    r = min(state + itr.n - 1, length(itr.c))
+function iterate(itr::PartitionIterator{<:AbstractRange}, state = firstindex(itr.c))
+    state > lastindex(itr.c) && return nothing
+    r = min(state + itr.n - 1, lastindex(itr.c))
     return @inbounds itr.c[state:r], r + 1
 end
 
-function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
-    state > length(itr.c) && return nothing
-    r = min(state + itr.n - 1, length(itr.c))
+function iterate(itr::PartitionIterator{<:AbstractArray}, state = firstindex(itr.c))
+    state > lastindex(itr.c) && return nothing
+    r = min(state + itr.n - 1, lastindex(itr.c))
     return @inbounds view(itr.c, state:r), r + 1
 end
 
@@ -1338,7 +1343,7 @@ length(s::Stateful) = length(s.itr) - s.taken
 Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
 collection has zero or multiple elements.
 
-See also: [`first`](@ref), [`last`](@ref).
+See also [`first`](@ref), [`last`](@ref).
 
 !!! compat "Julia 1.4"
     This method requires at least Julia 1.4.
