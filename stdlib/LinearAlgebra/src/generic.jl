@@ -1797,7 +1797,7 @@ function normalize(a::AbstractArray, p::Real = 2)
 end
 
 """
-    islc(A::AbstractMatrix, y::AbstractVector)
+    isLinearCombination(A::AbstractMatrix, y::AbstractVector)
 
 For a matrix A and a vector y, checks if y is a linear combination of columns of A.
 In other words, checks that equation Ax = y has a solution or not.
@@ -1813,17 +1813,12 @@ julia> y = [3, 1]
  2-element Vector{Int64}:
   3
   1
-julia> println(islc(A, y))
+julia> println(isLinearCombination(A, y))
   true
 ```
 """
-function islc(A::AbstractMatrix, y::AbstractVector)
-    tA = copy(A)
-    ty = copy(y)
-
-    r1 = rank(tA)
-    tA = [tA'; ty']'
-    r2 = rank(tA)
-
-    return r1 == r2
+function isLinearCombination(A::AbstractMatrix, y::AbstractVector)
+    r_a = rank(A)
+    r_ay = rank([A'; y'])
+    return r_a == r_ay 
 end
