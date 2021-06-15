@@ -97,6 +97,14 @@ end
         t = tempname(d)
         @test dirname(t) == d
     end
+    # 38873: check that `TMPDIR` being set does not
+    # override the parent argument to `tempname`.
+    mktempdir() do d
+        whithenv("TMPDIR"=>tmpdir()) do
+            t = tempname(d)
+            @test dirname(t) == d
+        end
+    end
     @test_throws ArgumentError tempname(randstring())
 end
 
