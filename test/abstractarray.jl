@@ -2050,3 +2050,7 @@ end
     test_unsetindex(MyMatrixUnsetIndexCartInds)
     test_unsetindex(MyMatrixUnsetIndexLinInds)
 end
+
+@testset "reshape for offset arrays" begin
+    @test_throws ArgumentError reshape(Base.IdentityUnitRange(0:1), (2,1))
+end
