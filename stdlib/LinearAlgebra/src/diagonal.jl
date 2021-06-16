@@ -333,7 +333,7 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
     mB = size(Db, 1)
     mA == mB || throw(DimensionMismatch("A has dimensions ($mA,$mA) but B has dimensions ($mB,$mB)"))
     mC, nC = size(C)
-    mC == nC == mA || throw(DimensionMismatch("output matrix has size: $(mC,nC), but should have size $(mA,mA)"))
+    mC == nC == mA || throw(DimensionMismatch("output matrix has size: ($mC,$nC), but should have size ($mA,$mA)"))
     require_one_based_indexing(C)
     da = Da.diag
     db = Db.diag
