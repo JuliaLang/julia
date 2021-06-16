@@ -1,0 +1,24 @@
+steps:
+  - label: "coverage-linux64"
+    commands:
+      - echo "--- Print the Git status"
+      - git status
+      - git log -n 1
+      - echo ""
+      - echo "--- Install build dependencies"
+      - apt-get update
+      - apt-get install -y build-essential cmake curl gfortran git libatomic1 m4 perl pkg-config python python3 wget
+      - echo "--- Build Julia from source"
+      - make -j 6
+      - echo "--- Print Julia version info"
+      - ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
+      - ./julia -e '@info "" Sys.CPU_THREADS'
+      - echo "--- Run Julia tests with code coverage enabled"
+      - git config --global init.defaultBranch master # this is necessary to make sure that the LibGit2 tests passes
+      - ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_base.jl
+      - echo "--- Process and upload coverage information"
+      - ./julia .buildkite/coverage-linux64/upload_coverage.jl
+    agents:
+      queue: "juliacpu" # this should be julia -- also in pipeline settings
+      # os: linux # tag missing for juliacpu queue
+    timeout_in_minutes: 480 # 480 minutes = 8 hours
