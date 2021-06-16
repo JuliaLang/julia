@@ -769,7 +769,7 @@ function rmul!(A::StridedVecOrMat{Bool}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}})
     prom = promote_type(eltype(A), eltype(adjB))
     Anew = convert(AbstractMatrix{prom}, A)
     (B = adjB.parent; LAPACK.gemqrt!('R','T',B.factors,B.T,Anew))
-end                                 
+end
 function *(A::StridedMatrix, adjB::Adjoint{<:Any,<:AbstractQ})
     B = adjB.parent
     TAB = promote_type(eltype(A),eltype(B))
