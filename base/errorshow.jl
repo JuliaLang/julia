@@ -1093,7 +1093,7 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack; show_repl_frame
     nexc = length(stack)
     printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
     if !show_repl_frames
-        stack = ExceptionStack([ (exception = x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack ])
+        stack = ExceptionStack([ (exception = x.exception, backtrace = x.backtrace) for x in stack ])
     end
     show_exception_stack(io, stack)
 end
