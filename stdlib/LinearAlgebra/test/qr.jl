@@ -405,6 +405,13 @@ end
         @test_throws DimensionMismatch("overdetermined systems are not supported")    qr(randn(n - 2, n), ColumnNorm())'\b
         @test_throws DimensionMismatch("arguments must have the same number of rows") qr(randn(n, n + 1), ColumnNorm())'\b
     end
+end 
+                  
+@testset "issue #38974" begin
+    A = qr(ones(3, 1))
+    B = I(3)
+    C = B*A.Q'
+    @test C ≈ A.Q
 end
 
 end # module TestQR
