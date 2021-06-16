@@ -2194,7 +2194,10 @@
             (cond ((eof-object? c))
                   (preceding-backslash?
                    (if (not (eqv? c #\newline))
-                       (begin (write-char #\\ out) (write-char c out)))
+                       (begin (write-char #\\ out) (write-char c out))
+                       ((define (loop-)
+                          (if (memv (peek-char in) '(#\space #\tab))
+                              (begin (take-char in) (loop-))))))
                    (loop #f))
                   ((eqv? c #\\) (loop #t))
                   (else (write-char c out) (loop #f)))))
