@@ -2073,7 +2073,7 @@ function _findr(op, A, region, Tv)
             throw(ArgumentError("array slices must be non-empty"))
         else
             ri = Base.reduced_indices0(A, region)
-            return (similar(A, ri), zeros(Ti, ri))
+            return (zeros(Tv, ri), zeros(Ti, ri))
         end
     end
 
@@ -3303,6 +3303,10 @@ dropstored!(A::AbstractSparseMatrixCSC, ::Colon) = dropstored!(A, :, :)
 
 # Sparse concatenation
 
+promote_idxtype(::AbstractSparseMatrixCSC{<:Any, Ti}) where {Ti} = Ti
+promote_idxtype(::AbstractSparseMatrixCSC{<:Any, Ti}, X::AbstractSparseMatrixCSC...) where {Ti} =
+    promote_type(Ti, promote_idxtype(X...))
+
 function vcat(X::AbstractSparseMatrixCSC...)
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
@@ -3317,7 +3321,7 @@ function vcat(X::AbstractSparseMatrixCSC...)
     end
 
     Tv = promote_eltype(X...)
-    Ti = promote_eltype(map(x->rowvals(x), X)...)
+    Ti = promote_idxtype(X...)
 
     nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
@@ -3369,7 +3373,7 @@ function hcat(X::AbstractSparseMatrixCSC...)
     n = sum(nX)
 
     Tv = promote_eltype(X...)
-    Ti = promote_eltype(map(x->rowvals(x), X)...)
+    Ti = promote_idxtype(X...)
 
     colptr = Vector{Ti}(undef, n+1)
     nnzX = Int[ nnz(x) for x in X ]
