@@ -2342,7 +2342,7 @@ function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Boo
     return A
 end
 
-@inline function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
+function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     # putting these in separate functions leads to unnecessary allocations
     lenxs = length(xs)
     lena = length(A)
@@ -2370,7 +2370,7 @@ end
     end
 end
 
-@inline function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int},
+function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int},
                               d1::Int, d2::Int, as::Tuple) where {T, N}
     length(scratch1) == length(scratch2) == N ||
         throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
