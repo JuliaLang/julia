@@ -329,17 +329,21 @@ lmul!(A::Diagonal, B::Diagonal) = Diagonal(B.diag .= A.diag .* B.diag)
     out .= (in .* permutedims(A.diag)) .*ₛ alpha .+ out .*ₛ beta
 
 function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number)
-    (size(C) == size(Da) == size(Db)) || throw(DimensionMismatch(""))
+    mA = size(Da, 1)
+    mB = size(Db, 1)
+    mA == mB || throw(DimensionMismatch("A has dimensions ($mA,$mA) but B has dimensions ($mB,$mB)"))
+    mC, nC = size(C)
+    mC == nC == mA || throw(DimensionMismatch("output matrix has size: $(mC,nC), but should have size $(mA,mA)"))
     require_one_based_indexing(C)
     da = Da.diag
     db = Db.diag
     _rmul_or_fill!(C, beta)
     if iszero(beta)
-        @inbounds @simd for i in 1:length(da)
+        @inbounds @simd for i in 1:ma
             C[i,i] = Ref(da[i] * db[i]) .*ₛ alpha
         end
     else
-        @inbounds @simd for i in 1:length(da)
+        @inbounds @simd for i in 1:ma
             C[i,i] += Ref(da[i] * db[i]) .*ₛ alpha
         end
     end
