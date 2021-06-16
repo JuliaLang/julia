@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(1234321)
+Random.seed!(1234324)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -37,7 +37,7 @@ dimg  = randn(n)/2
     else
         convert(Tridiagonal{eltya}, Tridiagonal(dlreal, dreal, dureal))
     end
-    ε = εa = eps(abs(float(one(eltya))))
+    εa = eps(abs(float(one(eltya))))
 
     if eltya <: BlasFloat
         @testset "LU factorization for Number" begin
@@ -71,7 +71,7 @@ dimg  = randn(n)/2
             # test conversion of LU factorization's numerical type
             bft = eltya <: Real ? LinearAlgebra.LU{BigFloat} : LinearAlgebra.LU{Complex{BigFloat}}
             bflua = convert(bft, lua)
-            @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=ε
+            @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=εa*norm(a)
             @test Factorization{eltya}(lua) === lua
             # test Factorization with different eltype
             if eltya <: BlasReal
@@ -241,7 +241,7 @@ end
 end
 
 @testset "conversion" begin
-    Random.seed!(3)
+    Random.seed!(4)
     a = Tridiagonal(rand(9),rand(10),rand(9))
     fa = Array(a)
     falu = lu(fa)

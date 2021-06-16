@@ -512,9 +512,23 @@ const Locale = Union{DateLocale, String}
 Construct a `DateTime` by parsing the `dt` date time string following the
 pattern given in the `format` string (see [`DateFormat`](@ref)  for syntax).
 
-This method creates a `DateFormat` object each time it is called. If you are
-parsing many date time strings of the same format, consider creating a
-[`DateFormat`](@ref) object once and using that as the second argument instead.
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+# Example
+```jldoctest
+julia> DateTime("2020-01-01", "yyyy-mm-dd")
+2020-01-01T00:00:00
+
+julia> a = ("2020-01-01", "2020-01-02");
+
+julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
+2-element Vector{DateTime}:
+ 2020-01-01T00:00:00
+ 2020-01-02T00:00:00
+```
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     return parse(DateTime, dt, DateFormat(format, locale))
@@ -538,9 +552,23 @@ DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime,
 Construct a `Date` by parsing the `d` date string following the pattern given
 in the `format` string (see [`DateFormat`](@ref) for syntax).
 
-This method creates a `DateFormat` object each time it is called. If you are
-parsing many date strings of the same format, consider creating a
-[`DateFormat`](@ref) object once and using that as the second argument instead.
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+# Example
+```jldoctest
+julia> Date("2020-01-01", "yyyy-mm-dd")
+2020-01-01
+
+julia> a = ("2020-01-01", "2020-01-02");
+
+julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
+2-element Vector{Date}:
+ 2020-01-01
+ 2020-01-02
+```
 """
 function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     parse(Date, d, DateFormat(format, locale))
@@ -564,9 +592,23 @@ Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
 Construct a `Time` by parsing the `t` time string following the pattern given
 in the `format` string (see [`DateFormat`](@ref) for syntax).
 
-This method creates a `DateFormat` object each time it is called. If you are
-parsing many time strings of the same format, consider creating a
-[`DateFormat`](@ref) object once and using that as the second argument instead.
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+# Example
+```jldoctest
+julia> Time("12:34pm", "HH:MMp")
+12:34:00
+
+julia> a = ("12:34pm", "2:34am");
+
+julia> [Time(d, dateformat"HH:MMp") for d ∈ a] # preferred
+2-element Vector{Time}:
+ 12:34:00
+ 02:34:00
+```
 """
 function Time(t::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     parse(Time, t, DateFormat(format, locale))

@@ -363,6 +363,12 @@
 (define (decl? e)
   (and (pair? e) (eq? (car e) '|::|)))
 
+(define (symdecl? e)
+  (or (symbol? e) (decl? e)))
+
+(define (eventually-decl? e)
+  (or (decl? e) (and (pair? e) (eq? (car e) 'atomic) (symdecl? (cadr e)))))
+
 (define (make-decl n t) `(|::| ,n ,t))
 
 (define (ssavalue? e)

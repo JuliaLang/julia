@@ -13,6 +13,7 @@ const Chars = Union{Val{'c'}, Val{'C'}}
 const Strings = Union{Val{'s'}, Val{'S'}}
 const Pointer = Val{'p'}
 const HexBases = Union{Val{'x'}, Val{'X'}, Val{'a'}, Val{'A'}}
+const PositionCounter = Val{'n'}
 
 """
 Typed representation of a format specifier.
@@ -571,6 +572,12 @@ end
 # pointers
 fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
 
+# position counters
+function fmt(buf, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
+    arg[] = pos - 1
+    pos
+end
+
 # old Printf compat
 function fix_dec end
 function ini_dec end
@@ -766,6 +773,7 @@ plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
     max(f.width, 0 + 309 + 17 + f.hash + 5)
 plength(f::Spec{T}, x) where {T <: Floats} =
     max(f.width, f.precision + 309 + 17 + f.hash + 5)
+plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
     len = sum(length, substringranges)

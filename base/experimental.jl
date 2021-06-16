@@ -10,6 +10,7 @@
 module Experimental
 
 using Base: Threads, sync_varname
+using Base.Meta
 
 """
     Const(A::Array)
@@ -255,5 +256,47 @@ end
 
 # OpaqueClosure
 include("opaque_closure.jl")
+
+"""
+    Experimental.@overlay mt [function def]
+
+Define a method and add it to the method table `mt` instead of to the global method table.
+This can be used to implement a method override mechanism. Regular compilation will not
+consider these methods, and you should customize the compilation flow to look in these
+method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+
+"""
+macro overlay(mt, def)
+    def = macroexpand(__module__, def) # to expand @inline, @generated, etc
+    if !isexpr(def, [:function, :(=)])
+        error("@overlay requires a function Expr")
+    end
+    if isexpr(def.args[1], :call)
+        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
+    elseif isexpr(def.args[1], :where)
+        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    else
+        error("@overlay requires a function Expr")
+    end
+    esc(def)
+end
+
+let new_mt(name::Symbol, mod::Module) = begin
+        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "@MethodTable")
+        ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
+    end
+    @eval macro MethodTable(name::Symbol)
+        esc(:(const $name = $$new_mt($(quot(name)), $(__module__))))
+    end
+end
+
+"""
+    Experimental.@MethodTable(name)
+
+Create a new MethodTable in the current module, bound to `name`. This method table can be
+used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
+adding them to the global method table.
+"""
+:@MethodTable
 
 end
