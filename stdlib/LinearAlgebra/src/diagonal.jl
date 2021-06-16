@@ -339,11 +339,11 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
     db = Db.diag
     _rmul_or_fill!(C, beta)
     if iszero(beta)
-        @inbounds @simd for i in 1:ma
+        @inbounds @simd for i in 1:mA
             C[i,i] = Ref(da[i] * db[i]) .*ₛ alpha
         end
     else
-        @inbounds @simd for i in 1:ma
+        @inbounds @simd for i in 1:mA
             C[i,i] += Ref(da[i] * db[i]) .*ₛ alpha
         end
     end
