@@ -4,6 +4,7 @@ module TestLU
 
 using Test, LinearAlgebra, Random
 using LinearAlgebra: ldiv!, BlasReal, BlasInt, BlasFloat, rdiv!
+using InteractiveUtils: @which
 
 n = 10
 
@@ -398,4 +399,45 @@ end
         @test a == c
     end
 end
+
+@testset "lu(A) has a fallback for abstract matrices (#40831)" begin
+    # check that lu works for some structured arrays
+    A0 = rand(5, 5)
+    @test lu(Diagonal(A0)) isa LU
+    @test Matrix(lu(Diagonal(A0))) ≈ Diagonal(A0)
+    @test lu(Bidiagonal(A0, :U)) isa LU
+    @test Matrix(lu(Bidiagonal(A0, :U))) ≈ Bidiagonal(A0, :U)
+
+    # lu(A) copies A and then invokes lu!, we want to make sure that the most
+    # efficient implementation of lu! continues to be used
+    # 1) Tridiagonal
+    A1 = Tridiagonal(rand(2), rand(3), rand(2))
+    @test lu(A1) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+    @test lu(A1, RowMaximum()) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+    @test lu(A1, RowMaximum(); check = false) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+
+    # 2) Hermitian
+    A2 = Hermitian(rand(ComplexF64, 3, 3))
+    A2_oftype = LinearAlgebra.copy_oftype(A2, eltype(A2))
+    A2_array = LinearAlgebra.copy_to_array(A2, eltype(A2))
+    @test A2_oftype isa Hermitian
+    @test A2_array isa Matrix
+    # we can't see which method of lu! ends up being called based on return type,
+    # because the results are the same. Instead, we only check that a different
+    # method of lu is being called.
+    @test (@which lu(A2_oftype)) != (@which lu(A2_array))
+    @test (@which lu(A2_oftype, RowMaximum())) != (@which lu(A2_array, RowMaximum()))
+    @test (@which lu(A2_oftype, check = false)) != (@which lu(A2_array, check = false))
+
+    # 3) Symmetric
+    A3 = Symmetric(rand(3, 3))
+    A3_oftype = LinearAlgebra.copy_oftype(A3, eltype(A3))
+    A3_array = LinearAlgebra.copy_to_array(A3, eltype(A3))
+    @test A3_oftype isa Symmetric
+    @test A3_array isa Matrix
+    @test (@which lu(A3_oftype)) != (@which lu(A3_array))
+    @test (@which lu(A3_oftype, RowMaximum())) != (@which lu(A3_array, RowMaximum()))
+    @test (@which lu(A3_oftype, check = false)) != (@which lu(A3_array, check = false))
+end
+
 end # module TestLU
