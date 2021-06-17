@@ -354,8 +354,11 @@ control over the factorization of `B`.
 """
 rdiv!(A, B)
 
-copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
-copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
+
+copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A,T), A)
+copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
+copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
+
 
 include("adjtrans.jl")
 include("transpose.jl")

@@ -662,6 +662,25 @@ end
     end
 end
 
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "AbstractArray constructor should preserve underlying storage type" begin
+    # tests corresponding to #34995
+    local m = 4
+    local T, S = Float32, Float64
+    immutablemat = ImmutableArray(randn(T,m,m))
+    for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        trimat = TriType(immutablemat)
+        @test convert(AbstractArray{S}, trimat).data isa ImmutableArray{S}
+        @test convert(AbstractMatrix{S}, trimat).data isa ImmutableArray{S}
+        @test AbstractArray{S}(trimat).data isa ImmutableArray{S}
+        @test AbstractMatrix{S}(trimat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, trimat) == trimat
+        @test convert(AbstractMatrix{S}, trimat) == trimat
+    end
+end
+
 @testset "inplace mul of appropriate types should preserve triagular structure" begin
     for elty1 in (Float64, ComplexF32), elty2 in (Float64, ComplexF32)
         T = promote_type(elty1, elty2)

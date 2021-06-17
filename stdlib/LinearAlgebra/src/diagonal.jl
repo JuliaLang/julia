@@ -215,14 +215,14 @@ function (*)(D::Diagonal, V::AbstractVector)
 end
 
 (*)(A::AbstractTriangular, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
+    rmul!(copy_oftype(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 (*)(D::Diagonal, B::AbstractTriangular) =
-    lmul!(D, copyto!(similar(B, promote_op(*, eltype(B), eltype(D.diag))), B))
+    lmul!(D, copy_oftype(B, promote_op(*, eltype(B), eltype(D.diag))))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A), D)
+    rmul!(copy_similar(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 (*)(D::Diagonal, A::AbstractMatrix) =
-    lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
+    lmul!(D, copy_similar(A, promote_op(*, eltype(A), eltype(D.diag))))
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
