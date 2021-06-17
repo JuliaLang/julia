@@ -2854,7 +2854,7 @@ b" == "acb"
             b""" == "ab"
     @test """
             a\
-          b""" == "  ab"
+          b""" == "ab"
     @test raw"""
           a\
           b""" == "a\\\nb"
