@@ -76,8 +76,8 @@ adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
 # StridedMatrix
-lu(A::StridedMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
-    lu!(copy_oftype(A, T), pivot; check=check)
+lu(A::StridedMatrix, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
+    lu!(copy_oftype(A, lutype(eltype(A))), pivot; check=check)
 
 lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
 function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
@@ -90,7 +90,7 @@ function lu!(A::StridedMatrix{<:BlasFloat}, pivot::NoPivot; check::Bool = true)
 end
 
 lu(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
-    lu!(copy_oftype(A, T), pivot; check=check)
+    lu!(copy_oftype(A, lutype(eltype(A))), pivot; check=check)
 
 function lu!(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
     copytri!(A.data, A.uplo, isa(A, Hermitian))

@@ -355,9 +355,28 @@ control over the factorization of `B`.
 rdiv!(A, B)
 
 
+# There are three often used methods in LinearAlgebra to create a mutable copy
+# of an array with a given eltype. These copies can be passed to in-place
+# algorithms (such as ldiv!, rdiv!, lu! and so on).
+# Which one to use in practice depends on what is known (or assumed) about the
+# structure of the array in that algorithm.
+
+# copy_oftype: make a mutable copy based on `similar(A, T)`.
+# The resulting matrix typically has similar algebraic structure as A. For example,
+# supplying a tridiagonal matrix results in another tridiagonal matrix.
 copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A,T), A)
+
+# copy_similar: make a mutable copy based on `similar(A, T, size(A))`.
+# Compared to copy_oftype, the result can be more flexible. For example,
+# supplying a tridiagonal matrix results in a sparse array.
 copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
+
+# copy_to_array: copy the contents of A to a standard dense array with element type T
 copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
+
+# To only ensure a certain eltype, and if a mutable copy is not needed, it is
+# more efficient to use:
+# convert(AbstractArray{T}, A)
 
 
 include("adjtrans.jl")
