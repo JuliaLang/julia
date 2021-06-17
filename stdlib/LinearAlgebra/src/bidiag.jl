@@ -745,32 +745,30 @@ function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
 end
 function ldiv!(adjA::Adjoint{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
     require_one_based_indexing(adjA, B)
-    A = adjA.parent
-    nA,mA = size(A)
-    tmp = similar(B,size(B,1))
+    mA, nA = size(adjA)
     n = size(B, 1)
+    tmp = similar(B, n)
     if mA != n
         throw(DimensionMismatch("size of adjoint of A is ($mA,$nA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
         copyto!(tmp, 1, B, (i - 1)*n + 1, n)
-        ldiv!(adjoint(A), tmp)
+        ldiv!(adjA, tmp)
         copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
     end
     B
 end
 function ldiv!(transA::Transpose{<:Any,<:Union{Bidiagonal,AbstractTriangular}}, B::AbstractMatrix)
     require_one_based_indexing(transA, B)
-    A = transA.parent
-    nA,mA = size(A)
-    tmp = similar(B,size(B,1))
+    mA, nA = size(transA)
     n = size(B, 1)
+    tmp = similar(B, n)
     if mA != n
         throw(DimensionMismatch("size of transpose of A is ($mA,$nA), corresponding dimension of B is $n"))
     end
     for i = 1:size(B,2)
         copyto!(tmp, 1, B, (i - 1)*n + 1, n)
-        ldiv!(transpose(A), tmp)
+        ldiv!(transA, tmp)
         copyto!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
     end
     B
@@ -830,14 +828,14 @@ function \(transA::Transpose{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrM
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     ldiv!(transpose(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
 end
-\(transA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(transpose(transA.parent), copy(B))
+\(transA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(transA, copy(B))
 function \(adjA::Adjoint{<:Number,<:Bidiagonal{<:Number}}, B::AbstractVecOrMat{<:Number})
     A = adjA.parent
     TA, TB = eltype(A), eltype(B)
     TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
     ldiv!(adjoint(convert(AbstractArray{TAB}, A)), copy_oftype(B, TAB))
 end
-\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(adjoint(adjA.parent), copy(B))
+\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = ldiv!(adjA, copy(B))
 
 factorize(A::Bidiagonal) = A
 

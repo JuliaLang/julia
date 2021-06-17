@@ -281,9 +281,9 @@ function (-)(A::UniformScaling, B::Diagonal{<:Number})
 end
 
 rmul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    (B = adjB.parent; rmul!(full!(A), adjoint(B)))
+    rmul!(full!(A), adjB)
 *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    (B = adjB.parent; *(copyto!(similar(parent(A)), A), adjoint(B)))
+    *(copyto!(similar(parent(A)), A), adjB)
 
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)
