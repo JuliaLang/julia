@@ -183,7 +183,6 @@ function _reshape(v::AbstractVector, dims::Dims{1})
 end
 # General reshape
 function _reshape(parent::AbstractArray, dims::Dims)
-    require_one_based_indexing(parent)
     n = length(parent)
     prod(dims) == n || _throw_dmrs(n, "size", dims)
     __reshape((parent, IndexStyle(parent)), dims)
@@ -252,7 +251,8 @@ end
 
 @inline function getindex(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(A, index)
-    @inbounds ret = parent(A)[index]
+    indexparent = index - firstindex(A) + firstindex(parent(A))
+    @inbounds ret = parent(A)[indexparent]
     ret
 end
 @inline function getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
@@ -276,7 +276,8 @@ end
 
 @inline function setindex!(A::ReshapedArrayLF, val, index::Int)
     @boundscheck checkbounds(A, index)
-    @inbounds parent(A)[index] = val
+    indexparent = index - firstindex(A) + firstindex(parent(A))
+    @inbounds parent(A)[indexparent] = val
     val
 end
 @inline function setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
