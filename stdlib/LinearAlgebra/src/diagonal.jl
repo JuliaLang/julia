@@ -289,9 +289,6 @@ function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
     rmul!(At, D)
 end
 
-*(D::Diagonal, B::Adjoint{<:Any,<:Diagonal}) = Diagonal(D.diag .* adjoint.(B.parent.diag))
-*(D::Diagonal, B::Adjoint{<:Any,<:AbstractTriangular}) =
-    lmul!(D, copyto!(similar(B, promote_op(*, eltype(B), eltype(D.diag))), B))
 *(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = rmul!(Array{promote_type(eltype(D), eltype(adjQ))}(D), adjQ)
 
 function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
