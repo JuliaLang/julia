@@ -198,6 +198,12 @@ JL_DLLEXPORT int (jl_egal)(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value
     return jl_egal(a, b);
 }
 
+JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    // warning: a,b may NOT have been gc-rooted by the caller
+    return jl_egal__unboxed_(a, b, dt);
+}
+
 int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     if (dt == jl_simplevector_type)

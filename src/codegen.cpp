@@ -628,11 +628,11 @@ static const auto jl_excstack_state_func = new JuliaFunction{
     [](LLVMContext &C) { return FunctionType::get(T_size, false); },
     nullptr,
 };
-static const auto jlegal_func = new JuliaFunction{
-    "jl_egal",
+static const auto jlegalx_func = new JuliaFunction{
+    "jl_egal__unboxed",
     [](LLVMContext &C) {
-        Type *T = PointerType::get(T_jlvalue, AddressSpace::CalleeRooted);
-        return FunctionType::get(T_int32, {T, T}, false); },
+        Type *T = PointerType::get(T_jlvalue, AddressSpace::Derived);
+        return FunctionType::get(T_int32, {T, T, T_prjlvalue}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind, Attribute::ArgMemOnly}),
             AttributeSet(),
@@ -2411,10 +2411,10 @@ static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const 
                                Value *nullcheck1, Value *nullcheck2)
 {
     if (jl_pointer_egal(arg1.typ) || jl_pointer_egal(arg2.typ)) {
+        assert((arg1.isboxed || arg1.constant) && (arg2.isboxed || arg2.constant) &&
+                "Expected unboxed cases to be handled earlier");
         Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : arg1.V;
         Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : arg2.V;
-        assert(varg1 && varg2 && (arg1.isboxed || arg1.TIndex) && (arg2.isboxed || arg2.TIndex) &&
-                "Only boxed types are valid for pointer comparison.");
         varg1 = maybe_decay_tracked(ctx, varg1);
         varg2 = maybe_decay_tracked(ctx, varg2);
         if (cast<PointerType>(varg1->getType())->getAddressSpace() != cast<PointerType>(varg2->getType())->getAddressSpace()) {
@@ -2426,10 +2426,19 @@ static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const 
     }
 
     return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] {
-        Value *varg1 = mark_callee_rooted(ctx, boxed(ctx, arg1));
-        Value *varg2 = mark_callee_rooted(ctx, boxed(ctx, arg2));
-        return ctx.builder.CreateTrunc(ctx.builder.CreateCall(prepare_call(jlegal_func),
-                                                              {varg1, varg2}), T_int1);
+        Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : maybe_bitcast(ctx, value_to_pointer(ctx, arg1).V, T_pjlvalue);
+        Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : maybe_bitcast(ctx, value_to_pointer(ctx, arg2).V, T_pjlvalue);
+        varg1 = decay_derived(ctx, varg1);
+        varg2 = decay_derived(ctx, varg2);
+        Value *neq = ctx.builder.CreateICmpNE(varg1, varg2);
+        return emit_guarded_test(ctx, neq, true, [&] {
+            Value *dtarg = emit_typeof_boxed(ctx, arg1);
+            Value *dt_eq = ctx.builder.CreateICmpEQ(dtarg, emit_typeof_boxed(ctx, arg2));
+            return emit_guarded_test(ctx, dt_eq, false, [&] {
+                return ctx.builder.CreateTrunc(ctx.builder.CreateCall(prepare_call(jlegalx_func),
+                                                                      {varg1, varg2, dtarg}), T_int1);
+            });
+        });
     });
 }
 
@@ -2583,6 +2592,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
 // representing the undef-ness of `arg1` and `arg2`.
 // This can only happen when comparing two fields of the same time and the result should be
 // true if both are NULL
+// Like the runtime counterpart, this is codegen guaranteed to be non-allocating and to exclude safepoints
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                         Value *nullcheck1, Value *nullcheck2)
 {
@@ -2603,46 +2613,45 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         // since it is normalized to `::Type{Union{}}` instead...
         if (arg1.TIndex)
             return emit_nullcheck_guard(ctx, nullcheck1, [&] {
-                return emit_isa(ctx, arg1, rt2, NULL).first; // rt2 is a singleton type
+                return emit_exactly_isa(ctx, arg1, rt2); // rt2 is a singleton type
             });
         if (arg2.TIndex)
             return emit_nullcheck_guard(ctx, nullcheck2, [&] {
-                return emit_isa(ctx, arg2, rt1, NULL).first; // rt1 is a singleton type
+                return emit_exactly_isa(ctx, arg2, rt1); // rt1 is a singleton type
             });
+        if (!(arg1.isboxed || arg1.constant) || !(arg2.isboxed || arg2.constant))
+            // not TIndex && not boxed implies it is an unboxed value of a different type from this singleton
+            // (which was probably caught above, but just to be safe, we repeat it here explicitly)
+            return ConstantInt::get(T_int1, 0);
+        Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : maybe_bitcast(ctx, arg1.Vboxed, T_pjlvalue);
+        Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : maybe_bitcast(ctx, arg2.Vboxed, T_pjlvalue);
         // rooting these values isn't needed since we won't load this pointer
         // and we know at least one of them is a unique Singleton
         // which is already enough to ensure pointer uniqueness for this test
         // even if the other pointer managed to get garbage collected
-        return ctx.builder.CreateICmpEQ(
-            mark_callee_rooted(ctx, boxed(ctx, arg1)),
-            mark_callee_rooted(ctx, boxed(ctx, arg2)));
+        // TODO: use emit_pointer_from_objref instead, per comment above
+        return ctx.builder.CreateICmpEQ(decay_derived(ctx, varg1), decay_derived(ctx, varg2));
     }
 
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
         return ConstantInt::get(T_int1, 0);
-
-    // If both sides are boxed or can be trivially boxed,
-    // we'll prefer to do a pointer check.
-    // At this point, we know that at least one of the arguments isn't a constant
-    // so a runtime content check will involve at least one load from the
-    // pointer (and likely a type check)
-    // so a pointer comparison should be no worse than that even in imaging mode
-    // when the constant pointer has to be loaded.
-    if ((arg1.V || arg1.constant) && (arg2.V || arg2.constant) &&
-        (jl_pointer_egal(rt1) || jl_pointer_egal(rt2)) &&
-        // jl_pointer_egal returns true for Bool, which is not helpful here
-        (rt1 != (jl_value_t*)jl_bool_type || rt2 != (jl_value_t*)jl_bool_type))
-        return ctx.builder.CreateICmpEQ(boxed(ctx, arg1), boxed(ctx, arg2));
 
     bool justbits1 = jl_is_concrete_immutable(rt1);
     bool justbits2 = jl_is_concrete_immutable(rt2);
     if (justbits1 || justbits2) { // whether this type is unique'd by value
         return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] () -> Value* {
             jl_value_t *typ = justbits1 ? rt1 : rt2;
+            if (typ == (jl_value_t*)jl_bool_type) { // aka jl_pointer_egal
+                // some optimizations for bool, since pointer comparison may be better
+                if ((arg1.isboxed || arg1.constant) && (arg2.isboxed || arg2.constant)) { // aka have-fast-pointer
+                    Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : maybe_bitcast(ctx, arg1.Vboxed, T_pjlvalue);
+                    Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : maybe_bitcast(ctx, arg2.Vboxed, T_pjlvalue);
+                    return ctx.builder.CreateICmpEQ(decay_derived(ctx, varg1), decay_derived(ctx, varg2));
+                }
+            }
             if (rt1 == rt2)
                 return emit_bits_compare(ctx, arg1, arg2);
-            Value *same_type = (typ == rt2) ? emit_isa(ctx, arg1, typ, NULL).first :
-                emit_isa(ctx, arg2, typ, NULL).first;
+            Value *same_type = emit_exactly_isa(ctx, (typ == rt2 ? arg1 : arg2), typ);
             BasicBlock *currBB = ctx.builder.GetInsertBlock();
             BasicBlock *isaBB = BasicBlock::Create(jl_LLVMContext, "is", ctx.f);
             BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_is", ctx.f);
@@ -2658,6 +2667,25 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
             cmp->addIncoming(bitcmp, isaBB);
             return cmp;
         });
+    }
+
+    // If either sides is boxed or can be trivially boxed,
+    // we'll prefer to do a pointer check.
+    // At this point, we know that at least one of the arguments isn't a constant
+    // so a runtime content check will involve at least one load from the
+    // pointer (and likely a type check)
+    // so a pointer comparison should be no worse than that even in imaging mode
+    // when the constant pointer has to be loaded.
+    // Note that we ignore nullcheck, since in the case where it may be set, we
+    // also knew the types of both fields must be the same so there cannot be
+    // any unboxed values on either side.
+    if (jl_pointer_egal(rt1) || jl_pointer_egal(rt2)) {
+        // n.b. Vboxed == isboxed || Tindex
+        if (!(arg1.Vboxed || arg1.constant) || !(arg2.Vboxed || arg2.constant))
+            return ConstantInt::get(T_int1, 0);
+        Value *varg1 = arg1.constant ? literal_pointer_val(ctx, arg1.constant) : maybe_bitcast(ctx, arg1.Vboxed, T_pjlvalue);
+        Value *varg2 = arg2.constant ? literal_pointer_val(ctx, arg2.constant) : maybe_bitcast(ctx, arg2.Vboxed, T_pjlvalue);
+        return ctx.builder.CreateICmpEQ(decay_derived(ctx, varg1), decay_derived(ctx, varg2));
     }
 
     // TODO: handle the case where arg1.typ != arg2.typ, or when one of these isn't union,
@@ -3498,8 +3526,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
             argvals[idx] = boxed(ctx, arg);
         }
         else if (et->isAggregateType()) {
-            if (!arg.ispointer())
-                arg = value_to_pointer(ctx, arg);
+            arg = value_to_pointer(ctx, arg);
             // can lazy load on demand, no copy needed
             assert(at == PointerType::get(et, AddressSpace::Derived));
             argvals[idx] = decay_derived(ctx, maybe_bitcast(ctx,
@@ -5437,8 +5464,7 @@ static Function* gen_cfun_wrapper(
             }
             else if (T->isAggregateType()) {
                 // aggregate types are passed by pointer
-                if (!inputarg.ispointer())
-                    inputarg = value_to_pointer(ctx, inputarg);
+                inputarg = value_to_pointer(ctx, inputarg);
                 arg = maybe_bitcast(ctx, decay_derived(ctx, data_pointer(ctx, inputarg)),
                     T->getPointerTo());
             }
@@ -7977,7 +8003,7 @@ static void init_jit_functions(void)
     add_named_global(jlleave_func, &jl_pop_handler);
     add_named_global(jl_restore_excstack_func, &jl_restore_excstack);
     add_named_global(jl_excstack_state_func, &jl_excstack_state);
-    add_named_global(jlegal_func, &jl_egal);
+    add_named_global(jlegalx_func, &jl_egal__unboxed);
     add_named_global(jlisa_func, &jl_isa);
     add_named_global(jlsubtype_func, &jl_subtype);
     add_named_global(jltypeassert_func, &jl_typeassert);
