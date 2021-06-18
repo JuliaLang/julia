@@ -3286,9 +3286,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_thread_heap_t *heap = &ptls->heap;
     jl_gc_pool_t *p = heap->norm_pools;
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
-        assert((jl_gc_sizeclasses[i] < 16 &&
-                jl_gc_sizeclasses[i] % sizeof(void*) == 0) ||
-               (jl_gc_sizeclasses[i] % 16 == 0));
         p[i].osize = jl_gc_sizeclasses[i];
         p[i].freelist = NULL;
         p[i].newpages = NULL;

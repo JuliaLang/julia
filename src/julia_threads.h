@@ -141,11 +141,11 @@ typedef struct {
 
     // variables for allocating objects from pools
 #ifdef _P64
-#  define JL_GC_N_POOLS 41
+#  define JL_GC_N_POOLS 49
 #elif MAX_ALIGN == 8
-#  define JL_GC_N_POOLS 42
+#  define JL_GC_N_POOLS 50
 #else
-#  define JL_GC_N_POOLS 43
+#  define JL_GC_N_POOLS 51
 #endif
     jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
 

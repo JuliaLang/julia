@@ -514,32 +514,39 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
     return jl_pchar_to_string((const char*)jl_array_data(a), len);
 }
 
-JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
+JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
 {
+    if (len == 0)
+        return jl_an_empty_string;
     size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
     if (sz < len) // overflow
         jl_throw(jl_memory_exception);
-    if (len == 0)
-        return jl_an_empty_string;
     jl_task_t *ct = jl_current_task;
-    jl_value_t *s = jl_gc_alloc_(ct->ptls, sz, jl_string_type); // force inlining
+    jl_value_t *s;
+    jl_ptls_t ptls = ct->ptls;
+    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    if (sz <= GC_MAX_SZCLASS) {
+        int pool_id = jl_gc_szclass_align8(allocsz);
+        jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
+        int osize = jl_gc_sizeclasses[pool_id];
+        s = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
+    }
+    else {
+        if (allocsz < sz) // overflow in adding offs, size was "negative"
+            jl_throw(jl_memory_exception);
+        s = jl_gc_big_alloc(ptls, allocsz);
+    }
+    jl_set_typeof(s, jl_string_type);
     *(size_t*)s = len;
-    memcpy((char*)s + sizeof(size_t), str, len);
-    ((char*)s + sizeof(size_t))[len] = 0;
+    jl_string_data(s)[len] = 0;
     return s;
 }
 
-JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
+JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
-    size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
-    if (sz < len) // overflow
-        jl_throw(jl_memory_exception);
-    if (len == 0)
-        return jl_an_empty_string;
-    jl_task_t *ct = jl_current_task;
-    jl_value_t *s = jl_gc_alloc_(ct->ptls, sz, jl_string_type); // force inlining
-    *(size_t*)s = len;
-    ((char*)s + sizeof(size_t))[len] = 0;
+    jl_value_t *s = jl_alloc_string(len);
+    if (len > 0)
+        memcpy(jl_string_data(s), str, len);
     return s;
 }
 
