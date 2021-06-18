@@ -1,8 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Logging
-import Logging: Info,
-    shouldlog, handle_message, min_enabled_level, catch_exceptions
+using Logging: Logging, AbstractLogger, LogLevel, Info, with_logger
 import Base: occursin
 
 #-------------------------------------------------------------------------------
@@ -30,22 +28,23 @@ mutable struct TestLogger <: AbstractLogger
     shouldlog_args
 end
 
-TestLogger(; min_level=Info, catch_exceptions=false) = TestLogger(LogRecord[], min_level, catch_exceptions, nothing)
-min_enabled_level(logger::TestLogger) = logger.min_level
+TestLogger(; min_level=Info, catch_exceptions=false) =
+    TestLogger(LogRecord[], min_level, catch_exceptions, nothing)
+Logging.min_enabled_level(logger::TestLogger) = logger.min_level
 
-function shouldlog(logger::TestLogger, level, _module, group, id)
+function Logging.shouldlog(logger::TestLogger, level, _module, group, id)
     logger.shouldlog_args = (level, _module, group, id)
     true
 end
 
-function handle_message(logger::TestLogger, level, msg, _module,
-                        group, id, file, line; kwargs...)
+function Logging.handle_message(logger::TestLogger, level, msg, _module,
+                                group, id, file, line; kwargs...)
     @nospecialize
     push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
 end
 
 # Catch exceptions for the test logger only if specified
-catch_exceptions(logger::TestLogger) = logger.catch_exceptions
+Logging.catch_exceptions(logger::TestLogger) = logger.catch_exceptions
 
 function collect_test_logs(f; kwargs...)
     logger = TestLogger(; kwargs...)
