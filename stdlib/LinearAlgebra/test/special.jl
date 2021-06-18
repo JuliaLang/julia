@@ -441,10 +441,13 @@ end
     Bi = Bidiagonal(d, dl, :L)
     Sym = SymTridiagonal(d, dl)
     F = qr(ones(4, 1))
-    A=F.Q'
-    @test Tri*A ≈ (A*Tri)'
-    @test Bi*A ≈ (A'*Bi')'
-    @test Sym*A ≈ (A*Sym)'
+    A = F.Q'
+    @test Tri*A ≈ Matrix(Tri)*A
+    @test A*Tri ≈ A*Matrix(Tri)
+    @test Bi*A ≈ Matrix(Bi)*A
+    @test A*Bi ≈ A*Matrix(Bi)
+    @test Sym*A ≈ Matrix(Sym)*A
+    @test A*Sym ≈ A*Matrix(Sym)
 end
 
 end # module TestSpecial
