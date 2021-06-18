@@ -49,7 +49,6 @@ Bidiagonal(A::AbstractTriangular) =
 
 const ConvertibleSpecialMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,AbstractTriangular}
 const PossibleTriangularMatrix = Union{Diagonal, Bidiagonal, AbstractTriangular}
-const BiTriSym = Union{Bidiagonal, Tridiagonal, SymTridiagonal}
 
 convert(T::Type{<:Diagonal},       m::ConvertibleSpecialMatrix) = m isa T ? m :
     isdiag(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as Diagonal"))
