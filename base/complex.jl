@@ -535,18 +535,12 @@ end
 #     return Complex(abs(iz)/r/2, copysign(r,iz))
 # end
 
-# compute exp(im*theta)
-function cis(theta::Real)
-    s, c = sincos(theta)
-    Complex(c, s)
-end
-
 """
-    cis(z)
+    cis(x)
 
-Return ``\\exp(iz)``.
+More efficient method for `exp(im*x)` by using Euler's formula: ``cos(x) + i sin(x) = \\exp(i x)``.
 
-See also [`cispi`](@ref), [`angle`](@ref).
+See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref), [`angle`](@ref).
 
 # Examples
 ```jldoctest
@@ -554,23 +548,29 @@ julia> cis(π) ≈ -1
 true
 ```
 """
+function cis end
+function cis(theta::Real)
+    s, c = sincos(theta)
+    Complex(c, s)
+end
+
 function cis(z::Complex)
     v = exp(-imag(z))
     s, c = sincos(real(z))
     Complex(v * c, v * s)
 end
 
-cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
-
 """
-    cispi(z)
+    cispi(x)
 
-Compute ``\\exp(i\\pi x)`` more accurately than `cis(pi*x)`, especially for large `x`.
+More accurate method for `cis(pi*x)` (especially for large `x`).
+
+See also [`cis`](@ref), [`sincospi`](@ref), [`exp`](@ref), [`angle`](@ref).
 
 # Examples
 ```jldoctest
-julia> cispi(1)
--1.0 + 0.0im
+julia> cispi(10000)
+1.0 + 0.0im
 
 julia> cispi(0.25 + 1im)
 0.030556854645952924 + 0.030556854645952924im
@@ -579,6 +579,9 @@ julia> cispi(0.25 + 1im)
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 """
+function cispi end
+cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
+
 function cispi(z::Complex)
     sipi, copi = sincospi(z)
     return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))
