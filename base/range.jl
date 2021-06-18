@@ -57,7 +57,7 @@ Mathematically a range is uniquely determined by any three of `start`, `step`, `
 Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
+  to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
 
 # Examples
 ```jldoctest
