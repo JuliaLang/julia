@@ -434,4 +434,17 @@ end
     end
 end
 
+@testset "BiTriSym*Q' and Q'*BiTriSym" begin
+    dl = [1, 1, 1];
+    d = [1, 1, 1, 1];
+    Tri = Tridiagonal(dl, d, dl)
+    Bi = Bidiagonal(d, dl, :L)
+    Sym = SymTridiagonal(d, dl)
+    F = qr(ones(4, 1))
+    A=F.Q'
+    @test Tri*A ≈ (A*Tri)'
+    @test Bi*A ≈ (A'*Bi')'
+    @test Sym*A ≈ (A*Sym)'
+end
+
 end # module TestSpecial
