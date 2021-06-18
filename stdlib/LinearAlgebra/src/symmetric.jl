@@ -356,8 +356,6 @@ real(A::Symmetric) = Symmetric(real(A.data), sym_uplo(A.uplo))
 real(A::Hermitian) = Hermitian(real(A.data), sym_uplo(A.uplo))
 imag(A::Symmetric) = Symmetric(imag(A.data), sym_uplo(A.uplo))
 
-Base.copy(A::Adjoint{<:Any,<:Hermitian}) = copy(A.parent)
-Base.copy(A::Transpose{<:Any,<:Symmetric}) = copy(A.parent)
 Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
     Symmetric(copy(adjoint(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 Base.copy(A::Transpose{<:Any,<:Hermitian}) =
