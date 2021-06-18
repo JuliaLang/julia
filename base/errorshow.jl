@@ -893,8 +893,7 @@ Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 # eg: a = [1 2; 3 4]; a[1][2] = 5
 function nonsetable_number_hint_handler(io, ex, arg_types, kwargs)
     if ex.f == setindex! && arg_types[1] <: Number
-        print(io, "\nMaybe you are trying to use an invalid array indexing method? ")
-        print(io, "Separate each index with commas in a single set of brackets: ")
+        print(io, "\nAre you trying to index into an array? Separate each index with commas: ")
         printstyled(io, "a[1, 2]", color=:cyan)
     end
 end
