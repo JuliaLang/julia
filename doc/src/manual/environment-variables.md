@@ -272,7 +272,7 @@ should have at the terminal.
 
 ### `JULIA_DEBUG`
 
-Enable debug logging for a file or module, see [`Logging`](@ref Logging) for more information.
+Enable debug logging for a file or module, see [`Logging`](@ref man-logging) for more information.
 
 ### `JULIA_GC_ALLOC_POOL`, `JULIA_GC_ALLOC_OTHER`, `JULIA_GC_ALLOC_PRINT`
 
