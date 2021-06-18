@@ -922,7 +922,7 @@ static void jl_check_open_for(jl_module_t *m, const char* funcname)
     }
 }
 
-JL_DLLEXPORT void jl_check_top_level_effect(jl_value_t *m, char *fname)
+JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("%s cannot be used in a generated function", fname);

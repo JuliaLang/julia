@@ -3172,4 +3172,21 @@ end
     end
 end
 
+@testset "issue #41135" begin
+    @test repr(SparseMatrixCSC([7;;])) == "sparse([1], [1], [7], 1, 1)"
+
+    m = SparseMatrixCSC([0 3; 4 0])
+    @test repr(m) == "sparse([2, 1], [1, 2], [4, 3], 2, 2)"
+    @test eval(Meta.parse(repr(m))) == m
+    @test summary(m) == "2×2 $SparseMatrixCSC{$Int, $Int} with 2 stored entries"
+
+    m = sprand(100, 100, .1)
+    @test occursin(r"^sparse\(\[.+\], \[.+\], \[.+\], \d+, \d+\)$", repr(m))
+    @test eval(Meta.parse(repr(m))) == m
+
+    m = sparse([85, 5, 38, 37, 59], [19, 72, 76, 98, 162], [0.8, 0.3, 0.2, 0.1, 0.5], 100, 200)
+    @test repr(m) == "sparse([85, 5, 38, 37, 59], [19, 72, 76, 98, 162], [0.8, 0.3, 0.2, 0.1, 0.5], 100, 200)"
+    @test eval(Meta.parse(repr(m))) == m
+end
+
 end # module

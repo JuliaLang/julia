@@ -153,6 +153,9 @@ end
 # short function def
 @overlay mt cos(x::Float64) = 2
 
+# parametric function def
+@overlay mt tan(x::T) where {T} = 3
+
 end
 
 methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, typemax(UInt))
