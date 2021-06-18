@@ -103,6 +103,11 @@ function getindex(x::Number, I::Integer...)
     @boundscheck all(isone, I) || throw(BoundsError())
     x
 end
+get(x::Number, i::Integer, default) = isone(i) ? x : default
+get(x::Number, ind::Tuple, default) = all(isone, ind) ? x : default
+get(f::Callable, x::Number, i::Integer) = isone(i) ? x : f()
+get(f::Callable, x::Number, ind::Tuple) = all(isone, ind) ? x : f()
+
 first(x::Number) = x
 last(x::Number) = x
 copy(x::Number) = x # some code treats numbers as collection-like

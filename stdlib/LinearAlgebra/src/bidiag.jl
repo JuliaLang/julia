@@ -390,18 +390,15 @@ const BiTri = Union{Bidiagonal,Tridiagonal}
 @inline mul!(C::AbstractMatrix,   A::AbstractTriangular, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix,   A::AbstractMatrix,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix,   A::Diagonal,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:Diagonal}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractTriangular}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractVector,   A::BiTriSym,              B::AbstractVector, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix,   A::BiTriSym,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractVecOrMat, A::BiTriSym,              B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta)) # around bidiag line 330
+@inline mul!(C::AbstractVector, A::BiTriSym, B::AbstractVector, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::BiTriSym, B::AbstractVecOrMat, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::BiTriSym, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractVector, A::BiTriSym, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = throw(MethodError(mul!, (C, A, B)), MulAddMul(alpha, beta))
+@inline mul!(C::AbstractVector, A::BiTriSym, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) = throw(MethodError(mul!, (C, A, B)), MulAddMul(alpha, beta))
 
 function check_A_mul_B!_sizes(C, A, B)
     require_one_based_indexing(C)
@@ -635,8 +632,6 @@ end
 
 const UpperOrUnitUpperTriangular = Union{UpperTriangular, UnitUpperTriangular}
 const LowerOrUnitLowerTriangular = Union{LowerTriangular, UnitLowerTriangular}
-const AdjOrTransUpperOrUnitUpperTriangular = Union{Adjoint{<:Any, <:UpperOrUnitUpperTriangular}, Transpose{<:Any, <:UpperOrUnitUpperTriangular}}
-const AdjOrTransLowerOrUnitLowerTriangular = Union{Adjoint{<:Any, <:LowerOrUnitLowerTriangular}, Transpose{<:Any, <:LowerOrUnitLowerTriangular}}
 
 function *(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
@@ -647,28 +642,10 @@ function *(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
     end
 end
 
-function *(A::AdjOrTransUpperOrUnitUpperTriangular, B::Bidiagonal)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    if B.uplo == 'L'
-        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
-    else
-        A_mul_B_td!(zeros(TS, size(A)...), A, B)
-    end
-end
-
 function *(A::LowerOrUnitLowerTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if B.uplo == 'L'
         A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
-    else
-        A_mul_B_td!(zeros(TS, size(A)...), A, B)
-    end
-end
-
-function *(A::AdjOrTransLowerOrUnitLowerTriangular, B::Bidiagonal)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    if B.uplo == 'U'
-        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end
@@ -688,28 +665,10 @@ function *(A::Bidiagonal, B::UpperOrUnitUpperTriangular)
     end
 end
 
-function *(A::Bidiagonal, B::AdjOrTransUpperOrUnitUpperTriangular)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    if A.uplo == 'L'
-        A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
-    else
-        A_mul_B_td!(zeros(TS, size(A)...), A, B)
-    end
-end
-
 function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     if A.uplo == 'L'
         A_mul_B_td!(LowerTriangular(zeros(TS, size(A)...)), A, B)
-    else
-        A_mul_B_td!(zeros(TS, size(A)...), A, B)
-    end
-end
-
-function *(A::Bidiagonal, B::AdjOrTransLowerOrUnitLowerTriangular)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    if A.uplo == 'U'
-        A_mul_B_td!(UpperTriangular(zeros(TS, size(A)...)), A, B)
     else
         A_mul_B_td!(zeros(TS, size(A)...), A, B)
     end

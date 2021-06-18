@@ -61,7 +61,7 @@ bar
 The `--` delimiter can be used to separate command-line arguments intended for the script file from arguments intended for Julia:
 
 ```
-$ julia --color=yes -O -- foo.jl arg1 arg2..
+$ julia --color=yes -O -- script.jl arg1 arg2..
 ```
 
 See also [Scripting](@ref man-scripting) for more information on writing Julia scripts.

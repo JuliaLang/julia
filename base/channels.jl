@@ -295,7 +295,7 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
 end
 
 struct InvalidStateException <: Exception
-    msg::AbstractString
+    msg::String
     state::Symbol
 end
 

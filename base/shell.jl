@@ -87,15 +87,18 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
                 i = consume_upto!(arg, s, i, j)
-            elseif c == '\\'
-                if in_double_quotes
+            elseif !in_single_quotes && c == '\\'
+                if !isempty(st) && peek(st)[2] == '\n'
+                    i = consume_upto!(arg, s, i, j) + 1
+                    _ = popfirst!(st)
+                elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
                     k, c′ = peek(st)
                     if c′ == '"' || c′ == '$' || c′ == '\\'
                         i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)
                     end
-                elseif !in_single_quotes
+                else
                     isempty(st) && error("dangling backslash")
                     i = consume_upto!(arg, s, i, j)
                     _ = popfirst!(st)
@@ -285,11 +288,11 @@ This function may be useful in concert with the `windows_verbatim` flag to
 
 ```julia
 wincmd(c::String) =
-   run(Cmd(Cmd(["cmd.exe", "/s /c \" \$c \""]);
+   run(Cmd(Cmd(["cmd.exe", "/s /c \\" \$c \\""]);
            windows_verbatim=true))
 wincmd_echo(s::String) =
    wincmd("echo " * Base.shell_escape_wincmd(s))
-wincmd_echo("hello \$(ENV["USERNAME"]) & the \"whole\" world! (=^I^=)")
+wincmd_echo("hello \$(ENV["USERNAME"]) & the \\"whole\\" world! (=^I^=)")
 ```
 
 But take note that if the input string `s` contains a `%`, the argument list
@@ -316,13 +319,13 @@ run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
     ```julia
     to_print = "All for 1 & 1 for all!"
     to_print_esc = Base.shell_escape_wincmd(Base.shell_escape_wincmd(to_print))
-    run(Cmd(Cmd(["cmd", "/S /C \" break | echo \$(to_print_esc) \""]), windows_verbatim=true))
+    run(Cmd(Cmd(["cmd", "/S /C \\" break | echo \$(to_print_esc) \\""]), windows_verbatim=true))
     ```
 
 With an I/O stream parameter `io`, the result will be written there,
 rather than returned as a string.
 
-See also: [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref)
+See also [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref).
 
 # Example
 ```jldoctest
@@ -376,7 +379,7 @@ It joins command-line arguments to be passed to a Windows
 C/C++/Julia application into a command line, escaping or quoting the
 meta characters space, TAB, double quote and backslash where needed.
 
-See also: [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref)
+See also [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref).
 """
 function escape_microsoft_c_args(io::IO, args::AbstractString...)
     # http://daviddeley.com/autohotkey/parameters/parameters.htm#WINCRULES

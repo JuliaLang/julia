@@ -9,22 +9,23 @@ function repr end
 
 struct DevNull <: IO end
 const devnull = DevNull()
-isreadable(::DevNull) = false
-iswritable(::DevNull) = true
-isopen(::DevNull) = true
-read(::DevNull, ::Type{UInt8}) = throw(EOFError())
 write(::DevNull, ::UInt8) = 1
 unsafe_write(::DevNull, ::Ptr{UInt8}, n::UInt)::Int = n
 close(::DevNull) = nothing
-flush(::DevNull) = nothing
-wait_readnb(::DevNull) = wait()
 wait_close(::DevNull) = wait()
-eof(::DevNull) = true
 
 let CoreIO = Union{Core.CoreSTDOUT, Core.CoreSTDERR}
-    global write, unsafe_write
-    write(io::CoreIO, x::UInt8) = Core.write(io, x)
-    unsafe_write(io::CoreIO, x::Ptr{UInt8}, nb::UInt) = Core.unsafe_write(io, x, nb)
+    global write(io::CoreIO, x::UInt8) = Core.write(io, x)
+    global unsafe_write(io::CoreIO, x::Ptr{UInt8}, nb::UInt) = Core.unsafe_write(io, x, nb)
+
+    CoreIO = Union{CoreIO, DevNull}
+    global read(::CoreIO, ::Type{UInt8}) = throw(EOFError())
+    global isopen(::CoreIO) = true
+    global isreadable(::CoreIO) = false
+    global iswritable(::CoreIO) = true
+    global flush(::CoreIO) = nothing
+    global eof(::CoreIO) = true
+    global wait_readnb(::CoreIO, nb::Int) = nothing
 end
 
 stdin = devnull
