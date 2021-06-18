@@ -453,29 +453,29 @@ end
 
 Mark `var` or `ex` as being performed atomically, if `ex` is a supported expression.
 
-    @atomic a.b.x = new
-    @atomic a.b.x += addend
-    @atomic :acquire_release a.b.x = new
-    @atomic :acquire_release a.b.x += addend
+    @atomic a.x = new
+    @atomic a.x += addend
+    @atomic :acquire_release a.x = new
+    @atomic :acquire_release a.x += addend
 
 Perform the store operation expressed on the right atomically and return the
 new value.
 
-With `=`, this operation translates to a `setproperty!(a.b, :x, new)` call.
-With any operator also, this operation translates to a `modifyproperty!(a.b,
+With `=`, this operation translates to a `setproperty!(a, :x, new)` call.
+With any operator also, this operation translates to a `modifyproperty!(a,
 :x, +, addend)[2]` call.
 
-    @atomic a.b.x max arg2
-    @atomic a.b.x + arg2
-    @atomic max(a.b.x, arg2)
-    @atomic :acquire_release max(a.b.x, arg2)
-    @atomic :acquire_release a.b.x + arg2
-    @atomic :acquire_release a.b.x max arg2
+    @atomic a.x max arg2
+    @atomic a.x + arg2
+    @atomic max(a.x, arg2)
+    @atomic :acquire_release max(a.x, arg2)
+    @atomic :acquire_release a.x + arg2
+    @atomic :acquire_release a.x max arg2
 
 Perform the binary operation expressed on the right atomically. Store the
 result into the field in the first argument and return the values `(old, new)`.
 
-This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
+This operation translates to a `modifyproperty!(a, :x, func, arg2)` call.
 
 
 See [atomics](#man-atomics) in the manual for more details.
@@ -530,6 +530,7 @@ function make_atomic(order, ex)
     if ex isa Expr
         if isexpr(ex, :., 2)
             l, r = esc(ex.args[1]), esc(ex.args[2])
+            _check_atomic_location_expr(l, ex)
             return :(getproperty($l, $r, $order))
         elseif isexpr(ex, :call, 3)
             return make_atomic(order, ex.args[2], ex.args[1], ex.args[3])
@@ -537,6 +538,7 @@ function make_atomic(order, ex)
             l, r = ex.args[1], esc(ex.args[2])
             if is_expr(l, :., 2)
                 ll, lr = esc(l.args[1]), esc(l.args[2])
+                _check_atomic_location_expr(ll, ex)
                 return :(setproperty!($ll, $lr, $r, $order))
             end
         end
@@ -562,17 +564,26 @@ function make_atomic(order, a1, op, a2)
     @nospecialize
     is_expr(a1, :., 2) || error("@atomic modify expression missing field access")
     a1l, a1r, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
+    _check_atomic_location_expr(a1l, a1)
     return :(modifyproperty!($a1l, $a1r, $op, $a2, $order))
+end
+function _check_atomic_location_expr(obj, context)
+    if isexpr(obj, :escape, 1)
+        obj = obj.args[1]
+    end
+    obj isa Symbol ||
+        error("only field access of the form `obj.field` is supported: ",
+              "`$obj` in `$context` is not a symbol")
 end
 
 
 """
-    @atomicswap a.b.x = new
-    @atomicswap :sequentially_consistent a.b.x = new
+    @atomicswap a.x = new
+    @atomicswap :sequentially_consistent a.x = new
 
-Stores `new` into `a.b.x` and returns the old value of `a.b.x`.
+Stores `new` into `a.x` and returns the old value of `a.x`.
 
-This operation translates to a `swapproperty!(a.b, :x, new)` call.
+This operation translates to a `swapproperty!(a, :x, new)` call.
 
 See [atomics](#man-atomics) in the manual for more details.
 
@@ -602,20 +613,21 @@ function make_atomicswap(order, ex)
     l, val = ex.args[1], esc(ex.args[2])
     is_expr(l, :., 2) || error("@atomicswap expression missing field access")
     ll, lr = esc(l.args[1]), esc(l.args[2])
+    _check_atomic_location_expr(ll, ex)
     return :(swapproperty!($ll, $lr, $val, $order))
 end
 
 
 """
-    @atomicreplace a.b.x expected => desired
-    @atomicreplace :sequentially_consistent a.b.x expected => desired
-    @atomicreplace :sequentially_consistent :monotonic a.b.x expected => desired
+    @atomicreplace a.x expected => desired
+    @atomicreplace :sequentially_consistent a.x expected => desired
+    @atomicreplace :sequentially_consistent :monotonic a.x expected => desired
 
 Perform the conditional replacement expressed by the pair atomically, returning
 the values `(old, success::Bool)`. Where `success` indicates whether the
 replacement was completed.
 
-This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` call.
+This operation translates to a `replaceproperty!(a, :x, expected, desired)` call.
 
 See [atomics](#man-atomics) in the manual for more details.
 
@@ -661,9 +673,11 @@ function make_atomicreplace(success_order, fail_order, ex, old_new)
     ll, lr = esc(ex.args[1]), esc(ex.args[2])
     if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
         exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
+        _check_atomic_location_expr(ll, ex)
         return :(replaceproperty!($ll, $lr, $exp, $rep, $success_order, $fail_order))
     else
         old_new = esc(old_new)
+        _check_atomic_location_expr(ll, ex)
         return :(replaceproperty!($ll, $lr, $old_new::Pair..., $success_order, $fail_order))
     end
 end
