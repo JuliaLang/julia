@@ -1806,8 +1806,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if isa(fname, SlotNumber)
                         changes = StateUpdate(fname, VarState(Any, false), changes, false)
                     end
-                elseif hd === :code_coverage_effect ||
-                       (hd !== :boundscheck && is_meta_expr_head(hd)) # :boundscheck can be narrowed to Bool
+                elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect || hd === :noinline
                     # these do not generate code
                 else
                     t = abstract_eval_statement(interp, stmt, changes, frame)

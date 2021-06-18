@@ -213,14 +213,13 @@ bigfunction2() do
     Usage in `do` blocks requires at least Julia 1.7
 """
 macro inline(ex)
-    if isa(ex, Expr)
-        ex = macroexpand(__module__, ex) # expand inner macros which may include other meta annotations
-        annotate_meta_def_or_block(ex, :inline)
-    else
-        return ex
-    end
+    esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
 end
-macro inline() Expr(:meta, :inline) end
+
+macro inline()
+    Expr(:meta, :inline)
+end
+
 
 """
     @noinline
@@ -267,26 +266,24 @@ f() do
 """
 macro noinline(ex)
     if isa(ex, Expr)
-        ex = macroexpand(__module__, ex) # expand inner macros which may include other meta annotations
-        annotate_meta_def_or_block(ex, :noinline)
+        if ex.head === :function || is_short_function_def(ex) || ex.head === :->
+            # function definition noinline
+            esc(pushmeta!(ex, :noinline))
+        else
+            # callsite noinline
+            return Expr(:block,
+                        Expr(:noinline, true),
+                        Expr(:local, Expr(:(=), :val, esc(ex))),
+                        Expr(:noinline, false),
+                        :val)
+        end
     else
-        return ex
+        esc(ex)
     end
 end
-macro noinline() Expr(:meta, :noinline) end
 
-function annotate_meta_def_or_block(ex::Expr, meta::Symbol)
-    if is_function_def(ex)
-        # annotation on a definition
-        return esc(pushmeta!(ex, :noinline))
-    else
-        # annotation on a block
-        return Expr(:block,
-                    Expr(:noinline, true),
-                    Expr(:local, Expr(:(=), :val, esc(ex))),
-                    Expr(:noinline, false),
-                    :val)
-    end
+macro noinline()
+    Expr(:meta, :noinline)
 end
 
 """
@@ -399,7 +396,7 @@ function findmetaarg(metaargs, sym)
     return 0
 end
 
-function is_short_function_def(ex::Expr)
+function is_short_function_def(ex)
     ex.head === :(=) || return false
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
         (ex.args[1].head === :call) && return true
@@ -408,11 +405,9 @@ function is_short_function_def(ex::Expr)
     end
     return false
 end
-is_function_def(ex::Expr) =
-    return ex.head === :function || is_short_function_def(ex) || ex.head === :->
 
 function findmeta(ex::Expr)
-    if is_function_def(ex)
+    if ex.head === :function || is_short_function_def(ex) || ex.head === :->
         body = ex.args[2]::Expr
         body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)
