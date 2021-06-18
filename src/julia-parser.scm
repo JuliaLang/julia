@@ -1329,7 +1329,8 @@
 (define (valid-1arg-func-sig? sig)
   (or (symbol? sig)
       (and (pair? sig) (eq? (car sig) '|::|)
-           (symbol? (cadr sig)))))
+           (or (symbol? (cadr sig))
+               (length= sig 2)))))
 
 (define (unwrap-where x)
   (if (and (pair? x) (eq? (car x) 'where))
@@ -1469,7 +1470,9 @@
                                    ;; function foo  =>  syntax error
                                    (error (string "expected \"(\" in " word " definition")))
                                (if (not (valid-func-sig? paren sig))
-                                   (error (string "expected \"(\" in " word " definition"))
+                                   (if paren
+                                       (error (string "ambiguous signature in " word " definition. Try adding a comma if this is a 1-argument anonymous function."))
+                                       (error (string "expected \"(\" in " word " definition")))
                                    sig)))
                      (body (parse-block s)))
                 (expect-end s word)

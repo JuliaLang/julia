@@ -2927,3 +2927,6 @@ b'` == `$("a\\\nb")`
           \\
           ``` == `'\'`
 end
+
+# issue #41253
+@test (function (::Dict{}); end)(Dict()) === nothing
