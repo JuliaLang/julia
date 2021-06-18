@@ -1320,7 +1320,18 @@ STATIC_INLINE int jl_is_array_zeroinit(jl_array_t *a) JL_NOTSAFEPOINT
 JL_DLLEXPORT int jl_egal(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_egal__bits(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
+
+STATIC_INLINE int jl_egal__unboxed_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    if (dt->name->mutabl) {
+        if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
+            return jl_egal__special(a, b, dt);
+        return 0;
+    }
+    return jl_egal__bits(a, b, dt);
+}
 
 STATIC_INLINE int jl_egal_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
@@ -1329,12 +1340,7 @@ STATIC_INLINE int jl_egal_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
     if (dt != (jl_datatype_t*)jl_typeof(b))
         return 0;
-    if (dt->name->mutabl) {
-        if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
-            return jl_egal__special(a, b, dt);
-        return 0;
-    }
-    return jl_egal__bits(a, b, dt);
+    return jl_egal__unboxed_(a, b, dt);
 }
 #define jl_egal(a, b) jl_egal_((a), (b))
 
