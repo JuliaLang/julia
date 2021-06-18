@@ -412,6 +412,7 @@ end
     B = I(3)
     C = B*A.Q'
     @test C ≈ A.Q
+    @test A.Q' * B ≈ A.Q
 end
 
 end # module TestQR
