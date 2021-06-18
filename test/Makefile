@@ -35,11 +35,8 @@ embedding:
 gcext:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(GCEXT_ARGS)
 
-clangsa:
-	@$(MAKE) -C $(SRCDIR)/$@
-
 clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 
-.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) embedding gcext clangsa clean
+.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) embedding gcext clean

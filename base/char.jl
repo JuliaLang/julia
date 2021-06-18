@@ -108,9 +108,8 @@ end
     ismalformed(c::AbstractChar) -> Bool
 
 Return `true` if `c` represents malformed (non-Unicode) data according to the
-encoding used by `c`. Defaults to `false` for non-`Char` types.
-
-See also [`show_invalid`](@ref).
+encoding used by `c`.  Defaults to `false` for non-`Char` types.  See also
+[`show_invalid`](@ref).
 """
 ismalformed(c::AbstractChar) = false
 
@@ -118,9 +117,8 @@ ismalformed(c::AbstractChar) = false
     isoverlong(c::AbstractChar) -> Bool
 
 Return `true` if `c` represents an overlong UTF-8 sequence. Defaults
-to `false` for non-`Char` types.
-
-See also [`decode_overlong`](@ref) and [`show_invalid`](@ref).
+to `false` for non-`Char` types.  See also [`decode_overlong`](@ref)
+and [`show_invalid`](@ref).
 """
 isoverlong(c::AbstractChar) = false
 

@@ -39,7 +39,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    Random.seed!(12344)
+    Random.seed!(12343)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -473,14 +473,6 @@ end
         @test C.L == L
         @test C.U == L'
     end
-end
-
-@testset "adjoint of Cholesky" begin
-    A = randn(5, 5)
-    A = A'A
-    F = cholesky(A)
-    b = ones(size(A, 1))
-    @test F\b == F'\b
 end
 
 end # module TestCholesky

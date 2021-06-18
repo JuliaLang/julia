@@ -434,9 +434,6 @@ function serialize(s::AbstractSerializer, meth::Method)
     else
         serialize(s, nothing)
     end
-    if isdefined(meth, :external_mt)
-        error("cannot serialize Method objects with external method tables")
-    end
     nothing
 end
 
@@ -465,11 +462,11 @@ function serialize(s::AbstractSerializer, t::Task)
     serialize(s, t.code)
     serialize(s, t.storage)
     serialize(s, t.state)
-    if t._isexception && (stk = Base.current_exceptions(t); !isempty(stk))
+    if t._isexception && (stk = Base.catch_stack(t); !isempty(stk))
         # the exception stack field is hidden inside the task, so if there
         # is any information there make a CapturedException from it instead.
         # TODO: Handle full exception chain, not just the first one.
-        serialize(s, CapturedException(stk[1].exception, stk[1].backtrace))
+        serialize(s, CapturedException(stk[1][1], stk[1][2]))
     else
         serialize(s, t.result)
     end
@@ -510,9 +507,9 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, primary.parameters)
     serialize(s, primary.types)
     serialize(s, isdefined(primary, :instance))
-    serialize(s, t.flags & 0x1 == 0x1) # .abstract
-    serialize(s, t.flags & 0x2 == 0x2) # .mutable
-    serialize(s, Int32(length(primary.types) - t.n_uninitialized))
+    serialize(s, primary.abstract)
+    serialize(s, primary.mutable)
+    serialize(s, primary.ninitialized)
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -663,7 +660,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         serialize_type(s, t)
         write(s.io, x)
     else
-        if ismutable(x)
+        if t.mutable
             serialize_cycle(s, x) && return
             serialize_type(s, t, true)
         else
@@ -940,7 +937,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
-    if ismutabletype(t) && length(t.types) > 0  # manual specialization of fieldcount
+    if t.mutable && length(t.types) > 0  # manual specialization of fieldcount
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -1256,8 +1253,8 @@ function deserialize_typename(s::AbstractSerializer, number)
     else
         # reuse the same name for the type, if possible, for nicer debugging
         tn_name = isdefined(__deserialized_types__, name) ? gensym() : name
-        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any, Cint, Cint),
-                   tn_name, __deserialized_types__, false, false)
+        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any),
+                   tn_name, __deserialized_types__)
         makenew = true
     end
     remember_object(s, tn, number)
@@ -1267,19 +1264,18 @@ function deserialize_typename(s::AbstractSerializer, number)
     super = deserialize(s)::Type
     parameters = deserialize(s)::SimpleVector
     types = deserialize(s)::SimpleVector
-    attrs = Core.svec()
     has_instance = deserialize(s)::Bool
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
 
     if makenew
-        Core.setfield!(tn, :names, names)
+        tn.names = names
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
-        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
-                    tn, tn.module, super, parameters, names, types, attrs,
+        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
+                    tn, tn.module, super, parameters, names, types,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
@@ -1426,7 +1422,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
     if nf == 0 && t.size > 0
         # bits type
         return read(s.io, t)
-    elseif ismutabletype(t)
+    elseif t.mutable
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         deserialize_cycle(s, x)
         for i in 1:nf

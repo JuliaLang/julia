@@ -18,22 +18,14 @@ nested_error_pattern = r"""
 
 @testset "display_error" begin
     # Display of errors which cause more than one entry on the exception stack
-    excs = try
+    err_str = try
         eval(nested_error_expr)
     catch
-        Base.current_exceptions()
+        excs = Base.catch_stack()
+        @test typeof.(first.(excs)) == [UndefVarError, DivideError]
+        sprint(Base.display_error, excs)
     end
-    @test typeof.(first.(excs)) == [UndefVarError, DivideError]
-    @test occursin(nested_error_pattern, sprint(Base.display_error, excs))
-
-    @test occursin(r"""
-        2-element ExceptionStack:
-        DivideError: integer division error
-        Stacktrace:.*
-
-        caused by: UndefVarError: __not_a_binding__ not defined
-        Stacktrace:.*
-        """s, sprint(show, excs))
+    @test occursin(nested_error_pattern, err_str)
 end
 
 @testset "Fallback REPL" begin

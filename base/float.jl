@@ -290,18 +290,8 @@ float(::Type{T}) where {T<:AbstractFloat} = T
     unsafe_trunc(T, x)
 
 Return the nearest integral value of type `T` whose absolute value is
-less than or equal to the absolute value of `x`. If the value is not representable by `T`,
-an arbitrary value will be returned.
-See also [`trunc`](@ref).
-
-# Examples
-```jldoctest
-julia> unsafe_trunc(Int, -2.2)
--2
-
-julia> unsafe_trunc(Int, NaN)
--9223372036854775808
-```
+less than or equal to `x`. If the value is not representable by `T`, an arbitrary value will
+be returned.
 """
 function unsafe_trunc end
 
@@ -449,19 +439,9 @@ end
 isequal(x::Float16, y::Float16) = fpiseq(x, y)
 isequal(x::Float32, y::Float32) = fpiseq(x, y)
 isequal(x::Float64, y::Float64) = fpiseq(x, y)
-
-# interpret as sign-magnitude integer
-@inline function _fpint(x)
-    IntT = inttype(typeof(x))
-    ix = reinterpret(IntT, x)
-    return ifelse(ix < zero(IntT), ix ⊻ typemax(IntT), ix)
-end
-
-@inline function isless(a::T, b::T) where T<:IEEEFloat
-    (isnan(a) || isnan(b)) && return !isnan(a)
-
-    return _fpint(a) < _fpint(b)
-end
+isless( x::Float16, y::Float16) = fpislt(x, y)
+isless( x::Float32, y::Float32) = fpislt(x, y)
+isless( x::Float64, y::Float64) = fpislt(x, y)
 
 # Exact Float (Tf) vs Integer (Ti) comparisons
 # Assumes:
@@ -477,7 +457,7 @@ end
 #  b. unsafe_convert undefined behaviour if fy == Tf(typemax(Ti))
 #     (but consequently x == fy > y)
 for Ti in (Int64,UInt64,Int128,UInt128)
-    for Tf in (Float32,Float64)
+    for Tf in (Float16,Float32,Float64)
         @eval begin
             function ==(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
@@ -982,17 +962,6 @@ bswap(x::IEEEFloat) = bswap_int(x)
 uinttype(::Type{Float64}) = UInt64
 uinttype(::Type{Float32}) = UInt32
 uinttype(::Type{Float16}) = UInt16
-inttype(::Type{Float64}) = Int64
-inttype(::Type{Float32}) = Int32
-inttype(::Type{Float16}) = Int16
-# float size of integer
-floattype(::Type{UInt64}) = Float64
-floattype(::Type{UInt32}) = Float32
-floattype(::Type{UInt16}) = Float16
-floattype(::Type{Int64}) = Float64
-floattype(::Type{Int32}) = Float32
-floattype(::Type{Int16}) = Float16
-
 
 ## Array operations on floating point numbers ##
 

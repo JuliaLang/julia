@@ -69,16 +69,6 @@ jl_sym_t *optlevel_sym; jl_sym_t *thismodule_sym;
 jl_sym_t *atom_sym; jl_sym_t *statement_sym; jl_sym_t *all_sym;
 jl_sym_t *compile_sym; jl_sym_t *infer_sym;
 
-jl_sym_t *atomic_sym;
-jl_sym_t *not_atomic_sym;
-jl_sym_t *unordered_sym;
-jl_sym_t *monotonic_sym;
-jl_sym_t *acquire_sym;
-jl_sym_t *release_sym;
-jl_sym_t *acquire_release_sym;
-jl_sym_t *sequentially_consistent_sym;
-
-
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
 };
@@ -277,7 +267,7 @@ static jl_ast_context_list_t *jl_ast_ctx_freed = NULL;
 
 static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
-    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
     JL_LOCK_NOGC(&flisp_lock);
     jl_ast_context_list_t *node;
@@ -285,7 +275,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOI
     // First check if the current task is using one of the contexts
     for (node = jl_ast_ctx_using;node;(node = node->next)) {
         ctx = jl_ast_context_list_item(node);
-        if (ctx->task == ct) {
+        if (ctx->task == ptls->current_task) {
             ctx->ref++;
             JL_UNLOCK_NOGC(&flisp_lock);
             return ctx;
@@ -297,7 +287,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOI
         jl_ast_context_list_insert(&jl_ast_ctx_using, node);
         ctx = jl_ast_context_list_item(node);
         ctx->ref = 1;
-        ctx->task = ct;
+        ctx->task = ptls->current_task;
         ctx->module = NULL;
         JL_UNLOCK_NOGC(&flisp_lock);
         return ctx;
@@ -305,7 +295,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOI
     // Construct a new one if we can't find any
     ctx = (jl_ast_context_t*)calloc(1, sizeof(jl_ast_context_t));
     ctx->ref = 1;
-    ctx->task = ct;
+    ctx->task = ptls->current_task;
     node = &ctx->list;
     jl_ast_context_list_insert(&jl_ast_ctx_using, node);
     JL_UNLOCK_NOGC(&flisp_lock);
@@ -328,11 +318,11 @@ static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 
 void jl_init_flisp(void)
 {
-    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_ast_ctx_using || jl_ast_ctx_freed)
         return;
     jl_ast_main_ctx.ref = 1;
-    jl_ast_main_ctx.task = ct;
+    jl_ast_main_ctx.task = ptls->current_task;
     jl_ast_context_list_insert(&jl_ast_ctx_using, &jl_ast_main_ctx.list);
     jl_init_ast_ctx(&jl_ast_main_ctx);
     // To match the one in jl_ast_ctx_leave
@@ -420,14 +410,6 @@ void jl_init_common_symbols(void)
     atom_sym = jl_symbol("atom");
     statement_sym = jl_symbol("statement");
     all_sym = jl_symbol("all");
-    atomic_sym = jl_symbol("atomic");
-    not_atomic_sym = jl_symbol("not_atomic");
-    unordered_sym = jl_symbol("unordered");
-    monotonic_sym = jl_symbol("monotonic");
-    acquire_sym = jl_symbol("acquire");
-    release_sym = jl_symbol("release");
-    acquire_release_sym = jl_symbol("acquire_release");
-    sequentially_consistent_sym = jl_symbol("sequentially_consistent");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -933,8 +915,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
                 jl_array_ptr_ref(new_code, i)
             ));
         }
-        new_ci->code = new_code;
-        jl_gc_wb(new_ci, new_code);
         new_ci->slotnames = jl_array_copy(new_ci->slotnames);
         jl_gc_wb(new_ci, new_ci->slotnames);
         new_ci->slotflags = jl_array_copy(new_ci->slotflags);
@@ -1053,7 +1033,7 @@ int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
 
 static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, size_t world, int throw_load_error)
 {
-    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_TIMING(MACRO_INVOCATION);
     size_t nargs = jl_array_len(args) + 1;
     JL_NARGSV("macrocall", 3); // macro name, location, and module
@@ -1071,8 +1051,8 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     for (i = 3; i < nargs; i++)
         margs[i] = jl_array_ptr_ref(args, i - 1);
 
-    size_t last_age = ct->world_age;
-    ct->world_age = world < jl_world_counter ? world : jl_world_counter;
+    size_t last_age = ptls->world_age;
+    ptls->world_age = world < jl_world_counter ? world : jl_world_counter;
     jl_value_t *result;
     JL_TRY {
         margs[0] = jl_toplevel_eval(*ctx, margs[0]);
@@ -1101,7 +1081,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
                                            jl_current_exception()));
         }
     }
-    ct->world_age = last_age;
+    ptls->world_age = last_age;
     JL_GC_POP();
     return result;
 }
@@ -1304,11 +1284,11 @@ JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t 
     args[2] = filename;
     args[3] = jl_box_ulong(offset);
     args[4] = options;
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_world_counter;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    ptls->world_age = jl_world_counter;
     jl_value_t *result = jl_apply(args, 5);
-    ct->world_age = last_age;
+    ptls->world_age = last_age;
     args[0] = result; // root during error checks below
     JL_TYPECHK(parse, simplevector, result);
     if (jl_svec_len(result) != 2)

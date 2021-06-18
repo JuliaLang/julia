@@ -2,7 +2,6 @@
 
 using Test
 using Base.Meta
-using InteractiveUtils
 using Core: ReturnNode
 
 """
@@ -163,8 +162,8 @@ function fully_eliminated(f, args, retval)
     end
 end
 
-# check that ismutabletype(type) can be fully eliminated
-f_mutable_nothrow(s::String) = Val{typeof(s).name.flags}
+# check that type.mutable can be fully eliminated
+f_mutable_nothrow(s::String) = Val{typeof(s).mutable}
 @test fully_eliminated(f_mutable_nothrow, (String,))
 
 # check that ifelse can be fully eliminated
@@ -322,34 +321,21 @@ end
 
 # Issue #18773 - Specifying `@noinline` at callsite
 # Ensure `@noinline` in caller overrides `@inline` in callee
-
-# check if `x` is a statically-resolved call of a function whose name is `sym`
-isinvoke(@nospecialize(x), sym::Symbol) = isinvoke(x, name->name===sym)
-function isinvoke(@nospecialize(x), pred)
-    if Meta.isexpr(x, :invoke)
-        return pred((x.args[1]::Core.MethodInstance).def.name)
-    end
-    return false
-end
-
 @inline f18773(x) = x
 g18773(x) = @noinline f18773(x)
-let ci = first(@code_typed g18773(1))
-    @test any(x->isinvoke(x, :f18773), ci.code)
+let ci = code_typed(g18773, Tuple{Int})[1].first
+    @test length(ci.code) == 2 &&
+        isexpr(ci.code[1], :invoke) &&
+        ci.code[1].args[1].def.name == :f18773
 end
 # Test that `@noinline` works across entire expression
 h18773(x) = @noinline f18773(x) + f18773(x)
-let ci = first(@code_typed h18773(1))
-    @test count(x->isinvoke(x, :f18773), ci.code) == 2
-end
-
-# `aggressive_constprop` annotation just make sure inference does constant propagation for this call
-# yet we want it not to be inlined by a call site annotation
-@inline Base.@aggressive_constprop constant_prop(a) = 2sin(a)
-let ci = code_typed() do
-        @noinline constant_prop(20)
-    end |> first |> first
-    @test any(x->isinvoke(x, :constant_prop), ci.code)
+let ci = code_typed(h18773, Tuple{Int})[1].first
+    @test length(ci.code) == 4 &&
+        isexpr(ci.code[1], :invoke) &&
+        ci.code[1].args[1].def.name == :f18773 &&
+        isexpr(ci.code[2], :invoke) &&
+        ci.code[2].args[1].def.name == :f18773
 end
 
 # Test inlining/noinlining of code within `do` blocks
@@ -357,18 +343,26 @@ end
 function do_inline(x)
     simple_caller() do
         @inline
-        # this call won't be resolved and thus will prevent inlining to happen if we don't
-        # annotate `@inline` at the top of this anonymous function body
-        return unresolved_call(x)
+        # Tests `@inline`'s ability to override the lack of inline
+        # that these `println` statements would have caused
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        println(stdout, "Hello")
+        println(stdout, "World")
+        x
     end
 end
-let ci = first(@code_typed do_inline(1))
-    # what we test here is that both `simple_caller` and the anonymous function that the
-    # `do` block creates are inlined away, and as a result there is only the unresolved call
-    @test all(ci.code) do x
-        !isinvoke(x, :simple_caller) &&
-        !isinvoke(x, name->startswith(string(name), '#'))
-    end
+let ci = code_typed(do_inline, Tuple{Int})[1].first
+    # A long body indicates inlining occurred
+    @test length(ci.code) == 25
 end
 function do_noinline(x)
     simple_caller() do
@@ -376,10 +370,9 @@ function do_noinline(x)
         x
     end
 end
-let ci = first(@code_typed do_noinline(1))
-    @test any(ci.code) do x
-        isinvoke(x, name->startswith(string(name), '#'))
-    end
+let ci = code_typed(do_noinline, Tuple{Int})[1].first
+    @test length(ci.code) == 3 &&
+        isexpr(ci.code[2], :invoke)
 end
 
 # Test that we can inline small constants even if they are not isbits

@@ -99,7 +99,6 @@ end
     #getindex(c::Char) = c
     for x in testarrays
         @test getindex(x) == x
-        @test getindex(x, CartesianIndex()) == x
     end
 
     #first(c::Char) = c
@@ -291,7 +290,6 @@ end
 
 @testset "broadcasting of Char" begin
     @test identity.('a') == 'a'
-    @test 'a' .* ['b', 'c'] == ["ab", "ac"]
 end
 
 @testset "code point format of U+ syntax (PR 33291)" begin

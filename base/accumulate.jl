@@ -293,10 +293,10 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
         # This branch takes care of the cases not handled by `_accumulate!`.
         return collect(Iterators.accumulate(op, A; kw...))
     end
-    nt = values(kw)
-    if isempty(kw)
+    nt = kw.data
+    if nt isa NamedTuple{()}
         out = similar(A, promote_op(op, eltype(A), eltype(A)))
-    elseif keys(nt) === (:init,)
+    elseif nt isa NamedTuple{(:init,)}
         out = similar(A, promote_op(op, typeof(nt.init), eltype(A)))
     else
         throw(ArgumentError("acccumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
@@ -356,10 +356,10 @@ julia> B
 ```
 """
 function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
-    nt = values(kw)
-    if isempty(kw)
+    nt = kw.data
+    if nt isa NamedTuple{()}
         _accumulate!(op, B, A, dims, nothing)
-    elseif keys(kw) === (:init,)
+    elseif nt isa NamedTuple{(:init,)}
         _accumulate!(op, B, A, dims, Some(nt.init))
     else
         throw(ArgumentError("acccumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))

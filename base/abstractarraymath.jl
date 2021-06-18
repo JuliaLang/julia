@@ -48,13 +48,9 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 """
     dropdims(A; dims)
 
-Return an array with the same data as `A`, but with the dimensions specified by
-`dims` removed. `size(A,d)` must equal 1 for every `d` in `dims`,
-and repeated dimensions or numbers outside `1:ndims(A)` are forbidden.
-
-The result shares the same underlying data as `A`, such that the
-result is mutable if and only if `A` is mutable, and setting elements of one
-alters the values of the other.
+Remove the dimensions specified by `dims` from array `A`.
+Elements of `dims` must be unique and within the range `1:ndims(A)`.
+`size(A,i)` must equal 1 for all `i` in `dims`.
 
 See also: [`reshape`](@ref), [`vec`](@ref).
 
@@ -66,16 +62,10 @@ julia> a = reshape(Vector(1:4),(2,2,1,1))
  1  3
  2  4
 
-julia> b = dropdims(a; dims=3)
+julia> dropdims(a; dims=3)
 2×2×1 Array{Int64, 3}:
 [:, :, 1] =
  1  3
- 2  4
-
-julia> b[1,1,1] = 5; a
-2×2×1×1 Array{Int64, 4}:
-[:, :, 1, 1] =
- 5  3
  2  4
 ```
 """
@@ -88,8 +78,13 @@ function _dropdims(A::AbstractArray, dims::Dims)
             dims[j] == dims[i] && throw(ArgumentError("dropped dims must be unique"))
         end
     end
-    ax = _foldoneto((ds, d) -> d in dims ? ds : (ds..., axes(A,d)), (), Val(ndims(A)))
-    reshape(A, ax::typeof(_sub(axes(A), dims)))
+    d = ()
+    for i = 1:ndims(A)
+        if !in(i, dims)
+            d = tuple(d..., axes(A, i))
+        end
+    end
+    reshape(A, d::typeof(_sub(axes(A), dims)))
 end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 

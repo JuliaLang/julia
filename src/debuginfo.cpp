@@ -214,7 +214,7 @@ public:
                                       const RuntimeDyld::LoadedObjectInfo &L,
                                       RTDyldMemoryManager *memmgr)
     {
-        jl_ptls_t ptls = jl_current_task->ptls;
+        jl_ptls_t ptls = jl_get_ptls_states();
         // This function modify codeinst->fptr in GC safe region.
         // This should be fine since the GC won't scan this field.
         int8_t gc_state = jl_gc_safe_enter(ptls);
@@ -236,9 +236,15 @@ public:
         object::section_iterator EndSection = debugObj.section_end();
         std::map<StringRef, object::SectionRef, strrefcomp> loadedSections;
         for (const object::SectionRef &lSection: Object.sections()) {
+#if JL_LLVM_VERSION >= 100000
             auto sName = lSection.getName();
             if (sName)
                 loadedSections[*sName] = lSection;
+#else
+            StringRef sName;
+            if (!lSection.getName(sName))
+                loadedSections[sName] = lSection;
+#endif
         }
         auto getLoadAddress = [&] (const StringRef &sName) -> uint64_t {
             auto search = loadedSections.find(sName);
@@ -259,12 +265,21 @@ public:
                 istext = true;
             }
             else {
+#if JL_LLVM_VERSION >= 100000
                 auto sName = section.getName();
                 if (!sName)
                     continue;
                 if (sName.get() != ".ARM.exidx") {
                     continue;
                 }
+#else
+                StringRef sName;
+                if (section.getName(sName))
+                    continue;
+                if (sName != ".ARM.exidx") {
+                    continue;
+                }
+#endif
             }
             uint64_t loadaddr = L.getSectionLoadAddress(section);
             size_t seclen = section.getSize();
@@ -318,7 +333,11 @@ public:
                 auto Section = cantFail(sym_iter.getSection());
                 assert(Section != EndSection && Section->isText());
                 uint64_t SectionAddr = Section->getAddress();
+#if JL_LLVM_VERSION >= 100000
                 sName = cantFail(Section->getName());
+#else
+                Section->getName(sName);
+#endif
                 uint64_t SectionLoadAddr = getLoadAddress(sName);
                 assert(SectionLoadAddr);
                 if (SectionAddrCheck) // assert that all of the Sections are at the same location
@@ -368,7 +387,12 @@ public:
             if (Section == EndSection) continue;
             if (!Section->isText()) continue;
             uint64_t SectionAddr = Section->getAddress();
+#if JL_LLVM_VERSION >= 100000
             StringRef secName = cantFail(Section->getName());
+#else
+            StringRef secName;
+            Section->getName(secName);
+#endif
             uint64_t SectionLoadAddr = getLoadAddress(secName);
             Addr -= SectionAddr - SectionLoadAddr;
             StringRef sName = cantFail(sym_iter.getName());
@@ -598,8 +622,13 @@ static debug_link_info getDebuglink(const object::ObjectFile &Obj) JL_NOTSAFEPOI
 {
     debug_link_info info = {};
     for (const object::SectionRef &Section: Obj.sections()) {
+#if JL_LLVM_VERSION >= 100000
         Expected<StringRef> sName = Section.getName();
         if (sName && *sName == ".gnu_debuglink")
+#else
+        StringRef sName;
+        if (!Section.getName(sName) && sName == ".gnu_debuglink")
+#endif
         {
             auto found = Section.getContents();
             if (found) {

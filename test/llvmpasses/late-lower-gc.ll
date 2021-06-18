@@ -5,7 +5,6 @@
 declare void @boxed_simple({} addrspace(10)*, {} addrspace(10)*)
 declare {} addrspace(10)* @jl_box_int64(i64)
 declare {}*** @julia.ptls_states()
-declare {}*** @julia.get_pgcstack()
 declare void @jl_safepoint()
 declare {} addrspace(10)* @jl_apply_generic({} addrspace(10)*, {} addrspace(10)**, i32)
 declare noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj(i8*, i64, {} addrspace(10)*)
@@ -15,8 +14,8 @@ define void @gc_frame_lowering(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @gc_frame_lowering
 ; CHECK: %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
-; CHECK:  %pgcstack = call {}*** @julia.get_pgcstack()
-    %pgcstack = call {}*** @julia.get_pgcstack()
+    %ptls = call {}*** @julia.ptls_states()
+; CHECK: %ptls = call {}*** @julia.ptls_states()
 ; CHECK-NEXT: call void @julia.push_gc_frame({} addrspace(10)** %gcframe, i32 2)
 ; CHECK-NEXT: call {} addrspace(10)* @jl_box_int64
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
@@ -38,7 +37,6 @@ top:
 define {} addrspace(10)* @gc_alloc_lowering() {
 top:
 ; CHECK-LABEL: @gc_alloc_lowering
-    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %ptls_i8 = bitcast {}*** %ptls to i8*
 ; CHECK: %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, [[SIZE_T:i.[0-9]+]] 8)
@@ -58,7 +56,6 @@ top:
 define void @gc_drop_aliasing() {
 top:
 ; CHECK-LABEL: @gc_drop_aliasing
-    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %ptls_i8 = bitcast {}*** %ptls to i8*
 ; CHECK: %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, [[SIZE_T:i.[0-9]+]] 8)
@@ -82,7 +79,7 @@ define i32 @callee_root({} addrspace(10)* %v0, {} addrspace(10)* %v1) {
 top:
 ; CHECK-LABEL: @callee_root
 ; CHECK-NOT: @julia.new_gc_frame
-  %v2 = call {}*** @julia.get_pgcstack()
+  %v2 = call {}*** @julia.ptls_states()
   %v3 = bitcast {} addrspace(10)* %v0 to {} addrspace(10)* addrspace(10)*
   %v4 = addrspacecast {} addrspace(10)* addrspace(10)* %v3 to {} addrspace(10)* addrspace(11)*
   %v5 = load atomic {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %v4 unordered, align 8

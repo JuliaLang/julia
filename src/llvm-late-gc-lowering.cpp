@@ -16,6 +16,9 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
+#if JL_LLVM_VERSION < 110000
+#include <llvm/IR/CallSite.h>
+#endif
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
@@ -26,7 +29,9 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
+#if JL_LLVM_VERSION >= 100000
 #include <llvm/InitializePasses.h>
+#endif
 
 #include "codegen_shared.h"
 #include "julia.h"
@@ -321,7 +326,7 @@ protected:
     }
 
 private:
-    CallInst *pgcstack;
+    CallInst *ptlsStates;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
@@ -396,14 +401,8 @@ CountTrackedPointers::CountTrackedPointers(Type *T) {
         }
         if (isa<ArrayType>(T))
             count *= cast<ArrayType>(T)->getNumElements();
-        else if (isa<VectorType>(T)) {
-#if JL_LLVM_VERSION >= 120000
-            ElementCount EC = cast<VectorType>(T)->getElementCount();
-            count *= EC.getKnownMinValue();
-#else
+        else if (isa<VectorType>(T))
             count *= cast<VectorType>(T)->getNumElements();
-#endif
-        }
     }
     if (count == 0)
         all = false;
@@ -414,14 +413,8 @@ unsigned getCompositeNumElements(Type *T) {
         return ST->getNumElements();
     else if (auto *AT = dyn_cast<ArrayType>(T))
         return AT->getNumElements();
-    else {
-#if JL_LLVM_VERSION >= 120000
-        ElementCount EC = cast<VectorType>(T)->getElementCount();
-        return EC.getKnownMinValue();
-#else
+    else
         return cast<VectorType>(T)->getNumElements();
-#endif
-    }
 }
 
 // Walk through a Type, and record the element path to every tracked value inside
@@ -434,7 +427,11 @@ void TrackCompositeType(Type *T, std::vector<unsigned> &Idxs, std::vector<std::v
         unsigned Idx, NumEl = getCompositeNumElements(T);
         for (Idx = 0; Idx < NumEl; Idx++) {
             Idxs.push_back(Idx);
+#if JL_LLVM_VERSION >= 110000
             Type *ElT = GetElementPtrInst::getTypeAtIndex(T, Idx);
+#else
+            Type *ElT = cast<CompositeType>(T)->getTypeAtIndex(Idx);
+#endif
             TrackCompositeType(ElT, Idxs, Numberings);
             Idxs.pop_back();
         }
@@ -579,7 +576,11 @@ Value *LateLowerGCFrame::MaybeExtractScalar(State &S, std::pair<Value*,int> ValE
         Type *FinalT = ExtractValueInst::getIndexedType(V->getType(), IdxsNotVec);
         bool IsVector = isa<VectorType>(FinalT);
         PointerType *T = cast<PointerType>(
+#if JL_LLVM_VERSION >= 110000
             GetElementPtrInst::getTypeAtIndex(FinalT, Idxs.back()));
+#else
+            cast<CompositeType>(FinalT)->getTypeAtIndex(Idxs.back()));
+#endif
         if (T->getAddressSpace() != AddressSpace::Tracked) {
             // if V isn't tracked, get the shadow def
             auto Numbers = NumberAllBase(S, V);
@@ -637,14 +638,8 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
     }
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
-    if (auto VTy = dyn_cast<VectorType>(SI->getType())) {
-#if JL_LLVM_VERSION >= 120000
-        ElementCount EC = VTy->getElementCount();
-        Numbers.resize(EC.getKnownMinValue(), -1);
-#else
+    if (auto VTy = dyn_cast<VectorType>(SI->getType()))
         Numbers.resize(VTy->getNumElements(), -1);
-#endif
-    }
     else
         assert(isa<PointerType>(SI->getType()) && "unimplemented");
     assert(!isTrackedValue(SI));
@@ -704,12 +699,7 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
             assert(NumRoots == 1);
             int Number = Numbers[0];
             Numbers.resize(0);
-#if JL_LLVM_VERSION >= 120000
-            ElementCount EC = VTy->getElementCount();
-            Numbers.resize(EC.getKnownMinValue(), Number);
-#else
             Numbers.resize(VTy->getNumElements(), Number);
-#endif
         }
     }
     if (!isa<PointerType>(SI->getType()))
@@ -1171,7 +1161,7 @@ static bool isLoadFromConstGV(Value *v, bool &task_local)
         if (callee && callee->getName() == "julia.typeof") {
             return true;
         }
-        if (callee && callee->getName() == "julia.get_pgcstack") {
+        if (callee && callee->getName() == "julia.ptls_states") {
             task_local = true;
             return true;
         }
@@ -1537,8 +1527,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Known functions emitted in codegen that are not safepoints
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
-                        callee == pgcstack_getter ||
-                        callee->getName() == "jl_lock_value" || callee->getName() == "jl_unlock_value" ||
+                        callee == ptls_getter ||
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
@@ -1681,7 +1670,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
     return S;
 }
 
+#if JL_LLVM_VERSION >= 110000
 static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> Idxs, IRBuilder<> &irbuilder) {
+#else
+static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> Idxs, IRBuilder<> irbuilder) {
+#endif
     Type *T_int32 = Type::getInt32Ty(V->getContext());
     if (isptr) {
         std::vector<Value*> IdxList{Idxs.size() + 1};
@@ -1724,7 +1717,11 @@ static unsigned getFieldOffset(const DataLayout &DL, Type *STy, ArrayRef<unsigne
     return (unsigned)offset;
 }
 
+#if JL_LLVM_VERSION >= 110000
 std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> &irbuilder, ArrayRef<unsigned> perm_offsets) {
+#else
+std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> irbuilder, ArrayRef<unsigned> perm_offsets) {
+#endif
     auto Tracked = TrackCompositeType(STy);
     std::vector<Value*> Ptrs;
     unsigned perm_idx = 0;
@@ -1757,7 +1754,11 @@ std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBu
     return Ptrs;
 }
 
+#if JL_LLVM_VERSION >= 110000
 unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
+#else
+unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> irbuilder) {
+#endif
     auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
     for (unsigned i = 0; i < Ptrs.size(); ++i) {
         Value *Elem = Ptrs[i];
@@ -2274,7 +2275,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 // to remove write barrier because of it.
                 // We pretty much only load using `T_size` so try our best to strip
                 // as many cast as possible.
+#if JL_LLVM_VERSION >= 100000
                 auto tag = CI->getArgOperand(2)->stripPointerCastsAndAliases();
+#else
+                auto tag = CI->getArgOperand(2)->stripPointerCasts();
+#endif
                 if (auto C = dyn_cast<ConstantExpr>(tag)) {
                     if (C->getOpcode() == Instruction::IntToPtr) {
                         tag = C->getOperand(0);
@@ -2300,7 +2305,13 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 auto tag_type = tag->getType();
                 if (tag_type->isPointerTy()) {
                     auto &DL = CI->getModule()->getDataLayout();
+#if JL_LLVM_VERSION >= 110000
                     auto align = tag->getPointerAlignment(DL).value();
+#elif JL_LLVM_VERSION >= 100000
+                    auto align = tag->getPointerAlignment(DL).valueOrOne().value();
+#else
+                    auto align = tag->getPointerAlignment(DL);
+#endif
                     if (align < 16) {
                         // On 5 <= LLVM < 12, it is illegal to call this on
                         // non-integral pointer. This relies on stripping the
@@ -2543,7 +2554,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
-        pushGcframe->insertAfter(pgcstack);
+        pushGcframe->insertAfter(ptlsStates);
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
@@ -2640,11 +2651,11 @@ bool LateLowerGCFrame::runOnFunction(Function &F) {
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!pgcstack_getter)
+    if (!ptls_getter)
         return CleanupIR(F);
 
-    pgcstack = getPGCstack(F);
-    if (!pgcstack)
+    ptlsStates = getPtls(F);
+    if (!ptlsStates)
         return CleanupIR(F);
 
     State S = LocalScan(F);

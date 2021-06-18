@@ -246,17 +246,17 @@ function qrfactPivotedUnblocked!(A::AbstractMatrix)
 end
 
 # LAPACK version
-qr!(A::StridedMatrix{<:BlasFloat}, ::NoPivot; blocksize=36) =
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{false} = Val(false); blocksize=36) =
     QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), blocksize))...)
-qr!(A::StridedMatrix{<:BlasFloat}, ::ColumnNorm) = QRPivoted(LAPACK.geqp3!(A)...)
+qr!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
 
 # Generic fallbacks
 
 """
-    qr!(A, pivot = NoPivot(); blocksize)
+    qr!(A, pivot=Val(false); blocksize)
 
-`qr!` is the same as [`qr`](@ref) when `A` is a subtype of [`StridedMatrix`](@ref),
-but saves space by overwriting the input `A`, instead of creating a copy.
+`qr!` is the same as [`qr`](@ref) when `A` is a subtype of
+[`StridedMatrix`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
 
@@ -292,17 +292,14 @@ Stacktrace:
 [...]
 ```
 """
-qr!(A::AbstractMatrix, ::NoPivot) = qrfactUnblocked!(A)
-qr!(A::AbstractMatrix, ::ColumnNorm) = qrfactPivotedUnblocked!(A)
-qr!(A::AbstractMatrix) = qr!(A, NoPivot())
-# TODO: Remove in Julia v2.0
-@deprecate qr!(A::AbstractMatrix, ::Val{true})  qr!(A, ColumnNorm())
-@deprecate qr!(A::AbstractMatrix, ::Val{false}) qr!(A, NoPivot())
+qr!(A::AbstractMatrix, ::Val{false}) = qrfactUnblocked!(A)
+qr!(A::AbstractMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
+qr!(A::AbstractMatrix) = qr!(A, Val(false))
 
 _qreltype(::Type{T}) where T = typeof(zero(T)/sqrt(abs2(one(T))))
 
 """
-    qr(A, pivot = NoPivot(); blocksize) -> F
+    qr(A, pivot=Val(false); blocksize) -> F
 
 Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
@@ -313,7 +310,7 @@ A = Q R
 
 The returned object `F` stores the factorization in a packed format:
 
- - if `pivot == ColumnNorm()` then `F` is a [`QRPivoted`](@ref) object,
+ - if `pivot == Val(true)` then `F` is a [`QRPivoted`](@ref) object,
 
  - otherwise if the element type of `A` is a BLAS type ([`Float32`](@ref), [`Float64`](@ref),
    `ComplexF32` or `ComplexF64`), then `F` is a [`QRCompactWY`](@ref) object,
@@ -343,7 +340,7 @@ and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix w
 orthogonal matrix.
 
 The block size for QR decomposition can be specified by keyword argument
-`blocksize :: Integer` when `pivot == NoPivot()` and `A isa StridedMatrix{<:BlasFloat}`.
+`blocksize :: Integer` when `pivot == Val(false)` and `A isa StridedMatrix{<:BlasFloat}`.
 It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
 
 !!! compat "Julia 1.4"
@@ -385,10 +382,6 @@ function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     copyto!(AA, A)
     return qr!(AA, arg...; kwargs...)
 end
-# TODO: remove in Julia v2.0
-@deprecate qr(A::AbstractMatrix, ::Val{false}; kwargs...) qr(A, NoPivot(); kwargs...)
-@deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, ColumnNorm(); kwargs...)
-
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)
     require_one_based_indexing(v)
@@ -471,8 +464,6 @@ function getproperty(F::QRPivoted{T}, d::Symbol) where T
 end
 Base.propertynames(F::QRPivoted, private::Bool=false) =
     (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
-
-adjoint(F::Union{QR,QRPivoted,QRCompactWY}) = Adjoint(F)
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 
@@ -941,35 +932,28 @@ function ldiv!(A::QRPivoted, B::StridedMatrix)
     B
 end
 
-function _apply_permutation!(F::QRPivoted, B::AbstractVecOrMat)
-    # Apply permutation but only to the top part of the solution vector since
-    # it's padded with zeros for underdetermined problems
-    B[1:length(F.p), :] = B[F.p, :]
-    return B
-end
-_apply_permutation!(F::Factorization, B::AbstractVecOrMat) = B
+# convenience methods
+## return only the solution of a least squares problem while avoiding promoting
+## vectors to matrices.
+_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
+_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
 
-function ldiv!(Fadj::Adjoint{<:Any,<:Union{QR,QRCompactWY,QRPivoted}}, B::AbstractVecOrMat)
+## append right hand side with zeros if necessary
+_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
+_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
+
+function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
     require_one_based_indexing(B)
-    m, n = size(Fadj)
+    S = promote_type(TA,TB)
+    m, n = size(A)
+    m == size(B,1) || throw(DimensionMismatch("Both inputs should have the same number of rows"))
 
-    # We don't allow solutions overdetermined systems
-    if m > n
-        throw(DimensionMismatch("overdetermined systems are not supported"))
-    end
-    if n != size(B, 1)
-        throw(DimensionMismatch("inputs should have the same number of rows"))
-    end
-    F = parent(Fadj)
+    AA = Factorization{S}(A)
 
-    B = _apply_permutation!(F, B)
-
-    # For underdetermined system, the triangular solve should only be applied to the top
-    # part of B that contains the rhs. For square problems, the view corresponds to B itself
-    ldiv!(LowerTriangular(adjoint(F.R)), view(B, 1:size(F.R, 2), :))
-    lmul!(F.Q, B)
-
-    return B
+    X = _zeros(S, B, n)
+    X[1:size(B, 1), :] = B
+    ldiv!(AA, X)
+    return _cut_B(X, 1:n)
 end
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret the complex

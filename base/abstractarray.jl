@@ -119,19 +119,6 @@ axes1(iter) = oneto(length(iter))
 unsafe_indices(A) = axes(A)
 unsafe_indices(r::AbstractRange) = (oneto(unsafe_length(r)),) # Ranges use checked_sub for size
 
-"""
-    keys(a::AbstractArray)
-
-Return an efficient array describing all valid indices for `a` arranged in the shape of `a` itself.
-
-They keys of 1-dimensional arrays (vectors) are integers, whereas all other N-dimensional
-arrays use [`CartesianIndex`](@ref) to describe their locations.  Often the special array
-types [`LinearIndices`](@ref) and [`CartesianIndices`](@ref) are used to efficiently
-represent these arrays of integers and `CartesianIndex`es, respectively.
-
-Note that the `keys` of an array might not be the most efficient index type; for maximum
-performance use  [`eachindex`](@ref) instead.
-"""
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
 
@@ -234,7 +221,7 @@ julia> ndims(A)
 ```
 """
 ndims(::AbstractArray{T,N}) where {T,N} = N
-ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N
+ndims(::Type{<:AbstractArray{T,N}}) where {T,N} = N
 
 """
     length(collection) -> Integer
@@ -1469,9 +1456,6 @@ RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{AbstractRange
 get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : default
 get(A::AbstractArray, I::Tuple{}, default) = checkbounds(Bool, A) ? A[] : default
 get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] : default
-get(f::Callable, A::AbstractArray, i::Integer) = checkbounds(Bool, A, i) ? A[i] : f()
-get(f::Callable, A::AbstractArray, I::Tuple{}) = checkbounds(Bool, A) ? A[] : f()
-get(f::Callable, A::AbstractArray, I::Dims) = checkbounds(Bool, A, I...) ? A[I...] : f()
 
 function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
@@ -1529,10 +1513,10 @@ vcat(X::T...) where {T<:Number} = T[ X[i] for i=1:length(X) ]
 hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
 hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
 
-vcat(X::Number...) = hvcat_fill!(Vector{promote_typeof(X...)}(undef, length(X)), X)
-hcat(X::Number...) = hvcat_fill!(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
-typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill!(Vector{T}(undef, length(X)), X)
-typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill!(Matrix{T}(undef, 1,length(X)), X)
+vcat(X::Number...) = hvcat_fill(Vector{promote_typeof(X...)}(undef, length(X)), X)
+hcat(X::Number...) = hvcat_fill(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
+typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Vector{T}(undef, length(X)), X)
+typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Matrix{T}(undef, 1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
@@ -1635,21 +1619,11 @@ cat_size(A::AbstractArray) = size(A)
 cat_size(A, d) = 1
 cat_size(A::AbstractArray, d) = size(A, d)
 
-cat_length(::Any) = 1
-cat_length(a::AbstractArray) = length(a)
-
-cat_ndims(a) = 0
-cat_ndims(a::AbstractArray) = ndims(a)
-
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
 
-cat_similar(A, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
-cat_similar(A, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
-cat_similar(A::Array, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
-cat_similar(A::Array, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
-cat_similar(A::AbstractArray, T::Type, shape::Tuple) = similar(A, T, shape)
-cat_similar(A::AbstractArray, T::Type, shape::Vector) = similar(A, T, shape...)
+cat_similar(A, ::Type{T}, shape) where T = Array{T}(undef, shape)
+cat_similar(A::AbstractArray, ::Type{T}, shape) where T = similar(A, T, shape)
 
 # These are for backwards compatibility (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
@@ -1842,24 +1816,6 @@ dimensions for every new input array and putting zero blocks elsewhere. For exam
 `cat(matrices...; dims=(1,2))` builds a block diagonal matrix, i.e. a block matrix with
 `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
 diagonal.
-
-See also [`hcat`](@ref), [`vcat`](@ref), [`hvcat`](@ref), [`repeat`](@ref).
-
-# Examples
-```jldoctest
-julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)
-2×6×1 Array{Float64, 3}:
-[:, :, 1] =
- 1.0  2.0  3.14159  10.0  10.0  10.0
- 3.0  4.0  3.14159  10.0  10.0  10.0
-
-julia> cat(true, trues(2,2), trues(4)', dims=(1,2))
-4×7 Matrix{Bool}:
- 1  0  0  0  0  0  0
- 0  1  1  0  0  0  0
- 0  1  1  0  0  0  0
- 0  0  0  1  1  1  1
-```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
 _cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(T, A...; dims=catdims)
@@ -1917,7 +1873,7 @@ julia> hvcat((3,3), a,b,c,d,e,f)
  1  2  3
  4  5  6
 
-julia> [a b; c d; e f]
+julia> [a b;c d; e f]
 3×2 Matrix{Int64}:
  1  2
  3  4
@@ -2003,13 +1959,9 @@ function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     a
 end
 
-function hvcat_fill!(a::Array, xs::Tuple)
-    nr, nc = size(a,1), size(a,2)
-    len = length(xs)
-    if nr*nc != len
-        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
-    end
+function hvcat_fill(a::Array, xs::Tuple)
     k = 1
+    nr, nc = size(a,1), size(a,2)
     for i=1:nr
         @inbounds for j=1:nc
             a[i,j] = xs[k]
@@ -2030,7 +1982,11 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
             throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
         end
     end
-    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
+    len = length(xs)
+    if nr*nc != len
+        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
+    end
+    hvcat_fill(Matrix{T}(undef, nr, nc), xs)
 end
 
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
@@ -2042,374 +1998,6 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
         a += rows[i]
     end
     T[rs...;]
-end
-
-## N-dimensional concatenation ##
-
-"""
-    hvncat(dim::Int, row_first, values...)
-    hvncat(dims::Tuple{Vararg{Int}}, row_first, values...)
-    hvncat(shape::Tuple{Vararg{Tuple}}, row_first, values...)
-
-Horizontal, vertical, and n-dimensional concatenation of many `values` in one call.
-
-This function is called for block matrix syntax. The first argument either specifies the
-shape of the concatenation, similar to `hvcat`, as a tuple of tuples, or the dimensions that
-specify the key number of elements along each axis, and is used to determine the output
-dimensions. The `dims` form is more performant, and is used by default when the concatenation
-operation has the same number of elements along each axis (e.g., [a b; c d;;; e f ; g h]).
-The `shape` form is used when the number of elements along each axis is unbalanced
-(e.g., [a b ; c]). Unbalanced syntax needs additional validation overhead. The `dim` form
-is an optimization for concatenation along just one dimension. `row_first` indicates how
-`values` are ordered. The meaning of the first and second elements of `shape` are also
-swapped based on `row_first`.
-
-# Examples
-```jldoctest
-julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
-(1, 2, 3, 4, 5, 6)
-
-julia> [a b c;;; d e f]
-1×3×2 Array{Int64, 3}:
-[:, :, 1] =
- 1  2  3
-
-[:, :, 2] =
- 4  5  6
-
-julia> hvncat((2,1,3), false, a,b,c,d,e,f)
-2×1×3 Array{Int64, 3}:
-[:, :, 1] =
- 1
- 2
-
-[:, :, 2] =
- 3
- 4
-
-[:, :, 3] =
- 5
- 6
-
-julia> [a b;;; c d;;; e f]
-1×2×3 Array{Int64, 3}:
-[:, :, 1] =
- 1  2
-
-[:, :, 2] =
- 3  4
-
-[:, :, 3] =
- 5  6
-
-julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
-1×3×2 Array{Int64, 3}:
-[:, :, 1] =
- 1  2  3
-
-[:, :, 2] =
- 4  5  6
-```
-
-# Examples for construction of the arguments:
-[a b c ; d e f ;;;
- g h i ; j k l ;;;
- m n o ; p q r ;;;
- s t u ; v w x]
-=> dims = (2, 3, 4)
-
-[a b ; c ;;; d ;;;;]
- ___   _     _
- 2     1     1 = elements in each row (2, 1, 1)
- _______     _
- 3           1 = elements in each column (3, 1)
- _____________
- 4             = elements in each 3d slice (4,)
- _____________
- 4             = elements in each 4d slice (4,)
- => shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `rowfirst` = true
-"""
-hvncat(::Tuple{}, ::Bool) = []
-hvncat(::Tuple{}, ::Bool, xs...) = []
-hvncat(::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = vcat(xs...) # methods assume 2+ dimensions
-hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
-hvncat(dim::Int, xs...) = _hvncat(dim, true, xs...)
-
-_hvncat(::Union{Tuple, Int}, ::Bool) = []
-_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs...) = _typed_hvncat(promote_eltypeof(xs...), dimsshape, row_first, xs...)
-_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::T...) where T<:Number = _typed_hvncat(T, dimsshape, row_first, xs...)
-_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::Number...) = _typed_hvncat(promote_typeof(xs...), dimsshape, row_first, xs...)
-_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray...) = _typed_hvncat(promote_eltype(xs...), dimsshape, row_first, xs...)
-_hvncat(dimsshape::Union{Tuple, Int}, row_first::Bool, xs::AbstractArray{T}...) where T = _typed_hvncat(T, dimsshape, row_first, xs...)
-
-typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
-typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-typed_hvncat(T::Type, ::Tuple{Vararg{Any, 1}}, ::Bool, xs...) = typed_vcat(T, xs...) # methods assume 2+ dimensions
-typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
-typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
-
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs::Number...) where T = Vector{T}()
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
-    A = Array{T, N}(undef, dims...)
-    lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
-    lengthx = length(xs) # Cuts from 3 allocations to 1.
-    if lengtha != lengthx
-       throw(ArgumentError("argument count does not match specified shape (expected $lengtha, got $lengthx)"))
-    end
-    hvncat_fill!(A, row_first, xs)
-    return A
-end
-
-function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
-    # putting these in separate functions leads to unnecessary allocations
-    if row_first
-        nr, nc = size(A, 1), size(A, 2)
-        nrc = nr * nc
-        na = prod(size(A)[3:end])
-        k = 1
-        for d ∈ 1:na
-            dd = nrc * (d - 1)
-            for i ∈ 1:nr
-                Ai = dd + i
-                for j ∈ 1:nc
-                    A[Ai] = xs[k]
-                    k += 1
-                    Ai += nr
-                end
-            end
-        end
-    else
-        for k ∈ eachindex(xs)
-            A[k] = xs[k]
-        end
-    end
-end
-
-_typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
-_typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
-_typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...)
-function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
-    # optimization for arrays that can be concatenated by copying them linearly into the destination
-    # conditions: the elements must all have 1- or 0-length dimensions above N
-    for a ∈ as
-        ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
-            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
-    end
-
-    nd = max(N, ndims(as[1]))
-
-    Ndim = 0
-    for i ∈ 1:lastindex(as)
-        Ndim += cat_size(as[i], N)
-        for d ∈ 1:N - 1
-            cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
-        end
-    end
-
-    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
-    k = 1
-    for a ∈ as
-        for i ∈ eachindex(a)
-            A[k] = a[i]
-            k += 1
-        end
-    end
-    return A
-end
-
-function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
-    # optimization for scalars and 1-length arrays that can be concatenated by copying them linearly
-    # into the destination
-    nd = N
-    Ndim = 0
-    for a ∈ as
-        if a isa AbstractArray
-            cat_size(a, N) == length(a) ||
-                throw(ArgumentError("all dimensions of elements other than $N must be of length 1"))
-            nd = max(nd, cat_ndims(a))
-        end
-        Ndim += cat_size(a, N)
-    end
-
-    A = Array{T, nd}(undef, ntuple(x -> 1, N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
-
-    k = 1
-    for a ∈ as
-        if a isa AbstractArray
-            lena = length(a)
-            copyto!(A, k, a, 1, lena)
-            k += lena
-        else
-            A[k] = a
-            k += 1
-        end
-    end
-    return A
-end
-
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
-    d1 = row_first ? 2 : 1
-    d2 = row_first ? 1 : 2
-
-    # discover dimensions
-    nd = max(N, cat_ndims(as[1]))
-    outdims = zeros(Int, nd)
-
-    # discover number of rows or columns
-    for i ∈ 1:dims[d1]
-        outdims[d1] += cat_size(as[i], d1)
-    end
-
-    currentdims = zeros(Int, nd)
-    blockcount = 0
-    for i ∈ eachindex(as)
-        currentdims[d1] += cat_size(as[i], d1)
-        if currentdims[d1] == outdims[d1]
-            currentdims[d1] = 0
-            for d ∈ (d2, 3:nd...)
-                currentdims[d] += cat_size(as[i], d)
-                if outdims[d] == 0 # unfixed dimension
-                    blockcount += 1
-                    if blockcount == (d > length(dims) ? 1 : dims[d]) # last expected member of dimension
-                        outdims[d] = currentdims[d]
-                        currentdims[d] = 0
-                        blockcount = 0
-                    else
-                        break
-                    end
-                else # fixed dimension
-                    if currentdims[d] == outdims[d] # end of dimension
-                        currentdims[d] = 0
-                    elseif currentdims[d] < outdims[d] # dimension in progress
-                        break
-                    else # exceeded dimension
-                        throw(ArgumentError("argument $i has too many elements along axis $d"))
-                    end
-                end
-            end
-        elseif currentdims[d1] > outdims[d1] # exceeded dimension
-            throw(ArgumentError("argument $i has too many elements along axis $d1"))
-        end
-    end
-
-    # calling sum() leads to 3 extra allocations
-    len = 0
-    for a ∈ as
-        len += cat_length(a)
-    end
-    outlen = prod(outdims)
-    outlen == 0 && ArgumentError("too few elements in arguments, unable to infer dimensions") |> throw
-    len == outlen || ArgumentError("too many elements in arguments; expected $(outlen), got $(len)") |> throw
-
-    # copy into final array
-    A = cat_similar(as[1], T, outdims)
-    # @assert all(==(0), currentdims)
-    outdims .= 0
-    hvncat_fill!(A, currentdims, outdims, d1, d2, as)
-    return A
-end
-
-function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Bool, as...) where {T, N}
-    d1 = row_first ? 2 : 1
-    d2 = row_first ? 1 : 2
-    shape = collect(shape) # saves allocations later
-    shapelength = shape[end][1]
-    lengthas = length(as)
-    shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
-
-    # discover dimensions
-    nd = max(N, cat_ndims(as[1]))
-    outdims = zeros(Int, nd)
-    currentdims = zeros(Int, nd)
-    blockcounts = zeros(Int, nd)
-    shapepos = ones(Int, nd)
-
-    for i ∈ eachindex(as)
-        wasstartblock = false
-        for d ∈ 1:N
-            ad = (d < 3 && row_first) ? (d == 1 ? 2 : 1) : d
-            dsize = cat_size(as[i], ad)
-            blockcounts[d] += 1
-
-            if d == 1 || i == 1 || wasstartblock
-                currentdims[d] += dsize
-            elseif dsize != cat_size(as[i - 1], ad)
-                throw(ArgumentError("""argument $i has a mismatched number of elements along axis $ad; \
-                                    expected $(cat_size(as[i - 1], ad)), got $dsize"""))
-            end
-
-            wasstartblock = blockcounts[d] == 1 # remember for next dimension
-
-            isendblock = blockcounts[d] == shape[d][shapepos[d]]
-            if isendblock
-                if outdims[d] == 0
-                    outdims[d] = currentdims[d]
-                elseif outdims[d] != currentdims[d]
-                    throw(ArgumentError("""argument $i has a mismatched number of elements along axis $ad; \
-                                        expected $(abs(outdims[d] - (currentdims[d] - dsize))), got $dsize"""))
-                end
-                currentdims[d] = 0
-                blockcounts[d] = 0
-                shapepos[d] += 1
-            end
-        end
-    end
-
-    if row_first
-        outdims[1], outdims[2] = outdims[2], outdims[1]
-    end
-
-    # @assert all(==(0), currentdims)
-    # @assert all(==(0), blockcounts)
-
-    # copy into final array
-    A = cat_similar(as[1], T, outdims)
-    hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
-    return A
-end
-
-function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple{Vararg}) where {T, N}
-    outdims = size(A)
-    offsets = scratch1
-    inneroffsets = scratch2
-    for a ∈ as
-        if isa(a, AbstractArray)
-            for ai ∈ a
-                Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
-                A[Ai] = ai
-
-                for j ∈ 1:N
-                    inneroffsets[j] += 1
-                    inneroffsets[j] < cat_size(a, j) && break
-                    inneroffsets[j] = 0
-                end
-            end
-        else
-            Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
-            A[Ai] = a
-        end
-
-        for j ∈ (d1, d2, 3:N...)
-            offsets[j] += cat_size(a, j)
-            offsets[j] < outdims[j] && break
-            offsets[j] = 0
-        end
-    end
-end
-
-@propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int},
-                                              outdims::Tuple{Vararg{Int}}, nd::Int)
-    Ai = inneroffsets[1] + offsets[1] + 1
-    for j ∈ 2:nd
-        increment = inneroffsets[j] + offsets[j]
-        for k ∈ 1:j-1
-            increment *= outdims[k]
-        end
-        Ai += increment
-    end
-    Ai
 end
 
 ## Reductions and accumulates ##
@@ -2747,10 +2335,6 @@ end
 concatenate_setindex!(R, v, I...) = (R[I...] .= (v,); R)
 concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
-## 0 arguments
-
-map(f) = f()
-
 ## 1 argument
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
@@ -2767,13 +2351,14 @@ map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 mapany(f, A::AbstractArray) = map!(f, Vector{Any}(undef, length(A)), A)
 mapany(f, itr) = Any[f(x) for x in itr]
 
+# default to returning an Array for `map` on general iterators
 """
     map(f, c...) -> collection
 
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise, and stop when when any of them is exhausted.
 
-See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
+See also: [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
 # Examples
 ```jldoctest
@@ -2790,7 +2375,7 @@ julia> map(+, [1, 2, 3], [10, 20, 30, 400, 5000])
  33
 ```
 """
-map(f, A) = collect(Generator(f,A)) # default to returning an Array for `map` on general iterators
+map(f, A) = collect(Generator(f,A))
 
 map(f, ::AbstractDict) = error("map is not defined on dictionaries")
 map(f, ::AbstractSet) = error("map is not defined on sets")
@@ -2859,31 +2444,7 @@ function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
     map_n!(f, dest, As)
 end
 
-"""
-    map(f, A::AbstractArray...) -> N-array
-
-When acting on multi-dimensional arrays of the same [`ndims`](@ref),
-they must all have the same [`axes`](@ref), and the answer will too.
-
-See also [`broadcast`](@ref), which allows mismatched sizes.
-
-# Examples
-```
-julia> map(//, [1 2; 3 4], [4 3; 2 1])
-2×2 Matrix{Rational{$Int}}:
- 1//4  2//3
- 3//2  4//1
-
-julia> map(+, [1 2; 3 4], zeros(2,1))
-ERROR: DimensionMismatch
-
-julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is exhausted
-3-element Vector{Float64}:
-   2.0
-  13.0
- 102.0
-```
-"""
+map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))
 
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
@@ -2974,47 +2535,4 @@ function rest(a::AbstractArray{T}, state...) where {T}
     # assume only very few items are taken from the front
     sizehint!(v, length(a))
     return foldl(push!, Iterators.rest(a, state...), init=v)
-end
-
-
-## keepat! ##
-
-"""
-    keepat!(a::AbstractVector, inds)
-
-Remove the items at all the indices which are not given by `inds`,
-and return the modified `a`.
-Items which are kept are shifted to fill the resulting gaps.
-
-`inds` must be an iterator of sorted and unique integer indices.
-See also [`deleteat!`](@ref).
-
-!!! compat "Julia 1.7"
-    This function is available as of Julia 1.7.
-
-# Examples
-```jldoctest
-julia> keepat!([6, 5, 4, 3, 2, 1], 1:2:5)
-3-element Vector{Int64}:
- 6
- 4
- 2
-```
-"""
-function keepat!(a::AbstractVector, inds)
-    local prev
-    i = firstindex(a)
-    for k in inds
-        if @isdefined(prev)
-            prev < k || throw(ArgumentError("indices must be unique and sorted"))
-        end
-        ak = a[k] # must happen even when i==k for bounds checking
-        if i != k
-            @inbounds a[i] = ak # k > i, so a[i] is inbounds
-        end
-        prev = k
-        i = nextind(a, i)
-    end
-    deleteat!(a, i:lastindex(a))
-    return a
 end

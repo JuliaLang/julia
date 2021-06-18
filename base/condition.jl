@@ -5,7 +5,7 @@
 @noinline function concurrency_violation()
     # can be useful for debugging
     #try; error(); catch; ccall(:jlbacktrace, Cvoid, ()); end
-    throw(ConcurrencyViolationError("lock must be held"))
+    error("concurrency violation detected")
 end
 
 """

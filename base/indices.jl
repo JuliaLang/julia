@@ -400,10 +400,6 @@ getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @bound
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
-# For OneTo, the values and indices of the values are identical, so this may be defined in Base.
-# In general such an indexing operation would produce offset ranges
-getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}}) = (@_inline_meta; @boundscheck checkbounds(S, I); I)
-
 """
     LinearIndices(A::AbstractArray)
 

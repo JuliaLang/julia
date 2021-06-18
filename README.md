@@ -45,6 +45,7 @@ helpful to start contributing to the Julia codebase.
 
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
+- [**Meetup**](https://julia.meetup.com/)
 - [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
@@ -72,14 +73,14 @@ First, make sure you have all the [required
 dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
-    git clone https://github.com/JuliaLang/julia.git
+    git clone git://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
 Julia. However, most users should use the most recent stable version
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.6.1
+    git checkout v1.6.0
 
 Now run `make` to build the `julia` executable.
 
@@ -144,7 +145,10 @@ Support for editing Julia is available for many
 [Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and many
 others.
 
-Supported IDEs include: [julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode) (VS
-Code plugin), [Juno](http://junolab.org/) (Atom plugin). [Jupyter](https://jupyter.org/)
-notebooks are available through the [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
-[Pluto](https://github.com/fonsp/Pluto.jl) notebooks through the Pluto.jl package.
+Supported IDEs include: [Juno](http://junolab.org/) (Atom plugin),
+[julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode) (VS
+Code plugin), and
+[julia-intellij](https://github.com/JuliaEditorSupport/julia-intellij)
+(IntelliJ IDEA plugin). The popular [Jupyter](https://jupyter.org/)
+notebook interface is available through
+[IJulia](https://github.com/JuliaLang/IJulia.jl).

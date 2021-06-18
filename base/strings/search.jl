@@ -162,12 +162,11 @@ in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
-    x = Iterators.peel(t)
-    if isnothing(x)
+    if isempty(t)
         return 1 <= i <= nextind(s,lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = x
+    t1, trest = Iterators.peel(t)
     while true
         i = findnext(isequal(t1),s,i)
         if i === nothing return 0 end
@@ -421,7 +420,7 @@ function _rsearchindex(s::AbstractString,
         return 1 <= i <= nextind(s, lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = Iterators.peel(Iterators.reverse(t))::NTuple{2,Any}
+    t1, trest = Iterators.peel(Iterators.reverse(t))
     while true
         i = findprev(isequal(t1), s, i)
         i === nothing && return 0
@@ -459,7 +458,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     n = length(t)
     m = length(s)
     k = Int(_k) - sentinel
-    k < 0 && throw(BoundsError(s, _k))
+    k < 1 && throw(BoundsError(s, _k))
 
     if n == 0
         return 0 <= k <= m ? max(k, 1) : sentinel
@@ -617,7 +616,7 @@ julia> occursin(r"a.a", "abba")
 false
 ```
 
-See also [`contains`](@ref).
+See also: [`contains`](@ref).
 """
 occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
     _searchindex(haystack, needle, firstindex(haystack)) != 0

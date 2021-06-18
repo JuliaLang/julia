@@ -187,12 +187,11 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError, ConcurrencyViolationError,
+    UndefKeywordError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
-    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
-    nfields, throw, tuple, ===, isdefined, eval, ifelse,
+    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval, ifelse,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     <:, typeof, isa, typeassert,
@@ -290,9 +289,6 @@ struct StackOverflowError  <: Exception end
 struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
-end
-struct ConcurrencyViolationError <: Exception
-    msg::AbstractString
 end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
@@ -433,7 +429,7 @@ eval(Core, :(InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(els
 eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
     $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
 
-Module(name::Symbol=:anonymous, std_imports::Bool=true, using_core::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, using_core)
+Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
     return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)

@@ -8,7 +8,7 @@ of Julia multi-threading features.
 By default, Julia starts up with a single thread of execution. This can be verified by using the
 command [`Threads.nthreads()`](@ref):
 
-```jldoctest
+```julia-repl
 julia> Threads.nthreads()
 1
 ```
@@ -37,7 +37,7 @@ julia> Threads.nthreads()
 
 But we are currently on the master thread. To check, we use the function [`Threads.threadid`](@ref)
 
-```jldoctest
+```julia-repl
 julia> Threads.threadid()
 1
 ```
@@ -147,7 +147,7 @@ to its assigned locations:
 
 ```julia-repl
 julia> a
-10-element Vector{Float64}:
+10-element Array{Float64,1}:
  1.0
  1.0
  1.0
@@ -182,17 +182,14 @@ julia> Threads.@threads for id in 1:4
        end
 
 julia> old_is
-4-element Vector{Float64}:
+4-element Array{Float64,1}:
  0.0
  1.0
  7.0
  3.0
 
-julia> i[]
- 10
-
 julia> ids
-4-element Vector{Float64}:
+4-element Array{Float64,1}:
  1.0
  2.0
  3.0
@@ -230,25 +227,11 @@ julia> acc[]
 1000
 ```
 
-
-## [Per-field atomics](@id man-atomics)
-
-We can also use atomics on a more granular level using the [`@atomic`](@ref
-Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap), and
-[`@atomicreplace`](@ref Base.@atomicreplace) macros.
-
-Specific details of the memory model and other details of the design are written
-in the [Julia Atomics
-Manifesto](https://gist.github.com/vtjnash/11b0031f2e2a66c9c24d33e810b34ec0),
-which will later be published formally.
-
-Any field in a struct declaration can be decorated with `@atomic`, and then any
-write must be marked with `@atomic` also, and must use one of the defined atomic
-orderings (:monotonic, :acquire, :release, :acquire\_release, or
-:sequentially\_consistent). Any read of an atomic field can also be annotated
-with an atomic ordering constraint, or will be done with monotonic (relaxed)
-ordering if unspecified.
-
+!!! note
+    Not *all* primitive types can be wrapped in an `Atomic` tag. Supported types
+    are `Int8`, `Int16`, `Int32`, `Int64`, `Int128`, `UInt8`, `UInt16`, `UInt32`,
+    `UInt64`, `UInt128`, `Float16`, `Float32`, and `Float64`. Additionally,
+    `Int128` and `UInt128` are not supported on AAarch32 and ppc64le.
 
 ## Side effects and mutable function arguments
 
@@ -257,7 +240,6 @@ When using multi-threading we have to be careful when using functions that are n
 For instance functions that have a
 [name ending with `!`](@ref bang-convention)
 by convention modify their arguments and thus are not pure.
-
 
 ## @threadcall
 

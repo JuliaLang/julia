@@ -21,9 +21,7 @@ static jl_sym_t *symtab = NULL;
 
 static uintptr_t hash_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
-    uintptr_t oid = memhash(str, len) ^ ~(uintptr_t)0/3*2;
-    // compute the same hash value as v1.6 and earlier, which used `hash_uint(3h - objectid(sym))`
-    return inthash(-oid);
+    return memhash(str, len) ^ ~(uintptr_t)0/3*2;
 }
 
 static size_t symbol_nbytes(size_t len) JL_NOTSAFEPOINT

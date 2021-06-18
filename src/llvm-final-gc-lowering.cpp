@@ -37,7 +37,7 @@ private:
     Function *queueRootFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
-    Instruction *pgcstack;
+    CallInst *ptlsStates;
 
     bool doInitialization(Module &M) override;
     bool doFinalization(Module &M) override;
@@ -60,6 +60,8 @@ private:
 
     // Lowers a `julia.queue_gc_root` intrinsic.
     Value *lowerQueueGCRoot(CallInst *target, Function &F);
+
+    Instruction *getPgcstack(Instruction *ptlsStates);
 };
 
 Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
@@ -109,6 +111,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                         T_size->getPointerTo()),
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
+    Value *pgcstack = builder.Insert(getPgcstack(ptlsStates));
     inst = builder.CreateAlignedStore(
             builder.CreateAlignedLoad(pgcstack, Align(sizeof(void*))),
             builder.CreatePointerCast(
@@ -135,7 +138,8 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
         inst,
-        builder.CreateBitCast(pgcstack,
+        builder.CreateBitCast(
+            builder.Insert(getPgcstack(ptlsStates)),
             PointerType::get(T_prjlvalue, 0)),
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -165,6 +169,16 @@ Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
     assert(target->getNumArgOperands() == 1);
     target->setCalledFunction(queueRootFunc);
     return target;
+}
+
+Instruction *FinalLowerGC::getPgcstack(Instruction *ptlsStates)
+{
+    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
+    return GetElementPtrInst::CreateInBounds(
+        T_ppjlvalue,
+        ptlsStates,
+        ArrayRef<Value*>(offset),
+        "jl_pgcstack");
 }
 
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
@@ -268,13 +282,13 @@ bool FinalLowerGC::runOnFunction(Function &F)
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!pgcstack_getter)
-        return false;
+    if (!ptls_getter)
+        return true;
 
-    // Look for a call to 'julia.get_pgcstack'.
-    pgcstack = getPGCstack(F);
-    if (!pgcstack)
-        return false;
+    // Look for a call to 'julia.ptls_states'.
+    ptlsStates = getPtls(F);
+    if (!ptlsStates)
+        return true;
 
     // Acquire intrinsic functions.
     auto newGCFrameFunc = getOrNull(jl_intrinsics::newGCFrame);

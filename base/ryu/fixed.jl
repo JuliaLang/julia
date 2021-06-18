@@ -1,18 +1,30 @@
-function writefixed(buf, pos, v::T,
+@inline function writefixed(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     @assert 0 < pos <= length(buf)
     startpos = pos
     x = Float64(v)
-    pos = append_sign(x, plus, space, buf, pos)
-
+    neg = signbit(x)
     # special cases
     if x == 0
+        if neg
+            buf[pos] = UInt8('-')
+            pos += 1
+        elseif plus
+            buf[pos] = UInt8('+')
+            pos += 1
+        elseif space
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
         buf[pos] = UInt8('0')
         pos += 1
-        if precision > 0 && !trimtrailingzeros
+        if precision > 0
             buf[pos] = decchar
             pos += 1
+            if trimtrailingzeros
+                precision = 1
+            end
             for _ = 1:precision
                 buf[pos] = UInt8('0')
                 pos += 1
@@ -28,6 +40,16 @@ function writefixed(buf, pos, v::T,
         buf[pos + 2] = UInt8('N')
         return pos + 3
     elseif !isfinite(x)
+        if neg
+            buf[pos] = UInt8('-')
+            pos += 1
+        elseif plus
+            buf[pos] = UInt8('+')
+            pos += 1
+        elseif space
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
         buf[pos] = UInt8('I')
         buf[pos + 1] = UInt8('n')
         buf[pos + 2] = UInt8('f')
@@ -46,6 +68,16 @@ function writefixed(buf, pos, v::T,
         m2 = (Int64(1) << 52) | mant
     end
     nonzero = false
+    if neg
+        buf[pos] = UInt8('-')
+        pos += 1
+    elseif plus
+        buf[pos] = UInt8('+')
+        pos += 1
+    elseif space
+        buf[pos] = UInt8(' ')
+        pos += 1
+    end
     if e2 >= -52
         idx = e2 < 0 ? 0 : indexforexp(e2)
         p10bits = pow10bitsforindex(idx)
@@ -69,11 +101,9 @@ function writefixed(buf, pos, v::T,
         buf[pos] = UInt8('0')
         pos += 1
     end
-    hasfractional = false
     if precision > 0 || hash
         buf[pos] = decchar
         pos += 1
-        hasfractional = true
     end
     if e2 < 0
         idx = div(-e2, 16)
@@ -141,7 +171,6 @@ function writefixed(buf, pos, v::T,
                     if dotPos > 1
                         buf[dotPos] = UInt8('0')
                         buf[dotPos + 1] = decchar
-                        hasfractional = true
                     end
                     buf[pos] = UInt8('0')
                     pos += 1
@@ -170,7 +199,7 @@ function writefixed(buf, pos, v::T,
             pos += 1
         end
     end
-    if trimtrailingzeros && hasfractional
+    if trimtrailingzeros
         while buf[pos - 1] == UInt8('0')
             pos -= 1
         end

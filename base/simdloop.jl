@@ -8,7 +8,7 @@ export @simd, simd_outer_range, simd_inner_length, simd_index
 
 # Error thrown from ill-formed uses of @simd
 struct SimdError <: Exception
-    msg::String
+    msg::AbstractString
 end
 
 # Parse iteration space expression

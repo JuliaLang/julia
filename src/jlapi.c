@@ -91,19 +91,6 @@ JL_DLLEXPORT void jl_init(void)
     free(libbindir);
 }
 
-// HACK: remove this for Julia 1.8 (see <https://github.com/JuliaLang/julia/issues/40730>)
-JL_DLLEXPORT void jl_init__threading(void)
-{
-    jl_init();
-}
-
-// HACK: remove this for Julia 1.8 (see <https://github.com/JuliaLang/julia/issues/40730>)
-JL_DLLEXPORT void jl_init_with_image__threading(const char *julia_bindir,
-                                     const char *image_relative_path)
-{
-    jl_init_with_image(julia_bindir, image_relative_path);
-}
-
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
@@ -117,7 +104,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
         jl_exception_clear();
     }
     JL_CATCH {
-        jl_current_task->ptls->previous_exception = jl_current_exception();
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         r = NULL;
     }
     return r;
@@ -125,18 +112,18 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 
 JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
-    jl_excstack_t *s = jl_current_task->excstack;
+    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
     return s && s->top != 0 ? jl_excstack_exception(s, s->top) : jl_nothing;
 }
 
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void)
 {
-    return jl_current_task->ptls->previous_exception;
+    return jl_get_ptls_states()->previous_exception;
 }
 
 JL_DLLEXPORT void jl_exception_clear(void)
 {
-    jl_current_task->ptls->previous_exception = NULL;
+    jl_get_ptls_states()->previous_exception = NULL;
 }
 
 // get the name of a type as a string
@@ -176,7 +163,6 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
 JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
 {
     jl_value_t *v;
-    jl_task_t *ct = jl_current_task;
     nargs++; // add f to args
     JL_TRY {
         jl_value_t **argv;
@@ -184,15 +170,15 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t na
         argv[0] = (jl_value_t*)f;
         for (int i = 1; i < nargs; i++)
             argv[i] = args[i - 1];
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_get_world_counter();
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, nargs);
-        ct->world_age = last_age;
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -201,18 +187,17 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t na
 JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
 {
     jl_value_t *v;
-    jl_task_t *ct = jl_current_task;
     JL_TRY {
         JL_GC_PUSH1(&f);
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_get_world_counter();
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply_generic(f, NULL, 0);
-        ct->world_age = last_age;
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -221,21 +206,20 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
 JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
 {
     jl_value_t *v;
-    jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 2);
         argv[0] = f;
         argv[1] = a;
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_get_world_counter();
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, 2);
-        ct->world_age = last_age;
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -244,22 +228,21 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
 JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b)
 {
     jl_value_t *v;
-    jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 3);
         argv[0] = f;
         argv[1] = a;
         argv[2] = b;
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_get_world_counter();
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, 3);
-        ct->world_age = last_age;
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -276,16 +259,15 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
         argv[1] = a;
         argv[2] = b;
         argv[3] = c;
-        jl_task_t *ct = jl_current_task;
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_get_world_counter();
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, 4);
-        ct->world_age = last_age;
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
-        jl_current_task->ptls->previous_exception = jl_current_exception();
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -310,7 +292,7 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
         jl_exception_clear();
     }
     JL_CATCH {
-        jl_current_task->ptls->previous_exception = jl_current_exception();
+        jl_get_ptls_states()->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -323,8 +305,8 @@ JL_DLLEXPORT void jl_sigatomic_begin(void)
 
 JL_DLLEXPORT void jl_sigatomic_end(void)
 {
-    jl_task_t *ct = jl_current_task;
-    if (ct->ptls->defer_signal == 0)
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->defer_signal == 0)
         jl_error("sigatomic_end called in non-sigatomic region");
     JL_SIGATOMIC_END();
 }
@@ -436,33 +418,33 @@ JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
 #ifndef __clang_analyzer__
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
 {
-    jl_task_t *ct = jl_current_task;
-    return jl_gc_unsafe_enter(ct->ptls);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return jl_gc_unsafe_enter(ptls);
 }
 
 JL_DLLEXPORT void (jl_gc_unsafe_leave)(int8_t state)
 {
-    jl_task_t *ct = jl_current_task;
-    jl_gc_unsafe_leave(ct->ptls, state);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_unsafe_leave(ptls, state);
 }
 
 JL_DLLEXPORT int8_t (jl_gc_safe_enter)(void)
 {
-    jl_task_t *ct = jl_current_task;
-    return jl_gc_safe_enter(ct->ptls);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return jl_gc_safe_enter(ptls);
 }
 
 JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
 {
-    jl_task_t *ct = jl_current_task;
-    jl_gc_safe_leave(ct->ptls, state);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_safe_leave(ptls, state);
 }
 #endif
 
 JL_DLLEXPORT void (jl_gc_safepoint)(void)
 {
-    jl_task_t *ct = jl_current_task;
-    jl_gc_safepoint_(ct->ptls);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_safepoint_(ptls);
 }
 
 JL_DLLEXPORT void (jl_cpu_pause)(void)
@@ -518,7 +500,8 @@ static int exec_program(char *program)
         jl_load(jl_main_module, program);
     }
     JL_CATCH {
-        // TODO: It is possible for this output to be mangled due to `jl_print_backtrace`
+        // TODO: It is possible for this output
+        //       to be mangled due to `jlbacktrace`
         //       printing directly to STDERR_FILENO.
         int shown_err = 0;
         jl_printf(JL_STDERR, "error during bootstrap:\n");
@@ -537,12 +520,31 @@ static int exec_program(char *program)
             jl_static_show((JL_STREAM*)STDERR_FILENO, exc);
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         }
-        jl_print_backtrace(); // written to STDERR_FILENO
+        jlbacktrace(); // written to STDERR_FILENO
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         return 1;
     }
     return 0;
 }
+
+#ifdef JL_GF_PROFILE
+static void print_profile(void)
+{
+    size_t i;
+    void **table = jl_base_module->bindings.table;
+    for(i=1; i < jl_base_module->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->value != NULL && jl_is_function(b->value) &&
+                jl_is_gf(b->value)) {
+                jl_printf(JL_STDERR, "%d\t%s\n",
+                           jl_gf_mtable(b->value)->ncalls,
+                           jl_gf_name(b->value)->name);
+            }
+        }
+    }
+}
+#endif
 
 static NOINLINE int true_main(int argc, char *argv[])
 {
@@ -553,11 +555,10 @@ static NOINLINE int true_main(int argc, char *argv[])
 
     if (start_client) {
         JL_TRY {
-            jl_task_t *ct = jl_current_task;
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_get_world_counter();
+            size_t last_age = jl_get_ptls_states()->world_age;
+            jl_get_ptls_states()->world_age = jl_get_world_counter();
             jl_apply(&start_client, 1);
-            ct->world_age = last_age;
+            jl_get_ptls_states()->world_age = last_age;
         }
         JL_CATCH {
             jl_no_exc_handler(jl_current_exception());
@@ -572,9 +573,9 @@ static NOINLINE int true_main(int argc, char *argv[])
         }
     }
 
-    jl_printf(JL_STDOUT, "WARNING: Base._start not defined, falling back to economy mode repl.\n");
+    ios_puts("WARNING: Base._start not defined, falling back to economy mode repl.\n", ios_stdout);
     if (!jl_errorexception_type)
-        jl_printf(JL_STDOUT, "WARNING: jl_errorexception_type not defined; any errors will be fatal.\n");
+        ios_puts("WARNING: jl_errorexception_type not defined; any errors will be fatal.\n", ios_stdout);
 
     while (!ios_eof(ios_stdin)) {
         char *volatile line = NULL;
@@ -596,7 +597,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_printf(JL_STDOUT, "\n");
             free(line);
             line = NULL;
-            jl_process_events();
+            uv_run(jl_global_event_loop(),UV_RUN_NOWAIT);
         }
         JL_CATCH {
             if (line) {
@@ -606,7 +607,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_printf((JL_STREAM*)STDERR_FILENO, "\nparser error:\n");
             jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-            jl_print_backtrace(); // written to STDERR_FILENO
+            jlbacktrace(); // written to STDERR_FILENO
         }
     }
     return 0;
@@ -664,7 +665,7 @@ static void rr_detach_teleport(void) {
 #endif
 }
 
-JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
+JL_DLLEXPORT int repl_entrypoint(int argc, char *argv[])
 {
     // no-op on Windows, note that the caller must have already converted
     // from `wchar_t` to `UTF-8` already if we're running on Windows.
@@ -694,7 +695,7 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 
     julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     if (lisp_prompt) {
-        jl_current_task->world_age = jl_get_world_counter();
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         jl_lisp_prompt();
         return 0;
     }

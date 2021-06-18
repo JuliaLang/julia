@@ -234,7 +234,3 @@ end
     @test copyto!(s, Float64[]) == [1, 2]
     @test copyto!(s, String[]) == [1, 2] # No error
 end
-
-@testset "deepcopy_internal arrays" begin
-    @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
-end

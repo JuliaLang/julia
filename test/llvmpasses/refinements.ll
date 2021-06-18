@@ -2,7 +2,6 @@
 
 
 declare {}*** @julia.ptls_states()
-declare {}*** @julia.get_pgcstack()
 declare void @jl_safepoint()
 declare void @one_arg_boxed({} addrspace(10)*)
 declare {} addrspace(10)* @jl_box_int64(i64)
@@ -10,7 +9,6 @@ declare {} addrspace(10)* @jl_box_int64(i64)
 define void @argument_refinement({} addrspace(10)* %a) {
 ; CHECK-LABEL: @argument_refinement
 ; CHECK-NOT: %gcframe
-    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
     %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
@@ -24,7 +22,6 @@ define void @argument_refinement({} addrspace(10)* %a) {
 define void @heap_refinement1(i64 %a) {
 ; CHECK-LABEL: @heap_refinement1
 ; CHECK:   %gcframe = alloca {} addrspace(10)*, i32 3
-    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
@@ -41,7 +38,6 @@ define void @heap_refinement1(i64 %a) {
 define void @heap_refinement2(i64 %a) {
 ; CHECK-LABEL: @heap_refinement2
 ; CHECK:   %gcframe = alloca {} addrspace(10)*, i32 3
-    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
@@ -59,7 +55,6 @@ declare {} addrspace(10)* @allocate_some_value()
 define void @issue22770() {
 ; CHECK-LABEL: @issue22770
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
-    %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %y = call {} addrspace(10)* @allocate_some_value()
     %casted1 = bitcast {} addrspace(10)* %y to {} addrspace(10)* addrspace(10)*
@@ -85,7 +80,6 @@ define void @refine_select_phi({} addrspace(10)* %x, {} addrspace(10)* %y, i1 %b
 ; CHECK-LABEL: @refine_select_phi
 ; CHECK-NOT: %gcframe
 top:
-  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %s = select i1 %b, {} addrspace(10)* %x, {} addrspace(10)* %y
   br i1 %b, label %L1, label %L2
@@ -107,7 +101,6 @@ define void @dont_refine_loop({} addrspace(10)* %x) {
 ; CHECK-LABEL: @dont_refine_loop
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 4
 top:
-  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   br label %L1
 
@@ -129,7 +122,6 @@ define void @refine_loop_const({} addrspace(10)* %x) {
 ; CHECK-LABEL: @refine_loop_const
 ; CHECK-NOT: %gcframe
 top:
-  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   br label %L1
 
@@ -150,7 +142,6 @@ define void @refine_loop_indirect({} addrspace(10)* %x) {
 ; CHECK-LABEL: @refine_loop_indirect
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
 top:
-  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %a = call {} addrspace(10)* @allocate_some_value()
   br label %L1
@@ -175,7 +166,6 @@ define void @refine_loop_indirect2({} addrspace(10)* %x) {
 ; CHECK-LABEL: @refine_loop_indirect2
 ; CHECK: %gcframe = alloca {} addrspace(10)*, i32 3
 top:
-  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %a = call {} addrspace(10)* @allocate_some_value()
   br label %L1
@@ -199,7 +189,6 @@ declare {} addrspace(10)* @julia.typeof({} addrspace(10)*) #0
 define {} addrspace(10)* @typeof({} addrspace(10)* %x) {
 ; CHECK-LABEL: @typeof(
 ; CHECK-NOT: %gcframe
-  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %v = call {} addrspace(10)* @julia.typeof({} addrspace(10)* %x)
   call void @one_arg_boxed({} addrspace(10)* %v)
@@ -212,7 +201,6 @@ define {} addrspace(10)* @setfield({} addrspace(10)* %p) {
 ; CHECK-LABEL: @setfield(
 ; CHECK-NOT: %gcframe
 ; CHECK: call void @jl_gc_queue_root
-  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %c = call {} addrspace(10)* @allocate_some_value()
   %fp = bitcast {} addrspace(10)* %p to {} addrspace(10)* addrspace(10)*

@@ -806,7 +806,6 @@ socket is connected to. Valid only for connected TCP sockets.
 getpeername(sock::TCPSocket) = _sockname(sock, false)
 
 function _sockname(sock, self=true)
-    sock.status == StatusInit || check_open(sock)
     rport = Ref{Cushort}(0)
     raddress = zeros(UInt8, 16)
     rfamily = Ref{Cuint}(0)

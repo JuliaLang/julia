@@ -74,7 +74,7 @@ end
 ## Libuv error handling ##
 
 struct IOError <: Exception
-    msg::String
+    msg::AbstractString
     code::Int32
     IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end

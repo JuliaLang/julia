@@ -997,8 +997,6 @@ end
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
-@test Module(:anonymous, false, true).Core == Core
-@test_throws UndefVarError Module(:anonymous, false, false).Core
 
 # exception from __init__()
 let didthrow =
@@ -1101,9 +1099,9 @@ end
 let strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
-    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
-    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
-    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
+    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
     @test strct.line === 0
     @test strct.error == "bad"
@@ -1125,7 +1123,7 @@ let mstrct = TestMutable("melm", 1, nothing)
     @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
 end
 let strct = LoadError("yofile", 0, "bad")
-    @test_throws(ErrorException("setfield!: immutable struct of type LoadError cannot be changed"),
+    @test_throws(ErrorException("setfield! immutable struct of type LoadError cannot be changed"),
                  ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), strct, 0, ""))
 end
 let mstrct = TestMutable("melm", 1, nothing)
@@ -3645,7 +3643,7 @@ end
 
 end
 
-# don't allow redefining types if n_uninitialized changes
+# don't allow redefining types if ninitialized changes
 struct NInitializedTestType
     a
 end
@@ -7532,7 +7530,7 @@ end
 struct S38224
     i::Union{Int,Missing}
 end
-@test S38224.flags & 0x10 == 0x10 # .zeroinit
+@test S38224.zeroinit
 for _ in 1:5
     let a = Vector{S38224}(undef, 1000000)
         @test all(x->ismissing(x.i), a)

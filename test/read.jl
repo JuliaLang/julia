@@ -98,27 +98,30 @@ s = io(text)
 close(s)
 push!(l, ("PipeEndpoint", io))
 
+#FIXME See https://github.com/JuliaLang/julia/issues/14747
+#      Reading from open(::Command) seems to deadlock on Linux
+#=
+if !Sys.iswindows()
 
-# Pipe (#14747)
+# Windows type command not working?
+# See "could not spawn `type 'C:\Users\appveyor\AppData\Local\Temp\1\jul3516.tmp\file.txt'`"
+#https://ci.appveyor.com/project/StefanKarpinski/julia/build/1.0.12733/job/hpwjs4hmf03vs5ag#L1244
+
+# Pipe
 io = (text) -> begin
     write(filename, text)
-    # we can skip using shell_escape_wincmd, since ", ^, and % aren't legal in
-    # a filename, so unconditionally wrapping in " is sufficient (okay, that's
-    # a lie, since ^ and % actually are legal, but DOS is broken)
-    if Sys.iswindows()
-        cmd = Cmd(["cmd.exe", "/c type \"$(replace(filename, '/' => '\\'))\""])
-        cmd = Cmd(cmd; windows_verbatim=true)
-        cmd = pipeline(cmd, stderr=devnull)
-    else
-        cmd = `cat $filename`
-    end
-    open(cmd)
+    open(`$(Sys.iswindows() ? "type" : "cat") $filename`)[1]
+#    Was open(`echo -n $text`)[1]
+#    See https://github.com/JuliaLang/julia/issues/14747
 end
 s = io(text)
 @test isa(s, IO)
-@test isa(s, Base.Process)
+@test isa(s, Pipe)
 close(s)
-push!(l, ("Process", io))
+push!(l, ("Pipe", io))
+
+end
+=#
 
 
 open_streams = []
@@ -137,6 +140,7 @@ end
 verbose = false
 
 for (name, f) in l
+    local f
     local function io(text=text)
         local s = f(text)
         push!(open_streams, s)
@@ -315,9 +319,9 @@ for (name, f) in l
     text = old_text
     write(filename, text)
 
-    if !isa(io(), Union{Base.PipeEndpoint, Base.AbstractPipe, TCPSocket})
+    if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
         verbose && println("$name position...")
-        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s)) == 4
+        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s))  == 4
 
         verbose && println("$name seek...")
         for n = 0:length(text)-1

@@ -176,24 +176,12 @@ Random.seed!(1)
             @test Array(a*D) ≈ a*DM
             @test Array(D*a) ≈ DM*a
             @test Array(D/a) ≈ DM/a
-            if elty <: Real
-                @test Array(abs.(D)^a) ≈ abs.(DM)^a
-            else
-                @test Array(D^a) ≈ DM^a
-            end
-            @test Diagonal(1:100)^2 == Diagonal((1:100).^2)
-            p = 3
-            @test Diagonal(1:100)^p == Diagonal((1:100).^p)
-            @test Diagonal(1:100)^(-1) == Diagonal(inv.(1:100))
-            @test Diagonal(1:100)^2.0 == Diagonal((1:100).^2.0)
-            @test Diagonal(1:100)^(2.0+0im) == Diagonal((1:100).^(2.0+0im))
-        end
-
-        if relty <: BlasFloat
-            for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
-                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+            if relty <: BlasFloat
+                for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+                    @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                    @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                    @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
+                end
             end
         end
 
@@ -229,14 +217,14 @@ Random.seed!(1)
                 @test Array(op(Dr, Aherm)) ≈ Array(Hermitian(op(Array(Dr), Array(Aherm))))
             end
         end
-        @test Array(D*transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
-        @test Array(D*adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
-        @test Array(D*transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
-        @test Array(D*adjoint(Aherm)) ≈ Array(D) * Array(adjoint(Aherm))
-        @test Array(transpose(Asym)*transpose(D)) ≈ Array(transpose(Asym)) * Array(transpose(D))
-        @test Array(transpose(D)*transpose(Asym)) ≈ Array(transpose(D)) * Array(transpose(Asym))
-        @test Array(adjoint(Aherm)*adjoint(D)) ≈ Array(adjoint(Aherm)) * Array(adjoint(D))
-        @test Array(adjoint(D)*adjoint(Aherm)) ≈ Array(adjoint(D)) * Array(adjoint(Aherm))
+        @test Array(D*Transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
+        @test Array(D*Adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
+        @test Array(D*Transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
+        @test Array(D*Adjoint(Aherm)) ≈ Array(D) * Array(adjoint(Aherm))
+        @test Array(Transpose(Asym)*Transpose(D)) ≈ Array(transpose(Asym)) * Array(transpose(D))
+        @test Array(Transpose(D)*Transpose(Asym)) ≈ Array(transpose(D)) * Array(transpose(Asym))
+        @test Array(Adjoint(Aherm)*Adjoint(D)) ≈ Array(adjoint(Aherm)) * Array(adjoint(D))
+        @test Array(Adjoint(D)*Adjoint(Aherm)) ≈ Array(adjoint(D)) * Array(adjoint(Aherm))
 
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
@@ -246,7 +234,7 @@ Random.seed!(1)
 
         UUU = similar(UU)
         for transformA in (identity, adjoint, transpose)
-            for transformD in (identity, adjoint, transpose)
+            for transformD in (identity, Adjoint, Transpose, adjoint, transpose)
                 @test mul!(UUU, transformA(UU), transformD(D)) ≈  transformA(UU) * Matrix(transformD(D))
                 @test mul!(UUU, transformD(D), transformA(UU)) ≈  Matrix(transformD(D)) * transformA(UU)
             end
@@ -415,28 +403,6 @@ Random.seed!(1)
 
 end
 
-@testset "rdiv! (#40887)" begin
-    @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
-    @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
-end
-
-@testset "kron (issue #40595)" begin
-    # custom array type to test that kron on Diagonal matrices preserves types of the parents if possible
-    struct KronTestArray{T, N, AT} <: AbstractArray{T, N}
-        data::AT
-    end
-    KronTestArray(data::AbstractArray) = KronTestArray{eltype(data), ndims(data), typeof(data)}(data)
-    Base.size(A::KronTestArray) = size(A.data)
-    LinearAlgebra.kron(A::KronTestArray, B::KronTestArray) = KronTestArray(kron(A.data, B.data))
-    Base.getindex(K::KronTestArray{<:Any,N}, i::Vararg{Int,N}) where {N} = K.data[i...]
-
-    A = KronTestArray([1, 2, 3]);
-    @test kron(A, A) isa KronTestArray
-    Ad = Diagonal(A);
-    @test kron(Ad, Ad).diag isa KronTestArray
-    @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
-end
-
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
@@ -582,7 +548,7 @@ end
     D = Diagonal(randn(5))
     Q = qr(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
-    Q = qr(randn(5, 5), ColumnNorm()).Q
+    Q = qr(randn(5, 5), Val(true)).Q
     @test_throws ArgumentError lmul!(Q, D)
 end
 
@@ -661,13 +627,15 @@ end
         fullBB = copyto!(Matrix{Matrix{T}}(undef, 2, 2), BB)
         for (transform1, transform2) in ((identity,  identity),
                 (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
-                (identity,  transpose), (transpose, identity ), (transpose, transpose))
+                (identity,  transpose), (transpose, identity ), (transpose, transpose),
+                (identity,  Adjoint  ), (Adjoint,   identity ), (Adjoint,   Adjoint  ),
+                (identity,  Transpose), (Transpose, identity ), (Transpose, Transpose))
             @test *(transform1(D), transform2(B))::typeof(D) ≈ *(transform1(Matrix(D)), transform2(Matrix(B))) atol=2 * eps()
             @test *(transform1(DD), transform2(BB))::typeof(DD) == *(transform1(fullDD), transform2(fullBB))
         end
         M = randn(T, 5, 5)
         MM = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
-        for transform in (identity, adjoint, transpose)
+        for transform in (identity, adjoint, transpose, Adjoint, Transpose)
             @test lmul!(transform(D), copy(M)) ≈ *(transform(Matrix(D)), M)
             @test rmul!(copy(M), transform(D)) ≈ *(M, transform(Matrix(D)))
             @test lmul!(transform(DD), copy(MM)) ≈ *(transform(fullDD), MM)
@@ -681,7 +649,7 @@ end
     @test Diagonal(transpose([1, 2, 3])) == Diagonal([1 2 3])
 end
 
-@testset "Multiplication with adjoint and transpose vectors (#26863)" begin
+@testset "Multiplication with Adjoint and Transpose vectors (#26863)" begin
     x = collect(1:2)
     xt = transpose(x)
     A = reshape([[1 2; 3 4], zeros(Int,2,2), zeros(Int, 2, 2), [5 6; 7 8]], 2, 2)
@@ -694,15 +662,13 @@ end
     @test yt*D*y == (yt*D)*y == (yt*A)*y
 end
 
-@testset "Multiplication of single element Diagonal (#36746, #40726)" begin
+@testset "Multiplication of single element Diagonal (#36746)" begin
     @test_throws DimensionMismatch Diagonal(randn(1)) * randn(5)
     @test_throws DimensionMismatch Diagonal(randn(1)) * Diagonal(randn(3, 3))
     A = [1 0; 0 2]
     v = [3, 4]
     @test Diagonal(A) * v == A * v
     @test Diagonal(A) * Diagonal(A) == A * A
-    @test_throws DimensionMismatch [1 0;0 1] * Diagonal([2 3])   # Issue #40726
-    @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
 end
 
 @testset "Triangular division by Diagonal #27989" begin
@@ -778,10 +744,6 @@ end
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
 end
 
-@testset "Diagonal(undef)" begin
-    d = Diagonal{Float32}(undef, 2)
-    @test length(d.diag) == 2
-end
 
 @testset "permutedims (#39447)" begin
     for D in (Diagonal(zeros(5)), Diagonal(zeros(5) .+ 1im), Diagonal([[1,2],[3,4]]))
@@ -797,14 +759,6 @@ end
     @test dot(A, B) ≈ dot(A, Matrix(B))
     @test dot(A, B) ≈ dot(Matrix(A), Matrix(B))
     @test dot(A, B) ≈ conj(dot(B, A))
-end
-
-@testset "eltype relaxation(#41015)" begin
-    A = rand(3,3)
-    for trans in (identity, adjoint, transpose)
-        @test ldiv!(trans(I(3)), A) == A
-        @test rdiv!(A, trans(I(3))) == A
-    end
 end
 
 end # module TestDiagonal

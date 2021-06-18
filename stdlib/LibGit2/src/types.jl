@@ -192,7 +192,7 @@ The fields represent:
     perfdata_cb::Ptr{Cvoid}      = C_NULL
     perfdata_payload::Any        = Nothing
 end
-@assert Base.allocatedinline(CheckoutOptions)
+@assert CheckoutOptions.isinlinealloc
 
 """
     LibGit2.TransferProgress
@@ -209,7 +209,7 @@ Matches the [`git_indexer_progress`](https://libgit2.org/libgit2/#HEAD/type/git_
     indexed_deltas::Cuint   = Cuint(0)
     received_bytes::Csize_t = Csize_t(0)
 end
-@assert Base.allocatedinline(TransferProgress)
+@assert TransferProgress.isinlinealloc
 
 """
     LibGit2.RemoteCallbacks
@@ -235,7 +235,7 @@ Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_
         resolve_url::Ptr{Cvoid}        = C_NULL
     end
 end
-@assert Base.allocatedinline(RemoteCallbacks)
+@assert RemoteCallbacks.isinlinealloc
 
 """
     LibGit2.Callbacks
@@ -313,7 +313,7 @@ julia> fetch(remote, "master", options=fo)
     certificate_cb::Ptr{Cvoid}   = certificate_cb()
     payload::Any                 = nothing
 end
-@assert Base.allocatedinline(ProxyOptions)
+@assert ProxyOptions.isinlinealloc
 
 """
     LibGit2.FetchOptions
@@ -347,7 +347,7 @@ The fields represent:
         custom_headers::StrArrayStruct = StrArrayStruct()
     end
 end
-@assert Base.allocatedinline(FetchOptions)
+@assert FetchOptions.isinlinealloc
 
 
 """
@@ -384,7 +384,7 @@ The fields represent:
     remote_cb::Ptr{Cvoid}               = C_NULL
     remote_cb_payload::Any              = nothing
 end
-@assert Base.allocatedinline(CloneOptions)
+@assert CloneOptions.isinlinealloc
 
 """
     LibGit2.DiffOptionsStruct
@@ -438,7 +438,7 @@ The fields represent:
     old_prefix::Cstring                      = Cstring(C_NULL)
     new_prefix::Cstring                      = Cstring(C_NULL)
 end
-@assert Base.allocatedinline(DiffOptionsStruct)
+@assert DiffOptionsStruct.isinlinealloc
 
 """
     LibGit2.DescribeOptions
@@ -468,7 +468,7 @@ The fields represent:
     only_follow_first_parent::Cint    = Cint(0)
     show_commit_oid_as_fallback::Cint = Cint(0)
 end
-@assert Base.allocatedinline(DescribeOptions)
+@assert DescribeOptions.isinlinealloc
 
 """
     LibGit2.DescribeFormatOptions
@@ -487,7 +487,7 @@ The fields represent:
     always_use_long_format::Cint = Cint(0)
     dirty_suffix::Cstring        = Cstring(C_NULL)
 end
-@assert Base.allocatedinline(DescribeFormatOptions)
+@assert DescribeFormatOptions.isinlinealloc
 
 """
     LibGit2.DiffFile
@@ -617,7 +617,7 @@ The fields represent:
     file_favor::GIT_MERGE_FILE_FAVOR  = Consts.MERGE_FILE_FAVOR_NORMAL
     file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
 end
-@assert Base.allocatedinline(MergeOptions)
+@assert MergeOptions.isinlinealloc
 
 """
     LibGit2.BlameOptions
@@ -647,7 +647,7 @@ The fields represent:
     min_line::Csize_t                 = Csize_t(1)
     max_line::Csize_t                 = Csize_t(0)
 end
-@assert Base.allocatedinline(BlameOptions)
+@assert BlameOptions.isinlinealloc
 
 
 """
@@ -678,7 +678,7 @@ The fields represent:
         custom_headers::StrArrayStruct = StrArrayStruct()
     end
 end
-@assert Base.allocatedinline(PushOptions)
+@assert PushOptions.isinlinealloc
 
 
 """
@@ -701,7 +701,7 @@ The fields represent:
     merge_opts::MergeOptions = MergeOptions()
     checkout_opts::CheckoutOptions = CheckoutOptions()
 end
-@assert Base.allocatedinline(CherrypickOptions)
+@assert CherrypickOptions.isinlinealloc
 
 
 """
@@ -771,7 +771,7 @@ The fields represent:
     end
     checkout_opts::CheckoutOptions = CheckoutOptions()
 end
-@assert Base.allocatedinline(RebaseOptions)
+@assert RebaseOptions.isinlinealloc
 
 """
     LibGit2.RebaseOperation
@@ -834,7 +834,7 @@ The fields represent:
         baseline::Ptr{Cvoid} = C_NULL
     end
 end
-@assert Base.allocatedinline(StatusOptions)
+@assert StatusOptions.isinlinealloc
 
 """
     LibGit2.StatusEntry
@@ -902,7 +902,7 @@ Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_conf
     free::Ptr{Cvoid}    = C_NULL
     payload::Any        = nothing
 end
-@assert Base.allocatedinline(ConfigEntry)
+@assert ConfigEntry.isinlinealloc
 
 function Base.show(io::IO, ce::ConfigEntry)
     print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
@@ -1136,7 +1136,7 @@ The fields represent:
 
     boundary::Char                        = '\0'
 end
-@assert Base.allocatedinline(BlameHunk)
+@assert BlameHunk.isinlinealloc
 
 """
     with(f::Function, obj)

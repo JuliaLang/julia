@@ -224,11 +224,13 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
     return b, e10
 end
 
-function writeshortest(buf::Vector{UInt8}, pos, x::T,
-                       plus=false, space=false, hash=true,
-                       precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'),
-                       typed=false, compact=false) where {T}
+
+@inline function writeshortest(buf::Vector{UInt8}, pos, x::T,
+                               plus=false, space=false, hash=true,
+                               precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'),
+                               typed=false, compact=false) where {T}
     @assert 0 < pos <= length(buf)
+    neg = signbit(x)
     # special cases
     if x == 0
         if typed && x isa Float16
@@ -242,7 +244,17 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
             buf[pos + 7] = UInt8('(')
             pos += 8
         end
-        pos = append_sign(x, plus, space, buf, pos)
+
+        if neg
+            buf[pos] = UInt8('-')
+            pos += 1
+        elseif plus
+            buf[pos] = UInt8('+')
+            pos += 1
+        elseif space
+            buf[pos] = UInt8(' ')
+            pos += 1
+        end
         buf[pos] = UInt8('0')
         pos += 1
         if hash
@@ -279,7 +291,6 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
         end
         return pos
     elseif isnan(x)
-        pos = append_sign(x, plus, space, buf, pos)
         buf[pos] = UInt8('N')
         buf[pos + 1] = UInt8('a')
         buf[pos + 2] = UInt8('N')
@@ -294,20 +305,22 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
         end
         return pos + 3 + (typed && x isa Union{Float32, Float16} ? 2 : 0)
     elseif !isfinite(x)
-        pos = append_sign(x, plus, space, buf, pos)
-        buf[pos] = UInt8('I')
-        buf[pos + 1] = UInt8('n')
-        buf[pos + 2] = UInt8('f')
+        if neg
+            buf[pos] = UInt8('-')
+        end
+        buf[pos + neg] = UInt8('I')
+        buf[pos + neg + 1] = UInt8('n')
+        buf[pos + neg + 2] = UInt8('f')
         if typed
             if x isa Float32
-                buf[pos + 3] = UInt8('3')
-                buf[pos + 4] = UInt8('2')
+                buf[pos + neg + 3] = UInt8('3')
+                buf[pos + neg + 4] = UInt8('2')
             elseif x isa Float16
-                buf[pos + 3] = UInt8('1')
-                buf[pos + 4] = UInt8('6')
+                buf[pos + neg + 3] = UInt8('1')
+                buf[pos + neg + 4] = UInt8('6')
             end
         end
-        return pos + 3 + (typed && x isa Union{Float32, Float16} ? 2 : 0)
+        return pos + neg + 3 + (typed && x isa Union{Float32, Float16} ? 2 : 0)
     end
 
     output, nexp = reduce_shortest(x, compact ? 999_999 : nothing)
@@ -323,7 +336,16 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
         buf[pos + 7] = UInt8('(')
         pos += 8
     end
-    pos = append_sign(x, plus, space, buf, pos)
+    if neg
+        buf[pos] = UInt8('-')
+        pos += 1
+    elseif plus
+        buf[pos] = UInt8('+')
+        pos += 1
+    elseif space
+        buf[pos] = UInt8(' ')
+        pos += 1
+    end
 
     olength = decimallength(output)
     exp_form = true

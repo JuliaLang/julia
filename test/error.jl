@@ -9,7 +9,7 @@
     Test.guardseed(12345) do
         x = ratio(collect(ExponentialBackOff(n=100, max_delay=Inf, factor=1, jitter=0.1)))
         xm = sum(x) / length(x)
-        @test abs(xm - 1.0) < 0.01
+        @test (xm - 1.0) < 1e-4
     end
 end
 @testset "retrying after errors" begin

@@ -164,11 +164,9 @@ end
     @test ismissing(⊽(1, missing))
 end
 
-@testset "* string/char concatenation" begin
+@testset "* string concatenation" begin
     @test ismissing("a" * missing)
-    @test ismissing('a' * missing)
     @test ismissing(missing * "a")
-    @test ismissing(missing * 'a')
 end
 
 # Emulate a unitful type such as Dates.Minute
@@ -573,16 +571,6 @@ end
 
     @test coalesce(nothing, missing) === nothing
     @test coalesce(missing, nothing) === nothing
-end
-
-@testset "@coalesce" begin
-    @test @coalesce() === missing
-    @test @coalesce(1) === 1
-    @test @coalesce(nothing) === nothing
-    @test @coalesce(missing) === missing
-
-    @test @coalesce(1, error("failed")) === 1
-    @test_throws ErrorException @coalesce(missing, error("failed"))
 end
 
 mutable struct Obj; x; end

@@ -234,14 +234,12 @@ Dict{Int64, Int64} with 3 entries:
 ```
 """
 function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
-    foldl(mergewith!(combine), others; init = d)
-end
-
-function mergewith!(combine, d1::AbstractDict, d2::AbstractDict)
-    for (k, v) in d2
-        d1[k] = haskey(d1, k) ? combine(d1[k], v) : v
+    for other in others
+        for (k,v) in other
+            d[k] = haskey(d, k) ? combine(d[k], v) : v
+        end
     end
-    return d1
+    return d
 end
 
 mergewith!(combine) = (args...) -> mergewith!(combine, args...)

@@ -53,7 +53,7 @@ end
 function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
     nf = nfields(x)
-    if ismutable(x)
+    if T.mutable
         if haskey(stackdict, x)
             return stackdict[x]
         end
@@ -87,7 +87,7 @@ end
 
 function deepcopy_internal(x::Array, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]::typeof(x)
+        return stackdict[x]
     end
     _deepcopy_array_t(x, eltype(x), stackdict)
 end

@@ -221,7 +221,7 @@ CartesianIndex(1, 2) d
 CartesianIndex(2, 2) e
 ```
 
-See also [`IndexStyle`](@ref), [`axes`](@ref).
+See also: [`IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
@@ -235,30 +235,30 @@ pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
-length(v::Pairs) = length(getfield(v, :itr))
-axes(v::Pairs) = axes(getfield(v, :itr))
-size(v::Pairs) = size(getfield(v, :itr))
+length(v::Pairs) = length(v.itr)
+axes(v::Pairs) = axes(v.itr)
+size(v::Pairs) = size(v.itr)
 @propagate_inbounds function iterate(v::Pairs{K, V}, state...) where {K, V}
-    x = iterate(getfield(v, :itr), state...)
+    x = iterate(v.itr, state...)
     x === nothing && return x
     indx, n = x
-    item = getfield(v, :data)[indx]
+    item = v.data[indx]
     return (Pair{K, V}(indx, item), n)
 end
-@inline isdone(v::Pairs, state...) = isdone(getfield(v, :itr), state...)
+@inline isdone(v::Pairs, state...) = isdone(v.itr, state...)
 
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:Base.AbstractUnitRange, <:Tuple}}) = HasLength()
 
-reverse(v::Pairs) = Pairs(getfield(v, :data), reverse(getfield(v, :itr)))
+reverse(v::Pairs) = Pairs(v.data, reverse(v.itr))
 
-haskey(v::Pairs, key) = (key in getfield(v, :itr))
-keys(v::Pairs) = getfield(v, :itr)
-values(v::Pairs) = getfield(v, :data) # TODO: this should be a view of data subset by itr
-getindex(v::Pairs, key) = getfield(v, :data)[key]
-setindex!(v::Pairs, value, key) = (getfield(v, :data)[key] = value; v)
-get(v::Pairs, key, default) = get(getfield(v, :data), key, default)
-get(f::Base.Callable, v::Pairs, key) = get(f, getfield(v, :data), key)
+haskey(v::Pairs, key) = (key in v.itr)
+keys(v::Pairs) = v.itr
+values(v::Pairs) = v.data # TODO: this should be a view of data subset by itr
+getindex(v::Pairs, key) = v.data[key]
+setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
+get(v::Pairs, key, default) = get(v.data, key, default)
+get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
 
 # zip
 
@@ -554,11 +554,6 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
-If the iterator is empty return `nothing` (like `iterate`).
-
-!!! compat "Julia 1.7"
-    Prior versions throw a BoundsError if the iterator is empty.
-
 See also: [`Iterators.drop`](@ref), [`Iterators.take`](@ref).
 
 # Examples
@@ -576,7 +571,7 @@ julia> collect(rest)
 """
 function peel(itr)
     y = iterate(itr)
-    y === nothing && return y
+    y === nothing && throw(BoundsError())
     val, s = y
     val, rest(itr, s)
 end
@@ -1176,15 +1171,15 @@ function length(itr::PartitionIterator)
     return cld(l, itr.n)
 end
 
-function iterate(itr::PartitionIterator{<:AbstractRange}, state = firstindex(itr.c))
-    state > lastindex(itr.c) && return nothing
-    r = min(state + itr.n - 1, lastindex(itr.c))
+function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
     return @inbounds itr.c[state:r], r + 1
 end
 
-function iterate(itr::PartitionIterator{<:AbstractArray}, state = firstindex(itr.c))
-    state > lastindex(itr.c) && return nothing
-    r = min(state + itr.n - 1, lastindex(itr.c))
+function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
+    state > length(itr.c) && return nothing
+    r = min(state + itr.n - 1, length(itr.c))
     return @inbounds view(itr.c, state:r), r + 1
 end
 
@@ -1343,7 +1338,7 @@ length(s::Stateful) = length(s.itr) - s.taken
 Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
 collection has zero or multiple elements.
 
-See also [`first`](@ref), [`last`](@ref).
+See also: [`first`](@ref), [`last`](@ref).
 
 !!! compat "Julia 1.4"
     This method requires at least Julia 1.4.

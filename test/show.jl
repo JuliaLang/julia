@@ -728,18 +728,11 @@ Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
-    @test repr(B) == "sparse([1, 2, 3], [1, 2, 3], $T12960[#undef, #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
-
+    @test sprint(show, B)  == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test sprint(print, B) == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
     B[1,2] = T12960()
-    @test repr(B)  == "sparse([1, 1, 2, 3], [1, 2, 2, 3], $T12960[#undef, $T12960(), #undef, #undef], 3, 3)"
-    @test occursin(
-        "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
-        repr(MIME("text/plain"), B),
-    )
+    @test sprint(show, B)  == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test sprint(print, B) == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
 end
 
 # issue #13127
@@ -815,20 +808,13 @@ Base.methodloc_callback[] = nothing
     # test that no spurious visual lines are added when one element spans multiple lines
     v = fill!(Array{Any}(undef, 9), 0)
     v[1] = "look I'm wide! --- " ^ 9
-    r = replstr(v)
-    @test startswith(r, "9-element Vector{Any}:\n  \"look I'm wide! ---")
-    @test endswith(r, "look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0")
-
+    @test replstr(v) == "9-element Vector{Any}:\n  \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0"
+    @test replstr([fill(0, 9) v]) == "9×2 Matrix{Any}:\n 0  …   \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0"
     # test vertical/diagonal ellipsis
     v = fill!(Array{Any}(undef, 50), 0)
     v[1] = "look I'm wide! --- " ^ 9
-    r = replstr(v)
-    @test startswith(r, "50-element Vector{Any}:\n  \"look I'm wide! ---")
-    @test endswith(r, "look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n ⋮\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0")
-
-    r = replstr([fill(0, 50) v])
-    @test startswith(r, "50×2 Matrix{Any}:\n 0  …   \"look I'm wide! ---")
-    @test endswith(r, "look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0\n ⋮  ⋱  \n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0")
+    @test replstr(v) == "50-element Vector{Any}:\n  \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n ⋮\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0"
+    @test replstr([fill(0, 50) v]) == "50×2 Matrix{Any}:\n 0  …   \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0\n ⋮  ⋱  \n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0"
 
     # issue #34659
     @test replstr(Int32[]) == "Int32[]"
@@ -837,45 +823,6 @@ Base.methodloc_callback[] = nothing
     @test replstr(permutedims([Dict(),Dict()])) == "1×2 Matrix{Dict{Any, Any}}:\n Dict()  Dict()"
     @test replstr(permutedims([undef,undef])) == "1×2 Matrix{UndefInitializer}:\n UndefInitializer()  UndefInitializer()"
     @test replstr([zeros(3,0),zeros(2,0)]) == "2-element Vector{Matrix{Float64}}:\n 3×0 Matrix{Float64}\n 2×0 Matrix{Float64}"
-end
-
-# string show with elision
-@testset "string show with elision" begin
-    @testset "elision logic" begin
-        strs = ["A", "∀", "∀A", "A∀", "😃"]
-        for limit = 0:100, len = 0:100, str in strs
-            str = str^len
-            str = str[1:nextind(str, 0, len)]
-            out = sprint() do io
-                show(io, MIME"text/plain"(), str; limit)
-            end
-            lower = length("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
-            limit = max(limit, lower)
-            if length(str) + 2 ≤ limit
-                @test eval(Meta.parse(out)) == str
-            else
-                @test limit-!isascii(str) <= length(out) <= limit
-                re = r"(\"[^\"]*\") ⋯ (\d+) bytes ⋯ (\"[^\"]*\")"
-                m = match(re, out)
-                head = eval(Meta.parse(m.captures[1]))
-                tail = eval(Meta.parse(m.captures[3]))
-                skip = parse(Int, m.captures[2])
-                @test startswith(str, head)
-                @test endswith(str, tail)
-                @test ncodeunits(str) ==
-                    ncodeunits(head) + skip + ncodeunits(tail)
-            end
-        end
-    end
-
-    @testset "default elision limit" begin
-        r = replstr("x"^1000)
-        @test length(r) == 7*80
-        @test r == repr("x"^271) * " ⋯ 459 bytes ⋯ " * repr("x"^270)
-        r = replstr(["x"^1000])
-        @test length(r) < 120
-        @test r == "1-element Vector{String}:\n " * repr("x"^31) * " ⋯ 939 bytes ⋯ " * repr("x"^30)
-    end
 end
 
 # Issue 14121
@@ -1720,11 +1667,6 @@ end
     @test summary(p) == "2-element reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32}) with eltype Tuple{Float32, Float32}"
     @test Base.showarg(io, p, false) === nothing
     @test String(take!(io)) == "reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32})"
-
-    r = Base.IdentityUnitRange(2:2)
-    B = @view ones(2)[r]
-    Base.showarg(io, B, false)
-    @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
 end
 
 @testset "Methods" begin
@@ -2018,7 +1960,7 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     io = IOBuffer()
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
-    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+    @test count(contains(r"my_fun28173 at a{80}:\d+"), eachline(io)) == 9
 end
 
 # Verify that extra instructions at the end of the IR
@@ -2292,15 +2234,4 @@ end
     @test s == "UnionAll"
     s = sprint(show, MIME("text/plain"), Function)
     @test s == "Function"
-end
-
-@testset "printing inline n-dimensional arrays and one-column matrices" begin
-    @test replstr([Int[1 2 3 ;;; 4 5 6]]) == "1-element Vector{Array{$Int, 3}}:\n [1 2 3;;; 4 5 6]"
-    @test replstr([Int[1 2 3 ;;; 4 5 6;;;;]]) == "1-element Vector{Array{$Int, 4}}:\n [1 2 3;;; 4 5 6;;;;]"
-    @test replstr([fill(1, (20,20,20))]) == "1-element Vector{Array{$Int, 3}}:\n [1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; … ;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1]"
-    @test replstr([fill(1, 5, 1)]) == "1-element Vector{Matrix{$Int}}:\n [1; 1; … ; 1; 1;;]"
-    @test replstr([fill(1, 5, 2)]) == "1-element Vector{Matrix{$Int}}:\n [1 1; 1 1; … ; 1 1; 1 1]"
-    @test replstr([[1;]]) == "1-element Vector{Vector{$Int}}:\n [1]"
-    @test replstr([[1;;]]) == "1-element Vector{Matrix{$Int}}:\n [1;;]"
-    @test replstr([[1;;;]]) == "1-element Vector{Array{$Int, 3}}:\n [1;;;]"
 end

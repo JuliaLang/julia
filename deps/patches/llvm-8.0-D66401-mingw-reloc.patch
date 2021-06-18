@@ -1,0 +1,69 @@
+diff --git a/test/CodeGen/X86/mingw-refptr.ll b/test/CodeGen/X86/mingw-refptr.ll
+--- a/test/CodeGen/X86/mingw-refptr.ll
++++ b/test/CodeGen/X86/mingw-refptr.ll
+@@ -1,5 +1,6 @@
+ ; RUN: llc < %s -mtriple=x86_64-w64-mingw32 | FileCheck %s -check-prefix=CHECK-X64
+ ; RUN: llc < %s -mtriple=i686-w64-mingw32 | FileCheck %s -check-prefix=CHECK-X86
++; RUN: llc < %s -mtriple=i686-w64-mingw32-none-elf | FileCheck %s -check-prefix=CHECK-X86-ELF
+ 
+ @var = external local_unnamed_addr global i32, align 4
+ @dsolocalvar = external dso_local local_unnamed_addr global i32, align 4
+@@ -16,6 +17,9 @@
+ ; CHECK-X86:    movl .refptr._var, %eax
+ ; CHECK-X86:    movl (%eax), %eax
+ ; CHECK-X86:    retl
++; CHECK-X86-ELF-LABEL: getVar:
++; CHECK-X86-ELF:    movl var, %eax
++; CHECK-X86-ELF:    retl
+ entry:
+   %0 = load i32, i32* @var, align 4
+   ret i32 %0
+@@ -66,6 +70,9 @@
+ ; CHECK-X86:    movl __imp__extvar, %eax
+ ; CHECK-X86:    movl (%eax), %eax
+ ; CHECK-X86:    retl
++; CHECK-X86-ELF-LABEL: getExtVar:
++; CHECK-X86-ELF:    movl extvar, %eax
++; CHECK-X86-ELF:    retl
+ entry:
+   %0 = load i32, i32* @extvar, align 4
+   ret i32 %0
+diff --git a/lib/Target/X86/X86Subtarget.cpp b/lib/Target/X86/X86Subtarget.cpp
+--- a/lib/Target/X86/X86Subtarget.cpp
++++ b/lib/Target/X86/X86Subtarget.cpp
+@@ -146,6 +146,9 @@
+       return X86II::MO_DLLIMPORT;
+     return X86II::MO_COFFSTUB;
+   }
++  // Some JIT users use *-win32-elf triples; these shouldn't use GOT tables.
++  if (isOSWindows())
++    return X86II::MO_NO_FLAG;
+ 
+   if (is64Bit()) {
+     // ELF supports a large, truly PIC code model with non-PC relative GOT
+diff --git a/lib/Target/TargetMachine.cpp b/lib/Target/TargetMachine.cpp
+--- a/lib/Target/TargetMachine.cpp
++++ b/lib/Target/TargetMachine.cpp
+@@ -128,8 +128,8 @@
+   // don't assume the variables to be DSO local unless we actually know
+   // that for sure. This only has to be done for variables; for functions
+   // the linker can insert thunks for calling functions from another DLL.
+-  if (TT.isWindowsGNUEnvironment() && GV && GV->isDeclarationForLinker() &&
+-      isa<GlobalVariable>(GV))
++  if (TT.isWindowsGNUEnvironment() && TT.isOSBinFormatCOFF() && GV &&
++      GV->isDeclarationForLinker() && isa<GlobalVariable>(GV))
+     return false;
+ 
+   // On COFF, don't mark 'extern_weak' symbols as DSO local. If these symbols
+@@ -142,7 +142,9 @@
+   // Make an exception for windows OS in the triple: Some firmware builds use
+   // *-win32-macho triples. This (accidentally?) produced windows relocations
+   // without GOT tables in older clang versions; Keep this behaviour.
+-  if (TT.isOSBinFormatCOFF() || (TT.isOSWindows() && TT.isOSBinFormatMachO()))
++  // Some JIT users use *-win32-elf triples; these shouldn't use GOT tables
++  // either.
++  if (TT.isOSBinFormatCOFF() || TT.isOSWindows())
+     return true;
+ 
+   // Most PIC code sequences that assume that a symbol is local cannot
+

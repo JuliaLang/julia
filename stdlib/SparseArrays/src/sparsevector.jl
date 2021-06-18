@@ -15,7 +15,7 @@ import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 Vector type for storing sparse vectors.
 """
 struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
-    n::Ti              # Length of the sparse vector
+    n::Int              # Length of the sparse vector
     nzind::Vector{Ti}   # Indices of stored values
     nzval::Vector{Tv}   # Stored values, typically nonzeros
 
@@ -23,7 +23,7 @@ struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
         length(nzind) == length(nzval) ||
             throw(ArgumentError("index and value vectors must be the same length"))
-        new(convert(Ti, n), nzind, nzval)
+        new(convert(Int, n), nzind, nzval)
     end
 end
 
@@ -84,13 +84,6 @@ rowvals(x::SparseVectorUnion) = nonzeroinds(x)
 indtype(x::SparseColumnView) = indtype(parent(x))
 indtype(x::SparseVectorView) = indtype(parent(x))
 
-
-function Base.sizehint!(v::SparseVector, newlen::Integer)
-    sizehint!(nonzeroinds(v), newlen)
-    sizehint!(nonzeros(v), newlen)
-    return v
-end
-
 ## similar
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
@@ -99,11 +92,10 @@ _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew
 # parent method for similar that preserves nothing (for when new dims are 1-d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
-# parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
-function _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew}
-    S1 = SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
-    return sizehint!(S1, min(widelength(S1), length(nonzeroinds(S))))
-end
+# parent method for similar that preserves storage space (for when new dims are 2-d)
+_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
+    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
+
 # The following methods hook into the AbstractArray similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
@@ -1101,22 +1093,17 @@ function vcat(Xin::_SparseConcatGroup...)
     X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
     vcat(X...)
 end
-hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...) =
-    vcat(_hvcat_rows(rows, X...)...)
-function _hvcat_rows((row1, rows...)::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
-    if row1 ≤ 0
-        throw(ArgumentError("length of block row must be positive, got $row1"))
+function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
+    nbr = length(rows)  # number of block rows
+
+    tmp_rows = Vector{SparseMatrixCSC}(undef, nbr)
+    k = 0
+    @inbounds for i = 1 : nbr
+        tmp_rows[i] = hcat(X[(1 : rows[i]) .+ k]...)
+        k += rows[i]
     end
-    # assert `X` is non-empty so that inference of `eltype` won't include `Type{Union{}}`
-    T = eltype(X::Tuple{Any,Vararg{Any}})
-    # inference of `getindex` may be imprecise in case `row1` is not const-propagated up
-    # to here, so help inference with the following type-assertions
-    return (
-        hcat(X[1 : row1]::Tuple{typeof(X[1]),Vararg{T}}...),
-        _hvcat_rows(rows, X[row1+1:end]::Tuple{Vararg{T}}...)...
-    )
+    vcat(tmp_rows...)
 end
-_hvcat_rows(::Tuple{}, X::_SparseConcatGroup...) = ()
 
 # make sure UniformScaling objects are converted to sparse matrices for concatenation
 promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = SparseMatrixCSC

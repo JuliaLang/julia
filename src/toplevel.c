@@ -66,12 +66,11 @@ void jl_module_run_initializer(jl_module_t *m)
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
+    size_t last_age = jl_get_ptls_states()->world_age;
     JL_TRY {
-        ct->world_age = jl_world_counter;
+        jl_get_ptls_states()->world_age = jl_world_counter;
         jl_apply(&f, 1);
-        ct->world_age = last_age;
+        jl_get_ptls_states()->world_age = last_age;
     }
     JL_CATCH {
         if (jl_initerror_type == NULL) {
@@ -116,7 +115,7 @@ static int jl_is__toplevel__mod(jl_module_t *mod)
 // TODO: add locks around global state mutation operations
 static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 {
-    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(ex->head == module_sym);
     if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex, 2))) {
         jl_error("syntax: malformed module expression");
@@ -149,8 +148,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         newm->parent = parent_module;
         jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
         jl_declare_constant(b);
-        jl_value_t *old = NULL;
-        if (!jl_atomic_cmpswap(&b->value, &old, (jl_value_t*)newm)) {
+        jl_value_t *old = jl_atomic_compare_exchange(&b->value, NULL, (jl_value_t*)newm);
+        if (old != NULL) {
             if (!jl_is_module(old)) {
                 jl_errorf("invalid redefinition of constant %s", jl_symbol_name(name));
             }
@@ -174,7 +173,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         jl_base_module = newm;
     }
 
-    size_t last_age = ct->world_age;
+    size_t last_age = ptls->world_age;
 
     // add standard imports unless baremodule
     if (std_imports) {
@@ -190,13 +189,13 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     for (int i = 0; i < jl_array_len(exprs); i++) {
         // process toplevel form
-        ct->world_age = jl_world_counter;
+        ptls->world_age = jl_world_counter;
         form = jl_expand_stmt_with_loc(jl_array_ptr_ref(exprs, i), newm, jl_filename, jl_lineno);
-        ct->world_age = jl_world_counter;
+        ptls->world_age = jl_world_counter;
         (void)jl_toplevel_eval_flex(newm, form, 1, 1);
     }
     newm->primary_world = jl_world_counter;
-    ct->world_age = last_age;
+    ptls->world_age = last_age;
 
 #if 0
     // some optional post-processing steps
@@ -268,7 +267,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 
 static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast)
 {
-    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 3);
     args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
@@ -279,10 +278,10 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     }
     else {
         args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_world_counter;
+        size_t last_age = ptls->world_age;
+        ptls->world_age = jl_world_counter;
         args[0] = jl_apply(args, 3);
-        ct->world_age = last_age;
+        ptls->world_age = last_age;
     }
     JL_GC_POP();
     return args[0];
@@ -412,19 +411,19 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_RO
     static jl_value_t *require_func = NULL;
     int build_mode = jl_generating_output();
     jl_module_t *m = NULL;
-    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (require_func == NULL && jl_base_module != NULL) {
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
     }
     if (require_func != NULL) {
-        size_t last_age = ct->world_age;
-        ct->world_age = (build_mode ? jl_base_module->primary_world : jl_world_counter);
+        size_t last_age = ptls->world_age;
+        ptls->world_age = (build_mode ? jl_base_module->primary_world : jl_world_counter);
         jl_value_t *reqargs[3];
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;
         reqargs[2] = (jl_value_t*)var;
         m = (jl_module_t*)jl_apply(reqargs, 3);
-        ct->world_age = last_age;
+        ptls->world_age = last_age;
     }
     if (m == NULL || !jl_is_module(m)) {
         jl_errorf("failed to load module %s", jl_symbol_name(var));
@@ -620,7 +619,7 @@ static void jl_eval_errorf(jl_module_t *m, const char* fmt, ...)
 
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int fast, int expanded)
 {
-    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (!jl_is_expr(e)) {
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);
@@ -653,7 +652,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         }
     }
 
-    if (ct->ptls->in_pure_callback) {
+    if (ptls->in_pure_callback) {
         jl_error("eval cannot be used in a generated function");
     }
 
@@ -661,11 +660,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     jl_code_info_t *thk = NULL;
     JL_GC_PUSH3(&mfunc, &thk, &ex);
 
-    size_t last_age = ct->world_age;
+    size_t last_age = ptls->world_age;
     if (!expanded && jl_needs_lowering(e)) {
-        ct->world_age = jl_world_counter;
+        ptls->world_age = jl_world_counter;
         ex = (jl_expr_t*)jl_expand_with_loc_warn(e, m, jl_filename, jl_lineno);
-        ct->world_age = last_age;
+        ptls->world_age = last_age;
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
@@ -869,12 +868,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         // TODO: This is still not correct since an `eval` can happen elsewhere, but it
         // helps in common cases.
         size_t world = jl_world_counter;
-        ct->world_age = world;
+        ptls->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
             (void)jl_type_infer(mfunc, world, 0);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
-        ct->world_age = last_age;
+        ptls->world_age = last_age;
     }
     else {
         // use interpreter
@@ -922,17 +921,10 @@ static void jl_check_open_for(jl_module_t *m, const char* funcname)
     }
 }
 
-JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
-{
-    if (jl_current_task->ptls->in_pure_callback)
-        jl_errorf("%s cannot be used in a generated function", fname);
-    jl_check_open_for(m, fname);
-}
-
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
-    jl_task_t *ct = jl_current_task;
-    if (ct->ptls->in_pure_callback)
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->in_pure_callback)
         jl_error("eval cannot be used in a generated function");
     jl_check_open_for(m, "eval");
     jl_value_t *v = NULL;
@@ -959,8 +951,7 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
     jl_method_instance_t *li = method_instance_for_thunk(thk, m);
     JL_GC_PUSH1(&li);
     jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-    jl_task_t *ct = jl_current_task;
-    jl_code_info_t *src = jl_type_infer(li, ct->world_age, 0);
+    jl_code_info_t *src = jl_type_infer(li, jl_get_ptls_states()->world_age, 0);
     JL_GC_POP();
     if (src)
         return src->rettype;
@@ -980,8 +971,8 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     if (!jl_is_string(text) || !jl_is_string(filename)) {
         jl_errorf("Expected `String`s for `text` and `filename`");
     }
-    jl_task_t *ct = jl_current_task;
-    if (ct->ptls->in_pure_callback)
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->in_pure_callback)
         jl_error("cannot use include inside a generated function");
     jl_check_open_for(module, "include");
 
@@ -998,7 +989,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
 
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
-    size_t last_age = ct->world_age;
+    size_t last_age = jl_get_ptls_states()->world_age;
     int lineno = 0;
     jl_lineno = 0;
     jl_filename = jl_string_data(filename);
@@ -1015,7 +1006,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
             }
             expression = jl_expand_with_loc_warn(expression, module,
                                                  jl_string_data(filename), lineno);
-            ct->world_age = jl_world_counter;
+            jl_get_ptls_states()->world_age = jl_world_counter;
             result = jl_toplevel_eval_flex(module, expression, 1, 1);
         }
     }
@@ -1025,7 +1016,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
         goto finally; // skip jl_restore_excstack
     }
 finally:
-    ct->world_age = last_age;
+    jl_get_ptls_states()->world_age = last_age;
     jl_lineno = last_lineno;
     jl_filename = last_filename;
     if (err) {

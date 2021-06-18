@@ -593,7 +593,7 @@ function naive_idoms(blocks::Vector{BasicBlock})
             if isempty(blocks[n].preds)
                 continue
             end
-            firstp, rest = Iterators.peel(Iterators.filter(p->p != 0, blocks[n].preds))::NTuple{2,Any}
+            firstp, rest = Iterators.peel(Iterators.filter(p->p != 0, blocks[n].preds))
             new_doms = copy(dominators[firstp])
             for p in rest
                 intersect!(new_doms, dominators[p])

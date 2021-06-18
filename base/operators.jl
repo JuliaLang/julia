@@ -202,7 +202,7 @@ largest values and `isgreater` defines a descending total order with `NaN` and
 !!! note
 
     Like `min`, `isgreater` orders containers (tuples, vectors, etc)
-    lexicographically with `isless(y, x)` rather than recursively with itself:
+    lexigraphically with `isless(y, x)` rather than recursively with itself:
 
     ```jldoctest
     julia> Base.isgreater(1, NaN) # 1 is greater than NaN
@@ -480,7 +480,7 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0
 """
     max(x, y, ...)
 
-Return the maximum of the arguments (with respect to [`isless`](@ref)). See also the [`maximum`](@ref) function
+Return the maximum of the arguments. See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
 
 # Examples
@@ -494,7 +494,7 @@ max(x, y) = ifelse(isless(y, x), x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments (with respect to [`isless`](@ref)). See also the [`minimum`](@ref) function
+Return the minimum of the arguments. See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
 
 # Examples
@@ -508,9 +508,7 @@ min(x,y) = ifelse(isless(y, x), y, x)
 """
     minmax(x, y)
 
-Return `(min(x,y), max(x,y))`.
-
-See also [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
+Return `(min(x,y), max(x,y))`. See also: [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
 
 # Examples
 ```jldoctest
@@ -875,7 +873,7 @@ const ÷ = div
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
 in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
-See also [`fld1`](@ref), [`fldmod1`](@ref).
+See also: [`fld1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -894,7 +892,7 @@ mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-See also [`mod1`](@ref), [`fldmod1`](@ref).
+See also: [`mod1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -921,7 +919,7 @@ end
 
 Return `(fld1(x,y), mod1(x,y))`.
 
-See also [`fld1`](@ref), [`mod1`](@ref).
+See also: [`fld1`](@ref), [`mod1`](@ref).
 """
 fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 

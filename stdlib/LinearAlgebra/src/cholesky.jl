@@ -529,8 +529,6 @@ Base.propertynames(F::CholeskyPivoted, private::Bool=false) =
 
 issuccess(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
-adjoint(C::Union{Cholesky,CholeskyPivoted}) = C
-
 function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
     if issuccess(C)
         summary(io, C); println(io)
