@@ -109,4 +109,7 @@ print_coverage_summary.(fcs);
 print_coverage_summary(fcs, "Total")
 
 # In order to upload to Codecov, you need to have the `CODECOV_TOKEN` environment variable defined.
-# Coverage.Codecov.submit_local(fcs)
+Coverage.Codecov.submit_local(fcs)
+
+# In order to upload to Coveralls, you need to have the `COVERALLS_TOKEN` environment variable defined.
+Coverage.Coveralls.submit_local(fcs)
