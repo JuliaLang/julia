@@ -232,7 +232,11 @@ endif # WINNT
 
 symlink_libLLVM: $(build_private_libdir)/libLLVM.$(SHLIB_EXT)
 ifneq ($(USE_SYSTEM_LLVM),0)
+ifeq ($(OS), Darwin)
+LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libdir)/libLLVM.$(SHLIB_EXT)
+else
 LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libfiles)
+endif
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms
 #       https://github.com/JuliaLang/julia/issues/29981
 else
