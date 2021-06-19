@@ -71,6 +71,10 @@ Standard library changes
 
 #### DelimitedFiles
 
+#### Logging
+* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
+  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
+
 
 Deprecated or removed
 ---------------------
