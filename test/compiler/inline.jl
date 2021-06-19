@@ -467,6 +467,15 @@ end
         force_noinline_constprop_explicit()                              = @noinline inlined_constprop_explicit(0)
         @inline Base.@aggressive_constprop inlined_constprop_implicit(a) = a+g
         force_noinline_constprop_implicit()                              = @noinline inlined_constprop_implicit(0)
+
+        @noinline notinlined(a) = a
+        function nested(a0, b0)
+            @noinline begin
+                a = @inline notinlined(a0) # this call should be inlined
+                b = notinlined(b0) # this call should NOT be inlined
+                return a, b
+            end
+        end
     end
 
     let ci = code_typed1(m.force_inline_explicit, (Int,))
@@ -510,6 +519,10 @@ end
     end
     let ci = code_typed1(m.force_noinline_constprop_implicit)
         @test any(x->isinvoke(x, :inlined_constprop_implicit), ci.code)
+    end
+
+    let ci = code_typed1(m.nested, (Int,Int))
+        @test count(x->isinvoke(x, :notinlined), ci.code) == 1
     end
 end
 

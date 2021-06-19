@@ -186,7 +186,7 @@ end
 is_stmt_inline(stmt_flag::UInt8)   = stmt_flag & IR_FLAG_INLINE != 0
 is_stmt_inline(::Nothing)          = false
 is_stmt_noinline(stmt_flag::UInt8) = stmt_flag & IR_FLAG_NOINLINE != 0
-is_stmt_noinline(::Nothing)        = false # not used right fow
+is_stmt_noinline(::Nothing)        = false # not used for now
 
 # These affect control flow within the function (so may not be removed
 # if there is no usage within the function), but don't affect the purity
@@ -375,8 +375,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     renumber_ir_elements!(code, changemap, labelmap)
 
     inbounds_depth = 0 # Number of stacked inbounds
-    inline   = false # whether or not in explicit inline scope
-    noinline = false # whether or not in explicit noinline scope
+    inline_flags = BitVector()
     meta = Any[]
     flags = fill(0x00, length(code))
     for i = 1:length(code)
@@ -392,12 +391,18 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             end
             stmt = nothing
         elseif isexpr(stmt, :inline)
-            arg1 = stmt.args[1]::Bool
-            inline = arg1
+            if stmt.args[1]::Bool
+                push!(inline_flags, true)
+            else
+                pop!(inline_flags)
+            end
             stmt = nothing
         elseif isexpr(stmt, :noinline)
-            arg1 = stmt.args[1]::Bool
-            noinline = arg1
+            if stmt.args[1]::Bool
+                push!(inline_flags, false)
+            else
+                pop!(inline_flags)
+            end
             stmt = nothing
         else
             stmt = normalize(stmt, meta)
@@ -407,14 +412,16 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             if inbounds_depth > 0
                 flags[i] |= IR_FLAG_INBOUNDS
             end
-            if inline
-                flags[i] |= IR_FLAG_INLINE
-            end
-            if noinline
-                flags[i] |= IR_FLAG_NOINLINE
+            if !isempty(inline_flags)
+                if last(inline_flags)
+                    flags[i] |= IR_FLAG_INLINE
+                else
+                    flags[i] |= IR_FLAG_NOINLINE
+                end
             end
         end
     end
+    @assert isempty(inline_flags) "malformed meta flags"
     strip_trailing_junk!(ci, code, stmtinfo, flags)
     cfg = compute_basic_blocks(code)
     types = Any[]
