@@ -184,11 +184,8 @@ Give a hint to the compiler that this function is worth inlining.
 
 Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
-an extra nudge can be given to the compiler to inline it. `@inline` can
-only be used at function definitions.
-
-If `@inline` is used at the beginning of a `do` block of a function
-call, the `do` block will be marked for inlining.
+an extra nudge can be given to the compiler to inline it.
+`@inline` can be applied either in a function body or immediately before its definition.
 
 This is shown in the following example:
 
@@ -228,11 +225,8 @@ By using `@noinline` on small functions, auto-inlining can be
 prevented. `@noinline` can be used at function definitions,
 function calls, and in `do` blocks.
 
-If `@noinline` is used at the beginning of a `do` block of a function
-call, the `do` block won't be inlined but the function itself still
-could be. Similarily, if `@noinline` is specified immediately before a
-function call with a `do` block, that function won't be inlined
-but the `do` block body could possibly be.
+`@noinline` can be applied either in a function body or
+immediately before its definition.
 
 This is shown in the following examples:
 

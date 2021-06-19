@@ -324,18 +324,16 @@ end
 @inline f18773(x) = x
 g18773(x) = @noinline f18773(x)
 let ci = code_typed(g18773, Tuple{Int})[1].first
-    @test length(ci.code) == 2 &&
-        isexpr(ci.code[1], :invoke) &&
-        ci.code[1].args[1].def.name == :f18773
+    @test any(ci.code) do x
+        isexpr(x, :invoke) && x.args[1].def.name === :f18773
+    end
 end
 # Test that `@noinline` works across entire expression
 h18773(x) = @noinline f18773(x) + f18773(x)
 let ci = code_typed(h18773, Tuple{Int})[1].first
-    @test length(ci.code) == 4 &&
-        isexpr(ci.code[1], :invoke) &&
-        ci.code[1].args[1].def.name == :f18773 &&
-        isexpr(ci.code[2], :invoke) &&
-        ci.code[2].args[1].def.name == :f18773
+    @test count(ci.code) do x
+        isexpr(x, :invoke) && x.args[1].def.name === :f18773
+    end == 2
 end
 
 # Test inlining/noinlining of code within `do` blocks
@@ -343,26 +341,18 @@ end
 function do_inline(x)
     simple_caller() do
         @inline
-        # Tests `@inline`'s ability to override the lack of inline
-        # that these `println` statements would have caused
-        println(stdout, "Hello")
-        println(stdout, "World")
-        println(stdout, "Hello")
-        println(stdout, "World")
-        println(stdout, "Hello")
-        println(stdout, "World")
-        println(stdout, "Hello")
-        println(stdout, "World")
-        println(stdout, "Hello")
-        println(stdout, "World")
-        println(stdout, "Hello")
-        println(stdout, "World")
-        x
+        # this call won't be resolved and thus will prevent inlining to happen if we don't
+        # annotate `@inline` at the top of this anonymous function body
+        return unresolved_call(x)
     end
 end
 let ci = code_typed(do_inline, Tuple{Int})[1].first
-    # A long body indicates inlining occurred
-    @test length(ci.code) == 25
+    # what we test here is that both `simple_caller` and the anonymous function that the
+    # `do` block creates are inlined away, and as a result there is only the unresolved call
+    @test all(ci.code) do x
+        !(isexpr(x, :invoke) && x.args[1].def.name === :simple_caller) &&
+        !(isexpr(x, :invoke) && startswith(string(x.args[1].def.name), '#'))
+    end
 end
 function do_noinline(x)
     simple_caller() do
@@ -370,9 +360,11 @@ function do_noinline(x)
         x
     end
 end
+
 let ci = code_typed(do_noinline, Tuple{Int})[1].first
-    @test length(ci.code) == 3 &&
-        isexpr(ci.code[2], :invoke)
+    @test any(ci.code) do x
+        isexpr(x, :invoke) && startswith(string(x.args[1].def.name), '#')
+    end
 end
 
 # Test that we can inline small constants even if they are not isbits
