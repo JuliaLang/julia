@@ -157,7 +157,7 @@ sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby
 """
     eigen!(A, [B]; permute, scale, sortby)
 
-came as [`eigen`](@ref), but saves space by overwriting the input `A` (and
+Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
 """
 function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby, jvl::Bool=false, jvr::Bool=true, jce::Bool=false, jcv::Bool=false) where T<:BlasReal
@@ -683,6 +683,16 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
         show(io, mime, F.rcondv)
     end
     nothing
+end
+
+function Base.hash(F::Eigen, h::UInt)
+    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
+end
+function Base.:(==)(A::Eigen, B::Eigen)
+    return A.values == B.values && A.vectors == B.vectors
+end
+function Base.isequal(A::Eigen, B::Eigen)
+    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
 end
 
 # Conversion methods

@@ -459,6 +459,11 @@ end
 
         @test !(1 in 1:0)
         @test !(1.0 in 1.0:0.0)
+
+        for r = (1:10, 1//1:10//1, 1:2:5, 1//2:1//2:5//2, 1.0:5.0, LinRange(1.5, 5.5, 9)),
+            x = (NaN16, Inf32, -Inf64, 1//0, -1//0)
+            @test !(x in r)
+        end
     end
     @testset "in() works across types, including non-numeric types (#21728)" begin
         @test 1//1 in 1:3
@@ -1082,7 +1087,7 @@ end
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
 end
 
-@testset "Issue 11049 and related" begin
+@testset "Issue 11049, and related" begin
     @test promote(range(0f0, stop=1f0, length=3), range(0., stop=5., length=2)) ===
         (range(0., stop=1., length=3), range(0., stop=5., length=2))
     @test convert(LinRange{Float64}, range(0., stop=1., length=3)) === LinRange(0., 1., 3)
@@ -1144,6 +1149,7 @@ end
     @test [reverse(range(1.0, stop=27.0, length=1275));] ==
         reverse([range(1.0, stop=27.0, length=1275);])
 end
+
 @testset "PR 12200 and related" begin
     for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
                range(1, stop=100, length=10), range(1f0, stop=100f0, length=10))
@@ -1288,8 +1294,8 @@ end
         @test_throws BoundsError r[4]
         @test_throws BoundsError r[0]
         @test broadcast(+, r, 1) === 2:4
-        @test 2*r === 2:2:6
-        @test r + r === 2:2:6
+        @test 2*r == 2:2:6
+        @test r + r == 2:2:6
         k = 0
         for i in r
             @test i == (k += 1)
@@ -1432,14 +1438,14 @@ end
     @test @inferred(r .+ x) === 3:7
     @test @inferred(r .- x) === -1:3
     @test @inferred(x .- r) === 1:-1:-3
-    @test @inferred(x .* r) === 2:2:10
-    @test @inferred(r .* x) === 2:2:10
+    @test @inferred(x .* r) == 2:2:10
+    @test @inferred(r .* x) == 2:2:10
     @test @inferred(r ./ x) === 0.5:0.5:2.5
     @test @inferred(x ./ r) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
     @test @inferred(r .\ x) == 2 ./ [r;] && isa(x ./ r, Vector{Float64})
     @test @inferred(x .\ r) === 0.5:0.5:2.5
 
-    @test @inferred(2 .* (r .+ 1) .+ 2) === 6:2:14
+    @test @inferred(2 .* (r .+ 1) .+ 2) == 6:2:14
 end
 
 @testset "Bad range calls" begin
@@ -1564,17 +1570,35 @@ end # module NonStandardIntegerRangeTest
 end
 
 @testset "constant-valued ranges (issues #10391 and #29052)" begin
-    for r in ((1:4), (1:1:4), (1.0:4.0))
-        is_int = eltype(r) === Int
-        @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
-        @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0] broken=is_int
-        @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
-        @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0] broken=is_int
+    @testset "with $(nameof(typeof(r))) of $(eltype(r))" for r in ((1:4), (1:1:4), StepRangeLen(1,1,4), (1.0:4.0))
+        @test @inferred(0 * r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(0 .* r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r .* 0) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r + (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        @test @inferred(r .+ (4:-1:1)) == [5.0, 5.0, 5.0, 5.0]
+        @test @inferred(r - r) == [0.0, 0.0, 0.0, 0.0]
+        @test @inferred(r .- r) == [0.0, 0.0, 0.0, 0.0]
+
         @test @inferred(r .+ (4.0:-1:1)) == [5.0, 5.0, 5.0, 5.0]
         @test @inferred(0.0 * r) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(0.0 .* r) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(r / Inf) == [0.0, 0.0, 0.0, 0.0]
         @test @inferred(r ./ Inf) == [0.0, 0.0, 0.0, 0.0]
+
+        @test eval(Meta.parse(repr(0 * r))) == [0.0, 0.0, 0.0, 0.0]
+
+        # Not constant-valued, but related methods:
+        @test @inferred(-1 * r) == [-1,-2,-3,-4]
+        @test @inferred(r * -1) == [-1,-2,-3,-4]
+        @test @inferred(r / -1) == [-1,-2,-3,-4]
+
+        @test @inferred(-1.0 .* r) == [-1,-2,-3,-4]
+        @test @inferred(r .* -1.0) == [-1,-2,-3,-4]
+        @test @inferred(r ./ -1.0) == [-1,-2,-3,-4]
+
+        @test @inferred(-1 * reverse(r)) == [-4,-3,-2,-1]
+        @test @inferred(-1.0 .* reverse(r)) == [-4,-3,-2,-1]
+        @test @inferred(reverse(r) ./ -1.0) == [-4,-3,-2,-1]
     end
 
     @test_broken @inferred(range(0, step=0, length=4)) == [0, 0, 0, 0]
@@ -1587,7 +1611,7 @@ end
     @test @inferred(range(0.0, stop=0, length=4)) == [0.0, 0.0, 0.0, 0.0]
 
     z4 = 0.0 * (1:4)
-    @test @inferred(z4 .+ (1:4)) === 1.0:1.0:4.0
+    @test @inferred(z4 .+ (1:4)) == 1.0:1.0:4.0
     @test @inferred(z4 .+ z4) === z4
 end
 
@@ -1888,4 +1912,39 @@ end
     @test r2 isa LinRange && r2 == 2:2
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
+end
+@testset "Non-Int64 endpoints that are identical (#39798)" begin
+    for T in DataType[Float16,Float32,Float64,Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128],
+        r in [ LinRange(1, 1, 10), StepRangeLen(7, 0, 5) ]
+        if first(r) > typemax(T)
+            continue
+        end
+        let start=T(first(r)), stop=T(last(r)), step=T(step(r)), length=length(r)
+            @test range(  start, stop,       length) == r
+            @test range(  start, stop;       length) == r
+            @test range(  start; stop,       length) == r
+            @test range(; start, stop,       length) == r
+        end
+    end
+end
+@testset "PR 40320 fixes" begin
+    # found by nanosoldier
+    @test 0.2 * (-2:2) == -0.4:0.2:0.4  # from tests of AbstractFFTs, needs Base.TwicePrecision
+    @test 0.2f0 * (-2:2) == Float32.(-0.4:0.2:0.4)  # likewise needs Float64
+    @test 0.2 * (-2:1:2) == -0.4:0.2:0.4
+
+    # https://github.com/JuliaLang/julia/issues/40846
+    @test 0.1 .* (3:-1:1) ≈ [0.3, 0.2, 0.1]
+    @test (10:-1:1) * 0.1 == 1:-0.1:0.1
+    @test 0.2 * (-2:2:2) == [-0.4, 0, 0.4]
+end
+
+@testset "Indexing OneTo with IdentityUnitRange" begin
+    for endpt in Any[10, big(10), UInt(10)]
+        r = Base.OneTo(endpt)
+        inds = Base.IdentityUnitRange(3:5)
+        rs = r[inds]
+        @test rs === inds
+        @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+    end
 end

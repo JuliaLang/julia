@@ -284,6 +284,12 @@ rmul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}
     (B = adjB.parent; rmul!(full!(A), adjoint(B)))
 *(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
     (B = adjB.parent; *(copyto!(similar(parent(A)), A), adjoint(B)))
+*(A::BiTriSym, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}) =
+    rmul!(copyto!(Array{promote_type(eltype(A), eltype(adjB))}(undef, size(A)...), A), adjB)
+*(adjA::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}, B::Diagonal) =
+    lmul!(adjA, copyto!(Array{promote_type(eltype(adjA), eltype(B))}(undef, size(B)...), B))
+*(adjA::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}, B::BiTriSym) =
+    lmul!(adjA, copyto!(Array{promote_type(eltype(adjA), eltype(B))}(undef, size(B)...), B))
 
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)

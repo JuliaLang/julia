@@ -142,6 +142,10 @@ end
         @testset "Scaling with 5-argument mul!" begin
             @test mul!(copy(a), 5., a, 10, 100) == a*150
             @test mul!(copy(a), a, 5., 10, 100) == a*150
+            @test mul!(vec(copy(a)), 5., a, 10, 100) == vec(a*150)
+            @test mul!(vec(copy(a)), a, 5., 10, 100) == vec(a*150)
+            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], 5., a, 10, 100)
+            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], a, 5., 10, 100)
             @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
             @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
             @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
@@ -189,6 +193,7 @@ end
         @test det(a) == a
         @test norm(a) == abs(a)
         @test norm(a, 0) == 1
+        @test norm(0, 0) == 0
     end
 
     @test !issymmetric(NaN16)
@@ -209,6 +214,19 @@ end
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
 @test_throws ArgumentError opnorm(Matrix{Float64}(undef,5,5),5)
 
+# operator norm for zero-dimensional domain is zero (see #40370)
+@testset "opnorm" begin
+    for m in (0, 1, 2)
+        @test @inferred(opnorm(fill(1,0,m))) == 0.0
+        @test @inferred(opnorm(fill(1,m,0))) == 0.0
+    end
+    for m in (1, 2)
+        @test @inferred(opnorm(fill(1im,1,m))) ≈ sqrt(m)
+        @test @inferred(opnorm(fill(1im,m,1))) ≈ sqrt(m)
+    end
+    @test @inferred(opnorm(fill(1,2,2))) ≈ 2
+end
+
 @testset "generic norm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
     @test @inferred(norm(x)) ≈ sqrt(30)
@@ -228,12 +246,14 @@ end
     rotate!(x, y, c, s)
     @test x ≈ c*x2 + s*y2
     @test y ≈ -conj(s)*x2 + c*y2
+    @test_throws DimensionMismatch rotate!([x; x], y, c, s)
 
     x3 = copy(x)
     y3 = copy(y)
     reflect!(x, y, c, s)
     @test x ≈ c*x3 + s*y3
     @test y ≈ conj(s)*x3 - c*y3
+    @test_throws DimensionMismatch reflect!([x; x], y, c, s)
 end
 
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
@@ -257,6 +277,7 @@ end
     ry = [2 8]
     @test LinearAlgebra.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
 end
+
 @testset "norm and normalize!" begin
     vr = [3.0, 4.0]
     for Tr in (Float32, Float64)
@@ -334,6 +355,11 @@ end
     @test [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]] ≈ [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 end
 
+@testset "Issue 40128" begin
+    @test det(BigInt[9 1 8 0; 0 0 8 7; 7 6 8 3; 2 9 7 7])::BigInt == -1
+    @test det(BigInt[1 big(2)^65+1; 3 4])::BigInt == (4 - 3*(big(2)^65+1))
+end
+
 # Minimal modulo number type - but not subtyping Number
 struct ModInt{n}
     k
@@ -361,13 +387,13 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
-    @test A*(lu(A, Val(false))\b) == b
+    @test A*(lu(A, NoPivot())\b) == b
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-    @test A*(lu(A, Val(true))\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
 end
 
 @testset "Issue 18742" begin

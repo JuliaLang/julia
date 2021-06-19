@@ -8,7 +8,7 @@ Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 const PATH_list = String[]
 const LIBPATH_list = String[]
 
-export libamd, libbtf, libcamd, libccolamd, libcholmod, libcolamd, libklu, libldl, librbio, libspqr, libsuitesparse_wrapper, libsuitesparseconfig, libumfpack
+export libamd, libbtf, libcamd, libccolamd, libcholmod, libcolamd, libklu, libldl, librbio, libspqr, libsuitesparseconfig, libumfpack
 
 # These get calculated in __init__()
 # Man I can't wait until these are automatically handled by an in-Base JLLWrappers clone.
@@ -35,8 +35,6 @@ librbio_handle = C_NULL
 librbio_path = ""
 libspqr_handle = C_NULL
 libspqr_path = ""
-libsuitesparse_wrapper_handle = C_NULL
-libsuitesparse_wrapper_path = ""
 libsuitesparseconfig_handle = C_NULL
 libsuitesparseconfig_path = ""
 libumfpack_handle = C_NULL
@@ -53,7 +51,6 @@ if Sys.iswindows()
     const libldl = "libldl.dll"
     const librbio = "librbio.dll"
     const libspqr = "libspqr.dll"
-    const libsuitesparse_wrapper = "libsuitesparse_wrapper.dll"
     const libsuitesparseconfig = "libsuitesparseconfig.dll"
     const libumfpack = "libumfpack.dll"
 elseif Sys.isapple()
@@ -67,7 +64,6 @@ elseif Sys.isapple()
     const libldl = "@rpath/libldl.2.dylib"
     const librbio = "@rpath/librbio.2.dylib"
     const libspqr = "@rpath/libspqr.2.dylib"
-    const libsuitesparse_wrapper = "@rpath/libsuitesparse_wrapper.dylib"
     const libsuitesparseconfig = "@rpath/libsuitesparseconfig.5.dylib"
     const libumfpack = "@rpath/libumfpack.5.dylib"
 else
@@ -81,7 +77,6 @@ else
     const libldl = "libldl.so.2"
     const librbio = "librbio.so.2"
     const libspqr = "libspqr.so.2"
-    const libsuitesparse_wrapper = "libsuitesparse_wrapper.so"
     const libsuitesparseconfig = "libsuitesparseconfig.so.5"
     const libumfpack = "libumfpack.so.5"
 end
@@ -107,15 +102,11 @@ function __init__()
     global librbio_path = dlpath(librbio_handle)
     global libspqr_handle = dlopen(libspqr)
     global libspqr_path = dlpath(libspqr_handle)
-    global libsuitesparse_wrapper_handle = dlopen(libsuitesparse_wrapper)
-    global libsuitesparse_wrapper_path = dlpath(libsuitesparse_wrapper_handle)
     global libsuitesparseconfig_handle = dlopen(libsuitesparseconfig)
     global libsuitesparseconfig_path = dlpath(libsuitesparseconfig_handle)
     global libumfpack_handle = dlopen(libumfpack)
     global libumfpack_path = dlpath(libumfpack_handle)
     global artifact_dir = dirname(Sys.BINDIR)
-    LIBPATH[] = dirname(libsuitesparse_wrapper_path)
-    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
@@ -135,7 +126,6 @@ get_libklu_path() = libklu_path
 get_libldl_path() = libldl_path
 get_librbio_path() = librbio_path
 get_libspqr_path() = libspqr_path
-get_libsuitesparse_wrapper_path() = libsuitesparse_wrapper_path
 get_libsuitesparseconfig_path() = libsuitesparseconfig_path
 get_libumfpack_path() = libumfpack_path
 

@@ -195,6 +195,20 @@ Compute `(m * mul) >> j % 10^9` where `mul = mula + mulb<<64 + mulc<<128`, and `
     return (v % UInt32) - UInt32(1000000000) * shifted
 end
 
+@inline function append_sign(x, plus, space, buf, pos)
+    if signbit(x) && !isnan(x)  # suppress minus sign for signaling NaNs
+        buf[pos] = UInt8('-')
+        pos += 1
+    elseif plus
+        buf[pos] = UInt8('+')
+        pos += 1
+    elseif space
+        buf[pos] = UInt8(' ')
+        pos += 1
+    end
+    return pos
+end
+
 @inline function append_n_digits(olength, digits, buf, pos)
     i = 0
     while digits >= 10000

@@ -741,6 +741,32 @@ julia> remotecall_fetch(anon_bar, 2)
 1
 ```
 
+## Troubleshooting "method not matched": parametric type invariance and `MethodError`s
+
+### Why doesn't it work to declare `foo(bar::Vector{Real}) = 42` and then call `foo([1])`?
+
+As you'll see if you try this, the result is a `MethodError`:
+
+```jldoctest
+julia> foo(x::Vector{Real}) = 42
+foo (generic function with 1 method)
+
+julia> foo([1])
+ERROR: MethodError: no method matching foo(::Vector{Int64})
+Closest candidates are:
+  foo(!Matched::Vector{Real}) at none:1
+```
+
+This is because `Vector{Real}` is not a supertype of `Vector{Int}`! You can solve this problem with something
+like `foo(bar::Vector{T}) where {T<:Real}` (or the short form `foo(bar::Vector{<:Real})` if the static parameter `T`
+is not needed in the body of the function). The `T` is a wild card: you first specify that it must be a
+subtype of Real, then specify the function takes a Vector of with elements of that type.
+
+This same issue goes for any composite type `Comp`, not just `Vector`. If `Comp` has a parameter declared of
+type `Y`, then another type `Comp2` with a parameter of type `X<:Y` is not a subtype of `Comp`. This is
+type-invariance (by contrast, Tuple is type-covariant in its parameters). See [Parametric Composite
+Types](@ref man-parametric-composite-types) for more explanation of these.
+
 ### Why does Julia use `*` for string concatenation? Why not `+` or something else?
 
 The [main argument](@ref man-concatenation) against `+` is that string concatenation is not
@@ -896,7 +922,7 @@ julia> @sync for i in 1:3
 
 ## Arrays
 
-### What are the differences between zero-dimensional arrays and scalars?
+### [What are the differences between zero-dimensional arrays and scalars?](@id faq-array-0dim)
 
 Zero-dimensional arrays are arrays of the form `Array{T,0}`. They behave similar
 to scalars, but there are important differences. They deserve a special mention
