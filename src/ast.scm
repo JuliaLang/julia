@@ -289,7 +289,7 @@
 ;; predicates and accessors
 
 (define (quoted? e)
-  (memq (car e) '(quote top core globalref outerref line break inert meta inbounds noinline loopinfo)))
+  (memq (car e) '(quote top core globalref outerref line break inert meta inbounds inline noinline loopinfo)))
 (define (quotify e) `',e)
 (define (unquote e)
   (if (and (pair? e) (memq (car e) '(quote inert)))

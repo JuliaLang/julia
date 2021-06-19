@@ -436,29 +436,80 @@ end
     end
 end
 
-# https://github.com/JuliaLang/julia/issues/18773
-@testset "callsite @noinline annotations" begin
-    # Ensure `@noinline` in caller overrides `@inline` in callee
+@testset "callsite @inline/@noinline annotations" begin
     m = Module()
     @eval m begin
-        @inline inlined_simple(x) = x
+        # this global variable prevents inference to fold everything as constant, and/or the optimizer to inline the call accessing to this
+        g = 0
 
-        force_noinline_simple(x) = @noinline inlined_simple(x)
-        force_noinline_block(x)  = @noinline inlined_simple(x) + inlined_simple(x)
+        @noinline noinlined_explicit(x) = x
+        force_inline_explicit(x)        = @inline noinlined_explicit(x)
+        force_inline_block_explicit(x)  = @inline noinlined_explicit(x) + noinlined_explicit(x)
+        noinlined_implicit(x)          = g
+        force_inline_implicit(x)       = @inline noinlined_implicit(x)
+        force_inline_block_implicit(x) = @inline noinlined_implicit(x) + noinlined_implicit(x)
 
-        # `aggressive_constprop` annotation just make sure inference does constant propagation for this function
-        @inline Base.@aggressive_constprop constant_proped_simple(a) = 2sin(a)
-        # yet we will force it not to be inlined by a call site annotation
-        force_noinline_constprop() = @noinline constant_proped_simple(20)
+        @inline inlined_explicit(x)      = x
+        force_noinline_explicit(x)       = @noinline inlined_explicit(x)
+        force_noinline_block_explicit(x) = @noinline inlined_explicit(x) + inlined_explicit(x)
+        inlined_implicit(x)              = x
+        force_noinline_implicit(x)       = @noinline inlined_implicit(x)
+        force_noinline_block_implicit(x) = @noinline inlined_implicit(x) + inlined_implicit(x)
+
+        # test callsite annotations for constant-prop'ed calls
+
+        @noinline Base.@aggressive_constprop noinlined_constprop_explicit(a) = a+g
+        force_inline_constprop_explicit()                                    = @inline noinlined_constprop_explicit(0)
+        Base.@aggressive_constprop noinlined_constprop_implicit(a) = a+g
+        force_inline_constprop_implicit()                          = @inline noinlined_constprop_implicit(0)
+
+        @inline Base.@aggressive_constprop inlined_constprop_explicit(a) = a+g
+        force_noinline_constprop_explicit()                              = @noinline inlined_constprop_explicit(0)
+        @inline Base.@aggressive_constprop inlined_constprop_implicit(a) = a+g
+        force_noinline_constprop_implicit()                              = @noinline inlined_constprop_implicit(0)
     end
-    let ci = code_typed1(m.force_noinline_simple, (Int,))
-        @test any(x->isinvoke(x, :inlined_simple), ci.code)
+
+    let ci = code_typed1(m.force_inline_explicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_explicit), ci.code)
     end
-    let ci = code_typed1(m.force_noinline_block, (Int,))
-        @test count(x->isinvoke(x, :inlined_simple), ci.code) == 2
+    let ci = code_typed1(m.force_inline_block_explicit, (Int,))
+        @test all(ci.code) do x
+            !isinvoke(x, :noinlined_explicit) &&
+            !isinvoke(x, :(+))
+        end
     end
-    let ci = code_typed1(m.force_noinline_constprop)
-        @test any(x->isinvoke(x, :constant_proped_simple), ci.code)
+    let ci = code_typed1(m.force_inline_implicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_implicit), ci.code)
+    end
+    let ci = code_typed1(m.force_inline_block_implicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_explicit), ci.code)
+    end
+
+    let ci = code_typed1(m.force_noinline_explicit, (Int,))
+        @test any(x->isinvoke(x, :inlined_explicit), ci.code)
+    end
+    let ci = code_typed1(m.force_noinline_block_explicit, (Int,))
+        @test count(x->isinvoke(x, :inlined_explicit), ci.code) == 2
+    end
+    let ci = code_typed1(m.force_noinline_implicit, (Int,))
+        @test any(x->isinvoke(x, :inlined_implicit), ci.code)
+    end
+    let ci = code_typed1(m.force_noinline_block_implicit, (Int,))
+        @test count(x->isinvoke(x, :inlined_implicit), ci.code) == 2
+    end
+
+    let ci = code_typed1(m.force_inline_constprop_explicit)
+        @test all(x->!isinvoke(x, :noinlined_constprop_explicit), ci.code)
+    end
+    let ci = code_typed1(m.force_inline_constprop_implicit)
+        @test all(x->!isinvoke(x, :noinlined_constprop_implicit), ci.code)
+    end
+
+    let ci = code_typed1(m.force_noinline_constprop_explicit)
+        @test any(x->isinvoke(x, :inlined_constprop_explicit), ci.code)
+    end
+    let ci = code_typed1(m.force_noinline_constprop_implicit)
+        @test any(x->isinvoke(x, :inlined_constprop_implicit), ci.code)
     end
 end
 

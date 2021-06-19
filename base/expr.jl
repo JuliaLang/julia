@@ -189,35 +189,47 @@ Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
 an extra nudge can be given to the compiler to inline it.
 
-`@inline` can be applied either in a function body or immediately before its definition.
-
-This is shown in the following examples:
+`@inline` can be applied immediately before the definition or in its function body.
 
 ```julia
-@inline function bigfunction(x)
-    #=
-        Function Definition
-    =#
+# annotate long-form definition
+@inline function longdef(x)
+    ...
 end
 
-bigfunction2() do
+# annotate short-form definition
+@inline shortdef(x) = ...
+
+# annotate anonymous function that a `do` block creates
+f() do
     @inline
-    #=
-        Do Body
-    #=
+    ...
+end
 ```
 
 !!! compat "Julia 1.7"
-    Usage in `do` blocks requires at least Julia 1.7
+    The usage within a function body requires at least Julia 1.7.
+
+---
+    @inline block
+
+Give a hint to the compiler that calls within `block` are worth inlining.
+
+```julia
+# The compiler will try to inline `f`
+@inline f(...)
+
+# The compiler will try to inline `f`, `g` and `+(...)`
+@inline f(...) + g(...)
+```
+
+!!! compat "Julia 1.7"
+    The callsite annotation requires at least Julia 1.7.
 """
 macro inline(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
+    return annotate_meta_def_or_block(macroexpand(__module__, ex) , :inline) # expand inner macros which may lead to a definition
 end
-
-macro inline()
-    Expr(:meta, :inline)
-end
-
+macro inline() Expr(:meta, :inline) end
 
 """
     @noinline
@@ -228,59 +240,51 @@ Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
 prevented.
 
-`@noinline` can be applied in a function body,
-immediately before its definition, or at a function
-callsite.
-
-This is shown in the following examples:
+`@noinline` can be applied immediately before the definition or in its function body.
 
 ```julia
-@noinline function smallfunction(x)
-    #=
-        Function Definition
-    =#
+# annotate long-form definition
+@noinline function longdef(x)
+    ...
 end
 
-@noinline previouslydefinedfunction(x)
+# annotate short-form definition
+@noinline shortdef(x) = ...
 
+# annotate anonymous function that a `do` block creates
 f() do
     @noinline
-    #=
-        Do Body
-    #=
+    ...
+end
 ```
 
+!!! compat "Julia 1.7"
+    The usage within a function body requires at least Julia 1.7.
+
+---
+    @noinline block
+
+Give a hint to the compiler that it should not inline the calls within `block`.
+
+```julia
+# The compiler will try to not inline `f`
+@noinline f(...)
+
+# The compiler will try to not inline `f`, `g` and `+(...)`
+@noinline f(...) + g(...)
+```
+
+!!! compat "Julia 1.7"
+    The callsite annotation requires at least Julia 1.7.
+
+---
 !!! note
     If the function is trivial (for example returning a constant) it might get inlined anyway.
-
-!!! compat "Julia 1.7"
-    Callsite usage requires at least Julia 1.7
-
-!!! compat "Julia 1.7"
-    Usage in `do` blocks requires at least Julia 1.7
 """
 macro noinline(ex)
-    if isa(ex, Expr)
-        ex = macroexpand(__module__, ex)
-        if ex.head === :function || is_short_function_def(ex) || ex.head === :->
-            # function definition noinline
-            esc(pushmeta!(ex, :noinline))
-        else
-            # callsite noinline
-            return Expr(:block,
-                        Expr(:noinline, true),
-                        Expr(:local, Expr(:(=), :val, esc(ex))),
-                        Expr(:noinline, false),
-                        :val)
-        end
-    else
-        esc(ex)
-    end
+    return annotate_meta_def_or_block(macroexpand(__module__, ex) , :noinline) # expand inner macros which may lead to a definition
 end
-
-macro noinline()
-    Expr(:meta, :noinline)
-end
+macro noinline() Expr(:meta, :noinline) end
 
 """
     @pure ex
@@ -392,8 +396,22 @@ function findmetaarg(metaargs, sym)
     return 0
 end
 
-function is_short_function_def(ex)
-    ex.head === :(=) || return false
+function annotate_meta_def_or_block(@nospecialize(ex), meta::Symbol)
+    if is_function_def(ex)
+        # annotation on a definition
+        return esc(pushmeta!(ex, meta))
+    else
+        # annotation on a block
+        return Expr(:block,
+                    Expr(meta, true),
+                    Expr(:local, Expr(:(=), :val, esc(ex))),
+                    Expr(meta, false),
+                    :val)
+    end
+end
+
+function is_short_function_def(@nospecialize(ex))
+    isexpr(ex, :(=)) || return false
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
         (ex.args[1].head === :call) && return true
         (ex.args[1].head === :where || ex.args[1].head === :(::)) || return false
@@ -401,9 +419,11 @@ function is_short_function_def(ex)
     end
     return false
 end
+is_function_def(@nospecialize(ex)) =
+    return isexpr(ex, :function) || is_short_function_def(ex) || isexpr(ex, :->)
 
 function findmeta(ex::Expr)
-    if ex.head === :function || is_short_function_def(ex) || ex.head === :->
+    if is_function_def(ex)
         body = ex.args[2]::Expr
         body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)

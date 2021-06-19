@@ -3495,7 +3495,7 @@ f(x) = yt(x)
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
-         error gc_preserve_begin gc_preserve_end import using export noinline)))
+         error gc_preserve_begin gc_preserve_end import using export inline noinline)))
 
 (define (local-in? s lam)
   (or (assq s (car  (lam:vinfo lam)))
@@ -4589,7 +4589,7 @@ f(x) = yt(x)
                (cons (car e) args)))
 
             ;; metadata expressions
-            ((line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope noinline)
+            ((line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)
@@ -4734,7 +4734,7 @@ f(x) = yt(x)
           (begin (set! linetable (cons (make-lineinfo name file line) linetable))
                  (set! current-loc 1)))
       (if (or reachable
-              (and (pair? e) (memq (car e) '(meta inbounds gc_preserve_begin gc_preserve_end aliasscope popaliasscope noinline))))
+              (and (pair? e) (memq (car e) '(meta inbounds gc_preserve_begin gc_preserve_end aliasscope popaliasscope inline noinline))))
           (begin (set! code (cons e code))
                  (set! i (+ i 1))
                  (set! locs (cons current-loc locs)))))

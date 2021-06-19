@@ -28,14 +28,14 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, T, P}
     policy::P
 end
 
-function default_inlining_policy(@nospecialize(src))
+function default_inlining_policy(@nospecialize(src), stmt_flag::Union{Nothing,UInt8})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
-        src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
+        src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
     end
     if isa(src, OptimizationState) && isdefined(src, :ir)
-        return src.src.inlineable ? src.ir : nothing
+        return (is_stmt_inline(stmt_flag) || src.src.inlineable) ? src.ir : nothing
     end
     return nothing
 end
@@ -134,8 +134,10 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # This statement was marked as @inbounds by the user. If replaced by inlining,
 # any contained boundschecks may be removed
 const IR_FLAG_INBOUNDS       = 0x01
+# This statement was marked as @inline by the user
+const IR_FLAG_INLINE         = 0x01 << 1
 # This statement was marked as @noinline by the user
-const IR_FLAG_NOINLINE       = 0x01 << 7
+const IR_FLAG_NOINLINE       = 0x01 << 2
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
 const IR_FLAG_EFFECT_FREE    = 0x01 << 4
@@ -180,6 +182,11 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
     end
     return inlineable
 end
+
+is_stmt_inline(stmt_flag::UInt8)   = stmt_flag & IR_FLAG_INLINE != 0
+is_stmt_inline(::Nothing)          = false
+is_stmt_noinline(stmt_flag::UInt8) = stmt_flag & IR_FLAG_NOINLINE != 0
+is_stmt_noinline(::Nothing)        = false # not used right fow
 
 # These affect control flow within the function (so may not be removed
 # if there is no usage within the function), but don't affect the purity
@@ -368,7 +375,8 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     renumber_ir_elements!(code, changemap, labelmap)
 
     inbounds_depth = 0 # Number of stacked inbounds
-    disable_inline = false # whether or not to disable inline optimization
+    inline   = false # whether or not in explicit inline scope
+    noinline = false # whether or not in explicit noinline scope
     meta = Any[]
     flags = fill(0x00, length(code))
     for i = 1:length(code)
@@ -383,9 +391,13 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
                 inbounds_depth -= 1
             end
             stmt = nothing
+        elseif isexpr(stmt, :inline)
+            arg1 = stmt.args[1]::Bool
+            inline = arg1
+            stmt = nothing
         elseif isexpr(stmt, :noinline)
-            arg1 = stmt.args[1]
-            disable_inline = arg1
+            arg1 = stmt.args[1]::Bool
+            noinline = arg1
             stmt = nothing
         else
             stmt = normalize(stmt, meta)
@@ -395,7 +407,10 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             if inbounds_depth > 0
                 flags[i] |= IR_FLAG_INBOUNDS
             end
-            if disable_inline
+            if inline
+                flags[i] |= IR_FLAG_INLINE
+            end
+            if noinline
                 flags[i] |= IR_FLAG_NOINLINE
             end
         end

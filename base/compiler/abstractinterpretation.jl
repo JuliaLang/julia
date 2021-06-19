@@ -666,7 +666,8 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, method
     if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
-            cache_inlineable = inlining_policy(interp)(cache_inf) !== nothing
+            # TODO maybe we want to respect callsite `@inline`/`@noinline` annotations here ?
+            cache_inlineable = inlining_policy(interp)(cache_inf, nothing) !== nothing
         end
     end
     if !cache_inlineable
@@ -1806,7 +1807,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if isa(fname, SlotNumber)
                         changes = StateUpdate(fname, VarState(Any, false), changes, false)
                     end
-                elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect || hd === :noinline
+                elseif hd === :code_coverage_effect ||
+                       (hd !== :boundscheck && hd !== nothing && is_meta_expr_head(hd)) # :boundscheck can be narrowed to Bool
                     # these do not generate code
                 else
                     t = abstract_eval_statement(interp, stmt, changes, frame)

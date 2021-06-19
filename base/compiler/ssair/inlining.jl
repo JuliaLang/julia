@@ -658,7 +658,7 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                 if isa(info, ConstCallInfo)
                     if !is_stmt_noinline(flag) &&
                         maybe_handle_const_call!(ir, state1.id, new_stmt, info, new_sig,
-                                                 call.rt, istate, false, todo)
+                                                 call.rt, istate, flag, false, todo)
                         handled = true
                     else
                         info = info.call
@@ -718,7 +718,7 @@ function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::Inf
     return mi
 end
 
-function resolve_todo(todo::InliningTodo, state::InliningState)
+function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     spec = todo.spec::DelayedInliningSpec
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
@@ -756,7 +756,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
     end
 
     if src !== nothing
-        src = state.policy(src)
+        src = state.policy(src, flag)
     end
 
     if src === nothing
@@ -771,17 +771,9 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
     return InliningTodo(todo.mi, src)
 end
 
-function resolve_todo(todo::UnionSplit, state::InliningState)
+function resolve_todo(todo::UnionSplit, state::InliningState, flag::UInt8)
     UnionSplit(todo.fully_covered, todo.atype,
-        Pair{Any,Any}[sig=>resolve_todo(item, state) for (sig, item) in todo.cases])
-end
-
-function resolve_todo!(todo::Vector{Pair{Int, Any}}, state::InliningState)
-    for i = 1:length(todo)
-        idx, item = todo[i]
-        todo[i] = idx=>resolve_todo(item, state)
-    end
-    todo
+        Pair{Any,Any}[sig=>resolve_todo(item, state, flag) for (sig, item) in todo.cases])
 end
 
 function validate_sparams(sparams::SimpleVector)
@@ -808,9 +800,7 @@ function analyze_method!(match::MethodMatch, atypes::Vector{Any},
     end
 
     # Bail out if any static parameters are left as TypeVar
-    ok = true
     validate_sparams(match.sparams) || return nothing
-
 
     if !state.params.inlining || is_stmt_noinline(flag)
         return compileable_specialization(state.et, match)
@@ -826,7 +816,7 @@ function analyze_method!(match::MethodMatch, atypes::Vector{Any},
     # If we don't have caches here, delay resolving this MethodInstance
     # until the batch inlining step (or an external post-processing pass)
     state.mi_cache === nothing && return todo
-    return resolve_todo(todo, state)
+    return resolve_todo(todo, state, flag)
 end
 
 function InliningTodo(mi::MethodInstance, ir::IRCode)
@@ -1243,7 +1233,7 @@ end
 
 function maybe_handle_const_call!(ir::IRCode, idx::Int, stmt::Expr,
         info::ConstCallInfo, sig::Signature, @nospecialize(calltype),
-        state::InliningState,
+        state::InliningState, flag::UInt8,
         isinvoke::Bool, todo::Vector{Pair{Int, Any}})
     # when multiple matches are found, bail out and later inliner will union-split this signature
     # TODO effectively use multiple constant analysis results here
@@ -1255,7 +1245,7 @@ function maybe_handle_const_call!(ir::IRCode, idx::Int, stmt::Expr,
     validate_sparams(item.mi.sparam_vals) || return true
     mthd_sig = item.mi.def.sig
     mistypes = item.mi.specTypes
-    state.mi_cache !== nothing && (item = resolve_todo(item, state))
+    state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
     if sig.atype <: mthd_sig
         handle_single_case!(ir, stmt, idx, item, isinvoke, todo)
         return true
@@ -1270,8 +1260,6 @@ function maybe_handle_const_call!(ir::IRCode, idx::Int, stmt::Expr,
         return true
     end
 end
-
-is_stmt_noinline(stmt_flag::UInt8) = stmt_flag & IR_FLAG_NOINLINE != 0
 
 function assemble_inline_todo!(ir::IRCode, state::InliningState)
     # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
@@ -1307,7 +1295,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # result.
         if isa(info, ConstCallInfo)
             if !is_stmt_noinline(flag) &&
-                maybe_handle_const_call!(ir, idx, stmt, info, sig, calltype, state, sig.f === Core.invoke, todo)
+                maybe_handle_const_call!(ir, idx, stmt, info, sig, calltype, state, flag, sig.f === Core.invoke, todo)
                 continue
             else
                 info = info.call
