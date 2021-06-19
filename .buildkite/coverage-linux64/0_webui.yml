@@ -13,4 +13,4 @@ steps:
           # verifies the treehash of the pipeline itself and the inputs listed in `inputs`
           signed_pipelines:
             - pipeline: .buildkite/coverage-linux64/pipeline.yml
-              signature: "U2FsdGVkX1+/lr4O7tYOavO3zubp1KCSw0nbznj1mH354bH3UTM0HaDX2CpkmOYYxpE5klotf9mo366YvVeS/fbpazKlKDnetPgI8eWFLJh7ho9nbq9jPJUYscddla9R"
+              signature: "U2FsdGVkX18eQWpd3hMYLO5Kd+6K+oBoLk1I6J3qIw7lc6g5/jaeWyq/wralosZCfTzyjS4NstNKFvhQf3KDPEBVElipNvTxoWOjVLRVOrfBqqvTkQN4xVosY/r026Gy"
