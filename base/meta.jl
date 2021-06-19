@@ -19,6 +19,7 @@ export quot,
        @dump
 
 using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
+import Base: isexpr
 
 """
     Meta.quot(ex)::Expr
@@ -73,9 +74,7 @@ julia> Meta.isexpr(ex, :call, 2)
 true
 ```
 """
-isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
 isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), head::Symbol, n::Int) = isa(ex, Expr) && ex.head === head && length(ex.args) == n
 isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
 
 """

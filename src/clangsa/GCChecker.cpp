@@ -728,7 +728,6 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_module_t") ||
                    Name.endswith_lower("jl_tupletype_t") ||
                    Name.endswith_lower("jl_gc_tracked_buffer_t") ||
-                   Name.endswith_lower("jl_tls_states_t") ||
                    Name.endswith_lower("jl_binding_t") ||
                    Name.endswith_lower("jl_ordereddict_t") ||
                    Name.endswith_lower("jl_tvar_t") ||

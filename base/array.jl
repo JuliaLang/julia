@@ -816,6 +816,8 @@ iterate(A::Array, i=1) = (@_inline_meta; (i % UInt) - 1 < length(A) ? (@inbounds
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
 `a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
 
+See also [`get`](@ref), [`keys`](@ref), [`eachindex`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)

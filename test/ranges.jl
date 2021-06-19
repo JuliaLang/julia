@@ -459,6 +459,11 @@ end
 
         @test !(1 in 1:0)
         @test !(1.0 in 1.0:0.0)
+
+        for r = (1:10, 1//1:10//1, 1:2:5, 1//2:1//2:5//2, 1.0:5.0, LinRange(1.5, 5.5, 9)),
+            x = (NaN16, Inf32, -Inf64, 1//0, -1//0)
+            @test !(x in r)
+        end
     end
     @testset "in() works across types, including non-numeric types (#21728)" begin
         @test 1//1 in 1:3
@@ -1932,4 +1937,14 @@ end
     @test 0.1 .* (3:-1:1) ≈ [0.3, 0.2, 0.1]
     @test (10:-1:1) * 0.1 == 1:-0.1:0.1
     @test 0.2 * (-2:2:2) == [-0.4, 0, 0.4]
+end
+
+@testset "Indexing OneTo with IdentityUnitRange" begin
+    for endpt in Any[10, big(10), UInt(10)]
+        r = Base.OneTo(endpt)
+        inds = Base.IdentityUnitRange(3:5)
+        rs = r[inds]
+        @test rs === inds
+        @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+    end
 end

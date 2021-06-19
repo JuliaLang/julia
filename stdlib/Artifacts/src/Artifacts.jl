@@ -73,7 +73,7 @@ a `~/.julia/artifacts/Override.toml` file with the following contents:
 This file defines four overrides; two which override specific artifacts identified
 through their content hashes, two which override artifacts based on their bound names
 within a particular package's UUID.  In both cases, there are two different targets of
-the override: overriding to an on-disk location through an absolutet path, and
+the override: overriding to an on-disk location through an absolute path, and
 overriding to another artifact by its content-hash.
 """
 const ARTIFACT_OVERRIDES = Ref{Union{Dict{Symbol,Any},Nothing}}(nothing)

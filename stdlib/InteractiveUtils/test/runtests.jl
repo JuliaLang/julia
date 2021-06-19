@@ -568,3 +568,21 @@ file, ln = functionloc(versioninfo, Tuple{})
     code_native(io, eltype, Tuple{Int})
     @test occursin("eltype", String(take!(io)))
 end
+
+@testset "Issue #41010" begin
+    struct A41010 end
+
+    struct B41010
+        a::A41010
+    end
+    export B41010
+
+    ms = methodswith(A41010, @__MODULE__) |> collect
+    @test ms[1].name == :B41010
+end
+
+# macro options should accept both literals and variables
+let
+    opt = false
+    @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
+end

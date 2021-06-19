@@ -39,7 +39,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    Random.seed!(12343)
+    Random.seed!(12344)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
