@@ -289,7 +289,8 @@ function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
     rmul!(At, D)
 end
 
-*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = rmul!(Array{promote_type(eltype(D), eltype(adjQ))}(D), adjQ)
+*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
+    rmul!(Array{promote_type(eltype(D), eltype(adjQ))}(D), adjQ)
 
 function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
     A = adjA.parent
