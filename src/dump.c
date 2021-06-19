@@ -981,9 +981,15 @@ static void jl_collect_lambdas_from_mod(jl_array_t *s, jl_module_t *m) JL_GC_DIS
                         jl_collect_lambdas_from_mod(s, (jl_module_t*)b->value);
                     }
                 }
-                else if (jl_is_mtable(bv)) {
-                    // a module containing an external method table
-                    jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
+                else if (jl_is_mtable(b->value)) {
+                    jl_methtable_t *mt = (jl_methtable_t*)b->value;
+                    if (mt->module == m && mt->name == b->name) {
+                        // this is probably an external method table, so let's assume so
+                        // as there is no way to precisely distinguish them,
+                        // and the rest of this serializer does not bother
+                        // to handle any method tables specially
+                        jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
+                    }
                 }
             }
         }
