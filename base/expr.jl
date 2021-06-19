@@ -185,9 +185,10 @@ Give a hint to the compiler that this function is worth inlining.
 Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
 an extra nudge can be given to the compiler to inline it.
+
 `@inline` can be applied either in a function body or immediately before its definition.
 
-This is shown in the following example:
+This is shown in the following examples:
 
 ```julia
 @inline function bigfunction(x)
@@ -222,11 +223,11 @@ Give a hint to the compiler that it should not inline a function.
 
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
-prevented. `@noinline` can be used at function definitions,
-function calls, and in `do` blocks.
+prevented.
 
-`@noinline` can be applied either in a function body or
-immediately before its definition.
+`@noinline` can be applied in a function body,
+immediately before its definition, or at a function
+callsite.
 
 This is shown in the following examples:
 
@@ -257,6 +258,7 @@ f() do
 """
 macro noinline(ex)
     if isa(ex, Expr)
+        ex = macroexpand(__module__, ex)
         if ex.head === :function || is_short_function_def(ex) || ex.head === :->
             # function definition noinline
             esc(pushmeta!(ex, :noinline))

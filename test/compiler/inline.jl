@@ -323,14 +323,14 @@ end
 # Ensure `@noinline` in caller overrides `@inline` in callee
 @inline f18773(x) = x
 g18773(x) = @noinline f18773(x)
-let ci = code_typed(g18773, Tuple{Int})[1].first
+let ci = first(code_typed(g18773, Tuple{Int})[1])
     @test any(ci.code) do x
         isexpr(x, :invoke) && x.args[1].def.name === :f18773
     end
 end
 # Test that `@noinline` works across entire expression
 h18773(x) = @noinline f18773(x) + f18773(x)
-let ci = code_typed(h18773, Tuple{Int})[1].first
+let ci = first(code_typed(h18773, Tuple{Int})[1])
     @test count(ci.code) do x
         isexpr(x, :invoke) && x.args[1].def.name === :f18773
     end == 2
@@ -346,7 +346,7 @@ function do_inline(x)
         return unresolved_call(x)
     end
 end
-let ci = code_typed(do_inline, Tuple{Int})[1].first
+let ci = first(code_typed(do_inline, Tuple{Int}))[1]
     # what we test here is that both `simple_caller` and the anonymous function that the
     # `do` block creates are inlined away, and as a result there is only the unresolved call
     @test all(ci.code) do x
@@ -361,7 +361,7 @@ function do_noinline(x)
     end
 end
 
-let ci = code_typed(do_noinline, Tuple{Int})[1].first
+let ci = first(code_typed(do_noinline, Tuple{Int}))[1]
     @test any(ci.code) do x
         isexpr(x, :invoke) && startswith(string(x.args[1].def.name), '#')
     end
