@@ -757,6 +757,25 @@ end
     for i in axes(ax,1)
         @test a[ax[i]] == a[ax][i]
     end
+
+    @testset "propagate indices in vector indexing" begin
+        ur = 5:12
+        idur = Base.IdentityUnitRange(ur)
+        ior = OffsetArrays.IdOffsetRange(ur .- 2, 2)
+        for r in Any[10.0:10.0:1000.0, StepRangeLen(Float64(10), Float64(1000), 1000), LinRange(10, 1000, 991),
+                Base.IdentityUnitRange(0:1000)]
+            rur = r[ur]
+            ridur = r[idur]
+            rior = r[ior]
+            @test all(((x,y,z),) -> x == y == z, zip(rur, ridur, rior))
+            @test axes(rur) == axes(ur)
+            @test all(i -> r[ur][i] == rur[i], eachindex(ur))
+            @test axes(ridur) == axes(idur)
+            @test all(i -> r[idur][i] == ridur[i], eachindex(idur))
+            @test axes(rior) == axes(ior)
+            @test all(i -> r[ior][i] == rior[i], eachindex(ior))
+        end
+    end
 end
 
 @testset "show OffsetMatrix" begin

@@ -909,6 +909,19 @@ end
 
 getindex(r::AbstractRange, ::Colon) = copy(r)
 
+# The result of the indexing operation r[s] should have the same indices as s
+# However this is not possible to achieve in general without offset arrays
+# To get aroudn this we introduce methods that are intended to be pirated by OffsetArrays
+# This way it does not need to pirate getindex while dispatching on the second argument,
+# which introduces a host of ambiguities
+
+# Indexing with OneTo is guaranteed to produce correct indices
+withindices(r, axs::Tuple{OneTo, Vararg{OneTo}}) = r
+# This method is expected to be pirated by OffsetArrays to produce a result with the correct indices
+# A package that seeks to produce a specific return type (and not participate in the piracy by OffsetArrays)
+# may extend it themselves for their own types
+withindices(r, axs) = r
+
 function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integer}
     @_inline_meta
     @boundscheck checkbounds(r, s)
@@ -918,7 +931,8 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
     else
         f = first(r)
         st = oftype(f, f + first(s)-firstindex(r))
-        return range(st, length=length(s))
+        ret = range(st, length=length(s))
+        return withindices(ret, axes(s))
     end
 end
 
@@ -958,7 +972,8 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
         end
     else
         st = oftype(r.start, r.start + (first(s)-1)*step(r))
-        return range(st, step=step(r)*step(s), length=length(s))
+        ret = range(st, step=step(r)*step(s), length=length(s))
+        return withindices(ret, axes(s))
     end
 end
 
@@ -985,10 +1000,11 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
         end
     else
         # Find closest approach to offset by s
-        ind = LinearIndices(s)
+        ind = 1:length(s)
         offset = L(max(min(1 + round(L, (r.offset - first(s))/sstep), last(ind)), first(ind)))
         ref = _getindex_hiprec(r, first(s) + (offset-1)*sstep)
-        return StepRangeLen{T}(ref, rstep*sstep, len, offset)
+        ret = StepRangeLen{T}(ref, rstep*sstep, len, offset)
+        return withindices(ret, axes(s))
     end
 end
 
@@ -1013,7 +1029,7 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     else
         vfirst = unsafe_getindex(r, first(s))
         vlast  = unsafe_getindex(r, last(s))
-        return LinRange{T}(vfirst, vlast, len)
+        return withindices(ret, axes(s))
     end
 end
 
