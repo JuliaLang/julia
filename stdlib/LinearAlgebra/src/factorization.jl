@@ -102,17 +102,13 @@ end
 function \(F::Union{Factorization, Adjoint{<:Any,<:Factorization}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
-    ldiv!(F, BB)
+    ldiv!(F, copy_similar(B, TFB))
 end
 
 function /(B::AbstractMatrix, F::Union{Factorization, Adjoint{<:Any,<:Factorization}})
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
-    rdiv!(BB, F)
+    rdiv!(copy_similar(B, TFB), F)
 end
 /(adjB::AdjointAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjB.parent)
 /(B::TransposeAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjoint(B))

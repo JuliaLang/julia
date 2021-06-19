@@ -198,10 +198,8 @@ end
         @testset "similar, size, and copyto!" begin
             B = similar(A)
             @test size(B) == size(A)
-            if mat_type == Tridiagonal # doesn't work for SymTridiagonal yet
-                copyto!(B, A)
-                @test B == A
-            end
+            copyto!(B, A)
+            @test B == A
             @test isa(similar(A), mat_type{elty})
             @test isa(similar(A, Int), mat_type{Int})
             @test isa(similar(A, (3, 2)), SparseMatrixCSC)
@@ -649,6 +647,23 @@ end
     S = Tridiagonal(S.dl, real.(S.d) .+ 0im, S.du)
     @test !issymmetric(S)
     @test ishermitian(S)
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    v1 = ImmutableArray([1, 2])
+    v2 = ImmutableArray([3, 4, 5])
+    v3 = ImmutableArray([6, 7])
+    T = Tridiagonal(v1, v2, v3)
+    Tsym = SymTridiagonal(v2, v1)
+
+    @test convert(AbstractArray{Float64}, T)::Tridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == T
+    @test convert(AbstractMatrix{Float64}, T)::Tridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == T
+    @test convert(AbstractArray{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
+    @test convert(AbstractMatrix{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
 end
 
 end # module TestTridiagonal

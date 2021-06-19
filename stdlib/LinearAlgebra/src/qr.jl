@@ -381,8 +381,7 @@ true
 """
 function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
-    AA = similar(A, _qreltype(T), size(A))
-    copyto!(AA, A)
+    AA = copy_similar(A, _qreltype(T))
     return qr!(AA, arg...; kwargs...)
 end
 # TODO: remove in Julia v2.0
@@ -770,8 +769,7 @@ function *(A::StridedMatrix, adjB::Adjoint{<:Any,<:AbstractQ})
     TAB = promote_type(eltype(A),eltype(B))
     BB = convert(AbstractMatrix{TAB}, B)
     if size(A,2) == size(B.factors, 1)
-        AA = similar(A, TAB, size(A))
-        copyto!(AA, A)
+        AA = copy_similar(A, TAB)
         return rmul!(AA, adjoint(BB))
     elseif size(A,2) == size(B.factors,2)
         return rmul!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], adjoint(BB))
