@@ -321,7 +321,7 @@ protected:
     }
 
 private:
-    CallInst *ptlsStates;
+    CallInst *pgcstack;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
@@ -396,8 +396,14 @@ CountTrackedPointers::CountTrackedPointers(Type *T) {
         }
         if (isa<ArrayType>(T))
             count *= cast<ArrayType>(T)->getNumElements();
-        else if (isa<VectorType>(T))
+        else if (isa<VectorType>(T)) {
+#if JL_LLVM_VERSION >= 120000
+            ElementCount EC = cast<VectorType>(T)->getElementCount();
+            count *= EC.getKnownMinValue();
+#else
             count *= cast<VectorType>(T)->getNumElements();
+#endif
+        }
     }
     if (count == 0)
         all = false;
@@ -408,8 +414,14 @@ unsigned getCompositeNumElements(Type *T) {
         return ST->getNumElements();
     else if (auto *AT = dyn_cast<ArrayType>(T))
         return AT->getNumElements();
-    else
+    else {
+#if JL_LLVM_VERSION >= 120000
+        ElementCount EC = cast<VectorType>(T)->getElementCount();
+        return EC.getKnownMinValue();
+#else
         return cast<VectorType>(T)->getNumElements();
+#endif
+    }
 }
 
 // Walk through a Type, and record the element path to every tracked value inside
@@ -625,8 +637,14 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
     }
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
-    if (auto VTy = dyn_cast<VectorType>(SI->getType()))
+    if (auto VTy = dyn_cast<VectorType>(SI->getType())) {
+#if JL_LLVM_VERSION >= 120000
+        ElementCount EC = VTy->getElementCount();
+        Numbers.resize(EC.getKnownMinValue(), -1);
+#else
         Numbers.resize(VTy->getNumElements(), -1);
+#endif
+    }
     else
         assert(isa<PointerType>(SI->getType()) && "unimplemented");
     assert(!isTrackedValue(SI));
@@ -686,7 +704,12 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
             assert(NumRoots == 1);
             int Number = Numbers[0];
             Numbers.resize(0);
+#if JL_LLVM_VERSION >= 120000
+            ElementCount EC = VTy->getElementCount();
+            Numbers.resize(EC.getKnownMinValue(), Number);
+#else
             Numbers.resize(VTy->getNumElements(), Number);
+#endif
         }
     }
     if (!isa<PointerType>(SI->getType()))
@@ -1148,7 +1171,7 @@ static bool isLoadFromConstGV(Value *v, bool &task_local)
         if (callee && callee->getName() == "julia.typeof") {
             return true;
         }
-        if (callee && callee->getName() == "julia.ptls_states") {
+        if (callee && callee->getName() == "julia.get_pgcstack") {
             task_local = true;
             return true;
         }
@@ -1514,7 +1537,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Known functions emitted in codegen that are not safepoints
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
-                        callee == ptls_getter ||
+                        callee == pgcstack_getter || callee->getName() == "jl_egal__unboxed" ||
+                        callee->getName() == "jl_lock_value" || callee->getName() == "jl_unlock_value" ||
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
@@ -2519,7 +2543,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
-        pushGcframe->insertAfter(ptlsStates);
+        pushGcframe->insertAfter(pgcstack);
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
@@ -2616,11 +2640,11 @@ bool LateLowerGCFrame::runOnFunction(Function &F) {
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!ptls_getter)
+    if (!pgcstack_getter)
         return CleanupIR(F);
 
-    ptlsStates = getPtls(F);
-    if (!ptlsStates)
+    pgcstack = getPGCstack(F);
+    if (!pgcstack)
         return CleanupIR(F);
 
     State S = LocalScan(F);

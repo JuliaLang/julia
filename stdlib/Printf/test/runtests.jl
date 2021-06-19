@@ -261,6 +261,12 @@ end
     @test (Printf.@sprintf "%-.3s" "test") == "tes"
     @test (Printf.@sprintf "%#-.3s" "test") == "\"te"
 
+    # issue #41068
+    @test Printf.@sprintf("%.2s", "föó") == "fö"
+    @test Printf.@sprintf("%5s", "föó") == "  föó"
+    @test Printf.@sprintf("%6s", "😍🍕") == "  😍🍕"
+    @test Printf.@sprintf("%2c", '🍕') == "🍕"
+    @test Printf.@sprintf("%3c", '🍕') == " 🍕"
 end
 
 @testset "chars" begin
@@ -747,6 +753,13 @@ end
     @test Printf.@sprintf("%20.0X",  UInt(3989525555)) == "            EDCB5433"
     @test Printf.@sprintf("%20.X",  UInt(0)) == "                   0"
 
+end
+
+@testset "%n" begin
+    x = Ref{Int}()
+    @test (Printf.@sprintf("%d4%n", 123, x); x[] == 4)
+    @test (Printf.@sprintf("%s%n", "😉", x); x[] == 4)
+    @test (Printf.@sprintf("%s%n", "1234", x); x[] == 4)
 end
 
 end # @testset "Printf"

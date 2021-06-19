@@ -691,45 +691,37 @@ end
 
 @testset "Multiplications symmetric/hermitian for $T and $S" for T in
         (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
-    let A = Transpose(Symmetric(rand(S, 3, 3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
-        @test A * Bv ≈ parent(A) * Bv
-        @test A * Bm ≈ parent(A) * Bm
-        @test Bm * A ≈ Bm * parent(A)
+    let A = transpose(Symmetric(rand(S, 3, 3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ Matrix(A) * Bv
+        @test A * Bm ≈ Matrix(A) * Bm
+        @test Bm * A ≈ Bm * Matrix(A)
     end
-    let A = Adjoint(Hermitian(rand(S, 3,3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
-        @test A * Bv ≈ parent(A) * Bv
-        @test A * Bm ≈ parent(A) * Bm
-        @test Bm * A ≈ Bm * parent(A)
+    let A = adjoint(Hermitian(rand(S, 3,3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ Matrix(A) * Bv
+        @test A * Bm ≈ Matrix(A) * Bm
+        @test Bm * A ≈ Bm * Matrix(A)
     end
-end
+    let Ahrs = transpose(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = transpose(Symmetric(rand(S, 3, 3))),
+        Ahcs = transpose(Hermitian(Symmetric(rand(S, 3, 3))))
 
-@testset "Dsiambiguation multiplication with transposed AbstractMatrix methods in linalg/matmul.jl for $T and $S" for T in
-        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
-    let Ahrs = Transpose(Hermitian(Symmetric(rand(T, 3, 3)))),
-        Acs = Transpose(Symmetric(rand(S, 3, 3))),
-        Ahcs = Transpose(Hermitian(Symmetric(rand(S, 3, 3))))
-
-        @test Ahrs * Ahrs ≈ Ahrs * parent(Ahrs)
-        @test Ahrs * Acs ≈ Ahrs * parent(Acs)
-        @test Acs * Acs ≈ parent(Acs) * parent(Acs)
-        @test Acs * Ahrs ≈ parent(Acs) * Ahrs
-        @test Ahrs * Ahcs ≈ parent(Ahrs) * Ahcs
-        @test Ahcs * Ahrs ≈ Ahcs * parent(Ahrs)
+        @test Ahrs * Ahrs ≈ Ahrs * Matrix(Ahrs)
+        @test Ahrs * Acs ≈ Ahrs * Matrix(Acs)
+        @test Acs * Acs ≈ Matrix(Acs) * Matrix(Acs)
+        @test Acs * Ahrs ≈ Matrix(Acs) * Ahrs
+        @test Ahrs * Ahcs ≈ Matrix(Ahrs) * Ahcs
+        @test Ahcs * Ahrs ≈ Ahcs * Matrix(Ahrs)
     end
-end
+    let Ahrs = adjoint(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = adjoint(Symmetric(rand(S, 3, 3))),
+        Ahcs = adjoint(Hermitian(Symmetric(rand(S, 3, 3))))
 
-@testset "Dsiambiguation multiplication with adjointed AbstractMatrix methods in linalg/matmul.jl for $T and $S" for T in
-        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
-    let Ahrs = Adjoint(Hermitian(Symmetric(rand(T, 3, 3)))),
-        Acs = Adjoint(Symmetric(rand(S, 3, 3))),
-        Ahcs = Adjoint(Hermitian(Symmetric(rand(S, 3, 3))))
-
-        @test Ahrs * Ahrs ≈ Ahrs * parent(Ahrs)
-        @test Ahcs * Ahcs ≈ parent(Ahcs) * parent(Ahcs)
-        @test Ahrs * Ahcs ≈ Ahrs * parent(Ahcs)
-        @test Acs * Ahcs ≈ Acs * parent(Ahcs)
-        @test Ahcs * Ahrs ≈ parent(Ahcs) * Ahrs
-        @test Ahcs * Acs ≈ parent(Ahcs) * Acs
+        @test Ahrs * Ahrs ≈ Ahrs * Matrix(Ahrs)
+        @test Ahcs * Ahcs ≈ Matrix(Ahcs) * Matrix(Ahcs)
+        @test Ahrs * Ahcs ≈ Ahrs * Matrix(Ahcs)
+        @test Acs * Ahcs ≈ Acs * Matrix(Ahcs)
+        @test Ahcs * Ahrs ≈ Matrix(Ahcs) * Ahrs
+        @test Ahcs * Acs ≈ Matrix(Ahcs) * Acs
     end
 end
 
