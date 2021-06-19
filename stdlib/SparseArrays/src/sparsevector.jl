@@ -1573,9 +1573,6 @@ function (*)(A::_StridedOrTriangularMatrix{Ta}, x::AbstractSparseVector{Tx}) whe
     mul!(y, A, x)
 end
 
-mul!(y::AbstractVector{Ty}, A::_StridedOrTriangularMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, true, false)
-
 function mul!(y::AbstractVector, A::_StridedOrTriangularMatrix, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
@@ -1603,21 +1600,18 @@ end
 
 # * and mul!(C, transpose(A), B)
 
-function *(transA::Transpose{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
-    require_one_based_indexing(transA, x)
-    m, n = size(transA)
+function *(tA::Transpose{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
+    require_one_based_indexing(tA, x)
+    m, n = size(tA)
     length(x) == n || throw(DimensionMismatch())
-    Ty = promote_op(matprod, eltype(transA), eltype(x))
+    Ty = promote_op(matprod, eltype(tA), eltype(x))
     y = Vector{Ty}(undef, m)
-    mul!(y, transA, x)
+    mul!(y, tA, x)
 end
 
-mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, transA, x, true, false)
-
-function mul!(y::AbstractVector, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
-    require_one_based_indexing(y, transA, x)
-    m, n = size(transA)
+function mul!(y::AbstractVector, tA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+    require_one_based_indexing(y, tA, x)
+    m, n = size(tA)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
     if β != one(β)
@@ -1630,7 +1624,7 @@ function mul!(y::AbstractVector, transA::Transpose{<:Any,<:_StridedOrTriangularM
     _nnz = length(xnzind)
     _nnz == 0 && return y
 
-    A = transA.parent
+    A = tA.parent
     Ty = promote_op(matprod, eltype(A), eltype(x))
     @inbounds for j = 1:m
         s = zero(Ty)
@@ -1652,9 +1646,6 @@ function *(adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSpa
     y = Vector{Ty}(undef, m)
     mul!(y, adjA, x)
 end
-
-mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, adjA, x, true, false)
 
 function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, adjA, x)
@@ -1712,9 +1703,6 @@ end
 
 # * and mul!
 
-mul!(y::AbstractVector{Ty}, A::AbstractSparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, true, false)
-
 function mul!(y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
@@ -1745,18 +1733,11 @@ function mul!(y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVe
 end
 
 # * and *(Tranpose(A), B)
-
-mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(y, transpose(A), x, true, false))
-
-mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
-    (A = transA.parent; _At_or_Ac_mul_B!((a,b) -> transpose(a) * b, y, A, x, α, β))
-
-mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = adjA.parent; mul!(y, adjoint(A), x, true, false))
+mul!(y::AbstractVector, tA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+    _At_or_Ac_mul_B!((a,b) -> transpose(a) * b, y, tA.parent, x, α, β)
 
 mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
-    (A = adjA.parent; _At_or_Ac_mul_B!((a,b) -> adjoint(a) * b, y, A, x, α, β))
+    _At_or_Ac_mul_B!((a,b) -> adjoint(a) * b, y, adjA.parent, x, α, β)
 
 function _At_or_Ac_mul_B!(tfun::Function,
                           y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVector,
@@ -1796,11 +1777,11 @@ function *(A::AbstractSparseMatrixCSC, x::AbstractSparseVector)
     _dense2sparsevec(y, initcap)
 end
 
-*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
-    (A = transA.parent; _At_or_Ac_mul_B((a,b) -> transpose(a) * b, A, x, promote_op(matprod, eltype(transA), eltype(x))))
+*(tA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
+    _At_or_Ac_mul_B((a,b) -> transpose(a) * b, tA.parent, x, promote_op(matprod, eltype(tA), eltype(x)))
 
 *(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
-    (A = adjA.parent; _At_or_Ac_mul_B((a,b) -> adjoint(a) * b, A, x, promote_op(matprod, eltype(adjA), eltype(x))))
+    _At_or_Ac_mul_B((a,b) -> adjoint(a) * b, adjA.parent, x, promote_op(matprod, eltype(adjA), eltype(x)))
 
 function _At_or_Ac_mul_B(tfun::Function, A::AbstractSparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX},
                          Tv = promote_op(matprod, TvA, TvX)) where {TvA,TiA,TvX,TiX}

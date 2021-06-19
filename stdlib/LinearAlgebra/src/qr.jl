@@ -569,9 +569,9 @@ end
 ## Multiplication by Q
 ### QB
 lmul!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
-    LAPACK.gemqrt!('L','N',A.factors,A.T,B)
+    LAPACK.gemqrt!('L', 'N', A.factors, A.T, B)
 lmul!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
-    LAPACK.ormqr!('L','N',A.factors,A.τ,B)
+    LAPACK.ormqr!('L', 'N', A.factors, A.τ, B)
 function lmul!(A::QRPackedQ, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     mA, nA = size(A.factors)
@@ -632,13 +632,13 @@ end
 
 ### QcB
 lmul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
-    (A = adjA.parent; LAPACK.gemqrt!('L','T',A.factors,A.T,B))
+    (A = adjA.parent; LAPACK.gemqrt!('L', 'T', A.factors, A.T, B))
 lmul!(adjA::Adjoint{<:Any,<:QRCompactWYQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
-    (A = adjA.parent; LAPACK.gemqrt!('L','C',A.factors,A.T,B))
+    (A = adjA.parent; LAPACK.gemqrt!('L', 'C', A.factors, A.T, B))
 lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
-    (A = adjA.parent; LAPACK.ormqr!('L','T',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormqr!('L', 'T', A.factors, A.τ, B))
 lmul!(adjA::Adjoint{<:Any,<:QRPackedQ{T,S}}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
-    (A = adjA.parent; LAPACK.ormqr!('L','C',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormqr!('L', 'C', A.factors, A.τ, B))
 function lmul!(adjA::Adjoint{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     A = adjA.parent
@@ -689,7 +689,7 @@ end
 
 ### AQ
 rmul!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
-    LAPACK.gemqrt!('R','N', B.factors, B.T, A)
+    LAPACK.gemqrt!('R', 'N', B.factors, B.T, A)
 rmul!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
     LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
 function rmul!(A::StridedMatrix,Q::QRPackedQ)
@@ -732,13 +732,13 @@ end
 
 ### AQc
 rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasReal} =
-    (B = adjB.parent; LAPACK.gemqrt!('R','T',B.factors,B.T,A))
+    (B = adjB.parent; LAPACK.gemqrt!('R', 'T', B.factors, B.T, A))
 rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasComplex} =
-    (B = adjB.parent; LAPACK.gemqrt!('R','C',B.factors,B.T,A))
+    (B = adjB.parent; LAPACK.gemqrt!('R', 'C', B.factors, B.T, A))
 rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasReal} =
-    (B = adjB.parent; LAPACK.ormqr!('R','T',B.factors,B.τ,A))
+    (B = adjB.parent; LAPACK.ormqr!('R', 'T', B.factors, B.τ, A))
 rmul!(A::StridedVecOrMat{T}, adjB::Adjoint{<:Any,<:QRPackedQ{T}}) where {T<:BlasComplex} =
-    (B = adjB.parent; LAPACK.ormqr!('R','C',B.factors,B.τ,A))
+    (B = adjB.parent; LAPACK.ormqr!('R', 'C', B.factors, B.τ, A))
 function rmul!(A::StridedMatrix, adjQ::Adjoint{<:Any,<:QRPackedQ})
     Q = adjQ.parent
     mQ, nQ = size(Q.factors)
@@ -917,7 +917,6 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     m < n && return _wide_qr_ldiv!(A, B)
 
-    mB, nB = size(B)
     lmul!(adjoint(A.Q), view(B, 1:m, :))
     R = A.factors
     ldiv!(UpperTriangular(view(R,1:n,:)), view(B, 1:n, :))
