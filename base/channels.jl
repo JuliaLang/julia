@@ -421,6 +421,20 @@ isready(c::Channel) = n_avail(c) > 0
 n_avail(c::Channel) = isbuffered(c) ? length(c.data) : length(c.cond_put.waitq)
 isempty(c::Channel) = isbuffered(c) ? isempty(c.data) : isempty(c.cond_put.waitq)
 
+"""
+    putwillblock(c::Channel)
+
+Returns `true` if a [`put!`](@ref) on a [`Channel`](@ref) will block
+"""
+putwillblock(c::Channel) =  isbuffered(c) ? (n_avail(c) == c.sz_max) : (length(c.cond_take.waitq) == 0)
+
+"""
+    takewillblock(c::Channel)
+
+Returns `true` if a [`take!`](@ref) on a [`Channel`](@ref) will block
+"""
+takewillblock(c::Channel) = !isready(c)
+
 lock(c::Channel) = lock(c.cond_take)
 lock(f, c::Channel) = lock(f, c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)

@@ -29,7 +29,7 @@ Build system changes
 
 New library functions
 ---------------------
-
+* New functions `putwillblock` and `takewillblock` that test if calling `put!` or `take!` on a Channel would block  ([#40720])
 
 New library features
 --------------------
@@ -64,6 +64,7 @@ Standard library changes
 #### Tar
 
 #### Distributed
+* New functions `putwillblock` and `takewillblock` that test if calling `put!` or `take!` on a RemoteChannel would block  ([#40921])
 
 #### UUIDs
 
