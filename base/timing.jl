@@ -207,6 +207,12 @@ macro time(ex)
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
+        ## ensure time samplers are compiled
+        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+        elapsedtime = time_ns() - elapsedtime
+        ## reset timers
+        compile_elapsedtime = cumulative_compile_time_ns_before()
+        elapsedtime = time_ns()
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
@@ -253,6 +259,12 @@ macro timev(ex)
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
+        ## ensure time samplers are compiled
+        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+        elapsedtime = time_ns() - elapsedtime
+        ## reset timers
+        compile_elapsedtime = cumulative_compile_time_ns_before()
+        elapsedtime = time_ns()
         local val = $(esc(ex))
         elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
