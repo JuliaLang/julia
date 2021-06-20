@@ -241,6 +241,7 @@ end
     @test collect(CartesianIndex(1, 1) .- R) == CartesianIndex(2, 2):CartesianIndex(-2, -3):CartesianIndex(-4, -4)
 end
 
+
 @testset "Iterators" begin
     @testset "Reverse" begin
         R = CartesianIndices((0:5, 0:5))
@@ -415,4 +416,14 @@ f39705() = Base.Cartesian.@nany 0 _ -> true
     @test @inferred(CartesianIndices((false,))) == CartesianIndices((0,))
     @test @inferred(CartesianIndices((true, false))) == CartesianIndices((1, 0))
     @test @inferred(CartesianIndices((false, true))) == CartesianIndices((0, 1))
+end
+
+
+@testset "haskey-CartesianIndex" begin
+    @test haskey((), CartesianIndex(1)) == false
+    @test haskey((1,), CartesianIndex(1)) == true
+    @test haskey((1,2), CartesianIndex(1)) == true
+    @test haskey((1,2), CartesianIndex(2)) == true
+    @test haskey((1,2,3), CartesianIndex(2)) == true
+    @test haskey((1,2,3), CartesianIndex(6)) == false
 end
