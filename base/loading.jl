@@ -1765,9 +1765,9 @@ function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{Str
 
     # Walk through each name that's called out as a compile-time preference
     for name in prefs_list
-        prefs_name = get(prefs, name, nothing)::Union{String, Nothing}
-        if prefs_name !== nothing
-            h = hash(prefs_name, h)
+        prefs_value = get(prefs, name, nothing)
+        if prefs_value !== nothing
+            h = hash(prefs_value, h)
         end
     end
     # We always return a `UInt64` so that our serialization format is stable
