@@ -750,6 +750,32 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "begin")
     @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
 
+    # Test switching repl modes
+    sendrepl2("""\e[200~
+            julia> A = 1
+            1
+
+            shell> echo foo
+            foo
+
+            shell> echo foo
+                   foo
+            foo foo
+
+            help?> Int
+            Dummy docstring
+
+                Some text
+
+                julia> error("If this error throws, the paste handler has failed to ignore this docstring example")
+
+            julia> B = 2
+            2\e[201~
+             """)
+    wait(c)
+    @test Main.A == 1
+    @test Main.B == 2
+
     # Close repl
     write(stdin_write, '\x04')
     Base.wait(repltask)
@@ -851,7 +877,7 @@ mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    fake_response = (Any[(Error19864(), Ptr{Cvoid}[])], true)
+    fake_response = (Base.ExceptionStack([(exception=Error19864(),backtrace=Ptr{Cvoid}[])]),true)
     REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
@@ -1298,27 +1324,40 @@ end
 
 @testset "Install missing packages via hooks" begin
     @testset "Parse AST for packages" begin
-        mods = REPL.modules_to_be_loaded(Meta.parse("using Foo"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("import Foo"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("using Foo, Bar"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo, Bar"))
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Meta.parse("import Foo, Bar"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
         @test mods == [:Foo, :Bar]
 
-        mods = REPL.modules_to_be_loaded(Meta.parse("if false using Foo end"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("if false if false using Foo end end"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false if false using Foo end end"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("if false using Foo, Bar end"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo, Bar end"))
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Meta.parse("if false using Foo: bar end"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo: bar end"))
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Meta.parse("import Foo.bar as baz"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo.bar as baz"))
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Meta.parse("using .Foo"))
-        @test mods == []
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base: nope"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Main"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("# comment"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
+        @test isempty(mods)
     end
 end

@@ -13,6 +13,7 @@ const Chars = Union{Val{'c'}, Val{'C'}}
 const Strings = Union{Val{'s'}, Val{'S'}}
 const Pointer = Val{'p'}
 const HexBases = Union{Val{'x'}, Val{'X'}, Val{'a'}, Val{'A'}}
+const PositionCounter = Val{'n'}
 
 """
 Typed representation of a format specifier.
@@ -219,15 +220,17 @@ end
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
     leftalign, width = spec.leftalign, spec.width
-    if !leftalign && width > 1
-        for _ = 1:(width - 1)
+    c = Char(first(arg))
+    w = textwidth(c)
+    if !leftalign && width > w
+        for _ = 1:(width - w)
             buf[pos] = UInt8(' ')
             pos += 1
         end
     end
-    pos = writechar(buf, pos, arg isa String ? arg[1] : Char(arg))
-    if leftalign && width > 1
-        for _ = 1:(width - 1)
+    pos = writechar(buf, pos, c)
+    if leftalign && width > w
+        for _ = 1:(width - w)
             buf[pos] = UInt8(' ')
             pos += 1
         end
@@ -239,7 +242,7 @@ end
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
     leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
     str = string(arg)
-    slen = length(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
+    slen = textwidth(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
     op = p = prec == -1 ? slen : min(slen, prec)
     if !leftalign && width > p
         for _ = 1:(width - p)
@@ -259,9 +262,9 @@ end
         end
     end
     for c in str
-        p == 0 && break
+        p -= textwidth(c)
+        p < 0 && break
         pos = writechar(buf, pos, c)
-        p -= 1
     end
     if hash && arg isa AbstractString && p > 0
         buf[pos] = UInt8('"')
@@ -421,9 +424,28 @@ const __BIG_FLOAT_MAX__ = 8192
     elseif T == Val{'f'} || T == Val{'F'}
         newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
     elseif T == Val{'g'} || T == Val{'G'}
+        # C11-compliant general format
         prec = prec == 0 ? 1 : prec
-        x = round(x, sigdigits=prec)
-        newpos = Ryu.writeshortest(buf, pos, x, plus, space, hash, prec, T == Val{'g'} ? UInt8('e') : UInt8('E'), true, UInt8('.'))
+        # format the value in scientific notation and parse the exponent part
+        exp = let p = Ryu.writeexp(buf, pos, x, prec)
+            b1, b2, b3, b4 = buf[p-4], buf[p-3], buf[p-2], buf[p-1]
+            Z = UInt8('0')
+            if b1 == UInt8('e')
+                # two-digit exponent
+                sign = b2 == UInt8('+') ? 1 : -1
+                exp = 10 * (b3 - Z) + (b4 - Z)
+            else
+                # three-digit exponent
+                sign = b1 == UInt8('+') ? 1 : -1
+                exp = 100 * (b2 - Z) + 10 * (b3 - Z) + (b4 - Z)
+            end
+            flipsign(exp, sign)
+        end
+        if -4 ≤ exp < prec
+            newpos = Ryu.writefixed(buf, pos, x, prec - (exp + 1), plus, space, hash, UInt8('.'), !hash)
+        else
+            newpos = Ryu.writeexp(buf, pos, x, prec - 1, plus, space, hash, T == Val{'g'} ? UInt8('e') : UInt8('E'), UInt8('.'), !hash)
+        end
     elseif T == Val{'a'} || T == Val{'A'}
         x, neg = x < 0 || x === -Base.zero(x) ? (-x, true) : (x, false)
         newpos = pos
@@ -551,6 +573,12 @@ end
 
 # pointers
 fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
+
+# position counters
+function fmt(buf, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
+    arg[] = pos - 1
+    pos
+end
 
 # old Printf compat
 function fix_dec end
@@ -729,13 +757,18 @@ const UNROLL_UPTO = 16
     return pos
 end
 
-plength(f::Spec{T}, x) where {T <: Chars} = max(f.width, 1) + (ncodeunits(x isa AbstractString ? x[1] : Char(x)) - 1)
+function plength(f::Spec{T}, x) where {T <: Chars}
+    c = Char(first(x))
+    w = textwidth(c)
+    return max(f.width, w) + (ncodeunits(c) - w)
+end
 plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
 
 function plength(f::Spec{T}, x) where {T <: Strings}
     str = string(x)
-    p = f.precision == -1 ? (length(str) + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - length(str))
+    sw = textwidth(str)
+    p = f.precision == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
+    return max(f.width, p) + (sizeof(str) - sw)
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
@@ -747,6 +780,7 @@ plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
     max(f.width, 0 + 309 + 17 + f.hash + 5)
 plength(f::Spec{T}, x) where {T <: Floats} =
     max(f.width, f.precision + 309 + 17 + f.hash + 5)
+plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
     len = sum(length, substringranges)
@@ -824,7 +858,7 @@ Use shorter of decimal or scientific 1.23 1.23e+07
 ```
 
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
-See also: [`@sprintf`](@ref).
+See also [`@sprintf`](@ref).
 
 # Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
@@ -840,6 +874,12 @@ Inf Inf NaN NaN
 julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
 0 0.0 -0.007812
 ```
+
+!!! compat "Julia 1.7"
+    Starting in Julia 1.7, `%s` (string) and `%c` (character) widths are computed
+    using [`textwidth`](@ref), which e.g. ignores zero-width characters
+    (such as combining characters for diacritical marks) and treats certain
+    "wide" characters (e.g. emoji) as width `2`.
 """
 macro printf(io_or_fmt, args...)
     if io_or_fmt isa String

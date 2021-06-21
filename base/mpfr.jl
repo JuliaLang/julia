@@ -151,6 +151,11 @@ global precision; `convert` will always return `x`.
 convenience since decimal literals are converted to `Float64` when parsed, so
 `BigFloat(2.1)` may not yield what you expect.
 
+See also:
+- [`@big_str`](@ref)
+- [`rounding`](@ref) and [`setrounding`](@ref)
+- [`precision`](@ref) and [`setprecision`](@ref)
+
 !!! compat "Julia 1.1"
     `precision` as a keyword argument requires at least Julia 1.1.
     In Julia 1.0 `precision` is the second positional argument (`BigFloat(x, precision)`).
@@ -169,11 +174,6 @@ julia> BigFloat("2.1", RoundUp)
 julia> BigFloat("2.1", RoundUp, precision=128)
 2.100000000000000000000000000000000000007
 ```
-
-# See also
-- [`@big_str`](@ref)
-- [`rounding`](@ref) and [`setrounding`](@ref)
-- [`precision`](@ref) and [`setprecision`](@ref)
 """
 BigFloat(x, r::RoundingMode)
 
@@ -1021,14 +1021,14 @@ set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, :libmpfr), Cint, (Clong
 set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, :libmpfr), Cint, (Clong,), x))
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
-    haskey(stackdict, x) && return stackdict[x]
-    # d = copy(x._d)
-    d = x._d
-    d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
-    y = _BigFloat(x.prec, x.sign, x.exp, d′)
-    #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
-    stackdict[x] = y
-    return y
+    get!(stackdict, x) do
+        # d = copy(x._d)
+        d = x._d
+        d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
+        y = _BigFloat(x.prec, x.sign, x.exp, d′)
+        #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
+        return y
+    end
 end
 
 function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}

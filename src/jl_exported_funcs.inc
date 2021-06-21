@@ -275,6 +275,8 @@
     XX(jl_init_restored_modules) \
     XX(jl_init) \
     XX(jl_init_with_image) \
+    XX(jl_init__threading) \
+    XX(jl_init_with_image__threading) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -434,7 +436,6 @@
     XX(jl_set_module_uuid) \
     XX(jl_set_next_task) \
     XX(jl_set_nth_field) \
-    XX(jl_set_ptls_states_getter) \
     XX(jl_set_safe_restore) \
     XX(jl_set_sysimg_so) \
     XX(jl_set_task_tid) \

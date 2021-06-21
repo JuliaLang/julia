@@ -1141,7 +1141,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         end
         return lu(A) \ B
     end
-    return qr(A,Val(true)) \ B
+    return qr(A, ColumnNorm()) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
@@ -1292,15 +1292,17 @@ false
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
+    return _istriu(A, k)
+end
+istriu(x::Number) = true
+
+@inline function _istriu(A::AbstractMatrix, k)
     m, n = size(A)
     for j in 1:min(n, m + k - 1)
-        for i in max(1, j - k + 1):m
-            iszero(A[i, j]) || return false
-        end
+        all(iszero, view(A, max(1, j - k + 1):m, j)) || return false
     end
     return true
 end
-istriu(x::Number) = true
 
 """
     istril(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1334,15 +1336,17 @@ false
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
+    return _istril(A, k)
+end
+istril(x::Number) = true
+
+@inline function _istril(A::AbstractMatrix, k)
     m, n = size(A)
     for j in max(1, k + 2):n
-        for i in 1:min(j - k - 1, m)
-            iszero(A[i, j]) || return false
-        end
+        all(iszero, view(A, 1:min(j - k - 1, m), j)) || return false
     end
     return true
 end
-istril(x::Number) = true
 
 """
     isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
@@ -1554,6 +1558,9 @@ function det(A::AbstractMatrix{T}) where T
 end
 det(x::Number) = x
 
+# Resolve Issue #40128
+det(A::AbstractMatrix{BigInt}) = det_bareiss(A)
+
 """
     logabsdet(M)
 
@@ -1616,6 +1623,55 @@ logdet(A) = log(det(A))
 
 const NumberArray{T<:Number} = AbstractArray{T}
 
+exactdiv(a, b) = a/b
+exactdiv(a::Integer, b::Integer) = div(a, b)
+
+"""
+    det_bareiss!(M)
+
+Calculates the determinant of a matrix using the
+[Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm) using
+inplace operations.
+
+# Examples
+```jldoctest
+julia> M = [1 0; 2 2]
+2×2 Matrix{Int64}:
+ 1  0
+ 2  2
+
+julia> LinearAlgebra.det_bareiss!(M)
+2
+```
+"""
+function det_bareiss!(M)
+    n = checksquare(M)
+    sign, prev = Int8(1), one(eltype(M))
+    for i in 1:n-1
+        if iszero(M[i,i]) # swap with another col to make nonzero
+            swapto = findfirst(!iszero, @view M[i,i+1:end])
+            isnothing(swapto) && return zero(prev)
+            sign = -sign
+            Base.swapcols!(M, i, i + swapto)
+        end
+        for k in i+1:n, j in i+1:n
+            M[j,k] = exactdiv(M[j,k]*M[i,i] - M[j,i]*M[i,k], prev)
+        end
+        prev = M[i,i]
+    end
+    return sign * M[end,end]
+end
+"""
+    LinearAlgebra.det_bareiss(M)
+
+Calculates the determinant of a matrix using the
+[Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm).
+Also refer to [`det_bareiss!`](@ref).
+"""
+det_bareiss(M) = det_bareiss!(copy(M))
+
+
+
 """
     promote_leaf_eltypes(itr)
 
@@ -1668,7 +1724,7 @@ function normalize!(a::AbstractArray, p::Real=2)
     __normalize!(a, nrm)
 end
 
-@inline function __normalize!(a::AbstractArray, nrm::AbstractFloat)
+@inline function __normalize!(a::AbstractArray, nrm::Real)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 

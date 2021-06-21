@@ -819,7 +819,7 @@ let f = function (x; kw...)
 end
 
 # normalization of Unicode symbols (#19464)
-let ε=1, μ=2, x=3, î=4, ⋅=5
+let ε=1, μ=2, x=3, î=4, ⋅=5, (-)=6
     # issue #5434 (mu vs micro):
     @test Meta.parse("\u00b5") === Meta.parse("\u03bc")
     @test µ == μ == 2
@@ -832,6 +832,17 @@ let ε=1, μ=2, x=3, î=4, ⋅=5
     # middot char · or · vs math dot operator ⋅ (#25098)
     @test Meta.parse("\u00b7") === Meta.parse("\u0387") === Meta.parse("\u22c5")
     @test (·) == (·) == (⋅) == 5
+    # minus − vs hyphen-minus - (#26193)
+    @test Meta.parse("\u2212") === Meta.parse("-")
+    @test Meta.parse("\u221242") === Meta.parse("-42")
+    @test Meta.parse("\u2212 42") == Meta.parse("- 42")
+    @test Meta.parse("\u2212x") == Meta.parse("-x")
+    @test Meta.parse("x \u2212 42") == Meta.parse("x - 42")
+    @test Meta.parse("x \u2212= 42") == Meta.parse("x -= 42")
+    @test Meta.parse("100.0e\u22122") === Meta.parse("100.0E\u22122") === Meta.parse("100.0e-2")
+    @test Meta.parse("100.0f\u22122") === Meta.parse("100.0f-2")
+    @test Meta.parse("0x100p\u22128") === Meta.parse("0x100P\u22128") === Meta.parse("0x100p-8")
+    @test (−) == (-) == 6
 end
 
 # issue #8925
@@ -2699,6 +2710,27 @@ end
     @test Meta.isexpr(Meta.@lower(f((; a, b::Int)) = a + b), :error)
 end
 
+# #33697
+@testset "N-dimensional concatenation" begin
+    @test :([1 2 5; 3 4 6;;; 0 9 3; 4 5 4]) ==
+        Expr(:ncat, 3, Expr(:nrow, 1, Expr(:row, 1, 2, 5), Expr(:row, 3, 4, 6)),
+                        Expr(:nrow, 1, Expr(:row, 0, 9, 3), Expr(:row, 4, 5, 4)))
+    @test :([1 ; 2 ;; 3 ; 4]) == Expr(:ncat, 2, Expr(:nrow, 1, 1, 2), Expr(:nrow, 1, 3, 4))
+
+    @test_throws ParseError Meta.parse("[1 2 ;; 3 4]") # cannot mix spaces and ;; except as line break
+    @test :([1 2 ;;
+            3 4]) == :([1 2 3 4])
+    @test :([1 2 ;;
+            3 4 ; 2 3 4 5]) == :([1 2 3 4 ; 2 3 4 5])
+
+    @test Meta.parse("[1;\n]") == :([1;]) # ensure line breaks following semicolons are treated correctly
+    @test Meta.parse("[1;\n\n]") == :([1;])
+    @test Meta.parse("[1\n;]") == :([1;]) # semicolons following a linebreak are fine
+    @test Meta.parse("[1\n;;; 2]") == :([1;;; 2])
+    @test_throws ParseError Meta.parse("[1;\n;2]") # semicolons cannot straddle a line break
+    @test_throws ParseError Meta.parse("[1; ;2]") # semicolons cannot be separated by a space
+end
+
 # issue #25652
 x25652 = 1
 x25652_2 = let (x25652, _) = (x25652, nothing)
@@ -2787,3 +2819,114 @@ macro m_nospecialize_unnamed_hygiene()
 end
 
 @test @m_nospecialize_unnamed_hygiene()(1) === Any
+
+# https://github.com/JuliaLang/julia/issues/40574
+@testset "no mutation while destructuring" begin
+    x = [1, 2]
+    x[2], x[1] = x
+    @test x == [2, 1]
+
+    x = [1, 2, 3]
+    x[3], x[1:2]... = x
+    @test x == [2, 3, 1]
+end
+
+@testset "escaping newlines inside strings" begin
+    c = "c"
+
+    @test "a\
+b" == "ab"
+    @test "a\
+    b" == "a    b"
+    @test raw"a\
+b" == "a\\\nb"
+    @test "a$c\
+b" == "acb"
+    @test "\\
+" == "\\\n"
+
+
+    @test """
+          a\
+          b""" == "ab"
+    @test """
+          a\
+            b""" == "a  b"
+    @test """
+            a\
+          b""" == "  ab"
+    @test raw"""
+          a\
+          b""" == "a\\\nb"
+    @test """
+          a$c\
+          b""" == "acb"
+
+    @test """
+          \
+          """ == ""
+    @test """
+          \\
+          """ == "\\\n"
+    @test """
+          \\\
+          """ == "\\"
+    @test """
+          \\\\
+          """ == "\\\\\n"
+    @test """
+          \\\\\
+          """ == "\\\\"
+    @test """
+          \
+          \
+          """ == ""
+    @test """
+          \\
+          \
+          """ == "\\\n"
+    @test """
+          \\\
+          \
+          """ == "\\"
+
+
+    @test `a\
+b` == `ab`
+    @test `a\
+    b` == `a    b`
+    @test `a$c\
+b` == `acb`
+    @test `"a\
+b"` == `ab`
+    @test `'a\
+b'` == `$("a\\\nb")`
+    @test `\\
+` == `'\'`
+
+
+    @test ```
+          a\
+          b``` == `ab`
+    @test ```
+          a\
+            b``` == `a  b`
+    @test ```
+            a\
+          b``` == `  ab`
+    @test ```
+          a$c\
+          b``` == `acb`
+    @test ```
+          "a\
+          b"``` == `ab`
+    @test ```
+          'a\
+          b'``` == `$("a\\\nb")`
+    @test ```
+          \\
+          ``` == `'\'`
+end
+
+# issue #41253
+@test (function (::Dict{}); end)(Dict()) === nothing

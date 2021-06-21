@@ -116,7 +116,7 @@ f() = 2
 @test overdub(Ctx(), gcd, 10, 20) === gcd(10, 20)
 
 # Test that pure propagates for Cassette
-Base.@pure isbitstype(T) = T.isbitstype
+Base.@pure isbitstype(T) = Base.isbitstype(T)
 f31012(T) = Val(isbitstype(T))
 @test @inferred(overdub(Ctx(), f31012, Int64)) == Val(true)
 
@@ -135,3 +135,82 @@ let method = which(func2, ())
 end
 func3() = func2()
 @test_throws UndefVarError func3()
+
+
+
+## overlay method tables
+
+module OverlayModule
+
+using Base.Experimental: @MethodTable, @overlay
+
+@MethodTable(mt)
+
+@overlay mt function sin(x::Float64)
+    1
+end
+
+# short function def
+@overlay mt cos(x::Float64) = 2
+
+# parametric function def
+@overlay mt tan(x::T) where {T} = 3
+
+end
+
+methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, typemax(UInt))
+@test only(methods).method.module === Base.Math
+
+methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, typemax(UInt))
+@test only(methods).method.module === OverlayModule
+
+methods = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, typemax(UInt))
+@test isempty(methods)
+
+# precompilation
+
+load_path = mktempdir()
+depot_path = mktempdir()
+try
+    pushfirst!(LOAD_PATH, load_path)
+    pushfirst!(DEPOT_PATH, depot_path)
+
+    write(joinpath(load_path, "Foo.jl"),
+          """
+          module Foo
+          Base.Experimental.@MethodTable(mt)
+          Base.Experimental.@overlay mt sin(x::Int) = 1
+          end
+          """)
+
+     # precompiling Foo serializes the overlay method through the `mt` binding in the module
+     Foo = Base.require(Main, :Foo)
+     @test length(Foo.mt) == 1
+
+    write(joinpath(load_path, "Bar.jl"),
+          """
+          module Bar
+          Base.Experimental.@MethodTable(mt)
+          end
+          """)
+
+    write(joinpath(load_path, "Baz.jl"),
+          """
+          module Baz
+          using Bar
+          Base.Experimental.@overlay Bar.mt sin(x::Int) = 1
+          end
+          """)
+
+     # when referring an method table in another module,
+     # the overlay method needs to be discovered explicitly
+     Bar = Base.require(Main, :Bar)
+     @test length(Bar.mt) == 0
+     Baz = Base.require(Main, :Baz)
+     @test length(Bar.mt) == 1
+finally
+    rm(load_path, recursive=true, force=true)
+    rm(depot_path, recursive=true, force=true)
+    filter!((≠)(load_path), LOAD_PATH)
+    filter!((≠)(depot_path), DEPOT_PATH)
+end

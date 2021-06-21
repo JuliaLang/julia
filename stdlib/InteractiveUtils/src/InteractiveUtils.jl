@@ -167,7 +167,7 @@ The optional second argument restricts the search to a particular module or func
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
 """
-function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=false)
+function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
@@ -189,7 +189,7 @@ function _methodswith(t::Type, m::Module, supertypes::Bool)
     for nm in names(m)
         if isdefined(m, nm)
             f = getfield(m, nm)
-            if isa(f, Function)
+            if isa(f, Base.Callable)
                 methodswith(t, f, meths; supertypes = supertypes)
             end
         end
@@ -303,7 +303,7 @@ end
 function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested
-    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
+    isa(x, DataType) && x.name.abstract && dumpsubtypes(io, x, Main, n, indent)
     nothing
 end
 

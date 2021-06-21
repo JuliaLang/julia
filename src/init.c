@@ -205,7 +205,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     if (jl_all_tls_states == NULL)
         return;
 
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
 
     if (exitcode == 0)
         jl_write_compiler_output();
@@ -218,10 +218,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             JL_TRY {
-                size_t last_age = ptls->world_age;
-                ptls->world_age = jl_get_world_counter();
+                size_t last_age = ct->world_age;
+                ct->world_age = jl_get_world_counter();
                 jl_apply(&f, 1);
-                ptls->world_age = last_age;
+                ct->world_age = last_age;
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
@@ -237,7 +237,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
     JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
-    jl_gc_run_all_finalizers(ptls);
+    jl_gc_run_all_finalizers(ct);
 
     uv_loop_t *loop = jl_global_event_loop();
 
@@ -249,7 +249,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     JL_UV_LOCK();
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
-    if (ptls->current_task != NULL) {
+    if (ct != NULL) {
         while (item) {
             JL_TRY {
                 while (item) {
@@ -615,8 +615,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 
 static void jl_set_io_wait(int v)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->io_wait = v;
+    jl_task_t *ct = jl_current_task;
+    ct->ptls->io_wait = v;
 }
 
 extern jl_mutex_t jl_modules_mutex;
@@ -632,9 +632,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
     // Make sure we finalize the tls callback before starting any threads.
-    jl_get_ptls_states_getter();
-    jl_ptls_t ptls = jl_get_ptls_states();
-    (void)ptls; assert(ptls); // make sure early that we have initialized ptls
+    (void)jl_get_pgcstack();
     jl_safepoint_init();
     libsupport_init();
     htable_new(&jl_current_modules, 0);
@@ -646,16 +644,9 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     init_stdio();
     restore_fp_env();
     restore_signals();
+    jl_init_intrinsic_properties();
 
     jl_page_size = jl_getpagesize();
-    uint64_t total_mem = uv_get_total_memory();
-    uint64_t constrained_mem = uv_get_constrained_memory();
-    if (constrained_mem > 0 && constrained_mem < total_mem)
-        total_mem = constrained_mem;
-    if (total_mem >= (size_t)-1) {
-        total_mem = (size_t)-1;
-    }
-    jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
@@ -727,11 +718,14 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     }
 
     jl_gc_init();
-
+    jl_init_tasks();
     jl_init_threading();
-    jl_init_intrinsic_properties();
 
-    jl_gc_enable(0);
+    jl_ptls_t ptls = jl_init_threadtls(0);
+    jl_init_root_task(ptls, stack_lo, stack_hi);
+    jl_task_t *ct = jl_current_task;
+
+    jl_init_threadinginfra();
 
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
@@ -740,16 +734,12 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    if (jl_options.image_file) {
+    if (jl_options.image_file)
         jl_restore_system_image(jl_options.image_file);
-    }
-    else {
+    else
         jl_init_types();
-        jl_init_codegen();
-    }
 
-    jl_init_tasks();
-    jl_init_root_task(stack_lo, stack_hi);
+    jl_init_codegen();
     jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
@@ -770,10 +760,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
         // Do initialization needed before starting child threads
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
         if (f) {
-            size_t last_age = ptls->world_age;
-            ptls->world_age = jl_get_world_counter();
+            size_t last_age = ct->world_age;
+            ct->world_age = jl_get_world_counter();
             jl_apply(&f, 1);
-            ptls->world_age = last_age;
+            ct->world_age = last_age;
         }
     }
     else {
@@ -837,6 +827,7 @@ static void post_boot_hooks(void)
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
+    jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));

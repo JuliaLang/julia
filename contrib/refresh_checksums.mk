@@ -19,7 +19,7 @@ CLANG_TRIPLETS=$(filter %-darwin %-freebsd,$(TRIPLETS))
 NON_CLANG_TRIPLETS=$(filter-out %-darwin %-freebsd,$(TRIPLETS))
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
-BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib suitesparse openlibm blastrampoline
+BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib libsuitesparse openlibm blastrampoline
 BB_GCC_EXPANDED_PROJECTS=openblas csl
 BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools
 # These are non-BB source-only deps
@@ -102,6 +102,11 @@ pack-checksum-llvm-tools: | pack-checksum-llvm
 pack-checksum-llvm: | checksum-llvm-tools
 pack-checksum-csl: | pack-checksum-compilersupportlibraries
 pack-checksum-compilersupportlibraries: | checksum-csl
+
+# We need to adjust to the fact that the checksum files are called `suitesparse`
+pack-checksum-libsuitesparse: | pack-checksum-suitesparse
+	@# nothing to do but disable the prefix rule
+pack-checksum-suitesparse: | checksum-libsuitesparse
 
 # define how to pack parallel checksums into a single file format
 pack-checksum-%: FORCE

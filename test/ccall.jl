@@ -906,7 +906,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         global function $fname(s::$t)
             verbose && println("B: ", s)
             @test s == $v
-            if($(t).mutable)
+            if ismutable(s)
                 @test !(s === $a)
             end
             global c = s
@@ -934,7 +934,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         end
         verbose && println("C: ",b)
         @test b == $v
-        if ($(t).mutable)
+        if ismutable($v)
             @test !(b === c)
             @test !(b === a)
         end
@@ -943,7 +943,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         end
         verbose && println("C: ",b)
         @test b == $v
-        if ($(t).mutable)
+        if ismutable($v)
             @test !(b === c)
             @test !(b === a)
         end
@@ -953,7 +953,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
-        if ($(t).mutable)
+        if ismutable($v)
             @test !(b === a)
         end
         let cf = @cfunction($fname, Any, (Ref{$t},))
@@ -962,7 +962,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
-        if ($(t).mutable)
+        if ismutable($v)
             @test !(b === a)
         end
         let cf = @cfunction($fname, Any, (Ref{Any},))
@@ -970,7 +970,7 @@ for (t, v) in ((Complex{Int32}, :ci32), (Complex{Int64}, :ci64),
         end
         @test b == $v
         @test b === c
-        if ($(t).mutable)
+        if ismutable($v)
             @test !(b === a)
         end
         let cf = @cfunction($fname, Ref{AbstractString}, (Ref{Any},))
@@ -1443,15 +1443,28 @@ end
              eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
 @test_throws(UndefVarError(:Something_not_defined_20835),
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
+@test isempty(methods(f20835))
 
-@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Cvoid, (Some{T},), Some(0))
-@noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Some{T}, ())
-@test code_llvm(devnull, f21104at, (Type{Float64},)) === nothing
-@test code_llvm(devnull, f21104rt, (Type{Float64},)) === nothing
-@test_throws(ErrorException("ccall argument 1 doesn't correspond to a C type"),
-             f21104at(Float64))
-@test_throws(ErrorException("ccall return type doesn't correspond to a C type"),
-             f21104rt(Float64))
+@test_throws(ErrorException("ccall method definition: argument 1 type doesn't correspond to a C type"),
+             @eval f21104(::Type{T}) where {T} = ccall(:fn, Cvoid, (Some{T},), Some(0)))
+@test_throws(ErrorException("ccall method definition: return type doesn't correspond to a C type"),
+             @eval f21104(::Type{T}) where {T} = ccall(:fn, Some{T}, ()))
+@test isempty(methods(f21104))
+@test_throws(ErrorException("ccall method definition: argument 1 type doesn't correspond to a C type"),
+             @eval if false; ccall(:fn, Cvoid, (Some.body,), Some(0)); end)
+@test_throws(ErrorException("ccall method definition: return type doesn't correspond to a C type"),
+             @eval if false; ccall(:fn, Some.body, ()); end)
+@test_throws(ErrorException("ccall method definition: return type doesn't correspond to a C type"),
+             @eval if false; ccall(:fn, Tuple, ()); end)
+## TODO: lowering is broken on this (throws "syntax: ssavalue with no def")
+#@test_throws(ErrorException("ccall method definition: return type doesn't correspond to a C type"),
+#             @eval if false; ccall(:fn, Tuple{Val{T}} where T, ()); end)
+@test_throws(ErrorException("ccall method definition: return type doesn't correspond to a C type"),
+             @eval if false; ccall(:fn, Tuple{Val}, ()); end)
+@test_throws(TypeError, @eval if false; ccall(:fn, Some.var, ()); end)
+@test_throws(TypeError, @eval if false; ccall(:fn, Cvoid, (Some.var,), Some(0)); end)
+@test_throws(ErrorException("ccall method definition: Vararg not allowed for argument list"),
+             @eval ccall(+, Int, (Vararg{Int},), 1))
 
 # test for malformed syntax errors
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
@@ -1482,21 +1495,20 @@ end
 
 evalf_callback_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = ci.f(0.5)::Float64
 
-evalf_callback_c_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = @cfunction(
-    evalf_callback_19805, Float64, (callinfos_19805{FUNC_FT},))
-
-@test_throws(ErrorException("cfunction argument 1 doesn't correspond to a C type"),
-             evalf_callback_c_19805( callinfos_19805(sin) ))
-@test_throws(ErrorException("cfunction argument 2 doesn't correspond to a C type"),
-             @cfunction(+, Int, (Int, Nothing)))
-@test_throws(ErrorException("cfunction: Vararg syntax not allowed for argument list"),
-             @cfunction(+, Int, (Vararg{Int},)))
+@test_throws(ErrorException("cfunction method definition: argument 1 type doesn't correspond to a C type"),
+             @eval evalf_callback_c_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} =
+                 @cfunction(evalf_callback_19805, Float64, (callinfos_19805{FUNC_FT},)))
+@test isempty(methods(evalf_callback_c_19805))
+@test_throws(ErrorException("cfunction method definition: Vararg not allowed for argument list"),
+             @eval if false; @cfunction(+, Int, (Vararg{Int},)); end)
 @test_throws(ErrorException("could not evaluate cfunction argument type (it might depend on a local variable)"),
              @eval () -> @cfunction(+, Int, (Ref{T}, Ref{T})) where T)
 @test_throws(ErrorException("could not evaluate cfunction return type (it might depend on a local variable)"),
              @eval () -> @cfunction(+, Ref{T}, (Int, Int)) where T)
+@test_throws(ErrorException("cfunction argument 2 doesn't correspond to a C type"),
+             @eval @cfunction(+, Int, (Int, Nothing)))
 @test_throws(ErrorException("cfunction return type Ref{Any} is invalid. Use Any or Ptr{Any} instead."),
-             @cfunction(+, Ref{Any}, (Int, Int)))
+             @eval @cfunction(+, Ref{Any}, (Int, Int)))
 
 # test Ref{abstract_type} calling parameter passes a heap box
 abstract type Abstract22734 end

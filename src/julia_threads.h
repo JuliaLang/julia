@@ -7,6 +7,14 @@
 #include <atomics.h>
 // threading ------------------------------------------------------------------
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+JL_DLLEXPORT int16_t jl_threadid(void);
+JL_DLLEXPORT void jl_threading_profile(void);
+
 // JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
 
 // When running into scheduler issues, this may help provide information on the
@@ -133,11 +141,11 @@ typedef struct {
 
     // variables for allocating objects from pools
 #ifdef _P64
-#  define JL_GC_N_POOLS 41
+#  define JL_GC_N_POOLS 49
 #elif MAX_ALIGN == 8
-#  define JL_GC_N_POOLS 42
+#  define JL_GC_N_POOLS 50
 #else
-#  define JL_GC_N_POOLS 43
+#  define JL_GC_N_POOLS 51
 #endif
     jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
 
@@ -182,9 +190,7 @@ struct _jl_bt_element_t;
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
-struct _jl_tls_states_t {
-    struct _jl_gcframe_t *pgcstack;
-    size_t world_age;
+typedef struct _jl_tls_states_t {
     int16_t tid;
     uint64_t rngseed;
     volatile size_t *safepoint;
@@ -197,18 +203,23 @@ struct _jl_tls_states_t {
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
     int8_t gc_state; // read from foreign threads
+    // execution of certain certain impure
+    // statements is prohibited from certain
+    // callbacks (such as generated functions)
+    // as it may make compilation undecidable
+    int8_t in_pure_callback;
     int8_t in_finalizer;
     int8_t disable_gc;
-    jl_thread_heap_t heap;
+    // Counter to disable finalizer **on the current thread**
+    int finalizers_inhibited;
+    jl_thread_heap_t heap; // this is very large, and the offset is baked into codegen
     jl_thread_gc_num_t gc_num;
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
     volatile sig_atomic_t defer_signal;
     struct _jl_task_t *current_task;
     struct _jl_task_t *next_task;
-#ifdef MIGRATE_TASKS
     struct _jl_task_t *previous_task;
-#endif
     struct _jl_task_t *root_task;
     struct _jl_timing_block_t *timing_stack;
     void *stackbase;
@@ -222,7 +233,6 @@ struct _jl_tls_states_t {
         struct jl_stack_context_t copy_stack_ctx;
 #endif
     };
-    jl_jmp_buf *safe_restore;
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
@@ -240,18 +250,11 @@ struct _jl_tls_states_t {
     void *signal_stack;
 #endif
     jl_thread_t system_id;
-    // execution of certain certain impure
-    // statements is prohibited from certain
-    // callbacks (such as generated functions)
-    // as it may make compilation undecidable
-    int in_pure_callback;
-    // Counter to disable finalizer **on the current thread**
-    int finalizers_inhibited;
     arraylist_t finalizers;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
     jl_gc_mark_sp_t gc_mark_sp;
-    // Saved exception for previous external API call or NULL if cleared.
+    // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
 
@@ -264,7 +267,9 @@ struct _jl_tls_states_t {
         uint64_t sleep_enter;
         uint64_t sleep_leave;
     )
-};
+} jl_tls_states_t;
+
+typedef jl_tls_states_t *jl_ptls_t;
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
@@ -283,10 +288,6 @@ struct _jl_tls_states_t {
 #  define jl_cpu_pause() ((void)0)
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
-#endif
-
-#ifdef __cplusplus
-extern "C" {
 #endif
 
 JL_DLLEXPORT void (jl_cpu_pause)(void);
@@ -342,10 +343,10 @@ int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
 #endif
 JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
-JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
+JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
-JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_ptls_t ptls);
+JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
 extern JL_DLLEXPORT int jl_gc_have_pending_finalizers;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
