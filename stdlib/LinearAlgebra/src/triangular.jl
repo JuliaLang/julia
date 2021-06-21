@@ -2314,7 +2314,7 @@ sqrt(A::UnitLowerTriangular) = copy(transpose(sqrt(copy(transpose(A)))))
 # Auxiliary functions for matrix square root
 
 # square root of upper triangular or real upper quasitriangular matrix
-function sqrt_quasitriu(A0; blockwidth=64)
+function sqrt_quasitriu(A0; blockwidth = eltype(A0) <: Complex ? 512 : 256)
     n = checksquare(A0)
     T = eltype(A0)
     Tr = typeof(sqrt(real(zero(T))))
