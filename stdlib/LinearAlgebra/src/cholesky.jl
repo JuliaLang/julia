@@ -110,8 +110,10 @@ positive semi-definite matrix `A`. This is the return type of [`cholesky(_, Val(
 the corresponding matrix factorization function.
 
 The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`
-via `F.L` and `F.U`, and the permutation via `F.p`, where `A[F.p, F.p] ≈ F.U' * F.U ≈ F.L * F.L'`,
-or alternatively `A ≈ F.U[:, F.p]' * F.U[:, F.p] ≈ F.L[F.p, :] * F.L[F.p, :]'`.
+via `F.L` and `F.U`, and the permutation via `F.p`, where `A[F.p, F.p] ≈ Ur' * Ur ≈ Lr * Lr'`
+with `Ur = F.U[1:F.rank, :]` and `Lr = F.L[:, 1:F.rank]`, or alternatively
+`A ≈ Up' * Up ≈ Lp * Lp'` with `Up = F.U[1:F.rank, invperm(F.p)]` and
+`Lp = F.L[invperm(F.p), 1:F.rank]`.
 
 The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
@@ -138,6 +140,9 @@ permutation:
  3
  2
  1
+
+julia> C.U[1:C.rank, :]' *  C.U[1:C.rank, :] ≈ A[C.p, C.p]
+true
 
 julia> l, u = C; # destructuring via iteration
 
@@ -398,8 +403,9 @@ and return a [`CholeskyPivoted`](@ref) factorization. The matrix `A` can either 
 or [`Hermitian`](@ref) [`StridedMatrix`](@ref) or a *perfectly* symmetric or Hermitian `StridedMatrix`.
 
 The triangular Cholesky factor can be obtained from the factorization `F` via `F.L` and `F.U`,
-and the permutation via `F.p`, where `A[F.p, F.p] ≈ F.U' * F.U ≈ F.L * F.L'`, or alternatively
-`A ≈ F.U[:, F.p]' * F.U[:, F.p] ≈ F.L[F.p, :] * F.L[F.p, :]'`.
+and the permutation via `F.p`, where `A[F.p, F.p] ≈ Ur' * Ur ≈ Lr * Lr'` with `Ur = F.U[1:F.rank, :]`
+and `Lr = F.L[:, 1:F.rank]`, or alternatively `A ≈ Up' * Up ≈ Lp * Lp'` with
+`Up = F.U[1:F.rank, invperm(F.p)]` and `Lp = F.L[invperm(F.p), 1:F.rank]`.
 
 The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
@@ -435,7 +441,7 @@ permutation:
  2
  1
 
-julia> C.U[:, C.p]' * C.U[:, C.p] ≈ A
+julia> C.U[1:C.rank, :]' * C.U[1:C.rank, :] ≈ A[C.p, C.p]
 true
 
 julia> l, u = C; # destructuring via iteration
