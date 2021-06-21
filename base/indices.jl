@@ -165,6 +165,9 @@ function promote_shape(a::Dims, b::Dims)
     return a
 end
 
+function promote_shape(a::Array{A}, b::Array{B}) where {A,B}
+    promote_shape(size(a), size(b))
+end
 function promote_shape(a::AbstractArray, b::AbstractArray)
     promote_shape(axes(a), axes(b))
 end
