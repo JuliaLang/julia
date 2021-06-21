@@ -1948,3 +1948,31 @@ end
         @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
     end
 end
+
+@testset "non 1-based ranges indexing" begin
+    struct ZeroBasedUnitRange{T,A<:AbstractUnitRange{T}} <: AbstractUnitRange{T}
+        a :: A
+        function ZeroBasedUnitRange(a::AbstractUnitRange{T}) where {T}
+            @assert !Base.has_offset_axes(a)
+            new{T, typeof(a)}(a)
+        end
+    end
+
+    Base.parent(A::ZeroBasedUnitRange) = A.a
+    Base.first(A::ZeroBasedUnitRange) = first(parent(A))
+    Base.length(A::ZeroBasedUnitRange) = length(parent(A))
+    Base.last(A::ZeroBasedUnitRange) = last(parent(A))
+    Base.size(A::ZeroBasedUnitRange) = size(parent(A))
+    Base.axes(A::ZeroBasedUnitRange) = map(x -> Base.IdentityUnitRange(0:x-1), size(parent(A)))
+    Base.getindex(A::ZeroBasedUnitRange, i::Int) = parent(A)[i + 1]
+    Base.getindex(A::ZeroBasedUnitRange, i::Integer) = parent(A)[i + 1]
+    Base.firstindex(A::ZeroBasedUnitRange) = 0
+    function Base.show(io::IO, A::ZeroBasedUnitRange)
+        show(io, parent(A))
+        print(io, " with indices $(axes(A,1))")
+    end
+
+    r = ZeroBasedUnitRange(5:8)
+    @test r[0:2] == r[0]:r[2]
+    @test r[0:1:2] == r[0]:1:r[2]
+end
