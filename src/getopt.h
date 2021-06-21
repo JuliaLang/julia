@@ -30,6 +30,16 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 extern "C" {
 #endif
 
+// rename exported symbols to avoid clash with the corresponding symbols
+// in the C library.
+#define getopt              jl_getopt
+#define optarg              jl_optarg
+#define optind              jl_optind
+#define opterr              jl_opterr
+#define option              jl_option
+#define getopt_long         jl_getopt_long
+#define getopt_long_only    jl_getopt_long_only
+
 int getopt(int, char * const [], const char *);
 extern char *optarg;
 extern int optind, opterr, optopt;

@@ -78,9 +78,7 @@ RUNTIME_SRCS += anticodegen
 LLVM_LIBS := support
 endif
 
-ifeq ($(USEMSVC), 1)
 SRCS += getopt
-endif
 
 SRCS += $(RUNTIME_SRCS)
 
