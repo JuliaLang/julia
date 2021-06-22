@@ -565,12 +565,14 @@ function inline_worthy(ir::IRCode,
     return true
 end
 
-function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::CodeInfo, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
+function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
     throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
-        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, src.slottypes, unionpenalties, params, throw_blocks)
+        thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
+                                            src isa CodeInfo ? src.slottypes : src.argtypes,
+                                            unionpenalties, params, throw_blocks)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost

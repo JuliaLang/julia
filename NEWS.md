@@ -45,6 +45,7 @@ Standard library changes
 #### Markdown
 
 #### Printf
+* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
 #### Random
 
@@ -69,6 +70,10 @@ Standard library changes
 #### Mmap
 
 #### DelimitedFiles
+
+#### Logging
+* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
+  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
 
 
 Deprecated or removed

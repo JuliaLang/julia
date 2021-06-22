@@ -1120,6 +1120,15 @@ static bool can_optimize_isa_union(jl_uniontype_t *type)
     return (_can_optimize_isa(type->a, counter) && _can_optimize_isa(type->b, counter));
 }
 
+// a simple case of emit_isa that is obvious not to include a safe-point
+static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_value_t *dt)
+{
+    assert(jl_is_concrete_type(dt));
+    return ctx.builder.CreateICmpEQ(
+            emit_typeof_boxed(ctx, arg),
+            track_pjlvalue(ctx, literal_pointer_val(ctx, dt)));
+}
+
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x,
                                         jl_value_t *type, const std::string *msg);
 
@@ -1217,12 +1226,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 return std::make_pair(ConstantInt::get(T_int1, 0), false);
             }
         }
-        if (auto val = ((jl_datatype_t*)intersected_type)->instance) {
-            auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, val));
-            return {ctx.builder.CreateICmpEQ(boxed(ctx, x), ptr), false};
-        }
-        return std::make_pair(ctx.builder.CreateICmpEQ(emit_typeof_boxed(ctx, x),
-            track_pjlvalue(ctx, literal_pointer_val(ctx, intersected_type))), false);
+        return std::make_pair(emit_exactly_isa(ctx, x, intersected_type), false);
     }
     jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(intersected_type);
     if (jl_is_datatype(dt) && !dt->name->abstract && jl_subtype(dt->name->wrapper, type)) {
