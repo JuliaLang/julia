@@ -170,7 +170,7 @@ function map_id(on_value, on_label, @nospecialize(stmt))
         end
     elseif stmt isa UpsilonNode
         if isdefined(stmt, :val)
-            UpsilonNode(stmt.val)
+            UpsilonNode(recurse(stmt.val))
         else
             stmt
         end
@@ -232,15 +232,29 @@ function foreach_descendant(f::F, ibb::Int, cfg::CFG, visited = falses(length(cf
 end
 # TODO: use worklist?
 
-function foreach_def(f::F, v::SSAValue, ir::IRCode, visited = falses(length(ir.stmts))) where {F}
+"""
+    foreach_def(f, v::SSAValue, ir::IRCode) -> exhausted::Bool
+
+Evaluate `f` on the statement `stmt::Instruction` corresponding to `v` and also
+all of its arguments recursively ("upwards") as long as `f` returns `true`.
+Note that `f` may receive non-`Instruction` argument (e.g., `Argument`).  Return
+`false` iff `f` returns `false` at least once.
+"""
+function foreach_def(
+    f::F,
+    v::SSAValue,
+    ir::IRCode,
+    visited = falses(length(ir.stmts)),
+) where {F}
     function g(i)
         visited[i] && return true
         visited[i] = true
         stmt = ir.stmts[i]
+        inst = stmt[:inst]
         ans = f(stmt)
         ans || return false
         cont = true
-        foreach_id(identity, stmt[:inst]) do v
+        foreach_id(identity, inst) do v
             if v isa SSAValue
                 cont &= g(v.id)
             else
@@ -359,6 +373,16 @@ function insert_new_nodes(ir::IRCode)
     return IRCode(ir, stmts, cfg, NewNodeStream())
 end
 
+function stmt_at(ir::IRCode, pos::Int)
+    pos <= length(ir.stmts) && return ir.stmts[pos]
+    return ir.new_nodes.stmts[pos-length(ir.stmts)]
+end
+
+function insert_pos(ir::IRCode, pos::Int)
+    pos <= length(ir.stmts) && return pos
+    return ir.new_nodes.info[pos-length(ir.stmts)].pos
+end
+
 is_sequential(stmts::InstructionStream) = !any(inst -> inst isa DetachNode, stmts.inst)
 is_sequential(ir::IRCode) = is_sequential(ir.stmts) && is_sequential(ir.new_nodes.stmts)
 
@@ -391,11 +415,122 @@ function foldunion(types)
     return T
 end
 
+struct _InaccessibleValue end
+
+function remove_stmt!(stmt::Instruction)
+    stmt[:inst] = _InaccessibleValue()
+    stmt[:type] = Any
+end
+
+function calls(inst, r::GlobalRef, nargs::Int)
+    isexpr(inst, :call) || isexpr(inst, :invoke) || return nothing
+    length(inst.args) == nargs + 1 || return nothing
+    f, = inst.args
+    if f isa GlobalRef
+        f === r || return nothing
+    else
+        isdefined(r.mod, r.name) || return nothing
+        g = getfield(r.mod, r.name)
+        f === g || return nothing
+        # TODO: check if this path is required
+    end
+    return inst.args
+end
+
+"""
+    lower_tapir_output!(ir::IRCode) -> ir′
+
+Lower output variables marked by `Tapir.Output` as Upsilon nodes.
+This removes the Phi nodes forbidden by Tapir.
+
+It transforms
+
+    %1 = Tapir.Output()
+    ...
+    %2 = ???
+    ...
+    %3 = ϕ(%1, %2)
+    ...
+    %4 = Tapir.loadoutput(%3)
+
+to
+
+    %1 = dead code
+    ...
+    %2 = ???
+    %2' = ϒ(%2)
+    ...
+    %3 = dead code
+    ...
+    %4 = φᶜ(%2')
+
+TODO: Currently, it assumes that output variables are not used at RHS positions;
+don't assume this. Or, throw a nice error.
+"""
+function lower_tapir_output!(ir::IRCode)
+    Tapir = tapir_module()
+    Tapir isa Module || return ir
+
+    # TODO: make it work without compaction?
+    ir = insert_new_nodes(ir)
+
+    function remove_defs(v)
+        v isa SSAValue || return
+        foreach_def(v, ir) do stmt
+            stmt isa Instruction || return true
+            if stmt[:inst] isa PhiNode
+                remove_stmt!(stmt)
+                return true
+            end
+            return false
+        end
+    end
+
+    # Follow and remove phi nodes; insert upsilons at definitions
+    function insert_upsilons(v)
+        v isa SSAValue || return []  # error?
+        upsilons = []
+        foreach_def(v, ir) do stmt
+            stmt isa Instruction || return true
+            if stmt[:inst] isa PhiNode
+                remove_stmt!(stmt)
+                return true  # keep following the chain
+            elseif calls(stmt[:inst], GlobalRef(Tapir, :Output), 0) !== nothing
+                remove_stmt!(stmt)
+            else
+                newinst = NewInstruction(UpsilonNode(SSAValue(stmt.idx)), stmt[:type])
+                ups = insert_node!(ir, stmt.idx, newinst, true)
+                push!(upsilons, ups)
+            end
+            return false
+        end
+        return upsilons
+    end
+
+    for i in 1:length(ir.stmts)
+        inst = ir.stmts.inst[i]
+        if (fargs = calls(inst, GlobalRef(Tapir, :loadoutput), 1)) !== nothing
+            _, a = fargs
+            if ir.stmts.type[i] isa Const
+                remove_defs(a)
+                ir.stmts.inst[i] = QuoteNode(ir.stmts.type[i].val)
+            else
+                ir.stmts.inst[i] = PhiCNode(insert_upsilons(a))
+            end
+        end
+    end
+
+    return ir
+end
+
 function early_tapir_pass!(ir::IRCode)
     is_sequential(ir) && return ir
     Tapir = tapir_module()
     Tapir isa Module || return ir
     Base = Main.Base::Module
+
+    ir = lower_tapir_output!(ir)
+    # TODO: maybe remove the following rather unsound transformation
 
     # Not calling `compact!(ir)` to avoid any DCE at this point. For example,
     # constant propagation makes it very difficult to determine where we should
@@ -722,14 +857,19 @@ function outline_child_task(ir::IRCode, task::ChildTask)
     end
     for iold in outside_uses
         ival = outvaluemap[iold]
-        stmts.inst[ival + 1] = Expr(
+        if stmts.inst[ival] isa UpsilonNode
+            value = stmts.inst[ival].val
+        else
+            value = SSAValue(ival)
+        end
+        stmts.inst[ival+1] = Expr(
             :call,
             setfield!,
             SSAValue(outrefmap[iold]),  # ::RefValue
             QuoteNode(:x),              # name
-            SSAValue(ival),             # value
+            value,
         )
-        stmts.type[ival + 1] = Any
+        stmts.type[ival+1] = Any
     end
 
     # Turn reattach nodes into return nodes (otherwise, they introduce edges to
@@ -921,6 +1061,21 @@ function lower_tapir!(ir::IRCode)
             return v
         end
         if replaced.x
+            if user isa PhiCNode
+                values = copy(user.values)
+                for iups in eachindex(user.values)
+                    ups = user.values[iups]
+                    if ups isa SSAValue
+                        ustmt = stmt_at(ir, ups.id)
+                        if !(ustmt[:inst] isa UpsilonNode)
+                            newinst = NewInstruction(UpsilonNode(ups), ustmt[:type])
+                            values[iups] =
+                                insert_node!(ir, insert_pos(ir, ups.id), newinst, true)
+                        end
+                    end
+                end
+                user = PhiCNode(values)
+            end
             stmt[:inst] = user
         end
     end
@@ -931,6 +1086,8 @@ function lower_tapir!(ir::IRCode)
         isexpr(inst, :invoke) && inst.args[2] === Tapir.noinline_box || continue
         stmt[:inst] = Expr(:call, Tapir.box, inst.args[3])
     end
+
+    # TODO: remove redundant PhiC and Upsilon nodes
 
     # Finalize the changes in the IR (clears the node inserted to `ir.new_nodes`):
     ir = compact!(ir, true)
@@ -1016,6 +1173,12 @@ function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Cod
     return remove_tapir!(src)
 end
 
+"""
+    lower_tapir(linfo::MethodInstance, ci::CodeInfo) -> ci′::CodeInfo
+
+This is called from `jl_emit_code` (`codegen.cpp`); i.e., just before compilation to
+to LLVM.
+"""
 lower_tapir(linfo::MethodInstance, ci::CodeInfo) =
     lower_tapir(NativeInterpreter(), linfo, ci)
 

@@ -4,10 +4,9 @@ function fib(N)
     if N <= 1
         return N
     end
-    local x1, x2
     Tapir.@sync begin
-        Tapir.@spawn x1 = fib(N - 1)
-        x2 = fib(N - 2)
+        Tapir.@spawn $x1 = fib(N - 1)
+        $x2 = fib(N - 2)
     end
     return x1 + x2
 end
@@ -181,12 +180,11 @@ P = 1
 
 function f()
     v = 'a'
-    local a, b
     Tapir.@sync begin
         Tapir.@spawn begin
-            a = (v, produce())
+            $a = (v, produce())
         end
-        b = produce()
+        $b = produce()
     end
     return (a, b)
 end
