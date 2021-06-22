@@ -351,7 +351,7 @@ end
 function parse_connection_info(str)
     m = match(r"^julia_worker:(\d+)#(.*)", str)
     if m !== nothing
-        (m.captures[2], parse(UInt16, m.captures[1]))
+        (String(m.captures[2]), parse(UInt16, m.captures[1]))
     else
         ("", UInt16(0))
     end
