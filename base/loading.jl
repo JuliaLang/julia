@@ -1252,7 +1252,7 @@ Base.include # defined in Base.jl
 
 # Full include() implementation which is used after bootstrap
 function _include(mapexpr::Function, mod::Module, _path::AbstractString)
-    @_noinline_meta # Workaround for module availability in _simplify_include_frames
+    @noinline # Workaround for module availability in _simplify_include_frames
     path, prev = _include_dependency(mod, _path)
     for callback in include_callbacks # to preserve order, must come before eval in include_string
         invokelatest(callback, mod, path)

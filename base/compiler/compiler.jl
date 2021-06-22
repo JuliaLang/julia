@@ -22,14 +22,10 @@ eval(m, x) = Core.eval(m, x)
 include(x) = Core.include(Compiler, x)
 include(mod, x) = Core.include(mod, x)
 
-# The real @inline macro is not available until after array.jl, so this
-# internal macro splices the meta Expr directly into the function body.
-macro _inline_meta()
-    Expr(:meta, :inline)
-end
-macro _noinline_meta()
-    Expr(:meta, :noinline)
-end
+# The @inline/@noinline macros that can be applied to a function declaration are not available
+# until after array.jl, and so we will mark them within a function body instead.
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
 
 # essential files and libraries
 include("essentials.jl")
@@ -88,9 +84,9 @@ using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
 
 ntuple(f, ::Val{0}) = ()
-ntuple(f, ::Val{1}) = (@_inline_meta; (f(1),))
-ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
-ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
+ntuple(f, ::Val{1}) = (@inline; (f(1),))
+ntuple(f, ::Val{2}) = (@inline; (f(1), f(2)))
+ntuple(f, ::Val{3}) = (@inline; (f(1), f(2), f(3)))
 ntuple(f, ::Val{n}) where {n} = ntuple(f, n::Int)
 ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 

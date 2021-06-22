@@ -51,12 +51,12 @@ true
 """
 function setindex(x::Tuple, v, i::Integer)
     @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
-    @_inline_meta
+    @inline
     _setindex(v, i, x...)
 end
 
 function _setindex(v, i::Integer, args...)
-    @_inline_meta
+    @inline
     return ntuple(j -> ifelse(j == i, v, args[j]), length(args))
 end
 
@@ -64,7 +64,7 @@ end
 ## iterating ##
 
 function iterate(@nospecialize(t::Tuple), i::Int=1)
-    @_inline_meta
+    @inline
     return (1 <= i <= length(t)) ? (@inbounds t[i], i + 1) : nothing
 end
 
@@ -74,19 +74,19 @@ prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
 nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 
 function keys(t::Tuple, t2::Tuple...)
-    @_inline_meta
+    @inline
     OneTo(_maxlength(t, t2...))
 end
 _maxlength(t::Tuple) = length(t)
 function _maxlength(t::Tuple, t2::Tuple, t3::Tuple...)
-    @_inline_meta
+    @inline
     max(length(t), _maxlength(t2, t3...))
 end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-indexed_iterate(t::Tuple, i::Int, state=1) = (@_inline_meta; (getfield(t, i), i+1))
-indexed_iterate(a::Array, i::Int, state=1) = (@_inline_meta; (a[i], i+1))
+indexed_iterate(t::Tuple, i::Int, state=1) = (@inline; (getfield(t, i), i+1))
+indexed_iterate(a::Array, i::Int, state=1) = (@inline; (a[i], i+1))
 function indexed_iterate(I, i)
     x = iterate(I)
     x === nothing && throw(BoundsError(I, i))
@@ -203,13 +203,13 @@ ERROR: ArgumentError: Cannot call front on an empty tuple.
 ```
 """
 function front(t::Tuple)
-    @_inline_meta
+    @inline
     _front(t...)
 end
 _front() = throw(ArgumentError("Cannot call front on an empty tuple."))
 _front(v) = ()
 function _front(v, t...)
-    @_inline_meta
+    @inline
     (v, _front(t...)...)
 end
 
@@ -217,10 +217,10 @@ end
 
 # 1 argument function
 map(f, t::Tuple{})              = ()
-map(f, t::Tuple{Any,})          = (@_inline_meta; (f(t[1]),))
-map(f, t::Tuple{Any, Any})      = (@_inline_meta; (f(t[1]), f(t[2])))
-map(f, t::Tuple{Any, Any, Any}) = (@_inline_meta; (f(t[1]), f(t[2]), f(t[3])))
-map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
+map(f, t::Tuple{Any,})          = (@inline; (f(t[1]),))
+map(f, t::Tuple{Any, Any})      = (@inline; (f(t[1]), f(t[2])))
+map(f, t::Tuple{Any, Any, Any}) = (@inline; (f(t[1]), f(t[2]), f(t[3])))
+map(f, t::Tuple)                = (@inline; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
 const Any32{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                        Any,Any,Any,Any,Any,Any,Any,Any,
@@ -242,10 +242,10 @@ function map(f, t::Any32)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
-map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (@_inline_meta; (f(t[1],s[1]),))
-map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (@_inline_meta; (f(t[1],s[1]), f(t[2],s[2])))
+map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (@inline; (f(t[1],s[1]),))
+map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (@inline; (f(t[1],s[1]), f(t[2],s[2])))
 function map(f, t::Tuple, s::Tuple)
-    @_inline_meta
+    @inline
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
 end
 function map(f, t::Any32, s::Any32)
@@ -261,7 +261,7 @@ heads(ts::Tuple...) = map(t -> t[1], ts)
 tails(ts::Tuple...) = map(tail, ts)
 map(f, ::Tuple{}...) = ()
 function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
-    @_inline_meta
+    @inline
     (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
 end
 function map(f, t1::Any32, t2::Any32, ts::Any32...)
@@ -281,7 +281,7 @@ fill_to_length(t::Tuple{}, val, ::Val{1}) = (val,)
 fill_to_length(t::Tuple{Any}, val, ::Val{2}) = (t..., val)
 fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 #function fill_to_length(t::Tuple, val, ::Val{N}) where {N}
-#    @_inline_meta
+#    @inline
 #    return (t..., ntuple(i -> val, N - length(t))...)
 #end
 
@@ -318,12 +318,12 @@ Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
 _totuple(::Type{Tuple{}}, itr, s...) = ()
 
 function _totuple_err(@nospecialize T)
-    @_noinline_meta
+    @noinline
     throw(ArgumentError("too few elements for tuple type $T"))
 end
 
 function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
-    @_inline_meta
+    @inline
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
     t1 = convert(fieldtype(T, 1), y[1])
@@ -514,7 +514,7 @@ any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 # equivalent to any(f, t), to be used only in bootstrap
 _tuple_any(f::Function, t::Tuple) = _tuple_any(f, false, t...)
 function _tuple_any(f::Function, tf::Bool, a, b...)
-    @_inline_meta
+    @inline
     _tuple_any(f, tf | f(a), b...)
 end
 _tuple_any(f::Function, tf::Bool) = tf

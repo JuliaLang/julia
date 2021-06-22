@@ -761,7 +761,7 @@ replace(f::Callable, t::Tuple; count::Integer=typemax(Int)) =
 
 function _replace(t::Tuple, count::Int, old_new::Tuple{Vararg{Pair}})
     _replace(t, count) do x
-        @_inline_meta
+        @inline
         for o_n in old_new
             isequal(first(o_n), x) && return last(o_n)
         end
