@@ -242,8 +242,8 @@ f() do
 end
 ```
 
-!!! compat "Julia 1.7"
-    The usage within a function body requires at least Julia 1.7.
+!!! compat "Julia 1.8"
+    The usage within a function body requires at least Julia 1.8.
 
 !!! note
     If the function is trivial (for example returning a constant) it might get inlined anyway.
