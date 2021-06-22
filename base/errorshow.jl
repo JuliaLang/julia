@@ -242,7 +242,7 @@ function showerror(io::IO, ex::MethodError)
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
-    elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
+    elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
         print(io, "objects of type ", ft, " are not callable")
@@ -878,6 +878,7 @@ end
 # the instance of a number (probably missing the operator)
 # eg: (1 + 2)(3 + 4)
 function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
     if ex.f isa Number
         print(io, "\nMaybe you forgot to use an operator such as ")
         printstyled(io, "*, ^, %, / etc. ", color=:cyan)

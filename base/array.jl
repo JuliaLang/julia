@@ -499,7 +499,7 @@ function zeros end
     ones([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
-See also: [`fill`](@ref), [`zeros`](@ref).
+See also [`fill`](@ref), [`zeros`](@ref).
 
 # Examples
 ```jldoctest
@@ -816,6 +816,8 @@ iterate(A::Array, i=1) = (@_inline_meta; (i % UInt) - 1 < length(A) ? (@inbounds
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
 `a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
 
+See also [`get`](@ref), [`keys`](@ref), [`eachindex`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
@@ -965,7 +967,7 @@ function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
     _growend!(a, 1)
-    a[end] = itemT
+    @inbounds a[end] = itemT
     return a
 end
 

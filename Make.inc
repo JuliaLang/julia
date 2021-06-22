@@ -45,7 +45,7 @@ USE_SYSTEM_BLAS:=0
 USE_SYSTEM_LAPACK:=0
 USE_SYSTEM_GMP:=0
 USE_SYSTEM_MPFR:=0
-USE_SYSTEM_SUITESPARSE:=0
+USE_SYSTEM_LIBSUITESPARSE:=0
 USE_SYSTEM_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
 USE_SYSTEM_MBEDTLS:=0
@@ -1168,7 +1168,7 @@ BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(s
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1187,7 +1187,7 @@ $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 
 # Warn if the user tries to build something that requires `gfortran` but they don't have it installed.
 ifeq ($(FC_VERSION),)
-ifneq ($(USE_BINARYBUILDER_OPENBLAS)$(USE_BINARYBUILDER_SUITESPARSE),11)
+ifneq ($(USE_BINARYBUILDER_OPENBLAS)$(USE_BINARYBUILDER_LIBSUITESPARSE),11)
 $(error "Attempting to build OpenBLAS or SuiteSparse without a functioning fortran compiler!")
 endif
 endif
@@ -1243,7 +1243,7 @@ else ifneq ($(USEMSVC), 1)
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive
+OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -latomic -Wl,--export-dynamic,--as-needed,--no-whole-archive
 # Detect if ifunc is supported
 IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
@@ -1269,7 +1269,7 @@ endif
 
 ifeq ($(OS), FreeBSD)
 JLDFLAGS := -Wl,-Bdynamic
-OSLIBS += -lelf -lkvm -lrt -lpthread
+OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 
 # Tweak order of libgcc_s in DT_NEEDED,
 # make it loaded first to
@@ -1374,8 +1374,8 @@ endif
 ifeq ($(USE_SYSTEM_BLAS),1)
 # Since the names don't line up (`BLAS` vs. `OPENBLAS`), manually gate:
 USE_BINARYBUILDER_OPENBLAS := 0
-# Disable BB SuiteSparse if we're using system BLAS
-USE_BINARYBUILDER_SUITESPARSE := 0
+# Disable BB LIBSUITESPARSE if we're using system BLAS
+USE_BINARYBUILDER_LIBSUITESPARSE := 0
 endif
 
 ifeq ($(USE_SYSTEM_LIBM),1)

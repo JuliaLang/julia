@@ -1914,10 +1914,14 @@ julia> Tuple(Real[1, 2, pi])  # takes a collection
 tuple
 
 """
-    getfield(value, name::Symbol)
-    getfield(value, i::Int)
+    getfield(value, name::Symbol, [order::Symbol])
+    getfield(value, i::Int, [order::Symbol])
 
-Extract a field from a composite `value` by name or position.
+Extract a field from a composite `value` by name or position. Optionally, an
+ordering can be defined for the operation. If the field was declared `@atomic`,
+the specification is strongly recommended to be compatible with the stores to
+that location. Otherwise, if not declared as `@atomic`, this parameter must be
+`:not_atomic` if specified.
 See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
@@ -1938,10 +1942,14 @@ julia> getfield(a, 1)
 getfield
 
 """
-    setfield!(value, name::Symbol, x)
+    setfield!(value, name::Symbol, x, [order::Symbol])
+    setfield!(value, i::Int, x, [order::Symbol])
 
-Assign `x` to a named field in `value` of composite type.
-The `value` must be mutable and `x` must be a subtype of `fieldtype(typeof(value), name)`.
+Assign `x` to a named field in `value` of composite type. The `value` must be
+mutable and `x` must be a subtype of `fieldtype(typeof(value), name)`.
+Additionally, an ordering can be specified for this operation. If the field was
+declared `@atomic`, this specification is mandatory. Otherwise, if not declared
+as `@atomic`, it must be `:not_atomic` if specified.
 See also [`setproperty!`](@ref Base.setproperty!).
 
 # Examples
@@ -1961,10 +1969,60 @@ julia> a = 1//2
 1//2
 
 julia> setfield!(a, :num, 3);
-ERROR: setfield! immutable struct of type Rational cannot be changed
+ERROR: setfield!: immutable struct of type Rational cannot be changed
 ```
 """
 setfield!
+
+"""
+    swapfield!(value, name::Symbol, x, [order::Symbol])
+    swapfield!(value, i::Int, x, [order::Symbol])
+
+These atomically perform the operations to simultaneously get and set a field:
+
+    y = getfield!(value, name)
+    setfield!(value, name, x)
+    return y
+```
+"""
+swapfield!
+
+"""
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol])
+    modifyfield!(value, i::Int, op, x, [order::Symbol])
+
+These atomically perform the operations to get and set a field after applying
+the function `op`.
+
+    y = getfield!(value, name)
+    z = op(y, x)
+    setfield!(value, name, z)
+    return y, z
+
+If supported by the hardware (for example, atomic increment), this may be
+optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+"""
+modifyfield!
+
+"""
+    replacefield!(value, name::Symbol, expected, desired,
+        [success_order::Symbol, [fail_order::Symbol=success_order]) =>
+        (old, Bool)
+
+These atomically perform the operations to get and conditionally set a field to
+a given value.
+
+    y = getfield!(value, name, fail_order)
+    ok = y === expected
+    if ok
+        setfield!(value, name, desired, success_order)
+    end
+    return y, ok
+
+If supported by the hardware, this may be optimized to the appropriate hardware
+instruction, otherwise it'll use a loop.
+"""
+replacefield!
 
 """
     typeof(x)
@@ -1989,12 +2047,16 @@ Matrix{Float64} (alias for Array{Float64, 2})
 typeof
 
 """
-    isdefined(m::Module, s::Symbol)
-    isdefined(object, s::Symbol)
-    isdefined(object, index::Int)
+    isdefined(m::Module, s::Symbol, [order::Symbol])
+    isdefined(object, s::Symbol, [order::Symbol])
+    isdefined(object, index::Int, [order::Symbol])
 
-Tests whether a global variable or object field is defined. The arguments can be a module and a symbol
-or a composite object and field name (as a symbol) or index.
+Tests whether a global variable or object field is defined. The arguments can
+be a module and a symbol or a composite object and field name (as a symbol) or
+index. Optionally, an ordering can be defined for the operation. If the field
+was declared `@atomic`, the specification is strongly recommended to be
+compatible with the stores to that location. Otherwise, if not declared as
+`@atomic`, this parameter must be `:not_atomic` if specified.
 
 To test whether an array element is defined, use [`isassigned`](@ref) instead.
 
@@ -2351,8 +2413,8 @@ julia> 4.5/2
 """
     ArgumentError(msg)
 
-The parameters to a function call do not match a valid signature. Argument `msg` is a
-descriptive error string.
+The arguments passed to a function are invalid.
+`msg` is a descriptive error message.
 """
 ArgumentError
 
@@ -2582,8 +2644,11 @@ typeassert
 
 """
     getproperty(value, name::Symbol)
+    getproperty(value, name::Symbol, order::Symbol)
 
 The syntax `a.b` calls `getproperty(a, :b)`.
+The syntax `@atomic order a.b` calls `getproperty(a, :b, :order)` and
+the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
 
 # Examples
 ```jldoctest
@@ -2608,20 +2673,61 @@ julia> obj.x
 1
 ```
 
-See also [`propertynames`](@ref Base.propertynames) and
+See also [`getfield`](@ref Core.getfield),
+[`propertynames`](@ref Base.propertynames) and
 [`setproperty!`](@ref Base.setproperty!).
 """
 Base.getproperty
 
 """
     setproperty!(value, name::Symbol, x)
+    setproperty!(value, name::Symbol, x, order::Symbol)
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
+The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
+and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
 
-See also [`propertynames`](@ref Base.propertynames) and
+See also [`setfield!`](@ref Core.setfield!),
+[`propertynames`](@ref Base.propertynames) and
 [`getproperty`](@ref Base.getproperty).
 """
 Base.setproperty!
+
+"""
+    swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic)
+
+The syntax `@atomic a.b, _ = c, a.b` returns `(c, swapproperty!(a, :b, c, :sequentially_consistent))`,
+where there must be one getfield expression common to both sides.
+
+See also [`swapfield!`](@ref Core.swapfield!)
+and [`setproperty!`](@ref Base.setproperty!).
+"""
+Base.swapproperty!
+
+"""
+    modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
+
+The syntax `@atomic! max(a().b, c)` returns `modifyproperty!(a(), :b,
+max, c, :sequentially_consistent))`, where the first argument must be a
+`getfield` expression and is modified atomically.
+
+See also [`modifyfield!`](@ref Core.modifyfield!)
+and [`setproperty!`](@ref Base.setproperty!).
+"""
+Base.modifyproperty!
+
+"""
+    replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+
+Perform a compare-and-swap operation on `x.f` from `expected` to `desired`, per
+egal. The syntax `@atomic_replace! x.f expected => desired` can be used instead
+of the function call form.
+
+See also [`replacefield!`](@ref Core.replacefield!)
+and [`setproperty!`](@ref Base.setproperty!).
+"""
+Base.replaceproperty!
+
 
 """
     StridedArray{T, N}
@@ -2697,5 +2803,47 @@ Base.Base
 A quoted piece of code, that does not support interpolation. See the [manual section about QuoteNodes](@ref man-quote-node) for details.
 """
 QuoteNode
+
+
+"""
+    "
+`"` Is used to delimit string literals.
+
+# Examples
+
+```jldoctest
+julia> "Hello World!"
+"Hello World!"
+
+julia> "Hello World!\\n"
+"Hello World!\\n"
+```
+
+See also [`\"""`](@ref \"\"\").
+"""
+kw"\""
+
+"""
+    \"""
+`\"""` is used to delimit string literals. Strings created by triple quotation marks can contain `"` characters without escaping and are dedented to the level of the least-indented line. This is useful for defining strings within code that is indented.
+
+# Examples
+
+```jldoctest
+julia> \"""Hello World!\"""
+"Hello World!"
+
+julia> \"""Contains "quote" characters\"""
+"Contains \\"quote\\" characters"
+
+julia> \"""
+         Hello,
+         world.\"""
+"Hello,\\nworld."
+```
+
+See also [`"`](@ref \")
+"""
+kw"\"\"\""
 
 end

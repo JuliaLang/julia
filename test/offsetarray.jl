@@ -2,6 +2,7 @@
 
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
+import .Main.OffsetArrays: IdOffsetRange
 using DelimitedFiles
 using Random
 using LinearAlgebra
@@ -231,9 +232,9 @@ targets1 = ["0-dimensional OffsetArray(::Array{Float64, 0}) with eltype Float64:
             "1×1×1×1 OffsetArray(::Array{Float64, 4}, 2:2, 3:3, 4:4, 5:5) with eltype Float64 with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
-            "([1.0], [1.0])",
-            "([1.0], [1.0])",
-            "([1.0], [1.0])"]
+            "([1.0;;], [1.0;;])",
+            "([1.0;;;], [1.0;;;])",
+            "([1.0;;;;], [1.0;;;;])"]
 @testset "printing of OffsetArray with n=$n" for n = 0:4
     a = OffsetArray(fill(1.,ntuple(Returns(1),n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
@@ -785,4 +786,12 @@ end
     for i in r
         @test b[i] == a[r[i]]
     end
+end
+
+@testset "proper patition for non-1-indexed vector" begin
+    @test Iterators.partition(OffsetArray(1:10,10), 5) |> collect == [1:5,6:10] # OffsetVector
+    @test Iterators.partition(OffsetArray(collect(1:10),10), 5) |> collect == [1:5,6:10] # OffsetVector
+    @test Iterators.partition(OffsetArray(reshape(1:9,3,3), (3,3)), 5) |> collect == [1:5,6:9] #OffsetMatrix
+    @test Iterators.partition(OffsetArray(reshape(collect(1:9),3,3), (3,3)), 5) |> collect == [1:5,6:9] #OffsetMatrix
+    @test Iterators.partition(IdOffsetRange(2:7,10), 5) |> collect == [12:16,17:17] # IdOffsetRange
 end

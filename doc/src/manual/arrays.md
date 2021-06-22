@@ -5,10 +5,11 @@ technical computing languages pay a lot of attention to their array implementati
 of other containers. Julia does not treat arrays in any special way. The array library is implemented
 almost completely in Julia itself, and derives its performance from the compiler, just like any
 other code written in Julia. As such, it's also possible to define custom array types by inheriting
-from [`AbstractArray`](@ref). See the [manual section on the AbstractArray interface](@ref man-interface-array) for more details
-on implementing a custom array type.
+from [`AbstractArray`](@ref). See the [manual section on the AbstractArray interface](@ref man-interface-array)
+for more details on implementing a custom array type.
 
-An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
+An array is a collection of objects stored in a multi-dimensional grid. Zero-dimensional arrays
+are allowed, see [this FAQ entry](@ref faq-array-0dim). In the most general case,
 an array may contain objects of type [`Any`](@ref). For most computational purposes, arrays should contain
 objects of a more specific type, such as [`Float64`](@ref) or [`Int32`](@ref).
 
@@ -67,9 +68,9 @@ omitted it will default to [`Float64`](@ref).
 | [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
 | [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
 | [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix. Requires `using LinearAlgebra` for [`I`](@ref).                                                                                                                                                                                                                   |
-| [`range(start, stop=stop, length=n)`](@ref)    | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
+| [`range(start, stop, n)`](@ref)                | a range of `n` linearly spaced elements from `start` to `stop` |
 | [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x`                                                                                                                                                                                                        |
-| [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`                                                                                                                                                                                                         |
+| [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`. In particular, `fill(x)` constructs a zero-dimensional `Array` containing `x`. |
 
 [^1]: *iid*, independently and identically distributed.
 
@@ -95,7 +96,7 @@ Here, `(2, 3)` is a [`Tuple`](@ref) and the first argument — the element type 
 ## [Array literals](@id man-array-literals)
 
 Arrays can also be directly constructed with square braces; the syntax `[A, B, C, ...]`
-creates a one dimensional array (i.e., a vector) containing the comma-separated arguments as
+creates a one-dimensional array (i.e., a vector) containing the comma-separated arguments as
 its elements. The element type ([`eltype`](@ref)) of the resulting array is automatically
 determined by the types of the arguments inside the braces. If all the arguments are the
 same type, then that is its `eltype`. If they all have a common
@@ -126,7 +127,7 @@ Any[]
 
 ### [Concatenation](@id man-array-concatenation)
 
-If the arguments inside the square brackets are separated by semicolons (`;`) or newlines
+If the arguments inside the square brackets are separated by single semicolons (`;`) or newlines
 instead of commas, then their contents are _vertically concatenated_ together instead of
 the arguments being used as elements themselves.
 
@@ -154,7 +155,7 @@ julia> [1:2
  6
 ```
 
-Similarly, if the arguments are separated by tabs or spaces, then their contents are
+Similarly, if the arguments are separated by tabs or spaces or double semicolons, then their contents are
 _horizontally concatenated_ together.
 
 ```jldoctest
@@ -171,9 +172,13 @@ julia> [[1,2]  [4,5]  [7,8]]
 julia> [1 2 3] # Numbers can also be horizontally concatenated
 1×3 Matrix{Int64}:
  1  2  3
+
+julia> [1;; 2;; 3;; 4]
+1×4 Matrix{Int64}:
+ 1  2  3  4
 ```
 
-Using semicolons (or newlines) and spaces (or tabs) can be combined to concatenate
+Single semicolons (or newlines) and spaces (or tabs) can be combined to concatenate
 both horizontally and vertically at the same time.
 
 ```jldoctest
@@ -189,17 +194,135 @@ julia> [zeros(Int, 2, 2) [1; 2]
  0  0  1
  0  0  2
  3  4  5
+
+julia> [[1 1]; 2 3; [4 4]]
+3×2 Matrix{Int64}:
+ 1  1
+ 2  3
+ 4  4
+```
+
+Spaces (and tabs) have a higher precedence than semicolons, performing any horizontal
+concatenations first and then concatenating the result. Using double semicolons for the
+horizontal concatenation, on the other hand, performs any vertical concatenations before
+horizontally concatenating the result.
+
+```jldoctest
+julia> [zeros(Int, 2, 2) ; [3 4] ;; [1; 2] ; 5]
+3×3 Matrix{Int64}:
+ 0  0  1
+ 0  0  2
+ 3  4  5
+
+julia> [1:2; 4;; 1; 3:4]
+3×2 Matrix{Int64}:
+ 1  1
+ 2  3
+ 4  4
+```
+
+Just as `;` and `;;` concatenate in the first and second dimension, using more semicolons
+extends this same general scheme. The number of semicolons in the separator specifies the
+particular dimension, so `;;;` concetenates in the third dimension, `;;;;` in the 4th, and
+so on. Fewer semicolons take precedence, so the lower dimensions are generally concatenated
+first.
+
+```jldoctest
+julia> [1; 2;; 3; 4;; 5; 6;;;
+        7; 8;; 9; 10;; 11; 12]
+2×3×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  3  5
+ 2  4  6
+
+[:, :, 2] =
+ 7   9  11
+ 8  10  12
+```
+
+Like before, spaces (and tabs) for horizontal concatenation have a higher precedence than
+any number of semicolons. Thus, higher-dimensional arrays can also be written by specifying
+their rows first, with their elements textually arranged in a manner similar to their layout:
+
+```jldoctest
+julia> [1 3 5
+        2 4 6;;;
+        7 9 11
+        8 10 12]
+2×3×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  3  5
+ 2  4  6
+
+[:, :, 2] =
+ 7   9  11
+ 8  10  12
+
+julia> [1 2;;; 3 4;;;; 5 6;;; 7 8]
+1×2×2×2 Array{Int64, 4}:
+[:, :, 1, 1] =
+ 1  2
+
+[:, :, 2, 1] =
+ 3  4
+
+[:, :, 1, 2] =
+ 5  6
+
+[:, :, 2, 2] =
+ 7  8
+
+julia> [[1 2;;; 3 4];;;; [5 6];;; [7 8]]
+1×2×2×2 Array{Int64, 4}:
+[:, :, 1, 1] =
+ 1  2
+
+[:, :, 2, 1] =
+ 3  4
+
+[:, :, 1, 2] =
+ 5  6
+
+[:, :, 2, 2] =
+ 7  8
+```
+
+Although they both mean concatenation in the second dimension, spaces (or tabs) and `;;`
+cannot appear in the same array expression unless the double semicolon is simply serving as
+a "line continuation" character. This allows a single horizontal concatenation to span
+multiple lines (without the line break being interpreted as a vertical concatenation).
+
+```jldoctest
+julia> [1 2 ;;
+       3 4]
+1×4 Matrix{Int64}:
+ 1  2  3  4
+```
+
+Terminating semicolons may also be used to add trailing length 1 dimensions.
+
+```jldoctest
+julia> [1;;]
+1×1 Matrix{Int64}:
+ 1
+
+julia> [2; 3;;;]
+2×1×1 Array{Int64, 3}:
+[:, :, 1] =
+ 2
+ 3
 ```
 
 More generally, concatenation can be accomplished through the [`cat`](@ref) function.
 These syntaxes are shorthands for function calls that themselves are convenience functions:
 
-| Syntax            | Function        | Description                                        |
-|:----------------- |:--------------- |:-------------------------------------------------- |
-|                   | [`cat`](@ref)   | concatenate input arrays along dimension(s) `k`    |
-| `[A; B; C; ...]`  | [`vcat`](@ref)  | shorthand for `cat(A...; dims=1)                   |
-| `[A B C ...]`     | [`hcat`](@ref)  | shorthand for `cat(A...; dims=2)                   |
-| `[A B; C D; ...]` | [`hvcat`](@ref) | simultaneous vertical and horizontal concatenation |
+| Syntax                 | Function         | Description                                                                                                |
+|:---------------------- |:---------------- |:---------------------------------------------------------------------------------------------------------- |
+|                        | [`cat`](@ref)    | concatenate input arrays along dimension(s) `k`                                                            |
+| `[A; B; C; ...]`       | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)                                                                           |
+| `[A B C ...]`          | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)                                                                           |
+| `[A B; C D; ...]`      | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                                         |
+| `[A; C;; B; D;;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where number of semicolons indicate the dimension to concatenate |
 
 ### Typed array literals
 
@@ -570,6 +693,12 @@ julia> A[2, :]
 
 julia> A[:, 3]
 3-element Vector{Int64}:
+ 13
+ 15
+ 17
+
+julia> A[:, 3:3]
+3×1 Matrix{Int64}:
  13
  15
  17

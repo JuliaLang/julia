@@ -57,7 +57,7 @@ Mathematically a range is uniquely determined by any three of `start`, `step`, `
 Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
+  to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
 
 # Examples
 ```jldoctest
@@ -1217,7 +1217,9 @@ function sum(r::AbstractRange{<:Real})
 end
 
 function _in_range(x, r::AbstractRange)
-    if step(r) == 0
+    if !isfinite(x)
+        return false
+    elseif iszero(step(r))
         return !isempty(r) && first(r) == x
     else
         n = round(Integer, (x - first(r)) / step(r)) + 1
@@ -1282,7 +1284,7 @@ end
 Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
 i.e. `y = mod(x - first(r), n) + first(r)`.
 
-See also: [`mod1`](@ref).
+See also [`mod1`](@ref).
 
 # Examples
 ```jldoctest

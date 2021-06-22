@@ -91,10 +91,17 @@
     /*  pointer access */ \
     ADD_I(pointerref, 3) \
     ADD_I(pointerset, 4) \
-    /* c interface */ \
+    /*  pointer atomics */ \
+    ADD_I(atomic_fence, 1) \
+    ADD_I(atomic_pointerref, 2) \
+    ADD_I(atomic_pointerset, 3) \
+    ADD_I(atomic_pointerswap, 3) \
+    ADD_I(atomic_pointermodify, 4) \
+    ADD_I(atomic_pointerreplace, 5) \
+    /*  c interface */ \
     ADD_I(cglobal, 2) \
     ALIAS(llvmcall, llvmcall) \
-    /* object access */ \
+    /*  object access */ \
     ADD_I(arraylen, 1) \
     /*  hidden intrinsics */ \
     ADD_HIDDEN(cglobal_auto, 1)
