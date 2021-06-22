@@ -34,7 +34,7 @@ end
 
 convert(::Type{T}, x::T) where {T>:Nothing} = x
 convert(::Type{T}, x) where {T>:Nothing} = convert(nonnothingtype_checked(T), x)
-convert(::Type{Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
+convert(::Type{Nothing}, x) = show_convert_error(IO, MethodError(convert, (Nothing, x)))
 convert(::Type{Nothing}, ::Nothing) = nothing
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
@@ -142,4 +142,3 @@ macro something(args...)
     end
     return esc(:(something(let val; $expr; end)))
 end
-
