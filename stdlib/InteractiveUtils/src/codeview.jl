@@ -57,10 +57,11 @@ Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to sp
 
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Symbol=:default, optimize::Bool=false)
+function code_warntype(io::IO, @nospecialize(f), @nospecialize(t);
+                       debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
-    for (src, rettype) in code_typed(f, t, optimize=optimize)
+    for (src, rettype) in code_typed(f, t; optimize, kwargs...)
         lambda_io::IOContext = io
         p = src.parent
         nargs::Int = 0

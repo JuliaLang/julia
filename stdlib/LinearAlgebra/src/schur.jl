@@ -149,7 +149,7 @@ true
 schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
 schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
 
-schur(A::AbstractMatrix{T}) where {T} = schur!(copyto!(Matrix{eigtype(T)}(undef, size(A)...), A))
+schur(A::AbstractMatrix{T}) where {T} = schur!(copy_to_array(A, eigtype(T)))
 function schur(A::RealHermSymComplexHerm)
     F = eigen(A; sortby=nothing)
     return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
@@ -352,6 +352,10 @@ Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 """
 schur(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schur!(copy(A),copy(B))
 function schur(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return schur!(copy_oftype(A, S), copy_oftype(B, S))
+end
+function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
     return schur!(copy_oftype(A, S), copy_oftype(B, S))
 end

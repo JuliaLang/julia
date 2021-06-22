@@ -467,6 +467,11 @@ end
 
         @test !(1 in 1:0)
         @test !(1.0 in 1.0:0.0)
+
+        for r = (1:10, 1//1:10//1, 1:2:5, 1//2:1//2:5//2, 1.0:5.0, LinRange(1.5, 5.5, 9)),
+            x = (NaN16, Inf32, -Inf64, 1//0, -1//0)
+            @test !(x in r)
+        end
     end
     @testset "in() works across types, including non-numeric types (#21728)" begin
         @test 1//1 in 1:3
