@@ -9,6 +9,7 @@ agents:
 
 steps:
   - label: "analyzegc"
+    key: analyzegc
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
@@ -24,6 +25,7 @@ steps:
     timeout_in_minutes: 60
 
   - label: "llvmpasses"
+    key: llvmpasses
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
