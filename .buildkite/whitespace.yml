@@ -17,5 +17,5 @@ steps:
           rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v1/llvm-passes.tar.gz
           rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
     commands: |
-      make -j 6 check-whitespace
+      make -j$${JULIA_NUM_CORES} check-whitespace
     timeout_in_minutes: 10
