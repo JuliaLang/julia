@@ -207,8 +207,8 @@ f() do
 end
 ```
 
-!!! compat "Julia 1.7"
-    The usage within a function body requires at least Julia 1.7.
+!!! compat "Julia 1.8"
+    The usage within a function body requires at least Julia 1.8.
 """
 macro inline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
