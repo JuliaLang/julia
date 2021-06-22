@@ -190,17 +190,16 @@ function f()
 end
 
 function set_distinct(bool::Bool)
-    local x, y
     Tapir.@sync begin
         Tapir.@spawn if bool
-            x = 1
+            $x = 1
         else
-            y = 2
+            $y = 2
         end
         if bool
-            y = 3
+            $y = 3
         else
-            x = 4
+            $x = 4
         end
     end
     return x + y
@@ -295,10 +294,9 @@ function _mapfold(f, op, xs, basesize)
     else
         left = @inbounds @view xs[begin:(end-begin+1)÷2]
         right = @inbounds @view xs[(end-begin+1)÷2+1:end]
-        local y, z
         Tapir.@sync begin
-            Tapir.@spawn z = _mapfold(f, op, right, basesize)
-            y = _mapfold(f, op, left, basesize)
+            Tapir.@spawn $z = _mapfold(f, op, right, basesize)
+            $y = _mapfold(f, op, left, basesize)
         end
         return op(y, z)
     end

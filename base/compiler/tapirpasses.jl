@@ -126,6 +126,7 @@ append_uses!(uses, @nospecialize(stmt)) = append_uses_and_args!(uses, nothing, s
 
 """
     map_id(on_value, on_label, stmt::T) -> stmt′::T
+    map_id(on_value, on_phi_label, on_goto_label, stmt::T) -> stmt′::T
 
 Map over the locations containing IDs in `stmt`; i.e., run the function
 `on_value` on `SSAValue` or `Arguments` in `stmt` and the function `on_label`
@@ -138,16 +139,18 @@ corresponding "fields" updated by these functions.
 * `on_label`: a function that accepts a basic block label (e.g., `goto.label`
   of a `goto::GotoNode` statement)
 """
-function map_id(on_value, on_label, @nospecialize(stmt))
-    recurse(@nospecialize x) = map_id(on_value, on_label, x)
+map_id(on_value, on_label, @nospecialize(stmt)) = map_id(on_value, on_label, on_label, stmt)
+
+function map_id(on_value, on_phi_label, on_goto_label, @nospecialize(stmt))
+    recurse(@nospecialize x) = map_id(on_value, on_phi_label, on_goto_label, x)
     if stmt isa SSAValue
         on_value(stmt)
     elseif stmt isa Argument
         on_value(stmt)
     elseif stmt isa GotoNode
-        GotoNode(on_label(stmt.label))
+        GotoNode(on_goto_label(stmt.label))
     elseif stmt isa GotoIfNot
-        GotoIfNot(recurse(stmt.cond), on_label(stmt.dest))
+        GotoIfNot(recurse(stmt.cond), on_goto_label(stmt.dest))
     elseif stmt isa ReturnNode
         if isdefined(stmt, :val) && stmt.val isa SSAValue
             ReturnNode(recurse(stmt.val))
@@ -164,7 +167,7 @@ function map_id(on_value, on_label, @nospecialize(stmt))
             end
         end
         if stmt isa PhiNode
-            PhiNode(Int32[on_label(x) for x in stmt.edges], newvalues)
+            PhiNode(Int32[on_phi_label(x) for x in stmt.edges], newvalues)
         else
             PhiCNode(newvalues)
         end
@@ -175,9 +178,13 @@ function map_id(on_value, on_label, @nospecialize(stmt))
             stmt
         end
     elseif stmt isa DetachNode
-        DetachNode(recurse(stmt.syncregion), on_label(stmt.label), on_label(stmt.reattach))
+        DetachNode(
+            recurse(stmt.syncregion),
+            on_goto_label(stmt.label),
+            on_goto_label(stmt.reattach),
+        )
     elseif stmt isa ReattachNode
-        ReattachNode(recurse(stmt.syncregion), on_label(stmt.label))
+        ReattachNode(recurse(stmt.syncregion), on_goto_label(stmt.label))
     elseif stmt isa SyncNode
         SyncNode(recurse(stmt.syncregion))
     elseif stmt isa Expr
@@ -383,6 +390,271 @@ function insert_pos(ir::IRCode, pos::Int)
     return ir.new_nodes.info[pos-length(ir.stmts)].pos
 end
 
+function cfg_reindex!(cfg::CFG)
+    resize!(cfg.index, length(cfg.blocks) - 1)
+    for ibb in 2:length(cfg.blocks)
+        cfg.index[ibb-1] = first(cfg.blocks[ibb].stmts)
+    end
+    return cfg
+end
+
+function cumsum(xs)
+    ys = collect(xs)
+    acc = ys[1]
+    for i in 2:length(ys)
+        acc += ys[i]
+        ys[i] = acc
+    end
+    return ys
+end
+
+function fixup_linetable!(ir::IRCode)
+    indexmap = _fixup_linetable!(ir.linetable)
+    verify_linetable(ir.linetable)
+    lines = ir.stmts.line
+    for (i, l) in pairs(lines)
+        if l > 0
+            lines[i] = indexmap[lines[i]]
+        end
+    end
+end
+
+function _fixup_linetable!(linetable::Vector{LineInfoNode})
+    n = length(linetable)
+    indexmap = Vector{Int}(undef, n)
+    shift = 0
+    for i in 1:length(linetable)
+        line = linetable[i]
+        shift = max(shift, line.inlined_at - (i + shift) + 1)
+        indexmap[i] = i + shift
+    end
+    resize!(linetable, n + shift)
+    linetable[end] = linetable[n]
+    for i in n-1:-1:1
+        line = linetable[i]
+        for j in indexmap[i]:indexmap[i+1]-1
+            linetable[j] = line
+        end
+        indexmap[i] == i && break
+    end
+    return indexmap
+end
+
+function allocate_blocks!(ir::IRCode, statement_positions)
+    @assert issorted(statement_positions)
+    ssachangemap = Vector{Int}(undef, length(ir.stmts) + length(ir.new_nodes.stmts))
+    let iold = 1, inew = 1
+        for pos in statement_positions
+            while iold < pos
+                ssachangemap[iold] = inew
+                iold += 1
+                inew += 1
+            end
+            inew += 2
+        end
+        while iold <= length(ssachangemap)
+            ssachangemap[iold] = inew
+            iold += 1
+            inew += 1
+        end
+    end
+
+    target_blocks = BitSet()
+    block_to_positions = Vector{Vector{Int}}(undef, length(ir.cfg.blocks))
+    for pos in statement_positions
+        ipos = insert_pos(ir, pos)
+        ibb = block_for_inst(ir.cfg, ipos)
+        if ibb in target_blocks
+            poss = block_to_positions[ibb]
+        else
+            push!(target_blocks, ibb)
+            poss = block_to_positions[ibb] = Int[]
+        end
+        push!(poss, ipos)
+    end
+
+    bbchangemap = cumsum(
+        if ibb in target_blocks
+            1 + 2 * length(block_to_positions[ibb])
+        else
+            1
+        end for ibb in 1:length(ir.cfg.blocks)
+    )
+    newblocks = 2 * length(statement_positions)
+
+    # Insert `newblocks` new blocks:
+    oldnblocks = length(ir.cfg.blocks)
+    resize!(ir.cfg.blocks, oldnblocks + newblocks)
+    for iold in oldnblocks:-1:1
+        bb = ir.cfg.blocks[iold]
+        for labels in (bb.preds, bb.succs)
+            for (i, l) in pairs(labels)
+                labels[i] = bbchangemap[l]
+            end
+        end
+        start = ssachangemap[bb.stmts.start]
+        stop = ssachangemap[bb.stmts.stop]
+        ir.cfg.blocks[bbchangemap[iold]] = BasicBlock(bb, StmtRange(start, stop))
+    end
+    for iold in target_blocks
+        positions = block_to_positions[iold]
+        ilst = bbchangemap[iold]  # using bbchangemap as it's already moved
+        bblst = ir.cfg.blocks[ilst]
+
+        inew = get(bbchangemap, iold - 1, 0)
+        preoldpos = 0  # for detecting duplicated positions
+        p1 = first(bblst.stmts)
+        isfirst = true
+        for (i, oldpos) in pairs(positions)
+            if preoldpos == oldpos
+                p2 = p1
+            else
+                preoldpos = oldpos
+                if isfirst
+                    isfirst = false
+                    p2 = ssachangemap[oldpos-1] + 1
+                    p1 = min(p1, p2)
+                else
+                    p1 = ssachangemap[oldpos-1]
+                    p2 = p1 + 1
+                    if p1 < first(bblst.stmts)
+                        p1 += 1  # p1 should be in the same BB
+                    end
+                end
+            end
+            p3 = p2 + 1
+            @assert p1 <= p2 < p3
+            ir.cfg.blocks[inew+1] = BasicBlock(StmtRange(p1, p2))
+            ir.cfg.blocks[inew+2] = BasicBlock(StmtRange(p3, p3))
+            p1 = p3 + 1
+            inew += 2
+        end
+        ifst = get(bbchangemap, iold - 1, 0) + 1
+        bbfst = ir.cfg.blocks[ifst]
+        for p in bblst.preds
+            k = findfirst(==(ilst), ir.cfg.blocks[p].succs)
+            @assert k !== nothing
+            ir.cfg.blocks[p].succs[k] = ifst
+        end
+        copy!(bbfst.preds, bblst.preds)
+        empty!(bblst.preds)
+        stmts = StmtRange(ssachangemap[positions[end]], last(bblst.stmts))
+        ir.cfg.blocks[bbchangemap[iold]] = BasicBlock(bblst, stmts)
+        @assert !isempty(stmts)
+    end
+    for bb in ir.cfg.blocks
+        @assert !isempty(bb.stmts)
+    end
+
+    # Bump SSA IDs and BB labels in CFG:
+    cfg_reindex!(ir.cfg)
+
+    # Like `bbchangemap` but maps to the first added BB (not the last)
+    gotolabelchangemap = cumsum(
+        if ibb in target_blocks
+            1 + 2 * length(block_to_positions[ibb])
+        else
+            1
+        end for ibb in 0:length(ir.cfg.blocks)-1
+    )
+
+    on_value(a) = a
+    on_value(v::SSAValue) = SSAValue(ssachangemap[v.id])
+    on_phi_label(l) = bbchangemap[l]
+    on_goto_label(l) = gotolabelchangemap[l]
+    for stmts in (ir.stmts, ir.new_nodes.stmts)
+        for i in 1:length(stmts)
+            st = stmts[i]
+            st[:inst] = map_id(on_value, on_phi_label, on_goto_label, st[:inst])
+        end
+    end
+    minpos = statement_positions[1]  # it's sorted
+    for (i, info) in pairs(ir.new_nodes.info)
+        if info.pos >= minpos
+            ir.new_nodes.info[i] = if info.attach_after
+                NewNodeInfo(ssachangemap[info.pos], info.attach_after)
+            else
+                NewNodeInfo(get(ssachangemap, info.pos - 1, 0) + 1, info.attach_after)
+            end
+        end
+    end
+    for (i, info) in pairs(ir.linetable)
+        1 <= info.inlined_at <= length(ssachangemap) || continue
+        if info.inlined_at >= minpos
+            ir.linetable[i] = LineInfoNode(
+                info.module,
+                info.method,
+                info.file,
+                info.line,
+                ssachangemap[info.inlined_at],
+            )
+        end
+    end
+    fixup_linetable!(ir)
+
+    function allocate_stmts!(xs, filler)
+        n = length(xs)
+        resize!(xs, length(xs) + newblocks)
+        for i in n:-1:1
+            xs[ssachangemap[i]] = xs[i]
+        end
+        for i in 2:n
+            for j in ssachangemap[i-1]+1:ssachangemap[i]-1
+                xs[j] = filler
+            end
+        end
+        for js in (1:ssachangemap[1]-1, ssachangemap[end]+1:length(xs))
+            for j in js
+                xs[j] = filler
+            end
+        end
+    end
+
+    allocate_stmts!(ir.stmts.inst, GotoNode(0))  # dummy
+    allocate_stmts!(ir.stmts.type, Any)
+    allocate_stmts!(ir.stmts.info, nothing)
+    allocate_stmts!(ir.stmts.line, 0)
+    allocate_stmts!(ir.stmts.flag, 0)
+
+    return (; target_blocks, block_to_positions, ssachangemap, bbchangemap)
+end
+
+function allocate_gotoifnot_sequence!(ir::IRCode, statement_positions)
+    isempty(statement_positions) && return nothing
+    blocks = allocate_blocks!(ir, statement_positions)
+    (; target_blocks, block_to_positions, bbchangemap) = blocks
+    for iold in target_blocks
+        ibb = get(bbchangemap, iold - 1, 0) + 1
+        for _ in block_to_positions[iold]
+            b1 = ir.cfg.blocks[ibb]
+            b2 = ir.cfg.blocks[ibb+1]
+            b3 = ir.cfg.blocks[ibb+2]
+            push!(b1.succs, ibb + 1, ibb + 2)
+            push!(b2.preds, ibb)
+            push!(b2.succs, ibb + 2)
+            push!(b3.preds, ibb, ibb + 1)
+            @assert ir.stmts.inst[last(b1.stmts)] === GotoNode(0)
+            @assert ir.stmts.inst[last(b2.stmts)] === GotoNode(0)
+            ir.stmts.inst[last(b1.stmts)] = GotoIfNot(false, ibb + 2)  # dummy
+            ir.stmts.inst[last(b2.stmts)] = GotoNode(ibb + 2)
+            ibb += 2
+        end
+    end
+    return blocks
+end
+
+foreach_allocated_gotoifnot_block(_, ::Nothing) = nothing
+function foreach_allocated_gotoifnot_block(f, blocks)
+    (; target_blocks, block_to_positions, bbchangemap) = blocks
+    for iold in target_blocks
+        inew = get(bbchangemap, iold - 1, 0)
+        for _ in block_to_positions[iold]
+            f(inew + 1)
+            inew += 2
+        end
+    end
+end
+
 is_sequential(stmts::InstructionStream) = !any(inst -> inst isa DetachNode, stmts.inst)
 is_sequential(ir::IRCode) = is_sequential(ir.stmts) && is_sequential(ir.new_nodes.stmts)
 
@@ -423,7 +695,7 @@ function remove_stmt!(stmt::Instruction)
 end
 
 function calls(inst, r::GlobalRef, nargs::Int)
-    isexpr(inst, :call) || isexpr(inst, :invoke) || return nothing
+    isexpr(inst, :call) || return nothing
     length(inst.args) == nargs + 1 || return nothing
     f, = inst.args
     if f isa GlobalRef
@@ -764,7 +1036,7 @@ end
     outline_child_task(ir::IRCode, task::ChildTask) -> taskir::IRCode
 """
 function outline_child_task(ir::IRCode, task::ChildTask)
-    Base = Main.Base::Module
+    Tapir = tapir_module()::Module
 
     uses = BitSet()
     defs = BitSet()
@@ -807,10 +1079,10 @@ function outline_child_task(ir::IRCode, task::ChildTask)
         ssachangemap[iold] = inew
         if iold in outside_uses
             outvaluemap[iold] = inew
-            offset += 1
+            offset += 2  # two more instructions for each outside_uses
         end
     end
-    @assert offset == nargs + ncaps + 2 * nouts
+    @assert offset == nargs + ncaps + 3 * nouts
     labelchangemap = zeros(Int, length(ir.cfg.blocks))
     for (inew, iold) in enumerate(task.blocks)
         labelchangemap[iold] = inew
@@ -831,7 +1103,10 @@ function outline_child_task(ir::IRCode, task::ChildTask)
 
     # Create a new instruction for the new outlined task:
     stmts = InstructionStream()
-    resize!(stmts, nargs + ncaps + 2 * nouts + length(locals))
+    resize!(stmts, nargs + ncaps + 3 * nouts + length(locals))
+    # If we add new statement at the end of BB, we need to use the new statement
+    # instead. `bbendmap` (initially an identity) tracks these shifts:
+    bbendmap = collect(1:length(stmts))
     for (inew, iold) in enumerate(args)
         stmts.inst[inew] = Expr(:call, getfield, Argument(1), inew)
         stmts.type[inew] = ir.argtypes[iold]
@@ -847,9 +1122,10 @@ function outline_child_task(ir::IRCode, task::ChildTask)
     for (i, iold) in enumerate(outside_uses)
         inew = nargs + ncaps + i
         stmts.inst[inew] = Expr(:call, getfield, Argument(1), inew)
-        stmts.type[inew] = Base.RefValue{widenconst(ir.stmts[iold][:type])}
+        stmts.type[inew] = Tapir.UndefableRef{widenconst(ir.stmts[iold][:type])}
         # ASK: ditto
     end
+    # Actual computation executed in the child task:
     for iold in defs
         inew = ssachangemap[iold]
         stmts[inew] = ir.stmts[iold]
@@ -862,21 +1138,20 @@ function outline_child_task(ir::IRCode, task::ChildTask)
         else
             value = SSAValue(ival)
         end
-        stmts.inst[ival+1] = Expr(
-            :call,
-            setfield!,
-            SSAValue(outrefmap[iold]),  # ::RefValue
-            QuoteNode(:x),              # name
-            value,
-        )
+        refvalue = SSAValue(outrefmap[iold])  # ::UndefableRef
+        stmts.inst[ival+1] = Expr(:call, setfield!, refvalue, QuoteNode(:x), value)
+        stmts.inst[ival+2] = Expr(:call, setfield!, refvalue, QuoteNode(:set), true)
         stmts.type[ival+1] = Any
+        stmts.type[ival+2] = Any
+        bbendmap[ival] = ival + 2
     end
 
     # Turn reattach nodes into return nodes (otherwise, they introduce edges to
     # invalid blocks and also the IR does not contain returns).
     for i in task.reattaches
-        @assert stmts.inst[ssachangemap[i]] isa ReattachNode
-        stmts.inst[ssachangemap[i]] = ReturnNode(nothing)
+        inew = ssachangemap[i]
+        @assert stmts.inst[inew] isa ReattachNode
+        stmts.inst[inew] = ReturnNode(nothing)
     end
 
     # Fill in undefined return values
@@ -891,7 +1166,7 @@ function outline_child_task(ir::IRCode, task::ChildTask)
         isentry = i == 1
         bb = ir.cfg.blocks[ibb]
         start = ssachangemap[bb.stmts[begin]]
-        stop = ssachangemap[bb.stmts[end]]
+        stop = bbendmap[ssachangemap[bb.stmts[end]]]
         preds = Int[labelchangemap[i] for i in bb.preds]
         succs = Int[labelchangemap[i] for i in bb.succs]
         if isentry
@@ -955,7 +1230,6 @@ end
 function lower_tapir!(ir::IRCode)
     Tapir = tapir_module()
     Tapir isa Module || return ir
-    Base = Main.Base::Module
 
     tasks = child_tasks(ir)
     isempty(tasks) && return ir
@@ -978,8 +1252,13 @@ function lower_tapir!(ir::IRCode)
             tbl = get!(() -> Tuple{Int,Type,SSAValue}[], tobeloaded, syncregion)
         end
         for (T, iout) in outputs
-            R = Base.RefValue{T}
+            R = Tapir.UndefableRef{T}
             ref = insert_node!(ir, task.detach, NewInstruction(Expr(:new, R), R))
+            setset = NewInstruction(
+                Expr(:call, setfield!, ref, QuoteNode(:set), QuoteNode(false)),
+                Any,
+            )
+            insert_node!(ir, task.detach, setset)
             push!(arguments, ref)
             push!(tbl, (iout, T, ref))
         end
@@ -1009,8 +1288,8 @@ function lower_tapir!(ir::IRCode)
     # TODO: handle `@sync @spawn @spawn ...` (currently, we are assuming that the
     # syncregion is not used in nested tasks)
 
-    original_outputs = BitSet()
-    output_loader = zeros(Int, length(ir.stmts))
+    # Vector of 4-tuple (sync! position, original use potision, type, ref SSA value):
+    task_outputs = Tuple{Int,Int,Type,SSAValue}[]
     for i in 1:length(ir.stmts)
         inst = ir.stmts[i][:inst]
         if inst isa SyncNode
@@ -1035,47 +1314,76 @@ function lower_tapir!(ir::IRCode)
 
                 tbl = get(tobeloaded, syncregion, nothing)
                 if tbl !== nothing
-                    bb = ir.cfg.blocks[block_for_inst(ir.cfg, i)]
                     for (iout, T, ref) in tbl
-                        ex = Expr(:call, getfield, ref, QuoteNode(:x))
-                        load = insert_node!(ir, i, NewInstruction(ex, T))
-                        @assert load.id > 0
-                        output_loader[iout] = load.id
-                        push!(original_outputs, iout)
+                        push!(task_outputs, (i, iout, T, ref))
                     end
                 end
             end
         end
     end
+    sort!(task_outputs, by = first)
+
+    # Insert checks if the task output is assigned before each uses:
+    undef_checks = allocate_gotoifnot_sequence!(ir, map(first, task_outputs))
+    original_outputs = BitSet()
+    output_value = zeros(Int, length(ir.stmts))
+    output_isset = zeros(Int, length(ir.stmts))
+    output_index = RefValue(0)
+    foreach_allocated_gotoifnot_block(undef_checks) do ibb
+        # `ibb` is the index of BB inserted at the sync! position `task_outputs[i][1]`
+        i = output_index.x += 1
+        (_, iout, T, ref) = task_outputs[i]
+        iout = undef_checks.ssachangemap[iout]
+        ref = SSAValue(undef_checks.ssachangemap[ref.id])
+
+        b0 = ir.cfg.blocks[ibb]
+        b1 = ir.cfg.blocks[ibb+1]
+        @assert ir.stmts.inst[last(b0.stmts)] === GotoIfNot(false, ibb + 2)
+        @assert ir.stmts.inst[last(b1.stmts)] === GotoNode(ibb + 2)  # already set
+
+        isset_ex = Expr(:call, getfield, ref, QuoteNode(:set))
+        isset = insert_node!(ir, last(b0.stmts), NewInstruction(isset_ex, Bool))
+        ir.stmts.inst[last(b0.stmts)] = GotoIfNot(isset, ibb + 2)
+
+        # If `ref.set`, then `ref.x`:
+        load_ex = Expr(:call, getfield, ref, QuoteNode(:x))
+        load = insert_node!(ir, last(b1.stmts), NewInstruction(load_ex, T))
+
+        output_value[iout] = load.id
+        output_isset[iout] = isset.id
+        push!(original_outputs, iout)
+    end
 
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
         replaced = RefValue(false)
+        isphic = stmt[:inst] isa PhiCNode
         user = map_id(identity, stmt[:inst]) do v
             if v isa SSAValue
                 if v.id in original_outputs
                     replaced.x = true
-                    return SSAValue(output_loader[v.id])
+                    oid = output_value[v.id]
+                    load = stmt_at(ir, oid)
+                    if isphic
+                        newinst = NewInstruction(UpsilonNode(SSAValue(oid)), load[:type])
+                        ipos = insert_pos(ir, oid)
+                        return insert_node!(ir, ipos, newinst, ipos == oid)
+                    else
+                        # If the original use is not PhiC, it was used
+                        # unconditionally. Thus, we load the value
+                        # unconditionally. The place we used for loading `ref.set`
+                        #
+                        # This "non-PhiC" branch exists for supporting SROA. But
+                        # maybe it's better to lower Phi nodes introduced by
+                        # SROA to PhiC?
+                        newinst = NewInstruction(load[:inst], load[:type])
+                        return insert_node!(ir, insert_pos(ir, output_isset[v.id]), newinst)
+                    end
                 end
             end
             return v
         end
         if replaced.x
-            if user isa PhiCNode
-                values = copy(user.values)
-                for iups in eachindex(user.values)
-                    ups = user.values[iups]
-                    if ups isa SSAValue
-                        ustmt = stmt_at(ir, ups.id)
-                        if !(ustmt[:inst] isa UpsilonNode)
-                            newinst = NewInstruction(UpsilonNode(ups), ustmt[:type])
-                            values[iups] =
-                                insert_node!(ir, insert_pos(ir, ups.id), newinst, true)
-                        end
-                    end
-                end
-                user = PhiCNode(values)
-            end
             stmt[:inst] = user
         end
     end
@@ -1091,12 +1399,12 @@ function lower_tapir!(ir::IRCode)
 
     # Finalize the changes in the IR (clears the node inserted to `ir.new_nodes`):
     ir = compact!(ir, true)
+    # Remove the dead code in the detached sub-CFG (child tasks):
+    ir = cfg_simplify!(ir)
     if JLOptions().debug_level == 2
         verify_ir(ir)
         verify_linetable(ir.linetable)
     end
-    # Remove the dead code in the detached sub-CFG (child tasks):
-    ir = cfg_simplify!(ir)
     return ir
 end
 
@@ -1162,6 +1470,9 @@ function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Cod
     preserve_coverage = coverage_enabled(opt.mod)
     ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, opt)
     ir = slot2reg(ir, ci, nargs, opt)
+    if JLOptions().debug_level == 2
+        @timeit "verify pre-tapir" (verify_ir(ir); verify_linetable(ir.linetable))
+    end
     @timeit "tapir" ir = lower_tapir!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify tapir" (verify_ir(ir); verify_linetable(ir.linetable))
