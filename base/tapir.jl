@@ -26,7 +26,7 @@ end
 
 # Can we make it more efficient using the may-happen parallelism property
 # (i.e., the lack of concurrent synchronizations)?
-const sync! = Base.sync_end
+sync!(tasks::TaskGroup) = Base.sync_end(tasks)
 
 mutable struct UndefableRef{T}
     set::Bool
