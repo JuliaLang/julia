@@ -114,7 +114,7 @@ function throw_promote_shape_mismatch(a::Tuple{T,Vararg{T}},
     _has_axes = T <: AbstractUnitRange
     _normalize(d) = map(x -> _has_axes ? (firstindex(x):lastindex(x)) : x, d)
     _things = _has_axes ? "axes" : "size"
-    msg = "dimensions must match: a has $(_things) $(_normalize(a))"
+    msg = "a has $(_things) $(_normalize(a))"
     if b ≢ nothing
         msg *= ", b has $(_things) $(_normalize(b))"
     end
