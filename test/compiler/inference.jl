@@ -1551,9 +1551,9 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
 
 # inference of `T.mutable`
-@test Core.Compiler.getfield_tfunc(Const(Int.name), Const(:mutable)) == Const(false)
-@test Core.Compiler.getfield_tfunc(Const(Vector{Int}.name), Const(:mutable)) == Const(true)
-@test Core.Compiler.getfield_tfunc(Core.TypeName, Const(:mutable)) == Bool
+@test Core.Compiler.getfield_tfunc(Const(Int.name), Const(:flags)) == Const(0x4)
+@test Core.Compiler.getfield_tfunc(Const(Vector{Int}.name), Const(:flags)) == Const(0x2)
+@test Core.Compiler.getfield_tfunc(Core.TypeName, Const(:flags)) == UInt8
 
 # getfield on abstract named tuples. issue #32698
 import Core.Compiler.getfield_tfunc
@@ -2953,7 +2953,8 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Integer
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Any, Vararg}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Vararg}) == Expr
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Vararg}) == Expr
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Any, Vararg}) == Expr
@@ -2964,7 +2965,8 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Vararg}) == Int
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Any, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Any, Vararg}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Any
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Any
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Any
@@ -3313,3 +3315,11 @@ end |> first === Tuple{Int, String}
 
 # issue #40742
 @test Base.return_types(string, (Vector{Tuple{:x}},)) == Any[String]
+
+# issue #40804
+@test Base.return_types(()) do; ===(); end == Any[Union{}]
+@test Base.return_types(()) do; typeassert(); end == Any[Union{}]
+
+primitive type UInt24ish 24 end
+f34288(x) = Core.Intrinsics.checked_sdiv_int(x, Core.Intrinsics.trunc_int(UInt24ish, 0))
+@test Base.return_types(f34288, (UInt24ish,)) == Any[UInt24ish]

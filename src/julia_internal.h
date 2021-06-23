@@ -175,6 +175,26 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 }
 
 
+// this is a version of memcpy that preserves atomic memory ordering
+// which makes it safe to use for objects that can contain memory references
+// without risk of creating pointers out of thin air
+// TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
+//       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
+static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOTSAFEPOINT
+{
+    size_t i;
+    if (dstp < srcp || dstp > srcp + n) {
+        for (i = 0; i < n; i++) {
+            jl_atomic_store_relaxed(dstp + i, jl_atomic_load_relaxed(srcp + i));
+        }
+    }
+    else {
+        for (i = 0; i < n; i++) {
+            jl_atomic_store_relaxed(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
+        }
+    }
+}
+
 // -- gc.c -- //
 
 #define GC_CLEAN  0 // freshly allocated
@@ -227,12 +247,15 @@ static const int jl_gc_sizeclasses[] = {
     4, 8, 12,
 #endif
 
-    // 16 pools at 16-byte spacing
-    16, 32, 48, 64, 80, 96, 112, 128,
+    // 16 pools at 8-byte spacing
+    // the 8-byte aligned pools are only used for Strings
+    16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136,
+    // 8 pools at 16-byte spacing
     144, 160, 176, 192, 208, 224, 240, 256,
 
     // the following tables are computed for maximum packing efficiency via the formula:
-    // sz=(div(2^14-8,rng)÷16)*16; hcat(sz, (2^14-8)÷sz, 2^14-(2^14-8)÷sz.*sz)'
+    // pg = 2^14
+    // sz = (div.(pg-8, rng).÷16)*16; hcat(sz, (pg-8).÷sz, pg .- (pg-8).÷sz.*sz)'
 
     // rng = 60:-4:32 (8 pools)
     272, 288, 304, 336, 368, 400, 448, 496,
@@ -273,15 +296,14 @@ STATIC_INLINE int jl_gc_alignment(size_t sz)
 }
 JL_DLLEXPORT int jl_alignment(size_t sz);
 
-// the following table is computed from jl_gc_sizeclasses via the formula:
-// [searchsortedfirst(TABLE, i) for i = 0:16:table[end]]
-static const uint8_t szclass_table[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 21, 21, 22, 22, 23, 23, 23, 24, 24, 24, 25, 25, 25, 26, 26, 27, 27, 27, 28, 28, 28, 29, 29, 29, 29, 30, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 32, 32, 33, 33, 33, 33, 33, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 36, 36, 37, 37, 37, 37, 37, 37, 37, 37, 38, 38, 38, 38, 38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40};
+// the following table is computed as:
+// [searchsortedfirst(jl_gc_sizeclasses, i) - 1 for i = 0:16:jl_gc_sizeclasses[end]]
+static const uint8_t szclass_table[] = {0, 1, 3, 5, 7, 9, 11, 13, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 28, 29, 29, 30, 30, 31, 31, 31, 32, 32, 32, 33, 33, 33, 34, 34, 35, 35, 35, 36, 36, 36, 37, 37, 37, 37, 38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 40, 41, 41, 41, 41, 41, 42, 42, 42, 42, 42, 43, 43, 43, 43, 43, 44, 44, 44, 44, 44, 44, 44, 45, 45, 45, 45, 45, 45, 45, 45, 46, 46, 46, 46, 46, 46, 46, 46, 46, 47, 47, 47, 47, 47, 47, 47, 47, 47, 47, 47, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48};
 static_assert(sizeof(szclass_table) == 128, "");
 
 STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz)
 {
     assert(sz <= 2032);
-    uint8_t klass = szclass_table[(sz + 15) / 16];
 #ifdef _P64
     if (sz <= 8)
         return 0;
@@ -295,7 +317,23 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz)
         return (sz >= 8 ? 2 : (sz >= 4 ? 1 : 0));
     const int N = 2;
 #endif
+    uint8_t klass = szclass_table[(sz + 15) / 16];
     return klass + N;
+}
+
+STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz)
+{
+    if (sz >= 16 && sz <= 152) {
+#ifdef _P64
+        const int N = 0;
+#elif MAX_ALIGN == 8
+        const int N = 1;
+#else
+        const int N = 2;
+#endif
+        return (sz + 7)/8 - 1 + N;
+    }
+    return jl_gc_szclass(sz);
 }
 
 #define JL_SMALL_BYTE_ALIGNMENT 16
@@ -430,7 +468,7 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
      if (dt->layout->first_ptr >= 0) {
         jl_value_t *nullp = ((jl_value_t**)v)[dt->layout->first_ptr];
         if (__unlikely(nullp == NULL))
-            jl_throw(jl_undefref_exception);
+            return NULL;
     }
     return v;
 }
@@ -525,8 +563,10 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
 void jl_cache_type_(jl_datatype_t *type);
-void jl_assign_bits(void *dest, jl_value_t *bits) JL_NOTSAFEPOINT;
-void set_nth_field(jl_datatype_t *st, void *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT;
+void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT;
+jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic);
+jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *op, jl_value_t *rhs, int isatomic);
+jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *expected, jl_value_t *rhs, int isatomic);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st);
@@ -551,13 +591,15 @@ jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t w
 
 jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs);
 jl_value_t *jl_gf_invoke(jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs);
-JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous,
+JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig);
 
 JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_methtable_t *jl_method_get_table(
+    jl_method_t *method) JL_NOTSAFEPOINT;
 jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT);
 
 int jl_pointer_egal(jl_value_t *t);
@@ -654,7 +696,6 @@ extern char jl_using_oprofile_jitevents;
 extern char jl_using_perf_jitevents;
 #endif
 extern char jl_using_gdb_jitevents;
-extern size_t jl_arr_xtralloc_limit;
 
 // -- init.c -- //
 
@@ -1088,6 +1129,12 @@ unsigned jl_intrinsic_nargs(int f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);
 JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *align, jl_value_t *i);
+JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order);
+JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order);
+JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order);
+JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order);
+JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order);
+JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *x, jl_value_t *expected, jl_value_t *success_order, jl_value_t *failure_order);
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty);
 JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v);
 
@@ -1330,6 +1377,17 @@ extern jl_sym_t *coverageeffect_sym; extern jl_sym_t *escape_sym;
 extern jl_sym_t *optlevel_sym; extern jl_sym_t *compile_sym;
 extern jl_sym_t *infer_sym;
 extern jl_sym_t *atom_sym; extern jl_sym_t *statement_sym; extern jl_sym_t *all_sym;
+
+extern jl_sym_t *atomic_sym;
+extern jl_sym_t *not_atomic_sym;
+extern jl_sym_t *unordered_sym;
+extern jl_sym_t *monotonic_sym; // or relaxed_sym?
+extern jl_sym_t *acquire_sym;
+extern jl_sym_t *release_sym;
+extern jl_sym_t *acquire_release_sym;
+extern jl_sym_t *sequentially_consistent_sym; // or strong_sym?
+enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing);
+enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, char loading, char storing);
 
 struct _jl_sysimg_fptrs_t;
 

@@ -65,7 +65,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             intptr_t label = jl_gotoifnot_label(expr);
             JL_GC_PUSH1(&cond);
             expr = jl_new_struct_uninit(jl_gotoifnot_type);
-            set_nth_field(jl_gotoifnot_type, expr, 0, cond);
+            set_nth_field(jl_gotoifnot_type, expr, 0, cond, 0);
             jl_gotoifnot_label(expr) = label;
             JL_GC_POP();
         }
@@ -665,6 +665,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->roots = NULL;
     m->ccallable = NULL;
     m->module = module;
+    m->external_mt = NULL;
     m->source = NULL;
     m->unspecialized = NULL;
     m->generator = NULL;
@@ -777,6 +778,11 @@ JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGA
     return first_methtable(argtypes, 0);
 }
 
+JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    return method->external_mt ? (jl_methtable_t*)method->external_mt : jl_method_table_for(method->sig);
+}
+
 // get the MethodTable implied by a single given type, or `nothing`
 JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
@@ -786,6 +792,7 @@ JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAG
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
 JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
+                                        jl_methtable_t *mt,
                                         jl_code_info_t *f,
                                         jl_module_t *module)
 {
@@ -814,7 +821,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         argtype = jl_new_struct(jl_unionall_type, tv, argtype);
     }
 
-    jl_methtable_t *mt = jl_method_table_for(argtype);
+    jl_methtable_t *external_mt = mt;
+    if (!mt)
+        mt = jl_method_table_for(argtype);
     if ((jl_value_t*)mt == jl_nothing)
         jl_error("Method dispatch is unimplemented currently for this method signature");
     if (mt->frozen)
@@ -843,6 +852,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         f = jl_new_code_info_from_ir((jl_expr_t*)f);
     }
     m = jl_new_method_uninit(module);
+    m->external_mt = (jl_value_t*)external_mt;
+    if (external_mt)
+        jl_gc_wb(m, external_mt);
     m->sig = argtype;
     m->name = name;
     m->isva = isva;

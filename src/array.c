@@ -20,27 +20,31 @@ extern "C" {
 
 #define JL_ARRAY_ALIGN(jl_value, nbytes) LLT_ALIGN(jl_value, nbytes)
 
-// this is a version of memcpy that preserves atomic memory ordering
-// which makes it safe to use for objects that can contain memory references
-// without risk of creating pointers out of thin air
-// TODO: replace with LLVM's llvm.memmove.element.unordered.atomic.p0i8.p0i8.i32
-//       aka `__llvm_memmove_element_unordered_atomic_8` (for 64 bit)
-static void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOTSAFEPOINT
+static inline void arrayassign_safe(int hasptr, jl_value_t *parent, char *dst, const jl_value_t *src, size_t nb) JL_NOTSAFEPOINT
 {
-    size_t i;
-    if (dstp < srcp || dstp > srcp + n) {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstp + i, jl_atomic_load_relaxed(srcp + i));
-        }
+    // array can assume more alignment than a field would normally have
+    assert(nb >= jl_datatype_size(jl_typeof(src))); // nb might move some undefined bits, but we should be okay with that
+    if (hasptr) {
+        size_t nptr = nb / sizeof(void*);
+        memmove_refs((void**)dst, (void**)src, nptr);
+        jl_gc_multi_wb(parent, src);
     }
     else {
-        for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
+        switch (nb) {
+        case  0: break;
+        case  1: *(uint8_t*)dst  = *(uint8_t*)src;  break;
+        case  2: *(uint16_t*)dst = *(uint16_t*)src; break;
+        case  4: *(uint32_t*)dst = *(uint32_t*)src; break;
+        case  8: *(uint64_t*)dst = *(uint64_t*)src; break;
+        case 16:
+            memcpy(jl_assume_aligned(dst, 16), jl_assume_aligned(src, 16), 16);
+            break;
+        default: memcpy(dst, src, nb);
         }
     }
 }
 
-static void memmove_safe(int hasptr, char *dst, const char *src, size_t nb) JL_NOTSAFEPOINT
+static inline void memmove_safe(int hasptr, char *dst, const char *src, size_t nb) JL_NOTSAFEPOINT
 {
     if (hasptr)
         memmove_refs((void**)dst, (void**)src, nb / sizeof(void*));
@@ -69,8 +73,6 @@ typedef __uint128_t wideint_t;
 #else
 typedef uint64_t wideint_t;
 #endif
-
-size_t jl_arr_xtralloc_limit = 0;
 
 #define MAXINTVAL (((size_t)-1)>>1)
 
@@ -512,32 +514,39 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
     return jl_pchar_to_string((const char*)jl_array_data(a), len);
 }
 
-JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
+JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
 {
+    if (len == 0)
+        return jl_an_empty_string;
     size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
     if (sz < len) // overflow
         jl_throw(jl_memory_exception);
-    if (len == 0)
-        return jl_an_empty_string;
     jl_task_t *ct = jl_current_task;
-    jl_value_t *s = jl_gc_alloc_(ct->ptls, sz, jl_string_type); // force inlining
+    jl_value_t *s;
+    jl_ptls_t ptls = ct->ptls;
+    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    if (sz <= GC_MAX_SZCLASS) {
+        int pool_id = jl_gc_szclass_align8(allocsz);
+        jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
+        int osize = jl_gc_sizeclasses[pool_id];
+        s = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
+    }
+    else {
+        if (allocsz < sz) // overflow in adding offs, size was "negative"
+            jl_throw(jl_memory_exception);
+        s = jl_gc_big_alloc(ptls, allocsz);
+    }
+    jl_set_typeof(s, jl_string_type);
     *(size_t*)s = len;
-    memcpy((char*)s + sizeof(size_t), str, len);
-    ((char*)s + sizeof(size_t))[len] = 0;
+    jl_string_data(s)[len] = 0;
     return s;
 }
 
-JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
+JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
-    size_t sz = sizeof(size_t) + len + 1; // add space for trailing \nul protector and size
-    if (sz < len) // overflow
-        jl_throw(jl_memory_exception);
-    if (len == 0)
-        return jl_an_empty_string;
-    jl_task_t *ct = jl_current_task;
-    jl_value_t *s = jl_gc_alloc_(ct->ptls, sz, jl_string_type); // force inlining
-    *(size_t*)s = len;
-    ((char*)s + sizeof(size_t))[len] = 0;
+    jl_value_t *s = jl_alloc_string(len);
+    if (len > 0)
+        memcpy(jl_string_data(s), str, len);
     return s;
 }
 
@@ -596,7 +605,10 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
         if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
             return ((jl_datatype_t*)eltype)->instance;
     }
-    return undefref_check((jl_datatype_t*)eltype, jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]));
+    jl_value_t *r = undefref_check((jl_datatype_t*)eltype, jl_new_bits(eltype, &((char*)a->data)[i * a->elsize]));
+    if (__unlikely(r == NULL))
+        jl_throw(jl_undefref_exception);
+    return r;
 }
 
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
@@ -624,6 +636,7 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
         JL_GC_POP();
     }
     if (!a->flags.ptrarray) {
+        int hasptr;
         if (jl_is_uniontype(eltype)) {
             uint8_t *psel = &((uint8_t*)jl_array_typetagdata(a))[i];
             unsigned nth = 0;
@@ -632,15 +645,12 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a JL_ROOTING_ARGUMENT, jl_value_t *rhs
             *psel = nth;
             if (jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(rhs)))
                 return;
-        }
-        if (a->flags.hasptr) {
-            memmove_refs((void**)&((char*)a->data)[i * a->elsize], (void**)rhs, a->elsize / sizeof(void*));
+            hasptr = 0;
         }
         else {
-            jl_assign_bits(&((char*)a->data)[i * a->elsize], rhs);
+            hasptr = a->flags.hasptr;
         }
-        if (a->flags.hasptr)
-            jl_gc_multi_wb(jl_array_owner(a), rhs);
+        arrayassign_safe(hasptr, jl_array_owner(a), &((char*)a->data)[i * a->elsize], rhs, a->elsize);
     }
     else {
         jl_atomic_store_relaxed(((jl_value_t**)a->data) + i, rhs);
@@ -758,16 +768,23 @@ static void NOINLINE array_try_unshare(jl_array_t *a)
     }
 }
 
-static size_t limit_overallocation(jl_array_t *a, size_t alen, size_t newlen, size_t inc)
+size_t overallocation(size_t maxsize)
 {
-    // Limit overallocation to jl_arr_xtralloc_limit
-    size_t es = a->elsize;
-    size_t xtra_elems_mem = (newlen - a->offset - alen - inc) * es;
-    if (xtra_elems_mem > jl_arr_xtralloc_limit) {
-        // prune down
-        return alen + inc + a->offset + (jl_arr_xtralloc_limit / es);
-    }
-    return newlen;
+    if (maxsize < 8)
+        return 8;
+    // compute maxsize = maxsize + 4*maxsize^(7/8) + maxsize/8
+    // for small n, we grow faster than O(n)
+    // for large n, we grow at O(n/8)
+    // and as we reach O(memory) for memory>>1MB,
+    // this means we end by adding about 10% of memory each time
+    int exp2 = sizeof(maxsize) * 8 -
+#ifdef _P64
+        __builtin_clzll(maxsize);
+#else
+        __builtin_clz(maxsize);
+#endif
+    maxsize += ((size_t)1 << (exp2 * 7 / 8)) * 4 + maxsize / 8;
+    return maxsize;
 }
 
 STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
@@ -815,10 +832,12 @@ STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
         size_t nb1 = idx * elsz;
         if (inc > (a->maxsize - n) / 2 - (a->maxsize - n) / 20) {
             // not enough room for requested growth from end of array
-            size_t newlen = a->maxsize == 0 ? inc * 2 : a->maxsize * 2;
+            size_t newlen = inc * 2;
             while (n + 2 * inc > newlen - a->offset)
                 newlen *= 2;
-            newlen = limit_overallocation(a, n, newlen, 2 * inc);
+            size_t newmaxsize = overallocation(a->maxsize);
+            if (newlen < newmaxsize)
+                newlen = newmaxsize;
             size_t newoffset = (newlen - newnrows) / 2;
             if (!array_resize_buffer(a, newlen)) {
                 data = (char*)a->data + oldoffsnb;
@@ -903,12 +922,11 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
     if (__unlikely(reqmaxsize > a->maxsize)) {
         size_t nb1 = idx * elsz;
         size_t nbinc = inc * elsz;
-        // if the requested size is more than 2x current maxsize, grow exactly
-        // otherwise double the maxsize
-        size_t newmaxsize = reqmaxsize >= a->maxsize * 2
-                          ? (reqmaxsize < 4 ? 4 : reqmaxsize)
-                          : a->maxsize * 2;
-        newmaxsize = limit_overallocation(a, n, newmaxsize, inc);
+        // grow either by our computed overallocation factor or exactly the requested size,
+        // whichever is larger
+        size_t newmaxsize = overallocation(a->maxsize);
+        if (newmaxsize < reqmaxsize)
+            newmaxsize = reqmaxsize;
         size_t oldmaxsize = a->maxsize;
         int newbuf = array_resize_buffer(a, newmaxsize);
         char *newdata = (char*)a->data + a->offset * elsz;

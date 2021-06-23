@@ -272,14 +272,14 @@ function summarize(io::IO, TT::Type, binding::Binding)
     if T isa DataType
         println(io, "```")
         print(io,
-            T.name.abstract ? "abstract type " :
-            T.name.mutable  ? "mutable struct " :
+            Base.isabstracttype(T) ? "abstract type " :
+            Base.ismutabletype(T)  ? "mutable struct " :
             Base.isstructtype(T) ? "struct " :
             "primitive type ")
         supert = supertype(T)
         println(io, T)
         println(io, "```")
-        if !T.name.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
+        if !Base.isabstracttype(T) && T.name !== Tuple.name && !isempty(fieldnames(T))
             println(io, "# Fields")
             println(io, "```")
             pad = maximum(length(string(f)) for f in fieldnames(T))

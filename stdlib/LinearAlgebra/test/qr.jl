@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(1234321)
+Random.seed!(1234325)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -405,6 +405,14 @@ end
         @test_throws DimensionMismatch("overdetermined systems are not supported")    qr(randn(n - 2, n), ColumnNorm())'\b
         @test_throws DimensionMismatch("arguments must have the same number of rows") qr(randn(n, n + 1), ColumnNorm())'\b
     end
+end
+
+@testset "issue #38974" begin
+    A = qr(ones(3, 1))
+    B = I(3)
+    C = B*A.Q'
+    @test C ≈ A.Q
+    @test A.Q' * B ≈ A.Q
 end
 
 end # module TestQR

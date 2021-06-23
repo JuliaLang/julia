@@ -1610,11 +1610,19 @@ end
     f, io = mktemp()
     s = stat(f)
     stat_show_str = sprint(show, s)
-    @test occursin(f, stat_show_str)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(")
+    @test endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for ")
+    @test rstrip(stat_show_str_multi) == stat_show_str_multi # no trailing \n
+    @test occursin(repr(f), stat_show_str)
+    @test occursin(repr(f), stat_show_str_multi)
     if Sys.iswindows()
         @test occursin("mode: 0o100666 (-rw-rw-rw-)", stat_show_str)
+        @test occursin("mode: 0o100666 (-rw-rw-rw-)\n", stat_show_str_multi)
     else
         @test occursin("mode: 0o100600 (-rw-------)", stat_show_str)
+        @test occursin("mode: 0o100600 (-rw-------)\n", stat_show_str_multi)
     end
     if Sys.iswindows() == false
         @test !isnothing(Base.Filesystem.getusername(s.uid))
@@ -1623,11 +1631,19 @@ end
     d = mktempdir()
     s = stat(d)
     stat_show_str = sprint(show, s)
-    @test occursin(d, stat_show_str)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(")
+    @test endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for ")
+    @test rstrip(stat_show_str_multi) == stat_show_str_multi # no trailing \n
+    @test occursin(repr(d), stat_show_str)
+    @test occursin(repr(d), stat_show_str_multi)
     if Sys.iswindows()
         @test occursin("mode: 0o040666 (drw-rw-rw-)", stat_show_str)
+        @test occursin("mode: 0o040666 (drw-rw-rw-)\n", stat_show_str_multi)
     else
         @test occursin("mode: 0o040700 (drwx------)", stat_show_str)
+        @test occursin("mode: 0o040700 (drwx------)\n", stat_show_str_multi)
     end
     if Sys.iswindows() == false
         @test !isnothing(Base.Filesystem.getusername(s.uid))

@@ -149,8 +149,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         newm->parent = parent_module;
         jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
         jl_declare_constant(b);
-        jl_value_t *old = jl_atomic_compare_exchange(&b->value, NULL, (jl_value_t*)newm);
-        if (old != NULL) {
+        jl_value_t *old = NULL;
+        if (!jl_atomic_cmpswap(&b->value, &old, (jl_value_t*)newm)) {
             if (!jl_is_module(old)) {
                 jl_errorf("invalid redefinition of constant %s", jl_symbol_name(name));
             }
@@ -920,6 +920,13 @@ static void jl_check_open_for(jl_module_t *m, const char* funcname)
             }
         }
     }
+}
+
+JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
+{
+    if (jl_current_task->ptls->in_pure_callback)
+        jl_errorf("%s cannot be used in a generated function", fname);
+    jl_check_open_for(m, fname);
 }
 
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
