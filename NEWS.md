@@ -31,6 +31,7 @@ Build system changes
 New library functions
 ---------------------
 
+ * `indmax(f, col)` and `indmin(f, col)` have been added, returning the index maximizing/minimizing a given function (or `identity`, if none is given) over an indexable collection.
 
 New library features
 --------------------
