@@ -434,17 +434,17 @@ to_dim(d::OneTo) = last(d)
     fill(value, dims::Tuple)
     fill(value, dims...)
 
-Create an array of size `dims` with every element set to `value`.
+Create an array of size `dims` with every location set to `value`.
 
 For example, `fill(1.0, (5,5))` returns a 5×5 array of floats,
 with `1.0` in every location of the array.
 
 The dimension lengths `dims` may be specified as either a tuple or a sequence of arguments.
 An `N`-length tuple or `N` arguments following the `value` specify an `N`-dimensional
-array. Thus, a common idiom for creating a zero-dimensional array with its only value
+array. Thus, a common idiom for creating a zero-dimensional array with its only location
 set to `x` is `fill(x)`.
 
-Every element of the returned array is set to (and is thus [`===`](@ref) to)
+Every location of the returned array is set to (and is thus [`===`](@ref) to)
 the `value` that was passed; this means that if the `value` is itself modified,
 all elements of the `fill`ed array will reflect that modification because they're
 _still_ that very `value`. This is of no concern with `fill(1.0, (5,5))` as the
