@@ -725,55 +725,13 @@ function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
 end
 
 #Linear solvers
-ldiv!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
-ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
-ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVector) = ldiv!(copy(A), b)
-function ldiv!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
-    require_one_based_indexing(A, B)
-    nA,mA = size(A)
-    n = size(B, 1)
-    if nA != n
-        throw(DimensionMismatch("size of A is ($nA,$mA), corresponding dimension of B is $n"))
-    end
-    for b in eachcol(B)
-        ldiv!(A, b)
-    end
-    B
-end
-function ldiv!(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractMatrix)
-    require_one_based_indexing(adjA, B)
-    mA, nA = size(adjA)
-    n = size(B, 1)
-    tmp = similar(B, n)
-    Ac = copy(adjA)
-    if mA != n
-        throw(DimensionMismatch("size of adjoint of A is ($mA,$nA), corresponding dimension of B is $n"))
-    end
-    for b in eachcol(B)
-        ldiv!(Ac, b)
-    end
-    B
-end
-function ldiv!(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractMatrix)
-    require_one_based_indexing(tA, B)
-    mA, nA = size(tA)
-    n = size(B, 1)
-    tmp = similar(B, n)
-    At = copy(tA)
-    if mA != n
-        throw(DimensionMismatch("size of transpose of A is ($mA,$nA), corresponding dimension of B is $n"))
-    end
-    for b in eachcol(B)
-        ldiv!(At, b)
-    end
-    B
-end
 #Generic solver using naive substitution
-function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) where T
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::Bidiagonal, b::AbstractVector)
+    require_one_based_indexing(A, b)
     N = size(A, 2)
-    if N != length(b) || N != length(x)
-        throw(DimensionMismatch("second dimension of A, $N, does not match one of the lengths of x, $(length(x)), or b, $(length(b))"))
+    mb = length(b)
+    if N != mb
+        throw(DimensionMismatch("second dimension of A, $N, does not match the length of b, $mb"))
     end
 
     if N == 0
@@ -782,33 +740,47 @@ function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) w
 
     @inbounds begin
         if A.uplo == 'L' #do forward substitution
-            x[1] = xj1 = A.dv[1]\b[1]
-            for j = 2:N
-                xj  = b[j]
-                xj -= A.ev[j - 1] * xj1
+            b[1] = bj1 = A.dv[1]\b[1]
+            for j in 2:N
+                bj  = b[j]
+                bj -= A.ev[j - 1] * bj1
                 dvj = A.dv[j]
                 if iszero(dvj)
                     throw(SingularException(j))
                 end
-                xj   = dvj\xj
-                x[j] = xj1 = xj
+                bj   = dvj\bj
+                b[j] = bj1 = bj
             end
         else #do backward substitution
-            x[N] = xj1 = A.dv[N]\b[N]
+            b[N] = bj1 = A.dv[N]\b[N]
             for j = (N - 1):-1:1
-                xj  = b[j]
-                xj -= A.ev[j] * xj1
+                bj  = b[j]
+                bj -= A.ev[j] * bj1
                 dvj = A.dv[j]
                 if iszero(dvj)
                     throw(SingularException(j))
                 end
-                xj   = dvj\xj
-                x[j] = xj1 = xj
+                bj   = dvj\bj
+                b[j] = bj1 = bj
             end
         end
     end
-    return x
+    return b
 end
+function ldiv!(A::Bidiagonal, B::AbstractMatrix)
+    require_one_based_indexing(A, B)
+    mA, nA = size(A)
+    n = size(B, 1)
+    if mA != n
+        throw(DimensionMismatch("first dimension of A, $mA, does not match the first dimension of B, $n"))
+    end
+    for b in eachcol(B)
+        ldiv!(A, b)
+    end
+    B
+end
+ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(copy(A), b)
+ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = ldiv!(copy(A), b)
 
 ### Generic promotion methods and fallbacks
 function \(A::Bidiagonal{<:Number}, B::AbstractVecOrMat{<:Number})
