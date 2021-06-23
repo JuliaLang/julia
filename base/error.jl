@@ -214,6 +214,11 @@ julia> @assert isodd(3) "What even are numbers?"
 ```
 """
 macro assert(ex, msgs...)
+    msg = prepare_error(msgs...)
+    return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
+end
+
+function prepare_error(msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
     if isa(msg, AbstractString)
         msg = msg # pass-through
@@ -230,7 +235,27 @@ macro assert(ex, msgs...)
                 (Core.println(msg); "Error during bootstrap. See stdout.")
         end
     end
-    return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
+    return msg
+end
+
+
+"""
+    @throw_unless cond [text]
+
+Throw an [`ErrorException`](@ref) if `cond` is `false`.
+Message `text` is optionally displayed upon assertion failure.
+
+# Examples
+```jldoctest
+julia> @throw_unless iseven(3) "3 is an odd number!"
+ERROR: ErrorException: 3 is an odd number!
+
+julia> @throw_unless isodd(3) "What even are numbers?"
+```
+"""
+macro throw_unless(ex, msgs...)
+    msg = prepare_error(msgs...)
+    return :($(esc(ex)) ? $(nothing) : throw(ErrorException($msg)))
 end
 
 struct ExponentialBackOff
