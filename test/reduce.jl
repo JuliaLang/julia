@@ -425,14 +425,22 @@ end
     @test indmin(-, 1:10) == 10
     @test indmin(cos, 0:π/2:2π) == 3
     @test indmin(identity, [1, 2, 3, missing]) === 4
-    @test indmin(sum, Iterators.product(1:5, 1:5) |> collect) == CartesianIndex(1, 1)
+    
+    prod_test = collect(Iterators.product(1:5, 1:5))
+    @test indmin(sum, prodtest) == CartesianIndex(1, 1)
+    @test indmin(identity, prodtest) == indmin(prodtest)
+    @test indmin(identity, prodtest) == CartesianIndex(1, 1)
 end
 
 @testset "indmax(f, itr)" begin
     @test indmax(-, 1:10) == 1
     @test indmax(cos, 0:π/2:2π) == 1
     @test indmax(identity, [1, 2, 3, missing]) == 4
-    @test indmax(sum, Iterators.product(1:5, 1:5) |> collect) == CartesianIndex(5, 5)
+
+    prod_test = collect(Iterators.product(1:5, 1:5))
+    @test indmax(sum, prodtest) == CartesianIndex(5, 5)
+    @test indmax(identity, prodtest) == indmax(prodtest)
+    @test indmax(identity, prodtest) == CartesianIndex(5, 5)
 end
 
 # any & all
