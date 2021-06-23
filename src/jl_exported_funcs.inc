@@ -540,4 +540,5 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_yield) \
-    XX(jl_print_backtrace)
+    XX(jl_print_backtrace) \
+    XX(jl_get_pgcstack)
