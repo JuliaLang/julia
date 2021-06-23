@@ -192,6 +192,7 @@ Standard library changes
 * `det(M::AbstractMatrix{BigInt})` now calls `det_bareiss(M)`, which uses the
   [Bareiss](https://en.wikipedia.org/wiki/Bareiss_algorithm) algorithm to calculate precise
   values ([#40868]).
+* `exp(A::StridedMatrix)` has improved performance improvents  in terms of CPU-time and allocations ([#40668])
 
 #### Markdown
 
