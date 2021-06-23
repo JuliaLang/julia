@@ -476,7 +476,7 @@ julia> v
  [8675309]
 ```
 
-To create an array of many independent inner arrays, use a [comprehension](@ref man-comprehension) instead.
+To create an array of many independent inner arrays, use a [comprehension](@ref man-comprehensions) instead.
 This creates a new and distinct array on each iteration of the loop:
 
 ```jldoctest
