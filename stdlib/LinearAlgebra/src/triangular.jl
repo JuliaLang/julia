@@ -1182,148 +1182,157 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
 end
 
 #Generic solver using naive substitution
-# manually hoisting x[j] significantly improves performance as of Dec 2015
+# manually hoisting b[j] significantly improves performance as of Dec 2015
 # manually eliding bounds checking significantly improves performance as of Dec 2015
 # directly indexing A.data rather than A significantly improves performance as of Dec 2015
 # replacing repeated references to A.data with [Adata = A.data and references to Adata]
 # does not significantly impact performance as of Dec 2015
 # replacing repeated references to A.data[j,j] with [Ajj = A.data[j,j] and references to Ajj]
 # does not significantly impact performance as of Dec 2015
-function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::UpperTriangular, b::AbstractVector)
+    require_one_based_indexing(A, b)
     n = size(A, 2)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    if !(n == length(b))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in n:-1:1
         iszero(A.data[j,j]) && throw(SingularException(j))
-        xj = x[j] = A.data[j,j] \ b[j]
+        bj = b[j] = A.data[j,j] \ b[j]
         for i in j-1:-1:1 # counterintuitively 1:j-1 performs slightly better
-            b[i] -= A.data[i,j] * xj
+            b[i] -= A.data[i,j] * bj
         end
     end
-    x
+    return b
 end
-function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b)
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::UnitUpperTriangular, b::AbstractVector)
+    require_one_based_indexing(A, b)
     n = size(A, 2)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    if !(n == length(b))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in n:-1:1
-        xj = x[j] = b[j]
+        bj = b[j]
         for i in j-1:-1:1 # counterintuitively 1:j-1 performs slightly better
-            b[i] -= A.data[i,j] * xj
+            b[i] -= A.data[i,j] * bj
         end
     end
-    x
+    return b
 end
-function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::LowerTriangular, b::AbstractVector)
+    require_one_based_indexing(A, b)
     n = size(A, 2)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    if !(n == length(b))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in 1:n
         iszero(A.data[j,j]) && throw(SingularException(j))
-        xj = x[j] = A.data[j,j] \ b[j]
+        bj = b[j] = A.data[j,j] \ b[j]
         for i in j+1:n
-            b[i] -= A.data[i,j] * xj
+            b[i] -= A.data[i,j] * bj
         end
     end
-    x
+    return b
 end
-function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::UnitLowerTriangular, b::AbstractVector)
+    require_one_based_indexing(A, b)
     n = size(A, 2)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    if !(n == length(b))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in 1:n
-        xj = x[j] = b[j]
+        bj = b[j]
         for i in j+1:n
-            b[i] -= A.data[i,j] * xj
+            b[i] -= A.data[i,j] * bj
         end
     end
-    x
+    return b
 end
+function ldiv!(A::AbstractTriangular, B::AbstractMatrix)
+    require_one_based_indexing(A, B)
+    nA, mA = size(A)
+    n = size(B, 1)
+    if nA != n
+        throw(DimensionMismatch("second dimension of left hand side A, $mA, and first dimension of right hand side B, $n, must be equal"))
+    end
+    for b in eachcol(B)
+        ldiv!(A, b)
+    end
+    B
+end
+
 # in the following transpose and conjugate transpose naive substitution variants,
-# accumulating in z rather than b[j] significantly improves performance as of Dec 2015
+# accumulating in z rather than b[j,k] significantly improves performance as of Dec 2015
 for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
-        function ldiv!(xA::UpperTriangular{<:Any,<:$t}, b::AbstractVector, x::AbstractVector)
-            require_one_based_indexing(xA, b, x)
+        function ldiv!(xA::UpperTriangular{<:Any,<:$t}, b::AbstractVector)
+            require_one_based_indexing(xA, b)
             A = parent(parent(xA))
             n = size(A, 1)
-            if !(n == length(b) == length(x))
-                throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+            if !(n == length(b))
+                throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
             end
             @inbounds for j in n:-1:1
                 z = b[j]
                 for i in n:-1:j+1
-                    z -= $tfun(A[i,j]) * x[i]
+                    z -= $tfun(A[i,j]) * b[i]
                 end
                 iszero(A[j,j]) && throw(SingularException(j))
-                x[j] = $tfun(A[j,j]) \ z
+                b[j] = $tfun(A[j,j]) \ z
             end
-            x
+            return b
         end
-        ldiv!(xA::UpperTriangular{<:Any,<:$t}, b::AbstractVector) = ldiv!(xA, b, b)
 
-        function ldiv!(xA::UnitUpperTriangular{<:Any,<:$t}, b::AbstractVector, x::AbstractVector)
-            require_one_based_indexing(xA, b, x)
+        function ldiv!(xA::UnitUpperTriangular{<:Any,<:$t}, b::AbstractVector)
+            require_one_based_indexing(xA, b)
             A = parent(parent(xA))
             n = size(A, 1)
-            if !(n == length(b) == length(x))
-                throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+            if !(n == length(b))
+                throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
             end
             @inbounds for j in n:-1:1
                 z = b[j]
                 for i in n:-1:j+1
-                    z -= $tfun(A[i,j]) * x[i]
+                    z -= $tfun(A[i,j]) * b[i]
                 end
-                x[j] = z
+                b[j] = z
             end
-            x
+            return b
         end
-        ldiv!(xA::UnitUpperTriangular{<:Any,<:$t}, b::AbstractVector) = ldiv!(xA, b, b)
 
-        function ldiv!(xA::LowerTriangular{<:Any,<:$t}, b::AbstractVector, x::AbstractVector)
-            require_one_based_indexing(xA, b, x)
+        function ldiv!(xA::LowerTriangular{<:Any,<:$t}, b::AbstractVector)
+            require_one_based_indexing(xA, b)
             A = parent(parent(xA))
             n = size(A, 1)
-            if !(n == length(b) == length(x))
-                throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+            if !(n == length(b))
+                throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
             end
             @inbounds for j in 1:n
                 z = b[j]
                 for i in 1:j-1
-                    z -= $tfun(A[i,j]) * x[i]
+                    z -= $tfun(A[i,j]) * b[i]
                 end
                 iszero(A[j,j]) && throw(SingularException(j))
-                x[j] = $tfun(A[j,j]) \ z
+                b[j] = $tfun(A[j,j]) \ z
             end
-            x
+            return b
         end
-        ldiv!(xA::LowerTriangular{<:Any,<:$t}, b::AbstractVector) = ldiv!(xA, b, b)
 
-        function ldiv!(xA::UnitLowerTriangular{<:Any,<:$t}, b::AbstractVector, x::AbstractVector)
-            require_one_based_indexing(xA, b, x)
+        function ldiv!(xA::UnitLowerTriangular{<:Any,<:$t}, b::AbstractVector)
+            require_one_based_indexing(xA, b)
             A = parent(parent(xA))
             n = size(A, 1)
-            if !(n == length(b) == length(x))
-                throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+            if !(n == length(b))
+                throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
             end
             @inbounds for j in 1:n
                 z = b[j]
                 for i in 1:j-1
-                    z -= $tfun(A[i,j]) * x[i]
+                    z -= $tfun(A[i,j]) * b[i]
                 end
-                x[j] = z
+                b[j] = z
             end
-            x
+            return b
         end
-        ldiv!(xA::UnitLowerTriangular{<:Any,<:$t}, b::AbstractVector) = ldiv!(xA, b, b)
     end
 end
 
