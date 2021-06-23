@@ -54,6 +54,11 @@ similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spz
 
 zero(a::AbstractSparseArray) = spzeros(eltype(a), size(a)...)
 
+LinearAlgebra._zeros(::Type{T}, b::AbstractSparseVector, n::Integer) where {T} =
+    zeros(T, max(length(b), n))
+LinearAlgebra._zeros(::Type{T}, B::AbstractSparseMatrix, n::Integer) where {T} =
+    zeros(T, max(size(B, 1), n), size(B, 2))
+
 const BiTriSym = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 function *(A::BiTriSym, B::BiTriSym)
     TS = promote_op(matprod, eltype(A), eltype(B))
