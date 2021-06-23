@@ -387,7 +387,7 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
     end
 end
 
-# findmin, findmax, argmin, argmax
+# findmin, findmax, argmin, argmax, indmin, indmax
 
 @testset "findmin(f, domain)" begin
     @test findmin(-, 1:10) == (-10, 10)
@@ -397,6 +397,7 @@ end
     @test findmin(identity, [1, NaN, 3]) === (NaN, 2)
     @test findmin(identity, [1, 3, NaN]) === (NaN, 3)
     @test findmin(cos, 0:π/2:2π) == (-1.0, 3)
+    @test findmin(sum, Iterators.product(1:5, 1:5) |> collect) == ((1, 1), CartesianIndex(1, 1))
 end
 
 @testset "findmax(f, domain)" begin
@@ -407,6 +408,7 @@ end
     @test findmax(identity, [1, NaN, 3]) === (NaN, 2)
     @test findmax(identity, [1, 3, NaN]) === (NaN, 3)
     @test findmax(cos, 0:π/2:2π) == (1.0, 1)
+    @test findmin(sum, Iterators.product(1:5, 1:5) |> collect) == ((5, 5), CartesianIndex(5, 5))
 end
 
 @testset "argmin(f, domain)" begin
@@ -417,6 +419,20 @@ end
 @testset "argmax(f, domain)" begin
     @test argmax(-, 1:10) == 1
     @test argmax(sum, Iterators.product(1:5, 1:5)) == (5, 5)
+end
+
+@testset "indmin(f, itr)" begin
+    @test indmin(-, 1:10) == 10
+    @test indmin(cos, 0:π/2:2π) == 3
+    @test indmin(identity, [1, 2, 3, missing]) === 4
+    @test indmin(sum, Iterators.product(1:5, 1:5) |> collect) == CartesianIndex(1, 1)
+end
+
+@testset "indmax(f, itr)" begin
+    @test indmax(-, 1:10) == 1
+    @test indmax(cos, 0:π/2:2π) == 1
+    @test indmax(identity, [1, 2, 3, missing]) == 4
+    @test indmax(sum, Iterators.product(1:5, 1:5) |> collect) == CartesianIndex(5, 5)
 end
 
 # any & all
