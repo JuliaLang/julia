@@ -1156,13 +1156,18 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
-    f = argtype_to_function(ft′)
-    ats = Any[ft]
-    for (t, a) in zip(ti.parameters[2:end], argtypes[4:end])
-        push!(ats, t ⊑ a ? t : a) # typeintersect might have narrowed signature
-    end
     match = MethodMatch(ti, env, method, argtype <: method.sig)
-    const_rt, const_result = abstract_call_method_with_const_args(interp, result, f, ats, match, sv, false)
+    # try constant propagation with early take-in of the heuristics -- since constuctions below seem to be a bit costly
+    const_prop_entry_heuristic(interp, result, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
+    argtypes′ = argtypes[4:end]
+    const_prop_argument_heuristic(interp, argtypes′) || const_prop_rettype_heuristic(interp, rt) || return CallMeta(rt, InvokeCallInfo(match, nothing))
+    pushfirst!(argtypes′, ft)
+    # # typeintersect might have narrowed signature
+    # for i in 1:length(argtypes′)
+    #     t, a = ti.parameters[i], argtypes′[i]
+    #     argtypes′[i] = t ⊑ a ? t : a
+    # end
+    const_rt, const_result = abstract_call_method_with_const_args(interp, result, argtype_to_function(ft′), argtypes′, match, sv, false)
     if const_rt !== rt && const_rt ⊑ rt
         return CallMeta(const_rt, InvokeCallInfo(match, const_result))
     else
