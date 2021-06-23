@@ -397,7 +397,7 @@ end
     @test findmin(identity, [1, NaN, 3]) === (NaN, 2)
     @test findmin(identity, [1, 3, NaN]) === (NaN, 3)
     @test findmin(cos, 0:π/2:2π) == (-1.0, 3)
-    @test findmin(sum, Iterators.product(1:5, 1:5) |> collect) == ((1, 1), CartesianIndex(1, 1))
+    @test findmin(sum, Iterators.product(1:5, 1:5) |> collect) == (2, CartesianIndex(1, 1))
 end
 
 @testset "findmax(f, domain)" begin
@@ -408,7 +408,7 @@ end
     @test findmax(identity, [1, NaN, 3]) === (NaN, 2)
     @test findmax(identity, [1, 3, NaN]) === (NaN, 3)
     @test findmax(cos, 0:π/2:2π) == (1.0, 1)
-    @test findmin(sum, Iterators.product(1:5, 1:5) |> collect) == ((5, 5), CartesianIndex(5, 5))
+    @test findmax(sum, Iterators.product(1:5, 1:5) |> collect) == (10, CartesianIndex(5, 5))
 end
 
 @testset "argmin(f, domain)" begin
