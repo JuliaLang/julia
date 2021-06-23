@@ -407,6 +407,16 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
             typea.isva, typea.parent, typea.source)
     end
+    if isa(typea, CustomLattice)
+        if !isa(typeb, CustomLattice) || (typea.callbacks === typeb.callbacks)
+            return typea.callbacks.tjoin(typea, typeb)
+        end
+    end
+    if isa(typeb, CustomLattice)
+        if !isa(typea, CustomLattice) || (typea.callbacks === typeb.callbacks)
+            return typeb.callbacks.tjoin(typeb, typea)
+        end
+    end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
     if !isa(typea, Type) || !isa(typeb, Type)

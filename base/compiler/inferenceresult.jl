@@ -3,7 +3,8 @@
 function is_argtype_match(@nospecialize(given_argtype),
                           @nospecialize(cache_argtype),
                           overridden_by_const::Bool)
-    if isa(given_argtype, Const) || isa(given_argtype, PartialStruct) || isa(given_argtype, PartialOpaque)
+    if isa(given_argtype, Const) || isa(given_argtype, PartialStruct) || isa(given_argtype, PartialOpaque) ||
+            isa(given_argtype, CustomLattice)
         return is_lattice_equal(given_argtype, cache_argtype)
     end
     return !overridden_by_const

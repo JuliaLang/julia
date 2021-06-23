@@ -555,8 +555,10 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
     end
     mi = mi::MethodInstance
     if !force && !const_prop_methodinstance_heuristic(interp, method, mi)
-        add_remark!(interp, sv, "[constprop] Disabled by meothd instance heuristic")
-        return nothing
+        if !_any(x->isa(x, CustomLattice), argtypes)
+            add_remark!(interp, sv, "[constprop] Disabled by meothd instance heuristic")
+            return nothing
+        end
     end
     return mi
 end
@@ -588,6 +590,7 @@ function is_const_prop_profitable_arg(@nospecialize(arg))
             is_const_prop_profitable_arg(b) && return true
         end
     end
+    isa(arg, CustomLattice) && return true
     isa(arg, PartialOpaque) && return true
     isa(arg, Const) || return true
     val = arg.val
@@ -643,10 +646,12 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
         t1 = widenconst(argtypes[2])
         all_same = true
         for i in 3:length(argtypes)
-            if widenconst(argtypes[i]) !== t1
+            ai = argtypes[i]
+            if all_same && widenconst(argtypes[i]) !== t1
                 all_same = false
                 break
             end
+            isa(ai, CustomLattice) && return true
         end
         return !all_same
     end
@@ -1097,7 +1102,24 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
             end
         end
     end
-    return isa(rt, TypeVar) ? rt.ub : rt
+    if isa(rt, TypeVar)
+        rt = rt.ub
+    end
+    if f !== tuple && f !== ifelse
+        for i = 1:la
+            ai = argtypes[i]
+            if isa(ai, CustomLattice)
+                # TODO: We should join over the lattices
+                rt′ = ai.callbacks.tfunc(f, argtypes)
+                if isa(rt′, CustomLattice)
+                    rt = ai.callbacks.tmeetbound(rt, rt′)
+                else
+                    rt = tmeet(rt, rt′)
+                end
+            end
+        end
+    end
+    return rt
 end
 
 function abstract_call_unionall(argtypes::Vector{Any})
@@ -1636,6 +1658,8 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
     isa(rt, InterConditional) && return rt
     isa(rt, Const) && return rt
     isa(rt, Type) && return rt
+    # TODO: Should we allow non-IPO safe custom lattice elements?
+    isa(rt, CustomLattice) && return rt
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
         haveconst = false

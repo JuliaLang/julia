@@ -33,6 +33,9 @@ function hasuniquerep(@nospecialize t)
 end
 
 function has_nontrivial_const_info(@nospecialize t)
+    # By default we propagate - Custom abstract interpreters may change the
+    # heuristics to account for the payload.
+    isa(t, CustomLattice) && return true
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
     isa(t, Const) || return false

@@ -100,6 +100,33 @@ struct LimitedAccuracy
         new(typ, causes)
 end
 
+struct LatticeCallbacks
+    (⊑)::Core.OpaqueClosure{Tuple{Any, Any}, Any}
+    tmeetbound::Core.OpaqueClosure{Tuple{Any, Any}, Any}
+    tjoin::Core.OpaqueClosure{Tuple{Any, Any}, Any}
+    tfunc::Core.OpaqueClosure{Tuple{Builtin, Vector{Any}}, Any}
+end
+
+# Represents a custom lattice element with callbacks to determine its behavior.
+# This is useful for compiler experiments and external testing. In the future,
+# there may be more expansive support to perform inference over a custom lattice,
+# so this should be considered highly experimental.
+struct CustomLattice
+    # An element in the regular inference lattice that this element elaborates.
+    # In particular, it should always be true that this element is ⊑ its `typ`.
+    typ
+    # The custom lattice element itself
+    payload
+    # Callbacks
+    callbacks::LatticeCallbacks
+end
+
+# Like `Union`, but of lattice elements
+struct LatticeUnion
+    a
+    b
+end
+
 struct NotFound end
 
 const NOT_FOUND = NotFound()
@@ -161,6 +188,14 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     b === Union{} && return false
     @assert !isa(a, TypeVar) "invalid lattice item"
     @assert !isa(b, TypeVar) "invalid lattice item"
+    if isa(b, CustomLattice)
+        if !isa(a, CustomLattice)
+            # CustomLattice elements always refine other lattice types, of if
+            # the RHS is not custom, bail.
+            return false
+        end
+        return b.callbacks.:⊑(a, b)
+    end
     if isa(a, AnyConditional)
         if isa(b, AnyConditional)
             return issubconditional(a, b)
@@ -200,6 +235,12 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             return true
         end
         return false
+    end
+    if isa(a, CustomLattice)
+        if !isa(b, CustomLattice)
+            return a.typ ⊑ b
+        end
+        return  a.callbacks.:⊑(a, b)
     end
     if isa(a, PartialOpaque)
         if isa(b, PartialOpaque)
@@ -286,6 +327,8 @@ widenconst(t::Type) = t
 widenconst(t::TypeVar) = t
 widenconst(t::Core.TypeofVararg) = t
 widenconst(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
+widenconst(t::CustomLattice) = widenconst(t.typ)
+widenconst(t::LatticeUnion) = Union{widenconst(t.a), widenconst(t.b)}
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 
