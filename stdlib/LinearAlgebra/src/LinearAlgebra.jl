@@ -454,8 +454,10 @@ _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
 
 ## append right hand side with zeros if necessary
-_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
-_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
+_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} =
+    fill!(similar(b, T, max(length(b), n)), zero(T))
+_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} =
+    fill!(similar(B, T, max(size(B, 1), n), size(B, 2)), zero(T))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
