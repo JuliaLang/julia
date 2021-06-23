@@ -439,7 +439,7 @@ Create an array of size `dims` with every element set to `value`.
 For example, `fill(1.0, (5,5))` returns a 5×5 array of floats,
 with `1.0` in every location of the array.
 
-The dimension lengths `dims` may be specified as either a tuple or a sequence of arguments. 
+The dimension lengths `dims` may be specified as either a tuple or a sequence of arguments.
 An `N`-length tuple or `N` arguments following the `value` specify an `N`-dimensional
 array. Thus, a common idiom for creating a zero-dimensional array with its only value
 set to `x` is `fill(x)`.
