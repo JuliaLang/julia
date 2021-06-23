@@ -892,7 +892,7 @@ Interval{Float64}(1.0, 2.0)
 |:----------------------------------------- |:----------------------------------------------------------------------------------------------- |
 | `unsafe_read(io, ::Ptr{UInt8}, ::UInt)`   | Copy bytes from the `IO` to a pointer. |
 | `unsafe_write(io, ::Ptr{UInt8}, ::UInt)`  | Copy bytes from a pointer to the `IO`. |
-| `eof(io)`                                 | Whether the IO stream is at an end.    |
+| `eof(io)`                                 | Whether the IO stream is at the end.   |
 
 | Optional methods                          | Brief description                                                                               |
 |:----------------------------------------- |:----------------------------------------------------------------------------------------------- |
@@ -914,7 +914,7 @@ Methods which affect the mutable state of the `IO` stream such as `close` and `s
 optional.
 
 ### Example
-The below example implements an `IO` "recorder" which writes all data written to it to
+The below example implements an `IO` "recorder" which writes all data read from it to
 an extra buffer.  It defines `read` and `write` methods for `UInt8`, so it supports
 reading and writing of any object which can be written or read from an `IOBuffer`.
 ```julia
