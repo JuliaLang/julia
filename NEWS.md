@@ -193,6 +193,7 @@ Standard library changes
   [Bareiss](https://en.wikipedia.org/wiki/Bareiss_algorithm) algorithm to calculate precise
   values ([#40868]).
 * `exp(A::StridedMatrix)` has improved performance improvents  in terms of CPU-time and allocations ([#40668])
+* Five argument `mul!` now supports in-place addition of `UniformScaling` ([#40731])
 
 #### Markdown
 
