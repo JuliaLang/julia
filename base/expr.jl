@@ -188,19 +188,32 @@ Give a hint to the compiler that this function is worth inlining.
 Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
 an extra nudge can be given to the compiler to inline it.
-This is shown in the following example:
+
+`@inline` can be applied immediately before the definition or in its function body.
 
 ```julia
-@inline function bigfunction(x)
-    #=
-        Function Definition
-    =#
+# annotate long-form definition
+@inline function longdef(x)
+    ...
+end
+
+# annotate short-form definition
+@inline shortdef(x) = ...
+
+# annotate anonymous function that a `do` block creates
+f() do
+    @inline
+    ...
 end
 ```
+
+!!! compat "Julia 1.8"
+    The usage within a function body requires at least Julia 1.8.
 """
 macro inline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
 end
+macro inline() Expr(:meta, :inline) end
 
 """
     @noinline
@@ -209,15 +222,28 @@ Give a hint to the compiler that it should not inline a function.
 
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
-prevented. This is shown in the following example:
+prevented.
+
+`@noinline` can be applied immediately before the definition or in its function body.
 
 ```julia
-@noinline function smallfunction(x)
-    #=
-        Function Definition
-    =#
+# annotate long-form definition
+@noinline function longdef(x)
+    ...
+end
+
+# annotate short-form definition
+@noinline shortdef(x) = ...
+
+# annotate anonymous function that a `do` block creates
+f() do
+    @noinline
+    ...
 end
 ```
+
+!!! compat "Julia 1.8"
+    The usage within a function body requires at least Julia 1.8.
 
 !!! note
     If the function is trivial (for example returning a constant) it might get inlined anyway.
@@ -225,6 +251,7 @@ end
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
+macro noinline() Expr(:meta, :noinline) end
 
 """
     @pure ex

@@ -6,6 +6,7 @@ New language features
 ---------------------
 
 * `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
+* `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
 
 Language changes
 ----------------
