@@ -965,6 +965,32 @@ julia> argmin(acos, 0:0.1:1)
 argmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)[2]
 
 """
+    argmin(itr)
+
+Return the index or key of the minimal element in a collection.
+If there are multiple minimal elements, then the first one will be returned.
+
+The collection must not be empty.
+
+`NaN` is treated as less than all other values except `missing`.
+
+See also: [`argmax`](@ref), [`findmin`](@ref).
+
+# Examples
+```jldoctest
+julia> argmin([8, 0.1, -9, pi])
+3
+
+julia> argmin([7, 1, 1, 6])
+2
+
+julia> argmin([7, 1, 1, NaN])
+4
+```
+"""
+argmin(itr) = findmin(itr)[2]
+
+"""
     indmin(itr) -> idx
 
 Return the index of the minimal element of the collection `itr`.
