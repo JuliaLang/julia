@@ -389,7 +389,7 @@ function isinvoke(@nospecialize(x), pred)
     end
     return false
 end
-code_typed1(args...; kwargs...) = (first∘first)(code_typed(args...; kwargs...))::Core.CodeInfo
+code_typed1(args...; kwargs...) = (first(only(code_typed(args...; kwargs...)))::Core.CodeInfo).code
 
 @testset "@inline/@noinline annotation before definition" begin
     m = Module()
@@ -414,24 +414,24 @@ code_typed1(args...; kwargs...) = (first∘first)(code_typed(args...; kwargs...)
         def_noinline_noconflict(x) = _def_noinline_noconflict(x)
     end
 
-    let ci = code_typed1(m.def_inline, (Int,))
-        @test all(ci.code) do x
+    let code = code_typed1(m.def_inline, (Int,))
+        @test all(code) do x
             !isinvoke(x, :_def_inline)
         end
     end
-    let ci = code_typed1(m.def_noinline, (Int,))
-        @test any(ci.code) do x
+    let code = code_typed1(m.def_noinline, (Int,))
+        @test any(code) do x
             isinvoke(x, :_def_noinline)
         end
     end
     # test that they don't conflict with other "before-definition" macros
-    let ci = code_typed1(m.def_inline_noconflict, (Int,))
-        @test all(ci.code) do x
+    let code = code_typed1(m.def_inline_noconflict, (Int,))
+        @test all(code) do x
             !isinvoke(x, :_def_inline_noconflict)
         end
     end
-    let ci = code_typed1(m.def_noinline_noconflict, (Int,))
-        @test any(ci.code) do x
+    let code = code_typed1(m.def_noinline_noconflict, (Int,))
+        @test any(code) do x
             isinvoke(x, :_def_noinline_noconflict)
         end
     end
@@ -471,36 +471,149 @@ end
         end
     end
 
-    let ci = code_typed1(m.body_inline, (Int,))
-        @test all(ci.code) do x
+    let code = code_typed1(m.body_inline, (Int,))
+        @test all(code) do x
             !isinvoke(x, :_body_inline)
         end
     end
-    let ci = code_typed1(m.body_noinline, (Int,))
-        @test any(ci.code) do x
+    let code = code_typed1(m.body_noinline, (Int,))
+        @test any(code) do x
             isinvoke(x, :_body_noinline)
         end
     end
     # test annotations for `do` blocks
-    let ci = code_typed1(m.do_inline, (Int,))
+    let code = code_typed1(m.do_inline, (Int,))
         # what we test here is that both `simple_caller` and the anonymous function that the
         # `do` block creates should inlined away, and as a result there is only the unresolved call
-        @test all(ci.code) do x
+        @test all(code) do x
             !isinvoke(x, :simple_caller) &&
             !isinvoke(x, mi->startswith(string(mi.def.name), '#'))
         end
     end
-    let ci = code_typed1(m.do_noinline, (Int,))
+    let code = code_typed1(m.do_noinline, (Int,))
         # the anonymous function that the `do` block created shouldn't be inlined here
-        @test any(ci.code) do x
+        @test any(code) do x
             isinvoke(x, mi->startswith(string(mi.def.name), '#'))
         end
     end
 end
 
+@testset "callsite @inline/@noinline annotations" begin
+    m = Module()
+    @eval m begin
+        # this global variable prevents inference to fold everything as constant, and/or the optimizer to inline the call accessing to this
+        g = 0
+
+        @noinline noinlined_explicit(x) = x
+        force_inline_explicit(x)        = @inline noinlined_explicit(x)
+        force_inline_block_explicit(x)  = @inline noinlined_explicit(x) + noinlined_explicit(x)
+        noinlined_implicit(x)          = g
+        force_inline_implicit(x)       = @inline noinlined_implicit(x)
+        force_inline_block_implicit(x) = @inline noinlined_implicit(x) + noinlined_implicit(x)
+
+        @inline inlined_explicit(x)      = x
+        force_noinline_explicit(x)       = @noinline inlined_explicit(x)
+        force_noinline_block_explicit(x) = @noinline inlined_explicit(x) + inlined_explicit(x)
+        inlined_implicit(x)              = x
+        force_noinline_implicit(x)       = @noinline inlined_implicit(x)
+        force_noinline_block_implicit(x) = @noinline inlined_implicit(x) + inlined_implicit(x)
+
+        # test callsite annotations for constant-prop'ed calls
+
+        @noinline Base.@aggressive_constprop noinlined_constprop_explicit(a) = a+g
+        force_inline_constprop_explicit()                                    = @inline noinlined_constprop_explicit(0)
+        Base.@aggressive_constprop noinlined_constprop_implicit(a) = a+g
+        force_inline_constprop_implicit()                          = @inline noinlined_constprop_implicit(0)
+
+        @inline Base.@aggressive_constprop inlined_constprop_explicit(a) = a+g
+        force_noinline_constprop_explicit()                              = @noinline inlined_constprop_explicit(0)
+        @inline Base.@aggressive_constprop inlined_constprop_implicit(a) = a+g
+        force_noinline_constprop_implicit()                              = @noinline inlined_constprop_implicit(0)
+
+        @noinline notinlined(a) = a
+        function nested(a0, b0)
+            @noinline begin
+                a = @inline notinlined(a0) # this call should be inlined
+                b = notinlined(b0) # this call should NOT be inlined
+                return a, b
+            end
+        end
+
+        # test inlining of un-cached callsites
+
+        import Core.Compiler: isType
+
+        limited(a) = @noinline(isType(a)) ? @inline(limited(a.parameters[1])) : rand(a)
+
+        function multilimited(a)
+            if @noinline(isType(a))
+                return @inline(multilimited(a.parameters[1]))
+            else
+                return rand(Bool) ? rand(a) : @inline(multilimited(a))
+            end
+        end
+    end
+
+    let code = code_typed1(m.force_inline_explicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_explicit), code)
+    end
+    let code = code_typed1(m.force_inline_block_explicit, (Int,))
+        @test all(code) do x
+            !isinvoke(x, :noinlined_explicit) &&
+            !isinvoke(x, :(+))
+        end
+    end
+    let code = code_typed1(m.force_inline_implicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_implicit), code)
+    end
+    let code = code_typed1(m.force_inline_block_implicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_explicit), code)
+    end
+
+    let code = code_typed1(m.force_noinline_explicit, (Int,))
+        @test any(x->isinvoke(x, :inlined_explicit), code)
+    end
+    let code = code_typed1(m.force_noinline_block_explicit, (Int,))
+        @test count(x->isinvoke(x, :inlined_explicit), code) == 2
+    end
+    let code = code_typed1(m.force_noinline_implicit, (Int,))
+        @test any(x->isinvoke(x, :inlined_implicit), code)
+    end
+    let code = code_typed1(m.force_noinline_block_implicit, (Int,))
+        @test count(x->isinvoke(x, :inlined_implicit), code) == 2
+    end
+
+    let code = code_typed1(m.force_inline_constprop_explicit)
+        @test all(x->!isinvoke(x, :noinlined_constprop_explicit), code)
+    end
+    let code = code_typed1(m.force_inline_constprop_implicit)
+        @test all(x->!isinvoke(x, :noinlined_constprop_implicit), code)
+    end
+
+    let code = code_typed1(m.force_noinline_constprop_explicit)
+        @test any(x->isinvoke(x, :inlined_constprop_explicit), code)
+    end
+    let code = code_typed1(m.force_noinline_constprop_implicit)
+        @test any(x->isinvoke(x, :inlined_constprop_implicit), code)
+    end
+
+    let code = code_typed1(m.nested, (Int,Int))
+        @test count(x->isinvoke(x, :notinlined), code) == 1
+    end
+
+    let code = code_typed1(m.limited, (Any,))
+        @test count(x->isinvoke(x, :isType), code) == 2
+    end
+    # check that inlining for recursive callsites doesn't depend on inference local cache
+    let code1 = code_typed1(m.multilimited, (Any,))
+        code2 = code_typed1(m.multilimited, (Any,))
+        @test code1 == code2
+    end
+end
+
 # force constant-prop' for `setproperty!`
-let m = Module()
-    ci = @eval m begin
+# https://github.com/JuliaLang/julia/pull/41882
+let ci = @eval Module() begin
         # if we don't force constant-prop', `T = fieldtype(Foo, ::Symbol)` will be union-split to
         # `Union{Type{Any},Type{Int}` and it will make `convert(T, nothing)` too costly
         # and it leads to inlining failure

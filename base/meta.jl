@@ -450,6 +450,7 @@ end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
 
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta
+                                   || head === :loopinfo || head === :inline || head === :noinline)
 
 end # module

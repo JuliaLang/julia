@@ -21,21 +21,30 @@ function push!(et::EdgeTracker, ci::CodeInstance)
     push!(et, ci.def)
 end
 
-struct InliningState{S <: Union{EdgeTracker, Nothing}, T, P}
+struct InliningState{S <: Union{EdgeTracker, Nothing}, T, I<:AbstractInterpreter}
     params::OptimizationParams
     et::S
     mi_cache::T
-    policy::P
+    interp::I
 end
 
-function default_inlining_policy(@nospecialize(src))
+function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8, match::Union{MethodMatch,InferenceResult})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
-        src_inlineable = ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
+        src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
-    end
-    if isa(src, OptimizationState) && isdefined(src, :ir)
-        return src.src.inlineable ? src.ir : nothing
+    elseif isa(src, OptimizationState) && isdefined(src, :ir)
+        return (is_stmt_inline(stmt_flag) || src.src.inlineable) ? src.ir : nothing
+    elseif src === nothing && is_stmt_inline(stmt_flag) && isa(match, MethodMatch)
+        # when the source isn't available at this moment, try to re-infer and inline it
+        # NOTE we can make inference try to keep the source if the call is going to be inlined,
+        # but then inlining will depend on local state of inference and so the first entry
+        # and the succeeding ones may generate different code; rather we always re-infer
+        # the source to avoid the problem while it's obviously not most efficient
+        # HACK disable inlining for the re-inference to avoid cycles by making sure the following inference never comes here again
+        interp = NativeInterpreter(get_world_counter(interp); opt_params = OptimizationParams(; inlining = false))
+        src, rt = typeinf_code(interp, match.method, match.spec_types, match.sparams, true)
+        return src
     end
     return nothing
 end
@@ -57,7 +66,7 @@ mutable struct OptimizationState
         inlining = InliningState(params,
             EdgeTracker(s_edges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
-            inlining_policy(interp))
+            interp)
         return new(frame.linfo,
                    frame.src, nothing, frame.stmt_info, frame.mod,
                    frame.sptypes, frame.slottypes, false,
@@ -86,7 +95,7 @@ mutable struct OptimizationState
         inlining = InliningState(params,
             nothing,
             WorldView(code_cache(interp), get_world_counter()),
-            inlining_policy(interp))
+            interp)
         return new(linfo,
                    src, nothing, stmt_info, mod,
                    sptypes_from_meth_instance(linfo), slottypes, false,
@@ -128,6 +137,10 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # This statement was marked as @inbounds by the user. If replaced by inlining,
 # any contained boundschecks may be removed
 const IR_FLAG_INBOUNDS       = 0x01
+# This statement was marked as @inline by the user
+const IR_FLAG_INLINE         = 0x01 << 1
+# This statement was marked as @noinline by the user
+const IR_FLAG_NOINLINE       = 0x01 << 2
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
 const IR_FLAG_EFFECT_FREE    = 0x01 << 4
@@ -172,6 +185,9 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
     end
     return inlineable
 end
+
+is_stmt_inline(stmt_flag::UInt8)   = stmt_flag & IR_FLAG_INLINE   != 0
+is_stmt_noinline(stmt_flag::UInt8) = stmt_flag & IR_FLAG_NOINLINE != 0
 
 # These affect control flow within the function (so may not be removed
 # if there is no usage within the function), but don't affect the purity
@@ -359,6 +375,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
     renumber_ir_elements!(code, changemap, labelmap)
 
     inbounds_depth = 0 # Number of stacked inbounds
+    inline_flags = BitVector()
     meta = Any[]
     flags = fill(0x00, length(code))
     for i = 1:length(code)
@@ -373,16 +390,38 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
                 inbounds_depth -= 1
             end
             stmt = nothing
+        elseif isexpr(stmt, :inline)
+            if stmt.args[1]::Bool
+                push!(inline_flags, true)
+            else
+                pop!(inline_flags)
+            end
+            stmt = nothing
+        elseif isexpr(stmt, :noinline)
+            if stmt.args[1]::Bool
+                push!(inline_flags, false)
+            else
+                pop!(inline_flags)
+            end
+            stmt = nothing
         else
             stmt = normalize(stmt, meta)
         end
         code[i] = stmt
-        if !(stmt === nothing)
+        if stmt !== nothing
             if inbounds_depth > 0
                 flags[i] |= IR_FLAG_INBOUNDS
             end
+            if !isempty(inline_flags)
+                if last(inline_flags)
+                    flags[i] |= IR_FLAG_INLINE
+                else
+                    flags[i] |= IR_FLAG_NOINLINE
+                end
+            end
         end
     end
+    @assert isempty(inline_flags) "malformed meta flags"
     strip_trailing_junk!(ci, code, stmtinfo, flags)
     cfg = compute_basic_blocks(code)
     types = Any[]

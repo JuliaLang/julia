@@ -217,7 +217,6 @@ may_discard_trees(::AbstractInterpreter) = true
 verbose_stmt_info(::AbstractInterpreter) = false
 
 method_table(interp::AbstractInterpreter) = InternalMethodTable(get_world_counter(interp))
-inlining_policy(::AbstractInterpreter) = default_inlining_policy
 
 """
 By default `AbstractInterpreter` implements the following inference bail out logic:
