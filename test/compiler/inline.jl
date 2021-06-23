@@ -380,3 +380,120 @@ end
 using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
+
+# check if `x` is a statically-resolved call of a function whose name is `sym`
+isinvoke(@nospecialize(x), sym::Symbol) = isinvoke(x, mi->mi.def.name===sym)
+function isinvoke(@nospecialize(x), pred)
+    if Meta.isexpr(x, :invoke)
+        return pred(x.args[1]::Core.MethodInstance)
+    end
+    return false
+end
+code_typed1(args...; kwargs...) = (first∘first)(code_typed(args...; kwargs...))::Core.CodeInfo
+
+@testset "@inline/@noinline annotation before definition" begin
+    m = Module()
+    @eval m begin
+        @inline function _def_inline(x)
+            # this call won't be resolved and thus will prevent inlining to happen if we don't
+            # annotate `@inline` at the top of this function body
+            return unresolved_call(x)
+        end
+        def_inline(x) = _def_inline(x)
+        @noinline _def_noinline(x) = x # obviously will be inlined otherwise
+        def_noinline(x) = _def_noinline(x)
+
+        # test that they don't conflict with other "before-definition" macros
+        @inline Base.@aggressive_constprop function _def_inline_noconflict(x)
+            # this call won't be resolved and thus will prevent inlining to happen if we don't
+            # annotate `@inline` at the top of this function body
+            return unresolved_call(x)
+        end
+        def_inline_noconflict(x) = _def_inline_noconflict(x)
+        @noinline Base.@aggressive_constprop _def_noinline_noconflict(x) = x # obviously will be inlined otherwise
+        def_noinline_noconflict(x) = _def_noinline_noconflict(x)
+    end
+
+    let ci = code_typed1(m.def_inline, (Int,))
+        @test all(ci.code) do x
+            !isinvoke(x, :_def_inline)
+        end
+    end
+    let ci = code_typed1(m.def_noinline, (Int,))
+        @test any(ci.code) do x
+            isinvoke(x, :_def_noinline)
+        end
+    end
+    # test that they don't conflict with other "before-definition" macros
+    let ci = code_typed1(m.def_inline_noconflict, (Int,))
+        @test all(ci.code) do x
+            !isinvoke(x, :_def_inline_noconflict)
+        end
+    end
+    let ci = code_typed1(m.def_noinline_noconflict, (Int,))
+        @test any(ci.code) do x
+            isinvoke(x, :_def_noinline_noconflict)
+        end
+    end
+end
+
+@testset "@inline/@noinline annotation within a function body" begin
+    m = Module()
+    @eval m begin
+        function _body_inline(x)
+            @inline
+            # this call won't be resolved and thus will prevent inlining to happen if we don't
+            # annotate `@inline` at the top of this function body
+            return unresolved_call(x)
+        end
+        body_inline(x) = _body_inline(x)
+        function _body_noinline(x)
+            @noinline
+            return x # obviously will be inlined otherwise
+        end
+        body_noinline(x) = _body_noinline(x)
+
+        # test annotations for `do` blocks
+        @inline simple_caller(a) = a()
+        function do_inline(x)
+            simple_caller() do
+                @inline
+                # this call won't be resolved and thus will prevent inlining to happen if we don't
+                # annotate `@inline` at the top of this anonymous function body
+                return unresolved_call(x)
+            end
+        end
+        function do_noinline(x)
+            simple_caller() do
+                @noinline
+                return x # obviously will be inlined otherwise
+            end
+        end
+    end
+
+    let ci = code_typed1(m.body_inline, (Int,))
+        @test all(ci.code) do x
+            !isinvoke(x, :_body_inline)
+        end
+    end
+    let ci = code_typed1(m.body_noinline, (Int,))
+        @test any(ci.code) do x
+            isinvoke(x, :_body_noinline)
+        end
+    end
+    # test annotations for `do` blocks
+    let ci = code_typed1(m.do_inline, (Int,))
+        # what we test here is that both `simple_caller` and the anonymous function that the
+        # `do` block creates should inlined away, and as a result there is only the unresolved call
+        @test all(ci.code) do x
+            !isinvoke(x, :simple_caller) &&
+            !isinvoke(x, mi->startswith(string(mi.def.name), '#'))
+        end
+    end
+    let ci = code_typed1(m.do_noinline, (Int,))
+        # the anonymous function that the `do` block created shouldn't be inlined here
+        @test any(ci.code) do x
+            isinvoke(x, mi->startswith(string(mi.def.name), '#'))
+        end
+    end
+end
