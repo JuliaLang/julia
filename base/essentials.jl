@@ -796,6 +796,11 @@ julia> values([2])
 1-element Vector{Int64}:
  2
 ```
+
+# Implementation
+
+Implementation of `values` should satisfy the invariance explained in
+[`keys`](@ref).
 """
 values(itr) = itr
 
