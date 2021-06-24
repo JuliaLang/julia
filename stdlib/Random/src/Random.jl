@@ -392,7 +392,7 @@ After the call to `seed!`, `rng` is equivalent to a newly created
 object initialized with the same seed.
 
 If `rng` is not specified, it defaults to seeding the state of the
-shared thread-local generator.
+shared task-local generator.
 
 # Examples
 ```julia-repl
