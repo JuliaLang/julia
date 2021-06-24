@@ -4087,9 +4087,13 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
 static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
 {
     jl_value_t *ssavalue_types = (jl_value_t*)ctx.source->ssavaluetypes;
-    assert(jl_is_array(ssavalue_types));
+    jl_value_t *phiType = NULL;
+    if (jl_is_array(ssavalue_types)) {
+        phiType = jl_array_ptr_ref(ssavalue_types, idx);
+    } else {
+        phiType = (jl_value_t*)jl_any_type;
+    }
     jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(r, 0);
-    jl_value_t *phiType = jl_array_ptr_ref(ssavalue_types, idx);
     BasicBlock *BB = ctx.builder.GetInsertBlock();
     auto InsertPt = BB->getFirstInsertionPt();
     if (phiType == jl_bottom_type) {

@@ -1413,6 +1413,13 @@ end
 
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
+        if isa(e, PhiNode)
+            rt = Union{}
+            for val in e.values
+                rt = tmerge(rt, abstract_eval_special_value(interp, val, vtypes, sv))
+            end
+            return rt
+        end
         return abstract_eval_special_value(interp, e, vtypes, sv)
     end
     e = e::Expr
