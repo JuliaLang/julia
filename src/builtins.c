@@ -967,7 +967,9 @@ JL_CALLABLE(jl_f_replacefield)
         JL_TYPECHK(replacefield!, symbol, args[5]);
         failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[5], 1, 0);
     }
-    // TODO: filter more invalid ordering combinations
+    if (failure_order > success_order)
+        jl_atomic_error("invalid atomic ordering");
+    // TODO: filter more invalid ordering combinations?
     jl_value_t *v = args[0];
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t idx = get_checked_fieldindex("replacefield!", st, v, args[1], 1);
@@ -978,8 +980,6 @@ JL_CALLABLE(jl_f_replacefield)
     if (isatomic == (failure_order == jl_memory_order_notatomic))
         jl_atomic_error(isatomic ? "replacefield!: atomic field cannot be accessed non-atomically"
                                  : "replacefield!: non-atomic field cannot be accessed atomically");
-    if (failure_order > success_order)
-        jl_atomic_error("invalid atomic ordering");
     v = replace_nth_field(st, v, idx, args[2], args[3], isatomic); // always seq_cst, if isatomic needed at all
     return v;
 }

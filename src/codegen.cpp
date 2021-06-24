@@ -879,6 +879,8 @@ static const std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map = {
     { &jl_f_isdefined,          new JuliaFunction{"jl_f_isdefined", get_func_sig, get_func_attrs} },
     { &jl_f_getfield,           new JuliaFunction{"jl_f_getfield", get_func_sig, get_func_attrs} },
     { &jl_f_setfield,           new JuliaFunction{"jl_f_setfield", get_func_sig, get_func_attrs} },
+    { &jl_f_swapfield,          new JuliaFunction{"jl_f_swapfield", get_func_sig, get_func_attrs} },
+    { &jl_f_modifyfield,        new JuliaFunction{"jl_f_modifyfield", get_func_sig, get_func_attrs} },
     { &jl_f_fieldtype,          new JuliaFunction{"jl_f_fieldtype", get_func_sig, get_func_attrs} },
     { &jl_f_nfields,            new JuliaFunction{"jl_f_nfields", get_func_sig, get_func_attrs} },
     { &jl_f__expr,              new JuliaFunction{"jl_f__expr", get_func_sig, get_func_attrs} },
@@ -1160,6 +1162,8 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
                              jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *theF,
                              jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
+static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
+                        Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr);
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
@@ -1441,6 +1445,17 @@ static void alloc_def_flag(jl_codectx_t &ctx, jl_varinfo_t& vi)
 
 // --- utilities ---
 
+static Constant *undef_value_for_type(Type *T) {
+    auto tracked = CountTrackedPointers(T);
+    Constant *undef;
+    if (tracked.count)
+        // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
+        undef = Constant::getNullValue(T);
+    else
+        undef = UndefValue::get(T);
+    return undef;
+}
+
 static void CreateTrap(IRBuilder<> &irbuilder)
 {
     Function *f = irbuilder.GetInsertBlock()->getParent();
@@ -1471,6 +1486,7 @@ static void CreateConditionalAbort(IRBuilder<> &irbuilder, Value *test)
 }
 #endif
 #endif
+
 
 #include "cgutils.cpp"
 
@@ -2351,62 +2367,6 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     return emit_checked_var(ctx, bp, name, false, tbaa_binding);
 }
 
-template<typename Func>
-static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Constant *defval, Func &&func)
-{
-    if (auto Cond = dyn_cast<ConstantInt>(ifnot)) {
-        if (Cond->isZero())
-            return defval;
-        return func();
-    }
-    BasicBlock *currBB = ctx.builder.GetInsertBlock();
-    BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "guard_pass", ctx.f);
-    BasicBlock *exitBB = BasicBlock::Create(jl_LLVMContext, "guard_exit", ctx.f);
-    ctx.builder.CreateCondBr(ifnot, passBB, exitBB);
-    ctx.builder.SetInsertPoint(passBB);
-    auto res = func();
-    passBB = ctx.builder.GetInsertBlock();
-    ctx.builder.CreateBr(exitBB);
-    ctx.builder.SetInsertPoint(exitBB);
-    if (defval == nullptr)
-        return nullptr;
-    PHINode *phi = ctx.builder.CreatePHI(defval->getType(), 2);
-    phi->addIncoming(defval, currBB);
-    phi->addIncoming(res, passBB);
-    return phi;
-}
-
-template<typename Func>
-static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Func &&func)
-{
-    return emit_guarded_test(ctx, ifnot, ConstantInt::get(T_int1, defval), func);
-}
-
-template<typename Func>
-static Value *emit_nullcheck_guard(jl_codectx_t &ctx, Value *nullcheck, Func &&func)
-{
-    if (!nullcheck)
-        return func();
-    return emit_guarded_test(ctx, null_pointer_cmp(ctx, nullcheck), false, func);
-}
-
-template<typename Func>
-static Value *emit_nullcheck_guard2(jl_codectx_t &ctx, Value *nullcheck1,
-                                    Value *nullcheck2, Func &&func)
-{
-    if (!nullcheck1)
-        return emit_nullcheck_guard(ctx, nullcheck2, func);
-    if (!nullcheck2)
-        return emit_nullcheck_guard(ctx, nullcheck1, func);
-    nullcheck1 = null_pointer_cmp(ctx, nullcheck1);
-    nullcheck2 = null_pointer_cmp(ctx, nullcheck2);
-    // If both are NULL, return true.
-    return emit_guarded_test(ctx, ctx.builder.CreateOr(nullcheck1, nullcheck2), true, [&] {
-        return emit_guarded_test(ctx, ctx.builder.CreateAnd(nullcheck1, nullcheck2),
-                                 false, func);
-    });
-}
-
 static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                                Value *nullcheck1, Value *nullcheck2)
 {
@@ -2443,8 +2403,6 @@ static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const 
 }
 
 static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2);
-static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
-                        Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr);
 
 static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
@@ -3011,13 +2969,18 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         else {
                             typed_store(ctx,
                                         emit_arrayptr(ctx, ary, ary_ex, isboxed),
-                                        idx, val, ety,
+                                        idx, val, jl_cgval_t(), ety,
                                         isboxed ? tbaa_ptrarraybuf : tbaa_arraybuf,
                                         ctx.aliasscope,
                                         data_owner,
                                         isboxed,
                                         isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                                        0);
+                                        isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                                        0,
+                                        false,
+                                        true,
+                                        false,
+                                        false);
                         }
                     }
                     *ret = ary;
@@ -3158,19 +3121,34 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return false;
     }
 
-    else if (f == jl_builtin_setfield && (nargs == 3 || nargs == 4)) {
+    else if ((f == jl_builtin_setfield && (nargs == 3 || nargs == 4)) ||
+             (f == jl_builtin_swapfield && (nargs == 3 || nargs == 4)) ||
+             (f == jl_builtin_replacefield && (nargs == 4 || nargs == 5 || nargs == 6))) {
+        bool issetfield = f == jl_builtin_setfield;
+        bool isreplacefield = f == jl_builtin_replacefield;
+        const jl_cgval_t undefval;
         const jl_cgval_t &obj = argv[1];
         const jl_cgval_t &fld = argv[2];
-        const jl_cgval_t &val = argv[3];
+        const jl_cgval_t &val = argv[isreplacefield ? 4 : 3];
+        const jl_cgval_t &cmp = isreplacefield ? argv[3] : undefval;
         enum jl_memory_order order = jl_memory_order_notatomic;
-        if (nargs == 4) {
-            const jl_cgval_t &ord = argv[4];
-            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, "setfield!");
+        if (nargs >= (isreplacefield ? 5 : 4)) {
+            const jl_cgval_t &ord = argv[isreplacefield ? 5 : 4];
+            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type,
+                    issetfield ? "setfield!" : isreplacefield ? "replacefield!" : "swapfield!");
             if (!ord.constant)
                 return false;
-            order = jl_get_atomic_order((jl_sym_t*)ord.constant, false, true);
+            order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetfield, true);
         }
-        if (order == jl_memory_order_invalid) {
+        enum jl_memory_order fail_order = order;
+        if (isreplacefield && nargs == 6) {
+            const jl_cgval_t &ord = argv[6];
+            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, "replacefield!");
+            if (!ord.constant)
+                return false;
+            fail_order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
+        }
+        if (order == jl_memory_order_invalid || fail_order == jl_memory_order_invalid || fail_order > order) {
             emit_atomic_error(ctx, "invalid atomic ordering");
             *ret = jl_cgval_t(); // unreachable
             return true;
@@ -3189,27 +3167,39 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
             if (idx != -1) {
                 jl_value_t *ft = jl_svecref(uty->types, idx);
-                if (jl_subtype(val.typ, ft)) {
+                if (!jl_has_free_typevars(ft) && jl_subtype(val.typ, ft)) {
                     // TODO: attempt better codegen for approximate types
                     bool isboxed = jl_field_isptr(uty, idx);
                     bool isatomic = jl_field_isatomic(uty, idx);
                     bool needlock = isatomic && !isboxed && jl_datatype_size(jl_field_type(uty, idx)) > MAX_ATOMIC_SIZE;
                     if (isatomic == (order == jl_memory_order_notatomic)) {
                         emit_atomic_error(ctx,
-                                isatomic ? "setfield!: atomic field cannot be written non-atomically"
-                                         : "setfield!: non-atomic field cannot be written atomically");
+                                issetfield ?
+                                (isatomic ? "setfield!: atomic field cannot be written non-atomically"
+                                          : "setfield!: non-atomic field cannot be written atomically") :
+                                isreplacefield ?
+                                (isatomic ? "replacefield!: atomic field cannot be written non-atomically"
+                                          : "replacefield!: non-atomic field cannot be written atomically") :
+                                (isatomic ? "swapfield!: atomic field cannot be written non-atomically"
+                                          : "swapfield!: non-atomic field cannot be written atomically"));
                         *ret = jl_cgval_t();
                         return true;
                     }
-                    if (needlock)
-                        emit_lockstate_value(ctx, obj, true);
-                    emit_setfield(ctx, uty, obj, idx, val, true, true,
+                    if (isatomic == (fail_order == jl_memory_order_notatomic)) {
+                        emit_atomic_error(ctx,
+                                (isatomic ? "replacefield!: atomic field cannot be accessed non-atomically"
+                                          : "replacefield!: non-atomic field cannot be accessed atomically"));
+                        *ret = jl_cgval_t();
+                        return true;
+                    }
+                    *ret = emit_setfield(ctx, uty, obj, idx, val, cmp, true, true,
                             (needlock || order <= jl_memory_order_notatomic)
                             ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                            : get_llvm_atomic_order(order));
-                    if (needlock)
-                        emit_lockstate_value(ctx, obj, false);
-                    *ret = val;
+                            : get_llvm_atomic_order(order),
+                            (needlock || fail_order <= jl_memory_order_notatomic)
+                            ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                            : get_llvm_atomic_order(fail_order),
+                            needlock, issetfield, isreplacefield);
                     return true;
                 }
             }
@@ -7232,17 +7222,6 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     ctx.builder.SetCurrentDebugLocation(noDbg);
     ctx.builder.ClearInsertionPoint();
-
-    auto undef_value_for_type = [&](Type *T) {
-        auto tracked = CountTrackedPointers(T);
-        Constant *undef;
-        if (tracked.count)
-            // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
-            undef = Constant::getNullValue(T);
-        else
-            undef = UndefValue::get(T);
-        return undef;
-    };
 
     // Codegen Phi nodes
     std::map<std::pair<BasicBlock*, BasicBlock*>, BasicBlock*> BB_rewrite_map;
