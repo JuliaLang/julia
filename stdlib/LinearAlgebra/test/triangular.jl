@@ -4,7 +4,7 @@ module TestTriangular
 
 debug = false
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: BlasFloat, errorbounds, full!, naivesub!, transpose!,
+using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
 
@@ -282,7 +282,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test sqrt(A1) |> (t -> (t*t)::typeof(t)) ≈ A1
 
         # naivesub errors
-        @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(undef,n+1))
+        @test_throws DimensionMismatch ldiv!(A1, Vector{elty1}(undef, n+1))
 
         # eigenproblems
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
@@ -476,7 +476,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test_throws DimensionMismatch Ann'\bm
             @test_throws DimensionMismatch transpose(Ann)\bm
             if t1 == UpperTriangular || t1 == LowerTriangular
-                @test_throws LinearAlgebra.SingularException naivesub!(t1(zeros(elty1,n,n)),fill(eltyB(1),n))
+                if elty1 === eltyB <: BlasFloat
+                    @test_throws LAPACKException ldiv!(t1(zeros(elty1, n, n)), fill(eltyB(1), n))
+                else
+                    @test_throws SingularException ldiv!(t1(zeros(elty1, n, n)), fill(eltyB(1), n))
+                end
             end
             @test B/A1 ≈ B/Matrix(A1)
             @test B/transpose(A1) ≈ B/transpose(Matrix(A1))
@@ -659,6 +663,25 @@ end
         @test isa(similar(trisparsemat, Float32), TriType{Float32,<:SparseMatrixCSC{Float32}})
         @test isa(similar(trisparsemat, (n, n)), typeof(sparsemat))
         @test isa(similar(trisparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
+    end
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "AbstractArray constructor should preserve underlying storage type" begin
+    # tests corresponding to #34995
+    local m = 4
+    local T, S = Float32, Float64
+    immutablemat = ImmutableArray(randn(T,m,m))
+    for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        trimat = TriType(immutablemat)
+        @test convert(AbstractArray{S}, trimat).data isa ImmutableArray{S}
+        @test convert(AbstractMatrix{S}, trimat).data isa ImmutableArray{S}
+        @test AbstractArray{S}(trimat).data isa ImmutableArray{S}
+        @test AbstractMatrix{S}(trimat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, trimat) == trimat
+        @test convert(AbstractMatrix{S}, trimat) == trimat
     end
 end
 

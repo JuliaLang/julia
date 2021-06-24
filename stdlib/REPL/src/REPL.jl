@@ -191,6 +191,7 @@ function modules_to_be_loaded(ast, mods = Symbol[])
     for arg in ast.args
         arg isa Expr && modules_to_be_loaded(arg, mods)
     end
+    filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
     return mods
 end
 modules_to_be_loaded(::Nothing) = Symbol[] # comments are parsed as nothing

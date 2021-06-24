@@ -619,19 +619,22 @@ function enq_work(t::Task)
     # 1. The Task's stack is currently being used by the scheduler for a certain thread.
     # 2. There is only 1 thread.
     # 3. The multiq is full (can be fixed by making it growable).
-    if t.sticky || tid != 0 || Threads.nthreads() == 1
+    if t.sticky || Threads.nthreads() == 1
         if tid == 0
             tid = Threads.threadid()
             ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
         end
         push!(Workqueues[tid], t)
     else
-        tid = 0
         if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
             # if multiq is full, give to a random thread (TODO fix)
-            tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            if tid == 0
+                tid = mod(time_ns() % Int, Threads.nthreads()) + 1
+                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            end
             push!(Workqueues[tid], t)
+        else
+            tid = 0
         end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)

@@ -656,7 +656,7 @@ Once finalized, a reference becomes invalid and cannot be used in any further ca
 ## Local invocations
 
 Data is necessarily copied over to the remote node for execution. This is the case for both
-remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
+remotecalls and when data is stored to a [`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed

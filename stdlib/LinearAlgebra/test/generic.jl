@@ -355,6 +355,11 @@ end
     @test [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]] ≈ [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 end
 
+@testset "Issue 40128" begin
+    @test det(BigInt[9 1 8 0; 0 0 8 7; 7 6 8 3; 2 9 7 7])::BigInt == -1
+    @test det(BigInt[1 big(2)^65+1; 3 4])::BigInt == (4 - 3*(big(2)^65+1))
+end
+
 # Minimal modulo number type - but not subtyping Number
 struct ModInt{n}
     k
@@ -382,13 +387,13 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
-    @test A*(lu(A, Val(false))\b) == b
+    @test A*(lu(A, NoPivot())\b) == b
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-    @test A*(lu(A, Val(true))\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
 end
 
 @testset "Issue 18742" begin

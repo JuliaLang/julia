@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(1234321)
+Random.seed!(12343219)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -170,5 +170,11 @@ end
     @test eigmax(A') == eigmax(copy(A'))
 end
 
+@testset "equality of eigen factorizations" begin
+    A = randn(3, 3)
+    @test eigen(A) == eigen(A)
+    @test hash(eigen(A)) == hash(eigen(A))
+    @test isequal(eigen(A), eigen(A))
+end
 
 end # module TestEigen
