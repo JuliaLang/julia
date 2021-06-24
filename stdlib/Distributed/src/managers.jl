@@ -84,6 +84,8 @@ Keyword arguments:
 
     + `shell=:posix`: a POSIX-compatible Unix/Linux shell (bash, sh, etc.). The default.
 
+        + NOTE: Csh style shells (csh, tcsh, etc.) are not supported
+
     + `shell=:wincmd`: Microsoft Windows `cmd.exe`.
 
 * `dir`: specifies the working directory on the workers. Defaults to the host's current
