@@ -1410,7 +1410,7 @@ function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::E
     elseif params.inlining && length(atypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
-        if isa(typ, Const)
+        if isa(typ, Const) && _builtin_nothrow(<:, Any[atypes[3], atypes[2]], typ)
             ir[SSAValue(idx)] = quoted(typ.val)
             return true
         end
