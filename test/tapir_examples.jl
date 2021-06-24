@@ -205,6 +205,11 @@ function set_distinct(bool::Bool)
     return x + y
 end
 
+end # module TaskOutputs
+
+module Racy
+using Base.Experimental: Tapir
+
 function update_distinct(bool::Bool)
     x = 0
     y = 0
@@ -223,7 +228,16 @@ function update_distinct(bool::Bool)
     return x + y
 end
 
-end # module TaskOutputs
+function simple_race()
+    a = 0
+    Tapir.@sync begin
+        Tapir.@spawn a += 1
+        a += 2
+    end
+    a
+end
+
+end # module Racy
 
 module SROA
 using Base.Experimental: Tapir

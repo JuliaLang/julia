@@ -305,14 +305,16 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     ir = slot2reg(ir, ci, nargs, sv)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @timeit "Early tapir" ir = early_tapir_pass!(ir)
+    @timeit "Lower tapir output" ir = lower_tapir_output!(ir)
+    @timeit "Check tapir output" ir, racy = check_tapir_race!(ir)
+    racy && return ir
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     #@timeit "verify 2" verify_ir(ir)
     ir = compact!(ir)
     #@Base.show ("before_sroa", ir)
     @timeit "SROA" ir = getfield_elim_pass!(ir)
-    @timeit "Re-run early tapir" ir = early_tapir_pass!(ir)
+    @timeit "Fixup phi nodes for tapir" ir = fixup_tapir_phi!(ir)
     #@Base.show ir.new_nodes
     #@Base.show ("after_sroa", ir)
     ir = adce_pass!(ir)

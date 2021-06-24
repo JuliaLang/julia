@@ -86,9 +86,14 @@ end
     @test @inferred(TaskOutputs.f()) == (('a', 1), 1)
     @test @inferred(TaskOutputs.set_distinct(true)) == 4
     @test @inferred(TaskOutputs.set_distinct(false)) == 6
-    @test @inferred(TaskOutputs.update_distinct(true)) == 4
-    @test @inferred(TaskOutputs.update_distinct(false)) == 6
     @test @inferred(tmap(x -> x + 0.5, 1:10)) == 1.5:1:10.5
+end
+
+@testset "Race detection" begin
+    err = @test_error Racy.simple_race()
+    @test occursin("tapir: racy update to a variable", sprint(showerror, err))
+    err = @test_error Racy.update_distinct(true)
+    @test occursin("tapir: racy update to a variable", sprint(showerror, err))
 end
 
 @testset "SROA" begin

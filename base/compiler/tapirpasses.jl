@@ -86,8 +86,8 @@ function detached_sub_cfg!(detach::Int, ir::IRCode, visited)
         bb = ir.cfg.blocks[ibb]
         term = ir.stmts[bb.stmts[end]][:inst]
         if term isa ReattachNode
-            @assert bb.succs == [ibb + 1]
-            continuation = ir.cfg.blocks[ibb + 1]
+            @assert bb.succs == [term.label] "bb.succs == [term.label]"
+            continuation = ir.cfg.blocks[term.label]
             for k in continuation.preds
                 i = ir.cfg.blocks[k].stmts[end]
                 if i == detach
@@ -380,10 +380,26 @@ function insert_new_nodes(ir::IRCode)
     return IRCode(ir, stmts, cfg, NewNodeStream())
 end
 
+function empty_ircode(ir::IRCode, len::Int)
+    stmts = InstructionStream(len)
+    for i in 1:len
+        stmts.inst[i] = nothing
+        stmts.type[i] = Any
+        stmts.info[i] = nothing
+    end
+    cfg = CFG([BasicBlock(StmtRange(1, len))], Int[])
+    return IRCode(ir, stmts, cfg, NewNodeStream())
+end
+
 function stmt_at(ir::IRCode, pos::Int)
     pos <= length(ir.stmts) && return ir.stmts[pos]
     return ir.new_nodes.stmts[pos-length(ir.stmts)]
 end
+
+valuetypeof(ir::IRCode, v::SSAValue) = stmt_at(ir, v.id)[:type]
+valuetypeof(ir::IRCode, v::Argument) = ir,argtypes[v.n]
+valuetypeof(::IRCode, v::QuoteNode) = typeof(v.value)
+valuetypeof(::IRCode, v) = typeof(v)
 
 function insert_pos(ir::IRCode, pos::Int)
     pos <= length(ir.stmts) && return pos
@@ -740,6 +756,7 @@ TODO: Currently, it assumes that output variables are not used at RHS positions;
 don't assume this. Or, throw a nice error.
 """
 function lower_tapir_output!(ir::IRCode)
+    is_sequential(ir) && return ir
     Tapir = tapir_module()
     Tapir isa Module || return ir
 
@@ -795,239 +812,137 @@ function lower_tapir_output!(ir::IRCode)
     return ir
 end
 
-function early_tapir_pass!(ir::IRCode)
-    is_sequential(ir) && return ir
-    Tapir = tapir_module()
-    Tapir isa Module || return ir
-    Base = Main.Base::Module
+"""
+    check_tapir_race!(ir::IRCode) -> ir′
 
-    ir = lower_tapir_output!(ir)
-    # TODO: maybe remove the following rather unsound transformation
+Inject error-throwing code when a racy phi node is found.
+This pass must be run after `lower_tapir_output!`.
+
+# Examples
+```
+julia> function f()
+           a = 0
+           Tapir.@sync begin
+               Tapir.@spawn a += 1
+               a += 2
+           end
+           a
+       end;
+
+julia> f()
+ERROR: tapir: racy update to a variable
+```
+"""
+function check_tapir_race!(ir::IRCode)
+    isdefined(Main, :Base) || return ir, false
+    Base = Main.Base::Module
+    is_sequential(ir) && return ir, false
+
+    ir = insert_new_nodes(ir)
+
+    for bb in ir.cfg.blocks
+        reattach = ir.stmts.inst[bb.stmts[end]]
+        reattach isa ReattachNode || continue
+        continuation = ir.cfg.blocks[reattach.label]
+        for iphi in continuation.stmts
+            phi = ir.stmts[iphi]
+            phi[:inst] isa PhiNode || continue
+            # Racy Phi node found; just throw:
+            th = Expr(:call, GlobalRef(Base, :error), "tapir: racy update to a variable")
+            irerr = empty_ircode(ir, 2)
+            irerr.stmts.inst[1] = th
+            irerr.stmts.type[1] = Union{}
+            irerr.stmts.inst[2] = ReturnNode()  # unreachable
+            return irerr, true
+        end
+    end
+
+    return ir, false
+end
+# TODO: Do this at the level of abstract interpretation?
+#
+# The above check cannot detect a race in
+#
+#     function f()
+#         local a
+#         Tapir.@sync begin
+#             Tapir.@spawn a = 1
+#             a = 2
+#         end
+#         a
+#     end
+#
+# ... since abstract interpretation removes `a = 1`. Also, producing a good
+# error message in `IRCode` is very hard since variable names are not preserved
+# any more.
+
+"""
+    fixup_tapir_phi!(ir::IRCode) -> ir′
+
+This transforms Phi nodes in the continuations to PhiC nodes at use-sites.
+
+This pass exists for supporting SROA which can introduce new Phi nodes.
+
+* TODO: Is it better to teach SROA to respect Tapir properties?
+* TODO: Check that the uses are dominated by sync
+"""
+function fixup_tapir_phi!(ir::IRCode)
+    is_sequential(ir) && return ir
 
     # Not calling `compact!(ir)` to avoid any DCE at this point. For example,
     # constant propagation makes it very difficult to determine where we should
     # initialize the memory.
+    # TODO: Check above comment; it could be stale.
     ir = insert_new_nodes(ir)
     @assert isempty(ir.new_nodes.stmts.inst)
 
-    # TODO: lazily create?
-    domtree = construct_domtree(ir.cfg.blocks)
-
-    # maybe use bit-packed BitSet?
-    isusedby_cache = IdDict{Tuple{Int,Int},Bool}()
-    isusedby(def, use) = get!(isusedby_cache, (def, use)) do
-        phi = ir.stmts.inst[use]::PhiNode
-        any_assigned(phi.values) do v
-            if v isa SSAValue
-                if v.id <= length(ir.stmts)
-                    v.id == def && return true
-                    inst = ir.stmts.inst[v.id]
-                    if inst isa PhiNode
-                        return isusedby(def, v.id)
-                    end
-                end
-            end
-            return false
-        end
-    end
-
-    ssamap = Vector{Any}(undef, length(ir.stmts))
-    toref = BitSet()
-    usersof = Vector{BitSet}(undef, length(ir.stmts))
-    for (ichild, bb) in enumerate(ir.cfg.blocks)
+    upsilons = Vector{Vector{Any}}(undef, length(ir.stmts))
+    for bb in ir.cfg.blocks
         reattach = ir.stmts.inst[bb.stmts[end]]
         reattach isa ReattachNode || continue
         continuation = ir.cfg.blocks[reattach.label]
         for iphi in continuation.stmts
             phi = ir.stmts.inst[iphi]
-            if phi isa PhiNode
-                local idetacher::BBNumber
-                local jchild, jdetacher
-                jchild_n = 0
-                jdetacher_n = 0
-                for (j, e) in enumerate(phi.edges)
-                    if e == ichild
-                        jchild = j
-                        jchild_n += 1
-                        continue
-                    end
-                    term = ir.stmts.inst[ir.cfg.blocks[e].stmts[end]]
-                    if term isa DetachNode && term.syncregion == reattach.syncregion
-                        idetacher = e
-                        jdetacher = j
-                        jdetacher_n += 1
-                    end
-                end
-                @assert jchild_n == 1
-                @assert jdetacher_n == 1
-                use_memory = true
-                # The detach always happens (and the child task will set the
-                # task output) if the continuation is dominated by the block
-                # detaching the task:
-                if dominates(domtree, idetacher, reattach.label)
-                    # Next, check if the variable set in the child task is not
-                    # used in the continuation.
-                    used_in_continuation = RefValue(false)
-                    foreach_descendant(reattach.label, ir.cfg) do _, bb
-                        for i in bb.stmts
-                            inst = ir.stmts.inst[i]
-                            if inst isa SyncNode
-                                inst.syncregion == reattach.syncregion && return false
-                            end
-                            foreach_id(identity, inst) do v
-                                if v === SSAValue(iphi)
-                                    used_in_continuation.x = true
-                                end
-                            end
-                        end
-                        return true
-                    end
-                    use_memory = used_in_continuation.x
-                end
-                @assert !any_assigned(phi.values) do v
-                    v isa SSAValue && (isassigned(ssamap, v.id) || v.id in toref)
-                end
-                if use_memory
-                    push!(toref, iphi)
-                    users = usersof[iphi] = BitSet()
-                    foreach_descendant(reattach.label, ir.cfg) do _, bb
-                        for i in bb.stmts
-                            inst = ir.stmts.inst[i]
-                            if inst isa PhiNode
-                                if isusedby(iphi, i)
-                                    push!(users, i)
-                                end
-                            end
-                        end
-                        return true
-                    end
-                else
-                    @assert !isassigned(ssamap, iphi)
-                    ssamap[iphi] = phi.values[jchild]
-                end
-            end
-        end
-    end
-
-    for i in 1:length(ir.stmts)
-        stmt = ir.stmts[i]
-        stmt[:inst] = map_id(identity, stmt[:inst]) do v
-            if v isa SSAValue && isassigned(ssamap, v.id)
-                return ssamap[v.id]
-            end
-            v
-        end
-    end
-    isempty(toref) && return ir
-
-    # Here, we have task outputs for which the tasks that will set them cannot
-    # be statically determined. We support this by turning them to references
-    # ("reg2mem"). Note that we still rely on that there is only one task that
-    # sets each taks output (thus, no atomic read/write is nessesary).
-
-    # [Identifying task output variables]
-    # Partition `toref` into the set of phi nodes used by at least one other
-    # shared phi node (i.e., the pairwise intersection of the sets of user phi
-    # nodes is non-empty). Each set (partition) corresponds to a single output
-    # variable. Since we only require pairwise intersection to be non-empty, we
-    # need to take the transitive closure to obtain an equivalence
-    # relationship:
-    same_variable = transitive_closure_on(toref) do v, w
-        havecommon(usersof[v], usersof[w])
-    end
-    # TODO: `transitive_closure_on` is O(n^2) (n = length(toref)). Is there a better way?
-    output_variables = BitSet[]
-    toref_next = BitSet()
-    while !isempty(toref)
-        v = pop!(toref)
-        phis = BitSet((v,))
-        push!(output_variables, phis)
-        while !isempty(toref)
-            w = pop!(toref)
-            if same_variable(v, w)
-                push!(phis, w)
-            else
-                push!(toref_next, w)
-            end
-        end
-        toref_next, toref = toref, toref_next
-    end
-    phisets = BitSet[
-        let set = BitSet(phis)
-            for v in phis
-                union!(set, usersof[v])
-            end
-            set
-        end for phis in output_variables
-    ]
-
-    # Insert stores
-    refs = SSAValue[]
-    sizehint!(refs, length(phisets))
-    for set in phisets
-        TX = foldunion(ir.stmts.type[i] for i in set)
-        if isconcretetype(TX)
-            T = Tapir.UndefableRef{TX}
-        else
-            T = Tapir.UndefableRef{<:TX}
-        end
-        r = insert_node!(ir, 1, NewInstruction(Expr(:call, Tapir.box, TX), T))
-        push!(refs, r)
-        handled = falses(length(ir.stmts))
-        is_inital_set::Bool = false
-        local initial_value
-        for i in set
-            phi = ir.stmts.inst[i]::PhiNode
-            foreach_def(SSAValue(i), ir) do v
-                if v isa Instruction
-                    handled[v.idx] && return false
-                    handled[v.idx] = true
-                    if !(v[:inst] isa PhiNode)
-                        local x = SSAValue(v.idx)
-                        local at = v.idx
-                        local inst = NewInstruction(Expr(:call, Base.setindex!, r, x), Any)
-                        insert_node!(ir, at, inst, true)
-                        return false
-                    end
-                    return true  # keep following the chain
-                end
-                if is_inital_set
-                    @assert initial_value === v
-                else
-                    initial_value = v
-                    is_inital_set = true
-                end
-                # `v` is either an `Argument` or a constant
-                insert_node!(ir, 1, NewInstruction(Expr(:call, Base.setindex!, r, v), Any))
-                return false
-            end
-            foreach_assigned_pair(phi.values) do jjjjj, v
+            # TODO: Can we assume Phi nodes are always at the beggining? (So
+            # that we can `break` instead of `continue`)
+            phi isa PhiNode || continue
+            ups = empty!(Vector{Any}(undef, length(phi.values)))
+            for i in eachindex(phi.values)
+                isassigned(phi.values, i) || continue
+                v = phi.values[i]
                 if v isa SSAValue
-                    local inst = ir.stmts.inst[v.id]
-                elseif v isa Argument
+                    st = stmt_at(ir, v.id)
+                    newinst = NewInstruction(UpsilonNode(v), st[:type])
+                    ipos = insert_pos(ir, v.id)
+                    bb = ir.cfg.blocks[block_for_inst(ir, ipos)]
+                    u = insert_node!(ir, last(bb.stmts), newinst)
+                else
+                    # Handle constant (also argument) values
+                    newinst = NewInstruction(UpsilonNode(v), valuetypeof(ir, v))
+                    ipos = last(ir.cfg.blocks[phi.edges[i]].stmts)
+                    u = insert_node!(ir, ipos, newinst)
                 end
+                push!(ups, u)
+            end
+            if !isempty(ups)
+                upsilons[iphi] = ups
             end
         end
     end
-    # Insert loads
+
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
-        stmt[:inst] isa PhiNode && continue
-        # TODO: support `@isdefined`
         stmt[:inst] = map_id(identity, stmt[:inst]) do v
-            if v isa SSAValue
-                for (set, r) in zip(phisets, refs)
-                    if v.id in set
-                        TX = foldunion(ir.stmts.type[i] for i in set)
-                        inst = NewInstruction(Expr(:call, Base.getindex, r), TX)
-                        load = insert_node!(ir, i, inst)
-                        return load
-                    end
-                end
+            if v isa SSAValue && isassigned(upsilons, v.id)
+                bb = ir.cfg.blocks[block_for_inst(ir.cfg, i)]
+                s = stmt_at(ir, v.id)
+                phic = PhiCNode((upsilons[v.id]))
+                return insert_node!(ir, first(bb.stmts), NewInstruction(phic, s[:type]), )
             end
             v
         end
     end
+    # TODO: CSE the duplicated PhiC?
 
     return ir
 end
