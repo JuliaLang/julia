@@ -254,31 +254,31 @@ function prepare_error(ex, msgs...)
     return msg
 end
 
-struct AuditError <: Exception
+struct CheckError <: Exception
     msg::AbstractString
 end
-AuditError() = AuditError("")
+CheckError() = CheckError("")
 
 """
-    @audit cond [text]
+    @check cond [text]
 
-Throw an [`AuditError`](@ref) if `cond` is `false`.
-Message `text` is optionally displayed upon audit failure.
+Throw an [`CheckError`](@ref) if `cond` is `false`.
+Message `text` is optionally displayed upon check failure.
 
 # Examples
 ```jldoctest
-julia> @audit iseven(3) "3 is an odd number!"
-ERROR: AuditError: 3 is an odd number!
+julia> @check iseven(3) "3 is an odd number!"
+ERROR: CheckError: 3 is an odd number!
 
-julia> @audit isodd(3) "What even are numbers?"
+julia> @check isodd(3) "What even are numbers?"
 ```
 """
-macro audit(ex, msgs...)
+macro check(ex, msgs...)
     msg = prepare_error(ex, msgs...)
-    fn = gensym("audit")
+    fn = gensym("check")
 
     @eval @noinline function $(fn)()
-        throw(AuditError($msg))
+        throw(CheckError($msg))
     end
 
     return :($(esc(ex)) ? $(nothing) : $(fn)())

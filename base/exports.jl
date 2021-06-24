@@ -1025,7 +1025,7 @@ export
     @polly,
 
     @assert,
-    @audit,
+    @check,
     @atomic,
     @atomicswap,
     @atomicreplace,
