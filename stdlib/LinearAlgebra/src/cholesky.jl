@@ -388,6 +388,12 @@ true
 cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
     ::Val{false}=Val(false); check::Bool = true) = cholesky!(cholcopy(A); check = check)
 
+function cholesky(A::Union{StridedMatrix{T},RealHermSymComplexHerm{<:T,<:StridedMatrix}}, ::Val{false}=Val(false); check::Bool = true) where T<:Float16
+    X = cholesky!(cholcopy(A); check = check)
+    Xnew = convert(AbstractMatrix{T}, X.factors)
+    Cholesky{T, typeof(Xnew)}(Xnew, X.uplo, X.info)
+end
+
 
 ## With pivoting
 """

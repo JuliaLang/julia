@@ -177,4 +177,12 @@ end
     @test isequal(eigen(A), eigen(A))
 end
 
+@testset "Float16" begin
+    A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    B = eigen(A)
+    @test B isa Eigen{Float16, Float16, Matrix{Float16}, Vector{Float16}, Vector{Float16}}
+    @test B.values isa Vector{Float16}
+    @test B.vectors isa Matrix{Float16}
+end
+
 end # module TestEigen
