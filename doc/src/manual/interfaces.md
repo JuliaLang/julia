@@ -896,10 +896,14 @@ Interval{Float64}(1.0, 2.0)
 
 | Optional methods                          | Brief description                                                                               |
 |:----------------------------------------- |:----------------------------------------------------------------------------------------------- |
-| `read(io, ::Type{UInt8})`                 | Read a byte from the stream.           |
-| `write(io, ::UInt8)`                      | Write a byte to the stream.            |
-| `close(io)`                               | Close the stream.                      |
-| `seek(io, ::Integer)`                     | Seek to a specific position.           |
+| `read(io, ::Type{UInt8})`                 | Read a byte from the stream.               |
+| `write(io, ::UInt8)`                      | Write a byte to the stream.                |
+| `close(io)`                               | Close the stream.                          |
+| `seek(io, ::Integer)`                     | Seek to a specific position.               |
+| `position(io)`                            | Return the current position of the stream. |
+| `seekstart(io)`                           | Seek to beginning of stream.               |
+| `seekend(io)`                             | Seek to the end of the stream.             |
+
 
 To implement an `IO` object it is required to define the low-level methods `unsafe_read`
 and `unsafe_write` which enable copying of data between the `IO` and a location given by a
