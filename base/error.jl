@@ -230,7 +230,14 @@ macro assert(ex, msgs...)
                 (Core.println(msg); "Error during bootstrap. See stdout.")
         end
     end
-    return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
+
+    fn = gensym("assert")
+
+    @eval @noinline function $(fn)()
+        throw(AssertionError($msg))
+    end
+
+    return :($(esc(ex)) ? $(nothing) : $(fn)())
 end
 
 function prepare_error(ex, msgs...)
@@ -253,131 +260,34 @@ function prepare_error(ex, msgs...)
     return msg
 end
 
-
-# https://github.com/c42f/FastClosures.jl/blob/0ffd494814a339d9fb96c247494d3ad72aff8191/src/FastClosures.jl
-
-struct Var
-    name::Symbol
-    num_esc::Int
+struct AuditError <: Exception
+    msg::AbstractString
 end
+AuditError() = AuditError("")
 
-
-# Utility function - fill `varlist` with all accesses to variables inside `ex`
-# which are not bound before being accessed.  Variables which were bound
-# before access are returned in `bound_vars` as a side effect.
-#
-# With works with the surface syntax so it unfortunately has to reproduce some
-# of the lowering logic (and consequently likely has bugs!)
-function find_var_uses!(varlist, bound_vars, ex, num_esc)
-    if isa(ex, Symbol)
-        var = Var(ex,num_esc)
-        if !(var in bound_vars)
-            var ∈ varlist || push!(varlist, var)
-        end
-        return varlist
-    elseif isa(ex, Expr)
-        if ex.head == :quote || ex.head == :line || ex.head == :inbounds
-            return varlist
-        end
-        if ex.head == :(=)
-            find_var_uses_lhs!(varlist, bound_vars, ex.args[1], num_esc)
-            find_var_uses!(varlist, bound_vars, ex.args[2], num_esc)
-        elseif ex.head == :kw
-            find_var_uses!(varlist, bound_vars, ex.args[2], num_esc)
-        elseif ex.head == :for || ex.head == :while || ex.head == :comprehension || ex.head == :let
-            # New scopes
-            inner_bindings = copy(bound_vars)
-            find_var_uses!(varlist, inner_bindings, ex.args, num_esc)
-        elseif ex.head == :try
-            # New scope + ex.args[2] is a new binding
-            find_var_uses!(varlist, copy(bound_vars), ex.args[1], num_esc)
-            catch_bindings = copy(bound_vars)
-            !isa(ex.args[2], Symbol) || push!(catch_bindings, Var(ex.args[2],num_esc))
-            find_var_uses!(varlist,catch_bindings,ex.args[3], num_esc)
-            if length(ex.args) > 3
-                finally_bindings = copy(bound_vars)
-                find_var_uses!(varlist,finally_bindings,ex.args[4], num_esc)
-            end
-        elseif ex.head == :call
-            find_var_uses!(varlist, bound_vars, ex.args[2:end], num_esc)
-        elseif ex.head == :local
-            foreach(ex.args) do e
-                if !isa(e, Symbol)
-                    find_var_uses!(varlist, bound_vars, e, num_esc)
-                end
-            end
-        elseif ex.head == :(::)
-            find_var_uses_lhs!(varlist, bound_vars, ex, num_esc)
-        elseif ex.head == :escape
-            # In the 0.7-DEV churn, escapes persist during recursive macro
-            # expansion until all macros are expanded.  Therefore, we
-            # need to need to keep track of the number of escapes we're
-            # currently inside, and to replay these when we construct the let
-            # expression. See https://github.com/JuliaLang/julia/issues/23221
-            # for additional pain and gnashing of teeth ;-)
-            find_var_uses!(varlist, bound_vars, ex.args[1], num_esc+1)
-        else
-            find_var_uses!(varlist, bound_vars, ex.args, num_esc)
-        end
-    end
-    varlist
-end
-
-find_var_uses!(varlist, bound_vars, exs::Vector, num_esc) =
-    foreach(e->find_var_uses!(varlist, bound_vars, e, num_esc), exs)
-
-# Find variable uses on the left hand side of an assignment.  Some of what may
-# be variable uses turn into bindings in this context (cf. tuple unpacking).
-function find_var_uses_lhs!(varlist, bound_vars, ex, num_esc)
-    if isa(ex, Symbol)
-        var = Var(ex,num_esc)
-        var ∈ bound_vars || push!(bound_vars, var)
-    elseif isa(ex, Expr)
-        if ex.head == :tuple
-            find_var_uses_lhs!(varlist, bound_vars, ex.args, num_esc)
-        elseif ex.head == :(::)
-            find_var_uses!(varlist, bound_vars, ex.args[2], num_esc)
-            find_var_uses_lhs!(varlist, bound_vars, ex.args[1], num_esc)
-        else
-            find_var_uses!(varlist, bound_vars, ex.args, num_esc)
-        end
-    end
-end
-
-find_var_uses_lhs!(varlist, bound_vars, exs::Vector, num_esc) = foreach(e->find_var_uses_lhs!(varlist, bound_vars, e, num_esc), exs)
-
-
-export @throw_unless
 """
-    @throw_unless cond [text]
+    @audit cond [text]
 
-Throw an [`ErrorException`](@ref) if `cond` is `false`.
-Message `text` is optionally displayed upon assertion failure.
+Throw an [`AuditError`](@ref) if `cond` is `false`.
+Message `text` is optionally displayed upon audit failure.
 
 # Examples
 ```jldoctest
-julia> @throw_unless iseven(3) "3 is an odd number!"
-ERROR: ErrorException: 3 is an odd number!
+julia> @audit iseven(3) "3 is an odd number!"
+ERROR: AuditError: 3 is an odd number!
 
-julia> @throw_unless isodd(3) "What even are numbers?"
+julia> @audit isodd(3) "What even are numbers?"
 ```
 """
-macro throw_unless(ex, msgs...)
+macro audit(ex, msgs...)
     msg = prepare_error(ex, msgs...)
-    fn = gensym("throw_unless")
-    captured_vars = Var[]
-    find_var_uses!(captured_vars, Var[], ex, 0)
-    @show captured_vars
-    argstup = Tuple(map(x -> x.name, captured_vars))
-    @show argstup
+    fn = gensym("audit")
 
-    @eval @noinline function $(fn)($(argstup...))
-        $(ex) ? $(nothing) : throw(ErrorException($msg))
+    @eval @noinline function $(fn)()
+        throw(AuditError($msg))
     end
 
-    return quote
-        $(fn)($(map(esc, argstup)...))
-    end
+    return :($(esc(ex)) ? $(nothing) : $(fn)())
 end
 
 
