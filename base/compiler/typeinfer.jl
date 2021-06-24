@@ -672,9 +672,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
                 deleteat!(src.codelocs, i)
                 deleteat!(sv.stmt_info, i)
                 nexpr -= 1
-                if oldidx < length(changemap)
-                    changemap[oldidx + 1] = -1
-                end
+                changemap[oldidx] = -1
                 continue
             else
                 body[i] = Const(expr) # annotate that this statement actually is dead
