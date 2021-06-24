@@ -53,7 +53,7 @@ for fn in [:isequal, :(==), :(!=), :(>=), :(<=), :<, :in, :∉, :∋, :∌, :end
         print(io, $name, "(")
         show(io, x.x)
         print(io, ")")
-    end    
+    end
 end
 
 
