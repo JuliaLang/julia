@@ -47,10 +47,12 @@ end
 show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
 show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
 
-for fn in [:isequal, :(==)]
+for fn in [:isequal, :(==), :(!=), :(>=), :(<=), :<, :in, :∉, :∋, :∌, :endswith, :startswith, :contains]
     name = string(fn)
-    @eval function show(io::IO, x::Fix2{typeof($fn)})
-        print(io, $name, "(", x.x, ")")
+    @eval function show(io::IO, ::MIME"text/plain", x::Fix2{typeof($fn)})
+        print(io, $name, "(")
+        show(io, x.x)
+        print(io, ")")
     end    
 end
 
