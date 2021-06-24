@@ -231,13 +231,7 @@ macro assert(ex, msgs...)
         end
     end
 
-    fn = gensym("assert")
-
-    @eval @noinline function $(fn)()
-        throw(AssertionError($msg))
-    end
-
-    return :($(esc(ex)) ? $(nothing) : $(fn)())
+    return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
 function prepare_error(ex, msgs...)
