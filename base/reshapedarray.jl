@@ -107,15 +107,14 @@ julia> reshape(1:6, 2, 3)
 """
 reshape
 
-reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Union{Integer, Colon, AbstractUnitRange{<:Integer}}...) = reshape(parent, dims)
+reshape(parent::AbstractArray, shp::Tuple{Integer, Vararg{Integer}}) = reshape(parent, to_shape(shp))
 reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
 reshape(parent::AbstractVector, ::Colon) = parent
-reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer, Colon, Base.OneTo}}}) = reshape(parent, _reshape_uncolon(parent, dims))
 @inline function _reshape_uncolon(A, dims)
     @noinline throw1(dims) = throw(DimensionMismatch(string("new dimensions $(dims) ",
         "may have at most one omitted dimension specified by `Colon()`")))
@@ -124,7 +123,7 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
     _any_colon(post...) && throw1(dims)
-    sz, remainder = divrem(length(A), prod(pre)*prod(post))
+    sz, remainder = divrem(length(A), prod(to_shape(pre))*prod(to_shape(post)))
     remainder == 0 || throw2(A, dims)
     (pre..., Int(sz), post...)
 end
