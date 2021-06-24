@@ -900,7 +900,7 @@ Values are compared with `isless`.
 !!! compat "Julia 1.7"
     This method requires Julia 1.7 or later.
 
-See also: [`argmin`](@ref), [`findmax`](@ref).
+See also [`argmin`](@ref), [`findmax`](@ref).
 
 # Examples
 ```jldoctest
@@ -952,7 +952,7 @@ If there are multiple minimal values for `f(x)` then the first one will be found
 !!! compat "Julia 1.7"
     This method requires Julia 1.7 or later.
 
-See also: [`argmax`](@ref), [`findmin`](@ref).
+See also [`argmax`](@ref), [`findmin`](@ref).
 
 # Examples
 ```jldoctest
