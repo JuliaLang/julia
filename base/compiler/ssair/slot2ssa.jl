@@ -817,7 +817,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
     # Delete any instruction in unreachable blocks (except for terminators)
     for bb in setdiff(BitSet(1:length(cfg.blocks)), visited)
         for idx in cfg.blocks[bb].stmts
-            if isa(code[idx], Union{GotoNode, GotoIfNot, ReturnNode})
+            if isterminator(code[idx])
                 code[idx] = ReturnNode()
             else
                 code[idx] = nothing

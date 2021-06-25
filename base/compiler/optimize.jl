@@ -305,8 +305,7 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     ir = slot2reg(ir, ci, nargs, sv)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @timeit "Lower tapir output" ir = lower_tapir_output!(ir)
-    @timeit "Check tapir output" ir, racy = check_tapir_race!(ir)
+    @timeit "Early tapir pass" ir, racy = early_tapir_pass!(ir)
     racy && return ir
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
@@ -338,6 +337,13 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    function requires_reattach(idx)
+        for i in idx+1:length(code)
+            code[i] isa ReattachNode && return true
+            isterminator(code[i]) && break
+        end
+        return false
+    end
     while idx <= length(code)
         codeloc = ci.codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
@@ -354,7 +360,11 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             prevloc = codeloc
         end
         if code[idx] isa Expr && ssavaluetypes[idx] === Union{}
-            if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
+            if !(
+                idx < length(code) &&
+                isa(code[idx+1], ReturnNode) &&
+                !isdefined((code[idx+1]::ReturnNode), :val)
+            ) && !requires_reattach(idx)
                 # insert unreachable in the same basic block after the current instruction (splitting it)
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])

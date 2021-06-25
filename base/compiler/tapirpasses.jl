@@ -192,6 +192,13 @@ function map_id(on_value, on_phi_label, on_goto_label, @nospecialize(stmt))
             stmt
         elseif stmt.head === :(=) && stmt.args[2] isa Expr
             Expr(stmt.head, stmt.args[1], recurse(stmt.args[2]))
+        elseif stmt.head === :enter
+            label = get(stmt.args, 1, nothing)
+            if label isa Integer
+                Expr(stmt.head, on_goto_label(stmt.args[1]))
+            else
+                stmt  # malformed?
+            end
         else
             Expr(stmt.head, Any[recurse(a) for a in stmt.args]...)
         end
@@ -725,6 +732,58 @@ function calls(inst, r::GlobalRef, nargs::Int)
 end
 
 """
+    early_tapir_pass!(ir::IRCode) -> (ir′::IRCode, racy::Bool)
+
+Mainly operates on task output variables.
+"""
+function early_tapir_pass!(ir::IRCode)
+    is_sequential(ir) && return ir, false
+    @timeit "Fixup syncregion" ir = fixup_syncregion_phic!(ir)
+    @timeit "Lower task output" ir = lower_tapir_output!(ir)
+    @timeit "Check task output" ir, racy = check_tapir_race!(ir)
+    return ir, racy
+end
+
+function resolve_syncregion(ir::IRCode, inst)
+    @nospecialize inst
+    inst0 = inst
+    while true
+        if inst isa PhiCNode
+            @assert length(inst.values) == 1
+            ups = ir[inst.values[1]::SSAValue]::UpsilonNode
+            inst = ups.val::SSAValue
+        elseif inst isa SSAValue
+            sr = ir[inst]
+            isexpr(sr, :syncregion) && return inst
+            inst = sr
+        end
+        if inst === inst0
+            error("cycle detected")
+        end
+    end
+end
+
+"""
+    fixup_syncregion_phic!(ir::IRCode) -> ir′
+"""
+function fixup_syncregion_phic!(ir::IRCode)
+    ir = insert_new_nodes(ir)
+
+    for bb in ir.cfg.blocks
+        isync = last(bb.stmts)
+        sync = ir.stmts[isync][:inst]
+        sync isa SyncNode || continue
+        inst = ir[sync.syncregion::SSAValue]
+        isexpr(inst, :syncregion) && continue
+        ssa = resolve_syncregion(ir, inst)
+        # TODO: validate that syncregion dominates sync
+        ir.stmts.inst[isync] = SyncNode(ssa)
+    end
+
+    return ir
+end
+
+"""
     lower_tapir_output!(ir::IRCode) -> ir′
 
 Lower output variables marked by `Tapir.Output` as Upsilon nodes.
@@ -755,7 +814,6 @@ TODO: Currently, it assumes that output variables are not used at RHS positions;
 don't assume this. Or, throw a nice error.
 """
 function lower_tapir_output!(ir::IRCode)
-    is_sequential(ir) && return ir
     Tapir = tapir_module()
     Tapir isa Module || return ir
 
@@ -812,7 +870,7 @@ function lower_tapir_output!(ir::IRCode)
 end
 
 """
-    check_tapir_race!(ir::IRCode) -> ir′
+    check_tapir_race!(ir::IRCode) -> (ir′, racy)
 
 Inject error-throwing code when a racy phi node is found.
 This pass must be run after `lower_tapir_output!`.
@@ -835,7 +893,6 @@ ERROR: tapir: racy update to a variable
 function check_tapir_race!(ir::IRCode)
     isdefined(Main, :Base) || return ir, false
     Base = Main.Base::Module
-    is_sequential(ir) && return ir, false
 
     ir = insert_new_nodes(ir)
 
@@ -1167,8 +1224,8 @@ function lower_tapir!(ir::IRCode)
 
     # Mapping from syncregion to (the instruction that creates) a taskgroup:
     taskgroups = IdDict{Int,SSAValue}()
-    # Mapping from syncregion to 3-tuple (original use position, type, ref SSA value):
-    tobeloaded = IdDict{Int,Vector{Tuple{Int,Type,SSAValue}}}()
+    # Mapping from original def to a vector of 3-tuple (type, ref SSA value):
+    tobeloaded = IdDict{Int,Vector{Tuple{Type,SSAValue}}}()
     for task in tasks
         det = ir.stmts.inst[task.detach]::DetachNode
         # ASK: Can we always assume `syncregion` is an SSAValue?
@@ -1181,19 +1238,17 @@ function lower_tapir!(ir::IRCode)
         taskir, arguments, outputs = outline_child_task(ir, task)
         taskir = lower_tapir!(taskir)
         meth = opaque_closure_method_from_ssair(taskir)
-        if !isempty(outputs)
-            tbl = get!(() -> Tuple{Int,Type,SSAValue}[], tobeloaded, syncregion)
-        end
         for (T, iout) in outputs
             R = Tapir.UndefableRef{T}
-            ref = insert_node!(ir, task.detach, NewInstruction(Expr(:new, R), R))
+            ref = insert_node!(ir, syncregion, NewInstruction(Expr(:new, R), R))
             setset = NewInstruction(
                 Expr(:call, setfield!, ref, QuoteNode(:set), QuoteNode(false)),
                 Any,
             )
-            insert_node!(ir, task.detach, setset)
+            insert_node!(ir, syncregion, setset)
             push!(arguments, ref)
-            push!(tbl, (iout, T, ref))
+            tbl = get!(() -> Tuple{Type,SSAValue}[], tobeloaded, iout)
+            push!(tbl, (T, ref))
         end
         oc_inst = NewInstruction(
             Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any, meth, arguments...),
@@ -1222,10 +1277,6 @@ function lower_tapir!(ir::IRCode)
     #     ...
     #     Tapir.sync!(%tg)
     #
-    # Accumulate the information about where the task outputs should be loaded.
-
-    # Vector of 4-tuple (sync! position, original use potision, type, ref SSA value):
-    task_outputs = Tuple{Int,Int,Type,SSAValue}[]
     for bb in ir.cfg.blocks
         isync = last(bb.stmts)
         sync = ir.stmts[isync][:inst]
@@ -1238,34 +1289,45 @@ function lower_tapir!(ir::IRCode)
         insert_node!(ir, isync, sync_inst)
         next_bb = block_for_inst(ir.cfg, isync + 1)
         ir.stmts.inst[isync] = GotoNode(next_bb)
-
-        tbl = get(tobeloaded, syncregion, nothing)
-        if tbl !== nothing
-            for (iout, T, ref) in tbl
-                push!(task_outputs, (isync, iout, T, ref))
-            end
-        end
     end
 
-    # Insert checks if the task output is assigned; i.e., insert branches after
-    # `Tapir.sync!(%tg)`:
+    # Load task outputs:
     #
     #     ...
-    #         Tapir.sync!(%tg)
     #         %isset = ref.set
     #         goto #anycase if not %isset
     #     #found
     #         %load = ref.x
+    #         %upsilon = ϒ(%load)
     #     #anycase
+    #         %phic = φᶜ(%upsilon, ...)
     #     ...
-    #
+
+    # Vector of 4-tuple (use position, original def potision, type, ref SSA value):
+    task_outputs = Tuple{Int,Int,Type,SSAValue}[]
+    output_users = BitSet()
+    for i in 1:length(ir.stmts)
+        foreach_id(identity, ir.stmts[i][:inst]) do v
+            if v isa SSAValue
+                tbl = get(tobeloaded, v.id, nothing)
+                if tbl !== nothing
+                    push!(output_users, i)
+                    for (T, ref) in tbl
+                        push!(task_outputs, (i, v.id, T, ref))
+                    end
+                end
+            end
+        end
+    end
+
     undef_checks = allocate_gotoifnot_sequence!(ir, map(first, task_outputs))
     original_outputs = BitSet()
+    output_upsilon = zeros(Int, length(ir.stmts))
     output_value = zeros(Int, length(ir.stmts))
     output_isset = zeros(Int, length(ir.stmts))
     output_index = RefValue(0)
     foreach_allocated_gotoifnot_block(undef_checks) do ibb
-        # `ibb` is the index of BB inserted at the sync! position `task_outputs[i][1]`
+        # `ibb` is the index of BB inserted at the use position `task_outputs[i][1]`
         i = output_index.x += 1
         (_, iout, T, ref) = task_outputs[i]
         iout = undef_checks.ssachangemap[iout]
@@ -1284,53 +1346,36 @@ function lower_tapir!(ir::IRCode)
         load_ex = Expr(:call, getfield, ref, QuoteNode(:x))
         load = insert_node!(ir, last(b1.stmts), NewInstruction(load_ex, T))
 
+        ups = insert_node!(ir, last(b1.stmts), NewInstruction(UpsilonNode(load), T))
+
+        output_upsilon[iout] = ups.id
         output_value[iout] = load.id
         output_isset[iout] = isset.id
         push!(original_outputs, iout)
     end
+    # TODO: check that all getfield calls are dominated by sync!
 
-    # Fixup PhiC nodes that refer to upsilon nodes in child tasks (in the
-    # original IR); i.e., transform
-    #
-    #     %phic = φᶜ(%original_upsilon, ...)
-    #
-    # to
-    #
-    #     %phic = φᶜ(%upsilon, ...)
-    #
-    # where `%upsilon` is the node newly added just after loading the task
-    # output (see above)
-    #
-    #     %load = ref.x
-    #     %upsilon = ϒ(%load)
-    for i in 1:length(ir.stmts)
-        stmt = ir.stmts[i]
-        replaced = RefValue(false)
+    for i in output_users
+        stmt = ir.stmts[undef_checks.ssachangemap[i]]
         isphic = stmt[:inst] isa PhiCNode
-        user = map_id(identity, stmt[:inst]) do v
+        stmt[:inst] = map_id(identity, stmt[:inst]) do v
             if v isa SSAValue
                 if v.id in original_outputs
-                    replaced.x = true
-                    oid = output_value[v.id]
-                    load = stmt_at(ir, oid)
                     if isphic
-                        newinst = NewInstruction(UpsilonNode(SSAValue(oid)), load[:type])
-                        ipos = insert_pos(ir, oid)
-                        return insert_node!(ir, ipos, newinst, ipos == oid)
+                        return SSAValue(output_upsilon[v.id])
                     else
                         # If the original use is not PhiC, it was used
                         # unconditionally; thus, we always load the value.
                         println(stderr, "** tapir: icnomplte concversion to PhiC/Upsilon **")
                         # TODO: turn this into a proper verification pass
+                        oid = output_value[v.id]
+                        load = stmt_at(ir, oid)
                         newinst = NewInstruction(load[:inst], load[:type])
                         return insert_node!(ir, insert_pos(ir, output_isset[v.id]), newinst)
                     end
                 end
             end
             return v
-        end
-        if replaced.x
-            stmt[:inst] = user
         end
     end
 

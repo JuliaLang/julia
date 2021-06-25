@@ -105,23 +105,21 @@ end
 end
 
 @noinline always() = rand() <= 1
-@noinline donothing() = always() || error("unreachable")
 
 @testset "exceptions" begin
     function f()
         Tapir.@sync begin
             Tapir.@spawn always() && throw(KeyError(1))
-            Tapir.@spawn always() && throw(KeyError(2))
-            donothing()  # TODO: don't
-            # `donothing` here is required for convincing the compiler to _not_
-            # inline the tasks.
+            always() && throw(KeyError(2))
         end
     end
     err = @test_error f()
     @test err isa CompositeException
-    @test all(x -> x isa TaskFailedException, err.exceptions)
-    exceptions = [e.task.result for e in err.exceptions]
-    @test Set(exceptions) == Set([KeyError(1), KeyError(2)])  # TODO
+    @test length(err) == 2
+    e1, e2 = err
+    @test e1 == KeyError(2)
+    @test e2 isa TaskFailedException
+    @test e2.task.result === KeyError(1)
 end
 
 end

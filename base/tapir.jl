@@ -129,11 +129,33 @@ macro sync(block)
     quote
         $(header...)
         let $var = @syncregion()
-            $(esc(block))
+            local ans
+            try
+                ans = $(esc(block))
+            catch err0
+                errs = try
+                    @sync_end($var)
+                    nothing
+                catch errs
+                    errs
+                end
+                rethrow(_merge_errors!(errs, err0))
+            end
             @sync_end($var)
+            ans
         end
         $(footer...)
     end
+end
+
+function _merge_errors!(errs, err0)
+    if errs === nothing
+        errs = CompositeException()
+    elseif !(errs isa CompositeException)
+        errs = CompositeException([errs])
+    end
+    pushfirst!(errs.exceptions, err0)
+    return errs
 end
 
 """
