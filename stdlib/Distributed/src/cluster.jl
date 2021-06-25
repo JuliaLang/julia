@@ -160,17 +160,18 @@ function check_worker_state(w::Worker)
         else
             w.ct_time = time()
             if myid() > w.id
-                @async exec_conn_func(w)
+                t = @async exec_conn_func(w)
             else
                 # route request via node 1
-                @async remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
+                t = @async remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
             end
+            errormonitor(t)
             wait_for_conn(w)
         end
     end
 end
 
-exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id))
+exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id)::Worker)
 function exec_conn_func(w::Worker)
     try
         f = notnothing(w.conn_func)
@@ -242,10 +243,10 @@ function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_std
     else
         sock = listen(interface, LPROC.bind_port)
     end
-    @async while isopen(sock)
+    errormonitor(@async while isopen(sock)
         client = accept(sock)
         process_messages(client, client, true)
-    end
+    end)
     print(out, "julia_worker:")  # print header
     print(out, "$(string(LPROC.bind_port))#") # print port
     print(out, LPROC.bind_addr)
@@ -274,7 +275,7 @@ end
 
 
 function redirect_worker_output(ident, stream)
-    @async while !eof(stream)
+    t = @async while !eof(stream)
         line = readline(stream)
         if startswith(line, "      From worker ")
             # stdout's of "additional" workers started from an initial worker on a host are not available
@@ -284,6 +285,7 @@ function redirect_worker_output(ident, stream)
             println("      From worker $(ident):\t$line")
         end
     end
+    errormonitor(t)
 end
 
 struct LaunchWorkerError <: Exception

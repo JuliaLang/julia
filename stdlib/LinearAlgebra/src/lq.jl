@@ -56,12 +56,10 @@ Base.iterate(S::LQ) = (S.L, Val(:Q))
 Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
 Base.iterate(S::LQ, ::Val{:done}) = nothing
 
-struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
-    factors::Matrix{T}
+struct LQPackedQ{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+    factors::S
     τ::Vector{T}
-    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
-LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
 
 """
@@ -107,8 +105,10 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::StridedMatrix{<:BlasFloat})  = lq!(copy(A))
-lq(x::Number) = lq(fill(x,1,1))
+lq(A::AbstractMatrix{T}) where {T}  = lq!(copy_oftype(A, lq_eltype(T)))
+lq(x::Number) = lq!(fill(convert(lq_eltype(typeof(x)), x), 1, 1))
+
+lq_eltype(::Type{T}) where {T} = typeof(zero(T) / sqrt(abs2(one(T))))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 

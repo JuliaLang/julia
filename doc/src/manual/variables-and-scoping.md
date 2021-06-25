@@ -103,14 +103,37 @@ Note that the interactive prompt (aka REPL) is in the global scope of the module
 
 ## Local Scope
 
-A new local scope is introduced by most code blocks (see above [table](@ref man-scope-table) for a
-complete list). Some programming languages require explicitly declaring new variables before using
-them. Explicit declaration works in Julia too: in any local scope, writing `local x` declares a new
-local variable in that scope, regardless of whether there is already a variable named `x` in an
-outer scope or not. Declaring each new local like this is somewhat verbose and tedious, however, so
-Julia, like many other languages, considers assignment to a new variable in a local scope to
-implicitly declare that variable as a new local. Mostly this is pretty intuitive, but as with many
-things that behave intuitively, the details are more subtle than one might naïvely imagine.
+A new local scope is introduced by most code blocks (see above [table](@ref
+man-scope-table) for a complete list). If such a block is syntactically nested
+inside of another local scope, the scope it creates is nested inside of all the
+local scopes that it appears within, which are all ultimately nested inside of
+the global scope of the module in which the code is evaluated. Variables in
+outer scopes are visible from any scope they contain — meaning that they can be
+read and written in inner scopes — unless there is a local variable with the
+same name that "shadows" the outer variable of the same name. This is true even
+if the outer local is declared after (in the sense of textually below) an inner
+block. When we say that a variable "exists" in a given scope, this means that a
+variable by that name exists in any of the scopes that the current scope is
+nested inside of, including the current one.
+
+Some programming languages require explicitly declaring new variables before
+using them. Explicit declaration works in Julia too: in any local scope, writing
+`local x` declares a new local variable in that scope, regardless of whether
+there is already a variable named `x` in an outer scope or not. Declaring each
+new variable like this is somewhat verbose and tedious, however, so Julia, like
+many other languages, considers assignment to a variable name that doesn't
+already exist to implicitly declare that variable. If the current scope is
+global, the new variable is global; if the current scope is local, the new
+variable is local to the innermost local scope and will be visible inside of
+that scope but not outside of it. If you assign to an existing local, it
+_always_ updates that existing local: you can only shadow a local by explicitly
+declaring a new local in a nested scope with the `local` keyword. In particular,
+this applies to variables assigned in inner functions, which may surprise users
+coming from Python where assignment in an inner function creates a new local
+unless the variable is explictly declared to be non-local.
+
+Mostly this is pretty intuitive, but as with many things that behave
+intuitively, the details are more subtle than one might naïvely imagine.
 
 When `x = <value>` occurs in a local scope, Julia applies the following rules to decide what the
 expression means based on where the assignment expression occurs and what `x` already refers to at
@@ -183,9 +206,15 @@ Since the `x` in `greet` is local, the value (or lack thereof) of the global `x`
 calling `greet`. The hard scope rule doesn't care whether a global named `x` exists or not:
 assignment to `x` in a hard scope is local (unless `x` is declared global).
 
-The next clear cut situation we'll consider is when there is already a local variable named `x`, in
-which case `x = <value>` always assigns to this existing local `x`.  The function `sum_to` computes
-the sum of the numbers from one up to `n`:
+The next clear cut situation we'll consider is when there is already a local
+variable named `x`, in which case `x = <value>` always assigns to this existing
+local `x`. This is true whether the assignment occurs in the same local scope,
+an inner local scope in the same function body, or in the body of a function
+nested inside of another function, also known as a
+[closure](https://en.wikipedia.org/wiki/Closure_(computer_programming)).
+
+We'll use the `sum_to` function, which computes the sum of integers from one up
+to `n`, as an example:
 
 ```julia
 function sum_to(n)
@@ -251,6 +280,44 @@ hard scope rule again: since the assignment to `t` occurs inside of a function, 
 introduces a hard scope, the assignment causes `t` to become a new local variable in the local scope
 where it appears, i.e. inside of the loop body. Even if there were a global named `t`, it would make
 no difference—the hard scope rule isn't affected by anything in global scope.
+
+Note that the local scope of a for loop body is no different from the local
+scope of an inner function. This means that we could rewrite this example so
+that the loop body is implemented as a call to an inner helper function and it
+behaves the same way:
+
+```jldoctest
+julia> function sum_to_def_closure(n)
+           function loop_body(i)
+               t = s + i # new local `t`
+               s = t # assign same local `s` as below
+           end
+           s = 0 # new local
+           for i = 1:n
+               loop_body(i)
+           end
+           return s, @isdefined(t)
+       end
+sum_to_def_closure (generic function with 1 method)
+
+julia> sum_to_def_closure(10)
+(55, false)
+```
+
+This example illustrates a couple of key points:
+
+1. Inner function scopes are just like any other nested local scope. In
+   particular, if a variable is already a local outside of an inner function and
+   you assign to it in the inner function, the outer local variable is updated.
+
+2. It doesn't matter if the definition of an outer local happens below where it
+   is updated, the rule remains the same. The entire enclosing local scope is
+   parsed and its locals determined before inner local meanings are resolved.
+
+This design means that you can generally move code in or out of an inner
+function without changing its meaning, which facilitates a number of common
+idioms in the language using closures (see [do blocks](@ref
+Do-Block-Syntax-for-Function-Arguments)).
 
 Let's move onto some more ambiguous cases covered by the soft scope rule. We'll explore this by
 extracting the bodies of the `greet` and `sum_to_def` functions into soft scope contexts. First, let's put the

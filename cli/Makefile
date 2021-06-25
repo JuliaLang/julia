@@ -6,7 +6,7 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 
-HEADERS := $(addprefix $(JULIAHOME)/cli/,jl_exports.h loader.h) $(addprefix $(JULIAHOME)/src/support/,platform.h dirpath.h) $(addprefix $(JULIAHOME)/src/,jl_exported_data.inc jl_exported_funcs.inc)
+HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h) $(addprefix $(JULIAHOME)/src/,support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_funcs.inc)
 
 LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding
 LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding -L$(build_shlibdir) -L$(build_libdir)
@@ -95,52 +95,45 @@ endif
 
 julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
-libjulia-release: $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)
-libjulia-debug: $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
+libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 
 ifeq ($(OS),WINNT)
 # On Windows we need to strip out exported functions from the generated import library.
-# On i686, there's an extra underscore at the beginning
-ifeq ($(ARCH),i686)
-ABI_UNDERSCORE := _\#\#
-else
-ABI_UNDERSCORE :=
-endif
-EXPORTED_FUNCS := $(shell echo -e "#include \"jl_exported_funcs.inc\"\n#define XX(x) $(ABI_UNDERSCORE)x\nJL_EXPORTED_FUNCS(XX)" | $(CPP) -I$(JULIAHOME)/src - | tail -n 1)
-STRIP_EXPORTED_FUNCS := $(patsubst %,--strip-symbol=%,$(EXPORTED_FUNCS))
-
-# Note that if the objcopy command starts getting too long, we can use `@file` to read
-# command-line options from `file` instead.
-define strip_implib
-	$(OBJCOPY) $(1).a $(STRIP_EXPORTED_FUNCS) $(1).a.stripped
-	mv $(1).a.stripped $(1).a
-endef
+STRIP_EXPORTED_FUNCS := $(shell $(CPP_STDOUT) -I$(JULIAHOME)/src $(SRCDIR)/list_strip_symbols.h)
 endif
 
-$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT))
-	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
+$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h | $(build_shlibdir) $(build_libdir)
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ \
+		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)))
+	@$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
+ifeq ($(OS), WINNT)
+	@# Note that if the objcopy command starts getting too long, we can use `@file` to read
+	@# command-line options from `file` instead.
+	@$(call PRINT_ANALYZE, $(OBJCOPY) $(build_libdir)/$(notdir $@).tmp.a $(STRIP_EXPORTED_FUNCS) $(build_libdir)/$(notdir $@).a && rm $(build_libdir)/$(notdir $@).tmp.a)
+endif
+
+$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h | $(build_shlibdir) $(build_libdir)
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ \
+		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
+	@$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@.tmp
+ifeq ($(OS), WINNT)
+	@$(call PRINT_ANALYZE, $(OBJCOPY) $(build_libdir)/$(notdir $@).tmp.a $(STRIP_EXPORTED_FUNCS) $(build_libdir)/$(notdir $@).a && rm $(build_libdir)/$(notdir $@).tmp.a)
+endif
+
 ifneq ($(OS), WINNT)
-	@ln -sf $(notdir $@) $(build_shlibdir)/libjulia.$(JL_MAJOR_SHLIB_EXT)
-	@ln -sf $(notdir $@) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
-else
-	$(call strip_implib,$(build_libdir)/libjulia.$(SHLIB_EXT))
+$(build_shlibdir)/libjulia.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_SHLIB_EXT): $(build_shlibdir)/libjulia%.$(JL_MAJOR_SHLIB_EXT): \
+		$(build_shlibdir)/libjulia%.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
+$(build_shlibdir)/libjulia.$(SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): $(build_shlibdir)/libjulia%.$(SHLIB_EXT): \
+		$(build_shlibdir)/libjulia%.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia%.$(JL_MAJOR_SHLIB_EXT)
+	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
 endif
 
-$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ $(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB)) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT))
-	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
-ifneq ($(OS), WINNT)
-	@ln -sf $(notdir $@) $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_SHLIB_EXT)
-	@ln -sf $(notdir $@) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
-else
-	$(call strip_implib,$(build_libdir)/libjulia-debug.$(SHLIB_EXT))
-endif
-
-$(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT) | $(build_bindir)
+$(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(SHIPFLAGS) $(EXE_OBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia)
 
-$(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) | $(build_bindir)
+$(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
 
 clean: | $(CLEAN_TARGETS)

@@ -295,7 +295,7 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
 """
     mapreduce(f, op, A::AbstractArray...; dims=:, [init])
 
-Evaluates to the same as `reduce(op, map(f, A); dims=dims, init=init)`, but is generally
+Evaluates to the same as `reduce(op, map(f, A...); dims=dims, init=init)`, but is generally
 faster because the intermediate array is avoided.
 
 !!! compat "Julia 1.2"
@@ -590,6 +590,8 @@ Compute the maximum value of an array over the given dimensions. See also the
 [`max(a,b)`](@ref) function to take the maximum of two or more arguments,
 which can be applied elementwise to arrays via `max.(a,b)`.
 
+See also: [`maximum!`](@ref), [`extrema`](@ref), [`findmax`](@ref), [`argmax`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -612,7 +614,7 @@ maximum(A::AbstractArray; dims)
 """
     maximum(f, A::AbstractArray; dims)
 
-Compute the maximum value from of calling the function `f` on each element of an array over the given
+Compute the maximum value by calling the function `f` on each element of an array over the given
 dimensions.
 
 # Examples
@@ -665,6 +667,8 @@ Compute the minimum value of an array over the given dimensions. See also the
 [`min(a,b)`](@ref) function to take the minimum of two or more arguments,
 which can be applied elementwise to arrays via `min.(a,b)`.
 
+See also: [`minimum!`](@ref), [`extrema`](@ref), [`findmin`](@ref), [`argmin`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -687,7 +691,7 @@ minimum(A::AbstractArray; dims)
 """
     minimum(f, A::AbstractArray; dims)
 
-Compute the minimum value from of calling the function `f` on each element of an array over the given
+Compute the minimum value by calling the function `f` on each element of an array over the given
 dimensions.
 
 # Examples
@@ -760,7 +764,7 @@ all(A::AbstractArray; dims)
 """
     all(p, A; dims)
 
-Determine whether predicate p returns true for all elements along the given dimensions of an array.
+Determine whether predicate `p` returns `true` for all elements along the given dimensions of an array.
 
 # Examples
 ```jldoctest
@@ -832,7 +836,7 @@ any(::AbstractArray; dims)
 """
     any(p, A; dims)
 
-Determine whether predicate p returns true for any elements along the given dimensions of an array.
+Determine whether predicate `p` returns `true` for any elements along the given dimensions of an array.
 
 # Examples
 ```jldoctest

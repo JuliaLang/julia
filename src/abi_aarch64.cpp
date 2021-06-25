@@ -17,7 +17,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
-    if (dt->layout == NULL)
+    if (dt->layout == NULL || jl_is_layout_opaque(dt->layout))
         return nullptr;
     size_t nfields = dt->layout->nfields;
     assert(nfields > 0);

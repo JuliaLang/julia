@@ -64,6 +64,9 @@ end
 
 @testset "spzeros de-splatting" begin
     @test spzeros(Float64, Int64, (2, 2)) == spzeros(Float64, Int64, 2, 2)
+    @test spzeros(Float64, Int32, (2, 2)) == spzeros(Float64, Int32, 2, 2)
+    @test spzeros(Float32, (3, 2)) == spzeros(Float32, Int, 3, 2)
+    @test spzeros((3, 2)) == spzeros((3, 2)...)
 end
 
 @testset "conversion to AbstractMatrix/SparseMatrix of same eltype" begin
@@ -469,12 +472,42 @@ end
 end
 
 @testset "sparse Frobenius dot/inner product" begin
+    full_view = M -> view(M, :, :)
     for i = 1:5
         A = sprand(ComplexF64,10,15,0.4)
         B = sprand(ComplexF64,10,15,0.5)
-        @test dot(A,B) ≈ dot(Matrix(A),Matrix(B))
+        C = rand(10,15) .> 0.3
+        @test dot(A,B) ≈ dot(Matrix(A), Matrix(B))
+        @test dot(A,B) ≈ dot(A, Matrix(B))
+        @test dot(A,B) ≈ dot(Matrix(A), B)
+        @test dot(A,C) ≈ dot(Matrix(A), C)
+        @test dot(C,A) ≈ dot(C, Matrix(A))
+        # square matrices required by most linear algebra wrappers
+        SA = A * A'
+        SB = B * B'
+        SC = C * C'
+        for W in (full_view, LowerTriangular, UpperTriangular, UpperHessenberg, Symmetric, Hermitian)
+            WA = W(Matrix(SA))
+            WB = W(Matrix(SB))
+            WC = W(Matrix(SC))
+            @test dot(WA,SB) ≈ dot(WA, Matrix(SB))
+            @test dot(SA,WB) ≈ dot(Matrix(SA), WB)
+            @test dot(SA,WC) ≈ dot(Matrix(SA), WC)
+        end
+        for W in (transpose, adjoint)
+            WA = W(Matrix(A))
+            WB = W(Matrix(B))
+            WC = W(Matrix(C))
+            TA = copy(W(A))
+            TB = copy(W(B))
+            @test dot(WA,TB) ≈ dot(WA, Matrix(TB))
+            @test dot(TA,WB) ≈ dot(Matrix(TA), WB)
+            @test dot(TA,WC) ≈ dot(Matrix(TA), WC)
+        end
     end
     @test_throws DimensionMismatch dot(sprand(5,5,0.2),sprand(5,6,0.2))
+    @test_throws DimensionMismatch dot(rand(5,5),sprand(5,6,0.2))
+    @test_throws DimensionMismatch dot(sprand(5,5,0.2),rand(5,6))
 end
 
 @testset "generalized dot product" begin
@@ -2454,22 +2487,22 @@ end
     @test typeof(simA) == typeof(A)
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(rowvals(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
-    # test similar with entry type and Dims{2} specification (preserves storage space only)
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
+    # test similar with entry type and Dims{2} specification (empty storage space)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(getcolptr(A))}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(rowvals(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(rowvals(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test similar with Dims{1} specification (preserves nothing)
     simA = similar(A, (6,))
     @test typeof(simA) == SparseVector{eltype(nonzeros(A)),eltype(getcolptr(A))}

@@ -12,6 +12,8 @@ function fib(N)
     return x1 + x2
 end
 
+@noinline fib_noinline_wrap(N) = fib(N)
+
 ###
 # Interesting corner cases and broken IR
 ###

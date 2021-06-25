@@ -564,7 +564,7 @@ function early_tapir_pass!(ir::IRCode)
         else
             T = Tapir.UndefableRef{<:TX}
         end
-        r = insert_node!(ir, 1, T, Expr(:call, Tapir.noinline_box, T))
+        r = insert_node!(ir, 1, NewInstruction(Expr(:call, Tapir.box, TX), T))
         push!(refs, r)
         handled = falses(length(ir.stmts))
         is_inital_set::Bool = false
@@ -578,7 +578,8 @@ function early_tapir_pass!(ir::IRCode)
                     if !(v[:inst] isa PhiNode)
                         local x = SSAValue(v.idx)
                         local at = v.idx
-                        insert_node!(ir, at, Any, Expr(:call, Base.setindex!, r, x), true)
+                        local inst = NewInstruction(Expr(:call, Base.setindex!, r, x), Any)
+                        insert_node!(ir, at, inst, true)
                         return false
                     end
                     return true  # keep following the chain
@@ -590,7 +591,7 @@ function early_tapir_pass!(ir::IRCode)
                     is_inital_set = true
                 end
                 # `v` is either an `Argument` or a constant
-                insert_node!(ir, 1, Any, Expr(:call, Base.setindex!, r, v))
+                insert_node!(ir, 1, NewInstruction(Expr(:call, Base.setindex!, r, v), Any))
                 return false
             end
             foreach_assigned_pair(phi.values) do jjjjj, v
@@ -611,7 +612,8 @@ function early_tapir_pass!(ir::IRCode)
                 for (set, r) in zip(phisets, refs)
                     if v.id in set
                         TX = foldunion(ir.stmts.type[i] for i in set)
-                        load = insert_node!(ir, i, TX, Expr(:call, Base.getindex, r))
+                        inst = NewInstruction(Expr(:call, Base.getindex, r), TX)
+                        load = insert_node!(ir, i, inst)
                         return load
                     end
                 end
@@ -825,7 +827,8 @@ function lower_tapir!(ir::IRCode)
         # ASK: Can we always assume `syncregion` is an SSAValue?
         syncregion = (det.syncregion::SSAValue).id
         tg = get!(taskgroups, syncregion) do
-            insert_node!(ir, syncregion, Tapir.TaskGroup, Expr(:call, Tapir.taskgroup), true)
+            tg_inst = NewInstruction(Expr(:call, Tapir.taskgroup), Tapir.TaskGroup)
+            insert_node!(ir, syncregion, tg_inst, true)
         end
 
         taskir, arguments, outputs = outline_child_task(ir, task)
@@ -836,13 +839,17 @@ function lower_tapir!(ir::IRCode)
         end
         for (T, iout) in outputs
             R = Base.RefValue{T}
-            ref = insert_node!(ir, task.detach, R, Expr(:new, R))
+            ref = insert_node!(ir, task.detach, NewInstruction(Expr(:new, R), R))
             push!(arguments, ref)
             push!(tbl, (iout, T, ref))
         end
-        oc_inst = Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any, meth, arguments...)
-        oc = insert_node!(ir, task.detach, Any, oc_inst)
-        sp = insert_node!(ir, task.detach, Any, Expr(:call, Tapir.spawn!, tg, oc))
+        oc_inst = NewInstruction(
+            Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any, meth, arguments...),
+            Any,
+        )
+        oc = insert_node!(ir, task.detach, oc_inst)
+        spawn_inst = NewInstruction(Expr(:call, Tapir.spawn!, tg, oc), Any)
+        sp = insert_node!(ir, task.detach, spawn_inst)
         ir.stmts.inst[task.detach] = GotoNode(det.reattach)
         cfg_delete_edge!(ir.cfg, block_for_inst(ir.cfg, task.detach), det.label)
         # i.e., transform
@@ -870,7 +877,8 @@ function lower_tapir!(ir::IRCode)
             syncregion = (inst.syncregion::SSAValue).id
             tg = get(taskgroups, syncregion, nothing)
             if tg !== nothing
-                insert_node!(ir, i, Any, Expr(:call, Tapir.sync!, tg::SSAValue))
+                sync_inst = NewInstruction(Expr(:call, Tapir.sync!, tg::SSAValue), Any)
+                insert_node!(ir, i, sync_inst)
                 next_bb = block_for_inst(ir.cfg, i + 1)
                 ir.stmts.inst[i] = GotoNode(next_bb)
                 # i.e., transform
@@ -890,7 +898,7 @@ function lower_tapir!(ir::IRCode)
                     bb = ir.cfg.blocks[block_for_inst(ir.cfg, i)]
                     for (iout, T, ref) in tbl
                         ex = Expr(:call, getfield, ref, QuoteNode(:x))
-                        load = insert_node!(ir, i, T, ex)
+                        load = insert_node!(ir, i, NewInstruction(ex, T))
                         @assert load.id > 0
                         output_loader[iout] = load.id
                         push!(original_outputs, iout)
@@ -969,11 +977,12 @@ function opaque_closure_method_from_ssair(ir::IRCode)
     end
     ci = code_info_from_ssair(ir)
     nargs = length(ir.argtypes)
+    name = :_tapir_outlined_function
     return ccall(
         :jl_make_opaque_closure_method,
         Ref{Method},
-        (Any,Any,Any,Any),
-        mod, nargs - 1, functionloc, ci,
+        (Any,Any,Any,Any,Any),
+        mod, name, nargs - 1, functionloc, ci,
     )
 end
 
@@ -983,10 +992,13 @@ function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Cod
     ccall(:jl_breakpoint, Cvoid, (Any,), ci)
     is_sequential(ci) && return remove_tapir(ci)
 
+    # Making a copy here, as `convert_to_ircode` mutates `ci`:
+    ci = copy(ci)
+
     # Ref: _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     params = OptimizationParams(interp)
     opt = OptimizationState(linfo, copy(ci), params, interp)
-    nargs = Int(opt.nargs) - 1 # Ref: optimize(interp, opt, params)
+    nargs = Int(opt.nargs) - 1 # Ref: optimize(interp, opt, params, result)
 
     # Ref: run_passes
     preserve_coverage = coverage_enabled(opt.mod)
@@ -997,10 +1009,10 @@ function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Cod
         @timeit "verify tapir" (verify_ir(ir); verify_linetable(ir.linetable))
     end
 
-    finish(opt, params, ir, Any) # Ref: optimize(interp, opt, params)
-    finish(opt.src, interp) # Ref: _typeinf(interp, frame)
+    finish(interp, opt, params, ir, Any) # Ref: optimize(interp, opt, params, result)
+    src = ir_to_codeinf!(opt)
 
-    return remove_tapir!(opt.src)
+    return remove_tapir!(src)
 end
 
 lower_tapir(linfo::MethodInstance, ci::CodeInfo) =

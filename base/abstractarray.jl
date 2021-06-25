@@ -8,6 +8,8 @@
 Supertype for `N`-dimensional arrays (or array-like types) with elements of type `T`.
 [`Array`](@ref) and other types are subtypes of this. See the manual section on the
 [`AbstractArray` interface](@ref man-interface-array).
+
+See also: [`AbstractVector`](@ref), [`AbstractMatrix`](@ref), [`eltype`](@ref), [`ndims`](@ref).
 """
 AbstractArray
 
@@ -23,6 +25,8 @@ dimension to just get the length of that dimension.
 
 Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
+
+See also: [`length`](@ref), [`ndims`](@ref), [`eachindex`](@ref), [`sizeof`](@ref).
 
 # Examples
 ```jldoctest
@@ -75,6 +79,8 @@ end
 
 Return the tuple of valid indices for array `A`.
 
+See also: [`size`](@ref), [`keys`](@ref), [`eachindex`](@ref).
+
 # Examples
 
 ```jldoctest
@@ -96,7 +102,8 @@ end
 Return `true` if the indices of `A` start with something other than 1 along any axis.
 If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
 """
-has_offset_axes(A)    = _tuple_any(x->Int(first(x))::Int != 1, axes(A))
+has_offset_axes(A) = _tuple_any(x->Int(first(x))::Int != 1, axes(A))
+has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
 has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
 has_offset_axes(::Colon) = false
 
@@ -112,6 +119,19 @@ axes1(iter) = oneto(length(iter))
 unsafe_indices(A) = axes(A)
 unsafe_indices(r::AbstractRange) = (oneto(unsafe_length(r)),) # Ranges use checked_sub for size
 
+"""
+    keys(a::AbstractArray)
+
+Return an efficient array describing all valid indices for `a` arranged in the shape of `a` itself.
+
+They keys of 1-dimensional arrays (vectors) are integers, whereas all other N-dimensional
+arrays use [`CartesianIndex`](@ref) to describe their locations.  Often the special array
+types [`LinearIndices`](@ref) and [`CartesianIndices`](@ref) are used to efficiently
+represent these arrays of integers and `CartesianIndex`es, respectively.
+
+Note that the `keys` of an array might not be the most efficient index type; for maximum
+performance use  [`eachindex`](@ref) instead.
+"""
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
 
@@ -173,6 +193,8 @@ For dictionary types, this will be a `Pair{KeyType,ValType}`. The definition
 instead of types. However the form that accepts a type argument should be defined for new
 types.
 
+See also: [`keytype`](@ref), [`typeof`](@ref).
+
 # Examples
 ```jldoctest
 julia> eltype(fill(1f0, (2,2)))
@@ -201,6 +223,8 @@ elsize(A::AbstractArray) = elsize(typeof(A))
 
 Return the number of dimensions of `A`.
 
+See also: [`size`](@ref), [`axes`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = fill(1, (3,4,5));
@@ -218,6 +242,8 @@ ndims(::Type{<:AbstractArray{T,N}}) where {T,N} = N
 Return the number of elements in the collection.
 
 Use [`lastindex`](@ref) to get the last valid index of an indexable collection.
+
+See also: [`size`](@ref), [`ndims`](@ref), [`eachindex`](@ref).
 
 # Examples
 ```jldoctest
@@ -335,6 +361,8 @@ Return the last index of `collection`. If `d` is given, return the last index of
 The syntaxes `A[end]` and `A[end, end]` lower to `A[lastindex(A)]` and
 `A[lastindex(A, 1), lastindex(A, 2)]`, respectively.
 
+See also: [`axes`](@ref), [`firstindex`](@ref), [`eachindex`](@ref), [`prevind`](@ref).
+
 # Examples
 ```jldoctest
 julia> lastindex([1,2,4])
@@ -352,6 +380,11 @@ lastindex(a, d) = (@_inline_meta; last(axes(a, d)))
     firstindex(collection, d) -> Integer
 
 Return the first index of `collection`. If `d` is given, return the first index of `collection` along dimension `d`.
+
+The syntaxes `A[begin]` and `A[1, begin]` lower to `A[firstindex(A)]` and
+`A[1, firstindex(A, 2)]`, respectively.
+
+See also: [`first`](@ref), [`axes`](@ref), [`lastindex`](@ref), [`nextind`](@ref).
 
 # Examples
 ```jldoctest
@@ -373,6 +406,8 @@ first(a::AbstractArray) = a[first(eachindex(a))]
 Get the first element of an iterable collection. Return the start point of an
 [`AbstractRange`](@ref) even if it is empty.
 
+See also: [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
+
 # Examples
 ```jldoctest
 julia> first(2:2:10)
@@ -391,8 +426,10 @@ end
 """
     first(itr, n::Integer)
 
-Get the first `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
+Get the first `n` elements of the iterable collection `itr`, or fewer elements if `itr` is not
 long enough.
+
+See also: [`startswith`](@ref), [`Iterators.take`](@ref).
 
 !!! compat "Julia 1.6"
     This method requires at least Julia 1.6.
@@ -425,6 +462,8 @@ Get the last element of an ordered collection, if it can be computed in O(1) tim
 accomplished by calling [`lastindex`](@ref) to get the last index. Return the end
 point of an [`AbstractRange`](@ref) even if it is empty.
 
+See also [`first`](@ref), [`endswith`](@ref).
+
 # Examples
 ```jldoctest
 julia> last(1:2:10)
@@ -439,7 +478,7 @@ last(a) = a[end]
 """
     last(itr, n::Integer)
 
-Get the last `n` elements of the iterable collection `itr`, or fewer elements if `v` is not
+Get the last `n` elements of the iterable collection `itr`, or fewer elements if `itr` is not
 long enough.
 
 !!! compat "Julia 1.6"
@@ -471,6 +510,8 @@ end
 
 Return a tuple of the memory strides in each dimension.
 
+See also: [`stride`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = fill(1, (3,4,5));
@@ -485,6 +526,8 @@ function strides end
     stride(A, k::Integer)
 
 Return the distance in memory (in number of elements) between adjacent elements in dimension `k`.
+
+See also: [`strides`](@ref).
 
 # Examples
 ```jldoctest
@@ -659,6 +702,8 @@ Return `true` if the given `index` is within the bounds of
 arrays can extend this method in order to provide a specialized bounds
 checking implementation.
 
+See also [`checkbounds`](@ref).
+
 # Examples
 ```jldoctest
 julia> checkindex(Bool, 1:20, 8)
@@ -734,6 +779,7 @@ julia> similar(falses(10), Float64, 2, 4)
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 ```
 
+See also: [`undef`](@ref), [`isassigned`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
 similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(axes(a)))
@@ -746,6 +792,7 @@ similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, 
 # define this method to convert supported axes to Ints, with the expectation that an offset array
 # package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, ::Type{T}, dims::Tuple{Integer, Vararg{Integer}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
 
@@ -789,6 +836,8 @@ similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
 Create an empty vector similar to `v`, optionally changing the `eltype`.
 
+See also: [`empty!`](@ref), [`isempty`](@ref), [`isassigned`](@ref).
+
 # Examples
 
 ```jldoctest
@@ -813,6 +862,7 @@ elements in `dst`.
 If `dst` and `src` are of the same type, `dst == src` should hold after
 the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
+
 See also [`copyto!`](@ref).
 
 !!! compat "Julia 1.1"
@@ -920,10 +970,11 @@ end
 """
     copyto!(dest::AbstractArray, src) -> dest
 
-
 Copy all elements from collection `src` to array `dest`, whose length must be greater than
 or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
 the other elements are left untouched.
+
+See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
 
 # Examples
 ```jldoctest
@@ -1170,7 +1221,7 @@ function getindex(A::AbstractArray, I...)
     _getindex(IndexStyle(A), A, to_indices(A, I)...)
 end
 # To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
-getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
+@propagate_inbounds getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
 
 function unsafe_getindex(A::AbstractArray, I...)
     @_inline_meta
@@ -1490,7 +1541,7 @@ AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
 _typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
 _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
-    _typed_vcat!(_typed_vcat_similar(V, T, mapreduce(length, +, V)), V)
+    _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
 
 function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
     pos = 1
@@ -1604,7 +1655,7 @@ _cat_size_shape(dims, shape) = shape
 
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
-_cshp(ndim::Int, dims, ::Tuple{}, ::Tuple{}) = ntuple(b -> 1, Val(length(dims)))
+_cshp(ndim::Int, dims, ::Tuple{}, ::Tuple{}) = ntuple(Returns(1), Val(length(dims)))
 @inline _cshp(ndim::Int, dims, shape, ::Tuple{}) =
     (shape[1] + dims[1], _cshp(ndim + 1, tail(dims), tail(shape), ())...)
 @inline _cshp(ndim::Int, dims, ::Tuple{}, nshape) =
@@ -1810,7 +1861,7 @@ function hvcat(nbc::Integer, as...)
     mod(n,nbc) != 0 &&
         throw(ArgumentError("number of arrays $n is not a multiple of the requested number of block columns $nbc"))
     nbr = div(n,nbc)
-    hvcat(ntuple(i->nbc, nbr), as...)
+    hvcat(ntuple(Returns(nbc), nbr), as...)
 end
 
 """
@@ -2128,18 +2179,28 @@ end
     foreach(f, c...) -> Nothing
 
 Call function `f` on each element of iterable `c`.
-For multiple iterable arguments, `f` is called elementwise.
-`foreach` should be used instead of `map` when the results of `f` are not
+For multiple iterable arguments, `f` is called elementwise, and iteration stops when
+any iterator is finished.
+
+`foreach` should be used instead of [`map`](@ref) when the results of `f` are not
 needed, for example in `foreach(println, array)`.
 
 # Examples
 ```jldoctest
-julia> a = 1:3:7;
+julia> tri = 1:3:7; res = Int[];
 
-julia> foreach(x -> println(x^2), a)
-1
-16
-49
+julia> foreach(x -> push!(res, x^2), tri)
+
+julia> res
+3-element Vector{$(Int)}:
+  1
+ 16
+ 49
+
+julia> foreach((x, y) -> println(x, " with ", y), tri, 'a':'z')
+1 with a
+4 with b
+7 with c
 ```
 """
 foreach(f) = (f(); nothing)
@@ -2159,6 +2220,8 @@ of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying 
 colons go in this expression. The results are concatenated along the remaining dimensions.
 For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
 for all `i` and `j`.
+
+See also [`eachcol`](@ref), [`eachslice`](@ref).
 
 # Examples
 ```jldoctest
@@ -2238,9 +2301,9 @@ function mapslices(f, A::AbstractArray; dims)
     end
     nextra = max(0, length(dims)-ndims(r1))
     if eltype(Rsize) == Int
-        Rsize[dims] = [size(r1)..., ntuple(d->1, nextra)...]
+        Rsize[dims] = [size(r1)..., ntuple(Returns(1), nextra)...]
     else
-        Rsize[dims] = [axes(r1)..., ntuple(d->OneTo(1), nextra)...]
+        Rsize[dims] = [axes(r1)..., ntuple(Returns(OneTo(1)), nextra)...]
     end
     R = similar(r1, tuple(Rsize...,))
 
@@ -2306,9 +2369,9 @@ mapany(f, itr) = Any[f(x) for x in itr]
     map(f, c...) -> collection
 
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
-apply `f` elementwise.
+apply `f` elementwise, and stop when when any of them is exhausted.
 
-See also: [`mapslices`](@ref)
+See also: [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
 # Examples
 ```jldoctest
@@ -2318,7 +2381,7 @@ julia> map(x -> x * 2, [1, 2, 3])
  4
  6
 
-julia> map(+, [1, 2, 3], [10, 20, 30])
+julia> map(+, [1, 2, 3], [10, 20, 30, 400, 5000])
 3-element Vector{Int64}:
  11
  22
@@ -2363,7 +2426,9 @@ end
     map!(function, destination, collection...)
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
-collection. `destination` must be at least as large as the first collection.
+collection. `destination` must be at least as large as the smallest collection.
+
+See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 
 # Examples
 ```jldoctest
@@ -2376,6 +2441,14 @@ julia> a
  2.0
  4.0
  6.0
+
+julia> map!(+, zeros(Int, 5), 100:999, 1:3)
+5-element Vector{$(Int)}:
+ 101
+ 103
+ 105
+   0
+   0
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
@@ -2396,13 +2469,21 @@ pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
 ## hashing AbstractArray ##
 
+const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
 function hash(A::AbstractArray, h::UInt)
-    h = hash(AbstractArray, h)
+    h += hash_abstractarray_seed
     # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
     # Instead hash the tuple of firsts and lasts along each dimension
     h = hash(map(first, axes(A)), h)
     h = hash(map(last, axes(A)), h)
-    isempty(A) && return h
+
+    # For short arrays, it's not worth doing anything complicated
+    if length(A) < 8192
+        for x in A
+            h = hash(x, h)
+        end
+        return h
+    end
 
     # Goal: Hash approximately log(N) entries with a higher density of hashed elements
     # weighted towards the end and special consideration for repeated values. Colliding
@@ -2433,7 +2514,7 @@ function hash(A::AbstractArray, h::UInt)
     n = 0
     while true
         n += 1
-        # Hash the current key-index and its element
+        # Hash the element
         elt = A[keyidx]
         h = hash(keyidx=>elt, h)
 

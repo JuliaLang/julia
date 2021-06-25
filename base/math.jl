@@ -47,15 +47,17 @@ end
 Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
 are promoted to a common type.
 
+See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
+
 # Examples
 ```jldoctest
-julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
+julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
 3-element Vector{BigFloat}:
  3.141592653589793238462643383279502884197169399375105820974944592307816406286198
  2.0
  9.0
 
-julia> clamp.([11,8,5],10,6) # an example where lo > hi
+julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
 3-element Vector{Int64}:
   6
   6
@@ -73,12 +75,18 @@ clamp(x::X, lo::L, hi::H) where {X,L,H} =
 
 Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
 
+See also [`trunc`](@ref).
+
 # Examples
 ```jldoctest
 julia> clamp(200, Int8)
 127
+
 julia> clamp(-200, Int8)
 -128
+
+julia> trunc(Int, 4pi^2)
+39
 ```
 """
 clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
@@ -89,6 +97,19 @@ clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
+
+# Examples
+```jldoctest
+julia> row = collect(-4:4)';
+
+julia> clamp!(row, 0, Inf)
+1×9 adjoint(::Vector{Int64}) with eltype Int64:
+ 0  0  0  0  0  1  2  3  4
+
+julia> clamp.((-4:4)', 0, Inf)
+1×9 Matrix{Float64}:
+ 0.0  0.0  0.0  0.0  0.0  1.0  2.0  3.0  4.0
+```
 """
 function clamp!(x::AbstractArray, lo, hi)
     @inbounds for i in eachindex(x)
@@ -205,6 +226,8 @@ end
     @horner(x, p...)
 
 Evaluate `p[1] + x * (p[2] + x * (....))`, i.e. a polynomial via Horner's rule.
+
+See also [`@evalpoly`](@ref), [`evalpoly`](@ref).
 """
 macro horner(x, p...)
      xesc, pesc = esc(x), esc.(p)
@@ -224,6 +247,8 @@ that is, the coefficients are given in ascending order by power of `z`.  This ma
 to efficient inline code that uses either Horner's method or, for complex `z`, a more
 efficient Goertzel-like algorithm.
 
+See also [`evalpoly`](@ref).
+
 # Examples
 ```jldoctest
 julia> @evalpoly(3, 1, 0, 1)
@@ -239,6 +264,20 @@ julia> @evalpoly(2, 1, 1, 1)
 macro evalpoly(z, p...)
     zesc, pesc = esc(z), esc.(p)
     :(evalpoly($zesc, ($(pesc...),)))
+end
+
+# polynomial evaluation using compensated summation.
+# much more accurate, especially when lo can be combined with other rounding errors
+@inline function exthorner(x, p::Tuple)
+    hi, lo = p[end], zero(x)
+    for i in length(p)-1:-1:1
+        pi = p[i]
+        prod = hi*x
+        err = fma(hi, x, -prod)
+        hi = pi+prod
+        lo = fma(lo, x, prod - (hi - pi) + err)
+    end
+    return hi, lo
 end
 
 """
@@ -258,6 +297,8 @@ rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
     deg2rad(x)
 
 Convert `x` from degrees to radians.
+
+See also: [`rad2deg`](@ref), [`sind`](@ref).
 
 # Examples
 ```jldoctest
@@ -365,23 +406,6 @@ Compute the inverse hyperbolic sine of `x`.
 """
 asinh(x::Number)
 
-"""
-    expm1(x)
-
-Accurately compute ``e^x-1``. It avoids the loss of precision involved in the direct
-evaluation of exp(x)-1 for small values of x.
-# Examples
-```jldoctest
-julia> expm1(1e-16)
-1.0e-16
-
-julia> exp(1e-16) - 1
-0.0
-```
-"""
-expm1(x)
-expm1(x::Float64) = ccall((:expm1,libm), Float64, (Float64,), x)
-expm1(x::Float32) = ccall((:expm1f,libm), Float32, (Float32,), x)
 
 # utility for converting NaN return to DomainError
 # the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
@@ -393,6 +417,8 @@ expm1(x::Float32) = ccall((:expm1f,libm), Float32, (Float32,), x)
     sin(x)
 
 Compute sine of `x`, where `x` is in radians.
+
+See also [`sind`], [`sinpi`], [`sincos`], [`cis`].
 """
 sin(x::Number)
 
@@ -400,6 +426,8 @@ sin(x::Number)
     cos(x)
 
 Compute cosine of `x`, where `x` is in radians.
+
+See also [`cosd`], [`cospi`], [`sincos`], [`cis`].
 """
 cos(x::Number)
 
@@ -444,6 +472,8 @@ atanh(x::Number)
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
+See also [`log1p`], [`log2`], [`log10`].
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> log(2)
@@ -464,6 +494,8 @@ log(x::Number)
 
 Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
+
+See also: [`exp2`](@ref), [`ldexp`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -542,6 +574,8 @@ end
 Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
 
+See also: [`hypot`](@ref).
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> sqrt(big(81))
@@ -556,6 +590,13 @@ Stacktrace:
 
 julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
+
+julia> .√(1:4)
+4-element Vector{Float64}:
+ 1.0
+ 1.4142135623730951
+ 1.7320508075688772
+ 2.0
 ```
 """
 sqrt(x)
@@ -1154,7 +1195,7 @@ include("special/log.jl")
 
 # Float16 definitions
 
-for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
+for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
              :atanh,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
@@ -1162,13 +1203,12 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
     end
 end
 
-for func in (:exp,:exp2,:exp10)
+for func in (:exp,:exp2,:exp10,:sinh)
      @eval $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
 end
 
 
 atan(a::Float16,b::Float16) = Float16(atan(Float32(a),Float32(b)))
-cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 sincos(a::Float16) = Float16.(sincos(Float32(a)))
 
 for f in (:sin, :cos, :tan, :asin, :atan, :acos,

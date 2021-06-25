@@ -275,6 +275,11 @@ end
     # Issue 13332
     @test replace("abc", 'b' => 2.1) == "a2.1c"
 
+    # Issue 31456
+    @test replace("The fox.", r"fox(es)?" => s"bus\1") == "The bus."
+    @test replace("The foxes.", r"fox(es)?" => s"bus\1") == "The buses."
+    @test replace("The quick fox quickly.", r"(quick)?\sfox(es)?\s(run)?" => s"\1 bus\2 \3") == "The quick bus quickly."
+
     # test replace with a count for String and GenericString
     # check that replace is a no-op if count==0
     for s in ["aaa", Test.GenericString("aaa")]
@@ -375,6 +380,11 @@ end
 
         #non-hex characters
         @test_throws ArgumentError hex2bytes(b"0123456789abcdefABCDEFGH")
+    end
+
+    @testset "Issue 39284" begin
+        @test "efcdabefcdab8967452301" == bytes2hex(Iterators.reverse(hex2bytes("0123456789abcdefABCDEF")))
+        @test hex2bytes(Iterators.reverse(b"CE1A85EECc")) == UInt8[0xcc, 0xee, 0x58, 0xa1, 0xec]
     end
 end
 
