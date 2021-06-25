@@ -1369,10 +1369,7 @@ end
 
 is_sequential(src::CodeInfo) = all(x -> !(x isa DetachNode), src.code)
 
-function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
-    ccall(:jl_breakpoint, Cvoid, (Any,), ci)
-    is_sequential(ci) && return remove_tapir(ci)
-
+function _lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
     # Making a copy here, as `convert_to_ircode` mutates `ci`:
     ci = copy(ci)
 
@@ -1389,6 +1386,12 @@ function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Cod
         @timeit "verify pre-tapir" (verify_ir(ir); verify_linetable(ir.linetable))
     end
     @timeit "tapir" ir = lower_tapir!(ir)
+    return ir, params, opt
+end
+
+function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
+    is_sequential(ci) && return remove_tapir(ci)
+    ir, params, opt = _lower_tapir(interp, linfo, ci)
     if JLOptions().debug_level == 2
         @timeit "verify tapir" (verify_ir(ir); verify_linetable(ir.linetable))
     end
@@ -1407,6 +1410,12 @@ to LLVM.
 """
 lower_tapir(linfo::MethodInstance, ci::CodeInfo) =
     lower_tapir(NativeInterpreter(), linfo, ci)
+
+# Useful for debugging:
+lower_tapir_to_ircode(linfo::MethodInstance, ci::CodeInfo) =
+    lower_tapir_to_ircode(NativeInterpreter(), linfo, ci)
+lower_tapir_to_ircode(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo) =
+    first(_lower_tapir(interp, linfo, ci))
 
 """
     remove_tapir!(src::CodeInfo)
