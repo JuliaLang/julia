@@ -175,7 +175,7 @@ true
 function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
     svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
 end
-function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T <: Union{Float16,Complex{Float16}}
+function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T <: Union{Float16,Complex{Float16}}}
     A = svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
     return SVD{T}(A)
 end
