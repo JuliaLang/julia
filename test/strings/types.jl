@@ -269,9 +269,9 @@ let s = "|η(α)-ϕ(κ)| < ε"
 end
 
 @testset "reverseind" for T in (String, SubString, GenericString)
-    for prefix in ("", "abcd", "\U0001d6a4\U0001d4c1", "\U0001d6a4\U0001d4c1c", " \U0001d6a4\U0001d4c1")
-        for suffix in ("", "abcde", "\U0001d4c1β\U0001d6a4", "\U0001d4c1β\U0001d6a4c", " \U0001d4c1β\U0001d6a4")
-            for c in ('X', 'δ', '\U0001d6a5')
+    for prefix in ("", "abcd", "\U01d6a4\U01d4c1", "\U01d6a4\U01d4c1c", " \U01d6a4\U01d4c1")
+        for suffix in ("", "abcde", "\U01d4c1β\U01d6a4", "\U01d4c1β\U01d6a4c", " \U01d4c1β\U01d6a4")
+            for c in ('X', 'δ', '\U01d6a5')
                 s = convert(T, string(prefix, c, suffix))
                 r = reverse(s)
                 ri = findfirst(isequal(c), r)

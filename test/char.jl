@@ -299,6 +299,6 @@ end
     @test repr("text/plain", '/') == "'/': ASCII/Unicode U+002F (category Po: Punctuation, other)"
     @test repr("text/plain", '\u10e') == "'Ď': Unicode U+010E (category Lu: Letter, uppercase)"
     @test repr("text/plain", '\u3a2c') == "'㨬': Unicode U+3A2C (category Lo: Letter, other)"
-    @test repr("text/plain", '\U001f428') == "'🐨': Unicode U+1F428 (category So: Symbol, other)"
-    @test repr("text/plain", '\U010f321') == "'\\U10f321': Unicode U+10F321 (category Co: Other, private use)"
+    @test repr("text/plain", '\U01f428') == "'🐨': Unicode U+1F428 (category So: Symbol, other)"
+    @test repr("text/plain", '\U10f321') == "'\\U10f321': Unicode U+10F321 (category Co: Other, private use)"
 end
