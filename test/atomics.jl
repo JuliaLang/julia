@@ -63,22 +63,43 @@ let (x, y) = (Complex{Int128}(10, 30), Complex{Int128}(20, 40))
     @test sizeof(r) == sizeof(ar) - Int(fieldoffset(typeof(ar), 1))
 end
 
+struct PadIntA <: Number # internal padding
+    a::Int8
+    b::Int16
+    PadIntA(x) = new(82, x)
+end
+struct PadIntB <: Number # external padding
+    a::UInt8
+    b::UInt8
+    c::UInt8
+    PadIntB(x) = new(x & 0xff, (x >> 8) & 0xff, (x >> 16) & 0xff)
+end
+primitive type Int24 <: Signed 24 end # integral padding
+Int24(x::Int) = Core.Intrinsics.trunc_int(Int24, x)
+Base.Int(x::PadIntB) = x.a + (Int(x.b) << 8) + (Int(x.c) << 16)
+Base.:(+)(x::PadIntA, b::Int) = PadIntA(x.b + b)
+Base.:(+)(x::PadIntB, b::Int) = PadIntB(Int(x) + b)
+Base.:(+)(x::Int24, b::Int) = Core.Intrinsics.add_int(x, Int24(b))
+Base.show(io::IO, x::PadIntA) = print(io, "PadIntA(", x.b, ")")
+Base.show(io::IO, x::PadIntB) = print(io, "PadIntB(", Int(x), ")")
+Base.show(io::IO, x::Int24) = print(io, "Int24(", Core.Intrinsics.zext_int(Int, x), ")")
+
 @noinline function _test_field_operators(r)
     r = r[]
     T = typeof(getfield(r, :x))
-    @test getfield(r, :x, :sequentially_consistent) === T(12345_10)
-    @test setfield!(r, :x, T(12345_1), :sequentially_consistent) === T(12345_1)
-    @test getfield(r, :x, :sequentially_consistent) === T(12345_1)
-    @test replacefield!(r, :x, 12345_1 % UInt, T(12345_100), :sequentially_consistent, :sequentially_consistent) === (T(12345_1), false)
-    @test replacefield!(r, :x, T(12345_1), T(12345_100), :sequentially_consistent, :sequentially_consistent) === (T(12345_1), true)
-    @test getfield(r, :x, :sequentially_consistent) === T(12345_100)
-    @test replacefield!(r, :x, T(12345_1), T(12345_1), :sequentially_consistent, :sequentially_consistent) === (T(12345_100), false)
-    @test getfield(r, :x, :sequentially_consistent) === T(12345_100)
-    @test modifyfield!(r, :x, add, 1, :sequentially_consistent) === (T(12345_100), T(12345_101))
-    @test modifyfield!(r, :x, add, 1, :sequentially_consistent) === (T(12345_101), T(12345_102))
-    @test getfield(r, :x, :sequentially_consistent) === T(12345_102)
-    @test swapfield!(r, :x, T(12345_1), :sequentially_consistent) === T(12345_102)
-    @test getfield(r, :x, :sequentially_consistent) === T(12345_1)
+    @test getfield(r, :x, :sequentially_consistent) === T(123_10)
+    @test setfield!(r, :x, T(123_1), :sequentially_consistent) === T(123_1)
+    @test getfield(r, :x, :sequentially_consistent) === T(123_1)
+    @test replacefield!(r, :x, 123_1 % UInt, T(123_30), :sequentially_consistent, :sequentially_consistent) === (T(123_1), false)
+    @test replacefield!(r, :x, T(123_1), T(123_30), :sequentially_consistent, :sequentially_consistent) === (T(123_1), true)
+    @test getfield(r, :x, :sequentially_consistent) === T(123_30)
+    @test replacefield!(r, :x, T(123_1), T(123_1), :sequentially_consistent, :sequentially_consistent) === (T(123_30), false)
+    @test getfield(r, :x, :sequentially_consistent) === T(123_30)
+    @test modifyfield!(r, :x, add, 1, :sequentially_consistent) === (T(123_30), T(123_31))
+    @test modifyfield!(r, :x, add, 1, :sequentially_consistent) === (T(123_31), T(123_32))
+    @test getfield(r, :x, :sequentially_consistent) === T(123_32)
+    @test swapfield!(r, :x, T(123_1), :sequentially_consistent) === T(123_32)
+    @test getfield(r, :x, :sequentially_consistent) === T(123_1)
     nothing
 end
 @noinline function test_field_operators(r)
@@ -86,11 +107,15 @@ end
     _test_field_operators(Ref{Any}(copy(r)))
     nothing
 end
-test_field_operators(ARefxy{Int}(12345_10, 12345_20))
-test_field_operators(ARefxy{Any}(12345_10, 12345_20))
-test_field_operators(ARefxy{Union{Nothing,Int}}(12345_10, nothing))
-test_field_operators(ARefxy{Complex{Int32}}(12345_10, 12345_20))
-test_field_operators(ARefxy{Complex{Int128}}(12345_10, 12345_20))
+test_field_operators(ARefxy{Int}(123_10, 123_20))
+test_field_operators(ARefxy{Any}(123_10, 123_20))
+test_field_operators(ARefxy{Union{Nothing,Int}}(123_10, nothing))
+test_field_operators(ARefxy{Complex{Int32}}(123_10, 123_20))
+test_field_operators(ARefxy{Complex{Int128}}(123_10, 123_20))
+test_field_operators(ARefxy{PadIntA}(123_10, 123_20))
+test_field_operators(ARefxy{PadIntB}(123_10, 123_20))
+#FIXME: test_field_operators(ARefxy{Int24}(123_10, 123_20))
+#FIXME: test_field_operators(ARefxy{Float64}(123_10, 123_20))
 
 @noinline function _test_field_orderings(r, x, y)
     @nospecialize x y
@@ -247,11 +272,13 @@ test_field_orderings(true, false)
 test_field_orderings("hi", "bye")
 test_field_orderings(:hi, :bye)
 test_field_orderings(nothing, nothing)
-test_field_orderings(ARefxy{Any}(12345_10, 12345_20), 12345_10, 12345_20)
+test_field_orderings(ARefxy{Any}(123_10, 123_20), 123_10, 123_20)
 test_field_orderings(ARefxy{Any}(true, false), true, false)
 test_field_orderings(ARefxy{Union{Nothing,Missing}}(nothing, missing), nothing, missing)
-test_field_orderings(ARefxy{Union{Nothing,Int}}(nothing, 12345_1), nothing, 12345_1)
+test_field_orderings(ARefxy{Union{Nothing,Int}}(nothing, 123_1), nothing, 123_1)
 test_field_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+#FIXME: test_field_orderings(10.0, 20.0)
+#FIXME: test_field_orderings(NaN, Inf)
 
 struct UndefComplex{T}
     re::T
