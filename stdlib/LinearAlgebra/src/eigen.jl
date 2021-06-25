@@ -279,12 +279,12 @@ function eigen(A::AbstractMatrix{Float16}; permute::Bool=true, scale::Bool=true,
     AA = copy_oftype(A, eigtype(Float16))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     A = eigen!(AA; permute=permute, scale=scale, sortby=sortby)
-    if isreal(A.values) == false
-        Eigen(convert(Vector{Complex{Float16}}, A.values),
-            convert(AbstractArray{Complex{Float16}}, A.vectors))
-    else
+    if isreal(A.values)
         Eigen(convert(Vector{Float16}, A.values),
             convert(AbstractArray{Float16}, A.vectors))
+    else
+        Eigen(convert(Vector{Complex{Float16}}, A.values),
+            convert(AbstractArray{Complex{Float16}}, A.vectors))
     end
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
