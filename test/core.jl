@@ -7219,8 +7219,8 @@ end
 struct B33954
     x::Q33954{B33954}
 end
-@test_broken isbitstype(Tuple{B33954})
-@test_broken isbitstype(B33954)
+@test isbitstype(Tuple{B33954})
+@test isbitstype(B33954)
 
 struct B40050 <: Ref{Tuple{B40050}}
 end
@@ -7564,3 +7564,13 @@ const T35130 = Tuple{Vector{Int}, <:Any}
 end
 h35130(x) = A35130(Any[x][1]::Vector{T35130})
 @test h35130(T35130[([1],1)]) isa A35130
+
+# issue #41349
+struct A41349{T}
+    x::Ptr{T}
+end
+struct B41349
+    x::A41349{B41349}
+end
+@test isbitstype(B41349)
+@test isbitstype(Tuple{B41349})

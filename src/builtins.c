@@ -1502,11 +1502,20 @@ static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layou
         jl_datatype_t *dp = (jl_datatype_t*)p;
         if (affects_layout && dp->name == name)
             return 1;
-        affects_layout = dp->types == NULL || jl_svec_len(dp->types) != 0;
-        size_t i, l = jl_nparams(p);
-        for (i = 0; i < l; i++) {
-            if (references_name(jl_tparam(p, i), name, affects_layout))
-                return 1;
+        jl_svec_t *ft = dp->types;
+        if (ft && dp->name->mayinlinealloc) {
+            size_t i, l = jl_svec_len(ft);
+            for (i = 0; i < l; i++) {
+                if (references_name(jl_svecref(ft, i), name, 1))
+                    return 1;
+            }
+        }
+        else {
+            size_t i, l = jl_nparams(p);
+            for (i = 0; i < l; i++) {
+                if (references_name(jl_tparam(p, i), name, 1))
+                    return 1;
+            }
         }
     }
     return 0;
