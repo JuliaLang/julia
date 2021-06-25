@@ -286,7 +286,7 @@ function eigen(A::AbstractMatrix{Float16}; permute::Bool=true, scale::Bool=true,
         Eigen(convert(Vector{Float16}, A.values),
             convert(AbstractArray{Float16}, A.vectors))
     end
-end 
+end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
 """
