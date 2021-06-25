@@ -1488,7 +1488,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (type_is_ghost(elty))
         return ghostValue(jltype);
     AllocaInst *intcast = NULL;
-    if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy() && !elty->isFloatingPointTy()) {
+    if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
         const DataLayout &DL = jl_data_layout;
         unsigned nb = DL.getTypeSizeInBits(elty);
         intcast = ctx.builder.CreateAlloca(elty);
@@ -1563,7 +1563,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     if (type_is_ghost(elty))
         return oldval;
     Value *intcast = nullptr;
-    if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy() && !elty->isFloatingPointTy()) {
+    if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
         const DataLayout &DL = jl_data_layout;
         unsigned nb = DL.getTypeSizeInBits(elty);
         if (!issetfield)

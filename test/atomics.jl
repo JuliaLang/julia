@@ -115,7 +115,7 @@ test_field_operators(ARefxy{Complex{Int128}}(123_10, 123_20))
 test_field_operators(ARefxy{PadIntA}(123_10, 123_20))
 test_field_operators(ARefxy{PadIntB}(123_10, 123_20))
 #FIXME: test_field_operators(ARefxy{Int24}(123_10, 123_20))
-#FIXME: test_field_operators(ARefxy{Float64}(123_10, 123_20))
+test_field_operators(ARefxy{Float64}(123_10, 123_20))
 
 @noinline function _test_field_orderings(r, x, y)
     @nospecialize x y
@@ -277,8 +277,8 @@ test_field_orderings(ARefxy{Any}(true, false), true, false)
 test_field_orderings(ARefxy{Union{Nothing,Missing}}(nothing, missing), nothing, missing)
 test_field_orderings(ARefxy{Union{Nothing,Int}}(nothing, 123_1), nothing, 123_1)
 test_field_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
-#FIXME: test_field_orderings(10.0, 20.0)
-#FIXME: test_field_orderings(NaN, Inf)
+test_field_orderings(10.0, 20.0)
+test_field_orderings(NaN, Inf)
 
 struct UndefComplex{T}
     re::T
