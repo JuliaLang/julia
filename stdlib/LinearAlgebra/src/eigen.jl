@@ -275,7 +275,7 @@ function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; permute=permute, scale=scale, sortby=sortby, jvl=jvl, jvr=jvr, jce=jce, jcv=jcv)
 end
-function eigen(A::AbstractMatrix{Float16}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
+function eigen(A::AbstractMatrix{Union{Float16,Complex{Float16}}}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
     AA = copy_oftype(A, eigtype(Float16))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     A = eigen!(AA; permute=permute, scale=scale, sortby=sortby)
