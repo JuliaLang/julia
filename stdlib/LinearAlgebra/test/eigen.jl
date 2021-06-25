@@ -180,9 +180,19 @@ end
 @testset "Float16" begin
     A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
     B = eigen(A)
+    C = Float16[3 -2; 4 -1]
+    D = eigen(C)
+    E = complex(C)
+    F = eigen(E)
     @test B isa Eigen{Float16, Float16, Matrix{Float16}, Vector{Float16}, Vector{Float16}}
     @test B.values isa Vector{Float16}
     @test B.vectors isa Matrix{Float16}
+    @test D isa Eigen{ComplexF16, ComplexF16, Matrix{ComplexF16}, Vector{ComplexF16}, Vector{Float16}}
+    @test D.values isa Vector{ComplexF16}
+    @test D.vectors isa Matrix{ComplexF16}
+    @test F isa Eigen{ComplexF16, ComplexF16, Matrix{ComplexF16}, Vector{ComplexF16}, Vector{Float16}}
+    @test F.values isa Vector{ComplexF16}
+    @test F.vectors isa Matrix{ComplexF16}
 end
 
 end # module TestEigen
