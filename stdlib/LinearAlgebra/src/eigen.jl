@@ -275,13 +275,18 @@ function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; permute=permute, scale=scale, sortby=sortby, jvl=jvl, jvr=jvr, jce=jce, jcv=jcv)
 end
-function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T<:Float16
-    AA = copy_oftype(A, eigtype(T))
+function eigen(A::AbstractMatrix{Float16}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
+    AA = copy_oftype(A, eigtype(Float16))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     A = eigen!(AA; permute=permute, scale=scale, sortby=sortby)
-    Eigen(convert(Vector{Float16}, A.values),
-          convert(AbstractArray{Float16}, A.vectors))
-end
+    if isreal(A.values) == false
+        Eigen(convert(Vector{Complex{Float16}}, A.values),
+            convert(AbstractArray{Complex{Float16}}, A.vectors))
+    else
+        Eigen(convert(Vector{Float16}, A.values),
+            convert(AbstractArray{Float16}, A.vectors))
+    end
+end 
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
 """
