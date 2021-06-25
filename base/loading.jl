@@ -862,7 +862,7 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
 end
 
 # to synchronize multiple tasks trying to import/using something
-const package_locks = Dict{PkgId,Condition}()
+const package_locks = Dict{PkgId,Threads.Condition}()
 
 # to notify downstream consumers that a module was successfully loaded
 # Callbacks take the form (mod::Base.PkgId) -> nothing.
@@ -1074,10 +1074,12 @@ function _require(pkg::PkgId)
     loading = get(package_locks, pkg, false)
     if loading !== false
         # load already in progress for this module
-        wait(loading)
+        lock(loading) do
+            wait(loading)
+        end
         return
     end
-    package_locks[pkg] = Condition()
+    package_locks[pkg] = Threads.Condition()
 
     last = toplevel_load[]
     try
@@ -1156,7 +1158,9 @@ function _require(pkg::PkgId)
     finally
         toplevel_load[] = last
         loading = pop!(package_locks, pkg)
-        notify(loading, all=true)
+        lock(loading) do
+            notify(loading, all=true)
+        end
     end
     nothing
 end
