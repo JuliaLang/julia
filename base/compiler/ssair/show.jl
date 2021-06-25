@@ -462,7 +462,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     if frame.line != typemax(frame.line) && frame.line != 0
                         print(io, ":", frame.line)
                     end
-                    print(io, " within `", method_name(frame), "'")
+                    print(io, " within `", method_name(frame), "`")
                     if collapse
                         method = method_name(frame)
                         while nctx < nframes
@@ -723,48 +723,6 @@ end
 
 _strip_color(s::String) = replace(s, r"\e\[\d+m" => "")
 
-# corresponds to `verbose_linetable=true`
-function ircode_verbose_linfo_printer(code::IRCode)
-    stmts = code.stmts
-    max_depth = maximum(compute_inlining_depth(code.linetable, stmts[i][:line]) for i in 1:length(stmts.line))
-    last_stack = Ref(Int[])
-    used = stmts_used(code, false)
-    maxlength_idx = if isempty(used)
-        0
-    else
-        maxused = maximum(used)
-        length(string(maxused))
-    end
-
-    function (io::IO, indent::String, idx::Int)
-        idx == 0 && return ""
-        cols = (displaysize(io)::Tuple{Int,Int})[2]
-        stmt = stmts[idx]
-
-        stack = compute_loc_stack(code.linetable, stmt[:line])
-        # We need to print any stack frames that did not exist in the last stack
-        ndepth = max(1, length(stack))
-        rail = string(" "^(max_depth+1-ndepth), "│"^ndepth)
-        start_column = cols - max_depth - 10
-        for (i, x) in enumerate(stack)
-            if i > length(last_stack[]) || last_stack[][i] != x
-                entry = code.linetable[x]
-                printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :light_black)
-                print(io, indent)
-                ssa_guard = " "^(maxlength_idx + 4 + i)
-                entry_label = "$(ssa_guard)$(method_name(entry)) at $(entry.file):$(entry.line) "
-                width_hline = start_column - length(entry_label) - length(_strip_color(indent)) + max_depth - i
-                width_hline = max(width_hline, 0) # don't error on overlong method/file names
-                hline = string("─"^width_hline, "┐")
-                printstyled(io, string(entry_label, hline), "\n"; color=:light_black)
-            end
-        end
-        last_stack[] = stack
-        printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :light_black)
-        return ""
-    end
-end
-
 function statementidx_lineinfo_printer(f, code::IRCode)
     printer = f(code.linetable)
     function (io::IO, indent::String, idx::Int)
@@ -807,7 +765,7 @@ function stmts_used(code::CodeInfo)
 end
 
 function default_config(code::IRCode; verbose_linetable=false)
-    return IRShowConfig(verbose_linetable ? ircode_verbose_linfo_printer(code)
+    return IRShowConfig(verbose_linetable ? statementidx_lineinfo_printer(code)
                                           : inline_linfo_printer(code);
                         bb_color=:normal)
 end

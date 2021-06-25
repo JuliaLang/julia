@@ -159,7 +159,7 @@ julia> dirname("/home/myuser/")
 "/home/myuser"
 ```
 
-See also: [`basename`](@ref)
+See also [`basename`](@ref).
 """
  dirname(path::AbstractString) = splitdir(path)[1]
 
@@ -181,7 +181,7 @@ julia> basename("/home/myuser/")
 ""
 ```
 
-See also: [`dirname`](@ref)
+See also [`dirname`](@ref).
 """
 basename(path::AbstractString) = splitdir(path)[2]
 

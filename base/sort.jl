@@ -68,7 +68,7 @@ function issorted(itr, order::Ordering)
 end
 
 """
-    issorted(v, lt=isless, by=identity, rev:Bool=false, order::Ordering=Forward)
+    issorted(v, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
 order is considered to be sorted just as they do for [`sort`](@ref).
@@ -383,13 +383,14 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsortedlast
 
 """
-    insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+    insorted(a, x; by=<transform>, lt=<comparison>, rev=false) -> Bool
 
 Determine whether an item is in the given sorted collection, in the sense that
 it is [`==`](@ref) to one of the values of the collection according to the order
 specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
-sorted in that order, see [`sort`](@ref) for the keywords. See also
-[`in`](@ref). Returns a `Bool` value.
+sorted in that order, see [`sort`](@ref) for the keywords.
+
+See also [`in`](@ref).
 
 # Examples
 ```jldoctest
@@ -668,7 +669,8 @@ Sort the vector `v` in place. [`QuickSort`](@ref) is used by default for numeric
 [`MergeSort`](@ref) is used for other arrays. You can specify an algorithm to use via the `alg`
 keyword (see [Sorting Algorithms](@ref) for available algorithms). The `by` keyword lets you provide
 a function that will be applied to each element before comparison; the `lt` keyword allows
-providing a custom "less than" function; use `rev=true` to reverse the sorting order. These
+providing a custom "less than" function (note that for every `x` and `y`, only one of `lt(x,y)`
+and `lt(y,x)` can return `true`); use `rev=true` to reverse the sorting order. These
 options are independent and can be used together in all possible combinations: if both `by`
 and `lt` are specified, the `lt` function is applied to the result of the `by` function;
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.

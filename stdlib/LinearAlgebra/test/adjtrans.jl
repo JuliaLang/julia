@@ -4,18 +4,20 @@ module TestAdjointTranspose
 
 using Test, LinearAlgebra, SparseArrays
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
 @testset "Adjoint and Transpose inner constructor basics" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
     # Adjoint/Transpose eltype must match the type of the Adjoint/Transpose of the input eltype
-    @test_throws ErrorException Adjoint{Float64,Vector{Int}}(intvec)
-    @test_throws ErrorException Adjoint{Float64,Matrix{Int}}(intmat)
-    @test_throws ErrorException Transpose{Float64,Vector{Int}}(intvec)
-    @test_throws ErrorException Transpose{Float64,Matrix{Int}}(intmat)
+    @test_throws TypeError Adjoint{Float64,Vector{Int}}(intvec)[1,1]
+    @test_throws TypeError Adjoint{Float64,Matrix{Int}}(intmat)[1,1]
+    @test_throws TypeError Transpose{Float64,Vector{Int}}(intvec)[1,1]
+    @test_throws TypeError Transpose{Float64,Matrix{Int}}(intmat)[1,1]
     # Adjoint/Transpose wrapped array type must match the input array type
-    @test_throws MethodError Adjoint{Int,Vector{Float64}}(intvec)
-    @test_throws MethodError Adjoint{Int,Matrix{Float64}}(intmat)
-    @test_throws MethodError Transpose{Int,Vector{Float64}}(intvec)
-    @test_throws MethodError Transpose{Int,Matrix{Float64}}(intmat)
+    @test_throws TypeError Adjoint{Int,Vector{Float64}}(intvec)[1,1]
+    @test_throws TypeError Adjoint{Int,Matrix{Float64}}(intmat)[1,1]
+    @test_throws TypeError Transpose{Int,Vector{Float64}}(intvec)[1,1]
+    @test_throws TypeError Transpose{Int,Matrix{Float64}}(intmat)[1,1]
     # Adjoint/Transpose inner constructor basic functionality, concrete scalar eltype
     @test (Adjoint{Int,Vector{Int}}(intvec)::Adjoint{Int,Vector{Int}}).parent === intvec
     @test (Adjoint{Int,Matrix{Int}}(intmat)::Adjoint{Int,Matrix{Int}}).parent === intmat
@@ -237,6 +239,25 @@ end
     @test convert(Adjoint{Float64,Matrix{Float64}}, Adjoint(intmat))::Adjoint{Float64,Matrix{Float64}} == Adjoint(intmat)
     @test convert(Transpose{Float64,Vector{Float64}}, Transpose(intvec))::Transpose{Float64,Vector{Float64}} == Transpose(intvec)
     @test convert(Transpose{Float64,Matrix{Float64}}, Transpose(intmat))::Transpose{Float64,Matrix{Float64}} == Transpose(intmat)
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Adjoint and Transpose convert methods to AbstractArray" begin
+    # tests corresponding to #34995
+    intvec, intmat = [1, 2], [1 2 3; 4 5 6]
+    statvec = ImmutableArray(intvec)
+    statmat = ImmutableArray(intmat)
+
+    @test convert(AbstractArray{Float64}, Adjoint(statvec))::Adjoint{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Adjoint(statvec)
+    @test convert(AbstractArray{Float64}, Adjoint(statmat))::Array{Float64,2} == Adjoint(statmat)
+    @test convert(AbstractArray{Float64}, Transpose(statvec))::Transpose{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Transpose(statvec)
+    @test convert(AbstractArray{Float64}, Transpose(statmat))::Array{Float64,2} == Transpose(statmat)
+    @test convert(AbstractMatrix{Float64}, Adjoint(statvec))::Adjoint{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Adjoint(statvec)
+    @test convert(AbstractMatrix{Float64}, Adjoint(statmat))::Array{Float64,2} == Adjoint(statmat)
+    @test convert(AbstractMatrix{Float64}, Transpose(statvec))::Transpose{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Transpose(statvec)
+    @test convert(AbstractMatrix{Float64}, Transpose(statmat))::Array{Float64,2} == Transpose(statmat)
 end
 
 @testset "Adjoint and Transpose similar methods" begin
@@ -527,7 +548,6 @@ end
     @test pointer(Transpose(D)) === pointer(D)
 end
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
