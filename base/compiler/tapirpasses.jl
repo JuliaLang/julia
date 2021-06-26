@@ -1064,14 +1064,6 @@ function outline_child_task(ir::IRCode, task::ChildTask)
         stmts.inst[inew] = ReturnNode(nothing)
     end
 
-    # Fill in undefined return values
-    for (i, inst) in pairs(stmts.inst)
-        if inst isa ReturnNode && !isdefined(inst, :val)
-            stmts.inst[i] = ReturnNode(nothing)
-        end
-    end
-    # ASK/TODO: Is this a reasonable code or am I just hiding a bug?
-
     blocks = map(enumerate(task.blocks)) do (i, ibb)
         isentry = i == 1
         bb = ir.cfg.blocks[ibb]

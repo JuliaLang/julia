@@ -51,6 +51,12 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         return jl_module_globalref(module, (jl_sym_t*)expr);
     }
     else if (jl_is_returnnode(expr)) {
+        if (!jl_returnnode_value(expr)) {
+            // When an opaque closure is created from a typed IR, we have
+            // `unreachable` represented as a `ReturnNode(#undef)` that should
+            // be ignored here.
+            return expr;
+        }
         jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
         if (val != jl_returnnode_value(expr)) {
             JL_GC_PUSH1(&val);
