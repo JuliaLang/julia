@@ -1,6 +1,7 @@
 module TestTapir
 include("tapir_examples.jl")
 
+using InteractiveUtils
 using Test
 
 macro test_error(expr)
@@ -120,6 +121,12 @@ end
     @test e1 == KeyError(2)
     @test e2 isa TaskFailedException
     @test e2.task.result === KeyError(1)
+end
+
+@testset "tak" begin
+    @code_typed tak(5, 1, 5)  # expecting no error
+    @test @inferred(tak(5, 1, 5)) == 1
+    @test @inferred(tak(9, 1, 9)) == 1
 end
 
 end

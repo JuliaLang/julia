@@ -336,3 +336,19 @@ function tmap(f, xs; kw...)
         return ys
     end
 end
+
+# This triggered a bug in inference:
+tak(x, y, z) =
+    if y < x
+        a = Ref(0)
+        b = Ref(0)
+        local c
+        Tapir.@sync begin
+            Tapir.@spawn a[] = tak(x - 1, y, z)
+            Tapir.@spawn b[] = tak(y - 1, z, x)
+            c = tak(z - 1, x, y)
+        end
+        tak(a[], b[], c)
+    else
+        z
+    end
