@@ -33,7 +33,8 @@ steps:
 
       echo "--- Run Julia tests with code coverage enabled"
       # Run the actual tests
-      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_base.jl
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_parallel.jl
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_serial.jl
 
       echo "--- Process and upload coverage information"
       ./julia .buildkite/coverage-linux64/upload_coverage.jl

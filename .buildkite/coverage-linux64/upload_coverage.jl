@@ -2,6 +2,7 @@ empty!(Base.DEPOT_PATH)
 push!(Base.DEPOT_PATH, mktempdir(; cleanup = true))
 
 import Pkg
+import LibGit2
 import Logging
 import TOML
 
@@ -108,8 +109,20 @@ sort!(fcs; by = fc -> fc.filename)
 print_coverage_summary.(fcs);
 print_coverage_summary(fcs, "Total")
 
-# In order to upload to Codecov, you need to have the `CODECOV_TOKEN` environment variable defined.
-Coverage.Codecov.submit_local(fcs)
+let
+    # In order to upload to Codecov, you need to have the `CODECOV_TOKEN` environment variable defined.
+    Coverage.Codecov.submit_local(fcs)
+end
 
-# In order to upload to Coveralls, you need to have the `COVERALLS_TOKEN` environment variable defined.
-Coverage.Coveralls.submit_local(fcs)
+let
+    # In order to upload to Coveralls, you need to have the `COVERALLS_TOKEN` environment variable defined.
+    git_info = Coverage.Coveralls.query_git_info()
+    @info "" git_info
+    @info "" git_info["branch"]
+    if strip(git_info["branch"]) == "HEAD"
+        git_info["branch"] = String(strip(read(`git rev-parse --abbrev-ref HEAD`, String)))
+    end
+    @info "" git_info
+    @info "" git_info["branch"]
+    Coverage.Coveralls.submit_local(fcs, git_info)
+end
