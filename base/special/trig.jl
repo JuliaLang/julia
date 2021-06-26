@@ -526,8 +526,8 @@ function atan(x::T) where T<:Union{Float32, Float64}
         end
     end
     # end of argument reduction
-    p, q = atan_pq(x)
-    z = hi - (muladd(x, (p + q), - lo) - x)
+    p = atan_pq(x)
+    z = hi - (muladd(x, p, - lo) - x)
     copysign(z, x_orig)
 end
 # atan2 methods
@@ -579,7 +579,7 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
 		println((z,m))
 		m = 2 - (m&1)
     else #safe to do y/x
-        z = myatan(abs(y/x))
+        z = atan(abs(y/x))
     end
 
     if m == 1
