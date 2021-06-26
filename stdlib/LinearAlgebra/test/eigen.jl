@@ -190,7 +190,7 @@ end
     @test B isa Eigen{Float16, Float16, Matrix{Float16}, Vector{Float16}, Vector{Float16}}
     @test B.values isa Vector{Float16}
     @test B.vectors isa Matrix{Float16}
-    @test B.vectorsl is Matrix{Float16}
+    @test B.vectorsl isa Matrix{Float16}
     @test B.values ≈ B32.values
     @test B.vectors ≈ B32.vectors
     @test B.vectorsl ≈ B32.vectorsl
