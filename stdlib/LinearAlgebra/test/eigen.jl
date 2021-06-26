@@ -187,12 +187,21 @@ end
     @test B isa Eigen{Float16, Float16, Matrix{Float16}, Vector{Float16}, Vector{Float16}}
     @test B.values isa Vector{Float16}
     @test B.vectors isa Matrix{Float16}
+    @test B.rcondv isa Vector{Float16}
+    @test B.rconde isa Vector{Float16}
+    @test B.vectorsl isa Matrix{Float16}
     @test D isa Eigen{ComplexF16, ComplexF16, Matrix{ComplexF16}, Vector{ComplexF16}, Vector{Float16}}
     @test D.values isa Vector{ComplexF16}
     @test D.vectors isa Matrix{ComplexF16}
+    @test D.rcondv isa Vector{Float16}
+    @test D.rconde isa Vector{Float16}
+    @test D.vectorsl isa Matrix{ComplexF16}
     @test F isa Eigen{ComplexF16, ComplexF16, Matrix{ComplexF16}, Vector{ComplexF16}, Vector{Float16}}
     @test F.values isa Vector{ComplexF16}
     @test F.vectors isa Matrix{ComplexF16}
+    @test F.rcondv isa Vector{Float16}
+    @test F.rconde isa Vector{Float16}
+    @test F.vectorsl isa Matrix{ComplexF16}
 end
 
 end # module TestEigen
