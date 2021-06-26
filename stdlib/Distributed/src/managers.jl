@@ -413,7 +413,7 @@ end
 """
     addprocs(; kwargs...) -> List of process identifiers
 
-Equivalent to `addprocs(Sys.CPU_THREADS; kwargs...)` if processes have already not been launched,
+Equivalent to `addprocs(Sys.CPU_THREADS; kwargs...)` if processes have not been launched,
 otherwise it will add only the remaining processes to reach Sys.CPU_THREADS.
 
 Note that workers do not run a `.julia/config/startup.jl` startup script, nor do they synchronize
