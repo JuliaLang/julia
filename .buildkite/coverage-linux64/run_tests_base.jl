@@ -30,7 +30,8 @@ const ncores = min(Sys.CPU_THREADS, Threads.nthreads())
 @info "" ncores Sys.CPU_THREADS Threads.nthreads()
 
 try
-    Base.runtests(tests; ncores)
+    # Base.runtests(tests; ncores) # TODO: uncomment this line
+    Base.runtests(["compiler"]; ncores) # TODO: delete this line
 catch ex
     @error "" exception=(ex, catch_backtrace())
 end
