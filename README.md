@@ -5,14 +5,20 @@
 </a>
 </div>
 
+Documentation:
+[![version 1][docs-img]](https://docs.julialang.org)
+
 Code coverage:
 [![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
 [![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
 
-Documentation:
-[![version 1][docs-img]](https://docs.julialang.org)
+| Builder    | Status |
+| ---------- | ------ |
+| Overall    | [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master)](https://buildkite.com/julialang/julia) |
+| analyzegc  | [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master&step=analyzegc)](https://buildkite.com/julialang/julia) |
+| llvmpasses | [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master&step=llvmpasses)](https://buildkite.com/julialang/julia) |
+| coverage   | [![Build status](https://badge.buildkite.com/d5ae34dbbf6fefe615300c4f3118bf63cb4a5ae7fd962263c1.svg?branch=master)](https://buildkite.com/julialang/julia-coverage-linux64) |
 
-[appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
 [coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
 [codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
 [docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
