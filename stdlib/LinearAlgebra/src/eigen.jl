@@ -57,13 +57,6 @@ struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector,R<:AbstractVector} <: Facto
     Eigen{T,V,S,U,R}(values::AbstractVector{V}, vectors::AbstractMatrix{T}, vectorsl::AbstractMatrix{T}, unitary::Bool, rconde::R, rcondv::R) where {T,V,S,U,R} =
         new(values, vectors, vectorsl, unitary, rconde, rcondv)
 end
-Eigen{T}(F::Eigen) where {T} = Eigen(
-           convert(AbstractVector{T}, F.values),
-           convert(AbstractMatrix{T}, F.vectors),
-           convert(AbstractMatrix{T}, F.vectorsl),
-           F.unitary::Bool,
-           convert(AbstractVector{T}, F.rconde),
-           convert(AbstractVector{T}, F.rcondv))
 Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}, vectorsl=vectors, uni=true, rce=zeros(real(T),0), rcv=zeros(real(T), 0)) where {T,V} =
     Eigen{T,V,typeof(vectors),typeof(values),typeof(rce)}(values, vectors, vectorsl, uni, rce, rcv)
 
