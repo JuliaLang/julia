@@ -888,12 +888,8 @@ This pass exists for supporting SROA which can introduce new Phi nodes.
 function fixup_tapir_phi!(ir::IRCode)
     is_sequential(ir) && return ir
 
-    # Not calling `compact!(ir)` to avoid any DCE at this point. For example,
-    # constant propagation makes it very difficult to determine where we should
-    # initialize the memory.
-    # TODO: Check above comment; it could be stale.
-    ir = insert_new_nodes(ir)
-    @assert isempty(ir.new_nodes.stmts.inst)
+    # Flushing the new nodes, since we only look at `ir.stmts`:
+    ir = compact!(ir)
 
     upsilons = Vector{Vector{Any}}(undef, length(ir.stmts))
     for bb in ir.cfg.blocks
