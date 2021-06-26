@@ -282,8 +282,8 @@ function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     values = convert(AbstractVector{isreal(A.values) ? Float16 : Complex{Float16}}, A.values)
     vectors = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectors)
     vectorsl = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectorsl)
-    rconde = convert(Vector{isreal(A.rconde) ? Float16 : Complex{Float16}}, A.rconde)
-    rcondv = convert(Vector{isreal(A.rcondv) ? Float16 : Complex{Float16}}, A.rcondv)
+    rconde = convert(Vector{Float16}, A.rconde)
+    rcondv = convert(Vector{Float16}, A.rcondv)
     return Eigen(values, vectors, vectorsl, A.unitary, rconde, rcondv)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
