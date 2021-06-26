@@ -34,9 +34,6 @@ mutable struct UndefableRef{T}
     UndefableRef{T}() where {T} = new{T}(false)
 end
 
-@inline box(::Type{T}) where {T} = UndefableRef{T}()
-@noinline noinline_box(::Type{T}) where {T} = __UNDEFINED__::UndefableRef{T}
-
 function Base.setindex!(ref::UndefableRef, x)
     ref.x = x
     ref.set = true

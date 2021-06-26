@@ -2,8 +2,13 @@
 
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
-# TODO: add detach/reattach?
-isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
+isterminator(@nospecialize(stmt)) =
+    isa(stmt, GotoNode) ||
+    isa(stmt, GotoIfNot) ||
+    isa(stmt, ReturnNode) ||
+    isa(stmt, DetachNode) ||
+    isa(stmt, ReattachNode) ||
+    isa(stmt, SyncNode)
 
 struct CFG
     blocks::Vector{BasicBlock}

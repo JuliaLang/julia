@@ -315,7 +315,6 @@ function for_each_statement_in_each_block(bb_user, ir::IRCode)
         end
         (nni.pos, nni.attach_after)
     end
-    nn_offset = length(ir.stmts)
     hi = length(indices)
     lo::Int = 1
     for (ibb, bb) in enumerate(ir.cfg.blocks)
@@ -1105,7 +1104,6 @@ function outline_child_task(ir::IRCode, task::ChildTask)
     )
     # Due to `sort!(task.blocks)` in `child_tasks`, we should get sorted `cfg.index` here:
     @assert issorted(cfg.index)
-    types = Any[]
     meta = Any[]  # TODO: copy something from `ir.meta`?
     linetable = copy(ir.linetable)  # TODO: strip off?
     argtypes = Any[Any]  # ASK: what's the appropriate "self" type for the opaque closure?
@@ -1149,7 +1147,39 @@ function lower_tapir!(ir::IRCode)
     tasks = child_tasks(ir)
     isempty(tasks) && return ir
 
-    taskgroups = IdDict{Int,Any}()
+    # Lower each detach of child task to the call to `Tapir.spawn!`.  It also
+    # removes the detach edge to child.  That is to say, we transform
+    #
+    #     ...
+    #         %syncregion = Expr(:syncregion)
+    #         ...
+    #     #detacher
+    #         ...
+    #         detach within %syncregion, #child, #continuation
+    #     #child
+    #         $child_code
+    #         reattach within %syncregion, #continuation
+    #     #continuation
+    #     ...
+    #
+    # to
+    #
+    #     ...
+    #         %tg = Tapir.taskgroup()
+    #         ...
+    #     #detacher
+    #         ...
+    #         %oc = new_opaque_closure(%outlined_child_code, capture...)
+    #         Tapir.spawn!(%tg, %oc)
+    #         goto #continuation
+    #     #continuation
+    #     ...
+    #
+    # and then remove the detach edge from #detacher to #child.
+
+    # Mapping from syncregion to (the instruction that creates) a taskgroup:
+    taskgroups = IdDict{Int,SSAValue}()
+    # Mapping from syncregion to 3-tuple (original use position, type, ref SSA value):
     tobeloaded = IdDict{Int,Vector{Tuple{Int,Type,SSAValue}}}()
     for task in tasks
         det = ir.stmts.inst[task.detach]::DetachNode
@@ -1183,62 +1213,64 @@ function lower_tapir!(ir::IRCode)
         )
         oc = insert_node!(ir, task.detach, oc_inst)
         spawn_inst = NewInstruction(Expr(:call, Tapir.spawn!, tg, oc), Any)
-        sp = insert_node!(ir, task.detach, spawn_inst)
+        insert_node!(ir, task.detach, spawn_inst)
         ir.stmts.inst[task.detach] = GotoNode(det.reattach)
         cfg_delete_edge!(ir.cfg, block_for_inst(ir.cfg, task.detach), det.label)
-        # i.e., transform
-        #     %syncregion = Expr(:syncregion)
-        #     ...
-        #     detach within %syncregion, #child, #continuation
-        # to
-        #     %tg = Tapir.taskgroup()
-        #     ...
-        #     %oc = new_opaque_closure(%meth, capture...)
-        #     Tapir.spawn!(%tg, %oc)
-        #     goto #continuation
-        # and then remove the detach edge from this BB to #child.
-        #
-        # ASK: Is this a valid way to transform the CFG in Julia?
     end
     # TODO: handle `@sync @spawn @spawn ...` (currently, we are assuming that the
     # syncregion is not used in nested tasks)
 
+    # Covnert sync nodes to `Tapir.sync!`; i.e., transform
+    #
+    #     %tg = Tapir.taskgroup()
+    #     %syncregion = Expr(:syncregion)
+    #     ...
+    #     sync within %syncregion
+    #
+    # to
+    #
+    #     %tg = Tapir.taskgroup()
+    #     %syncregion = Expr(:syncregion)
+    #     ...
+    #     Tapir.sync!(%tg)
+    #
+    # Accumulate the information about where the task outputs should be loaded.
+
     # Vector of 4-tuple (sync! position, original use potision, type, ref SSA value):
     task_outputs = Tuple{Int,Int,Type,SSAValue}[]
-    for i in 1:length(ir.stmts)
-        inst = ir.stmts[i][:inst]
-        if inst isa SyncNode
-            syncregion = (inst.syncregion::SSAValue).id
-            tg = get(taskgroups, syncregion, nothing)
-            if tg !== nothing
-                sync_inst = NewInstruction(Expr(:call, Tapir.sync!, tg::SSAValue), Any)
-                insert_node!(ir, i, sync_inst)
-                next_bb = block_for_inst(ir.cfg, i + 1)
-                ir.stmts.inst[i] = GotoNode(next_bb)
-                # i.e., transform
-                #     %syncregion = Expr(:syncregion)
-                #     ...
-                #     sync within %syncregion
-                # to
-                #     %tg = Tapir.taskgroup()
-                #     ...
-                #     Tapir.sync!(%tg)
-                #     goto #next_bb
-                #
-                # Note: using the "noop" goto node to avoid changing the CFG
+    for bb in ir.cfg.blocks
+        isync = last(bb.stmts)
+        sync = ir.stmts[isync][:inst]
+        sync isa SyncNode || continue
+        syncregion = (sync.syncregion::SSAValue).id
+        tg = get(taskgroups, syncregion, nothing)
+        tg === nothing && continue  # ignore syncregion of child tasks
 
-                tbl = get(tobeloaded, syncregion, nothing)
-                if tbl !== nothing
-                    for (iout, T, ref) in tbl
-                        push!(task_outputs, (i, iout, T, ref))
-                    end
-                end
+        sync_inst = NewInstruction(Expr(:call, Tapir.sync!, tg::SSAValue), Any)
+        insert_node!(ir, isync, sync_inst)
+        next_bb = block_for_inst(ir.cfg, isync + 1)
+        ir.stmts.inst[isync] = GotoNode(next_bb)
+
+        tbl = get(tobeloaded, syncregion, nothing)
+        if tbl !== nothing
+            for (iout, T, ref) in tbl
+                push!(task_outputs, (isync, iout, T, ref))
             end
         end
     end
-    sort!(task_outputs, by = first)
 
-    # Insert checks if the task output is assigned before each uses:
+    # Insert checks if the task output is assigned; i.e., insert branches after
+    # `Tapir.sync!(%tg)`:
+    #
+    #     ...
+    #         Tapir.sync!(%tg)
+    #         %isset = ref.set
+    #         goto #anycase if not %isset
+    #     #found
+    #         %load = ref.x
+    #     #anycase
+    #     ...
+    #
     undef_checks = allocate_gotoifnot_sequence!(ir, map(first, task_outputs))
     original_outputs = BitSet()
     output_value = zeros(Int, length(ir.stmts))
@@ -1269,6 +1301,20 @@ function lower_tapir!(ir::IRCode)
         push!(original_outputs, iout)
     end
 
+    # Fixup PhiC nodes that refer to upsilon nodes in child tasks (in the
+    # original IR); i.e., transform
+    #
+    #     %phic = φᶜ(%original_upsilon, ...)
+    #
+    # to
+    #
+    #     %phic = φᶜ(%upsilon, ...)
+    #
+    # where `%upsilon` is the node newly added just after loading the task
+    # output (see above)
+    #
+    #     %load = ref.x
+    #     %upsilon = ϒ(%load)
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
         replaced = RefValue(false)
@@ -1285,12 +1331,9 @@ function lower_tapir!(ir::IRCode)
                         return insert_node!(ir, ipos, newinst, ipos == oid)
                     else
                         # If the original use is not PhiC, it was used
-                        # unconditionally. Thus, we load the value
-                        # unconditionally. The place we used for loading `ref.set`
-                        #
-                        # This "non-PhiC" branch exists for supporting SROA. But
-                        # maybe it's better to lower Phi nodes introduced by
-                        # SROA to PhiC?
+                        # unconditionally; thus, we always load the value.
+                        println(stderr, "** tapir: icnomplte concversion to PhiC/Upsilon **")
+                        # TODO: turn this into a proper verification pass
                         newinst = NewInstruction(load[:inst], load[:type])
                         return insert_node!(ir, insert_pos(ir, output_isset[v.id]), newinst)
                     end
@@ -1301,13 +1344,6 @@ function lower_tapir!(ir::IRCode)
         if replaced.x
             stmt[:inst] = user
         end
-    end
-
-    for i in ir.cfg.blocks[1].stmts
-        stmt = ir.stmts[i]
-        inst = stmt[:inst]
-        isexpr(inst, :invoke) && inst.args[2] === Tapir.noinline_box || continue
-        stmt[:inst] = Expr(:call, Tapir.box, inst.args[3])
     end
 
     # TODO: remove redundant PhiC and Upsilon nodes
