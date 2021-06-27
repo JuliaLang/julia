@@ -1829,8 +1829,8 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *logstate;
     jl_function_t *start;
+    uint16_t sticky; // 0 means this Task can be migrated to a new thread
     uint8_t _state;
-    uint8_t sticky; // record whether this Task can be migrated to a new thread
     uint8_t _isexception; // set if `result` is an exception to throw or that we exited with
     uint64_t rngState0; // really rngState[4], but more convenient to split
     uint64_t rngState1;
