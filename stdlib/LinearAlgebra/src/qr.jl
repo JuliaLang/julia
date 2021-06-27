@@ -156,7 +156,9 @@ function Base.:(==)(A::QRCompactWY, B::QRCompactWY)
     return A.factors == B.factors && all(splat(==), zip(_triuppers_qr.((A.T, B.T))...))
 end
 function Base.isequal(A::QRCompactWY, B::QRCompactWY)
-    return isequal(A.factors, B.factors) && all(splat(isequal), zip(_triuppers_qr.((A.T, B.T))...))
+    return isequal(A.factors, B.factors) && all(zip(_triuppers_qr.((A.T, B.T))...)) do (a, b)
+        isequal(a, b)::Bool
+    end
 end
 
 """
