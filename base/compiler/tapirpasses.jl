@@ -1228,7 +1228,6 @@ function lower_tapir!(ir::IRCode)
     tobeloaded = IdDict{Int,Vector{Tuple{Type,SSAValue}}}()
     for task in tasks
         det = ir.stmts.inst[task.detach]::DetachNode
-        # ASK: Can we always assume `syncregion` is an SSAValue?
         syncregion = (det.syncregion::SSAValue).id
         tg = get!(taskgroups, syncregion) do
             tg_inst = NewInstruction(Expr(:call, Tapir.taskgroup), Tapir.TaskGroup)

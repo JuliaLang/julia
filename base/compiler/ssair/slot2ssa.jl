@@ -136,14 +136,25 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
         end
         return stmt
     end
-    if isa(stmt, DetachNode)
-        return DetachNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion), stmt.label, stmt.reattach)
-    end
-    if isa(stmt, ReattachNode)
-        return ReattachNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion), stmt.label)
-    end
-    if isa(stmt, SyncNode)
-        return SyncNode(fixemup!(cond, rename, ir, ci, idx, stmt.syncregion))
+    if isa(stmt, Union{DetachNode, ReattachNode, SyncNode})
+        x = fixemup!(cond, rename, ir, ci, idx, stmt.syncregion)
+        if x === undef_token
+            # `syncregion` can become undef at this point if the sub-CFG
+            # containing detaches etc. is already determined to be unreachable.
+            # Instead of removing the statement, we use goto nodes for
+            # preserving the CFG (i.e., serial projection).
+            isa(stmt, DetachNode) && return GotoIfNot(false, stmt.reattach)
+            isa(stmt, ReattachNode) && return GotoNode(stmt.label)
+            isa(stmt, SyncNode) && return nothing  # fallthrough
+            # TODO: Remove the detach edge `.label` from DetachNode. This is for
+            # avoiding incorrect serial projection using `GotoIfNot`.
+            # stmt.detach can be, in principle, not the next BB.
+        else
+            isa(stmt, DetachNode) && return DetachNode(x, stmt.label, stmt.reattach)
+            isa(stmt, ReattachNode) && return ReattachNode(x, stmt.label)
+            isa(stmt, SyncNode) && return SyncNode(x)
+        end
+        @assert false # unreachable
     end
     if isexpr(stmt, :isdefined)
         val = stmt.args[1]

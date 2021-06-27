@@ -129,4 +129,18 @@ end
     @test @inferred(tak(9, 1, 9)) == 1
 end
 
+@noinline consume(x) = (global SINK = x; nothing)
+
+function unreachable_spawn()
+    if false
+        Tapir.@sync begin
+            Tapir.@spawn nothing
+        end
+    end
+end
+
+@testset "unreachable spawn" begin
+    @test unreachable_spawn() === nothing
+end
+
 end
