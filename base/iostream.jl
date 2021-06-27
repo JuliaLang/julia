@@ -442,7 +442,7 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
 end
 
 function readline(s::IOStream; keep::Bool=false; msg::String="")
-    if !isempty(str) 
+    if !isempty(strip(s)) 
         println(msg) 
     end
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
