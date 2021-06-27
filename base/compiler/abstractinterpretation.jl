@@ -1162,7 +1162,7 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     argtypes′ = argtypes[4:end]
     const_prop_argument_heuristic(interp, argtypes′) || const_prop_rettype_heuristic(interp, rt) || return CallMeta(rt, InvokeCallInfo(match, nothing))
     pushfirst!(argtypes′, ft)
-    # # typeintersect might have narrowed signature
+    # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons
     # for i in 1:length(argtypes′)
     #     t, a = ti.parameters[i], argtypes′[i]
     #     argtypes′[i] = t ⊑ a ? t : a
