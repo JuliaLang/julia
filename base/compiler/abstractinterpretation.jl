@@ -1157,7 +1157,8 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     match = MethodMatch(ti, env, method, argtype <: method.sig)
-    # try constant propagation with early take-in of the heuristics -- since constuctions below seem to be a bit costly
+    # try constant propagation with manual inlinings of some of the heuristics
+    # since some checks within `abstract_call_method_with_const_args` seem a bit costly
     const_prop_entry_heuristic(interp, result, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
     argtypes′ = argtypes[4:end]
     const_prop_argument_heuristic(interp, argtypes′) || const_prop_rettype_heuristic(interp, rt) || return CallMeta(rt, InvokeCallInfo(match, nothing))
