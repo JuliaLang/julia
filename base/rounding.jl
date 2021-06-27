@@ -37,7 +37,7 @@ Currently supported rounding modes are:
 - [`RoundNearestTiesAway`](@ref)
 - [`RoundNearestTiesUp`](@ref)
 - [`RoundToZero`](@ref)
-- [`RoundFromZero`](@ref) ([`BigFloat`](@ref) only)
+- [`RoundFromZero`](@ref)
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
 """
@@ -76,7 +76,6 @@ const RoundDown = RoundingMode{:Down}()
     RoundFromZero
 
 Rounds away from zero.
-This rounding mode may only be used with `T == BigFloat` inputs to [`round`](@ref).
 
 # Examples
 ```jldoctest
