@@ -42,4 +42,19 @@ using Test, LinearAlgebra
     @test hash(F) == hash(G)
 end
 
+@testset "equality of QRCompactWY" begin
+    A = rand(100, 100)
+    F, G = qr(A), qr(A)
+
+    @test F == G
+    @test isequal(F, G)
+    @test hash(F) == hash(G)
+
+    G.T[28, 100] = 42
+
+    @test F != G
+    @test !isequal(F, G)
+    @test hash(F) != hash(G)
+end
+
 end
