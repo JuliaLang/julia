@@ -284,13 +284,13 @@ true
 ```
 """
 function _isapprox(x::Number, y::Number;
-                  abstol::Real=0, reltol::Real=reltoldefault(x,y,abstol),
+                  abstol::Real=0, reltol::Real=rtoldefault(x,y,abstol),
                   nans::Bool=false, norm::Function=abs)
     x == y || (isfinite(x) && isfinite(y) && norm(x-y) <= max(abstol, reltol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
 end
 
 function isapprox(x::Number, y::Number;
-                 rtol=nothing, atol=nothing, abstol::Real=0, reltol::Real=reltoldefault(x,y,abstol),
+                 rtol=nothing, atol=nothing, abstol::Real=0, reltol::Real=rtoldefault(x,y,abstol),
                  nans::Bool=false, norm::Function=abs)
     flag = false
     if rtol != nothing
@@ -334,10 +334,10 @@ This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
 ≉(args...; kws...) = !≈(args...; kws...)
 
 # default tolerance arguments
-reltoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
-reltoldefault(::Type{<:Real}) = 0
-function reltoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, abstol::Real) where {T<:Number,S<:Number}
-    reltol = max(reltoldefault(real(T)),reltoldefault(real(S)))
+rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
+rtoldefault(::Type{<:Real}) = 0
+function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, abstol::Real) where {T<:Number,S<:Number}
+    reltol = max(rtoldefault(real(T)),rtoldefault(real(S)))
     return abstol > 0 ? zero(reltol) : reltol
 end
 

@@ -1701,7 +1701,7 @@ promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_elt
 # `a ≈ a` is `true`.
 function isapprox(x::AbstractArray, y::AbstractArray;
     abstol::Real=0,
-    reltol::Real=Base.reltoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y),abstol),
+    reltol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y),abstol),
     nans::Bool=false, norm::Function=norm)
     d = norm(x - y)
     if isfinite(d)
