@@ -269,9 +269,9 @@ let s = "|η(α)-ϕ(κ)| < ε"
 end
 
 @testset "reverseind" for T in (String, SubString, GenericString)
-    for prefix in ("", "abcd", "\U01d6a4\U01d4c1", "\U01d6a4\U01d4c1c", " \U01d6a4\U01d4c1")
-        for suffix in ("", "abcde", "\U01d4c1β\U01d6a4", "\U01d4c1β\U01d6a4c", " \U01d4c1β\U01d6a4")
-            for c in ('X', 'δ', '\U01d6a5')
+    for prefix in ("", "abcd", "\U0001d6a4\U0001d4c1", "\U0001d6a4\U0001d4c1c", " \U0001d6a4\U0001d4c1")
+        for suffix in ("", "abcde", "\U0001d4c1β\U0001d6a4", "\U0001d4c1β\U0001d6a4c", " \U0001d4c1β\U0001d6a4")
+            for c in ('X', 'δ', '\U0001d6a5')
                 s = convert(T, string(prefix, c, suffix))
                 r = reverse(s)
                 ri = findfirst(isequal(c), r)
@@ -286,6 +286,20 @@ end
             end
         end
     end
+end
+
+# issue 41365 - breaking change
+@testset "unicode U-sequences" begin
+    @test "\U10ABCDEF" == '\U10ABCD' * "EF"
+    @test "\U010ABCDEF" == '\U10ABC' * "DEF"
+    @test "\U0010ABCDEF" == '\U10ABCD' * "EF"
+    @test "\U01F300A" == '\U01F300' * "A"
+    @test_throws Base.Meta.ParseError("invalid escape sequence") Meta.parse("\"\\U1F300A\"")
+    @test "\U10ABCXYZ" == '\U10ABC' * "XYZ"
+    @test "\U010ABCXYZ" == '\U10ABC' * "XYZ"
+    @test "\U0010ABCXYZ" == '\U10ABC' * "XYZ"
+    @test "\U01F300X" == '\U01F300' * "X"
+    @test "\U1F300X" == '\U01F300' * "X"
 end
 
 @testset "reverseind of empty strings" begin
