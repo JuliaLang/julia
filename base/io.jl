@@ -499,13 +499,19 @@ julia> readline("my_file.txt", keep=true)
 julia> rm("my_file.txt")
 ```
 """
-function readline(filename::AbstractString; keep::Bool=false)
+function readline(filename::AbstractString; keep::Bool=false; msg::String="")
+    if !isEmpty(strip(msg))
+        println(msg)
+    end
     open(filename) do f
         readline(f, keep=keep)
     end
 end
 
-function readline(s::IO=stdin; keep::Bool=false)
+function readline(s::IO=stdin; keep::Bool=false; msg::String="")
+    if !isEmpty(strip(msg))
+        println(msg)
+    end
     line = readuntil(s, 0x0a, keep=true)::Vector{UInt8}
     i = length(line)
     if keep || i == 0 || line[i] != 0x0a
@@ -545,7 +551,10 @@ julia> readlines("my_file.txt", keep=true)
 julia> rm("my_file.txt")
 ```
 """
-function readlines(filename::AbstractString; kw...)
+function readlines(filename::AbstractString; kw...; msg::String="")
+    if !isEmpty(strip(msg))
+        println(msg)
+    end
     open(filename) do f
         readlines(f; kw...)
     end
