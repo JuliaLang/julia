@@ -184,9 +184,8 @@ end
     C = Float16[3 -2; 4 -1]
     D = eigen(C)
     D32 = eigen(Float32.(C))
-    E = complex(C)
-    F = eigen(E)
-    F32 = eigen(Float32.(E))
+    F = eigen(complex(C))
+    F32 = eigen(complex(Float32.(C)))
     @test B isa Eigen{Float16, Float16, Matrix{Float16}, Vector{Float16}, Vector{Float16}}
     @test B.values isa Vector{Float16}
     @test B.vectors isa Matrix{Float16}
