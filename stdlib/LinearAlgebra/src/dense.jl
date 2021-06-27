@@ -795,9 +795,9 @@ that is the unique matrix ``X`` with eigenvalues having positive real part such 
 If `A` is real-symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used to compute the square root.   For such matrices, eigenvalues λ that
 appear to be slightly negative due to roundoff errors are treated as if they were zero
-More precisely, matrices with all eigenvalues `≥ -rtol*(max |λ|)` are treated as semidefinite
+More precisely, matrices with all eigenvalues `≥ -reltol*(max |λ|)` are treated as semidefinite
 (yielding a Hermitian square root), with negative eigenvalues taken to be zero.
-`rtol` is a keyword argument to `sqrt` (in the Hermitian/real-symmetric case only) that
+`reltol` is a keyword argument to `sqrt` (in the Hermitian/real-symmetric case only) that
 defaults to machine precision scaled by `size(A,1)`.
 
 Otherwise, the square root is determined by means of the
@@ -1377,22 +1377,22 @@ factorize(A::Transpose) = transpose(factorize(parent(A)))
 ## Moore-Penrose pseudoinverse
 
 """
-    pinv(M; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
-    pinv(M, rtol::Real) = pinv(M; rtol=rtol) # to be deprecated in Julia 2.0
+    pinv(M; abstol::Real=0, reltol::Real=abstol>0 ? 0 : n*ϵ)
+    pinv(M, reltol::Real) = pinv(M; reltol=reltol) # to be deprecated in Julia 2.0
 
 Computes the Moore-Penrose pseudoinverse.
 
 For matrices `M` with floating point elements, it is convenient to compute
 the pseudoinverse by inverting only singular values greater than
-`max(atol, rtol*σ₁)` where `σ₁` is the largest singular value of `M`.
+`max(abstol, reltol*σ₁)` where `σ₁` is the largest singular value of `M`.
 
-The optimal choice of absolute (`atol`) and relative tolerance (`rtol`) varies
+The optimal choice of absolute (`abstol`) and relative tolerance (`reltol`) varies
 both with the value of `M` and the intended application of the pseudoinverse.
 The default relative tolerance is `n*ϵ`, where `n` is the size of the smallest
 dimension of `M`, and `ϵ` is the [`eps`](@ref) of the element type of `M`.
 
 For inverting dense ill-conditioned matrices in a least-squares sense,
-`rtol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
+`reltol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
@@ -1422,7 +1422,7 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
-function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(float(one(T))))*min(size(A)...))*iszero(atol)) where T
+function pinv(A::AbstractMatrix{T}; abstol::Real = 0.0, reltol::Real = (eps(real(float(one(T))))*min(size(A)...))*iszero(abstol)) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
@@ -1432,13 +1432,13 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         ind = diagind(A)
         dA = view(A, ind)
         maxabsA = maximum(abs, dA)
-        tol = max(rtol * maxabsA, atol)
+        tol = max(reltol * maxabsA, abstol)
         B = fill!(similar(A, Tout, (n, m)), 0)
         B[ind] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
         return B
     end
     SVD         = svd(A)
-    tol         = max(rtol*maximum(SVD.S), atol)
+    tol         = max(reltol*maximum(SVD.S), abstol)
     Stype       = eltype(SVD.S)
     Sinv        = fill!(similar(A, Stype, length(SVD.S)), 0)
     index       = SVD.S .> tol
@@ -1453,14 +1453,14 @@ end
 ## Basis for null space
 
 """
-    nullspace(M; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
-    nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
+    nullspace(M; abstol::Real=0, reltol::Real=abstol>0 ? 0 : n*ϵ)
+    nullspace(M, reltol::Real) = nullspace(M; reltol=reltol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of `M` whose singular values have magnitudes greater than `max(atol, rtol*σ₁)`,
+vectors of `M` whose singular values have magnitudes greater than `max(abstol, reltol*σ₁)`,
 where `σ₁` is `M`'s largest singular value.
 
-By default, the relative tolerance `rtol` is `n*ϵ`, where `n`
+By default, the relative tolerance `reltol` is `n*ϵ`, where `n`
 is the size of the smallest dimension of `M`, and `ϵ` is the [`eps`](@ref) of
 the element type of `M`.
 
@@ -1478,24 +1478,24 @@ julia> nullspace(M)
  0.0
  1.0
 
-julia> nullspace(M, rtol=3)
+julia> nullspace(M, reltol=3)
 3×3 Matrix{Float64}:
  0.0  1.0  0.0
  1.0  0.0  0.0
  0.0  0.0  1.0
 
-julia> nullspace(M, atol=0.95)
+julia> nullspace(M, abstol=0.95)
 3×1 Matrix{Float64}:
  0.0
  0.0
  1.0
 ```
 """
-function nullspace(A::AbstractVecOrMat; atol::Real = 0.0, rtol::Real = (min(size(A, 1), size(A, 2))*eps(real(float(one(eltype(A))))))*iszero(atol))
+function nullspace(A::AbstractVecOrMat; abstol::Real = 0.0, reltol::Real = (min(size(A, 1), size(A, 2))*eps(real(float(one(eltype(A))))))*iszero(abstol))
     m, n = size(A, 1), size(A, 2)
     (m == 0 || n == 0) && return Matrix{eigtype(eltype(A))}(I, n, n)
     SVD = svd(A; full=true)
-    tol = max(atol, SVD.S[1]*rtol)
+    tol = max(abstol, SVD.S[1]*reltol)
     indstart = sum(s -> s .> tol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end

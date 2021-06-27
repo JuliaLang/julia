@@ -208,13 +208,13 @@ Test Failed at none:1
    Evaluated: 1 ≈ 0.999999
 ERROR: There was an error during testing
 ```
-You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
+You can specify relative and absolute tolerances by setting the `reltol` and `abstol` keyword arguments of `isapprox`, respectively,
 after the `≈` comparison:
 ```jldoctest
-julia> @test 1 ≈ 0.999999  rtol=1e-5
+julia> @test 1 ≈ 0.999999  reltol=1e-5
 Test Passed
-  Expression: ≈(1, 0.999999, rtol = 1.0e-5)
-   Evaluated: ≈(1, 0.999999; rtol = 1.0e-5)
+  Expression: ≈(1, 0.999999, reltol = 1.0e-5)
+   Evaluated: ≈(1, 0.999999; reltol = 1.0e-5)
 ```
 Note that this is not a specific feature of the `≈` but rather a general feature of the `@test` macro: `@test a <op> b key=val` is transformed by the macro into `@test op(a, b, key=val)`. It is, however, particularly useful for `≈` tests.
 

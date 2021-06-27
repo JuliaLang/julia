@@ -971,19 +971,19 @@ dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(d
 ###########################################################################################
 
 """
-    rank(A::AbstractMatrix; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
-    rank(A::AbstractMatrix, rtol::Real)
+    rank(A::AbstractMatrix; abstol::Real=0, reltol::Real=abstol>0 ? 0 : n*ϵ)
+    rank(A::AbstractMatrix, reltol::Real)
 
 Compute the rank of a matrix by counting how many singular
-values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
-`A`'s largest singular value. `atol` and `rtol` are the absolute and relative
+values of `A` have magnitude greater than `max(abstol, reltol*σ₁)` where `σ₁` is
+`A`'s largest singular value. `abstol` and `reltol` are the absolute and relative
 tolerances, respectively. The default relative tolerance is `n*ϵ`, where `n`
 is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
 the element type of `A`.
 
 !!! compat "Julia 1.1"
-    The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
-    In Julia 1.0 `rtol` is available as a positional argument, but this
+    The `abstol` and `reltol` keyword arguments requires at least Julia 1.1.
+    In Julia 1.0 `reltol` is available as a positional argument, but this
     will be deprecated in Julia 2.0.
 
 # Examples
@@ -994,20 +994,20 @@ julia> rank(Matrix(I, 3, 3))
 julia> rank(diagm(0 => [1, 0, 2]))
 2
 
-julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.1)
+julia> rank(diagm(0 => [1, 0.001, 2]), reltol=0.1)
 2
 
-julia> rank(diagm(0 => [1, 0.001, 2]), rtol=0.00001)
+julia> rank(diagm(0 => [1, 0.001, 2]), reltol=0.00001)
 3
 
-julia> rank(diagm(0 => [1, 0.001, 2]), atol=1.5)
+julia> rank(diagm(0 => [1, 0.001, 2]), abstol=1.5)
 1
 ```
 """
-function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
+function rank(A::AbstractMatrix; abstol::Real = 0.0, reltol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(abstol))
     isempty(A) && return 0 # 0-dimensional case
     s = svdvals(A)
-    tol = max(atol, rtol*s[1])
+    tol = max(abstol, reltol*s[1])
     count(x -> x > tol, s)
 end
 rank(x::Number) = x == 0 ? 0 : 1
@@ -1700,15 +1700,15 @@ promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_elt
 # Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
 # `a ≈ a` is `true`.
 function isapprox(x::AbstractArray, y::AbstractArray;
-    atol::Real=0,
-    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y),atol),
+    abstol::Real=0,
+    reltol::Real=Base.reltoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y),abstol),
     nans::Bool=false, norm::Function=norm)
     d = norm(x - y)
     if isfinite(d)
-        return d <= max(atol, rtol*max(norm(x), norm(y)))
+        return d <= max(abstol, reltol*max(norm(x), norm(y)))
     else
         # Fall back to a component-wise approximate comparison
-        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
+        return all(ab -> isapprox(ab[1], ab[2]; reltol=reltol, abstol=abstol, nans=nans), zip(x, y))
     end
 end
 

@@ -223,18 +223,18 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
+    isapprox(x, y; abstol::Real=0, reltol::Real=abstol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
 
 Inexact equality comparison. Two numbers compare equal if their relative distance *or* their
 absolute distance is within tolerance bounds: `isapprox` returns `true` if
-`norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The default `atol` is zero and the
-default `rtol` depends on the types of `x` and `y`. The keyword argument `nans` determines
+`norm(x-y) <= max(abstol, reltol*max(norm(x), norm(y)))`. The default `abstol` is zero and the
+default `reltol` depends on the types of `x` and `y`. The keyword argument `nans` determines
 whether or not NaN values are considered equal (defaults to false).
 
-For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to
+For real or complex floating-point values, if an `abstol > 0` is not specified, `reltol` defaults to
 the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
-e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
+e.g. for integer arguments or if an `abstol > 0` is supplied, `reltol` defaults to zero.
 
 The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for
 arrays (where an alternative `norm` choice is sometimes useful).
@@ -246,11 +246,11 @@ The binary operator `≈` is equivalent to `isapprox` with the default arguments
 is equivalent to `!isapprox(x,y)`.
 
 Note that `x ≈ 0` (i.e., comparing to zero with the default tolerances) is
-equivalent to `x == 0` since the default `atol` is `0`.  In such cases, you should either
-supply an appropriate `atol` (or use `norm(x) ≤ atol`) or rearrange your code (e.g.
-use `x ≈ y` rather than `x - y ≈ 0`).   It is not possible to pick a nonzero `atol`
+equivalent to `x == 0` since the default `abstol` is `0`.  In such cases, you should either
+supply an appropriate `abstol` (or use `norm(x) ≤ abstol`) or rearrange your code (e.g.
+use `x ≈ y` rather than `x - y ≈ 0`).   It is not possible to pick a nonzero `abstol`
 automatically because it depends on the overall scaling (the "units") of your problem:
-for example, in `x - y ≈ 0`, `atol=1e-9` is an absurdly small tolerance if `x` is the
+for example, in `x - y ≈ 0`, `abstol=1e-9` is an absurdly small tolerance if `x` is the
 [radius of the Earth](https://en.wikipedia.org/wiki/Earth_radius) in meters,
 but an absurdly large tolerance if `x` is the
 [radius of a Hydrogen atom](https://en.wikipedia.org/wiki/Bohr_radius) in meters.
@@ -261,13 +261,13 @@ but an absurdly large tolerance if `x` is the
 
 # Examples
 ```jldoctest
-julia> isapprox(0.1, 0.15; atol=0.05)
+julia> isapprox(0.1, 0.15; abstol=0.05)
 true
 
-julia> isapprox(0.1, 0.15; rtol=0.34)
+julia> isapprox(0.1, 0.15; reltol=0.34)
 true
 
-julia> isapprox(0.1, 0.15; rtol=0.33)
+julia> isapprox(0.1, 0.15; reltol=0.33)
 false
 
 julia> 0.1 + 1e-10 ≈ 0.1
@@ -276,17 +276,41 @@ true
 julia> 1e-10 ≈ 0
 false
 
-julia> isapprox(1e-10, 0, atol=1e-8)
+julia> isapprox(1e-10, 0, abstol=1e-8)
 true
 
 julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0]) # using `norm`
 true
 ```
 """
-function isapprox(x::Number, y::Number;
-                  atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
+function _isapprox(x::Number, y::Number;
+                  abstol::Real=0, reltol::Real=reltoldefault(x,y,abstol),
                   nans::Bool=false, norm::Function=abs)
-    x == y || (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
+    x == y || (isfinite(x) && isfinite(y) && norm(x-y) <= max(abstol, reltol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
+end
+
+function isapprox(x::Number, y::Number;
+                 rtol=nothing, atol=nothing, abstol::Real=0, reltol::Real=reltoldefault(x,y,abstol),
+                 nans::Bool=false, norm::Function=abs)
+    flag = false
+    if rtol != nothing
+        flag = true
+        _rtol = rtol
+    else
+        _rtol = reltol
+    end
+
+    if atol != nothing
+        flag = true
+        _atol = atol
+    else
+        _atol = abstol
+    end
+
+    if flag
+        depwarn("isapprox(x, y; atol=tol, rtol=tol) should be replaced with isapprox(x, y; abstol=tol, reltol=tol)", :isapprox; force = true)
+    end
+    return _isapprox(x, y; abstol=_atol, reltol=_rtol)
 end
 
 """
@@ -310,11 +334,11 @@ This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
 ≉(args...; kws...) = !≈(args...; kws...)
 
 # default tolerance arguments
-rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
-rtoldefault(::Type{<:Real}) = 0
-function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where {T<:Number,S<:Number}
-    rtol = max(rtoldefault(real(T)),rtoldefault(real(S)))
-    return atol > 0 ? zero(rtol) : rtol
+reltoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
+reltoldefault(::Type{<:Real}) = 0
+function reltoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, abstol::Real) where {T<:Number,S<:Number}
+    reltol = max(reltoldefault(real(T)),reltoldefault(real(S)))
+    return abstol > 0 ? zero(reltol) : reltol
 end
 
 # fused multiply-add
