@@ -970,7 +970,7 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
 end
 function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
-    return T[@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
+    return [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
 end
 
 ### from abstractarray.jl
