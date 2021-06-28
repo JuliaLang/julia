@@ -37,8 +37,13 @@ using Test, LinearAlgebra
         return x isa AbstractArray{Float64} ? Float64.(Float32.(x)) : x
     end...)
 
-    @test F == G broken=!(f === eigen || f === qr)
-    @test isequal(F, G) broken=!(f === eigen || f === qr)
+    if f === eigen || f === qr
+        @test F == G
+        @test isequal(F, G)
+    else
+        @test_broken F == G
+        @test_broken isequal(F, G)
+    end
     @test hash(F) == hash(G)
 end
 
