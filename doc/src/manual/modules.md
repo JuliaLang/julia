@@ -122,10 +122,13 @@ definition in the current module, the system will search for it among variables 
 and use it if it is found there. This means that all uses of that global within the current
 module will resolve to the definition of that variable in `ModuleName`.
 
+To loading a module from a package, the statement `using ModuleName` can be used.
+To loading a module from a locally defined module, a dot needs to be added before the module name like `using .ModuleName`.
+
 To continue with our example,
 
 ```julia
-using NiceStuff
+using .NiceStuff
 ```
 
 would load the above code, making `NiceStuff` (the module name), `DOG` and `nice` available. `Dog` is not on the export list, but it can be accessed if the name is qualified with the module path (which here is just the module name) as `NiceStuff.Dog`.
@@ -135,11 +138,11 @@ Importantly, **`using ModuleName` is the only form for which export lists matter
 In contrast,
 
 ```julia
-import NiceStuff
+import .NiceStuff
 ```
 
 brings *only* the module name into scope. Users would need to use `NiceStuff.DOG`, `NiceStuff.Dog`, and `NiceStuff.nice` to access its contents. Usually, `import ModuleName` is used in contexts when the user wants to keep the namespace clean.
-As we will see in the next section `import NiceStuff` is equivalent to `using NiceStuff: NiceStuff`.
+As we will see in the next section `import .NiceStuff` is equivalent to `using .NiceStuff: NiceStuff`.
 
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
@@ -152,14 +155,14 @@ using LinearAlgebra, Statistics
 When `using ModuleName:` or `import ModuleName:` is followed by a comma-separated list of names, the module is loaded, but *only those specific names are brought into the namespace* by the statement. For example,
 
 ```julia
-using NiceStuff: nice, DOG
+using .NiceStuff: nice, DOG
 ```
 
 will import the names `nice` and `DOG`.
 
 Importantly, the module name `NiceStuff` will *not* be in the namespace. If you want to make it accessible, you have to list it explicitly, as
 ```julia
-using NiceStuff: nice, DOG, NiceStuff
+using .NiceStuff: nice, DOG, NiceStuff
 ```
 
 Julia has two forms for seemingly the same thing because only `import ModuleName: f` allows adding methods to `f`
@@ -167,7 +170,7 @@ Julia has two forms for seemingly the same thing because only `import ModuleName
 That is to say, the following example will give an error:
 
 ```julia
-using NiceStuff: nice
+using .NiceStuff: nice
 struct Cat end
 nice(::Cat) = "nice 😸"
 ```
@@ -176,14 +179,14 @@ This error prevents accidentally adding methods to functions in other modules th
 
 There are two ways to deal with this. You can always qualify function names with a module path:
 ```julia
-using NiceStuff
+using .NiceStuff
 struct Cat end
 NiceStuff.nice(::Cat) = "nice 😸"
 ```
 
 Alternatively, you can `import` the specific function name:
 ```julia
-import NiceStuff: nice
+import .NiceStuff: nice
 struct Cat end
 nice(::Cat) = "nice 😸"
 ```
@@ -234,8 +237,8 @@ When multiple `using` or `import` statements of any of the forms above are used,
 For example,
 
 ```julia
-using NiceStuff         # exported names and the module name
-import NiceStuff: nice  # allows adding methods to unqualified functions
+using .NiceStuff         # exported names and the module name
+import .NiceStuff: nice  # allows adding methods to unqualified functions
 ```
 
 would bring all the exported names of `NiceStuff` and the module name itself into scope, and also
@@ -257,7 +260,7 @@ f() = 2
 end
 ```
 
-The statement `using A, B` works, but when you try to call `f`, you get a warning
+The statement `using .A, .B` works, but when you try to call `f`, you get a warning
 
 ```julia
 WARNING: both B and A export "f"; uses of it in module Main must be qualified
@@ -271,8 +274,8 @@ Here, Julia cannot decide which `f` you are referring to, so you have to make a 
 2. Use the `as` keyword above to rename one or both identifiers, eg
 
    ```julia
-   using A: f as f
-   using B: f as g
+   using .A: f as f
+   using .B: f as g
    ```
 
    would make `B.f` available as `g`. Here, we are assuming that you did not use `using A` before,
@@ -353,7 +356,7 @@ end
 
 You may see code in packages, which, in a similar situation, uses
 ```julia
-import ParentModule.SubA: add_D
+import .ParentModule.SubA: add_D
 ```
 However, this operates through [code loading](@ref code-loading), and thus only works if `ParentModule` is in a package. It is better to use relative paths.
 
