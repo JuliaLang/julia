@@ -3,7 +3,7 @@
 Julia enables package developers and users to document functions, types and other objects easily
 via a built-in documentation system.
 
-The basic syntax is simple: any string appearing just above an object
+The basic syntax is simple: any string appearing just before an object
 (function, macro, type or instance) will be interpreted as documenting it (these are called
 *docstrings*). Note that no blank lines or comments may intervene between a docstring and
 the documented object. Here is a basic example:
