@@ -310,7 +310,6 @@ end
 
 end # module NestedSpawns
 
-
 function mapfold(f, op, xs; basesize = cld(length(xs), Threads.nthreads()))
     basesize = max(3, basesize)  # for length(left) + length(right) >= 4
     if length(xs) < basesize
@@ -373,3 +372,65 @@ tak(x, y, z) =
     else
         z
     end
+
+module OptimizableTasks
+using Base.Experimental: Tapir
+
+@noinline produce() = P::Int
+P = 0
+
+function trivial_detach(x, y)
+    Tapir.@sync begin
+        Tapir.@spawn $a = x + y
+        $b = produce()
+    end
+    return a + b
+end
+
+function trivial_continuation(x, y)
+    Tapir.@sync begin
+        Tapir.@spawn $a = produce()
+        $b = x + y
+    end
+    return a + b
+end
+end # module OptimizableTasks
+
+module NonOptimizableTasks
+using Base.Experimental: Tapir
+
+@noinline consume(x) = (global SINK = x; nothing)
+
+function loop_in_spawn(n)
+    Tapir.@sync begin
+        Tapir.@spawn begin
+            acc = 0
+            for x in 1:n
+                acc += x
+            end
+            $y = acc
+        end
+        consume(nothing)
+    end
+    return y
+end
+
+function loop_in_continuation(n)
+    Tapir.@sync begin
+        Tapir.@spawn consume(nothing)
+        acc = 0
+        for x in 1:n
+            acc += x
+        end
+        $y = acc
+    end
+    return y
+end
+
+function spawn_in_loop()
+    Tapir.@sync for i in 1:3
+        Tapir.@spawn consume(i)
+    end
+end
+
+end # module NonOptimizableTasks

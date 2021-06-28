@@ -753,6 +753,21 @@ function calls(inst, r::GlobalRef, nargs::Int)
     return inst.args
 end
 
+function is_in_loop(cfg::CFG, subcfg, needle::Int)
+    subcfg = BitSet(subcfg)
+    ref = RefValue(false)
+    foreach_descendant(cfg, needle) do ibb
+        ibb in subcfg || return false
+        if ibb < needle
+            ref.x = true
+            return false
+        else
+            return true
+        end
+    end
+    return ref.x
+end
+
 has_loop(ir::IRCode, blocklabels) =
     any(blocklabels) do ibb
         bb = ir.cfg.blocks[ibb]
@@ -794,22 +809,21 @@ function is_trivial_for_spawn(@nospecialize(inst))
     return false
 end
 
-"""
-    is_spawn_worthy(ir::IRCode, task::ChildTask) -> worthy::Bool
+is_trivial_for_spawn(ir::IRCode, bb::BasicBlock) = is_trivial_for_spawn(ir, bb.stmts)
+function is_trivial_for_spawn(ir::IRCode, stmts::StmtRange)
+    for istmt in stmts
+        is_trivial_for_spawn(ir.stmts.inst[istmt]) || return false
+    end
+    return true
+end
 
-Check if it is worthy spawning the `task`.
-
-TODO: Check the continuation too.
-"""
-function is_spawn_worthy(ir::IRCode, task::ChildTask)
-    has_loop(ir, task.blocks) && return true
+function is_trivial_for_spawn(ir::IRCode, task::ChildTask)
+    has_loop(ir, task.blocks) && return false
 
     for ibb in task.blocks
-        for istmt in ir.cfg.blocks[ibb].stmts
-            is_trivial_for_spawn(ir.stmts.inst[istmt]) || return true
-        end
+        is_trivial_for_spawn(ir, ir.cfg.blocks[ibb]) || return false
     end
-    return false
+    return true
 end
 
 function remove_syncregions!(ir::IRCode, stmts = 1:length(ir.stmts))
@@ -1126,44 +1140,76 @@ end
 Replace detached tasks containing only trivial code with the serial projection.
 """
 function remove_trivial_spawns!(ir::IRCode)
-    syncregions = BitSet()
-    syncregion_to_ntasks = zeros(Int, length(ir.stmts))
-    for task in child_tasks(ir)
-        det = ir.stmts.inst[task.detach]::DetachNode
-        sr = (det.syncregion::SSAValue).id
-        push!(syncregions, sr)
+    tasks = child_tasks(ir)
+    isempty(tasks) && return ir
 
-        if !is_spawn_worthy(ir, task)
-            remove_tapir!(ir, task)
-        else
-            syncregion_to_ntasks[sr] += 1
+    cache = RefValue{Union{Vector{Vector{Int}},Nothing}}(nothing)
+    function get_syncregion_to_syncs()
+        syncregion_to_syncs = cache[]
+        syncregion_to_syncs === nothing || return syncregion_to_syncs
+        syncregion_to_syncs = Vector{Vector{Int}}(undef, length(ir.stmts))
+        for bb in ir.cfg.blocks
+            isync = last(bb.stmts)
+            sync = ir.stmts.inst[isync]
+            sync isa SyncNode || continue
+            sr = (sync.syncregion::SSAValue).id
+            if isassigned(syncregion_to_syncs, sr)
+                ids = syncregion_to_syncs[sr]
+            else
+                ids = syncregion_to_syncs[sr] = Int[]
+            end
+            push!(ids, isync)
         end
+        cache[] = syncregion_to_syncs
+        return syncregion_to_syncs
     end
 
+    syncregion_to_ntasks = zeros(Int, length(ir.stmts))
+    syncregions = BitSet()
+    function remove_rec(ir::IRCode, tasks::Vector{ChildTask})
+        for task in tasks
+            if task.subtasks !== nothing
+                remove_rec(ir, task.subtasks)
+            end
+            det = ir.stmts.inst[task.detach]::DetachNode
+            sr = (det.syncregion::SSAValue).id
+            push!(syncregions, sr)
+
+            if is_trivial_for_spawn(ir, task)
+                remove_tapir!(ir, task)
+            else
+                # Check if continuation is trivial:
+                is_trivial = RefValue(true)
+                syncs = get_syncregion_to_syncs()[sr]
+                foreach_descendant(det.reattach, ir.cfg) do _ibb, bb
+                    is_trivial.x || return false
+                    if det.reattach in bb.succs  # loop
+                        is_trivial.x = false
+                        return false
+                    end
+                    if !is_trivial_for_spawn(ir, bb)
+                        is_trivial.x = false
+                        return false
+                    end
+                    return !(bb.stmts[end] in syncs)
+                end
+                if is_trivial.x
+                    remove_tapir!(ir, task)
+                else
+                    syncregion_to_ntasks[sr] += 1
+                end
+            end
+        end
+        return ir
+    end
+    remove_rec(ir, tasks)
+
     # Remove empty syncregions
-    syncregion_to_syncs = nothing
     for sr in syncregions
         syncregion_to_ntasks[sr] > 0 && continue
 
-        # Lazily compute syncregion-to-SyncNode mapping
-        if syncregion_to_syncs === nothing
-            syncregion_to_syncs = Vector{Vector{Int}}(undef, length(ir.stmts))
-            for bb in ir.cfg.blocks
-                isync = last(bb.stmts)
-                sync = ir.stmts.inst[isync]
-                sync isa SyncNode || continue
-                local sr = (sync.syncregion::SSAValue).id
-                if isassigned(syncregion_to_syncs, sr)
-                    ids = syncregion_to_syncs[sr]
-                else
-                    ids = syncregion_to_syncs[sr] = Int[]
-                end
-                push!(ids, isync)
-            end
-        end
-
         ir.stmts.inst[sr] = nothing
-        for isync in syncregion_to_syncs[sr]
+        for isync in get_syncregion_to_syncs()[sr]
             ir.stmts.inst[isync] = nothing
         end
     end

@@ -147,4 +147,25 @@ end
     @test unreachable_spawn() === nothing
 end
 
+@testset "OptimizableTasks" begin
+    @testset "$label" for (label, ci) in [
+        :trivial_detach => first(@code_typed OptimizableTasks.trivial_detach(0, 0)),
+        :trivial_continuation =>
+            first(@code_typed OptimizableTasks.trivial_continuation(0, 0)),
+    ]
+        @test !Core.Compiler.has_tapir(ci::Core.Compiler.CodeInfo)
+    end
+end
+
+@testset "NonOptimizableTasks" begin
+    @testset "$label" for (label, ci) in [
+        :loop_in_spawn => first(@code_typed NonOptimizableTasks.loop_in_spawn(1)),
+        :loop_in_continuation =>
+            first(@code_typed NonOptimizableTasks.loop_in_continuation(1)),
+        :spawn_in_loop => first(@code_typed NonOptimizableTasks.spawn_in_loop()),
+    ]
+        @test Core.Compiler.has_tapir(ci::Core.Compiler.CodeInfo)
+    end
+end
+
 end
