@@ -289,6 +289,27 @@ end
 f() = tmap!(identity, zeros(10), 1:10)
 end # module AdHocLoop
 
+module NestedSpawns
+using Base.Experimental: Tapir
+
+@noinline inc(x) = Base.inferencebarrier(x + 1)::typeof(x)
+
+function f()
+    Tapir.@sync begin
+        Tapir.@spawn begin
+            x = inc(1)
+            Tapir.@spawn begin
+                $a = inc(x)
+            end
+            $b = x + 2
+        end
+        $c = inc(3)
+    end
+    return a + b + c
+end
+
+end # module NestedSpawns
+
 
 function mapfold(f, op, xs; basesize = cld(length(xs), Threads.nthreads()))
     basesize = max(3, basesize)  # for length(left) + length(right) >= 4

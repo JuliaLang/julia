@@ -447,7 +447,7 @@ function _fixup_linetable!(linetable::Vector{LineInfoNode})
     shift = 0
     for i in 1:length(linetable)
         line = linetable[i]
-        shift = max(shift, line.inlined_at - (i + shift) + 1)
+        shift = max(shift, line.inlined_at - i + 1)
         indexmap[i] = i + shift
     end
     resize!(linetable, n + shift)
@@ -1339,29 +1339,55 @@ function lower_tapir!(ir::IRCode)
     Tapir = tapir_module()
     Tapir isa Module || return ir
 
+    # Replace `Expr(:syncregion)` with `%tg = Tapir.taskgroup()`.
+    for i in 1:length(ir.stmts)
+        stmt = ir.stmts[i]
+        if isexpr(stmt[:inst], :syncregion)
+            stmt[:inst] = Expr(:call, Tapir.taskgroup)
+            stmt[:type] = Tapir.TaskGroup
+        end
+    end
+
+    # Replace `sync within %tg` with `Tapir.sync!(%tg)`.
+    for bb in ir.cfg.blocks
+        isync = last(bb.stmts)
+        sync = ir.stmts[isync][:inst]
+        sync isa SyncNode || continue
+        tg = sync.syncregion
+        ir.stmts.inst[isync] = Expr(:call, Tapir.sync!, tg::SSAValue)
+        ir.stmts.type[isync] = Any
+    end
+
+    return lower_tapir_task!(ir)
+end
+
+"""
+    lower_tapir_task!(ir::IRCode) -> ir′
+
+Process detaches and reattaches recursively. It expects that syncregion and
+SyncNode are transformed to runtime function calls.
+"""
+function lower_tapir_task!(ir::IRCode)
+    Tapir = tapir_module()
+    Tapir isa Module || return ir
+
     tasks = child_tasks(ir)
     isempty(tasks) && return ir
 
     # Lower each detach of child task to the call to `Tapir.spawn!`.  It also
     # removes the detach edge to child.  That is to say, we transform
     #
-    #     ...
-    #         %syncregion = Expr(:syncregion)
-    #         ...
     #     #detacher
     #         ...
-    #         detach within %syncregion, #child, #continuation
+    #         detach within %tg, #child, #continuation
     #     #child
     #         $child_code
-    #         reattach within %syncregion, #continuation
+    #         reattach within %tg, #continuation
     #     #continuation
     #     ...
     #
     # to
     #
-    #     ...
-    #         %tg = Tapir.taskgroup()
-    #         ...
     #     #detacher
     #         ...
     #         %oc = new_opaque_closure(%outlined_child_code, capture...)
@@ -1372,29 +1398,23 @@ function lower_tapir!(ir::IRCode)
     #
     # and then remove the detach edge from #detacher to #child.
 
-    # Mapping from syncregion to (the instruction that creates) a taskgroup:
-    taskgroups = IdDict{Int,SSAValue}()
     # Mapping from original def to a vector of 3-tuple (type, ref SSA value):
     tobeloaded = IdDict{Int,Vector{Tuple{Type,SSAValue}}}()
     for task in tasks
         det = ir.stmts.inst[task.detach]::DetachNode
-        syncregion = (det.syncregion::SSAValue).id
-        tg = get!(taskgroups, syncregion) do
-            tg_inst = NewInstruction(Expr(:call, Tapir.taskgroup), Tapir.TaskGroup)
-            insert_node!(ir, syncregion, tg_inst, true)
-        end
+        tg = det.syncregion::SSAValue
 
         taskir, arguments, outputs = outline_child_task(ir, task)
-        taskir = lower_tapir!(taskir)
+        taskir = lower_tapir_task!(taskir)
         meth = opaque_closure_method_from_ssair(taskir)
         for (T, iout) in outputs
             R = Tapir.UndefableRef{T}
-            ref = insert_node!(ir, syncregion, NewInstruction(Expr(:new, R), R))
+            ref = insert_node!(ir, tg.id, NewInstruction(Expr(:new, R), R))
             setset = NewInstruction(
                 Expr(:call, setfield!, ref, QuoteNode(:set), QuoteNode(false)),
                 Any,
             )
-            insert_node!(ir, syncregion, setset)
+            insert_node!(ir, tg.id, setset)
             push!(arguments, ref)
             tbl = get!(() -> Tuple{Type,SSAValue}[], tobeloaded, iout)
             push!(tbl, (T, ref))
@@ -1408,36 +1428,6 @@ function lower_tapir!(ir::IRCode)
         insert_node!(ir, task.detach, spawn_inst)
         ir.stmts.inst[task.detach] = GotoNode(det.reattach)
         cfg_delete_edge!(ir.cfg, block_for_inst(ir.cfg, task.detach), det.label)
-    end
-    # TODO: handle `@sync @spawn @spawn ...` (currently, we are assuming that the
-    # syncregion is not used in nested tasks)
-
-    # Covnert sync nodes to `Tapir.sync!`; i.e., transform
-    #
-    #     %tg = Tapir.taskgroup()
-    #     %syncregion = Expr(:syncregion)
-    #     ...
-    #     sync within %syncregion
-    #
-    # to
-    #
-    #     %tg = Tapir.taskgroup()
-    #     %syncregion = Expr(:syncregion)
-    #     ...
-    #     Tapir.sync!(%tg)
-    #
-    for bb in ir.cfg.blocks
-        isync = last(bb.stmts)
-        sync = ir.stmts[isync][:inst]
-        sync isa SyncNode || continue
-        syncregion = (sync.syncregion::SSAValue).id
-        tg = get(taskgroups, syncregion, nothing)
-        tg === nothing && continue  # ignore syncregion of child tasks
-
-        sync_inst = NewInstruction(Expr(:call, Tapir.sync!, tg::SSAValue), Any)
-        insert_node!(ir, isync, sync_inst)
-        next_bb = block_for_inst(ir.cfg, isync + 1)
-        ir.stmts.inst[isync] = GotoNode(next_bb)
     end
 
     # Load task outputs:

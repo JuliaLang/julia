@@ -105,6 +105,10 @@ end
     @test AdHocLoop.f() == 1:10
 end
 
+@testset "nested spawns" begin
+    @test NestedSpawns.f() == 11
+end
+
 @noinline always() = rand() <= 1
 
 @testset "exceptions" begin
