@@ -191,3 +191,28 @@ let bt
     end
     @test any(s->startswith(string(s), "f33065(x::Float32, y::Float32; b::Float64, a::String, c::"), bt)
 end
+
+# Opaque closure backtraces
+oc_error_template(x) = error(x)
+let ci = code_lowered(oc_error_template, Tuple{Any})[]
+    # This should run in the interpreter
+    oc = eval(Expr(:new_opaque_closure, Tuple{Any}, false, Any, Any,
+                   Expr(:opaque_closure_method, :oc_method_name, 1, LineNumberNode(1, :foo), ci)))
+    bt = try
+        oc(Int64(1))
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test bt[findfirst(s->startswith(string(s), "oc_method_name"), bt)].linfo !== nothing
+    @test occursin("oc_method_name(::Int64)", sprint(Base.show_backtrace, bt))
+end
+
+mk_opaque_closure() = @Base.Experimental.opaque x->throw(x)
+let oc = mk_opaque_closure()
+    bt = try
+        oc(1)
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test bt[findfirst(s->contains(string(s), "opaque closure"), bt)].linfo !== nothing
+end
