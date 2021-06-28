@@ -47,8 +47,13 @@ struct ChildTask
     reattaches::Vector{Int}
     """A list of basic block indices that defines this task."""
     blocks::Vector{Int}
+    """A list of child tasks. `nothing` means `[]` (optimization)."""
+    subtasks::Union{Nothing,Vector{ChildTask}}
 end
-ChildTask(detach::Int) = ChildTask(detach, Int[], Int[])
+ChildTask(detach::Int) = ChildTask(detach, Int[], Int[], nothing)
+
+ChildTask(task::ChildTask, subtasks::Vector{ChildTask}) =
+    ChildTask(task.detach, task.reattaches, task.blocks, subtasks)
 
 """
     child_tasks(ir::IRCode) -> tasks::Vector{ChildTask}
@@ -81,11 +86,19 @@ Find a sub CFG detached by the detach node `ir.stmts[detach]`. It mutates
 function detached_sub_cfg!(detach::Int, ir::IRCode, visited)
     detachnode = ir.stmts.inst[detach]::DetachNode
     task = ChildTask(detach)
-    foreach_descendant(detachnode.label, ir.cfg, visited) do ibb, bb
+    subtasks = nothing
+    foreach_descendant(detachnode.label, ir.cfg, visited) do ibb, _bb
         push!(task.blocks, ibb)
         bb = ir.cfg.blocks[ibb]
         term = ir.stmts[bb.stmts[end]][:inst]
-        if term isa ReattachNode
+        if term isa DetachNode
+            t = detached_sub_cfg!(bb.stmts[end], ir, visited)
+            if subtasks === nothing
+                subtasks = ChildTask[]
+            end
+            push!(subtasks::Vector{ChildTask}, t)
+            return true  # continue on reattach edge
+        elseif term isa ReattachNode
             @assert bb.succs == [term.label] "bb.succs == [term.label]"
             continuation = ir.cfg.blocks[term.label]
             for k in continuation.preds
@@ -95,8 +108,15 @@ function detached_sub_cfg!(detach::Int, ir::IRCode, visited)
                     return false
                 end
             end
+            error("unbalanced detach-reattach")
         end
         return true
+    end
+    if subtasks isa Vector{ChildTask}
+        for t in subtasks
+            append!(task.blocks, t.blocks)
+        end
+        task = ChildTask(task, subtasks)
     end
     sort!(task.blocks)
     @assert task.blocks[1] == detachnode.label  # entry block
@@ -813,7 +833,8 @@ function remove_tapir_terminator!(stmt::Instruction)
     return term
 end
 
-# remove_tapir!(ir::IRCode) = remote_tapir_in_blocks!(ir, 1:length(ir.cfg.blocks))
+remove_tapir!(ir::IRCode) = remove_tapir_in_blocks!(ir, 1:length(ir.cfg.blocks))
+
 function remove_tapir_in_blocks!(ir::IRCode, blocklabels)
     for ibb in blocklabels
         bb = ir.cfg.blocks[ibb]
@@ -821,6 +842,7 @@ function remove_tapir_in_blocks!(ir::IRCode, blocklabels)
         term isa DetachNode && @assert term.label == ibb + 1  # for GotoIfNot compat
         remove_syncregions!(ir, bb.stmts)
     end
+    return ir
 end
 
 function remove_tapir!(ir::IRCode, task::ChildTask)
@@ -1150,9 +1172,9 @@ function remove_trivial_spawns!(ir::IRCode)
 end
 
 """
-    outline_child_task(ir::IRCode, task::ChildTask) -> taskir::IRCode
+    outline_child_task(task::ChildTask, ir::IRCode)
 """
-function outline_child_task(ir::IRCode, task::ChildTask)
+function outline_child_task(task::ChildTask, ir::IRCode)
     Tapir = tapir_module()::Module
 
     uses = BitSet()
@@ -1320,7 +1342,38 @@ function outline_child_task(ir::IRCode, task::ChildTask)
         push!(outputs, (T, i))
     end
 
-    return taskir, captured_variables, outputs
+    return (taskir, captured_variables, outputs), (ssachangemap, labelchangemap)
+end
+
+"""
+    outline_child_task!(task::ChildTask, ir::IRCode) -> (taskir, arguments, outputs)
+
+Extract `task` in `ir` as a new `taskir::IRCode`. Mutate `tasksir.subtasks` to
+respect the changes in SSA positions and BB labels.  The second argument `ir` is
+not mutated.
+"""
+function outline_child_task!(task::ChildTask, ir::IRCode)
+    result, (ssachangemap, labelchangemap) = outline_child_task(task, ir)
+    renumber_subtasks!(task, ssachangemap, labelchangemap)
+    return result
+end
+# TODO: Calling this at each recurse of `lower_tapir_tasks!` is not great
+# (quadraic in depth). Maybe keep the stack of changemaps and renumber lazily?
+
+function renumber_subtasks!(task::ChildTask, ssachangemap, labelchangemap)
+    subtasks = task.subtasks
+    subtasks === nothing && return task
+    for (i, t) in pairs(subtasks)
+        renumber_subtasks!(t, ssachangemap, labelchangemap)
+        for (j, k) in pairs(t.blocks)
+            t.blocks[j] = labelchangemap[k]
+        end
+        for (j, k) in pairs(t.reattaches)
+            t.reattaches[j] = ssachangemap[k]
+        end
+        subtasks[i] = ChildTask(ssachangemap[t.detach], t.reattaches, t.blocks, t.subtasks)
+    end
+    return task
 end
 
 """
@@ -1338,6 +1391,9 @@ end
 function lower_tapir!(ir::IRCode)
     Tapir = tapir_module()
     Tapir isa Module || return ir
+
+    tasks = child_tasks(ir)
+    isempty(tasks) && return remove_tapir!(ir)
 
     # Replace `Expr(:syncregion)` with `%tg = Tapir.taskgroup()`.
     for i in 1:length(ir.stmts)
@@ -1358,21 +1414,18 @@ function lower_tapir!(ir::IRCode)
         ir.stmts.type[isync] = Any
     end
 
-    return lower_tapir_task!(ir)
+    return lower_tapir_tasks!(ir, tasks)
 end
 
 """
-    lower_tapir_task!(ir::IRCode) -> ir′
+    lower_tapir_task!(ir::IRCode, tasks::Vector{ChildTask}) -> ir′
 
 Process detaches and reattaches recursively. It expects that syncregion and
 SyncNode are transformed to runtime function calls.
 """
-function lower_tapir_task!(ir::IRCode)
-    Tapir = tapir_module()
+function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask})
+    Tapir = tapir_module()::Module
     Tapir isa Module || return ir
-
-    tasks = child_tasks(ir)
-    isempty(tasks) && return ir
 
     # Lower each detach of child task to the call to `Tapir.spawn!`.  It also
     # removes the detach edge to child.  That is to say, we transform
@@ -1404,8 +1457,10 @@ function lower_tapir_task!(ir::IRCode)
         det = ir.stmts.inst[task.detach]::DetachNode
         tg = det.syncregion::SSAValue
 
-        taskir, arguments, outputs = outline_child_task(ir, task)
-        taskir = lower_tapir_task!(taskir)
+        taskir, arguments, outputs = outline_child_task!(task, ir)
+        if task.subtasks !== nothing
+            taskir = lower_tapir_tasks!(taskir, task.subtasks)
+        end
         meth = opaque_closure_method_from_ssair(taskir)
         for (T, iout) in outputs
             R = Tapir.UndefableRef{T}
