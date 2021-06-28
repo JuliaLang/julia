@@ -16,7 +16,8 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
+    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing,
+    splat
 using Base.Broadcast: Broadcasted, broadcasted
 import Libdl
 
