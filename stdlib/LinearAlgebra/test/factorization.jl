@@ -37,7 +37,7 @@ using Test, LinearAlgebra
         return x isa AbstractArray{Float64} ? Float64.(Float32.(x)) : x
     end...)
 
-    if f === eigen || f === qr
+    if f === qr
         @test F == G
         @test isequal(F, G)
     else
