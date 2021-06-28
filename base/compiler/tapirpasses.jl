@@ -680,6 +680,8 @@ end
 is_sequential(stmts::InstructionStream) = !any(inst -> inst isa DetachNode, stmts.inst)
 is_sequential(ir::IRCode) = is_sequential(ir.stmts) && is_sequential(ir.new_nodes.stmts)
 
+has_tapir(x) = !is_sequential(x)
+
 function havecommon(x::AbstractSet, y::AbstractSet)
     (b, c) = length(x) > length(y) ? (x, y) : (y, x)
     return any(in(b), c)
@@ -729,6 +731,103 @@ function calls(inst, r::GlobalRef, nargs::Int)
         # TODO: check if this path is required
     end
     return inst.args
+end
+
+has_loop(ir::IRCode, blocklabels) =
+    any(blocklabels) do ibb
+        bb = ir.cfg.blocks[ibb]
+        any(<(ibb), bb.succs)
+    end
+
+function try_resolve(@nospecialize(x))
+    if x isa GlobalRef
+        if isdefined(x.mod, x.name)
+            return getfield(x.mod, x.name), true
+        end
+    end
+    return nothing, false
+end
+
+function is_trivial_for_spawn(@nospecialize(inst))
+    if isterminator(inst)
+        return true
+    elseif inst isa Union{PhiNode,PhiCNode,UpsilonNode,Nothing}
+        return true
+    elseif inst isa Expr
+        if is_meta_expr_head(inst.head)
+            return true
+        elseif inst.head === :call
+            f, = try_resolve(inst.args[1])
+            if f isa Builtin
+                return f !== Core.Intrinsics.llvmcall
+            end
+        elseif (
+            inst.head === :new ||
+            inst.head === :enter ||
+            inst.head === :leave ||
+            inst.head === :the_exception ||
+            inst.head === :pop_exception
+        )
+            return true
+        end
+    end
+    return false
+end
+
+"""
+    is_spawn_worthy(ir::IRCode, task::ChildTask) -> worthy::Bool
+
+Check if it is worthy spawning the `task`.
+
+TODO: Check the continuation too.
+"""
+function is_spawn_worthy(ir::IRCode, task::ChildTask)
+    has_loop(ir, task.blocks) && return true
+
+    for ibb in task.blocks
+        for istmt in ir.cfg.blocks[ibb].stmts
+            is_trivial_for_spawn(ir.stmts.inst[istmt]) || return true
+        end
+    end
+    return false
+end
+
+function remove_syncregions!(ir::IRCode, stmts = 1:length(ir.stmts))
+    for i in stmts
+        stmt = ir.stmts[i]
+        if isexpr(stmt[:inst], :syncregion)
+            stmt[:inst] = nothing
+        end
+    end
+end
+
+function remove_tapir_terminator!(stmt::Instruction)
+    term = stmt[:inst]
+    if term isa DetachNode
+        stmt[:inst] = GotoIfNot(true, term.reattach)
+    elseif term isa ReattachNode
+        stmt[:inst] = GotoNode(term.label)
+    elseif term isa SyncNode
+        stmt[:inst] = nothing
+    end
+    return term
+end
+
+# remove_tapir!(ir::IRCode) = remote_tapir_in_blocks!(ir, 1:length(ir.cfg.blocks))
+function remove_tapir_in_blocks!(ir::IRCode, blocklabels)
+    for ibb in blocklabels
+        bb = ir.cfg.blocks[ibb]
+        term = remove_tapir_terminator!(ir.stmts[last(bb.stmts)])
+        term isa DetachNode && @assert term.label == ibb + 1  # for GotoIfNot compat
+        remove_syncregions!(ir, bb.stmts)
+    end
+end
+
+function remove_tapir!(ir::IRCode, task::ChildTask)
+    remove_tapir_in_blocks!(ir, task.blocks)
+    det = remove_tapir_terminator!(ir.stmts[task.detach])::DetachNode
+    @assert det.label == block_for_inst(ir, task.detach) + 1  # for GotoIfNot compat
+    return ir
 end
 
 """
@@ -995,6 +1094,57 @@ function fixup_tapir_phi!(ir::IRCode)
         end
     end
     # TODO: CSE the duplicated PhiC?
+
+    return ir
+end
+
+"""
+    remove_trivial_spawns!(ir::IRCode) -> ir′
+
+Replace detached tasks containing only trivial code with the serial projection.
+"""
+function remove_trivial_spawns!(ir::IRCode)
+    syncregions = BitSet()
+    syncregion_to_ntasks = zeros(Int, length(ir.stmts))
+    for task in child_tasks(ir)
+        det = ir.stmts.inst[task.detach]::DetachNode
+        sr = (det.syncregion::SSAValue).id
+        push!(syncregions, sr)
+
+        if !is_spawn_worthy(ir, task)
+            remove_tapir!(ir, task)
+        else
+            syncregion_to_ntasks[sr] += 1
+        end
+    end
+
+    # Remove empty syncregions
+    syncregion_to_syncs = nothing
+    for sr in syncregions
+        syncregion_to_ntasks[sr] > 0 && continue
+
+        # Lazily compute syncregion-to-SyncNode mapping
+        if syncregion_to_syncs === nothing
+            syncregion_to_syncs = Vector{Vector{Int}}(undef, length(ir.stmts))
+            for bb in ir.cfg.blocks
+                isync = last(bb.stmts)
+                sync = ir.stmts.inst[isync]
+                sync isa SyncNode || continue
+                local sr = (sync.syncregion::SSAValue).id
+                if isassigned(syncregion_to_syncs, sr)
+                    ids = syncregion_to_syncs[sr]
+                else
+                    ids = syncregion_to_syncs[sr] = Int[]
+                end
+                push!(ids, isync)
+            end
+        end
+
+        ir.stmts.inst[sr] = nothing
+        for isync in syncregion_to_syncs[sr]
+            ir.stmts.inst[isync] = nothing
+        end
+    end
 
     return ir
 end
@@ -1380,6 +1530,8 @@ function lower_tapir!(ir::IRCode)
 
     # TODO: remove redundant PhiC and Upsilon nodes
 
+    remove_syncregions!(ir)
+
     # Finalize the changes in the IR (clears the node inserted to `ir.new_nodes`):
     ir = compact!(ir, true)
     # Remove the dead code in the detached sub-CFG (child tasks):
@@ -1424,7 +1576,6 @@ function opaque_closure_method_from_ssair(ir::IRCode)
         functionloc = LineNumberNode(lin.line, lin.file)
     end
     ci = code_info_from_ssair(ir)
-    ci = remove_tapir!(ci)  # TODO: do this at IRCode
     nargs = length(ir.argtypes)
     name = :_tapir_outlined_function
     return ccall(

@@ -143,7 +143,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
             # containing detaches etc. is already determined to be unreachable.
             # Instead of removing the statement, we use goto nodes for
             # preserving the CFG (i.e., serial projection).
-            isa(stmt, DetachNode) && return GotoIfNot(false, stmt.reattach)
+            isa(stmt, DetachNode) && return GotoIfNot(true, stmt.reattach)
             isa(stmt, ReattachNode) && return GotoNode(stmt.label)
             isa(stmt, SyncNode) && return nothing  # fallthrough
             # TODO: Remove the detach edge `.label` from DetachNode. This is for
