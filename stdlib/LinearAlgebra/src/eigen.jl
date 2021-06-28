@@ -278,7 +278,7 @@ end
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
     AA = copy_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
-    A = eigen!(AA; permute=permute, scale=scale, sortby=sortby)
+    A = eigen!(AA; permute, scale, sortby)
     values = convert(AbstractVector{isreal(A.values) ? Float16 : Complex{Float16}}, A.values)
     vectors = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectors)
     vectorsl = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectorsl)
