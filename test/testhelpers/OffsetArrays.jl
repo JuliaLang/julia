@@ -132,11 +132,11 @@ _indexoffset(r::AbstractRange) = first(r) - 1
 _indexoffset(i::Integer) = 0
 _indexoffset(i::Colon) = 0
 _indexlength(r::AbstractRange) = length(r)
-_indexlength(i::Integer) = i
+_indexlength(i::Integer) = Int(i)
 _indexlength(i::Colon) = Colon()
 
 _offset(axparent::AbstractUnitRange, ax::AbstractUnitRange) = first(ax) - first(axparent)
-_offset(axparent::AbstractUnitRange, ax::Integer) = 1 - first(axparent)
+_offset(axparent::AbstractUnitRange, ::Union{Integer, Colon}) = 1 - first(axparent)
 
 abstract type AxisConversionStyle end
 struct SingleRange <: AxisConversionStyle end

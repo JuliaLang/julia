@@ -188,7 +188,7 @@ julia> transpose(V)
  [1 3; 2 4]  [5 7; 6 8]
 ```
 """
-permutedims(v::AbstractVector) = reshape(v, (1, length(v)))
+permutedims(v::AbstractVector) = reshape(v, (1, axes(v,1)))
 
 """
     permutedims!(dest, src, perm)

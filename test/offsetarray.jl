@@ -795,3 +795,7 @@ end
     @test Iterators.partition(OffsetArray(reshape(collect(1:9),3,3), (3,3)), 5) |> collect == [1:5,6:9] #OffsetMatrix
     @test Iterators.partition(IdOffsetRange(2:7,10), 5) |> collect == [12:16,17:17] # IdOffsetRange
 end
+
+@testset "permutedims" begin
+    @test axes(permutedims(ones(2:3))) == (1:1, 2:3)
+end
