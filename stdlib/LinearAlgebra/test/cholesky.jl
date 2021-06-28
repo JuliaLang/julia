@@ -483,4 +483,17 @@ end
     @test F\b == F'\b
 end
 
+@testset "Float16" begin
+    A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    B = cholesky(A)
+    B32 = cholesky(Float32.(A))
+    @test B isa Cholesky{Float16, Matrix{Float16}}
+    @test B.U isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.L isa LowerTriangular{Float16, Matrix{Float16}}
+    @test B.UL isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.U ≈ B32.U
+    @test B.L ≈ B32.L
+    @test B.UL ≈ B32.UL
+end
+
 end # module TestCholesky

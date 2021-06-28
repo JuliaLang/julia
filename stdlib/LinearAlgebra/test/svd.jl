@@ -248,4 +248,17 @@ end
     end
 end
 
+@testset "Float16" begin
+    A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    B = svd(A)
+    B32 = svd(Float32.(A))
+    @test B isa SVD{Float16, Float16, Matrix{Float16}}
+    @test B.U isa Matrix{Float16}
+    @test B.Vt isa Matrix{Float16}
+    @test B.S isa Vector{Float16}
+    @test B.U ≈ B32.U
+    @test B.Vt ≈ B32.Vt
+    @test B.S ≈ B32.S
+end
+
 end # module TestSVD
