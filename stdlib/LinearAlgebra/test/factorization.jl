@@ -12,7 +12,7 @@ using Test, LinearAlgebra
     lq,
     lu,
     qr,
-    x -> qr(x, ColumnNorm()),
+    x -> qr(x, Val(true)),
     svd,
     schur,
 ]
