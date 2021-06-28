@@ -624,6 +624,34 @@ end
 # Factored out so that the behavior after saturation can be tested:
 is_sticky_count_saturated(t::Task) = t.sticky_count === typemax(t.sticky_count)
 
+# This is a struct rather than a closure so that `serialize` can be dispatched
+# to ignore `parent` field.
+struct StickyCountDecrementer
+    code::Any
+    parent::Union{Nothing,Task}
+end
+
+unset_parent(f::StickyCountDecrementer) = StickyCountDecrementer(f.code, nothing)
+
+function (f::StickyCountDecrementer)()
+    try
+        f.code()
+    finally
+        parent_task = f.parent
+        if  parent_task !== nothing && !is_sticky_count_saturated(parent_task)
+            # Once `parent_task.sticky_count` hits the typemax (which
+            # practically never happens), we stop un-sticking the parent task.
+            # This only affects the performance in rare cases (which already
+            # torturing the scheulder anyway) and does not sacrifice the
+            # correctness. Checking saturation should be done for all tasks
+            # includding those started with `parent_task.sticky_count < typemax
+            # -1` since there may be sticky tasks started realying on that the
+            # coutner is saturated.
+            parent_task.sticky_count -= 1
+        end
+    end
+end
+
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
     tid = Threads.threadid(t)
@@ -641,25 +669,7 @@ function enq_work(t::Task)
             parent_task = current_task()
             if t.sticky && !is_sticky_count_saturated(parent_task)
                 parent_task.sticky_count += 1
-                original_code = t.code
-                t.code = function wrapper_code()
-                    try
-                        original_code()
-                    finally
-                        if !is_sticky_count_saturated(parent_task)
-                            # Once `parent_task.sticky_count` hits the typemax (which
-                            # practically never happens), we stop un-sticking the parent
-                            # task. This only affects the performance in rare cases (which
-                            # already torturing the scheulder anyway) and does not
-                            # sacrifice the correctness. Checking saturation should be done
-                            # for all tasks includding those started with
-                            #`parent_task.sticky_count < typemax -1` since there may be
-                            # sticky tasks started realying on that the coutner is
-                            # saturated.
-                            parent_task.sticky_count -= 1
-                        end
-                    end
-                end
+                t.code = StickyCountDecrementer(t.code, parent_task)
             end
 
             tid = Threads.threadid()
