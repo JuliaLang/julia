@@ -2365,8 +2365,11 @@
                     (loop (read-char p) b e 0))))
            (let ((nxch (not-eof-for delim (read-char p))))
              (write-char #\\ b)
-             (write-char nxch b)
-             (loop (read-char p) b e 0))))
+             (if (eqv? nxch #\return)
+                 (loop nxch b e 0)
+                 (begin
+                   (write-char nxch b)
+                   (loop (read-char p) b e 0))))))
 
       ((and (eqv? c #\$) (not raw))
        (let* ((ex (parse-interpolate s))
