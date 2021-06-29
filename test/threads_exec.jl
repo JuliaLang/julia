@@ -920,7 +920,7 @@ const MAX_STICKY_COUNT = 3
 @assert MAX_STICKY_COUNT <= typemax(fieldtype(Task, :sticky_count))
 Base.is_sticky_count_saturated(t::Task) = t.sticky_count == MAX_STICKY_COUNT
 
-@testset "Saturated stick_count" begin
+@testset "Saturated sticky_count" begin
     @testset for nchild in MAX_STICKY_COUNT-1:MAX_STICKY_COUNT+1
         local is_sticky_pre, is_sticky_post, sticky_count_pre, sticky_count_post
         @sync Threads.@spawn begin
