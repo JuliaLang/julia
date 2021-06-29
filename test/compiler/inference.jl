@@ -3323,3 +3323,35 @@ end |> first === Tuple{Int, String}
 primitive type UInt24ish 24 end
 f34288(x) = Core.Intrinsics.checked_sdiv_int(x, Core.Intrinsics.trunc_int(UInt24ish, 0))
 @test Base.return_types(f34288, (UInt24ish,)) == Any[UInt24ish]
+
+# Inference of PhiNode showing up in lowered AST
+function f_convert_me_to_ir(b, x)
+    a = b ? sin(x) : cos(x)
+    return a
+end
+
+let
+    # Test the presence of PhiNodes in lowered IR by taking the above function,
+    # running it through SSA conversion and then putting it into an opaque
+    # closure.
+    mi = Core.Compiler.specialize_method(first(methods(f_convert_me_to_ir)),
+        Tuple{Bool, Float64}, Core.svec())
+    ci = Base.uncompressed_ast(mi.def)
+    ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
+    sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
+        Core.Compiler.NativeInterpreter())
+    ir = Core.Compiler.convert_to_ircode(ci, Core.Compiler.copy_exprargs(ci.code),
+        false, 2, sv)
+    ir = Core.Compiler.slot2reg(ir, ci, 2, sv)
+    ir = Core.Compiler.compact!(ir)
+    Core.Compiler.replace_code_newstyle!(ci, ir, 3)
+    ci.ssavaluetypes = length(ci.code)
+    @test any(x->isa(x, Core.PhiNode), ci.code)
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(b, 1.0)
+    @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
+
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(true, 1.0)
+    @test Base.return_types(oc, Tuple{}) == Any[Float64]
+end
