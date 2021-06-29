@@ -94,6 +94,10 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                         i += 1
                         popfirst!(st)
                     end
+                    while !isempty(st) && peek(st)[2] in (' ', '\t')
+                        i = nextind(str, i)
+                        _ = popfirst!(st)
+                    end
                 elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
                     k, c′ = peek(st)
