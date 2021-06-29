@@ -256,6 +256,19 @@ function local_update_after_store(n)
     return acc
 end
 
+function conditional_output(x)
+    Tapir.@sync begin
+        Tapir.@spawn begin
+            a = produce()
+            if x
+                $a = a
+            end
+        end
+        $b = produce()
+    end
+    return a + b
+end
+
 end # module TaskOutputs
 
 module Racy

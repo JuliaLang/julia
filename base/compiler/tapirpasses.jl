@@ -527,6 +527,7 @@ function allocate_blocks!(ir::IRCode, statement_positions)
     # Insert `newblocks` new blocks:
     oldnblocks = length(ir.cfg.blocks)
     resize!(ir.cfg.blocks, oldnblocks + newblocks)
+    # Copy pre-existing blocks:
     for iold in oldnblocks:-1:1
         bb = ir.cfg.blocks[iold]
         for labels in (bb.preds, bb.succs)
@@ -538,6 +539,7 @@ function allocate_blocks!(ir::IRCode, statement_positions)
         stop = ssachangemap[bb.stmts.stop]
         ir.cfg.blocks[bbchangemap[iold]] = BasicBlock(bb, StmtRange(start, stop))
     end
+    # Insert new blocks:
     for iold in target_blocks
         positions = block_to_positions[iold]
         ilst = bbchangemap[iold]  # using bbchangemap as it's already moved
@@ -552,16 +554,10 @@ function allocate_blocks!(ir::IRCode, statement_positions)
                 p2 = p1
             else
                 preoldpos = oldpos
+                p2 = ssachangemap[oldpos-1] + 1
                 if isfirst
                     isfirst = false
-                    p2 = ssachangemap[oldpos-1] + 1
                     p1 = min(p1, p2)
-                else
-                    p1 = ssachangemap[oldpos-1]
-                    p2 = p1 + 1
-                    if p1 < first(bblst.stmts)
-                        p1 += 1  # p1 should be in the same BB
-                    end
                 end
             end
             p3 = p2 + 1
@@ -587,8 +583,6 @@ function allocate_blocks!(ir::IRCode, statement_positions)
     for bb in ir.cfg.blocks
         @assert !isempty(bb.stmts)
     end
-
-    # Bump SSA IDs and BB labels in CFG:
     cfg_reindex!(ir.cfg)
 
     # Like `bbchangemap` but maps to the first added BB (not the last)
@@ -948,6 +942,7 @@ to
 function lower_tapir_output!(ir::IRCode)
     Tapir = tapir_module()
     Tapir isa Module || return ir
+    Base = Main.Base::Module
 
     # TODO: make it work without compaction?
     ir = insert_new_nodes(ir)
@@ -966,8 +961,9 @@ function lower_tapir_output!(ir::IRCode)
 
     # Follow and remove phi nodes; insert upsilons at definitions
     function insert_upsilons(v)
-        v isa SSAValue || return []  # error?
-        upsilons = []
+        v isa SSAValue || return [], []  # error?
+        vals = []
+        undefs = []
         foreach_def(v, ir) do stmt
             stmt isa Instruction || return true
             if stmt[:inst] isa PhiNode
@@ -978,24 +974,66 @@ function lower_tapir_output!(ir::IRCode)
             else
                 newinst = NewInstruction(UpsilonNode(SSAValue(stmt.idx)), stmt[:type])
                 ups = insert_node!(ir, stmt.idx, newinst, true)
-                push!(upsilons, ups)
+                push!(vals, ups)
+                newinst = NewInstruction(UpsilonNode(QuoteNode(false)), Const(false))
+                ups = insert_node!(ir, stmt.idx, newinst, true)
+                push!(undefs, ups)
             end
             return false
         end
-        return upsilons
+        return vals, undefs
     end
 
+    undef_checks = Tuple{Int,Any,SSAValue}[]
     for i in 1:length(ir.stmts)
         inst = ir.stmts.inst[i]
-        if (fargs = calls(inst, GlobalRef(Tapir, :loadoutput), 1)) !== nothing
-            _, a = fargs
+        if (fargs = calls(inst, GlobalRef(Tapir, :loadoutput), 2)) !== nothing
+            _, a, name = fargs
             if ir.stmts.type[i] isa Const
                 remove_defs(a)
                 ir.stmts.inst[i] = QuoteNode(ir.stmts.type[i].val)
             else
-                ir.stmts.inst[i] = PhiCNode(insert_upsilons(a))
+                vals, undefs = insert_upsilons(a)
+                ir.stmts.inst[i] = PhiCNode(vals)
+
+                undefinit = NewInstruction(UpsilonNode(QuoteNode(true)), Const(true))
+                push!(undefs, insert_node!(ir, 1, undefinit))
+                undefssa = insert_node!(ir, i, NewInstruction(PhiCNode(undefs), Bool))
+                push!(undef_checks, (i, name, undefssa))
             end
         end
+    end
+
+    allocated = allocate_gotoifnot_sequence!(ir, map(first, undef_checks))
+    undef_checks_index = RefValue(0)
+    foreach_allocated_gotoifnot_block(allocated) do ibb
+        # `ibb` is the index of BB inserted at the use position `undef_checks[i][1]`
+        i = undef_checks_index.x += 1
+        (_, name, undefssa) = undef_checks[i]
+        undefssa = SSAValue(allocated.ssachangemap[undefssa.id])
+        if name isa SSAValue
+            name = SSAValue(allocated.ssachangemap[name.id])
+        end
+
+        b0 = ir.cfg.blocks[ibb]
+        b1 = ir.cfg.blocks[ibb+1]
+        @assert ir.stmts.inst[last(b0.stmts)] === GotoIfNot(false, ibb + 2)  # dummy
+        @assert ir.stmts.inst[last(b1.stmts)] === GotoNode(ibb + 2)  # dummy
+
+        # If defined (not undef), skip over the throw:
+        ir.stmts.inst[last(b0.stmts)] = GotoIfNot(undefssa, ibb + 2)
+
+        newex_ex = Expr(:call, GlobalRef(Base, :UndefVarError), name)
+        newex = insert_node!(ir, last(b1.stmts), NewInstruction(newex_ex, Any))
+        throw_ex = Expr(:call, GlobalRef(Base, :throw), newex)
+        insert_node!(ir, last(b1.stmts), NewInstruction(throw_ex, Union{}))
+        ir.stmts.inst[last(b1.stmts)] = ReturnNode()
+        cfg_delete_edge!(ir.cfg, ibb + 1, ibb + 2)
+    end
+
+    if JLOptions().debug_level == 2
+        verify_ir(ir)
+        verify_linetable(ir.linetable)
     end
 
     return ir

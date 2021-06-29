@@ -55,8 +55,8 @@ end
 
 struct Output end
 
-@noinline loadoutput(::Output) = error("unreachable")
-@noinline loadoutput(x) = x
+@noinline loadoutput(::Output, ::Symbol) = error("unreachable")
+@noinline loadoutput(x, ::Symbol) = x
 
 macro syncregion()
     Expr(:syncregion)
@@ -126,9 +126,10 @@ macro sync(block)
     block = macroexpand(__module__, block)  # for nested @sync
     block = Expr(:block, __source__, block)
     dict = output_vars!(block)
-    outputs = [(esc(v), esc(tmp)) for (v, tmp) in sort!(collect(dict))]
-    header = [:(local $tmp = Output()) for (_, tmp) in outputs]
-    footer = [:($v = loadoutput($tmp)) for (v, tmp) in outputs]
+    outputs = sort!(collect(dict))
+    header = [:(local $(esc(tmp)) = Output()) for (_, tmp) in outputs]
+    footer =
+        [:($(esc(v)) = loadoutput($(esc(tmp)), $(QuoteNode(v)))) for (v, tmp) in outputs]
     quote
         $(header...)
         let $var = @syncregion()
