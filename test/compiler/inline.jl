@@ -497,3 +497,7 @@ end
         end
     end
 end
+
+# Issue #41299 - inlining deletes error check in :>
+g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
+@test_throws TypeError g41299(>:, 1, 2)

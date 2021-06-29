@@ -267,6 +267,8 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
             find_ssavalue_uses(e, uses, line)
+        elseif isa(e, PhiNode)
+            find_ssavalue_uses(e, uses, line)
         end
     end
     return uses
@@ -283,6 +285,14 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
             push!(uses[a.id], line)
         elseif isa(a, Expr)
             find_ssavalue_uses(a, uses, line)
+        end
+    end
+end
+
+function find_ssavalue_uses(e::PhiNode, uses::Vector{BitSet}, line::Int)
+    for val in e.values
+        if isa(val, SSAValue)
+            push!(uses[val.id], line)
         end
     end
 end
