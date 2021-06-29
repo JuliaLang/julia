@@ -189,7 +189,25 @@ function f()
     return (a, b)
 end
 
+@noinline id(x) = rand() > 1 ? error("unreachable") : x
+
 function set_distinct(bool::Bool)
+    Tapir.@sync begin
+        Tapir.@spawn if bool
+            $x = id(1)
+        else
+            $y = id(2)
+        end
+        if bool
+            $y = id(3)
+        else
+            $x = id(4)
+        end
+    end
+    return x + y
+end
+
+function set_distinct_optimizable(bool::Bool)
     Tapir.@sync begin
         Tapir.@spawn if bool
             $x = 1
@@ -203,6 +221,39 @@ function set_distinct(bool::Bool)
         end
     end
     return x + y
+end
+
+function update_distinct(bool::Bool)
+    x = 0
+    y = 0
+    Tapir.@sync begin
+        Tapir.@spawn if bool
+            $x = id(x + 1)
+        else
+            $y = id(y + 2)
+        end
+        if bool
+            $y = id(y + 3)
+        else
+            $x = id(x + 4)
+        end
+    end
+    return x + y
+end
+
+function local_update_after_store(n)
+    Tapir.@sync begin
+        Tapir.@spawn begin
+            acc = 0
+            for x in 1:n
+                acc += x
+            end
+            $acc = acc
+            acc *= 10  # should be ignored
+        end
+        produce()
+    end
+    return acc
 end
 
 end # module TaskOutputs

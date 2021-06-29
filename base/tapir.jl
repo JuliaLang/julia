@@ -63,7 +63,7 @@ macro syncregion()
 end
 
 macro spawnin(token, expr)
-    Expr(:spawn, esc(token), esc(Expr(:block, expr)))
+    Expr(:spawn, esc(token), esc(Expr(:block, __source__, expr)))
 end
 
 macro sync_end(token)
@@ -76,7 +76,7 @@ end
 
 isassignment(ex) = Meta.isexpr(ex, :(=)) && length(ex.args) > 1
 
-output_vars!(ex) = output_vars!(Symbol[], ex)
+output_vars!(ex) = output_vars!(Dict{Symbol,Symbol}(), ex)
 output_vars!(outputs, _) = outputs
 function output_vars!(outputs, ex::Expr)
     if isassignment(ex)
@@ -107,8 +107,8 @@ function lhs_output_vars!(outputs, ex, indices = eachindex(ex.args))
         if Meta.isexpr(ex.args[i], :$, 1)
             v, = ex.args[i].args
             if v isa Symbol
-                push!(outputs, v)
-                ex.args[i] = v
+                tmp = get!(() -> gensym("output_$(v)_"), outputs, v)
+                ex.args[i] = tmp
             end
         elseif Meta.isexpr(ex.args[i], :tuple)
             lhs_output_vars!(outputs, ex.args[i])
@@ -123,9 +123,12 @@ const tokenname = gensym(:token)
 """
 macro sync(block)
     var = esc(tokenname)
-    outputs = map(esc, output_vars!(block))
-    header = [:(local $v = Output()) for v in outputs]
-    footer = [:($v = loadoutput($v)) for v in outputs]
+    block = macroexpand(__module__, block)  # for nested @sync
+    block = Expr(:block, __source__, block)
+    dict = output_vars!(block)
+    outputs = [(esc(v), esc(tmp)) for (v, tmp) in sort!(collect(dict))]
+    header = [:(local $tmp = Output()) for (_, tmp) in outputs]
+    footer = [:($v = loadoutput($tmp)) for (v, tmp) in outputs]
     quote
         $(header...)
         let $var = @syncregion()

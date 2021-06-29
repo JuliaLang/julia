@@ -944,9 +944,6 @@ to
     %3 = dead code
     ...
     %4 = φᶜ(%2')
-
-TODO: Currently, it assumes that output variables are not used at RHS positions;
-don't assume this. Or, throw a nice error.
 """
 function lower_tapir_output!(ir::IRCode)
     Tapir = tapir_module()

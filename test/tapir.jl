@@ -87,6 +87,11 @@ end
     @test @inferred(TaskOutputs.f()) == (('a', 1), 1)
     @test @inferred(TaskOutputs.set_distinct(true)) == 4
     @test @inferred(TaskOutputs.set_distinct(false)) == 6
+    @test @inferred(TaskOutputs.set_distinct_optimizable(true)) == 4
+    @test @inferred(TaskOutputs.set_distinct_optimizable(false)) == 6
+    @test @inferred(TaskOutputs.update_distinct(true)) == 4
+    @test @inferred(TaskOutputs.update_distinct(false)) == 6
+    @test @inferred(TaskOutputs.local_update_after_store(3)) == sum(1:3)
     @test @inferred(tmap(x -> x + 0.5, 1:10)) == 1.5:1:10.5
 end
 
@@ -152,6 +157,8 @@ end
         :trivial_detach => first(@code_typed OptimizableTasks.trivial_detach(0, 0)),
         :trivial_continuation =>
             first(@code_typed OptimizableTasks.trivial_continuation(0, 0)),
+        :set_distinct =>
+            first(@code_typed TaskOutputs.set_distinct_optimizable(true)),
     ]
         @test !Core.Compiler.has_tapir(ci::Core.Compiler.CodeInfo)
     end
