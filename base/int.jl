@@ -273,6 +273,59 @@ mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
 mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
+
+"""
+    mod(x, (lo, hi)::Tuple{Any,Any}; closed=:left)
+
+Return an element of the interval [lo, hi) whose distance to x is a multiple of the
+length of the interval hi - lo.
+If closed=:right is passed, then the interval (lo, hi] is used instead.
+
+```jldoctest
+julia> mod(2, (3,5))
+4
+
+julia> mod(1, (3,5))
+3
+
+julia> mod(1, (3,5), closed=:right)
+5
+
+julia> mod(2, (3, 4.5))
+3.5
+```
+
+!!! compat "Julia 1.8"
+    This method requires Julia 1.8 or later.
+"""
+function mod(x, (lo, hi)::Tuple{Any,Any}; closed=:left)
+    x,lo,hi = promote(x,lo,hi)
+    mod(x, (lo, hi); closed)
+end
+function mod(x::T, (lo,hi)::Tuple{T,T}; closed=:left) where {T}
+    if !(lo < hi)
+        msg = """
+        lo < hi most hold. Got:
+        lo = $lo
+        hi = $hi
+        """
+        throw(ArgumentError(msg))
+    end
+    Δ = hi - lo
+    if closed === :left
+        mod(x-lo, Δ) + lo
+    elseif closed === :right
+        mod1(x-lo, Δ) + lo
+    else
+        msg = """
+        Only closed = :left and closed = :right are supported.
+        Got closed = $(repr(closed)) instead.
+        """
+        throw(ArgumentError(msg))
+    end
+end
+mod1(x, I::Tuple{Any,Any}; closed=:right) = mod(x, I; closed)
+
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
 div(x::T, y::T) where {T<:BitSigned64} = checked_sdiv_int(x, y)
