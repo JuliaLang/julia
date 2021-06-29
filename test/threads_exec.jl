@@ -846,6 +846,7 @@ fib34666(x) =
         @test current_task().sticky == false
         child = @async begin end
         @test current_task().sticky == true
+        @test Threads.threadid() == Threads.threadid(child)
         wait(child)
     end
     wait(parent)
