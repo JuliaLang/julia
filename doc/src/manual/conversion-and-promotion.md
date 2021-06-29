@@ -319,9 +319,15 @@ julia> promote_type(Int8, Int64)
 Int64
 ```
 
+Note that we do **not** overload `promote_type` directly: we overload `promote_rule` instead.
+`promote_type` uses `promote_rule`, and adds the symmetry.
+Overloading it directly can cause ambiguity errrors.
+We overload `promote_rule` to define how things should be promoted, and we use `promote_type`
+to query that.
+
 Internally, `promote_type` is used inside of `promote` to determine what type argument values
-should be converted to for promotion. It can, however, be useful in its own right. The curious
-reader can read the code in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
+should be converted to for promotion. The curious reader can read the code in
+[`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
 which defines the complete promotion mechanism in about 35 lines.
 
 ### Case Study: Rational Promotions
