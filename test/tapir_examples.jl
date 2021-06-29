@@ -17,56 +17,6 @@ end
 @noinline fib3() = fib(3)
 @noinline fib10() = fib(10)
 
-###
-# Interesting corner cases and broken IR
-###
-
-##
-# Parallel regions with errors are tricky
-# #1  detach within %sr, #2, #3
-# #2  ...
-#     unreachable()
-#     reattach within %sr, #3
-# #3  sync within %sr
-#
-# Normally a unreachable get's turned into a ReturnNode(),
-# but that breaks the CFG. So we need to detect that we are
-# in a parallel region.
-#
-# Question:
-#   - Can we elimante a parallel region that throws?
-#     Probably if the sync is dead as well. We could always
-#     use the serial projection and serially execute the region.
-
-#=
-function vecadd_err(out, A, B)
-    @assert length(out) == length(A) == length(B)
-    @inbounds begin
-        @par for i in 1:length(out)
-            out[i] = A[i] + B[i]
-            error()
-        end
-    end
-    return out
-end
-
-# This function is broken due to the PhiNode
-@noinline function fib2(N)
-    if N <= 1
-        return N
-    end
-    token = @syncregion()
-    x1 = 0
-    @spawn token begin
-        x1  = fib2(N-1)
-    end
-    x2 = fib2(N-2)
-    @sync_end token
-    return x1 + x2
-end
-=#
-
-
 module ReturnViaRef
 using Base.Experimental: Tapir
 
@@ -457,6 +407,17 @@ function trivial_continuation(x, y)
         $b = x + y
     end
     return a + b
+end
+
+function always_throw()
+    Tapir.@sync begin
+        Tapir.@spawn begin
+            produce()
+            throw(KeyError(0))
+            produce()
+        end
+        produce()
+    end
 end
 end # module OptimizableTasks
 

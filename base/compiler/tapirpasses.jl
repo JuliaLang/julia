@@ -250,7 +250,12 @@ visited. The function `f` takes two arguments; the index `ibb` of the basic
 block and the corresponding basic block `cfg.blocks[ibb]`. Return `false`
 iff `f` returns `false` at least once.
 """
-function foreach_descendant(f::F, ibb::Int, cfg::CFG, visited = falses(length(cfg.blocks))) where {F}
+function foreach_descendant(
+    f::F,
+    ibb::Int,
+    cfg::CFG,
+    visited = falses(length(cfg.blocks)),
+) where {F}
     function g(ibb)
         visited[ibb] && return true
         visited[ibb] = true
@@ -265,6 +270,26 @@ function foreach_descendant(f::F, ibb::Int, cfg::CFG, visited = falses(length(cf
     return g(ibb)
 end
 # TODO: use worklist?
+
+function foreach_ancestor(
+    f::F,
+    ibb::Int,
+    cfg::CFG,
+    visited = falses(length(cfg.blocks)),
+) where {F}
+    function g(ibb)
+        visited[ibb] && return true
+        visited[ibb] = true
+        bb = cfg.blocks[ibb]
+        f(ibb, bb) || return false
+        cond = true
+        for pred in bb.preds
+            cond &= g(pred)
+        end
+        return cond
+    end
+    return g(ibb)
+end
 
 """
     foreach_def(f, v::SSAValue, ir::IRCode) -> exhausted::Bool
@@ -768,6 +793,33 @@ has_loop(ir::IRCode, blocklabels) =
         any(<(ibb), bb.succs)
     end
 
+function always_throws(ir::IRCode, task::ChildTask)
+    visited = falses(length(ir.cfg.blocks))
+    detacher = block_for_inst(ir, task.detach)
+    for i in task.reattaches
+        # If all non-terminator instructions just beofer all reattach nodes have
+        # `Union{}`, this task always throw.  Handle the case where there is
+        # only one terminator instruction in a BB using `foreach_ancestor`:
+        throws = RefValue(true)
+        foreach_ancestor(block_for_inst(ir, i), ir.cfg, visited) do ibb, bb
+            detacher == ibb && return false  # stop; outside the task
+            stmt = ir.stmts[bb.stmts[end]]
+            if isterminator(stmt[:inst])
+                if length(bb.stmts) < 2
+                    return true  # continue checking successor
+                end
+                stmt = ir.stmts[bb.stmts[end-1]]
+            end
+            if stmt[:type] !== Union{}
+                throws.x = false
+            end
+            return false
+        end
+        throws.x || return false
+    end
+    return true
+end
+
 function try_resolve(@nospecialize(x))
     if x isa GlobalRef
         if isdefined(x.mod, x.name)
@@ -788,7 +840,7 @@ function is_trivial_for_spawn(@nospecialize(inst))
         elseif inst.head === :call
             f, = try_resolve(inst.args[1])
             if f isa Builtin
-                return f !== Core.Intrinsics.llvmcall
+                return !(f === Core.Intrinsics.invoke || f === Core.Intrinsics.llvmcall)
             end
         elseif (
             inst.head === :new ||
@@ -813,6 +865,7 @@ end
 
 function is_trivial_for_spawn(ir::IRCode, task::ChildTask)
     has_loop(ir, task.blocks) && return false
+    always_throws(ir, task) && return true
 
     for ibb in task.blocks
         is_trivial_for_spawn(ir, ir.cfg.blocks[ibb]) || return false
