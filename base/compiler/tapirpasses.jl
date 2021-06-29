@@ -1152,6 +1152,10 @@ function fixup_tapir_phi!(ir::IRCode)
         end
     end
 
+    # TODO: Verify DRF of SROA'ed SSA values.
+    # Following transformation assumes that the newly introduced phi nodes are
+    # not accessed in the continuation (i.e., there was no data races). It
+    # implies that the uses
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
         stmt[:inst] = map_id(identity, stmt[:inst]) do v
@@ -1532,8 +1536,8 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask})
     #
     # and then remove the detach edge from #detacher to #child.
 
-    # Mapping from original def to a vector of 3-tuple (type, ref SSA value):
-    tobeloaded = IdDict{Int,Vector{Tuple{Type,SSAValue}}}()
+    # Mapping from original def to a 2-tuple (type, ref SSA value):
+    tobeloaded = IdDict{Int,Tuple{Type,SSAValue}}()
     for task in tasks
         det = ir.stmts.inst[task.detach]::DetachNode
         tg = det.syncregion::SSAValue
@@ -1552,8 +1556,8 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask})
             )
             insert_node!(ir, tg.id, setset)
             push!(arguments, ref)
-            tbl = get!(() -> Tuple{Type,SSAValue}[], tobeloaded, iout)
-            push!(tbl, (T, ref))
+            @assert !haskey(tobeloaded, iout)
+            tobeloaded[iout] = (T, ref)
         end
         oc_inst = NewInstruction(
             Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any, meth, arguments...),
@@ -1587,9 +1591,8 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask})
                 tbl = get(tobeloaded, v.id, nothing)
                 if tbl !== nothing
                     push!(output_users, i)
-                    for (T, ref) in tbl
-                        push!(task_outputs, (i, v.id, T, ref))
-                    end
+                    T, ref = tbl
+                    push!(task_outputs, (i, v.id, T, ref))
                 end
             end
         end
