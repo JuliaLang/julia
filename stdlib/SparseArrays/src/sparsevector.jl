@@ -1088,7 +1088,7 @@ const _DenseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpo
 const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpose{T,Vector{T}}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
-_makesparse(x::Number) = sparse([1], [1], [x])
+_makesparse(x::Number) = x
 _makesparse(x::AbstractArray) = SparseMatrixCSC(issparse(x) ? x : sparse(x))
 
 function Base._cat(dims, Xin::_SparseConcatGroup...)
@@ -1098,11 +1098,11 @@ function Base._cat(dims, Xin::_SparseConcatGroup...)
 end
 function hcat(Xin::_SparseConcatGroup...)
     X = map(_makesparse, Xin)
-    hcat(X...)
+    return cat(X..., dims=Val(2))
 end
 function vcat(Xin::_SparseConcatGroup...)
     X = map(_makesparse, Xin)
-    vcat(X...)
+    return cat(X..., dims=Val(1))
 end
 hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...) =
     vcat(_hvcat_rows(rows, X...)...)
