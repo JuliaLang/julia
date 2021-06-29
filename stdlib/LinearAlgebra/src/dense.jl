@@ -451,7 +451,7 @@ function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
 end
 function integerpow(A::AbstractMatrix{T}, p) where T
     TT = promote_op(^, T, typeof(p))
-    return (TT == T ? A : copyto!(similar(A, TT), A))^Integer(p)
+    return (TT == T ? A : convert(AbstractMatrix{TT}, A))^Integer(p)
 end
 function schurpow(A::AbstractMatrix, p)
     if istriu(A)

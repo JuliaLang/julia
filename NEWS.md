@@ -6,6 +6,7 @@ New language features
 ---------------------
 
 * `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
+* `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
 
 Language changes
 ----------------
@@ -45,6 +46,7 @@ Standard library changes
 #### Markdown
 
 #### Printf
+* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
 #### Random
 
@@ -69,6 +71,10 @@ Standard library changes
 #### Mmap
 
 #### DelimitedFiles
+
+#### Logging
+* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
+  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
 
 
 Deprecated or removed

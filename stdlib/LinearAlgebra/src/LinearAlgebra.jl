@@ -16,7 +16,8 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
 using Base: IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
+    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing,
+    splat
 using Base.Broadcast: Broadcasted, broadcasted
 import Libdl
 
@@ -354,8 +355,58 @@ control over the factorization of `B`.
 """
 rdiv!(A, B)
 
-copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
-copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
+
+
+"""
+    copy_oftype(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T)`.
+
+The resulting matrix typically has similar algebraic structure as `A`. For
+example, supplying a tridiagonal matrix results in another tridiagonal matrix.
+In general, the type of the output corresponds to that of `similar(A, T)`.
+
+There are three often used methods in LinearAlgebra to create a mutable copy
+of an array with a given eltype. These copies can be passed to in-place
+algorithms (such as ldiv!, rdiv!, lu! and so on). Which one to use in practice
+depends on what is known (or assumed) about the structure of the array in that
+algorithm.
+
+See also: `copy_similar`, `copy_to_array`.
+"""
+copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A,T), A)
+
+"""
+    copy_similar(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T, size(A))`.
+
+Compared to `copy_oftype`, the result can be more flexible. For example,
+supplying a tridiagonal matrix results in a sparse array. In general, the type
+of the output corresponds to that of the three-argument method `similar(A, T, size(s))`.
+
+See also: `copy_oftype`, `copy_to_array`.
+"""
+copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
+
+"""
+    copy_to_array(A, T)
+
+Copy `A` to a regular dense `Array` with element type `T`.
+
+The resulting array is mutable. It can be used, for example, to pass the data of
+`A` to an efficient in-place method for a matrix factorization such as `lu!`, in
+cases where a more specific implementation of `lu!` (or `lu`) is not available.
+
+See also: `copy_oftype`, `copy_similar`
+"""
+copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
+
+# The three copy functions above return mutable arrays with eltype T.
+# To only ensure a certain eltype, and if a mutable copy is not needed, it is
+# more efficient to use:
+# convert(AbstractArray{T}, A)
+
 
 include("adjtrans.jl")
 include("transpose.jl")

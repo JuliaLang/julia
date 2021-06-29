@@ -541,7 +541,12 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
     const_prop_argument_heuristic(interp, argtypes) || const_prop_rettype_heuristic(interp, result.rt) || return nothing
     allconst = is_allconst(argtypes)
     force = force_const_prop(interp, f, method)
-    force || const_prop_function_heuristic(interp, f, argtypes, nargs, allconst) || return nothing
+    if !force
+        if !const_prop_function_heuristic(interp, f, argtypes, nargs, allconst)
+            add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
+            return nothing
+        end
+    end
     force |= allconst
     mi = specialize_method(match, !force)
     if mi === nothing
@@ -550,14 +555,17 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
     end
     mi = mi::MethodInstance
     if !force && !const_prop_methodinstance_heuristic(interp, method, mi)
-        add_remark!(interp, sv, "[constprop] Disabled by heuristic")
+        add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
     end
     return mi
 end
 
 function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, sv::InferenceState)
-    call_result_unused(sv) && result.edgecycle && return false
+    if call_result_unused(sv) && result.edgecycle
+        add_remark!(interp, sv, "[constprop] Edgecycle with unused result")
+        return false
+    end
     return is_improvable(result.rt) && InferenceParams(interp).ipo_constant_propagation
 end
 
@@ -1413,6 +1421,13 @@ end
 
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
+        if isa(e, PhiNode)
+            rt = Union{}
+            for val in e.values
+                rt = tmerge(rt, abstract_eval_special_value(interp, val, vtypes, sv))
+            end
+            return rt
+        end
         return abstract_eval_special_value(interp, e, vtypes, sv)
     end
     e = e::Expr

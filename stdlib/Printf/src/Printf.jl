@@ -220,15 +220,17 @@ end
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
     leftalign, width = spec.leftalign, spec.width
-    if !leftalign && width > 1
-        for _ = 1:(width - 1)
+    c = Char(first(arg))
+    w = textwidth(c)
+    if !leftalign && width > w
+        for _ = 1:(width - w)
             buf[pos] = UInt8(' ')
             pos += 1
         end
     end
-    pos = writechar(buf, pos, arg isa String ? arg[1] : Char(arg))
-    if leftalign && width > 1
-        for _ = 1:(width - 1)
+    pos = writechar(buf, pos, c)
+    if leftalign && width > w
+        for _ = 1:(width - w)
             buf[pos] = UInt8(' ')
             pos += 1
         end
@@ -240,7 +242,7 @@ end
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
     leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
     str = string(arg)
-    slen = length(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
+    slen = textwidth(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
     op = p = prec == -1 ? slen : min(slen, prec)
     if !leftalign && width > p
         for _ = 1:(width - p)
@@ -260,9 +262,9 @@ end
         end
     end
     for c in str
-        p == 0 && break
+        p -= textwidth(c)
+        p < 0 && break
         pos = writechar(buf, pos, c)
-        p -= 1
     end
     if hash && arg isa AbstractString && p > 0
         buf[pos] = UInt8('"')
@@ -755,13 +757,18 @@ const UNROLL_UPTO = 16
     return pos
 end
 
-plength(f::Spec{T}, x) where {T <: Chars} = max(f.width, 1) + (ncodeunits(x isa AbstractString ? x[1] : Char(x)) - 1)
+function plength(f::Spec{T}, x) where {T <: Chars}
+    c = Char(first(x))
+    w = textwidth(c)
+    return max(f.width, w) + (ncodeunits(c) - w)
+end
 plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
 
 function plength(f::Spec{T}, x) where {T <: Strings}
     str = string(x)
-    p = f.precision == -1 ? (length(str) + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - length(str))
+    sw = textwidth(str)
+    p = f.precision == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
+    return max(f.width, p) + (sizeof(str) - sw)
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
@@ -867,6 +874,12 @@ Inf Inf NaN NaN
 julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
 0 0.0 -0.007812
 ```
+
+!!! compat "Julia 1.7"
+    Starting in Julia 1.7, `%s` (string) and `%c` (character) widths are computed
+    using [`textwidth`](@ref), which e.g. ignores zero-width characters
+    (such as combining characters for diacritical marks) and treats certain
+    "wide" characters (e.g. emoji) as width `2`.
 """
 macro printf(io_or_fmt, args...)
     if io_or_fmt isa String

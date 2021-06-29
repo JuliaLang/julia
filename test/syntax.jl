@@ -2927,3 +2927,13 @@ b'` == `$("a\\\nb")`
           \\
           ``` == `'\'`
 end
+
+# issue #41253
+@test (function (::Dict{}); end)(Dict()) === nothing
+
+@testset "issue #41330" begin
+    @test Meta.parse("\"a\\\r\nb\"") == "ab"
+    @test Meta.parse("\"a\\\rb\"") == "ab"
+    @test eval(Meta.parse("`a\\\r\nb`")) == `ab`
+    @test eval(Meta.parse("`a\\\rb`")) == `ab`
+end
