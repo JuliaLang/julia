@@ -925,7 +925,7 @@ mutable struct MethodList <: AbstractArray{Method,1}
 end
 
 size(m::MethodList) = size(m.ms)
-getindex(m::MethodList, i) = m.ms[i]
+getindex(m::MethodList, i::Integer) = m.ms[i]
 
 function MethodList(mt::Core.MethodTable)
     ms = Method[]
