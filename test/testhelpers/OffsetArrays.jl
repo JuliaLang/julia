@@ -442,9 +442,9 @@ no_offset_view(a::Array) = a
 no_offset_view(i::Number) = i
 no_offset_view(A::AbstractArray) = _no_offset_view(axes(A), A)
 _no_offset_view(::Tuple{}, A::AbstractArray{T,0}) where T = A
-_no_offset_view(::Tuple{<:Base.OneTo,Vararg{<:Base.OneTo}}, A::AbstractArray) = A
+_no_offset_view(::Tuple{Base.OneTo, Vararg{Base.OneTo}}, A::AbstractArray) = A
 # the following method is needed for ambiguity resolution
-_no_offset_view(::Tuple{<:Base.OneTo,Vararg{<:Base.OneTo}}, A::AbstractUnitRange) = A
+_no_offset_view(::Tuple{Base.OneTo, Vararg{Base.OneTo}}, A::AbstractUnitRange) = A
 _no_offset_view(::Any, A::AbstractArray) = OffsetArray(A, Origin(1))
 _no_offset_view(::Any, A::AbstractUnitRange) = UnitRange(A)
 
