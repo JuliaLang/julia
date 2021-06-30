@@ -114,20 +114,23 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     }
 
     int ndimwords = jl_array_ndimwords(ndims);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
     if (tot <= ARRAY_INLINE_NBYTES) {
-        if (isunboxed && elsz >= 4)
-            tsz = JL_ARRAY_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT); // align data area
+        // align data area
+        if (tot >= ARRAY_CACHE_ALIGN_THRESHOLD)
+            tsz = JL_ARRAY_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT);
+        else if (isunboxed && elsz >= 4)
+            tsz = JL_ARRAY_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
         size_t doffs = tsz;
         tsz += tot;
-        tsz = JL_ARRAY_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT); // align whole object
+        // jl_array_t is large enough that objects will always be aligned 16
         a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
+        assert(((size_t)a & 15) == 0);
         // No allocation or safepoint allowed after this
         a->flags.how = 0;
         data = (char*)a + doffs;
     }
     else {
-        tsz = JL_ARRAY_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT); // align whole object
         data = jl_gc_managed_malloc(tot);
         // Allocate the Array **after** allocating the data
         // to make sure the array is still young
@@ -223,7 +226,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
 
     int ndimwords = jl_array_ndimwords(ndims);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*);
     a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
     // No allocation or safepoint allowed after this
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
@@ -304,7 +307,7 @@ JL_DLLEXPORT jl_array_t *jl_string_to_array(jl_value_t *str)
     jl_array_t *a;
 
     int ndimwords = jl_array_ndimwords(1);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*);
     a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, jl_array_uint8_type);
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->flags.ndims = 1;
@@ -351,7 +354,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
 
     int ndimwords = jl_array_ndimwords(1);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
     a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
     // No allocation or safepoint allowed after this
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
@@ -418,7 +421,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
 
     int ndimwords = jl_array_ndimwords(ndims);
-    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
+    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
     a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, atype);
     // No allocation or safepoint allowed after this
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;

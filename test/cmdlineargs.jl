@@ -324,7 +324,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         rm(memfile)
         @test popfirst!(got) == "        0 g(x) = x + 123456"
         @test popfirst!(got) == "        - function f(x)"
-        @test popfirst!(got) == "       80     []"
+        if Sys.WORD_SIZE == 64
+            @test popfirst!(got) == "       48     []"
+        else
+            @test popfirst!(got) == "       32     []"
+        end
         if Sys.WORD_SIZE == 64
             # P64 pools with 64 bit tags
             @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
@@ -337,7 +341,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test popfirst!(got) == "        8     Base.invokelatest(g, 0)"
             @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         end
-        @test popfirst!(got) == "       80     []"
+        if Sys.WORD_SIZE == 64
+            @test popfirst!(got) == "       48     []"
+        else
+            @test popfirst!(got) == "       32     []"
+        end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
         @test isempty(got) || got
