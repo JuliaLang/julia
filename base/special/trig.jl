@@ -555,40 +555,36 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     #    S8) ATAN2(+-INF,+INF ) is +-pi/4 ;
     #    S9) ATAN2(+-INF,-INF ) is +-3pi/4;
     #    S10) ATAN2(+-INF, (anything but,0,NaN, and INF)) is +-pi/2;
+    if isnan(x) || isnan(y) # S1 or S2
+        return T(NaN)
+    end
     # generate an m ∈ {0, 1, 2, 3} to branch off of
-    m = 2*signbit(x) + 1*signbit(y)+1
+    m = 2*signbit(x) + 1*signbit(y)
 
     if iszero(y)
-		return (y,y,T(pi),-T(pi))[m]
+		z = zero(T)
     elseif iszero(x)
         return flipsign(T(pi)/2, y)
-    end
-
-    if isinf(x)
-        if isinf(y)
-			return (T(pi)/4,-T(pi)/4,3*T(pi)/4,-3*T(pi)/4)[m]
-        else
-			return (zero(T),-zero(T),T(pi),-T(pi))[m]
-        end
-    end
-    # x wasn't Inf, but y is
-    isinf(y) && return copysign(T(pi)/2, y)
-
-    if abs(y) > abs(x)*ATAN2_RATIO_THRESHOLD(T)
-        z=T(pi)/2+T(0.5)*ATAN2_PI_LO(T)
-		println((z,m))
-		m = 2 - (m&1)
+    elseif isinf(x)
+        z = isinf(y) ?  T(pi) * T(.25) : return zero(T)
+    elseif isinf(y)
+		return copysign(T(pi)/2, y)
+    elseif y > x*ATAN2_RATIO_THRESHOLD(T) # |y/x| >  threshold
+        z = T(0.5)*(T(pi) + ATAN2_PI_LO(T))
+        m&=1;
+    elseif x<0 && y < -x*ATAN2_RATIO_THRESHOLD(T) # 0 > |y|/x > threshold
+        z = zero(T)
     else #safe to do y/x
         z = atan(abs(y/x))
     end
 
-    if m == 1
+    if m == 0
         return z # atan(+,+)
-    elseif m == 2
+    elseif m == 1
         return -z # atan(-,+)
-    elseif m == 3
+    elseif m == 2
         return T(pi)-(z-ATAN2_PI_LO(T)) # atan(+,-)
-    else # default case m == 4
+    else # default case m == 3
         return (z-ATAN2_PI_LO(T))-T(pi) # atan(-,-)
     end
 end
