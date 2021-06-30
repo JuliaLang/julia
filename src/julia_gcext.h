@@ -49,6 +49,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_foreign_type(
         int haspointers,
         int large);
 
+JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt);
+
 JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void);
 JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void);
 

@@ -4,7 +4,7 @@
 (define (add-dots ops) (append! ops (map (lambda (op) (symbol (string "." op))) ops)))
 
 (define prec-assignment
-  (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
+  (append! (add-dots '(= += -= −= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻= ≔ ⩴ ≕))
            (add-dots '(~))
            '(:= $=)))
 ;; comma - higher than assignment outside parentheses, lower when inside
@@ -20,7 +20,7 @@
 (define prec-pipe>       '(|.\|>| |\|>|))
 (define prec-colon       (append! '(: |..|) (add-dots '(… ⁝ ⋮ ⋱ ⋰ ⋯))))
 (define prec-plus        (append! '($)
-                          (add-dots '(+ - ¦ |\|| ⊕ ⊖ ⊞ ⊟ |++| ∪ ∨ ⊔ ± ∓ ∔ ∸ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣))))
+                          (add-dots '(+ - − ¦ |\|| ⊕ ⊖ ⊞ ⊟ |++| ∪ ∨ ⊔ ± ∓ ∔ ∸ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣))))
 (define prec-times       (add-dots '(* / ⌿ ÷ % & · · ⋅ ∘ × |\\| ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗ ⨟)))
 (define prec-rational    (add-dots '(//)))
 (define prec-bitshift    (add-dots '(<< >> >>>)))
@@ -311,6 +311,9 @@
 (define (numchk n s)
   (or n (error (string "invalid numeric constant \"" s "\""))))
 
+(define (string-lastchar s)
+  (string.char s (string.dec s (length s))))
+
 (define (read-number port leadingdot neg)
   (let ((str  (open-output-string))
         (pred char-numeric?)
@@ -377,13 +380,17 @@
               (and (eq? pred char-hex?) ispP)
               (memv c '(#\e #\E #\f)))
           (begin (read-char port)
-                 (let ((d (peek-char port)))
+                 (let* ((d (peek-char port))
+                        (is-minus-sign (or (eqv? d #\-) (eqv? d #\u2212))))
                    (if (and (not (eof-object? d))
-                            (or (char-numeric? d) (eqv? d #\+) (eqv? d #\-)))
+                            (or (char-numeric? d) (eqv? d #\+) is-minus-sign))
                        (begin (set! is-float32-literal (eqv? c #\f))
                               (set! is-hex-float-literal ispP)
                               (write-char c str)
-                              (write-char (read-char port) str)
+                              (if is-minus-sign
+                                  (begin (read-char port)
+                                         (write-char #\- str))
+                                  (write-char (read-char port) str))
                               (read-digs #t #f)
                               (disallow-dot))
                        (io.ungetc port c)))))
@@ -408,7 +415,7 @@
                    (string.sub s 1)
                    s)
                r is-float32-literal)))
-      (if (and (eqv? #\. (string.char s (string.dec s (length s))))
+      (if (and (eqv? #\. (string-lastchar s))
                (let ((nxt (peek-char port)))
                  (and (not (eof-object? nxt))
                       (or (identifier-start-char? nxt)
@@ -1218,6 +1225,8 @@
                           (loop (list* 'typed_vcat ex (cdr al))))
                          ((comprehension)
                           (loop (list* 'typed_comprehension ex (cdr al))))
+                         ((ncat)
+                          (loop (list* 'typed_ncat ex (cdr al))))
                          (else (error "unknown parse-cat result (internal error)")))))))
             ((|.|)
              (disallow-space s ex t)
@@ -1320,7 +1329,8 @@
 (define (valid-1arg-func-sig? sig)
   (or (symbol? sig)
       (and (pair? sig) (eq? (car sig) '|::|)
-           (symbol? (cadr sig)))))
+           (or (symbol? (cadr sig))
+               (length= sig 2)))))
 
 (define (unwrap-where x)
   (if (and (pair? x) (eq? (car x) 'where))
@@ -1460,7 +1470,9 @@
                                    ;; function foo  =>  syntax error
                                    (error (string "expected \"(\" in " word " definition")))
                                (if (not (valid-func-sig? paren sig))
-                                   (error (string "expected \"(\" in " word " definition"))
+                                   (if paren
+                                       (error (string "ambiguous signature in " word " definition. Try adding a comma if this is a 1-argument anonymous function."))
+                                       (error (string "expected \"(\" in " word " definition")))
                                    sig)))
                      (body (parse-block s)))
                 (expect-end s word)
@@ -1849,60 +1861,125 @@
          (take-token s))
      `(comprehension ,gen))))
 
-(define (parse-matrix s first closer gotnewline last-end-symbol)
-  (define (fix head v) (cons head (reverse v)))
-  (define (update-outer v outer)
-    (cond ((null? v)       outer)
-          ((null? (cdr v)) (cons (car v) outer))
-          (else            (cons (fix 'row v) outer))))
-  (define semicolon (eqv? (peek-token s) #\;))
+(define (parse-array s first closer gotnewline last-end-symbol)
+  (define (fix head v)
+    (cons head (reverse v)))
+  (define (unfixrow l)
+    (cons (reverse (cdaar l)) (if (and (null? (cdar l)) (null? (cdr l)))
+                                  '()
+                                  (cons (cdar l) (cdr l)))))
+  (define (fixcat head d v)
+    (cons head (cons d (reverse v))))
+  (define (ncons a n l)
+    (if (< n 1)
+        l
+        (ncons a (1- n) (cons a l))))
+  (define (fix-level ah n)
+     (if (length= ah 1)
+         (car ah)
+         (if (= n 1)
+             (fix 'row ah)
+             (fixcat 'nrow (1- n) ah))))
+  (define (collapse-level n l i)
+    (if (> n 0)
+        (let* ((lhfix (fix-level (car l) i))
+               (lnew (if (null? (cdr l))
+                         (list (list lhfix))
+                         (cons (cons lhfix (cadr l)) (cddr l)))))
+          (collapse-level (1- n) lnew (1+ i)))
+        l))
+  (define (parse-array-inner s a is-row-first semicolon-count max-level closer gotnewline gotlinesep)
+    (define (process-semicolon next)
+      (set! semicolon-count (1+ semicolon-count))
+      (set! max-level (max max-level semicolon-count))
+      (if (and (null? is-row-first) (= semicolon-count 2) (not (eqv? next #\;)))
+          ; finding ;; that isn't a row-separator makes it column-first
+          (set! is-row-first #f))
+      (set! a (collapse-level 1 a semicolon-count)))
+    (define (restore-lower-dim-lists next)
+      (if (and (not gotlinesep) (not (memv next (list #\; 'for closer #\newline))))
+          (set! a (ncons '() semicolon-count a))))
+    (let ((t (if (or gotnewline (eqv? (peek-token s) #\newline))
+                 #\newline
+                 (require-token s))))
+      (if (eqv? t closer)
+          (begin
+            (take-token s)
+            (set! a (collapse-level (- max-level semicolon-count) a (1+ semicolon-count)))
+            (cond ((= max-level 0)
+                   (if (length= (car a) 1)
+                       (fix 'vect (car a))
+                       (fix 'hcat (car a))))
+                  ((= max-level 1)
+                   (fix 'vcat (car a)))
+                  (else
+                   (fixcat 'ncat max-level (car a)))))
+      (case t
+        ((#\newline)
+         (or gotnewline (take-token s))
+         (let ((next (peek-token s)))
+           (if (and (> semicolon-count 0) (eqv? next #\;))
+               (error (string "semicolons may appear before or after a line break in an array expression, "
+                              "but not both")))
+           (if (and (= semicolon-count 0)
+                    (not (memv next (list #\; 'for closer #\newline))))
+               ; treat a linebreak prior to a value as a semicolon if no previous semicolons observed
+                (process-semicolon next))
+           (restore-lower-dim-lists next)
+           (parse-array-inner s a is-row-first semicolon-count max-level closer #f gotlinesep)))
+        ((#\;)
+         (or gotnewline (take-token s))
+         (if (and (> semicolon-count 0) (ts:space? s)) ; disallow [a; ;b]
+             (error "multiple semicolons must be adjacent in an array expression"))
+         (let ((next (peek-token s)))
+           (let ((is-line-sep
+                 (if (and (not (null? is-row-first)) is-row-first (= semicolon-count 1))
+                     (cond ((eqv? next #\newline) #t) ; [a b ;;<newline>...
+                           ((not (or (eof-object? next) (eqv? next #\;))) ; [a b ;;...
+                             (error (string "cannot mix space and ;; separators in an array expression, "
+                                            "except to wrap a line")))
+                           (else #f)) ; [a b ;;<eof> for REPL,  [a ;;...
+                     #f))) ; [a ; b ;; c ; d...
+             (if is-line-sep
+                 (begin (set! a (unfixrow a))
+                        (set! max-level
+                              (if (null? (cdr a))
+                                  0 ; no prior single semicolon
+                                  max-level)))
+                 (begin (process-semicolon next)
+                        (restore-lower-dim-lists next)))
+           (parse-array-inner s a is-row-first semicolon-count max-level closer #f is-line-sep))))
+        ((#\,)
+         (error "unexpected comma in array expression"))
+        ((#\] #\})
+         (error (string "unexpected \"" t "\"")))
+        ((for)
+         (if (and (length= (car a) 1)
+                  (null? (cdr a)))
+             (begin ;; if we get here, there must have been some kind of space or separator
+               ;;(expect-space-before s 'for)
+               (take-token s)
+               (parse-comprehension s (caar a) closer))
+             (error "invalid comprehension syntax")))
+        (else
+         (if (and (not gotlinesep) (pair? (car a)) (not (ts:space? s)))
+            (error (string "expected \"" closer "\" or separator in arguments to \""
+                           (if (eqv? closer #\]) #\[ #\{) " " closer
+                           "\"; got \""
+                           (deparse (caar a)) t "\"")))
+         (let ((u (parse-eq* s)))
+           (set! a (cons (cons u (car a)) (cdr a)))
+           (if (= (length (car a)) 2)
+               ; at least 2 elements separated by space found [a b...], [a; b c...]
+               (if (null? is-row-first)
+                   (set! is-row-first #t)
+                   (if (not is-row-first)
+                       (error (string "cannot mix space and \";;\" separators in an array expression, "
+                                      "except to wrap a line"))))))
+         (parse-array-inner s a is-row-first 0 max-level closer #f #f))))))
   ;; if a [ ] expression is a cat expression, `end` is not special
   (with-bindings ((end-symbol last-end-symbol))
-  (let loop ((vec   (list first))
-             (outer '()))
-    (let ((t  (if (or (eqv? (peek-token s) #\newline) gotnewline)
-                  #\newline
-                  (require-token s))))
-      (if (eqv? t closer)
-          (begin (take-token s)
-                 (if (pair? outer)
-                     (fix 'vcat (update-outer vec outer))
-                     (if (or (null? vec) (null? (cdr vec)))
-                         (fix 'vect vec)     ; [x]   => (vect x)
-                         (fix 'hcat vec))))  ; [x y] => (hcat x y)
-          (case t
-            ((#\;)
-             (take-token s)
-             (if (eqv? (peek-token s) #\;)
-               (parser-depwarn s (string "Multiple semicolons in an array concatenation expression currently have no effect, "
-                                  "but may have a new meaning in a future version of Julia.")
-                                 "Please remove extra semicolons to preserve forward compatibility e.g. [1;;3] => [1;3]."))
-             (set! gotnewline #f)
-             (loop '() (update-outer vec outer)))
-            ((#\newline)
-             (or gotnewline (take-token s))
-             (set! gotnewline #f)
-             (loop '() (update-outer vec outer)))
-            ((#\,)
-             (error "unexpected comma in matrix expression"))
-            ((#\] #\})
-             (error (string "unexpected \"" t "\"")))
-            ((for)
-             (if (and (not semicolon)
-                      (length= outer 1)
-                      (null? vec))
-                 (begin ;; if we get here, there must have been some kind of space or separator
-                        ;;(expect-space-before s 'for)
-                        (take-token s)
-                        (parse-comprehension s (car outer) closer))
-                 (error "invalid comprehension syntax")))
-            (else
-             (if (and (pair? vec) (not (ts:space? s)))
-                 (error (string "expected \"" closer "\" or separator in arguments to \""
-                                (if (eqv? closer #\]) #\[ #\{) " " closer
-                                "\"; got \""
-                                (deparse (car vec)) t "\"")))
-             (loop (cons (parse-eq* s) vec) outer))))))))
+    (parse-array-inner s (list (list first)) '() 0 0 closer gotnewline #f)))
 
 (define (expect-space-before s t)
   (if (not (ts:space? s))
@@ -1929,9 +2006,9 @@
                  (take-token s)
                  (if (memv (peek-token s) (list #\, closer))
                      (parse-vect s first closer)
-                     (parse-matrix s first closer #t last-end-symbol)))
+                     (parse-array s first closer #t last-end-symbol)))
                 (else
-                 (parse-matrix s first closer #f last-end-symbol)))))))
+                 (parse-array s first closer #f last-end-symbol)))))))
 
 (define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
 (define (=-to-kw e) (if (assignment? e) (cons 'kw (cdr e)) e))
@@ -2111,16 +2188,44 @@
 (define (unescape-parsed-string-literal strs)
   (map-at even? unescape-string strs))
 
+(define (strip-escaped-newline s raw)
+  (if raw s (map (lambda (s)
+                   (if (string? s) (strip-escaped-newline- s) s))
+                 s)))
+
+;; remove `\` followed by a newline
+(define (strip-escaped-newline- s)
+  (let ((in  (open-input-string s))
+        (out (open-output-string)))
+    (define (loop preceding-backslash?)
+          (let ((c (read-char in)))
+            (cond ((eof-object? c))
+                  (preceding-backslash?
+                   (if (not (eqv? c #\newline))
+                       (begin (write-char #\\ out) (write-char c out))
+                       ((define (loop-)
+                          (if (memv (peek-char in) '(#\space #\tab))
+                              (begin (take-char in) (loop-))))))
+                   (loop #f))
+                  ((eqv? c #\\) (loop #t))
+                  (else (write-char c out) (loop #f)))))
+    (loop #f)
+    (io.tostring! out)))
+
 (define (parse-string-literal s delim raw)
-  (let ((p (ts:port s)))
-    ((if raw identity unescape-parsed-string-literal)
-     (if (eqv? (peek-char p) delim)
-         (if (eqv? (peek-char (take-char p)) delim)
-             (map-first strip-leading-newline
-                        (dedent-triplequoted-string
-                         (parse-string-literal- 2 (take-char p) s delim raw)))
-             (list ""))
-         (parse-string-literal- 0 p s delim raw)))))
+  (let* ((p (ts:port s))
+         (str (if (eqv? (peek-char p) delim)
+                  (if (eqv? (peek-char (take-char p)) delim)
+                      (map-first strip-leading-newline
+                                 (dedent-triplequoted-string
+                                   (strip-escaped-newline
+                                     (parse-string-literal- 2 (take-char p) s delim raw)
+                                     raw)))
+                      (list ""))
+                  (strip-escaped-newline
+                    (parse-string-literal- 0 p s delim raw)
+                    raw))))
+    (if raw str (unescape-parsed-string-literal str))))
 
 (define (strip-leading-newline s)
   (let ((n (sizeof s)))
@@ -2269,8 +2374,11 @@
                     (loop (read-char p) b e 0))))
            (let ((nxch (not-eof-for delim (read-char p))))
              (write-char #\\ b)
-             (write-char nxch b)
-             (loop (read-char p) b e 0))))
+             (if (eqv? nxch #\return)
+                 (loop nxch b e 0)
+                 (begin
+                   (write-char nxch b)
+                   (loop (read-char p) b e 0))))))
 
       ((and (eqv? c #\$) (not raw))
        (let* ((ex (parse-interpolate s))

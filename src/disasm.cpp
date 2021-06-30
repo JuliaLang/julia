@@ -249,7 +249,7 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
         if (frame.Line != UINT_MAX && frame.Line != 0)
             Out << ":" << frame.Line;
         StringRef method = StringRef(frame.FunctionName).rtrim(';');
-        Out << " within `" << method << "'";
+        Out << " within `" << method << "`";
         if (collapse_recursive) {
             while (nctx < nframes) {
                 const DILineInfo &frame = DI.at(nframes - 1 - nctx);
@@ -470,7 +470,8 @@ static void jl_dump_asm_internal(
         DIContext *di_ctx,
         raw_ostream &rstream,
         const char* asm_variant,
-        const char* debuginfo);
+        const char* debuginfo,
+        bool binary);
 
 // This isn't particularly fast, but neither is printing assembly, and they're only used for interactive mode
 static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
@@ -506,10 +507,9 @@ static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
 
 // print a native disassembly for the function starting at fptr
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo)
+jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo, char binary)
 {
     assert(fptr != 0);
-    jl_ptls_t ptls = jl_get_ptls_states();
     std::string code;
     raw_string_ostream stream(code);
 
@@ -537,13 +537,15 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant,
     }
 
     // Dump assembly code
+    jl_ptls_t ptls = jl_current_task->ptls;
     int8_t gc_state = jl_gc_safe_enter(ptls);
     jl_dump_asm_internal(
             fptr, symsize, slide,
             Section, context,
             stream,
             asm_variant,
-            debuginfo);
+            debuginfo,
+            binary);
     jl_gc_safe_leave(ptls, gc_state);
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
@@ -739,6 +741,33 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
 }
 } // namespace
 
+// Stringify raw bytes as a comment string.
+std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory, const llvm::Triple& Triple)
+{
+    std::string Buffer{"; "};
+    llvm::raw_string_ostream Stream{Buffer};
+    auto Address = reinterpret_cast<uintptr_t>(Memory.data());
+    // write abbreviated address
+    llvm::write_hex(Stream, Address & 0xffff, HexPrintStyle::Lower, 4);
+    Stream << ":";
+    auto Arch = Triple.getArch();
+    bool FixedLength = !(Arch == Triple::x86 || Arch == Triple::x86_64);
+    if (FixedLength)
+        Stream << " ";
+    if (FixedLength && Triple.isLittleEndian()) {
+        for (auto Iter = Memory.rbegin(); Iter != Memory.rend(); ++Iter)
+            llvm::write_hex(Stream, *Iter, HexPrintStyle::Lower, 2);
+    }
+    else {
+        // variable-length or (fixed-length) big-endian format
+        for (auto Byte : Memory) {
+            if (!FixedLength)
+                Stream << " ";
+            llvm::write_hex(Stream, Byte, HexPrintStyle::Lower, 2);
+        }
+    }
+    return Stream.str();
+}
 
 static void jl_dump_asm_internal(
         uintptr_t Fptr, size_t Fsize, int64_t slide,
@@ -746,7 +775,8 @@ static void jl_dump_asm_internal(
         DIContext *di_ctx,
         raw_ostream &rstream,
         const char* asm_variant,
-        const char* debuginfo)
+        const char* debuginfo,
+        bool binary)
 {
     // GC safe
     // Get the host information
@@ -840,6 +870,16 @@ static void jl_dump_asm_internal(
         if (j + 1 < nlineinfo) {
             di_lineinfo.resize(j + 1);
         }
+    }
+
+    if (binary) {
+        // Print the complete address and the size at the top (instruction addresses are abbreviated)
+        std::string Buffer{"; code origin: "};
+        llvm::raw_string_ostream Stream{Buffer};
+        auto Address = reinterpret_cast<uintptr_t>(memoryObject.data());
+        llvm::write_hex(Stream, Address, HexPrintStyle::Lower, 16);
+        Stream << ", code size: " << memoryObject.size();
+        Streamer->emitRawText(Stream.str());
     }
 
     // Take two passes: In the first pass we record all branch labels,
@@ -984,6 +1024,8 @@ static void jl_dump_asm_internal(
                             }
                         }
                     }
+                    if (binary)
+                        Streamer->emitRawText(rawCodeComment(memoryObject.slice(Index, insSize), TheTriple));
                     Streamer->emitInstruction(Inst, *STI);
                 }
                 break;

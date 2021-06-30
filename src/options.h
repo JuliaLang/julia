@@ -12,9 +12,13 @@
 
 // object layout options ------------------------------------------------------
 
-// how much space we're willing to waste if an array outgrows its
-// original object
+// The data for an array this size or below will be allocated within the
+// Array object. If the array outgrows that space, it will be wasted.
 #define ARRAY_INLINE_NBYTES (2048*sizeof(void*))
+
+// Arrays at least this size will get larger alignment (JL_CACHE_BYTE_ALIGNMENT).
+// Must be bigger than GC_MAX_SZCLASS.
+#define ARRAY_CACHE_ALIGN_THRESHOLD 2048
 
 // codegen options ------------------------------------------------------------
 
@@ -114,7 +118,7 @@
 #endif
 
 // allow a suspended Task to restart on a different thread
-//#define MIGRATE_TASKS
+#define MIGRATE_TASKS
 
 // threading options ----------------------------------------------------------
 

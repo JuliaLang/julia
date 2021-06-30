@@ -544,10 +544,14 @@ end # Float16
         @test Ryu.writefixed(7.018232e-82, 6) == "0.000000"
     end
 
-    @testset "Consistency of trimtrailingzeros" begin
+    @testset "Trimming of trailing zeros" begin
         @test Ryu.writefixed(0.0, 1, false, false, false, UInt8('.'), true) == "0"
         @test Ryu.writefixed(1.0, 1, false, false, false, UInt8('.'), true) == "1"
         @test Ryu.writefixed(2.0, 1, false, false, false, UInt8('.'), true) == "2"
+
+        @test Ryu.writefixed(1.25e+5, 0, false, false, false, UInt8('.'), true) == "125000"
+        @test Ryu.writefixed(1.25e+5, 1, false, false, false, UInt8('.'), true) == "125000"
+        @test Ryu.writefixed(1.25e+5, 2, false, false, false, UInt8('.'), true) == "125000"
     end
 end # fixed
 

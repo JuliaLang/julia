@@ -1,6 +1,6 @@
 name = "CompilerSupportLibraries_jll"
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "0.4.2+1"
+version = "0.5.0+0"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -8,3 +8,9 @@ Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [compat]
 julia = "1.6"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

@@ -677,8 +677,8 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
-    @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Type
-    @test fieldtype_tfunc(Type{<:Tuple}, Any) == Type
+    @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Any
+    @test fieldtype_tfunc(Type{<:Tuple}, Any) == Any
     @test fieldtype_nothrow(Type{Base.RefValue{<:Real}}, Const(:x))
     @test !fieldtype_nothrow(Type{Union{}}, Const(:x))
     @test !fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Int32} where {T<:Real}, Const(:x))
@@ -1551,9 +1551,9 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
 
 # inference of `T.mutable`
-@test Core.Compiler.getfield_tfunc(Const(Int), Const(:mutable)) == Const(false)
-@test Core.Compiler.getfield_tfunc(Const(Vector{Int}), Const(:mutable)) == Const(true)
-@test Core.Compiler.getfield_tfunc(DataType, Const(:mutable)) == Bool
+@test Core.Compiler.getfield_tfunc(Const(Int.name), Const(:flags)) == Const(0x4)
+@test Core.Compiler.getfield_tfunc(Const(Vector{Int}.name), Const(:flags)) == Const(0x2)
+@test Core.Compiler.getfield_tfunc(Core.TypeName, Const(:flags)) == UInt8
 
 # getfield on abstract named tuples. issue #32698
 import Core.Compiler.getfield_tfunc
@@ -1831,6 +1831,24 @@ end
         d = b ? a : 1 # d::Int, not d::Union{Nothing,Int}
         return c, d # ::Tuple{Int,Int}
     end == Any[Tuple{Int,Int}]
+end
+
+@testset "conditional constraint propagation from non-`Conditional` object" begin
+    @test Base.return_types((Bool,)) do b
+        if b
+            return !b ? nothing : 1 # ::Int
+        else
+            return 0
+        end
+    end == Any[Int]
+
+    @test Base.return_types((Any,)) do b
+        if b
+            return b # ::Bool
+        else
+            return nothing
+        end
+    end == Any[Union{Bool,Nothing}]
 end
 
 function f25579(g)
@@ -2935,7 +2953,8 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Integer
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Any, Vararg}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Vararg}) == Expr
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Vararg}) == Expr
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Any, Vararg}) == Expr
@@ -2946,11 +2965,12 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Vararg}) == Int
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Vararg}) == Int
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Union{Type, TypeVar}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Union{Type, TypeVar}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Union{Type, TypeVar}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Union{Type, TypeVar}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Any, Vararg}) == Int
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Any, Vararg}) == Union{}
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Any
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Any
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Any, Vararg}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Any
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Any
@@ -3269,4 +3289,109 @@ end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
         end
         true
     end
+end
+
+# Make sure that const prop doesn't fall into cycles that aren't problematic
+# in the type domain
+f_recurse(x) = x > 1000000 ? x : f_recurse(x+1)
+@test Base.return_types() do
+    f_recurse(1)
+end |> first === Int
+
+# issue #39915
+function f33915(a_tuple, which_ones)
+    rest = f33915(Base.tail(a_tuple), Base.tail(which_ones))
+    if first(which_ones)
+        (first(a_tuple), rest...)
+    else
+        rest
+    end
+end
+f33915(a_tuple::Tuple{}, which_ones::Tuple{}) = ()
+g39915(a_tuple) = f33915(a_tuple, (true, false, true, false))
+@test Base.return_types() do
+    g39915((1, 1.0, "a", :a))
+end |> first === Tuple{Int, String}
+
+# issue #40742
+@test Base.return_types(string, (Vector{Tuple{:x}},)) == Any[String]
+
+# issue #40804
+@test Base.return_types(()) do; ===(); end == Any[Union{}]
+@test Base.return_types(()) do; typeassert(); end == Any[Union{}]
+
+primitive type UInt24ish 24 end
+f34288(x) = Core.Intrinsics.checked_sdiv_int(x, Core.Intrinsics.trunc_int(UInt24ish, 0))
+@test Base.return_types(f34288, (UInt24ish,)) == Any[UInt24ish]
+
+# Inference of PhiNode showing up in lowered AST
+function f_convert_me_to_ir(b, x)
+    a = b ? sin(x) : cos(x)
+    return a
+end
+
+let
+    # Test the presence of PhiNodes in lowered IR by taking the above function,
+    # running it through SSA conversion and then putting it into an opaque
+    # closure.
+    mi = Core.Compiler.specialize_method(first(methods(f_convert_me_to_ir)),
+        Tuple{Bool, Float64}, Core.svec())
+    ci = Base.uncompressed_ast(mi.def)
+    ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
+    sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
+        Core.Compiler.NativeInterpreter())
+    ir = Core.Compiler.convert_to_ircode(ci, Core.Compiler.copy_exprargs(ci.code),
+        false, 2, sv)
+    ir = Core.Compiler.slot2reg(ir, ci, 2, sv)
+    ir = Core.Compiler.compact!(ir)
+    Core.Compiler.replace_code_newstyle!(ci, ir, 3)
+    ci.ssavaluetypes = length(ci.code)
+    @test any(x->isa(x, Core.PhiNode), ci.code)
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(b, 1.0)
+    @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
+
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(true, 1.0)
+    @test Base.return_types(oc, Tuple{}) == Any[Float64]
+end
+
+@testset "constant prop' on `invoke` calls" begin
+    m = Module()
+
+    # simple cases
+    @eval m begin
+        f(a::Any,    sym::Bool) = sym ? Any : :any
+        f(a::Number, sym::Bool) = sym ? Number : :number
+    end
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Any, true::Bool)
+    end) == Any[Type{Any}]
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Number, true::Bool)
+    end) == Any[Type{Number}]
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Any, false::Bool)
+    end) == Any[Symbol]
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Number, false::Bool)
+    end) == Any[Symbol]
+
+    # https://github.com/JuliaLang/julia/issues/41024
+    @eval m begin
+        # mixin, which expects common field `x::Int`
+        abstract type AbstractInterface end
+        Base.getproperty(x::AbstractInterface, sym::Symbol) =
+            sym === :x ? getfield(x, sym)::Int :
+            return getfield(x, sym) # fallback
+
+        # extended mixin, which expects additional field `y::Rational{Int}`
+        abstract type AbstractInterfaceExtended <: AbstractInterface end
+        Base.getproperty(x::AbstractInterfaceExtended, sym::Symbol) =
+            sym === :y ? getfield(x, sym)::Rational{Int} :
+            return Base.@invoke getproperty(x::AbstractInterface, sym::Symbol)
+    end
+    @test (@eval m Base.return_types((AbstractInterfaceExtended,)) do x
+        x.x
+    end) == Any[Int]
 end

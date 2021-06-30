@@ -57,7 +57,7 @@ Mathematically a range is uniquely determined by any three of `start`, `step`, `
 Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
+  to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
 
 # Examples
 ```jldoctest
@@ -927,6 +927,14 @@ end
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
+function show(io::IO, r::StepRangeLen)
+    if step(r) != 0
+        print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
+    else
+        # ugly temporary printing, to avoid 0:0:0 etc.
+        print(io, "StepRangeLen(", repr(first(r)), ", ", repr(step(r)), ", ", repr(length(r)), ")")
+    end
+end
 
 function ==(r::T, s::T) where {T<:AbstractRange}
     isempty(r) && return isempty(s)
@@ -1209,7 +1217,9 @@ function sum(r::AbstractRange{<:Real})
 end
 
 function _in_range(x, r::AbstractRange)
-    if step(r) == 0
+    if !isfinite(x)
+        return false
+    elseif iszero(step(r))
         return !isempty(r) && first(r) == x
     else
         n = round(Integer, (x - first(r)) / step(r)) + 1
@@ -1238,7 +1248,7 @@ function _define_range_op(@nospecialize f)
             r1l = length(r1)
             (r1l == length(r2) ||
              throw(DimensionMismatch("argument dimensions must match: length of r1 is $r1l, length of r2 is $(length(r2))")))
-            range($f(first(r1), first(r2)), step=$f(step(r1), step(r2)), length=r1l)
+            StepRangeLen($f(first(r1), first(r2)), $f(step(r1), step(r2)), r1l)
         end
 
         function $f(r1::LinRange{T}, r2::LinRange{T}) where T
@@ -1274,7 +1284,7 @@ end
 Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
 i.e. `y = mod(x - first(r), n) + first(r)`.
 
-See also: [`mod1`](@ref).
+See also [`mod1`](@ref).
 
 # Examples
 ```jldoctest
