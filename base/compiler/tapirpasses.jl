@@ -772,6 +772,19 @@ function calls(inst, r::GlobalRef, nargs::Int)
     return inst.args
 end
 
+function find_method_instance_from_sig(
+    interp::AbstractInterpreter,
+    @nospecialize(sig::Type);
+    sparms::SimpleVector = svec(),
+    preexisting::Bool = false,
+    compilesig::Bool = false,
+)
+    result = findsup(sig, method_table(interp))
+    result === nothing && return nothing
+    method, = result
+    return specialize_method(method, sig, sparms, preexisting, compilesig)
+end
+
 function is_in_loop(cfg::CFG, subcfg, needle::Int)
     subcfg = BitSet(subcfg)
     ref = RefValue(false)
@@ -1526,7 +1539,7 @@ function tapir_module()
     return Experimental.Tapir::Module
 end
 
-function lower_tapir!(ir::IRCode)
+function lower_tapir!(ir::IRCode, interp::AbstractInterpreter)
     Tapir = tapir_module()
     Tapir isa Module || return ir
 
@@ -1537,7 +1550,16 @@ function lower_tapir!(ir::IRCode)
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
         if isexpr(stmt[:inst], :syncregion)
-            stmt[:inst] = Expr(:call, Tapir.taskgroup)
+            mi = find_method_instance_from_sig(
+                interp,
+                Tuple{typeof(Tapir.taskgroup)};
+                compilesig = true,
+            )
+            if mi === nothing
+                stmt[:inst] = Expr(:call, GlobalRef(Tapir, :taskgroup))
+            else
+                stmt[:inst] = Expr(:invoke, mi, GlobalRef(Tapir, :taskgroup))
+            end
             stmt[:type] = Tapir.TaskGroup
         end
     end
@@ -1547,21 +1569,30 @@ function lower_tapir!(ir::IRCode)
         isync = last(bb.stmts)
         sync = ir.stmts[isync][:inst]
         sync isa SyncNode || continue
-        tg = sync.syncregion
-        ir.stmts.inst[isync] = Expr(:call, Tapir.sync!, tg::SSAValue)
+        tg = sync.syncregion::SSAValue
+        mi = find_method_instance_from_sig(
+            interp,
+            Tuple{typeof(Tapir.sync!),Tapir.TaskGroup};
+            compilesig = true,
+        )
+        if mi === nothing
+            ir.stmts.inst[isync] = Expr(:call, GlobalRef(Tapir, :sync!), tg)
+        else
+            ir.stmts.inst[isync] = Expr(:invoke, mi, GlobalRef(Tapir, :sync!), tg)
+        end
         ir.stmts.type[isync] = Any
     end
 
-    return lower_tapir_tasks!(ir, tasks)
+    return lower_tapir_tasks!(ir, tasks, interp)
 end
 
 """
-    lower_tapir_task!(ir::IRCode, tasks::Vector{ChildTask}) -> ir′
+    lower_tapir_task!(ir::IRCode, tasks::Vector{ChildTask}, interp) -> ir′
 
 Process detaches and reattaches recursively. It expects that syncregion and
 SyncNode are transformed to runtime function calls.
 """
-function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask})
+function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::AbstractInterpreter)
     Tapir = tapir_module()::Module
     Tapir isa Module || return ir
 
@@ -1597,7 +1628,7 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask})
 
         taskir, arguments, outputs = outline_child_task!(task, ir)
         if task.subtasks !== nothing
-            taskir = lower_tapir_tasks!(taskir, task.subtasks)
+            taskir = lower_tapir_tasks!(taskir, task.subtasks, interp)
         end
         meth = opaque_closure_method_from_ssair(taskir)
         for (T, iout) in outputs
@@ -1617,8 +1648,17 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask})
             Any,
         )
         oc = insert_node!(ir, task.detach, oc_inst)
-        spawn_inst = NewInstruction(Expr(:call, Tapir.spawn!, tg, oc), Any)
-        insert_node!(ir, task.detach, spawn_inst)
+        mi = find_method_instance_from_sig(
+            interp,
+            Tuple{typeof(Tapir.spawn!),Tapir.TaskGroup,Any};
+            compilesig = true,
+        )
+        if mi === nothing
+            spawn_ex = Expr(:call, Tapir.spawn!, tg, oc)
+        else
+            spawn_ex = Expr(:invoke, mi, Tapir.spawn!, tg, oc)
+        end
+        insert_node!(ir, task.detach, NewInstruction(spawn_ex, Any))
         ir.stmts.inst[task.detach] = GotoNode(det.reattach)
         cfg_delete_edge!(ir.cfg, block_for_inst(ir.cfg, task.detach), det.label)
     end
@@ -1786,7 +1826,7 @@ function _lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Co
     if JLOptions().debug_level == 2
         @timeit "verify pre-tapir" (verify_ir(ir); verify_linetable(ir.linetable))
     end
-    @timeit "tapir" ir = lower_tapir!(ir)
+    @timeit "tapir" ir = lower_tapir!(ir, interp)
     return ir, params, opt
 end
 

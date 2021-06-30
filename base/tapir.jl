@@ -172,4 +172,13 @@ macro spawn(expr)
     end
 end
 
+# precompile
+const _NEVER = Ref(false)
+function __init__()
+    _NEVER[] || return
+    tg = taskgroup()
+    spawn!(tg, () -> nothing)
+    sync!(tg)
+end
+
 end
