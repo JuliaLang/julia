@@ -572,8 +572,6 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     elseif y > x*ATAN2_RATIO_THRESHOLD(T) # |y/x| >  threshold
         z = T(0.5)*(T(pi) + ATAN2_PI_LO(T))
         m&=1;
-    elseif x<0 && y < -x*ATAN2_RATIO_THRESHOLD(T) # 0 > |y|/x > threshold
-        z = zero(T)
     else #safe to do y/x
         z = atan(abs(y/x))
     end
