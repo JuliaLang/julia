@@ -356,6 +356,32 @@ end
     @test bitstring(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
         "0000000000000000000000000000000000000000000000000000010000001011")
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
+
+
+    @test sprint(print_int, UInt32('3'), base = 2) == "110011"
+    @test sprint(print_int, UInt32('3'), pad = 7, base = 2) == "0110011"
+    @test sprint(print_int, 3, base = 2) == "11"
+    @test sprint(print_int, 3, pad = 2, base = 2) == "11"
+    @test sprint(print_int, 3, pad = Int32(2), base = Int32(2)) == "11"
+    @test sprint(print_int, 3, pad = typemin(Int128) + 3, base = 0x2) == "11"
+    @test sprint(print_int, 3, pad = 3, base = 2) == "011"
+    @test sprint(print_int, -3, base = 2) == "-11"
+    @test sprint(print_int, -3, pad = 3, base = 2) == "-011"
+
+    @test sprint(print_int, 9, base = 8) == "11"
+    @test sprint(print_int, -9, base = 8) == "-11"
+    @test sprint(print_int, -9, base = 8, pad = 5) == "-00011"
+    @test sprint(print_int, -9, base = 8, pad = Int32(5)) == "-00011"
+
+    @test sprint(print_int, 121, base = 10) == "121"
+    @test sprint(print_int, 121, base = 10, pad = 5) == "00121"
+    @test sprint(print_int, 121, base = 10, pad = 5) == "00121"
+
+    @test sprint(print_int, 12, base = 16) == "c"
+    @test sprint(print_int, -12, pad = 3, base = 16) == "-00c"
+    @test sprint(print_int, -12, pad = Int32(3), base = Int32(16)) == "-00c"
+
+    @test sprint(print_int, 5, pad = 7, base = 2) == "0000101"
 end
 
 @testset "digits/base" begin
