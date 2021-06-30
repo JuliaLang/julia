@@ -1810,11 +1810,12 @@ This is called from `jl_emit_code` (`codegen.cpp`); i.e., just before compilatio
 to LLVM.
 """
 lower_tapir(linfo::MethodInstance, ci::CodeInfo) =
-    lower_tapir(NativeInterpreter(), linfo, ci)
+    lower_tapir(NativeInterpreter(linfo.def.primary_world), linfo, ci)
+# ASK: Should we use the world age from `jl_codegen_params_t`?
 
 # Useful for debugging:
 lower_tapir_to_ircode(linfo::MethodInstance, ci::CodeInfo) =
-    lower_tapir_to_ircode(NativeInterpreter(), linfo, ci)
+    lower_tapir_to_ircode(NativeInterpreter(linfo.def.primary_world), linfo, ci)
 lower_tapir_to_ircode(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo) =
     first(_lower_tapir(interp, linfo, ci))
 
