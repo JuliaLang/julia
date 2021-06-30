@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+## Helpers
+eltype_or_default_eltype(itr::T) where T = eltype_or_default_eltype(itr, IteratorEltype(T))
+eltype_or_default_eltype(itr::T, ::HasEltype) where T = eltype(T)
+eltype_or_default_eltype(itr, ::EltypeUnknown) = @default_eltype(itr)
+
 ## reductions ##
 
 ###### Generic (map)reduce functions ######
@@ -455,9 +460,101 @@ julia> reduce(*, [2; 3; 4]; init=-1)
 -24
 ```
 """
-reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
+function reduce(op, itr::T; kw...) where T
+    # Redispatch, adding traits
+    reduce(op, itr, eltype_or_default_eltype(itr), IteratorSize(T); kw...)
+end
+
+function reduce(op, itr, et, isize; kw...)
+    # Fallback: if nothing interesting is being done with the traits
+    # or the operation
+    return mapreduce(identity, op, itr; kw...)
+end
 
 reduce(op, a::Number) = a  # Do we want this?
+
+##### Operation specific reduce optimisations
+
+## vcat
+
+function reduce(::typeof(vcat), xs, T::Type{<:AbstractVector{V}}, isize) where V
+    x_state = iterate(xs)
+    x_state === nothing && return reduce_empty(vcat, T)
+    x1, state = x_state
+
+    ret = Vector(x1)
+
+    hinted_size = 0
+    if !(isize isa SizeUnknown)
+        # Assume first element has representitive size, unless that would make this too large
+        SIZEHINT_CAP = 10^5
+        hinted_size = min(SIZEHINT_CAP, length(xs)*length(x1))
+        sizehint!(ret, hinted_size)
+    end
+
+    x_state = iterate(xs, state)
+    while(x_state !== nothing)
+        x, state =  x_state
+        append!(ret, x)
+        x_state = iterate(xs, state)
+    end
+
+    if length(ret) < hinted_size/2  # it is only allowable to be at most 2x too much memory
+        sizehint!(ret, length(ret))
+    end
+
+    return ret
+end
+
+## hcat
+
+function reduce(::typeof(hcat), xs, T::Type{<:AbstractVector{V}}, isize::SizeUnknown) where V
+    x_state = iterate(xs)
+    x_state === nothing && return reduce_empty(hcat, T)
+    x1, state = x_state
+
+    dim1_size = length(x1)
+    dim2_size = 1
+    ret_vec = Vector(x1)
+
+    x_state = iterate(xs, state)
+
+    while(x_state !== nothing)
+        x, state =  x_state
+        append!(ret_vec, x)
+        dim2_size += 1
+        x_state = iterate(xs, state)
+    end
+
+    # Reshape will throw errors if anything was the wrong size
+    return reshape(ret_vec, (dim1_size, dim2_size))
+end
+
+function reduce(::typeof(hcat), xs, T::Type{<:AbstractVector{V}}, isize) where V
+    # Size is known
+    x_state = iterate(xs)
+    x_state === nothing && return reduce_empty(hcat, T)
+    x1, state = x_state
+
+    dim1_size = size(x1,1)
+    dim2_size = length(xs)
+
+    ret = similar(x1, eltype(x1), (dim1_size, dim2_size))
+    copyto!(ret, 1, x1, 1)
+
+    x_state = iterate(xs, state)
+    offset =  length(x1)+1
+    while(x_state !== nothing)
+        x, state =  x_state
+        length(x)==dim1_size || throw(DimensionMismatch("hcat"))
+        copyto!(ret, offset, x, 1)
+        offset += length(x)
+        x_state = iterate(xs, state)
+    end
+
+    return ret
+end
+
 
 ###### Specific reduction functions ######
 
