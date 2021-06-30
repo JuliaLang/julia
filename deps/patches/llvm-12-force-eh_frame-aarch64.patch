@@ -1,0 +1,31 @@
+From 026f3518c4713e388a8ed06fa032e0925d35c6f5 Mon Sep 17 00:00:00 2001
+From: Cody Tapscott <cody+github@tapscott.me>
+Date: Mon, 24 May 2021 16:36:06 -0700
+Subject: [PATCH] Force `.eh_frame` emission on AArch64
+
+We need to force the emission of the EH Frame section (currently done via SupportsCompactUnwindWithoutEHFrame in the MCObjectFileInfo for the target), since libunwind doesn't yet support dynamically registering compact unwind information at run-time.
+---
+ llvm/lib/MC/MCObjectFileInfo.cpp | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/llvm/lib/MC/MCObjectFileInfo.cpp b/llvm/lib/MC/MCObjectFileInfo.cpp
+index 1a448f040b3b..e12154deca5f 100644
+--- a/llvm/lib/MC/MCObjectFileInfo.cpp
++++ b/llvm/lib/MC/MCObjectFileInfo.cpp
+@@ -57,9 +57,10 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
+           MachO::S_ATTR_STRIP_STATIC_SYMS | MachO::S_ATTR_LIVE_SUPPORT,
+       SectionKind::getReadOnly());
+ 
+-  if (T.isOSDarwin() &&
+-      (T.getArch() == Triple::aarch64 || T.getArch() == Triple::aarch64_32))
+-    SupportsCompactUnwindWithoutEHFrame = true;
++  // Disabled for now, since we need to emit EH Frames for stack unwinding in the JIT
++  // if (T.isOSDarwin() &&
++  //     (T.getArch() == Triple::aarch64 || T.getArch() == Triple::aarch64_32))
++  //   SupportsCompactUnwindWithoutEHFrame = true;
+ 
+   if (T.isWatchABI())
+     OmitDwarfIfHaveCompactUnwind = true;
+-- 
+2.30.1 (Apple Git-130)
+
