@@ -2908,3 +2908,13 @@ end
     @test [fill(1); fill(2, (2,1,1))] == reshape([1; 2; 2], (3, 1, 1))
     @test_throws DimensionMismatch [fill(1); rand(2, 2, 2)]
 end
+
+@testset "eltype of zero for arrays (issue #41348)" begin
+    for a in Any[[DateTime(2020), DateTime(2021)], [Date(2000), Date(2001)], [Time(1), Time(2)]]
+        @test a + zero(a) == a
+        b = reshape(a, :, 1)
+        @test b + zero(b) == b
+        c = view(b, 1:1, 1:1)
+        @test c + zero(c) == c
+    end
+end
