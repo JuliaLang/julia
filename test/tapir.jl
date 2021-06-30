@@ -7,7 +7,7 @@ using Test
 macro test_error(expr)
     @gensym err tmp
     quote
-        local $err
+        local $err = nothing
         $Test.@test try
             $expr
             false

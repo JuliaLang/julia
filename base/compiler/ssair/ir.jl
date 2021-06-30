@@ -56,8 +56,8 @@ function basic_blocks_starts(stmts::Vector{Any})
             idx < length(stmts) && push!(jump_dests, idx+1)
             push!(jump_dests, stmt.label)
         elseif isa(stmt, DetachNode)
+            push!(jump_dests, idx+1)
             push!(jump_dests, stmt.label)
-            push!(jump_dests, stmt.reattach)
         elseif isa(stmt, ReattachNode)
             push!(jump_dests, stmt.label)
         elseif isa(stmt, SyncNode)
@@ -122,11 +122,6 @@ function compute_basic_blocks(stmts::Vector{Any})
             block′ = block_for_inst(basic_block_index, terminator.label)
             push!(blocks[block′].preds, num)
             push!(b.succs, block′)
-
-            block′ = block_for_inst(basic_block_index, terminator.reattach)
-            push!(blocks[block′].preds, num)
-            push!(b.succs, block′)
-            continue
         end
         # Conditional Branch
         if isa(terminator, GotoIfNot)
@@ -462,7 +457,7 @@ function setindex!(x::UseRef, @nospecialize(v))
         x.stmt = GotoIfNot(v, stmt.dest)
     elseif isa(stmt, DetachNode)
         x.op == 1 || throw(BoundsError())
-        x.stmt = DetachNode(v, stmt.label, stmt.reattach)
+        x.stmt = DetachNode(v, stmt.label)
     elseif isa(stmt, ReattachNode)
         x.op == 1 || throw(BoundsError())
         x.stmt = ReattachNode(v, stmt.label)
@@ -1054,7 +1049,6 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 stmt = DetachNode(
                     stmt.syncregion,
                     compact.bb_rename_succ[stmt.label],
-                    compact.bb_rename_succ[stmt.reattach],
                 )
             elseif isa(stmt, ReattachNode)
                 stmt = ReattachNode(stmt.syncregion, compact.bb_rename_succ[stmt.label])

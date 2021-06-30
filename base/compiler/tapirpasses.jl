@@ -67,10 +67,10 @@ function child_tasks(ir::IRCode)
     foreach_descendant(1, ir.cfg, visited) do ibb, bb
         term = ir.stmts[bb.stmts[end]][:inst]
         if term isa DetachNode
-            @assert term.reattach in bb.succs
+            @assert ibb + 1 in bb.succs
             @assert term.label in bb.succs
             @assert length(bb.succs) == 2
-            push!(tasks, detached_sub_cfg!(bb.stmts[end], ir, visited))
+            push!(tasks, detached_sub_cfg!(ibb, ir, visited))
         end
         return true
     end
@@ -78,21 +78,21 @@ function child_tasks(ir::IRCode)
 end
 
 """
-    detached_sub_cfg!(detach::Int, ir::IRCode, visited) -> task::ChildTask
+    detached_sub_cfg!(detacher::Int, ir::IRCode, visited) -> task::ChildTask
 
-Find a sub CFG detached by the detach node `ir.stmts[detach]`. It mutates
-`visited` but not other arguments.
+Find a sub CFG detached by the detach node `ir.stmts[ir.cfg.blocks[detacher].stmts[end]]`.
+It mutates `visited` but not other arguments.
 """
-function detached_sub_cfg!(detach::Int, ir::IRCode, visited)
-    detachnode = ir.stmts.inst[detach]::DetachNode
+function detached_sub_cfg!(detacher::Int, ir::IRCode, visited)
+    detach = ir.cfg.blocks[detacher].stmts[end]
+    @assert ir.stmts.inst[detach] isa DetachNode
     task = ChildTask(detach)
     subtasks = nothing
-    foreach_descendant(detachnode.label, ir.cfg, visited) do ibb, _bb
+    foreach_descendant(detacher + 1, ir.cfg, visited) do ibb, bb
         push!(task.blocks, ibb)
-        bb = ir.cfg.blocks[ibb]
         term = ir.stmts[bb.stmts[end]][:inst]
         if term isa DetachNode
-            t = detached_sub_cfg!(bb.stmts[end], ir, visited)
+            t = detached_sub_cfg!(ibb, ir, visited)
             if subtasks === nothing
                 subtasks = ChildTask[]
             end
@@ -119,7 +119,7 @@ function detached_sub_cfg!(detach::Int, ir::IRCode, visited)
         task = ChildTask(task, subtasks)
     end
     sort!(task.blocks)
-    @assert task.blocks[1] == detachnode.label  # entry block
+    @assert task.blocks[1] == detacher + 1  # entry block
     return task
 end
 
@@ -198,11 +198,7 @@ function map_id(on_value, on_phi_label, on_goto_label, @nospecialize(stmt))
             stmt
         end
     elseif stmt isa DetachNode
-        DetachNode(
-            recurse(stmt.syncregion),
-            on_goto_label(stmt.label),
-            on_goto_label(stmt.reattach),
-        )
+        DetachNode(recurse(stmt.syncregion), on_goto_label(stmt.label))
     elseif stmt isa ReattachNode
         ReattachNode(recurse(stmt.syncregion), on_goto_label(stmt.label))
     elseif stmt isa SyncNode
@@ -898,7 +894,7 @@ end
 function remove_tapir_terminator!(stmt::Instruction)
     term = stmt[:inst]
     if term isa DetachNode
-        stmt[:inst] = GotoIfNot(true, term.reattach)
+        stmt[:inst] = GotoIfNot(true, term.label)
     elseif term isa ReattachNode
         stmt[:inst] = GotoNode(term.label)
     elseif term isa SyncNode
@@ -912,8 +908,7 @@ remove_tapir!(ir::IRCode) = remove_tapir_in_blocks!(ir, 1:length(ir.cfg.blocks))
 function remove_tapir_in_blocks!(ir::IRCode, blocklabels)
     for ibb in blocklabels
         bb = ir.cfg.blocks[ibb]
-        term = remove_tapir_terminator!(ir.stmts[last(bb.stmts)])
-        term isa DetachNode && @assert term.label == ibb + 1  # for GotoIfNot compat
+        remove_tapir_terminator!(ir.stmts[last(bb.stmts)])
         remove_syncregions!(ir, bb.stmts)
     end
     return ir
@@ -921,8 +916,7 @@ end
 
 function remove_tapir!(ir::IRCode, task::ChildTask)
     remove_tapir_in_blocks!(ir, task.blocks)
-    det = remove_tapir_terminator!(ir.stmts[task.detach])::DetachNode
-    @assert det.label == block_for_inst(ir, task.detach) + 1  # for GotoIfNot compat
+    remove_tapir_terminator!(ir.stmts[task.detach])::DetachNode
     return ir
 end
 
@@ -1286,9 +1280,9 @@ function remove_trivial_spawns!(ir::IRCode)
                 # Check if continuation is trivial:
                 is_trivial = RefValue(true)
                 syncs = get_syncregion_to_syncs()[sr]
-                foreach_descendant(det.reattach, ir.cfg) do _ibb, bb
+                foreach_descendant(det.label, ir.cfg) do _ibb, bb
                     is_trivial.x || return false
-                    if det.reattach in bb.succs  # loop
+                    if det.label in bb.succs  # loop
                         is_trivial.x = false
                         return false
                     end
@@ -1659,8 +1653,9 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
             spawn_ex = Expr(:invoke, mi, Tapir.spawn!, tg, oc)
         end
         insert_node!(ir, task.detach, NewInstruction(spawn_ex, Any))
-        ir.stmts.inst[task.detach] = GotoNode(det.reattach)
-        cfg_delete_edge!(ir.cfg, block_for_inst(ir.cfg, task.detach), det.label)
+        ir.stmts.inst[task.detach] = GotoNode(det.label)
+        detacher = block_for_inst(ir.cfg, task.detach)
+        cfg_delete_edge!(ir.cfg, detacher, detacher + 1)
     end
 
     # Load task outputs:
@@ -1868,8 +1863,10 @@ due to the (assumed) serial projection property of the source program.
 """
 function remove_tapir!(src::CodeInfo)
     for (i, x) in pairs(src.code)
-        if x isa Union{DetachNode,ReattachNode,SyncNode}
+        if x isa Union{DetachNode,SyncNode}
             src.code[i] = nothing
+        elseif x isa ReattachNode
+            src.code[i] = GotoNode(x.label)
         elseif isexpr(x, :syncregion)
             src.code[i] = nothing
         end

@@ -143,14 +143,11 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
             # containing detaches etc. is already determined to be unreachable.
             # Instead of removing the statement, we use goto nodes for
             # preserving the CFG (i.e., serial projection).
-            isa(stmt, DetachNode) && return GotoIfNot(true, stmt.reattach)
+            isa(stmt, DetachNode) && return GotoIfNot(true, stmt.label)
             isa(stmt, ReattachNode) && return GotoNode(stmt.label)
             isa(stmt, SyncNode) && return nothing  # fallthrough
-            # TODO: Remove the detach edge `.label` from DetachNode. This is for
-            # avoiding incorrect serial projection using `GotoIfNot`.
-            # stmt.detach can be, in principle, not the next BB.
         else
-            isa(stmt, DetachNode) && return DetachNode(x, stmt.label, stmt.reattach)
+            isa(stmt, DetachNode) && return DetachNode(x, stmt.label)
             isa(stmt, ReattachNode) && return ReattachNode(x, stmt.label)
             isa(stmt, SyncNode) && return SyncNode(x)
         end
@@ -410,7 +407,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         cs = domtree.nodes[node].children
         terminator = ir.stmts[last(ir.cfg.blocks[node].stmts)][:inst]
         iscondbr = isa(terminator, GotoIfNot)
-        isspawnbr = isa(terminator, DetachNode) || isa(terminator, ReattachNode)
+        isspawnbr = isa(terminator, ReattachNode)
         let old_node = node + 1
             if length(cs) >= 1
                 # Adding the nodes in reverse sorted order attempts to retain
@@ -503,8 +500,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             end
             result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif isa(terminator, DetachNode)
-            result[inst_range[end]][:inst] = DetachNode(terminator.syncregion, bb_rename[terminator.label],
-                                                        bb_rename[terminator.reattach])
+            result[inst_range[end]][:inst] = DetachNode(terminator.syncregion,
+                                                        bb_rename[terminator.label])
         elseif isa(terminator, ReattachNode)
             result[inst_range[end]][:inst] = ReattachNode(terminator.syncregion, bb_rename[terminator.label])
         elseif !isa(terminator, ReturnNode)
@@ -847,8 +844,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         if isa(stmt, GotoNode)
             new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
         elseif isa(stmt, DetachNode)
-            new_code[idx] = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label),
-                                       block_for_inst(cfg, stmt.reattach))
+            new_code[idx] = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif isa(stmt, ReattachNode)
             new_code[idx] = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)

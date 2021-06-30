@@ -1015,7 +1015,6 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
 #define jl_gotoifnot_cond(x) (((jl_value_t**)(x))[0])
 #define jl_gotoifnot_label(x) (((intptr_t*)(x))[1])
 #define jl_detachnode_label(x) (((intptr_t*)(x))[1])
-#define jl_detachnode_reattach(x) (((intptr_t*)(x))[2])
 #define jl_reattachnode_label(x) (((intptr_t*)(x))[1])
 #define jl_syncregion(x) (((jl_value_t**)(x))[0])
 #define jl_globalref_mod(s) (*(jl_module_t**)(s))

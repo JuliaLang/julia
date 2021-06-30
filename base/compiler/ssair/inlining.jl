@@ -399,7 +399,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             elseif isa(stmt′, GotoNode)
                 stmt′ = GotoNode(stmt′.label + bb_offset)
             elseif isa(stmt′, DetachNode)
-                stmt′ = DetachNode(stmt′.syncregion, stmt′.label + bb_offset, stmt′.reattach + bb_offset)
+                stmt′ = DetachNode(stmt′.syncregion, stmt′.label + bb_offset)
             elseif isa(stmt′, ReattachNode)
                 stmt′ = ReattachNode(stmt′.syncregion, stmt′.label + bb_offset)
             elseif isa(stmt′, Expr) && stmt′.head === :enter
@@ -586,7 +586,7 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
             elseif isa(stmt, GotoNode)
                 compact[idx] = GotoNode(state.bb_rename[stmt.label])
             elseif isa(stmt, DetachNode)
-                compact[idx] = DetachNode(stmt.syncregion, state.bb_rename[stmt.label], state.bb_rename[stmt.reattach])
+                compact[idx] = DetachNode(stmt.syncregion, state.bb_rename[stmt.label])
             elseif isa(stmt, ReattachNode)
                 compact[idx] = ReattachNode(stmt.syncregion, state.bb_rename[stmt.label])
             elseif isa(stmt, Expr) && stmt.head === :enter

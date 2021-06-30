@@ -158,7 +158,6 @@
 #struct DetachNode
 #    syncregion
 #    label::Int
-#    reattach::Int
 #end
 
 #struct ReattachNode
@@ -437,7 +436,7 @@ eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
 eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
              $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
 eval(Core, :(SyncNode(token) = $(Expr(:new, :SyncNode, :token))))
-eval(Core, :(DetachNode(token, bb::Int, reattach::Int) = $(Expr(:new, :DetachNode, :token, :bb, :reattach))))
+eval(Core, :(DetachNode(token, bb::Int) = $(Expr(:new, :DetachNode, :token, :bb))))
 eval(Core, :(ReattachNode(token, bb::Int) = $(Expr(:new, :ReattachNode, :token, :bb))))
 eval(Core, :(LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
              $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
