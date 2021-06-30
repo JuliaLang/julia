@@ -576,8 +576,13 @@ function __init__()
     try
         libblas_path = find_library_path(Base.libblas_name)
         liblapack_path = find_library_path(Base.liblapack_name)
+        # We manually `dlopen()` these libraries here, so that we search with `libjulia-internal`'s
+        # `RPATH` and not `libblastrampoline's`.  Once it's been opened, when LBT tries to open it,
+        # it will find the library already loaded.
+        libblas_path = Libdl.dlpath(Libdl.dlopen(libblas_path))
         BLAS.lbt_forward(libblas_path; clear=true)
         if liblapack_path != libblas_path
+            liblapack_path = Libdl.dlpath(Libdl.dlopen(liblapack_path))
             BLAS.lbt_forward(liblapack_path)
         end
         BLAS.check()
