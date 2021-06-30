@@ -442,9 +442,12 @@
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let* ((l (if (null? pargl) '() (last pargl)))
                         ;; handle vararg with default value
-                        (l (if (kwarg? l) (cadr l) l)))
-                   (if (or (vararg? l) (varargexpr? l))
+                        (l- (if (kwarg? l) (cadr l) l)))
+                   (if (or (vararg? l-) (varargexpr? l-))
                        (list l) '())))
+         ;; expression to forward varargs to another call
+         (splatted-vararg (if (null? vararg) '()
+                              (list `(... ,(arg-name (car vararg))))))
          ;; positional args with vararg
          (pargl-all pargl)
          ;; positional args without vararg
@@ -520,8 +523,7 @@
                                        ,@(if ordered-defaults keynames vals)
                                        ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
                                        ,@(map arg-name pargl)
-                                       ,@(if (null? vararg) '()
-                                             (list `(... ,(arg-name (car vararg)))))))))
+                                       ,@splatted-vararg))))
                (if ordered-defaults
                    (scopenest keynames vals ret)
                    ret))))
@@ -579,16 +581,13 @@
                 ,@(if (null? restkw)
                       `((if (call (top isempty) ,rkw)
                             (null)
-                            (call (top kwerr) ,kw ,@(map arg-name pargl)
-                                  ,@(if (null? vararg) '()
-                                        (list `(... ,(arg-name (car vararg))))))))
+                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg)))
                       '())
                 (return (call ,mangled  ;; finally, call the core function
                               ,@keynames
                               ,@(if (null? restkw) '() (list rkw))
                               ,@(map arg-name pargl)
-                              ,@(if (null? vararg) '()
-                                    (list `(... ,(arg-name (car vararg)))))))))))
+                              ,@splatted-vararg))))))
         ;; return primary function
         ,(if (not (symbol? name))
              '(null) name)))))
