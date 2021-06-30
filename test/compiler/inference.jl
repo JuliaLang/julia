@@ -3355,3 +3355,43 @@ let
         Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
 end
+
+@testset "constant prop' on `invoke` calls" begin
+    m = Module()
+
+    # simple cases
+    @eval m begin
+        f(a::Any,    sym::Bool) = sym ? Any : :any
+        f(a::Number, sym::Bool) = sym ? Number : :number
+    end
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Any, true::Bool)
+    end) == Any[Type{Any}]
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Number, true::Bool)
+    end) == Any[Type{Number}]
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Any, false::Bool)
+    end) == Any[Symbol]
+    @test (@eval m Base.return_types((Any,)) do a
+        Base.@invoke f(a::Number, false::Bool)
+    end) == Any[Symbol]
+
+    # https://github.com/JuliaLang/julia/issues/41024
+    @eval m begin
+        # mixin, which expects common field `x::Int`
+        abstract type AbstractInterface end
+        Base.getproperty(x::AbstractInterface, sym::Symbol) =
+            sym === :x ? getfield(x, sym)::Int :
+            return getfield(x, sym) # fallback
+
+        # extended mixin, which expects additional field `y::Rational{Int}`
+        abstract type AbstractInterfaceExtended <: AbstractInterface end
+        Base.getproperty(x::AbstractInterfaceExtended, sym::Symbol) =
+            sym === :y ? getfield(x, sym)::Rational{Int} :
+            return Base.@invoke getproperty(x::AbstractInterface, sym::Symbol)
+    end
+    @test (@eval m Base.return_types((AbstractInterfaceExtended,)) do x
+        x.x
+    end) == Any[Int]
+end
