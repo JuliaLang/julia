@@ -840,6 +840,19 @@ fib34666(x) =
     end
 @test fib34666(25) == 75025
 
+# issue #41324
+@testset "Co-schedule" begin
+    parent = Threads.@spawn begin
+        @test current_task().sticky == false
+        child = @async begin end
+        @test current_task().sticky == true
+        @test Threads.threadid() == Threads.threadid(child)
+        wait(child)
+    end
+    wait(parent)
+    @test parent.sticky == true
+end
+
 function jitter_channel(f, k, delay, ntasks, schedule)
     x = Channel(ch -> foreach(i -> put!(ch, i), 1:k), 1)
     y = Channel(k) do ch

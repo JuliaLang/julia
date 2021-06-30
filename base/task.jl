@@ -621,6 +621,12 @@ function enq_work(t::Task)
     # 3. The multiq is full (can be fixed by making it growable).
     if t.sticky || Threads.nthreads() == 1
         if tid == 0
+            # Issue #41324
+            # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+            # the parent task. If the parent (current_task) is not sticky we must
+            # set it to be sticky.
+            # XXX: Ideally we would be able to unset this
+            current_task().sticky = true
             tid = Threads.threadid()
             ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
         end
