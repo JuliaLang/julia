@@ -420,7 +420,13 @@ Note that workers do not run a `.julia/config/startup.jl` startup script, nor do
 their global state (such as global variables, new method definitions, and loaded modules) with any
 of the other running processes.
 """
-addprocs(; kwargs...) = nprocs() < Sys.CPU_THREADS && addprocs(Sys.CPU_THREADS-nprocs()+1; kwargs...)
+function addprocs(; kwargs...)
+    if nprocs() <= Sys.CPU_THREADS 
+        addprocs(Sys.CPU_THREADS-nprocs()+1; kwargs...)
+    else
+        Int[] # make type-stable on the no-op branch
+    end
+end
 
 """
     addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
