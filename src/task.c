@@ -475,12 +475,8 @@ JL_DLLEXPORT void jl_switch(void)
     if (t == ct) {
         return;
     }
-    if (t->_state != JL_TASK_STATE_RUNNABLE || (t->started && t->stkbuf == NULL)) {
-        ct->_isexception = t->_isexception;
-        ct->result = t->result;
-        jl_gc_wb(ct, ct->result);
-        return;
-    }
+    if (t->started && t->stkbuf == NULL)
+        jl_error("attempt to switch to exited task");
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
     if (ptls->in_pure_callback)
