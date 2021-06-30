@@ -1053,7 +1053,7 @@ show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, b::Bool) = print(io, get(io, :typeinfo, Any) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, n::Signed) = print_int(io, n)
 show(io::IO, n::Unsigned) = print_int(io, ("0x", ), n; pad = sizeof(n)<<1, base = 16)
-print(io::IO, n::Signed) = print_int(io, n)
+print(io::IO, n::Signed) = show(io, n)
 print(io::IO, n::Unsigned) = print_int(io, n)
 
 show(io::IO, p::Ptr) = print_int(io, (typeof(p), " @0x"), UInt(p); base = 16, pad = Sys.WORD_SIZE>>2)
