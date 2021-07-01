@@ -1447,7 +1447,7 @@ using Base: typed_hvncat
     # e.g. [;;], [;;;], though that isn't valid syntax
     @test hvncat(1) == []
     @test hvncat(2) == Array{Int, 2}(undef, 0, 0)
-    @test hvncat(3) == Array{Int, 3}(undef, 0, 0, 0)
+    @test Array{Int, 3}(undef, 0, 0, 0) == hvncat(3) isa Array{Int, 3}
     @test typed_hvncat(Int, 1) == []
     @test typed_hvncat(Int, 2) == Array{Int, 2}(undef, 0, 0)
     @test typed_hvncat(Int, 3) == Array{Int, 3}(undef, 0, 0, 0)
