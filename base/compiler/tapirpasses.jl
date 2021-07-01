@@ -1283,6 +1283,9 @@ end
 Replace detached tasks containing only trivial code with the serial projection.
 """
 function remove_trivial_spawns!(ir::IRCode)
+    # This pass only looks into `ir.stmts` at the moment:
+    @assert isempty(ir.new_nodes.stmts.inst)
+
     tasks = child_tasks(ir)
     isempty(tasks) && return ir
 
@@ -1357,6 +1360,7 @@ function remove_trivial_spawns!(ir::IRCode)
         end
     end
 
+    @assert isempty(ir.new_nodes.stmts.inst)
     return ir
 end
 

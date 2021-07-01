@@ -317,13 +317,13 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     #@Base.show ("before_sroa", ir)
     @timeit "SROA" ir = getfield_elim_pass!(ir)
     tapir && @timeit "Fixup phi nodes for tapir" ir = fixup_tapir_phi!(ir)
-    tapir && @timeit "Remove tirival spawns" ir = remove_trivial_spawns!(ir)
     #@Base.show ir.new_nodes
     #@Base.show ("after_sroa", ir)
     ir = adce_pass!(ir)
     #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
+    tapir && @timeit "Remove tirival spawns" ir = remove_trivial_spawns!(ir)
     #@Base.show ir
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
