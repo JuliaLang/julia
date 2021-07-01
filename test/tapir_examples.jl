@@ -128,6 +128,21 @@ using Base.Experimental: Tapir
 @noinline produce() = P::Int
 P = 1
 
+""" A simple example with less macro tricks. """
+function simple()
+    ao = Tapir.Output{:a}()
+    bo = Tapir.Output{:b}()
+    token = Tapir.@syncregion
+    Tapir.@spawnin token begin
+        ao.x = produce()
+    end
+    bo.x = produce()
+    Tapir.@sync_end token
+    a = ao.x
+    b = bo.x
+    a + b
+end
+
 function f()
     v = 'a'
     Tapir.@sync begin

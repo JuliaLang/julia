@@ -84,6 +84,7 @@ end
 end
 
 @testset "`Tapir.Output`" begin
+    @test @inferred(TaskOutputs.simple()) == 2
     @test @inferred(TaskOutputs.f()) == (('a', 1), 1)
     @test @inferred(TaskOutputs.set_distinct(true)) == 4
     @test @inferred(TaskOutputs.set_distinct(false)) == 6

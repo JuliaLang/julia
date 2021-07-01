@@ -753,6 +753,32 @@ function remove_stmt!(stmt::Instruction)
     stmt[:type] = Any
 end
 
+function resolve_callee(ir::IRCode, @nospecialize(inst))::Tuple{Any,Bool}
+    isexpr(inst, :call) || return nothing, false
+    isempty(inst.args) && return nothing, false
+    f, = inst.args
+    f0 = f
+    while f isa SSAValue
+        f = ir[f]
+        f === f0 && error("cycle detected")
+    end
+    if f isa GlobalRef
+        isdefined(f.mod, f.name) || return nothing, false
+        f = getfield(f.mod, f.name)
+    end
+    return f, true
+end
+
+function constructs(stmt::Instruction, @nospecialize(T::Type))
+    inst = stmt[:inst]
+    if isexpr(inst, :new)
+        return get(inst.args, 1, nothing) <: T
+    elseif isexpr(inst, :call)
+        return widenconst(stmt[:type]) <: T
+    end
+    return false
+end
+
 function calls(inst, r::GlobalRef, nargs::Int)
     isexpr(inst, :call) || return nothing
     length(inst.args) == nargs + 1 || return nothing
@@ -980,24 +1006,27 @@ This removes the Phi nodes forbidden by Tapir.
 
 It transforms
 
-    %1 = Tapir.Output()
     ...
-    %2 = ???
+        %ref = Tapir.Output{%name}()
     ...
-    %3 = ϕ(%1, %2)
+        %ref.x = %value
     ...
-    %4 = Tapir.loadoutput(%3)
+        %out = %ref.x
 
 to
 
-    %1 = dead code
     ...
-    %2 = ???
-    %2' = ϒ(%2)
+        %undefinit = ϒ(true)
     ...
-    %3 = dead code
+        %store = ϒ(%value)
+        %notundef = ϒ(true)
     ...
-    %4 = φᶜ(%2')
+        %undef = φᶜ(%undefinit, %notundef)
+        goto #ok if not %undef
+    #throw
+        throw(UndefVarError(%name))
+    #ok
+        %out = φᶜ(%store)
 """
 function lower_tapir_output!(ir::IRCode)
     Tapir = tapir_module()
@@ -1007,63 +1036,81 @@ function lower_tapir_output!(ir::IRCode)
     # TODO: make it work without compaction?
     ir = insert_new_nodes(ir)
 
-    function remove_defs(v)
-        v isa SSAValue || return
-        foreach_def(v, ir) do stmt
-            stmt isa Instruction || return true
-            if stmt[:inst] isa PhiNode
-                remove_stmt!(stmt)
-                return true
-            end
-            return false
-        end
-    end
-
-    # Follow and remove phi nodes; insert upsilons at definitions
-    function insert_upsilons(v)
-        v isa SSAValue || return [], []  # error?
-        vals = []
-        undefs = []
-        foreach_def(v, ir) do stmt
-            stmt isa Instruction || return true
-            if stmt[:inst] isa PhiNode
-                remove_stmt!(stmt)
-                return true  # keep following the chain
-            elseif calls(stmt[:inst], GlobalRef(Tapir, :Output), 0) !== nothing
-                remove_stmt!(stmt)
-            else
-                newinst = NewInstruction(UpsilonNode(SSAValue(stmt.idx)), stmt[:type])
-                ups = insert_node!(ir, stmt.idx, newinst, true)
-                push!(vals, ups)
-                newinst = NewInstruction(UpsilonNode(QuoteNode(false)), Const(false))
-                ups = insert_node!(ir, stmt.idx, newinst, true)
-                push!(undefs, ups)
-            end
-            return false
-        end
-        return vals, undefs
-    end
-
-    undef_checks = Tuple{Int,Any,SSAValue}[]
+    outputs = BitSet()
     for i in 1:length(ir.stmts)
-        inst = ir.stmts.inst[i]
-        if (fargs = calls(inst, GlobalRef(Tapir, :loadoutput), 2)) !== nothing
-            _, a, name = fargs
-            if ir.stmts.type[i] isa Const
-                remove_defs(a)
-                ir.stmts.inst[i] = QuoteNode(ir.stmts.type[i].val)
-            else
-                vals, undefs = insert_upsilons(a)
-                ir.stmts.inst[i] = PhiCNode(vals)
+        constructs(ir.stmts[i], Tapir.Output) && push!(outputs, i)
+    end
+    isempty(outputs) && return ir
 
-                undefinit = NewInstruction(UpsilonNode(QuoteNode(true)), Const(true))
-                push!(undefs, insert_node!(ir, 1, undefinit))
-                undefssa = insert_node!(ir, i, NewInstruction(PhiCNode(undefs), Bool))
-                push!(undef_checks, (i, name, undefssa))
+    # Handle stores
+    storemap = undefmap = nothing
+    for i in 1:length(ir.stmts)
+        stmt = ir.stmts[i]
+        inst = stmt[:inst]
+        f, = resolve_callee(ir, inst)
+        f === setfield! || f === Base.setproperty! || continue
+        _, r, _, value = inst.args
+        r isa SSAValue && r.id in outputs || continue
+
+        if storemap === nothing
+            storemap = Vector{Vector{Any}}(undef, length(ir.stmts))
+            undefmap = Vector{Vector{Any}}(undef, length(ir.stmts))
+        end
+        if !isassigned(storemap, r.id)
+            newup = NewInstruction(UpsilonNode(QuoteNode(true)), Const(true))
+            undefinit = insert_node!(ir, 1, newup)
+            undefs = undefmap[r.id] = Any[undefinit]
+            stores = storemap[r.id] = Any[]
+        else
+            undefs = undefmap[r.id]
+            stores = storemap[r.id]
+        end
+
+        newinst = NewInstruction(UpsilonNode(QuoteNode(false)), Const(false))
+        ups = insert_node!(ir, i, newinst, true)
+        push!(undefs, ups)
+
+        newinst = NewInstruction(UpsilonNode(value), stmt[:type])
+        ups = insert_node!(ir, i, newinst, true)
+        push!(stores, ups)
+    end
+    storemap === nothing && return ir
+
+    output_names = Vector{Symbol}(undef, length(ir.stmts))
+    for i in outputs
+        name = Symbol("?")
+        Output = widenconst(ir.stmts.type[i])
+        if Output <: Tapir.Output
+            name = try
+                Output.parameters[1]
+            catch
+                name
             end
         end
+        output_names[i] = name
     end
 
+    # Handle loads
+    undef_checks = Tuple{Int,Symbol,SSAValue}[]
+    for i in 1:length(ir.stmts)
+        stmt = ir.stmts[i]
+        inst = stmt[:inst]
+        f, = resolve_callee(ir, inst)
+        f === getfield || f === Base.getproperty || continue
+        _, r, = inst.args
+        r isa SSAValue && r.id in outputs || continue
+
+        # Replace getfield with PhiC
+        ir.stmts.inst[i] = PhiCNode(storemap[r.id])
+
+        # Preparing for undef check
+        name = output_names[r.id]
+        undefs = undefmap[r.id]
+        undefssa = insert_node!(ir, i, NewInstruction(PhiCNode(undefs), Bool))
+        push!(undef_checks, (i, name, undefssa))
+    end
+
+    # Insert throw on undef:
     allocated = allocate_gotoifnot_sequence!(ir, map(first, undef_checks))
     undef_checks_index = RefValue(0)
     foreach_allocated_gotoifnot_block(allocated) do ibb
@@ -1071,9 +1118,6 @@ function lower_tapir_output!(ir::IRCode)
         i = undef_checks_index.x += 1
         (_, name, undefssa) = undef_checks[i]
         undefssa = SSAValue(allocated.ssachangemap[undefssa.id])
-        if name isa SSAValue
-            name = SSAValue(allocated.ssachangemap[name.id])
-        end
 
         b0 = ir.cfg.blocks[ibb]
         b1 = ir.cfg.blocks[ibb+1]
@@ -1083,7 +1127,7 @@ function lower_tapir_output!(ir::IRCode)
         # If defined (not undef), skip over the throw:
         ir.stmts.inst[last(b0.stmts)] = GotoIfNot(undefssa, ibb + 2)
 
-        newex_ex = Expr(:call, GlobalRef(Base, :UndefVarError), name)
+        newex_ex = Expr(:call, GlobalRef(Base, :UndefVarError), QuoteNode(name))
         newex = insert_node!(ir, last(b1.stmts), NewInstruction(newex_ex, Any))
         throw_ex = Expr(:call, GlobalRef(Base, :throw), newex)
         insert_node!(ir, last(b1.stmts), NewInstruction(throw_ex, Union{}))

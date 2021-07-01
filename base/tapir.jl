@@ -53,10 +53,10 @@ end
 ##### Julia-Tapir Frontend
 #####
 
-struct Output end
-
-@noinline loadoutput(::Output, ::Symbol) = error("unreachable")
-@noinline loadoutput(x, ::Symbol) = x
+mutable struct Output{Name}
+    x::Any
+    Output{Name}() where {Name} = new{Name}()
+end
 
 macro syncregion()
     Expr(:syncregion)
@@ -108,7 +108,7 @@ function lhs_output_vars!(outputs, ex, indices = eachindex(ex.args))
             v, = ex.args[i].args
             if v isa Symbol
                 tmp = get!(() -> gensym("output_$(v)_"), outputs, v)
-                ex.args[i] = tmp
+                ex.args[i] = :($tmp.x)
             end
         elseif Meta.isexpr(ex.args[i], :tuple)
             lhs_output_vars!(outputs, ex.args[i])
@@ -127,9 +127,8 @@ macro sync(block)
     block = Expr(:block, __source__, block)
     dict = output_vars!(block)
     outputs = sort!(collect(dict))
-    header = [:(local $(esc(tmp)) = Output()) for (_, tmp) in outputs]
-    footer =
-        [:($(esc(v)) = loadoutput($(esc(tmp)), $(QuoteNode(v)))) for (v, tmp) in outputs]
+    header = [:(local $(esc(tmp)) = Output{$(QuoteNode(v))}()) for (v, tmp) in outputs]
+    footer = [:($(esc(v)) = $(esc(tmp)).x) for (v, tmp) in outputs]
     quote
         $(header...)
         let $var = @syncregion()
