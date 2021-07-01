@@ -192,8 +192,8 @@ Standard library changes
 * `det(M::AbstractMatrix{BigInt})` now calls `det_bareiss(M)`, which uses the
   [Bareiss](https://en.wikipedia.org/wiki/Bareiss_algorithm) algorithm to calculate precise
   values ([#40868]).
-* `exp(A::StridedMatrix)` has improved performance in terms of CPU-time and allocations ([#40668])
-* Five argument `mul!` now supports in-place addition of `UniformScaling` ([#40731])
+* `exp(A::StridedMatrix)` has improved performance in terms of CPU-time and allocations ([#40668]).
+* Five argument `mul!` now supports in-place addition of `UniformScaling` ([#40731]).
 
 #### Markdown
 
