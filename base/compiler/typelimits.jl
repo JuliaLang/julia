@@ -256,7 +256,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
                     let tPi = unwrap_unionall(tPi),
                         cPi = unwrap_unionall(cPi)
                         if isa(tPi, DataType) && isa(cPi, DataType) &&
-                                !tPi.abstract && !cPi.abstract &&
+                            !isabstracttype(tPi) && !isabstracttype(cPi) &&
                                 sym_isless(cPi.name.name, tPi.name.name)
                             # allow collect on (anonymous) Generators to nest, provided that their functions are appropriately ordered
                             # TODO: is there a better way?

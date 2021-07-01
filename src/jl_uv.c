@@ -105,11 +105,11 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         JL_STDERR = (JL_STREAM*)STDERR_FILENO;
     // also let the client app do its own cleanup
     if (handle->type != UV_FILE && handle->data) {
-        jl_ptls_t ptls = jl_get_ptls_states();
-        size_t last_age = ptls->world_age;
-        ptls->world_age = jl_world_counter;
+        jl_task_t *ct = jl_current_task;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_world_counter;
         jl_uv_call_close_callback((jl_value_t*)handle->data);
-        ptls->world_age = last_age;
+        ct->world_age = last_age;
     }
     if (handle == (uv_handle_t*)&signal_async)
         return;
@@ -205,17 +205,17 @@ extern volatile unsigned _threadedregion;
 
 JL_DLLEXPORT int jl_process_events(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     uv_loop_t *loop = jl_io_loop;
-    jl_gc_safepoint_(ptls);
-    if (loop && (_threadedregion || ptls->tid == 0)) {
+    jl_gc_safepoint_(ct->ptls);
+    if (loop && (_threadedregion || ct->tid == 0)) {
         if (jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             loop->stop_flag = 0;
             int r = uv_run(loop, UV_RUN_NOWAIT);
             JL_UV_UNLOCK();
             return r;
         }
-        jl_gc_safepoint_(ptls);
+        jl_gc_safepoint_(ct->ptls);
     }
     return 0;
 }
@@ -404,9 +404,9 @@ JL_DLLEXPORT int jl_fs_access(char *path, int mode)
 JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
                              int64_t offset) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_get_current_task();
     // TODO: fix this cheating
-    if (ptls->safe_restore || ptls->tid != 0)
+    if (jl_get_safe_restore() || ct == NULL || ct->tid != 0)
 #ifdef _OS_WINDOWS_
         return WriteFile(handle, data, len, NULL, NULL);
 #else
@@ -505,8 +505,8 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
     }
 
     // TODO: Hack to make CoreIO thread-safer
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->tid != 0) {
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->tid != 0) {
         if (stream == JL_STDOUT) {
             fd = UV_STDOUT_FD;
         }
@@ -966,12 +966,13 @@ JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     return uv_tty_set_mode(handle, mode_enum);
 }
 
-typedef int (*work_cb_t)(void *, void *);
+typedef int (*work_cb_t)(void *, void *, void *);
 typedef void (*notify_cb_t)(int);
 
 struct work_baton {
     uv_work_t req;
     work_cb_t work_func;
+    void      *ccall_fptr;
     void      *work_args;
     void      *work_retval;
     notify_cb_t notify_func;
@@ -985,7 +986,7 @@ struct work_baton {
 void jl_work_wrapper(uv_work_t *req)
 {
     struct work_baton *baton = (struct work_baton*) req->data;
-    baton->work_func(baton->work_args, baton->work_retval);
+    baton->work_func(baton->ccall_fptr, baton->work_args, baton->work_retval);
 }
 
 void jl_work_notifier(uv_work_t *req, int status)
@@ -995,12 +996,13 @@ void jl_work_notifier(uv_work_t *req, int status)
     free(baton);
 }
 
-JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_retval,
+JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *ccall_fptr, void *work_args, void *work_retval,
                                notify_cb_t notify_func, int notify_idx)
 {
     struct work_baton *baton = (struct work_baton*)malloc_s(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
     baton->work_func = work_func;
+    baton->ccall_fptr = ccall_fptr;
     baton->work_args = work_args;
     baton->work_retval = work_retval;
     baton->notify_func = notify_func;

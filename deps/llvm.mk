@@ -512,6 +512,8 @@ $(eval $(call LLVM_PROJ_PATCH,llvm-11-AArch64-FastIsel-bug))
 $(eval $(call LLVM_PATCH,llvm-12-D97435-AArch64-movaddrreg))
 $(eval $(call LLVM_PROJ_PATCH,llvm-11-D97571-AArch64-loh)) # remove for LLVM 13
 $(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
+$(eval $(call LLVM_PROJ_PATCH,llvm-12-fde-symbols-aarch64)) # remove for LLVM 13
+$(eval $(call LLVM_PROJ_PATCH,llvm-12-force-eh_frame-aarch64)) # remove for LLVM 13
 endif # LLVM_VER 12.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
@@ -553,7 +555,7 @@ LLVM_INSTALL = \
     cp -r $$(LLVM_SRC_DIR)/utils/lit $2$$(build_depsbindir)/ && \
     $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
-LLVM_INSTALL += && cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
+LLVM_INSTALL += && cp $2$$(build_shlibdir)/libLLVM.dll $2$$(build_depsbindir)
 endif
 ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981

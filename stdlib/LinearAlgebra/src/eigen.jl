@@ -157,7 +157,7 @@ sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby
 """
     eigen!(A, [B]; permute, scale, sortby)
 
-came as [`eigen`](@ref), but saves space by overwriting the input `A` (and
+Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
 """
 function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby, jvl::Bool=false, jvr::Bool=true, jce::Bool=false, jcv::Bool=false) where T<:BlasReal
@@ -274,6 +274,17 @@ function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     AA = copy_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; permute=permute, scale=scale, sortby=sortby, jvl=jvl, jvr=jvr, jce=jce, jcv=jcv)
+end
+function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
+    AA = copy_oftype(A, eigtype(T))
+    isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
+    A = eigen!(AA; permute, scale, sortby)
+    values = convert(AbstractVector{isreal(A.values) ? Float16 : Complex{Float16}}, A.values)
+    vectors = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectors)
+    vectorsl = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectorsl)
+    rconde = convert(Vector{Float16}, A.rconde)
+    rcondv = convert(Vector{Float16}, A.rcondv)
+    return Eigen(values, vectors, vectorsl, A.unitary, rconde, rcondv)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
@@ -683,6 +694,16 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
         show(io, mime, F.rcondv)
     end
     nothing
+end
+
+function Base.hash(F::Eigen, h::UInt)
+    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
+end
+function Base.:(==)(A::Eigen, B::Eigen)
+    return A.values == B.values && A.vectors == B.vectors
+end
+function Base.isequal(A::Eigen, B::Eigen)
+    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
 end
 
 # Conversion methods

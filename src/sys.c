@@ -13,6 +13,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "llvm-version.h"
 
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
@@ -26,6 +27,7 @@
 #include <sys/ptrace.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
+#include <grp.h>
 #endif
 
 #ifndef _OS_WINDOWS_
@@ -228,6 +230,231 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
     uv_stat_t *s;
     s = (uv_stat_t*)statbuf;
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
+}
+
+JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, size_t uid)
+{
+#ifdef _OS_WINDOWS_
+  return UV_ENOTSUP;
+#else
+  // taken directly from libuv
+  struct passwd pw;
+  struct passwd* result;
+  char* buf;
+  size_t bufsize;
+  size_t name_size;
+  size_t homedir_size;
+  size_t shell_size;
+  size_t gecos_size;
+  long initsize;
+  int r;
+
+  if (pwd == NULL)
+    return UV_EINVAL;
+
+  initsize = sysconf(_SC_GETPW_R_SIZE_MAX);
+
+  if (initsize <= 0)
+    bufsize = 4096;
+  else
+    bufsize = (size_t) initsize;
+
+  buf = NULL;
+
+  for (;;) {
+    free(buf);
+    buf = (char*)malloc(bufsize);
+
+    if (buf == NULL)
+      return UV_ENOMEM;
+
+    r = getpwuid_r(uid, &pw, buf, bufsize, &result);
+
+    if (r != ERANGE)
+      break;
+
+    bufsize *= 2;
+  }
+
+  if (r != 0) {
+    free(buf);
+    return -r;
+  }
+
+  if (result == NULL) {
+    free(buf);
+    return UV_ENOENT;
+  }
+
+  /* Allocate memory for the username, gecos, shell, and home directory. */
+  name_size = strlen(pw.pw_name) + 1;
+  homedir_size = strlen(pw.pw_dir) + 1;
+  shell_size = strlen(pw.pw_shell) + 1;
+
+#ifdef __MVS__
+  gecos_size = 0; /* pw_gecos does not exist on zOS. */
+#else
+  if (pw.pw_gecos != NULL)
+    gecos_size = strlen(pw.pw_gecos) + 1;
+  else
+    gecos_size = 0;
+#endif
+
+  pwd->username = (char*)malloc(name_size +
+                         homedir_size +
+                         shell_size +
+                         gecos_size);
+
+  if (pwd->username == NULL) {
+    free(buf);
+    return UV_ENOMEM;
+  }
+
+  /* Copy the username */
+  memcpy(pwd->username, pw.pw_name, name_size);
+
+  /* Copy the home directory */
+  pwd->homedir = pwd->username + name_size;
+  memcpy(pwd->homedir, pw.pw_dir, homedir_size);
+
+  /* Copy the shell */
+  pwd->shell = pwd->homedir + homedir_size;
+  memcpy(pwd->shell, pw.pw_shell, shell_size);
+
+  /* Copy the gecos field */
+#ifdef __MVS__
+  pwd->gecos = NULL;  /* pw_gecos does not exist on zOS. */
+#else
+  if (pw.pw_gecos == NULL) {
+    pwd->gecos = NULL;
+  } else {
+    pwd->gecos = pwd->shell + shell_size;
+    memcpy(pwd->gecos, pw.pw_gecos, gecos_size);
+  }
+#endif
+
+  /* Copy the uid and gid */
+  pwd->uid = pw.pw_uid;
+  pwd->gid = pw.pw_gid;
+
+  free(buf);
+
+  return 0;
+#endif
+}
+
+typedef struct jl_group_s {
+    char* groupname;
+    long gid;
+    char** members;
+} jl_group_t;
+
+JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, size_t gid)
+{
+#ifdef _OS_WINDOWS_
+  return UV_ENOTSUP;
+#else
+  // modified directly from uv_os_get_password
+  struct group gp;
+  struct group* result;
+  char* buf;
+  char* gr_mem;
+  size_t bufsize;
+  size_t name_size;
+  long members;
+  size_t mem_size;
+  long initsize;
+  int r;
+
+  if (grp == NULL)
+    return UV_EINVAL;
+
+  initsize = sysconf(_SC_GETGR_R_SIZE_MAX);
+
+  if (initsize <= 0)
+    bufsize = 4096;
+  else
+    bufsize = (size_t) initsize;
+
+  buf = NULL;
+
+  for (;;) {
+    free(buf);
+    buf = (char*)malloc(bufsize);
+
+    if (buf == NULL)
+      return UV_ENOMEM;
+
+    r = getgrgid_r(gid, &gp, buf, bufsize, &result);
+
+    if (r != ERANGE)
+      break;
+
+    bufsize *= 2;
+  }
+
+  if (r != 0) {
+    free(buf);
+    return -r;
+  }
+
+  if (result == NULL) {
+    free(buf);
+    return UV_ENOENT;
+  }
+
+  /* Allocate memory for the groupname and members. */
+  name_size = strlen(gp.gr_name) + 1;
+  members = 0;
+  mem_size = sizeof(char*);
+  for (r = 0; gp.gr_mem[r] != NULL; r++) {
+    mem_size += strlen(gp.gr_mem[r]) + 1 + sizeof(char*);
+    members++;
+  }
+
+  gr_mem = (char*)malloc(name_size + mem_size);
+  if (gr_mem == NULL) {
+    free(buf);
+    return UV_ENOMEM;
+  }
+
+  /* Copy the members */
+  grp->members = (char**) gr_mem;
+  grp->members[members] = NULL;
+  gr_mem = (char*) ((char**) gr_mem + members + 1);
+  for (r = 0; r < members; r++) {
+    grp->members[r] = gr_mem;
+    gr_mem = stpcpy(gr_mem, gp.gr_mem[r]) + 1;
+  }
+  assert(gr_mem == (char*)grp->members + mem_size);
+
+  /* Copy the groupname */
+  grp->groupname = gr_mem;
+  memcpy(grp->groupname, gp.gr_name, name_size);
+  gr_mem += name_size;
+
+  /* Copy the gid */
+  grp->gid = gp.gr_gid;
+
+  free(buf);
+
+  return 0;
+#endif
+}
+
+JL_DLLEXPORT void jl_os_free_group(jl_group_t *grp)
+{
+  if (grp == NULL)
+    return;
+
+  /*
+    The memory for is allocated in a single uv__malloc() call. The base of the
+    pointer is stored in grp->members, so that is the only field that needs
+    to be freed.
+  */
+  free(grp->members);
+  grp->members = NULL;
+  grp->groupname = NULL;
 }
 
 // --- buffer manipulation ---
@@ -668,7 +895,13 @@ JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT {
     HMODULE mod;
     // FIXME: GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS on LLVMContextCreate,
     //        but that just points to libjulia.dll
-    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, "LLVM", &mod))
+#if JL_LLVM_VERSION <= 110000
+    const char* libLLVM = "LLVM";
+#else
+    const char* libLLVM = "libLLVM";
+#endif
+
+    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, libLLVM, &mod))
         return jl_nothing;
 
     char path[MAX_PATH];

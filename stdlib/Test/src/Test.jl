@@ -85,8 +85,9 @@ struct Pass <: Result
     orig_expr
     data
     value
-    function Pass(test_type::Symbol, orig_expr, data, thrown)
-        return new(test_type, orig_expr, data, thrown isa String ? "String" : thrown)
+    source::Union{Nothing,LineNumberNode}
+    function Pass(test_type::Symbol, orig_expr, data, thrown, source=nothing)
+        return new(test_type, orig_expr, data, thrown isa String ? "String" : thrown, source)
     end
 end
 
@@ -236,6 +237,7 @@ function Serialization.serialize(s::Serialization.AbstractSerializer, t::Pass)
     Serialization.serialize(s, t.orig_expr === nothing ? nothing : string(t.orig_expr))
     Serialization.serialize(s, t.data === nothing ? nothing : string(t.data))
     Serialization.serialize(s, string(t.value))
+    Serialization.serialize(s, t.source === nothing ? nothing : t.source)
     nothing
 end
 
@@ -353,9 +355,12 @@ Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 ```jldoctest
 julia> @test true
 Test Passed
+  Expression: true
 
 julia> @test [1, 2] + [2, 1] == [3, 3]
 Test Passed
+  Expression: [1, 2] + [2, 1] == [3, 3]
+   Evaluated: [3, 3] == [3, 3]
 ```
 
 The `@test f(args...) key=val...` form is equivalent to writing
@@ -365,6 +370,8 @@ is a call using infix syntax such as approximate comparisons:
 ```jldoctest
 julia> @test π ≈ 3.14 atol=0.01
 Test Passed
+  Expression: ≈(π, 3.14, atol = 0.01)
+   Evaluated: ≈(π, 3.14; atol = 0.01)
 ```
 
 This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
@@ -393,6 +400,8 @@ Test Broken
 
 julia> @test 2 + 2 ≈ 5 atol=1 broken=false
 Test Passed
+  Expression: ≈(2 + 2, 5, atol = 1)
+   Evaluated: ≈(4, 5; atol = 1)
 
 julia> @test 2 + 2 == 5 skip=true
 Test Broken
@@ -400,6 +409,8 @@ Test Broken
 
 julia> @test 2 + 2 == 4 skip=false
 Test Passed
+  Expression: 2 + 2 == 4
+   Evaluated: 4 == 4
 ```
 
 !!! compat "Julia 1.7"
@@ -516,6 +527,12 @@ function get_test_result(ex, source)
         first(string(ex.args[1])) != '.' && !is_splat(ex.args[2]) && !is_splat(ex.args[3]) &&
         (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
         ex = Expr(:comparison, ex.args[2], ex.args[1], ex.args[3])
+
+    # Mark <: and >: as :comparison expressions
+    elseif isa(ex, Expr) && length(ex.args) == 2 &&
+        !is_splat(ex.args[1]) && !is_splat(ex.args[2]) &&
+        Base.operator_precedence(ex.head) == comparison_prec
+        ex = Expr(:comparison, ex.args[1], ex.head, ex.args[2])
     end
     if isa(ex, Expr) && ex.head === :comparison
         # pass all terms of the comparison to `eval_comparison`, as an Expr
@@ -583,7 +600,7 @@ function get_test_result(ex, source)
             $testret
         catch _e
             _e isa InterruptException && rethrow()
-            Threw(_e, Base.catch_stack(), $(QuoteNode(source)))
+            Threw(_e, Base.current_exceptions(), $(QuoteNode(source)))
         end
     end
     Base.remove_linenums!(result)
@@ -604,7 +621,7 @@ function do_test(result::ExecutionResult, orig_expr)
         value = result.value
         testres = if isa(value, Bool)
             # a true value Passes
-            value ? Pass(:test, nothing, nothing, value) :
+            value ? Pass(:test, orig_expr, result.data, value, result.source) :
                     Fail(:test, orig_expr, result.data, value, result.source)
         else
             # If the result is non-Boolean, this counts as an Error
@@ -646,10 +663,12 @@ Note that `@test_throws` does not support a trailing keyword form.
 ```jldoctest
 julia> @test_throws BoundsError [1, 2, 3][4]
 Test Passed
+  Expression: ([1, 2, 3])[4]
       Thrown: BoundsError
 
 julia> @test_throws DimensionMismatch [1, 2, 3] + [1, 2]
 Test Passed
+  Expression: [1, 2, 3] + [1, 2]
       Thrown: DimensionMismatch
 ```
 """
@@ -707,7 +726,7 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             end
         end
         if success
-            testres = Pass(:test_throws, nothing, nothing, exc)
+            testres = Pass(:test_throws, orig_expr, extype, exc, result.source)
         else
             testres = Fail(:test_throws_wrong, orig_expr, extype, exc, result.source)
         end
@@ -816,9 +835,20 @@ function record end
     finish(ts::AbstractTestSet)
 
 Do any final processing necessary for the given testset. This is called by the
-`@testset` infrastructure after a test block executes. One common use for this
-function is to record the testset to the parent's results list, using
-`get_testset`.
+`@testset` infrastructure after a test block executes.
+
+Custom `AbstractTestSet` subtypes should call `record` on their parent (if there
+is one) to add themselves to the tree of test results. This might be implemented
+as:
+
+```julia
+if get_testset_depth() != 0
+    # Attach this test set to the parent test set
+    parent_ts = get_testset()
+    record(parent_ts, self)
+    return self
+end
+```
 """
 function finish end
 
@@ -1247,7 +1277,7 @@ function testset_beginend(args, tests, source)
         local oldrng = copy(RNG)
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed!(RNG.seed)
+            Random.seed!(Random.GLOBAL_SEED)
             let
                 $(esc(tests))
             end
@@ -1255,7 +1285,7 @@ function testset_beginend(args, tests, source)
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
             pop_testset()
@@ -1329,7 +1359,7 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), $(QuoteNode(source))))
+            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         end
     end
     quote
@@ -1338,7 +1368,7 @@ function testset_forloop(args, testloop, source)
         local ts
         local RNG = default_rng()
         local oldrng = copy(RNG)
-        Random.seed!(RNG.seed)
+        Random.seed!(Random.GLOBAL_SEED)
         local tmprng = copy(RNG)
         try
             let
@@ -1577,7 +1607,7 @@ function detect_ambiguities(mods::Module...;
         for m in Base.MethodList(mt)
             is_in_mods(m.module, recursive, mods) || continue
             ambig = Int32[0]
-            ms = Base._methods_by_ftype(m.sig, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+            ms = Base._methods_by_ftype(m.sig, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
             ambig[1] == 0 && continue
             isa(ms, Bool) && continue
             for match2 in ms
@@ -1809,7 +1839,7 @@ end
 
 "`guardseed(f, seed)` is equivalent to running `Random.seed!(seed); f()` and
 then restoring the state of the global RNG as it was before."
-guardseed(f::Function, seed::Union{Vector{UInt32},Integer}) = guardseed() do
+guardseed(f::Function, seed::Union{Vector{UInt64},Vector{UInt32},Integer,NTuple{4,UInt64}}) = guardseed() do
     Random.seed!(seed)
     f()
 end

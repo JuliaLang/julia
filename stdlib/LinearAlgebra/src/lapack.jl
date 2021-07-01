@@ -5963,9 +5963,9 @@ for (gees, gges, elty) in
             alphar = similar(A, $elty, n)
             alphai = similar(A, $elty, n)
             beta = similar(A, $elty, n)
-            ldvsl = jobvsl == 'V' ? n : 1
+            ldvsl = jobvsl == 'V' ? max(1, n) : 1
             vsl = similar(A, $elty, ldvsl, n)
-            ldvsr = jobvsr == 'V' ? n : 1
+            ldvsr = jobvsr == 'V' ? max(1, n) : 1
             vsr = similar(A, $elty, ldvsr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -6058,9 +6058,9 @@ for (gees, gges, elty, relty) in
             sdim = BlasInt(0)
             alpha = similar(A, $elty, n)
             beta = similar(A, $elty, n)
-            ldvsl = jobvsl == 'V' ? n : 1
+            ldvsl = jobvsl == 'V' ? max(1, n) : 1
             vsl = similar(A, $elty, ldvsl, n)
-            ldvsr = jobvsr == 'V' ? n : 1
+            ldvsr = jobvsr == 'V' ? max(1, n) : 1
             vsr = similar(A, $elty, ldvsr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)

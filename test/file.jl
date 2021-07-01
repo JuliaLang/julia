@@ -702,7 +702,7 @@ let
     @test a_stat.size == b_stat.size
     @test a_stat.size == c_stat.size
 
-    @test parse(Int, match(r"mode=(.*),", sprint(show, a_stat)).captures[1]) == a_stat.mode
+    @test parse(Int, split(sprint(show, a_stat),"mode: ")[2][1:8]) == a_stat.mode
 
     close(af)
     rm(afile)
@@ -1604,4 +1604,49 @@ if Sys.iswindows()
     tmp = mkdir(tempname("C:\\"))
     @test rm(tmp) === nothing
 end
+end
+
+@testset "StatStruct show's extended details" begin
+    f, io = mktemp()
+    s = stat(f)
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(")
+    @test endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for ")
+    @test rstrip(stat_show_str_multi) == stat_show_str_multi # no trailing \n
+    @test occursin(repr(f), stat_show_str)
+    @test occursin(repr(f), stat_show_str_multi)
+    if Sys.iswindows()
+        @test occursin("mode: 0o100666 (-rw-rw-rw-)", stat_show_str)
+        @test occursin("mode: 0o100666 (-rw-rw-rw-)\n", stat_show_str_multi)
+    else
+        @test occursin("mode: 0o100600 (-rw-------)", stat_show_str)
+        @test occursin("mode: 0o100600 (-rw-------)\n", stat_show_str_multi)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
+    d = mktempdir()
+    s = stat(d)
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(")
+    @test endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for ")
+    @test rstrip(stat_show_str_multi) == stat_show_str_multi # no trailing \n
+    @test occursin(repr(d), stat_show_str)
+    @test occursin(repr(d), stat_show_str_multi)
+    if Sys.iswindows()
+        @test occursin("mode: 0o040666 (drw-rw-rw-)", stat_show_str)
+        @test occursin("mode: 0o040666 (drw-rw-rw-)\n", stat_show_str_multi)
+    else
+        @test occursin("mode: 0o040700 (drwx------)", stat_show_str)
+        @test occursin("mode: 0o040700 (drwx------)\n", stat_show_str_multi)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
 end

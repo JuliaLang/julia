@@ -132,6 +132,39 @@ aimg  = randn(n,n)/2
         @test Z == A
         @test λ == zeros(0)
     end
+
+    if eltya <: Real
+        @testset "quasitriangular to triangular" begin
+            S = schur(a)
+            SC = Schur{Complex}(S)
+            @test eltype(SC) == complex(eltype(S))
+            @test istriu(SC.T)
+            @test SC.Z*SC.Z' ≈ I
+            @test SC.Z*SC.T*SC.Z' ≈ a
+            @test sort(SC.values,by=LinearAlgebra.eigsortby) ≈ sort(S.values,by=LinearAlgebra.eigsortby)
+            @test Schur{Complex}(SC) === SC === Schur{eltype(SC)}(SC)
+            @test Schur{eltype(S)}(S) === S
+            if eltype(S) === Float32
+                S64 = Schur{Float64}(S)
+                @test eltype(S64) == Float64
+                @test S64.Z == S.Z
+                @test S64.T == S.T
+                @test S64.values == S.values
+            end
+        end
+    end
+
+    @testset "0x0 $eltya matrices" begin
+        A = zeros(eltya, 0, 0)
+        B = zeros(eltya, 0, 0)
+        S = LinearAlgebra.schur(A, B)
+        @test S.S == A
+        @test S.T == A
+        @test S.Q == A
+        @test S.Z == A
+        @test S.alpha == zeros(0)
+        @test S.beta == zeros(0)
+    end
 end
 
 @testset "Generalized Schur convergence" begin
@@ -158,6 +191,15 @@ end
         @test f.Q*f.S*f.Z' ≈ A
         @test f.Q*f.T*f.Z' ≈ B
     end
+end
+
+@testset "adjoint and transpose for schur (#40941)" begin
+    A = rand(3, 3)
+    B = schur(A', A)
+    C = B.left*B.S*B.right'
+    D = schur(transpose(A), A)
+    E = D.left*D.S*D.right'
+    @test A' ≈ C ≈ E
 end
 
 end # module TestSchur

@@ -858,9 +858,9 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
         if make_typealias(properx) !== nothing || (unwrap_unionall(x) isa Union && x <: make_typealiases(properx)[2])
             show(IOContext(io, :compact => true), x)
             if !(get(io, :compact, false)::Bool)
-                print(io, " (alias for ")
-                show(IOContext(io, :compact => false), x)
-                print(io, ")")
+                printstyled(io, " (alias for "; color = :light_black)
+                printstyled(IOContext(io, :compact => false), x, color = :light_black)
+                printstyled(io, ")"; color = :light_black)
             end
             return
         end
@@ -1020,7 +1020,7 @@ show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 Prints one or more expressions, and their results, to `stdout`, and returns the last result.
 
-See also: [`show`](@ref), [`@info`](@ref Logging), [`println`](@ref).
+See also: [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
 
 # Examples
 ```jldoctest
@@ -1330,9 +1330,10 @@ julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
 ```
 """
 function isidentifier(s::AbstractString)
-    isempty(s) && return false
+    x = Iterators.peel(s)
+    isnothing(x) && return false
     (s == "true" || s == "false") && return false
-    c, rest = Iterators.peel(s)
+    c, rest = x
     is_id_start_char(c) || return false
     return all(is_id_char, rest)
 end
@@ -1454,8 +1455,7 @@ function operator_associativity(s::Symbol)
     return :left
 end
 
-is_expr(@nospecialize(ex), head::Symbol)         = isa(ex, Expr) && (ex.head === head)
-is_expr(@nospecialize(ex), head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
+const is_expr = isexpr
 
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
@@ -1477,8 +1477,8 @@ emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, f
     printstyled(io, str; color=col, bold=true) :
     print(io, uppercase(str))
 
-show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
-show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")
+show_linenumber(io::IO, line)       = printstyled(io, "#= line ", line, " =#", color=:light_black)
+show_linenumber(io::IO, line, file) = printstyled(io, "#= ", file, ":", line, " =#", color=:light_black)
 show_linenumber(io::IO, line, file::Nothing) = show_linenumber(io, line)
 
 # show a block, e g if/for/etc
@@ -2616,7 +2616,7 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
     if x !== Any
         print(io, " <: ", supertype(x))
     end
-    if n > 0 && !(x <: Tuple) && !x.abstract
+    if n > 0 && !(x <: Tuple) && !isabstracttype(x)
         tvar_io::IOContext = io
         for tparam in x.parameters
             # approximately recapture the list of tvar parameterization

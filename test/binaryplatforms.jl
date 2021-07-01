@@ -368,7 +368,7 @@ end
 
 
     # Next, an asymmetric comparison strategy.  We'll create a "less than or equal to" constraint
-    # that uses the `{a,b}_requested` paramters to determine which number represents the limit.
+    # that uses the `{a,b}_requested` parameters to determine which number represents the limit.
     function less_than_constraint(a::String, b::String, a_requested::Bool, b_requested::Bool)
         a = parse(Int, a)
         b = parse(Int, b)

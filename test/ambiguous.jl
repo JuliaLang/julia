@@ -348,7 +348,7 @@ f35983(::Type, ::Type) = 2
 @test length(Base.methods(f35983, (Any, Any))) == 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
     @test length(ms) == 1
     @test ambig[1] == 0
 end
@@ -356,14 +356,14 @@ f35983(::Type{Int16}, ::Any) = 3
 @test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
 @test length(Base.methods(f35983, (Type, Type))) == 2
 let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
     @test length(ms) == 2
     @test ambig[1] == 1
 end
 
 struct B38280 <: Real; val; end
 let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, 1, typemax(UInt), false, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, nothing, 1, typemax(UInt), false, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
     @test ms isa Vector
     @test length(ms) == 1
     @test ambig[1] == 1
