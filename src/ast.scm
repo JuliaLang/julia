@@ -306,7 +306,7 @@
          (bad-formal-argument v))
         (else
          (case (car v)
-           ((... kw)
+           ((...)
 	    (arg-name (cadr v)) ;; to check for errors
 	    (decl-var (cadr v)))
            ((|::|)
@@ -317,6 +317,8 @@
             (if (nospecialize-meta? v #t)
                 (arg-name (caddr v))
                 (bad-formal-argument v)))
+           ((kw)
+            (arg-name (cadr v)))
            (else (bad-formal-argument v))))))
 
 (define (arg-type v)
@@ -336,6 +338,8 @@
             (if (nospecialize-meta? v #t)
                 (arg-type (caddr v))
                 (bad-formal-argument v)))
+           ((kw)
+            (arg-type (cadr v)))
            (else (bad-formal-argument v))))))
 
 ;; convert a lambda list into a list of just symbols

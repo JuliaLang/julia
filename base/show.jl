@@ -2721,7 +2721,7 @@ function showarg(io::IO, v::SubArray, toplevel)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
 end
-showindices(io, ::Union{Slice,IdentityUnitRange}, inds...) =
+showindices(io, ::Slice, inds...) =
     (print(io, ", :"); showindices(io, inds...))
 showindices(io, ind1, inds...) =
     (print(io, ", ", ind1); showindices(io, inds...))

@@ -60,7 +60,7 @@ static void jl_init_intrinsic_functions_codegen(void)
     float_func[fpiseq] = true;
     float_func[fpislt] = true;
     float_func[abs_float] = true;
-    //float_func[copysign_float] = false; // this is actually an integer operation
+    float_func[copysign_float] = true;
     float_func[ceil_llvm] = true;
     float_func[floor_llvm] = true;
     float_func[trunc_llvm] = true;
@@ -207,8 +207,9 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         const uint8_t *ov = (const uint8_t*)ptr + offs;
         if (jl_is_uniontype(ft)) {
             // compute the same type layout as julia_struct_to_llvm
-            size_t fsz = jl_field_size(bt, i);
-            size_t al = jl_field_align(bt, i);
+            size_t fsz = 0, al = 0;
+            (void)jl_islayout_inline(ft, &fsz, &al);
+            fsz = jl_field_size(bt, i);
             uint8_t sel = ((const uint8_t*)ptr)[offs + fsz - 1];
             jl_value_t *active_ty = jl_nth_union_component(ft, sel);
             size_t active_sz = jl_datatype_size(active_ty);
@@ -1250,14 +1251,8 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateCall(absintr, x);
     }
     case copysign_float: {
-        Value *bits = ctx.builder.CreateBitCast(x, t);
-        Value *sbits = ctx.builder.CreateBitCast(y, t);
-        unsigned nb = cast<IntegerType>(t)->getBitWidth();
-        APInt notsignbit = APInt::getSignedMaxValue(nb);
-        APInt signbit0(nb, 0); signbit0.setBit(nb - 1);
-        return ctx.builder.CreateOr(
-                    ctx.builder.CreateAnd(bits, ConstantInt::get(t, notsignbit)),
-                    ctx.builder.CreateAnd(sbits, ConstantInt::get(t, signbit0)));
+        FunctionCallee copyintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::copysign, makeArrayRef(t));
+        return ctx.builder.CreateCall(copyintr, {x, y});
     }
     case flipsign_int: {
         ConstantInt *cx = dyn_cast<ConstantInt>(x);

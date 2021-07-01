@@ -1,4 +1,4 @@
-@inline function writefixed(buf, pos, v::T,
+function writefixed(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     @assert 0 < pos <= length(buf)
@@ -19,12 +19,9 @@
         end
         buf[pos] = UInt8('0')
         pos += 1
-        if precision > 0
+        if precision > 0 && !trimtrailingzeros
             buf[pos] = decchar
             pos += 1
-            if trimtrailingzeros
-                precision = 1
-            end
             for _ = 1:precision
                 buf[pos] = UInt8('0')
                 pos += 1
@@ -101,9 +98,11 @@
         buf[pos] = UInt8('0')
         pos += 1
     end
+    hasfractional = false
     if precision > 0 || hash
         buf[pos] = decchar
         pos += 1
+        hasfractional = true
     end
     if e2 < 0
         idx = div(-e2, 16)
@@ -171,6 +170,7 @@
                     if dotPos > 1
                         buf[dotPos] = UInt8('0')
                         buf[dotPos + 1] = decchar
+                        hasfractional = true
                     end
                     buf[pos] = UInt8('0')
                     pos += 1
@@ -199,7 +199,7 @@
             pos += 1
         end
     end
-    if trimtrailingzeros
+    if trimtrailingzeros && hasfractional
         while buf[pos - 1] == UInt8('0')
             pos -= 1
         end

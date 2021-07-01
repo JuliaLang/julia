@@ -458,7 +458,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     n = length(t)
     m = length(s)
     k = Int(_k) - sentinel
-    k < 1 && throw(BoundsError(s, _k))
+    k < 0 && throw(BoundsError(s, _k))
 
     if n == 0
         return 0 <= k <= m ? max(k, 1) : sentinel

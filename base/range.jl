@@ -1073,7 +1073,9 @@ function sum(r::AbstractRange{<:Real})
 end
 
 function _in_range(x, r::AbstractRange)
-    if step(r) == 0
+    if !isfinite(x)
+        return false
+    elseif iszero(step(r))
         return !isempty(r) && first(r) == x
     else
         n = round(Integer, (x - first(r)) / step(r)) + 1

@@ -1,4 +1,4 @@
-@inline function writeexp(buf, pos, v::T,
+function writeexp(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     @assert 0 < pos <= length(buf)
@@ -19,7 +19,7 @@
         end
         buf[pos] = UInt8('0')
         pos += 1
-        if precision > 0
+        if precision > 0 && !trimtrailingzeros
             buf[pos] = decchar
             pos += 1
             for _ = 1:precision
