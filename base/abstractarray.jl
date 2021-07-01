@@ -2142,9 +2142,9 @@ typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 # 1-dimensional hvncat methods
 
 _typed_hvncat(::Type, ::Val{0}) = _typed_hvncat_0d_only_one()
-_typed_hvncat(::Type{T}, ::Val{0}, x) where T = fill(convert(T, x))
-_typed_hvncat(::Type{T}, ::Val{0}, x::Number) where T = fill(convert(T, x))
-_typed_hvncat(::Type{T}, ::Val{0}, x::AbstractArray) where T = convert.(T, x)
+_typed_hvncat(T::Type, ::Val{0}, x) = fill(convert(T, x))
+_typed_hvncat(T::Type, ::Val{0}, x::Number) = fill(convert(T, x))
+_typed_hvncat(T::Type, ::Val{0}, x::AbstractArray) = convert.(T, x)
 _typed_hvncat(::Type, ::Val{0}, ::Any...) = _typed_hvncat_0d_only_one()
 _typed_hvncat(::Type, ::Val{0}, ::Number...) = _typed_hvncat_0d_only_one()
 _typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_only_one()
@@ -2251,15 +2251,10 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
 end
 
 
-# 0-dimensional cases for balanced and unbalanced hvncat methods
+# 0-dimensional cases for balanced and unbalanced hvncat method
 
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x) where T = fill(convert(T, x))
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::Number) where T = fill(convert(T, x))
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, x::AbstractArray) where T = convert.(T, x)
-_typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Number...) =
-    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
-_typed_hvncat(::Type, ::Tuple{}, ::Bool, ::Any...) =
-    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
+_typed_hvncat(T::Type, ::Tuple{}, ::Bool, x...) = _typed_hvncat(T, Val(0), x...)
+_typed_hvncat(T::Type, ::Tuple{}, ::Bool, x::Number...) = _typed_hvncat(T, Val(0), x...)
 
 
 # balanced dimensions hvncat methods
