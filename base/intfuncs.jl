@@ -639,23 +639,31 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 
 ## integer to string functions ##
 
-const PRINT_INT_SCRATCH_LENGTH = 256
-const PRINT_INT_SCRATCH = Vector{UInt8}[StringVector(PRINT_INT_SCRATCH_LENGTH)]
-
-@inline function print_int_scratch(n)
-    # FIXME: scratch = @inbounds print_int_scratch_[Threads.threadid()]
-    scratch = @inbounds PRINT_INT_SCRATCH[1]
-    resize!(scratch, n)
-    scratch
+struct Scratch
+    p::Ptr{UInt8}
+    length::UInt64
 end
 
-function init_print_int_scratch()
-    # FIXME: resize_nthreads!(PRINT_INT_SCRATCH, print_int_scratch_[1])
-    # print_int_scratch() also needs to use Threads.threadid(), but it's
-    # not clear how to replace that as @eval into base is prohibited
+@inline function with_scratch(f, n::Int64)
+    scratch = Scratch(
+        llvmcall(
+            """%2 = alloca i8, i64 %0
+            %3 = ptrtoint i8* %2 to i64
+            ret i64 %3""",
+            Ptr{UInt8}, Tuple{Int64}, n ),
+        unsafe_trunc(UInt64, n)
+    )
 
-    nothing
+    f(scratch)
 end
+
+@propagate_inbounds function setindex!(a::Scratch, v, i)
+    @boundscheck (i <= a.length || throw(BoundsError(a, i)))
+    unsafe_store!(a.p, convert(UInt8, v), i)
+    a
+end
+
+write(io::IO, a::Scratch) = unsafe_write(io, a.p, a.length)
 
 @inline function bin_impl_(a, x::Unsigned, n::Int, neg::Bool)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
@@ -694,10 +702,11 @@ end
 function bin_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
     m = 8 * sizeof(x) - Base.leading_zeros(x)
     n = neg + max(pad, m)
-    scratch = print_int_scratch(n)
 
-    bin_impl_(scratch, x, n, neg)
-    write(io, scratch)
+    with_scratch(n) do scratch
+        bin_impl_(scratch, x, n, neg)
+        write(io, scratch)
+    end
 end
 
 @inline function oct_impl_(a, x::Unsigned, n::Int, neg::Bool)
@@ -724,9 +733,11 @@ end
 function oct_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
     m = div(8 * sizeof(x) - leading_zeros(x) + 2, 3)
     n = neg + max(pad, m)
-    scratch = print_int_scratch(n)
-    oct_impl_(scratch, x, n, neg)
-    write(io, scratch)
+
+    with_scratch(n) do scratch
+        oct_impl_(scratch, x, n, neg)
+        write(io, scratch)
+    end
 end
 
 # 2-digit decimal characters ("00":"99")
@@ -759,9 +770,11 @@ end
 
 function dec_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
-    scratch = print_int_scratch(n)
-    dec_impl_(scratch, x, n, neg)
-    write(io, scratch)
+
+    with_scratch(n) do scratch
+        dec_impl_(scratch, x, n, neg)
+        write(io, scratch)
+    end
 end
 
 @inline function hex_impl_(a, x::Unsigned, n::Int, neg::Bool)
@@ -795,9 +808,11 @@ end
 function hex_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
     m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
     n = neg + max(pad, m)
-    scratch = print_int_scratch(n)
-    hex_impl_(scratch, x, n, neg)
-    write(io, scratch)
+
+    with_scratch(n) do scratch
+        hex_impl_(scratch, x, n, neg)
+        write(io, scratch)
+    end
 end
 
 const base36digits = UInt8['0':'9';'a':'z']
@@ -838,10 +853,10 @@ function _base_io(io::IO, base::Integer, x::Integer, pad::Int, neg::Bool)
     b = (base % Int)::Int
     n = neg + ndigits(x, base=b, pad=pad)
 
-    scratch = print_int_scratch(n)
-    _base_impl_(scratch, b, x, n, neg)
-
-    write(io, scratch)
+    with_scratch(n) do scratch
+        _base_impl_(scratch, b, x, n, neg)
+        write(io, scratch)
+    end
 end
 
 split_sign(n::Integer) = unsigned(abs(n)), n < 0
