@@ -858,9 +858,9 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
         if make_typealias(properx) !== nothing || (unwrap_unionall(x) isa Union && x <: make_typealiases(properx)[2])
             show(IOContext(io, :compact => true), x)
             if !(get(io, :compact, false)::Bool)
-                print(io, " (alias for ")
-                show(IOContext(io, :compact => false), x)
-                print(io, ")")
+                printstyled(io, " (alias for "; color = :light_black)
+                printstyled(IOContext(io, :compact => false), x, color = :light_black)
+                printstyled(io, ")"; color = :light_black)
             end
             return
         end
