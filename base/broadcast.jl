@@ -991,13 +991,6 @@ preprocess_args(dest, args::Tuple{}) = ()
 # Specialize this method if all you want to do is specialize on typeof(dest)
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
-    # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
-    if bc.f === identity && bc.args isa Tuple{AbstractArray} # only a single input argument to broadcast!
-        A = bc.args[1]
-        if axes(dest) == axes(A)
-            return copyto!(dest, A)
-        end
-    end
     bc′ = preprocess(dest, bc)
     # Performance may vary depending on whether `@inbounds` is placed outside the
     # for loop or not. (cf. https://github.com/JuliaLang/julia/issues/38086)
