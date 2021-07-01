@@ -221,10 +221,11 @@
 
 (define (method-expr-name m)
   (let ((name (cadr m)))
+     (let ((name (if (or (length= m 2) (not (pair? name)) (not (quoted? name))) name (cadr name))))
        (cond ((not (pair? name)) name)
              ((eq? (car name) 'outerref) (cadr name))
              ;((eq? (car name) 'globalref) (caddr name))
-             (else name))))
+             (else name)))))
 
 ;; extract static parameter names from a (method ...) expression
 (define (method-expr-static-parameters m)
@@ -251,6 +252,13 @@
             (or (atom? (cadr e)) (sym-ref? (cadr e)))
             (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
             (symbol? (cadr (caddr e))))))
+
+(define (overlay? e)
+  (and (pair? e) (eq? (car e) 'overlay)))
+
+(define (sym-ref-or-overlay? e)
+  (or (overlay? e)
+      (sym-ref? e)))
 
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
@@ -341,14 +349,15 @@
    (let* ((names (map car sparams))
           (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
           (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
-          (ename (if (nodot-sym-ref? name) name `(null))))
+          (ename (if (nodot-sym-ref? name) name
+                    (if (overlay? name) (cadr name) `(null)))))
      (if (has-dups unused_anames)
          (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
          (error "function static parameter names not unique"))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
          (error "function argument and static parameter names must be distinct"))
-     (if (or (and name (not (sym-ref? name))) (not (valid-name? name)))
+     (if (or (and name (not (sym-ref-or-overlay? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((loc (maybe-remove-functionloc! body))
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
@@ -433,9 +442,12 @@
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let* ((l (if (null? pargl) '() (last pargl)))
                         ;; handle vararg with default value
-                        (l (if (kwarg? l) (cadr l) l)))
-                   (if (or (vararg? l) (varargexpr? l))
+                        (l- (if (kwarg? l) (cadr l) l)))
+                   (if (or (vararg? l-) (varargexpr? l-))
                        (list l) '())))
+         ;; expression to forward varargs to another call
+         (splatted-vararg (if (null? vararg) '()
+                              (list `(... ,(arg-name (car vararg))))))
          ;; positional args with vararg
          (pargl-all pargl)
          ;; positional args without vararg
@@ -511,8 +523,7 @@
                                        ,@(if ordered-defaults keynames vals)
                                        ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
                                        ,@(map arg-name pargl)
-                                       ,@(if (null? vararg) '()
-                                             (list `(... ,(arg-name (car vararg)))))))))
+                                       ,@splatted-vararg))))
                (if ordered-defaults
                    (scopenest keynames vals ret)
                    ret))))
@@ -570,16 +581,13 @@
                 ,@(if (null? restkw)
                       `((if (call (top isempty) ,rkw)
                             (null)
-                            (call (top kwerr) ,kw ,@(map arg-name pargl)
-                                  ,@(if (null? vararg) '()
-                                        (list `(... ,(arg-name (car vararg))))))))
+                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg)))
                       '())
                 (return (call ,mangled  ;; finally, call the core function
                               ,@keynames
                               ,@(if (null? restkw) '() (list rkw))
                               ,@(map arg-name pargl)
-                              ,@(if (null? vararg) '()
-                                    (list `(... ,(arg-name (car vararg)))))))))))
+                              ,@splatted-vararg))))))
         ;; return primary function
         ,(if (not (symbol? name))
              '(null) name)))))
@@ -666,8 +674,7 @@
   (define (throw-unassigned argname)
     `(call (core throw) (call (core UndefKeywordError) (inert ,argname))))
   (define (to-kw x)
-    (cond ((symbol? x) `(kw ,x ,(throw-unassigned x)))
-          ((decl? x) `(kw ,x ,(throw-unassigned (cadr x))))
+    (cond ((symdecl? x) `(kw ,x ,(throw-unassigned (decl-var x))))
           ((nospecialize-meta? x) `(meta ,(cadr x) ,(to-kw (caddr x))))
           (else x)))
   (if (has-parameters? argl)
@@ -884,9 +891,20 @@
 
 (define (struct-def-expr- name params bounds super fields0 mut)
   (receive
-   (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
+   (fields defs) (separate (lambda (x) (or (symbol? x) (eventually-decl? x)))
                            fields0)
-   (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
+   (let* ((attrs ())
+          (fields (let ((n 0))
+                    (map (lambda (x)
+                           (set! n (+ n 1))
+                           (if (and (pair? x) (not (decl? x)))
+                               (begin
+                                 (set! attrs (cons (quotify (car x)) (cons n attrs)))
+                                 (cadr x))
+                               x))
+                         fields)))
+          (attrs (reverse attrs))
+          (defs        (filter (lambda (x) (not (effect-free? x))) defs))
           (locs        (if (and (pair? fields0) (linenum? (car fields0)))
                            (list (car fields0))
                            '()))
@@ -914,6 +932,7 @@
          (toplevel-only struct (outerref ,name))
          (= ,name (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@params)
                         (call (core svec) ,@(map quotify field-names))
+                        (call (core svec) ,@attrs)
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
          (if (isdefined (outerref ,name))
@@ -1132,13 +1151,14 @@
                   (argl-stmts (lower-destructuring-args argl))
                   (argl       (car argl-stmts))
                   (name       (check-dotop (car argl)))
+                  (argname    (if (overlay? name) (caddr name) name))
                   ;; fill in first (closure) argument
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| |#self#| ,(cadr n))
                                             n)))
-                  (farg    (if (decl? name)
-                               (adj-decl name)
-                               `(|::| |#self#| (call (core Typeof) ,name))))
+                  (farg    (if (decl? argname)
+                               (adj-decl argname)
+                               `(|::| |#self#| (call (core Typeof) ,argname))))
                   (body       (insert-after-meta body (cdr argl-stmts)))
                   (argl    (cdr argl))
                   (argl    (fix-arglist
@@ -1196,7 +1216,7 @@
         (if (null? binds)
             blk
             (cond
-             ((or (symbol? (car binds)) (decl? (car binds)))
+             ((symdecl? (car binds))
               ;; just symbol -> add local
               (loop (cdr binds)
                     `(scope-block
@@ -1220,8 +1240,7 @@
                                 `(local-def ,name))
                            ,(car binds)
                            ,blk)))))
-               ((or (symbol? (cadar binds))
-                    (decl?   (cadar binds)))
+               ((symdecl?   (cadar binds))
                 (let ((vname (decl-var (cadar binds))))
                   (loop (cdr binds)
                         (let ((tmp (make-ssavalue)))
@@ -1276,9 +1295,9 @@
       (if (null? f)
           '()
           (let ((x (car f)))
-            (cond ((or (symbol? x) (decl? x) (linenum? x))
+            (cond ((or (symdecl? x) (linenum? x))
                    (loop (cdr f)))
-                  ((and (assignment? x) (or (symbol? (cadr x)) (decl? (cadr x))))
+                  ((and (assignment? x) (symdecl? (cadr x)))
                    (error (string "\"" (deparse x) "\" inside type definition is reserved")))
                   (else '())))))
     (expand-forms
@@ -1363,6 +1382,9 @@
           ((= |::|)
            (expand-forms (expand-decls 'const (cdr e) #f)))
           (else e)))))
+
+(define (expand-atomic-decl e)
+  (error "unimplemented or unsupported atomic declaration"))
 
 (define (expand-local-or-global-decl e)
   (if (and (symbol? (cadr e)) (length= e 2))
@@ -2276,6 +2298,7 @@
    (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
 
    'const  expand-const-decl
+   'atomic expand-atomic-decl
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
    'local-def expand-local-or-global-decl
@@ -2746,15 +2769,13 @@
          ,result)))))
 
 (define (lhs-vars e)
-  (cond ((symbol? e) (list e))
-        ((decl? e)   (list (decl-var e)))
+  (cond ((symdecl? e)   (list (decl-var e)))
         ((and (pair? e) (eq? (car e) 'tuple))
          (apply append (map lhs-vars (cdr e))))
         (else '())))
 
 (define (lhs-decls e)
-  (cond ((symbol? e) (list e))
-        ((decl? e)   (list e))
+  (cond ((symdecl? e)   (list e))
         ((and (pair? e) (eq? (car e) 'tuple))
          (apply append (map lhs-decls (cdr e))))
         (else '())))
@@ -3231,6 +3252,7 @@ f(x) = yt(x)
                 ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
                 (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@P)
                             (call (core svec) ,@(map quotify fields))
+                            (call (core svec))
                             (false) ,(length fields)))
                 (= (outerref ,name) ,s)
                 (call (core _setsuper!) ,name ,super)
@@ -3244,6 +3266,7 @@ f(x) = yt(x)
                (block (global ,name) (const ,name)
                       (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec))
                                   (call (core svec) ,@(map quotify fields))
+                                  (call (core svec))
                                   (false) ,(length fields)))
                       (= (outerref ,name) ,s)
                       (call (core _setsuper!) ,name ,super)
@@ -3470,8 +3493,8 @@ f(x) = yt(x)
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
-         const null true false ssavalue isdefined toplevel module lambda error
-         gc_preserve_begin gc_preserve_end import using export)))
+         const atomic null true false ssavalue isdefined toplevel module lambda
+         error gc_preserve_begin gc_preserve_end import using export)))
 
 (define (local-in? s lam)
   (or (assq s (car  (lam:vinfo lam)))
@@ -3718,6 +3741,7 @@ f(x) = yt(x)
                      '(null)
                      `(newvar ,(cadr e))))))
           ((const) e)
+          ((atomic) e)
           ((const-if-global)
            (if (local-in? (cadr e) lam)
                '(null)
@@ -4501,6 +4525,7 @@ f(x) = yt(x)
                      (if (not global-const-error)
                          (set! global-const-error current-loc))
                      (emit e))))
+            ((atomic) (error "misplaced atomic declaration"))
             ((isdefined) (if tail (emit-return e) e))
             ((boundscheck) (if tail (emit-return e) e))
 

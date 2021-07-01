@@ -451,7 +451,7 @@ function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
 end
 function integerpow(A::AbstractMatrix{T}, p) where T
     TT = promote_op(^, T, typeof(p))
-    return (TT == T ? A : copyto!(similar(A, TT), A))^Integer(p)
+    return (TT == T ? A : convert(AbstractMatrix{TT}, A))^Integer(p)
 end
 function schurpow(A::AbstractMatrix, p)
     if istriu(A)
@@ -465,7 +465,7 @@ function schurpow(A::AbstractMatrix, p)
             retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
         end
     else
-        S,Q,d = schur(complex(A))
+        S,Q,d = Schur{Complex}(schur(A))
         # Integer part
         R = S ^ floor(p)
         # Real part
@@ -771,9 +771,8 @@ function log(A::StridedMatrix)
             if is_log_real
                 logA = SchurF.Z * log_quasitriu(SchurF.T) * SchurF.Z'
             else
-                SchurS = schur!(complex(SchurF.T))
-                Z = SchurF.Z * SchurS.Z
-                logA = Z * log(UpperTriangular(SchurS.T)) * Z'
+                SchurS = Schur{Complex}(SchurF)
+                logA = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
             end
         end
         return eltype(A) <: Complex ? complex(logA) : logA
@@ -849,9 +848,8 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
             if typeof(sqrt(zero(T))) <: BlasFloat && is_sqrt_real
                 sqrtA = SchurF.Z * sqrt_quasitriu(SchurF.T) * SchurF.Z'
             else
-                SchurS = schur!(complex(SchurF.T))
-                Z = SchurF.Z * SchurS.Z
-                sqrtA = Z * sqrt(UpperTriangular(SchurS.T)) * Z'
+                SchurS = Schur{Complex}(SchurF)
+                sqrtA = SchurS.Z * sqrt(UpperTriangular(SchurS.T)) * SchurS.Z'
             end
         end
         return eltype(A) <: Complex ? complex(sqrtA) : sqrtA
@@ -1096,7 +1094,7 @@ function acos(A::AbstractMatrix)
         acosHermA = acos(Hermitian(A))
         return isa(acosHermA, Hermitian) ? copytri!(parent(acosHermA), 'U', true) : parent(acosHermA)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(-im * log(U + im * sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -1127,7 +1125,7 @@ function asin(A::AbstractMatrix)
         asinHermA = asin(Hermitian(A))
         return isa(asinHermA, Hermitian) ? copytri!(parent(asinHermA), 'U', true) : parent(asinHermA)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(-im * log(im * U + sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -1157,7 +1155,7 @@ function atan(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(atan(Hermitian(A))), 'U', true)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = im * UpperTriangular(SchurF.T)
     R = triu!(parent(log((I + U) / (I - U)) / 2im))
     return SchurF.Z * R * SchurF.Z'
@@ -1176,7 +1174,7 @@ function acosh(A::AbstractMatrix)
         acoshHermA = acosh(Hermitian(A))
         return isa(acoshHermA, Hermitian) ? copytri!(parent(acoshHermA), 'U', true) : parent(acoshHermA)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log(U + sqrt(U - I) * sqrt(U + I))))
     return SchurF.Z * R * SchurF.Z'
@@ -1194,7 +1192,7 @@ function asinh(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(asinh(Hermitian(A))), 'U', true)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log(U + sqrt(I + U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -1212,7 +1210,7 @@ function atanh(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(atanh(Hermitian(A))), 'U', true)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log((I + U) / (I - U)) / 2))
     return SchurF.Z * R * SchurF.Z'
@@ -1439,7 +1437,7 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         B[ind] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
         return B
     end
-    SVD         = svd(A, full = false)
+    SVD         = svd(A)
     tol         = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
     Sinv        = fill!(similar(A, Stype, length(SVD.S)), 0)
@@ -1493,16 +1491,14 @@ julia> nullspace(M, atol=0.95)
  1.0
 ```
 """
-function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
-    m, n = size(A)
-    (m == 0 || n == 0) && return Matrix{eltype(A)}(I, n, n)
-    SVD = svd(A, full=true)
+function nullspace(A::AbstractVecOrMat; atol::Real = 0.0, rtol::Real = (min(size(A, 1), size(A, 2))*eps(real(float(one(eltype(A))))))*iszero(atol))
+    m, n = size(A, 1), size(A, 2)
+    (m == 0 || n == 0) && return Matrix{eigtype(eltype(A))}(I, n, n)
+    SVD = svd(A; full=true)
     tol = max(atol, SVD.S[1]*rtol)
     indstart = sum(s -> s .> tol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-
-nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
 
 """
     cond(M, p::Real=2)

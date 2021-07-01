@@ -240,9 +240,9 @@ Random.seed!(1)
             @test_throws DimensionMismatch transpose(T) \ offsizemat
             @test_throws DimensionMismatch T' \ offsizemat
 
-            if elty <: BlasReal
-                @test_throws SingularException LinearAlgebra.naivesub!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :U), rand(elty, n))
-                @test_throws SingularException LinearAlgebra.naivesub!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :L), rand(elty, n))
+            if elty <: BigFloat
+                @test_throws SingularException ldiv!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :U), rand(elty, n))
+                @test_throws SingularException ldiv!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :L), rand(elty, n))
             end
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
@@ -256,7 +256,7 @@ Random.seed!(1)
                 end
                 x = T \ b
                 tx = Tfull \ b
-                @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
+                @test_throws DimensionMismatch ldiv!(T, Vector{elty}(undef, n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 x = transpose(T) \ b
                 tx = transpose(Tfull) \ b
@@ -647,6 +647,22 @@ end
     @test A / c ≈ Matrix(A) / c
     @test c * A ≈ c * Matrix(A)
     @test c \ A ≈ c \ Matrix(A)
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    dv = ImmutableArray([1, 2, 3, 4])
+    ev = ImmutableArray([7, 8, 9])
+    Bu = Bidiagonal(dv, ev, :U)
+    Bl = Bidiagonal(dv, ev, :L)
+
+    @test convert(AbstractArray{Float64}, Bu)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bu
+    @test convert(AbstractMatrix{Float64}, Bu)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bu
+    @test convert(AbstractArray{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
+    @test convert(AbstractMatrix{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
 end
 
 end # module TestBidiagonal

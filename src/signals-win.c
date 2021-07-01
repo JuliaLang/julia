@@ -43,11 +43,11 @@ static char *strsignal(int sig)
 
 static void jl_try_throw_sigint(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     int force = jl_check_force_sigint();
-    if (force || (!ptls->defer_signal && ptls->io_wait)) {
+    if (force || (!ct->ptls->defer_signal && ct->ptls->io_wait)) {
         jl_safepoint_consume_sigint();
         if (force)
             jl_safe_printf("WARNING: Force throwing a SIGINT\n");
@@ -59,7 +59,7 @@ static void jl_try_throw_sigint(void)
 
 void __cdecl crt_sig_handler(int sig, int num)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     CONTEXT Context;
     switch (sig) {
     case SIGFPE:
@@ -86,7 +86,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         break;
     default: // SIGSEGV, (SSIGTERM, IGILL)
-        if (ptls->safe_restore)
+        if (jl_get_safe_restore())
             jl_rethrow();
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
@@ -108,7 +108,9 @@ static int have_backtrace_fiber;
 static void JL_NORETURN start_backtrace_fiber(void)
 {
     // collect the backtrace
-    stkerror_ptls->bt_size = rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx, stkerror_ptls->pgcstack);
+    stkerror_ptls->bt_size =
+        rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx,
+                          NULL /*current_task?*/);
     // switch back to the execution fiber
     jl_setcontext(&error_return_fiber);
     abort();
@@ -122,7 +124,8 @@ void restore_signals(void)
 
 void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
 #if defined(_CPU_X86_64_)
     DWORD64 Rsp = (ctxThread->Rsp & (DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
@@ -130,11 +133,12 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 #else
 #error WIN16 not supported :P
 #endif
-    if (!ptls->safe_restore) {
+    if (!jl_get_safe_restore()) {
         assert(excpt != NULL);
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
-            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, ptls->pgcstack);
+            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread,
+                                              ct->gcstack);
         }
         else if (have_backtrace_fiber) {
             JL_LOCK(&backtrace_lock);
@@ -222,7 +226,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
 
 LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_current_task->ptls;
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
@@ -248,7 +252,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                     }
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
-                if (ptls->safe_restore) {
+                if (jl_get_safe_restore()) {
                     jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }

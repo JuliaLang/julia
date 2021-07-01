@@ -4,20 +4,22 @@
 DocTestSetup = :(using Random)
 ```
 
-Random number generation in Julia uses the [Mersenne Twister library](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT)
-via `MersenneTwister` objects. Julia has a global RNG, which is used by default. Other RNG types
-can be plugged in by inheriting the `AbstractRNG` type; they can then be used to have multiple
-streams of random numbers. Besides `MersenneTwister`, Julia also provides the `RandomDevice` RNG
-type, which is a wrapper over the OS provided entropy.
+Random number generation in Julia uses the [Xoshiro256++](https://prng.di.unimi.it/) algorithm
+by default, with per-`Task` state.
+Other RNG types can be plugged in by inheriting the `AbstractRNG` type; they can then be used to
+obtain multiple streams of random numbers.
+Besides the default `TaskLocalRNG` type, the `Random` package also provides `MersenneTwister`,
+`RandomDevice` (which exposes OS-provided entropy), and `Xoshiro` (for explicitly-managed
+Xoshiro256++ streams).
 
-Most functions related to random generation accept an optional `AbstractRNG` object as first argument,
-which defaults to the global one if not provided. Moreover, some of them accept optionally
-dimension specifications `dims...` (which can be given as a tuple) to generate arrays of random
-values.  In a multi-threaded program, you should generally use different RNG objects from different threads
-in order to be thread-safe. However, the default global RNG is thread-safe as of Julia 1.3 (because
-it internally corresponds to a per-thread RNG).
+Most functions related to random generation accept an optional `AbstractRNG` object as first argument.
+Some also accept dimension specifications `dims...` (which can also be given as a tuple) to generate
+arrays of random values.
+In a multi-threaded program, you should generally use different RNG objects from different threads
+or tasks in order to be thread-safe. However, the default RNG is thread-safe as of Julia 1.3
+(using a per-thread RNG up to version 1.6, and per-task thereafter).
 
-A `MersenneTwister` or `RandomDevice` RNG can generate uniformly random numbers of the following types:
+The provided RNGs can generate uniform random numbers of the following types:
 [`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref), [`BigFloat`](@ref), [`Bool`](@ref),
 [`Int8`](@ref), [`UInt8`](@ref), [`Int16`](@ref), [`UInt16`](@ref), [`Int32`](@ref),
 [`UInt32`](@ref), [`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref), [`UInt128`](@ref),
@@ -67,6 +69,8 @@ Random.shuffle!
 ```@docs
 Random.seed!
 Random.AbstractRNG
+Random.TaskLocalRNG
+Random.Xoshiro
 Random.MersenneTwister
 Random.RandomDevice
 ```
@@ -147,20 +151,20 @@ Scalar and array methods for `Die` now work as expected:
 
 ```jldoctest Die; setup = :(Random.seed!(1))
 julia> rand(Die)
-Die(15)
+Die(6)
 
 julia> rand(MersenneTwister(0), Die)
 Die(11)
 
 julia> rand(Die, 3)
 3-element Vector{Die}:
- Die(18)
- Die(5)
+ Die(15)
+ Die(19)
  Die(4)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
 3-element Vector{Die}:
- Die(5)
+ Die(17)
  Die(20)
  Die(15)
 ```
@@ -175,12 +179,12 @@ In order to define random generation out of objects of type `S`, the following m
 julia> Random.rand(rng::AbstractRNG, d::Random.SamplerTrivial{Die}) = rand(rng, 1:d[].nsides);
 
 julia> rand(Die(4))
-3
+1
 
 julia> rand(Die(4), 3)
 3-element Vector{Any}:
+ 3
  4
- 1
  1
 ```
 
