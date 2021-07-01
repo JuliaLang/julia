@@ -2942,8 +2942,8 @@ end
     x, f()... = [1, 2, 3]
     @test x == 1
     @test f() == [2, 3]
-    # test that call to `Base.rest` is moved into definition of `f`
-    @test f() !== f()
+    # test that call to `Base.rest` is outside the definition of `f`
+    @test f() === f()
 
     x, f()... = 1, 2, 3
     @test x == 1
