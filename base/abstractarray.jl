@@ -2196,7 +2196,8 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     # conditions: the elements must all have 1- or 0-length dimensions above N
     for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
-            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
+            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as), 1), false, as...)
+            # the extra 1 is to avoid an infinite cycle
     end
 
     nd = max(N, ndims(as[1]))

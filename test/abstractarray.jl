@@ -1415,6 +1415,7 @@ using Base: typed_hvncat
     @test hvncat(1) == []
     @test hvncat(1, 1) == [1]
     @test hvncat(1, [1]) == [1]
+    @test hvncat(1, [1 2; 3 4]) == [1 2; 3 4]
     @test hvncat(1, 1, 1) == [1 ; 1]
     @test typed_hvncat(Float64, 1) == Float64[]
     @test typed_hvncat(Float64, 1, 1) == Float64[1.0]
