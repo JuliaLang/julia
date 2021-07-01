@@ -22,7 +22,9 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
+export enumerate, zip, unzip,
+    rest, countfrom, take, drop, takewhile, dropwhile,
+    cycle, repeated, product, flatten, partition
 
 """
     Iterators.map(f, iterators...)
@@ -399,6 +401,82 @@ zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
 reverse(z::Zip) = Zip(Base.map(reverse, z.is))
+
+# unzip
+
+"""
+    unzip(itrs) -> NTuple{length(first(itrs)), Vector}
+
+The `unzip` function takes an iterator of iterators and returns a tuple of
+vectors such that the first vector contains the first element yielded by each
+iterator, the second vector the second element yielded by each iterator, etc.
+`unzip` is sort of an inverse to the `zip` operation, as the name suggests.
+In particular, if we define
+
+    ≐(a, b) = collect(collect.(a)) == collect(collect.(b))
+
+then the following identities relating `zip` and `unzip` hold for any `itrs`
+that is is an iterator of iterators:
+
+    unzip(zip(itrs...)) ≐ itrs
+    zip(unzip(itrs)...) ≐ itrs
+
+Note that `unzip` does not return an iterator: it always consumes all of
+its argument and all of each iterator yielded by its argument. It is only
+associated with iteration because it is the inverse of `zip`.
+
+# Examples
+
+```jldoctest
+julia> unzip(enumerate("Hello"))
+([1, 2, 3, 4, 5], ['H', 'e', 'l', 'l', 'o'])
+
+julia> unzip([[1, "apple"], [2.5, "orange"], [0, "mango"]])
+(Real[1, 2.5, 0], ["apple", "orange", "mango"])
+```
+"""
+function unzip(itrs)
+    n = Base.haslength(itrs) ? length(itrs) : nothing
+    outer = iterate(itrs)
+    outer === nothing && return ()
+    vals, state = outer
+    vecs = ntuple(length(vals)) do i
+        x = vals[i]
+        v = Vector{typeof(x)}(undef, something(n, 1))
+        @inbounds v[1] = x
+        return v
+    end
+    unzip_rest(vecs, typeof(vals), n isa Int ? 1 : nothing, itrs, state)
+end
+
+function unzip_rest(vecs, eltypes, i, itrs, state)
+    while true
+        i isa Int && (i += 1)
+        outer = iterate(itrs, state)
+        outer === nothing && return vecs
+        itr, state = outer
+        vals = Tuple(itr)
+        if vals isa eltypes
+            for (v, x) in zip(vecs, vals)
+                if i isa Int
+                    @inbounds v[i] = x
+                else
+                    push!(v, x)
+                end
+            end
+        else
+            vecs′ = map(vecs, vals) do v, x
+                T = Base.promote_typejoin(eltype(v), typeof(x))
+                v′ = Vector{T}(undef, length(v) + !(i isa Int))
+                copyto!(v′, v)
+                @inbounds v′[something(i, end)] = x
+                return v′
+            end
+            eltypes′ = Tuple{map(eltype, vecs′)...}
+            return unzip_rest(Tuple(vecs′), eltypes′, i, itrs, state)
+        end
+    end
+end
 
 # filter
 

@@ -139,7 +139,7 @@ include("iddict.jl")
 include("idset.jl")
 
 include("iterators.jl")
-using .Iterators: zip, enumerate, only
+using .Iterators: zip, unzip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
 
 include("namedtuple.jl")
