@@ -513,6 +513,41 @@ Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 @test typeof(sqrt(Atu)[1,1]) <: Real
 @test typeof(sqrt(complex(Atu))[1,1]) <: Complex
 
+@testset "matrix square root quasi-triangular blockwise" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = schur(rand(T, 100, 100)^2).T
+        @test LinearAlgebra.sqrt_quasitriu(A; blockwidth=16)^2 ≈ A
+    end
+    n = 256
+    A = rand(ComplexF64, n, n)
+    U = schur(A).T
+    Ubig = Complex{BigFloat}.(U)
+    @test LinearAlgebra.sqrt_quasitriu(U; blockwidth=64) ≈ LinearAlgebra.sqrt_quasitriu(Ubig; blockwidth=64)
+end
+
+@testset "sylvester quasi-triangular blockwise" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64), m in (15, 40), n in (15, 45)
+        A = schur(rand(T, m, m)).T
+        B = schur(rand(T, n, n)).T
+        C = randn(T, m, n)
+        Ccopy = copy(C)
+        X = LinearAlgebra._sylvester_quasitriu!(A, B, C; blockwidth=16)
+        @test X === C
+        @test A * X + X * B ≈ -Ccopy
+
+        @testset "test raise=false does not break recursion" begin
+            Az = zero(A)
+            Bz = zero(B)
+            C2 = copy(Ccopy)
+            @test_throws LAPACKException LinearAlgebra._sylvester_quasitriu!(Az, Bz, C2; blockwidth=16)
+            m == n || @test any(C2 .== Ccopy)  # recursion broken
+            C3 = copy(Ccopy)
+            X3 = LinearAlgebra._sylvester_quasitriu!(Az, Bz, C3; blockwidth=16, raise=false)
+            @test !any(X3 .== Ccopy)  # recursion not broken
+        end
+    end
+end
+
 @testset "check matrix logarithm type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
     A = UpperTriangular(exp(triu(randn(elty, n, n))))
     @inferred Union{typeof(A),typeof(complex(A))} log(A)
