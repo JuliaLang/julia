@@ -1927,10 +1927,11 @@ function precompile(@nospecialize(f), args::Tuple)
 end
 
 function precompile(argt::Type)
-    if ccall(:jl_compile_hint, Int32, (Any,), argt) == 0
+    success = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
+    if !success
         @debug "Inactive precompile statement" maxlog=10 form=argt _module=nothing _file=nothing _line=0
     end
-    true
+    return success
 end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
