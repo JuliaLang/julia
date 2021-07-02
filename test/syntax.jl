@@ -2937,3 +2937,15 @@ end
     @test eval(Meta.parse("`a\\\r\nb`")) == `ab`
     @test eval(Meta.parse("`a\\\rb`")) == `ab`
 end
+
+@testset "slurping into function def" begin
+    x, f()... = [1, 2, 3]
+    @test x == 1
+    @test f() == [2, 3]
+    # test that call to `Base.rest` is outside the definition of `f`
+    @test f() === f()
+
+    x, f()... = 1, 2, 3
+    @test x == 1
+    @test f() == (2, 3)
+end
