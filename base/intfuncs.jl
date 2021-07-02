@@ -639,22 +639,21 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 
 ## integer to string functions ##
 
+const PRINT_SCRATCH_LENGTH = 256
+struct Buf
+    data::NTuple{PRINT_SCRATCH_LENGTH,UInt8}
+
+    Buf(::UndefInitializer) = new()
+end
+
 struct Scratch
     p::Ptr{UInt8}
     length::UInt64
 end
 
-@inline function with_scratch(f, n::Int64)
-    scratch = Scratch(
-        llvmcall(
-            """%2 = alloca i8, i64 %0
-            %3 = ptrtoint i8* %2 to i64
-            ret i64 %3""",
-            Ptr{UInt8}, Tuple{Int64}, n ),
-        unsafe_trunc(UInt64, n)
-    )
-
-    f(scratch)
+function with_scratch(f, n)
+    buf = Ref(Buf(undef))
+    GC.@preserve buf f(Scratch(pointer_from_objref(buf), unsafe_trunc(UInt64, n)))
 end
 
 @propagate_inbounds function setindex!(a::Scratch, v, i)
