@@ -479,6 +479,11 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
     end
     Atyp = promote_to_array_type(A)
     Amat = promote_to_arrays(n, 1, Atyp, A...)
+    # We have two methods for promote_to_array_type, one returning Matrix and
+    # another one returning SparseMatrixCSC (in SparseArrays.jl). In the dense
+    # case, we cannot call hvcat for the promoted UniformScalings because this
+    # causes a stack overflow. In the sparse case, however, we cannot call
+    # typed_hvcat because we need a sparse output.
     if Atyp == Matrix
         return typed_hvcat(promote_eltype(Amat...), rows, Amat...)
     else
