@@ -982,8 +982,8 @@ is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
 the element type of `A`.
 
 !!! compat "Julia 1.1"
-    The `abstol` and `reltol` keyword arguments requires at least Julia 1.1.
-    In Julia 1.0 `reltol` is available as a positional argument, but this
+    The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
+    In Julia 1.0 `rtol` is available as a positional argument, but this
     will be deprecated in Julia 2.0.
 
 # Examples
