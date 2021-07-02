@@ -51,6 +51,80 @@ end
     error("variable of type `$T` is not set")
 end
 
+abstract type TapirRaceError <: Exception end
+
+struct RacyStoreError <: TapirRaceError
+    value::Any
+end
+
+struct RacyLoadError <: TapirRaceError
+    value::Any
+end
+
+@noinline racy_store(@nospecialize(v)) = throw(RacyStoreError(v))
+@noinline racy_load(@nospecialize(v)) = throw(RacyLoadError(v))
+
+function Base.showerror(io::IO, e::RacyStoreError)
+    print(io, "Tapir: racy store of a value that may be read concurrently: ")
+    show(io, e.value)
+end
+
+function Base.showerror(io::IO, e::RacyLoadError)
+    print(io, "Tapir: racy load of a value that may be read concurrently: ")
+    show(io, e.value)
+end
+
+@noinline function warn_race()
+    bt = backtrace()
+
+    # Go out of this function's stack:
+    i = firstindex(bt)
+    while i <= lastindex(bt)
+        s, = Base.StackTraces.lookup(bt[i])
+        if s.linfo isa Core.MethodInstance && s.linfo.specTypes === Tuple{typeof(warn_race)}
+            i += 1
+        elseif !s.from_c
+            i += 1
+        else
+            break
+        end
+    end
+
+    # Find the first non-C function:
+    _module = Tapir
+    if i <= lastindex(bt)
+        ptr = bt[i]
+        s, = Base.StackTraces.lookup(ptr)
+        if s.linfo isa Core.MethodInstance
+            _module = s.linfo.def.module
+        end
+        id = ptr
+        file = String(s.file)
+        line = s.line
+    else
+        id = :default_warn_race_id
+        file = ""
+        line = 0
+    end
+
+    @warn(
+        raw"""
+        Tapir: Detected racy updates of variable(s). Use the output variable syntax
+            $output = value
+        to explicitly denote the output variables or use
+            local variable
+        inside `Tapir.@spawn` to declare that `variable` is used only locally in a task.
+
+        See more information in `Tapir.@spawn` documentation.
+        """,
+        _module = _module,
+        _file = file,
+        _line = line,
+        _id = id,
+        maxlog = 1,
+    )
+end
+
 #####
 ##### Julia-Tapir Frontend
 #####

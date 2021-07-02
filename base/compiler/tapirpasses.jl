@@ -972,6 +972,8 @@ end
 
 Return a function that checks if inserting phi nodes for a given list of BB is compatible
 with Tapir.
+
+See also `check_tapir_race!`
 """
 function parallel_getfield_elim_checker(ir::IRCode)
 
@@ -1010,9 +1012,10 @@ Mainly operates on task output variables.
 """
 function early_tapir_pass!(ir::IRCode)
     is_sequential(ir) && return ir, false
+    @timeit "Check task output" ir, racy = check_tapir_race!(ir)
+    racy && return ir, racy
     @timeit "Fixup syncregion" ir = fixup_syncregion_phic!(ir)
     @timeit "Lower task output" ir = lower_tapir_output!(ir)
-    @timeit "Check task output" ir, racy = check_tapir_race!(ir)
     return ir, racy
 end
 
@@ -1201,10 +1204,9 @@ function lower_tapir_output!(ir::IRCode)
 end
 
 """
-    check_tapir_race!(ir::IRCode) -> (ir′, racy)
+    check_tapir_race!(ir::IRCode) -> (ir′::IRCode, racy::Bool)
 
 Inject error-throwing code when a racy phi node is found.
-This pass must be run after `lower_tapir_output!`.
 
 # Examples
 ```
@@ -1218,33 +1220,98 @@ julia> function f()
        end;
 
 julia> f()
-ERROR: tapir: racy update to a variable
+ERROR: Tapir: racy load of a value that may be read concurrently: 1
 ```
+
+# Design notes
+
+In Julia, we disallow variables (slots) as task output for the sake of clarity.
+Thanks to this design decision, we can conclude that any `slot2reg` promotion
+that crosses task boundaries (manifested as phi nodes with continue edges) is a
+result from an attempt to update variables in a parent task (that are read in
+the continuation).
+
+In principle, this detection can be done inside `slot2reg`, just like how we use
+`parallel_getfield_elim_checker` (which is similar to Tapir/LLVM's
+`TaskInfo::isAllocaParallelPromotable`) for disabling invalid promotion in the
+SROA pass (`getfield_elim_pass!`). However, since slot is not a valid
+representation in `IRCode`, we cannot refuse to promote a given slot.  Thus, the
+best thing we can do is to insert helpful errors in the generated code; which is
+a nonlocal transformation.  Since `slot2reg` is a delicate chain of processing
+on half-constructed `IRCode`, it is more convenient and concise to do this after
+`slot2reg`.  Furthermore, since the promotion checking works by "attempting" to
+do `slot2reg` (i.e., requires IDF) anyway, actualy doing `slot2reg` first is
+equivalent.  Additionally, separating this out as a pass makes it easy to
+short-circuit `run_passes`.
 """
 function check_tapir_race!(ir::IRCode)
-    isdefined(Main, :Base) || return ir, false
-    Base = Main.Base::Module
+    Tapir = tapir_module()
+    Tapir isa Module || return ir, false
 
     ir = insert_new_nodes(ir)
 
-    for bb in ir.cfg.blocks
-        reattach = ir.stmts.inst[bb.stmts[end]]
-        reattach isa ReattachNode || continue
-        continuation = ir.cfg.blocks[reattach.label]
+    racy = false
+    throw_if_uses = nothing
+    for (ibb, bb) in pairs(ir.cfg.blocks)
+        det = ir.stmts.inst[bb.stmts[end]]
+        det isa DetachNode || continue
+        continuation = ir.cfg.blocks[det.label]
         for iphi in continuation.stmts
-            phi = ir.stmts[iphi]
-            phi[:inst] isa PhiNode || continue
-            # Racy Phi node found; just throw:
-            th = Expr(:call, GlobalRef(Base, :error), "tapir: racy update to a variable")
-            irerr = empty_ircode(ir, 2)
-            irerr.stmts.inst[1] = th
-            irerr.stmts.type[1] = Union{}
-            irerr.stmts.inst[2] = ReturnNode()  # unreachable
-            return irerr, true
+            phi = ir.stmts.inst[iphi]
+            phi isa PhiNode || continue
+            # Racy Phi node found
+            racy = true
+            # Insert a throw after "store" (def in child task):
+            for (i, e) in pairs(phi.edges)
+                e == ibb && continue  # skip the continue edge
+                isassigned(phi.values, i) && continue  # impossible?
+                v = phi.values[i]
+                v isa SSAValue || continue  # let's handle this on "load" side
+                th = Expr(:call, Tapir.racy_store, v)
+                insert_node!(ir, v.id, NewInstruction(th, Union{}), true)
+            end
+            # Insert a throw before "load" (use in continuation):
+            if throw_if_uses === nothing
+                throw_if_uses = BitSet()
+            end
+            push!(throw_if_uses, iphi)
+        end
+    end
+    racy || return  ir, false
+
+    for i in 1:length(ir.stmts)
+        inst = ir.stmts.inst[i]
+        if inst isa PhiNode
+            foreach_assigned_pair(inst.values) do k, v
+                if v isa SSAValue && v.id in throw_if_uses
+                    bb = ir.cfg.blocks[inst.edges[k]]
+                    iterm = bb.stmts[end]
+                    attach_after = !isterminator(ir.stmts.inst[iterm])
+                    th = Expr(:call, Tapir.racy_load, v)
+                    insert_node!(ir, iterm, NewInstruction(th, Union{}), attach_after)
+                end
+            end
+        else
+            foreach_id(identity, inst) do v
+                if v isa SSAValue && v.id in throw_if_uses
+                    th = Expr(:call, Tapir.racy_load, v)
+                    insert_node!(ir, i, NewInstruction(th, Union{}))
+                end
+            end
         end
     end
 
-    return ir, false
+    warn = Expr(:call, Tapir.warn_race)
+    insert_node!(ir, 1, NewInstruction(warn, Any))
+
+    ir = remove_tapir!(ir)
+    ir = compact!(ir)
+
+    if JLOptions().debug_level == 2
+        @timeit "verify (race)" (verify_ir(ir); verify_linetable(ir.linetable))
+    end
+
+    return ir, true
 end
 # TODO: Do this at the level of abstract interpretation?
 #

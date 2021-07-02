@@ -307,6 +307,7 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     tapir = has_tapir(ir)
     if tapir
+        # This must be run just after `slot2ref`:
         @timeit "Early tapir pass" ir, racy = early_tapir_pass!(ir)
         racy && return ir
     end

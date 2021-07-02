@@ -102,10 +102,13 @@ end
 end
 
 @testset "Race detection" begin
-    err = @test_error Racy.simple_race()
-    @test occursin("tapir: racy update to a variable", sprint(showerror, err))
-    err = @test_error Racy.update_distinct(true)
-    @test occursin("tapir: racy update to a variable", sprint(showerror, err))
+    logptn = (:warn, r"Detected racy updates")
+    err = @test_logs logptn @test_error Racy.simple_race()
+    @test occursin("racy", sprint(showerror, err))
+    err = @test_logs logptn @test_error Racy.update_distinct(true)
+    @test occursin("racy", sprint(showerror, err))
+    @test occursin("racy store", sprint(showerror, Tapir.RacyStoreError(0)))
+    @test occursin("racy load", sprint(showerror, Tapir.RacyLoadError(0)))
 end
 
 @testset "SROA" begin
