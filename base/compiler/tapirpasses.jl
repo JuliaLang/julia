@@ -67,13 +67,27 @@ ChildTask(task::ChildTask, subtasks::Vector{ChildTask}) =
 Iterate `tasks` recursively in the depth-first order.
 """
 function foreach_task_depth_first(f, tasks)
-    for t in tasks
-        if t.subtasks !== nothing
-            foreach_task_depth_first(f, t.subtasks) || return false
+    stack = [collect(ChildTask, tasks)]
+    while true
+        tasks = stack[end]
+        if isempty(tasks)
+            pop!(stack)
+            if isempty(stack)
+                return true
+            else
+                t = pop!(stack[end])
+                f(t) || return false
+            end
+            continue
         end
-        f(t) || return false
+        t = tasks[end]
+        if t.subtasks === nothing
+            pop!(tasks)
+            f(t) || return false
+        else
+            push!(stack, copy(t.subtasks))
+        end
     end
-    return true
 end
 
 """
@@ -273,20 +287,19 @@ function foreach_descendant(
     cfg::CFG,
     visited = falses(length(cfg.blocks)),
 ) where {F}
-    function g(ibb)
-        visited[ibb] && return true
+    worklist = [ibb]
+    acc = true
+    while !isempty(worklist)
+        ibb = pop!(worklist)
+        visited[ibb] && continue
         visited[ibb] = true
         bb = cfg.blocks[ibb]
-        f(ibb, bb) || return false
-        cond = true
-        for succ in bb.succs
-            cond &= g(succ)
-        end
-        return cond
+        c = f(ibb, bb)
+        acc &= c
+        c && append!(worklist, bb.succs)
     end
-    return g(ibb)
+    return acc
 end
-# TODO: use worklist?
 
 function foreach_ancestor(
     f::F,
@@ -294,18 +307,18 @@ function foreach_ancestor(
     cfg::CFG,
     visited = falses(length(cfg.blocks)),
 ) where {F}
-    function g(ibb)
-        visited[ibb] && return true
+    worklist = [ibb]
+    acc = true
+    while !isempty(worklist)
+        ibb = pop!(worklist)
+        visited[ibb] && continue
         visited[ibb] = true
         bb = cfg.blocks[ibb]
-        f(ibb, bb) || return false
-        cond = true
-        for pred in bb.preds
-            cond &= g(pred)
-        end
-        return cond
+        c = f(ibb, bb)
+        acc &= c
+        c && append!(worklist, bb.preds)
     end
-    return g(ibb)
+    return acc
 end
 
 """
@@ -322,24 +335,25 @@ function foreach_def(
     ir::IRCode,
     visited = falses(length(ir.stmts)),
 ) where {F}
-    function g(i)
-        visited[i] && return true
+    worklist = [v.id]
+    acc = RefValue(true)
+    while !isempty(worklist)
+        i = pop!(worklist)
+        visited[i] && continue
         visited[i] = true
         stmt = ir.stmts[i]
         inst = stmt[:inst]
-        ans = f(stmt)
-        ans || return false
-        cont = true
+        c = f(stmt)
+        acc.x &= c
         foreach_id(identity, inst) do v
             if v isa SSAValue
-                cont &= g(v.id)
+                c && push!(worklist, i)
             else
-                cont &= f(v)
+                acc.x &= f(v)
             end
         end
-        return cont
     end
-    return g(v.id)
+    return acc.x
 end
 
 function any_assigned(f, xs::Array)
