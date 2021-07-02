@@ -116,9 +116,6 @@ axes1(A::AbstractArray{<:Any,0}) = OneTo(1)
 axes1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
 axes1(iter) = oneto(length(iter))
 
-unsafe_indices(A) = axes(A)
-unsafe_indices(r::AbstractRange) = (oneto(unsafe_length(r)),) # Ranges use checked_sub for size
-
 """
     keys(a::AbstractArray)
 
@@ -580,14 +577,14 @@ end
 function trailingsize(inds::Indices, n)
     s = 1
     for i=n:length(inds)
-        s *= unsafe_length(inds[i])
+        s *= length(inds[i])
     end
     return s
 end
 # This version is type-stable even if inds is heterogeneous
 function trailingsize(inds::Indices)
     @_inline_meta
-    prod(map(unsafe_length, inds))
+    prod(map(length, inds))
 end
 
 ## Bounds checking ##
@@ -688,7 +685,7 @@ function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple)
     @_inline_meta
     checkindex(Bool, OneTo(1), I[1])::Bool & checkbounds_indices(Bool, (), tail(I))
 end
-checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@_inline_meta; all(x->unsafe_length(x)==1, IA))
+checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@_inline_meta; all(x->length(x)==1, IA))
 checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
@@ -2590,8 +2587,8 @@ function _sub2ind_recurse(inds, L, ind, i::Integer, I::Integer...)
 end
 
 nextL(L, l::Integer) = L*l
-nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
-nextL(L, r::Slice) = L*unsafe_length(r.indices)
+nextL(L, r::AbstractUnitRange) = L*length(r)
+nextL(L, r::Slice) = L*length(r.indices)
 offsetin(i, l::Integer) = i-1
 offsetin(i, r::AbstractUnitRange) = i-first(r)
 
@@ -2617,7 +2614,7 @@ end
 _lookup(ind, d::Integer) = ind+1
 _lookup(ind, r::AbstractUnitRange) = ind+first(r)
 _div(ind, d::Integer) = div(ind, d), 1, d
-_div(ind, r::AbstractUnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
+_div(ind, r::AbstractUnitRange) = (d = length(r); (div(ind, d), first(r), d))
 
 # Vectorized forms
 function _sub2ind(inds::Indices{1}, I1::AbstractVector{T}, I::AbstractVector{T}...) where T<:Integer
