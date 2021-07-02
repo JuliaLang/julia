@@ -277,9 +277,9 @@ mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 """
     mod(x, (lo, hi)::Tuple{Any,Any}; closed=:left)
 
-Return an element of the interval [lo, hi) whose distance to x is a multiple of the
-length of the interval hi - lo.
-If closed=:right is passed, then the interval (lo, hi] is used instead.
+Return an element of the interval [`lo`, `hi`) whose distance to `x` is a multiple of the
+length of the interval `hi - lo`.
+If `closed = :right` is passed, then the interval (`lo`, `hi`] is used instead.
 
 ```jldoctest
 julia> mod(2, (3,5))
