@@ -1928,7 +1928,7 @@ end
 
 function precompile(argt::Type)
     if ccall(:jl_compile_hint, Int32, (Any,), argt) == 0
-        @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
+        @debug "Inactive precompile statement" form=argt _module=nothing _file=nothing _line=0
     end
     true
 end
