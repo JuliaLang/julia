@@ -1288,10 +1288,10 @@ See also [`mod1`](@ref).
 
 # Examples
 ```jldoctest
-julia> mod(0, Base.OneTo(3))
+julia> mod(0, Base.OneTo(3))  # mod1(0, 3)
 3
 
-julia> mod(3, 0:2)
+julia> mod(3, 0:2)  # mod(3, 3)
 0
 ```
 
