@@ -37,7 +37,7 @@ end
 end
 
 @propagate_inbounds function view(a::Scratch, index::UnitRange)
-    @boundscheck ((index.start > 0 && index.stop <= a.length) || throw(BoundsError))
+    @boundscheck ((index.start > 0 && index.stop <= a.length) || throw(BoundsError(a, index)))
     index.start > index.stop && return Scratch(Ptr{UInt8}(), 0)
     Scratch(a.p + index.start - 1, unsafe_trunc(UInt64, index.stop - index.start + 1))
 end
