@@ -1447,7 +1447,7 @@ using Base: typed_hvncat
     # zero-value behaviors for int form above dimension zero
     # e.g. [;;], [;;;], though that isn't valid syntax
     @test [] == hvncat(1) isa Array{Any, 1}
-    @test Array{Any, 2}(undef, 0, 0, 0) == hvncat(2) isa Array{Any, 2}
+    @test Array{Any, 2}(undef, 0, 0) == hvncat(2) isa Array{Any, 2}
     @test Array{Any, 3}(undef, 0, 0, 0) == hvncat(3) isa Array{Any, 3}
     @test Int[] == typed_hvncat(Int, 1) isa Array{Int, 1}
     @test Array{Int, 2}(undef, 0, 0) == typed_hvncat(Int, 2) isa Array{Int, 2}
