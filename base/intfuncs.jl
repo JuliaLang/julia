@@ -639,33 +639,6 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 
 ## integer to string functions ##
 
-const PRINT_SCRATCH_LENGTH = 256
-struct Buf
-    data::NTuple{PRINT_SCRATCH_LENGTH,UInt8}
-
-    Buf(::UndefInitializer) = new()
-end
-
-struct Scratch
-    p::Ptr{UInt8}
-    length::UInt64
-end
-
-function with_scratch(f, n)
-    buf = Ref(Buf(undef))
-    GC.@preserve buf f(Scratch(pointer_from_objref(buf), unsafe_trunc(UInt64, n)))
-end
-
-@propagate_inbounds function setindex!(a::Scratch, v, i)
-    @boundscheck (i <= a.length || throw(BoundsError(a, i)))
-    unsafe_store!(a.p, convert(UInt8, v), i)
-    a
-end
-
-write(io::IO, a::Scratch) = unsafe_write(io, a.p, a.length)
-
-String(s::Scratch) = unsafe_string(s.p, s.length)
-
 @inline function bin_impl_(a, x::Unsigned, n::Int, neg::Bool)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
     #     @inbounds a[n - i] = 0x30 + (((x >> i) % UInt8)::UInt8 & 0x1)
