@@ -664,6 +664,8 @@ end
 
 write(io::IO, a::Scratch) = unsafe_write(io, a.p, a.length)
 
+String(s::Scratch) = unsafe_string(s.p, s.length)
+
 @inline function bin_impl_(a, x::Unsigned, n::Int, neg::Bool)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
     #     @inbounds a[n - i] = 0x30 + (((x >> i) % UInt8)::UInt8 & 0x1)
@@ -692,10 +694,12 @@ end
 function bin(x::Unsigned, pad::Int, neg::Bool)
     m = 8 * sizeof(x) - Base.leading_zeros(x)
     n = neg + max(pad, m)
-    a = Base.StringVector(n)
 
-    bin_impl_(a, x, n, neg)
-    String(a)
+
+    with_scratch(n) do a
+        bin_impl_(a, x, n, neg)
+        String(a)
+    end
 end
 
 function bin_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
@@ -723,10 +727,11 @@ end
 function oct(x::Unsigned, pad::Int, neg::Bool)
     m = div(8 * sizeof(x) - Base.leading_zeros(x) + 2, 3)
     n = neg + max(pad, m)
-    a = Base.StringVector(n)
 
-    oct_impl_(a, x, n, neg)
-    String(a)
+    with_scratch(n) do a
+        oct_impl_(a, x, n, neg)
+        String(a)
+    end
 end
 
 function oct_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
@@ -762,9 +767,11 @@ end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
-    scratch = Base.StringVector(n)
-    dec_impl_(scratch, x, n, neg)
-    String(scratch)
+
+    with_scratch(n) do scratch
+        dec_impl_(scratch, x, n, neg)
+        String(scratch)
+    end
 end
 
 function dec_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
@@ -798,10 +805,11 @@ end
 function hex(x::Unsigned, pad::Int, neg::Bool)
     m = 2 * sizeof(x) - (Base.leading_zeros(x) >> 2)
     n = neg + max(pad, m)
-    a = Base.StringVector(n)
 
-    hex_impl_(a, x, n, neg)
-    String(a)
+    with_scratch(n) do a
+        hex_impl_(a, x, n, neg)
+        String(a)
+    end
 end
 
 function hex_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
@@ -840,10 +848,11 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     2 <= abs(base) <= 62 || throw(DomainError(base, "base must satisfy 2 ≤ abs(base) ≤ 62"))
     b = (base % Int)::Int
     n = neg + ndigits(x, base=b, pad=pad)
-    a = StringVector(n)
 
-    _base_impl_(a, b, x, n, neg)
-    String(a)
+    with_scratch(n) do a
+        _base_impl_(a, b, x, n, neg)
+        String(a)
+    end
 end
 
 function _base_io(io::IO, base::Integer, x::Integer, pad::Int, neg::Bool)
