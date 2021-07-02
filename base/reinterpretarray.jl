@@ -12,25 +12,25 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     writable::Bool
 
     function throwbits(S::Type, T::Type, U::Type)
-        @_noinline_meta
+        @noinline
         throw(ArgumentError("cannot reinterpret `$(S)` as `$(T)`, type `$(U)` is not a bits type"))
     end
     function throwsize0(S::Type, T::Type, msg)
-        @_noinline_meta
+        @noinline
         throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a $msg size"))
     end
 
     global reinterpret
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
         function thrownonint(S::Type, T::Type, dim)
-            @_noinline_meta
+            @noinline
             throw(ArgumentError("""
                 cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
                 The resulting array would have non-integral first dimension.
                 """))
         end
         function throwaxes1(S::Type, T::Type, ax1)
-            @_noinline_meta
+            @noinline
             throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` when the first axis is $ax1. Try reshaping first."))
         end
         isbitstype(T) || throwbits(S, T, T)
@@ -51,11 +51,11 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     # With reshaping
     function reinterpret(::typeof(reshape), ::Type{T}, a::A) where {T,S,A<:AbstractArray{S}}
         function throwintmult(S::Type, T::Type)
-            @_noinline_meta
+            @noinline
             throw(ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got $(sizeof(T))) and `sizeof(eltype(a))` (got $(sizeof(S))) be an integer multiple of the other"))
         end
         function throwsize1(a::AbstractArray, T::Type)
-            @_noinline_meta
+            @noinline
             throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $(eltype(a)) requires that `axes(a, 1)` (got $(axes(a, 1))) be equal to 1:$(sizeof(T) ÷ sizeof(eltype(a))) (from the ratio of element sizes)"))
         end
         isbitstype(T) || throwbits(S, T, T)

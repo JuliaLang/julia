@@ -627,7 +627,7 @@ using .IteratorsMD
 ## Bounds-checking with CartesianIndex
 # Disallow linear indexing with CartesianIndex
 function checkbounds(::Type{Bool}, A::AbstractArray, i::Union{CartesianIndex, AbstractArray{<:CartesianIndex}})
-    @_inline_meta
+    @inline
     checkbounds_indices(Bool, axes(A), (i,))
 end
 
@@ -856,7 +856,7 @@ end
 
 function _generate_unsafe_getindex!_body(N::Int)
     quote
-        @_inline_meta
+        @inline
         D = eachindex(dest)
         Dy = iterate(D)
         @inbounds @nloops $N j d->I[d] begin
@@ -889,7 +889,7 @@ end
 
 ## setindex! ##
 function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(A, I...)
     _unsafe_setindex!(l, _maybe_reshape(l, A, I...), x, I...)
     A

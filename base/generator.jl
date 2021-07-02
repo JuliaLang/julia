@@ -40,7 +40,7 @@ Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
 
 function iterate(g::Generator, s...)
-    @_inline_meta
+    @inline
     y = iterate(g.iter, s...)
     y === nothing && return nothing
     y = y::Tuple{Any, Any} # try to give inference some idea of what to expect about the behavior of the next line

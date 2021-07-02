@@ -213,7 +213,6 @@ end
 macro inline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
 end
-macro inline() Expr(:meta, :inline) end
 
 """
     @noinline
@@ -251,7 +250,6 @@ end
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
-macro noinline() Expr(:meta, :noinline) end
 
 """
     @pure ex

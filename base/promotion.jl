@@ -233,7 +233,7 @@ function promote_type end
 
 promote_type()  = Bottom
 promote_type(T) = T
-promote_type(T, S, U, V...) = (@_inline_meta; promote_type(T, promote_type(S, U, V...)))
+promote_type(T, S, U, V...) = (@inline; promote_type(T, promote_type(S, U, V...)))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type(::Type{T}, ::Type{T}) where {T} = T
@@ -241,7 +241,7 @@ promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
 promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @_inline_meta
+    @inline
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
     #   promote_type(T, S) =>
@@ -261,10 +261,10 @@ function promote_rule end
 
 promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
 
-promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
+promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@_inline_meta; typejoin(T, S))
+promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
 
 """
     promote(xs...)
@@ -283,19 +283,19 @@ julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 function promote end
 
 function _promote(x::T, y::S) where {T,S}
-    @_inline_meta
+    @inline
     R = promote_type(T, S)
     return (convert(R, x), convert(R, y))
 end
 promote_typeof(x) = typeof(x)
-promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
+promote_typeof(x, xs...) = (@inline; promote_type(typeof(x), promote_typeof(xs...)))
 function _promote(x, y, z)
-    @_inline_meta
+    @inline
     R = promote_typeof(x, y, z)
     return (convert(R, x), convert(R, y), convert(R, z))
 end
 function _promote(x, y, zs...)
-    @_inline_meta
+    @inline
     R = promote_typeof(x, y, zs...)
     return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
 end
@@ -307,13 +307,13 @@ promote() = ()
 promote(x) = (x,)
 
 function promote(x, y)
-    @_inline_meta
+    @inline
     px, py = _promote(x, y)
     not_sametype((x,y), (px,py))
     px, py
 end
 function promote(x, y, z)
-    @_inline_meta
+    @inline
     px, py, pz = _promote(x, y, z)
     not_sametype((x,y,z), (px,py,pz))
     px, py, pz
@@ -331,7 +331,7 @@ not_sametype(x::T, y::T) where {T} = sametype_error(x)
 not_sametype(x, y) = nothing
 
 function sametype_error(input)
-    @_noinline_meta
+    @noinline
     error("promotion of types ",
           join(map(x->string(typeof(x)), input), ", ", " and "),
           " failed to change any arguments")

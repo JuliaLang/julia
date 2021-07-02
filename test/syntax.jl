@@ -1510,7 +1510,7 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
 end
 
 # issue #27129
-f27129(x = 1) = (@Base._inline_meta; x)
+f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
     @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end

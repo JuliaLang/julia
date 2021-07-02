@@ -4,7 +4,7 @@ struct Pair{A, B}
     first::A
     second::B
     function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
-        @_inline_meta
+        @inline
         # if we didn't inline this, it's probably because the callsite was actually dynamic
         # to avoid potentially compiling many copies of this, we mark the arguments with `@nospecialize`
         # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
