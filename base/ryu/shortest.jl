@@ -224,11 +224,11 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
     return b, e10
 end
 
-function writeshortest(buf, pos, x::T,
+@propagate_inbounds function writeshortest(buf, pos, x::T,
                        plus=false, space=false, hash=true,
                        precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'),
                        typed=false, compact=false) where {T}
-    @assert 0 < pos <= length(buf)
+    @boundscheck (0 < pos <= length(buf) || throw(BoundsError()))
     # special cases
     if x == 0
         if typed && x isa Float16

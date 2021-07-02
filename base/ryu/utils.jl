@@ -44,7 +44,7 @@ Computes `e == 0 ? 1 : ceil(log2(5^e))`. This is valid for `e < 3529` (if perfor
 """
 pow5bits(e) = ((e * 1217359) >> 19) + 1
 
-""""
+"""
      Ryu.mulshift(m::U, mula, j) where {U<:Unsigned}
 
 Compute `(m * mul) >> j`, where `j >= 8*sizeof(U)`. The type of the results is the larger of `U` or `UInt32`.
@@ -195,7 +195,7 @@ Compute `(m * mul) >> j % 10^9` where `mul = mula + mulb<<64 + mulc<<128`, and `
     return (v % UInt32) - UInt32(1000000000) * shifted
 end
 
-@inline function append_sign(x, plus, space, buf, pos)
+@propagate_inbounds function append_sign(x, plus, space, buf, pos)
     if signbit(x) && !isnan(x)  # suppress minus sign for signaling NaNs
         buf[pos] = UInt8('-')
         pos += 1
@@ -209,7 +209,7 @@ end
     return pos
 end
 
-@inline function append_n_digits(olength, digits, buf, pos)
+@propagate_inbounds function append_n_digits(olength, digits, buf, pos)
     i = 0
     while digits >= 10000
         c = digits % 10000
@@ -237,7 +237,7 @@ end
     return pos + i
 end
 
-@inline function append_d_digits(olength, digits, buf, pos, decchar)
+@propagate_inbounds function append_d_digits(olength, digits, buf, pos, decchar)
     i = 0
     while digits >= 10000
         c = digits % 10000
@@ -268,7 +268,7 @@ end
     return pos + i
 end
 
-@inline function append_c_digits(count, digits, buf, pos)
+@propagate_inbounds function append_c_digits(count, digits, buf, pos)
     i = 0
     while i < count - 1
         c = (digits % 100) << 1
@@ -283,7 +283,7 @@ end
     return pos + i
 end
 
-@inline function append_nine_digits(digits, buf, pos)
+@propagate_inbounds function append_nine_digits(digits, buf, pos)
     if digits == 0
         for _ = 1:9
             buf[pos] = UInt8('0')
