@@ -60,7 +60,7 @@ viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 
 # Simple utilities
-size(V::SubArray) = (@_inline_meta; map(unsafe_length, axes(V)))
+size(V::SubArray) = (@_inline_meta; map(length, axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
@@ -362,7 +362,7 @@ compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{Vararg{ScalarIndex}}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
-    (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
+    (@_inline_meta; compute_stride1(s*length(inds[1]), tail(inds), tail(I)))
 compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
@@ -407,12 +407,12 @@ end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
     @_inline_meta
     Δi = I[1]-first(IP[1])
-    compute_linindex(f + Δi*s, s*unsafe_length(IP[1]), tail(IP), tail(I))
+    compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
     @_inline_meta
     Δi = first(I[1])-first(IP[1])
-    compute_linindex(f + Δi*s, s*unsafe_length(IP[1]), tail(IP), tail(I))
+    compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
 end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
 
@@ -447,5 +447,5 @@ _indices_sub(::Real, I...) = (@_inline_meta; _indices_sub(I...))
 _indices_sub() = ()
 function _indices_sub(i1::AbstractArray, I...)
     @_inline_meta
-    (unsafe_indices(i1)..., _indices_sub(I...)...)
+    (axes(i1)..., _indices_sub(I...)...)
 end

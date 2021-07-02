@@ -66,6 +66,7 @@ Base.LinRange
 Base.isempty
 Base.empty!
 Base.length
+Base.checked_length
 ```
 
 Fully implemented by:
