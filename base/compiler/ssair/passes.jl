@@ -752,7 +752,6 @@ function getfield_elim_pass!(ir::IRCode)
         compact[idx] = val === nothing ? nothing : val.x
     end
 
-
     non_dce_finish!(compact)
     # Copy the use count, `simple_dce!` may modify it and for our predicate
     # below we need it consistent with the state of the IR here (after tracking
@@ -766,6 +765,9 @@ function getfield_elim_pass!(ir::IRCode)
     # `IncrementalCompact` because removing dead blocks can invalidate the
     # domtree.
     @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
+
+    # Returns false iff promoting the fields to
+    is_parallel_promotable = parallel_getfield_elim_checker(ir)
 
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
@@ -834,6 +836,7 @@ function getfield_elim_pass!(ir::IRCode)
                 phiblocks = Int[]
                 if !isempty(ldu.live_in_bbs)
                     phiblocks = idf(ir.cfg, ldu, domtree)
+                    is_parallel_promotable(phiblocks) || continue
                 end
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks

@@ -109,6 +109,7 @@ end
 end
 
 @testset "SROA" begin
+    @test SROA.demo_sroa_half() == sum(1:10)
     @test SROA.demo_sroa() == sum(1:10)
 end
 

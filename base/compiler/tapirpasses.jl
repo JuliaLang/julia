@@ -62,6 +62,21 @@ ChildTask(task::ChildTask, subtasks::Vector{ChildTask}) =
     ChildTask(task.detach, task.reattaches, task.blocks, subtasks)
 
 """
+    foreach_task_depth_first(f, tasks::Vector{ChildTask})
+
+Iterate `tasks` recursively in the depth-first order.
+"""
+function foreach_task_depth_first(f, tasks)
+    for t in tasks
+        if t.subtasks !== nothing
+            foreach_task_depth_first(f, t.subtasks) || return false
+        end
+        f(t) || return false
+    end
+    return true
+end
+
+"""
     child_tasks(ir::IRCode) -> tasks::Vector{ChildTask}
 
 Discover immediate child tasks.
@@ -953,6 +968,42 @@ function remove_tapir!(ir::IRCode, task::ChildTask)
 end
 
 """
+    parallel_getfield_elim_checker(ir) -> phiblocks -> is_promotable::Bool
+
+Return a function that checks if inserting phi nodes for a given list of BB is compatible
+with Tapir.
+"""
+function parallel_getfield_elim_checker(ir::IRCode)
+
+    # Lazily analyze child tasks:
+    cache = RefValue{Union{Nothing,Vector{ChildTask}}}(nothing)
+    function get_child_tasks()
+        tasks = cache[]
+        tasks === nothing || return tasks
+        tasks = cache[] = child_tasks(ir)
+        return tasks
+    end
+
+    function is_parallel_promotable(phiblocks)
+        @assert eltype(phiblocks) === BBNumber
+        result = RefValue(true)
+        foreach_task_depth_first(get_child_tasks()) do task
+            det = ir.stmts.inst[task.detach]::DetachNode
+            continuation = det.label
+            if continuation in phiblocks
+                result.x = false
+                return false  # break
+            else
+                return true  # keep going
+            end
+        end
+        return result.x
+    end
+
+    return is_parallel_promotable
+end
+
+"""
     early_tapir_pass!(ir::IRCode) -> (ir′::IRCode, racy::Bool)
 
 Mainly operates on task output variables.
@@ -1211,77 +1262,6 @@ end
 # ... since abstract interpretation removes `a = 1`. Also, producing a good
 # error message in `IRCode` is very hard since variable names are not preserved
 # any more.
-
-"""
-    fixup_tapir_phi!(ir::IRCode) -> ir′
-
-This transforms Phi nodes in the continuations to PhiC nodes at use-sites.
-
-This pass exists for supporting SROA which can introduce new Phi nodes.
-
-* TODO: Is it better to teach SROA to respect Tapir properties?
-* TODO: Check that the uses are dominated by sync
-"""
-function fixup_tapir_phi!(ir::IRCode)
-    is_sequential(ir) && return ir
-
-    # Flushing the new nodes, since we only look at `ir.stmts`:
-    ir = compact!(ir)
-
-    upsilons = Vector{Vector{Any}}(undef, length(ir.stmts))
-    for bb in ir.cfg.blocks
-        reattach = ir.stmts.inst[bb.stmts[end]]
-        reattach isa ReattachNode || continue
-        continuation = ir.cfg.blocks[reattach.label]
-        for iphi in continuation.stmts
-            phi = ir.stmts.inst[iphi]
-            # TODO: Can we assume Phi nodes are always at the beggining? (So
-            # that we can `break` instead of `continue`)
-            phi isa PhiNode || continue
-            ups = empty!(Vector{Any}(undef, length(phi.values)))
-            for i in eachindex(phi.values)
-                isassigned(phi.values, i) || continue
-                v = phi.values[i]
-                if v isa SSAValue
-                    st = stmt_at(ir, v.id)
-                    newinst = NewInstruction(UpsilonNode(v), st[:type])
-                    ipos = insert_pos(ir, v.id)
-                    bb = ir.cfg.blocks[block_for_inst(ir, ipos)]
-                    u = insert_node!(ir, last(bb.stmts), newinst)
-                else
-                    # Handle constant (also argument) values
-                    newinst = NewInstruction(UpsilonNode(v), valuetypeof(ir, v))
-                    ipos = last(ir.cfg.blocks[phi.edges[i]].stmts)
-                    u = insert_node!(ir, ipos, newinst)
-                end
-                push!(ups, u)
-            end
-            if !isempty(ups)
-                upsilons[iphi] = ups
-            end
-        end
-    end
-
-    # TODO: Verify DRF of SROA'ed SSA values.
-    # Following transformation assumes that the newly introduced phi nodes are
-    # not accessed in the continuation (i.e., there was no data races). It
-    # implies that the uses
-    for i in 1:length(ir.stmts)
-        stmt = ir.stmts[i]
-        stmt[:inst] = map_id(identity, stmt[:inst]) do v
-            if v isa SSAValue && isassigned(upsilons, v.id)
-                bb = ir.cfg.blocks[block_for_inst(ir.cfg, i)]
-                s = stmt_at(ir, v.id)
-                phic = PhiCNode((upsilons[v.id]))
-                return insert_node!(ir, first(bb.stmts), NewInstruction(phic, s[:type]), )
-            end
-            v
-        end
-    end
-    # TODO: CSE the duplicated PhiC?
-
-    return ir
-end
 
 """
     remove_trivial_spawns!(ir::IRCode) -> ir′

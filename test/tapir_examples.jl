@@ -282,15 +282,29 @@ end
     for x in xs
         setproperty!(r, p, getproperty(r, p) + x)
     end
+    return getproperty(r, p)
 end
 
-function demo_sroa()
+# Field access inside `@spawn` is not SROA'ed since it'd introduce a phi node in
+# the continuation.
+function demo_sroa_half()
     ab = AB(0, 0)
     Tapir.@sync begin
         Tapir.@spawn sumto!(ab, :a, 1:2:10)
         sumto!(ab, :b, 2:2:10)
     end
     return ab.a + ab.b
+end
+
+# All field access inside `@spawn` should be SROA'ed since there is no field
+# access after sync.
+function demo_sroa()
+    ab = AB(0, 0)
+    Tapir.@sync begin
+        Tapir.@spawn $a = sumto!(ab, :a, 1:2:10)
+        $b = sumto!(ab, :b, 2:2:10)
+    end
+    return a + b
 end
 end
 

@@ -316,7 +316,6 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     ir = compact!(ir)
     #@Base.show ("before_sroa", ir)
     @timeit "SROA" ir = getfield_elim_pass!(ir)
-    tapir && @timeit "Fixup phi nodes for tapir" ir = fixup_tapir_phi!(ir)
     #@Base.show ir.new_nodes
     #@Base.show ("after_sroa", ir)
     ir = adce_pass!(ir)
