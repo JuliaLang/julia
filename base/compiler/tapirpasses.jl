@@ -1365,43 +1365,38 @@ function remove_trivial_spawns!(ir::IRCode)
 
     syncregion_to_ntasks = zeros(Int, length(ir.stmts))
     syncregions = BitSet()
-    function remove_rec(ir::IRCode, tasks::Vector{ChildTask})
-        for task in tasks
-            if task.subtasks !== nothing
-                remove_rec(ir, task.subtasks)
-            end
-            det = ir.stmts.inst[task.detach]::DetachNode
-            sr = (det.syncregion::SSAValue).id
-            push!(syncregions, sr)
+    foreach_task_depth_first(tasks) do task
+        det = ir.stmts.inst[task.detach]::DetachNode
+        sr = (det.syncregion::SSAValue).id
+        push!(syncregions, sr)
 
-            if is_trivial_for_spawn(ir, task)
+        if is_trivial_for_spawn(ir, task)
+            remove_tapir!(ir, task)
+        else
+            # Check if continuation is trivial:
+            is_trivial = RefValue(true)
+            syncs = get_syncregion_to_syncs()[sr]
+            foreach_descendant(det.label, ir.cfg) do _ibb, bb
+                is_trivial.x || return false
+                if det.label in bb.succs  # loop
+                    is_trivial.x = false
+                    return false
+                end
+                if !is_trivial_for_spawn(ir, bb)
+                    is_trivial.x = false
+                    return false
+                end
+                return !(bb.stmts[end] in syncs)
+            end
+            if is_trivial.x
                 remove_tapir!(ir, task)
             else
-                # Check if continuation is trivial:
-                is_trivial = RefValue(true)
-                syncs = get_syncregion_to_syncs()[sr]
-                foreach_descendant(det.label, ir.cfg) do _ibb, bb
-                    is_trivial.x || return false
-                    if det.label in bb.succs  # loop
-                        is_trivial.x = false
-                        return false
-                    end
-                    if !is_trivial_for_spawn(ir, bb)
-                        is_trivial.x = false
-                        return false
-                    end
-                    return !(bb.stmts[end] in syncs)
-                end
-                if is_trivial.x
-                    remove_tapir!(ir, task)
-                else
-                    syncregion_to_ntasks[sr] += 1
-                end
+                syncregion_to_ntasks[sr] += 1
             end
         end
-        return ir
+
+        return true  # continue
     end
-    remove_rec(ir, tasks)
 
     # Remove empty syncregions
     for sr in syncregions
