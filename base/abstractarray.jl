@@ -1009,36 +1009,38 @@ end
 
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     isempty(src) && return dest
-    length(dest) >= length(src) || throw(BoundsError(dest, LinearIndices(src)))
+    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
+    idf, isf = first(destinds), first(srcinds)
+    Δi = idf - isf
+    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
+        throw(BoundsError(dest, srcinds))
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
-            Δi = firstindex(dest) - firstindex(src)
-            for i in eachindex(src)
-                @inbounds dest[i + Δi] = src[i]
+            # Single-index implementation
+            @inbounds for i in srcinds
+                dest[i + Δi] = src[i]
             end
         else
-            j = firstindex(dest) - 1
-            @inbounds @simd for I in eachindex(src)
-                dest[j+=1] = src[I]
+            # Dual-index implementation
+            i = idf - 1
+            @inbounds for a in src
+                dest[i+=1] = a
             end
         end
     else
-        if srcstyle isa IndexLinear
-            i = firstindex(src) - 1
-            @inbounds @simd for J in eachindex(dest)
-                dest[J] = src[i+=1]
+        iterdest, itersrc = eachindex(dest), eachindex(src)
+        if iterdest == itersrc
+            # Shared-iterator implementation
+            for I in iterdest
+                @inbounds dest[I] = src[I]
             end
         else
-            iterdest, itersrc = eachindex(dest), eachindex(src)
-            if iterdest == itersrc
-                # Shared-iterator implementation
-                @inbounds @simd for I in itersrc
-                    dest[I] = src[I]
-                end
-            else
-                for (I,J) in zip(itersrc, iterdest)
-                    @inbounds dest[J] = src[I]
-                end
+            # Dual-iterator implementation
+            ret = iterate(iterdest)
+            @inbounds for a in src
+                idx, state = ret
+                dest[idx] = a
+                ret = iterate(iterdest, state)
             end
         end
     end
