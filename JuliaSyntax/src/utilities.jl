@@ -297,6 +297,7 @@ end
 # https://github.com/JuliaLang/julia/blob/d7d2b0c692eb6ad409d7193ba8d9d42972cbf182/src/flisp/julia_extensions.c#L156-L174
 #
 # ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎²³¹ʰʲʳʷʸˡˢˣᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵇᵈᵉᵍᵏᵐᵒᵖᵗᵘᵛᵝᵞᵟᵠᵡᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶥᶦᶫᶰᶸᶻᶿ ⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿₐₑₒₓₕₖₗₘₙₚₛₜⱼⱽ′″‴‵‶‷⁗
+
 @inline function isopsuffix(c1::Char)
     c1 == EOF_CHAR && return false
     c = UInt32(c1)
@@ -344,7 +345,8 @@ end
     0x00002074 <= c <= 0x0000208e ||
     0x00002090 <= c <= 0x00002093 ||
     0x00002095 <= c <= 0x0000209c ||
-    0x00002c7c <= c <= 0x00002c7d
+    0x00002c7c <= c <= 0x00002c7d ||
+    0x0000a71b <= c <= 0x0000a71d
 end
 
 
