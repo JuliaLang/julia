@@ -119,6 +119,7 @@
         begin_arrow,
             RIGHT_ARROW, # -->
             LEFT_ARROW, # <--
+            DOUBLE_ARROW, # <-->
             LEFTWARDS_ARROW, # ←
             RIGHTWARDS_ARROW, # →
             LEFT_RIGHT_ARROW, # ↔
