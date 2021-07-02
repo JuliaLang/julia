@@ -63,7 +63,7 @@ recommend you use the official Julia binaries instead.
 
 First, make sure you have all the [required
 dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
-Then, acquire the source code by cloning the git repository:
+Then, acquire the source code by cloning the git repository (if you are working with a fork of Julia, make sure to use the forks URL):
 
     git clone https://github.com/JuliaLang/julia.git
 
