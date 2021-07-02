@@ -873,10 +873,11 @@ const ÷ = div
     mod1(x, y)
 
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
-in the range ``(0, y]`` for positive `y`, and in the range ``[y,0)`` for negative `y`.
+in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
 With integer arguments and positive `y`, this is equal to `mod(x, 1:y)`, and hence natural
-for 1-based indexing. By comparison, `mod(x, y) == mod(x, 0:y-1)` fits 0-based indices.
+for 1-based indexing. By comparison, `mod(x, y) == mod(x, 0:y-1)` is natural for computations with 
+offsets or strides. 
 
 See also [`mod`](@ref), [`fld1`](@ref), [`fldmod1`](@ref).
 
