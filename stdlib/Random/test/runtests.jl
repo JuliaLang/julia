@@ -913,7 +913,7 @@ end
     @testset "RandomDevice" begin
         @test string(RandomDevice()) == "RandomDevice()"
         if !Sys.iswindows()
-            @test string(RandomDevice(unlimited=false)) == "RandomDevice(unlimited=false)"
+            @test string(RandomDevice(unlimited=false)) == "$RandomDevice(unlimited=false)"
         end
     end
 end
