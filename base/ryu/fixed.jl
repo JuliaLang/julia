@@ -1,7 +1,7 @@
-@propagate_inbounds function writefixed(buf, pos, v::T,
+function writefixed(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
-    @boundscheck (0 < pos <= length(buf) || throw(BoundsError()))
+    @assert 0 < pos <= length(buf)
     startpos = pos
     x = Float64(v)
     pos = append_sign(x, plus, space, buf, pos)

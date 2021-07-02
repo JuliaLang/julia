@@ -1,7 +1,7 @@
 module Ryu
 
 import .Base: significand_bits, significand_mask, exponent_bits, exponent_mask, exponent_bias, exponent_max, uinttype
-import .Base: with_scratch, @propagate_inbounds
+import .Base: with_scratch
 
 include("utils.jl")
 include("shortest.jl")
@@ -47,7 +47,7 @@ function writeshortest(x::T,
         typed::Bool=false,
         compact::Bool=false) where {T <: Base.IEEEFloat}
     with_scratch(neededdigits(T)) do buf
-        pos = @inbounds writeshortest(buf, 1, x, plus, space, hash, precision, expchar, padexp, decchar, typed, compact)
+        pos = writeshortest(buf, 1, x, plus, space, hash, precision, expchar, padexp, decchar, typed, compact)
         return String(@inbounds view(buf, 1:pos - 1))
     end
 end
@@ -76,7 +76,7 @@ function writefixed(x::T,
     decchar::UInt8=UInt8('.'),
     trimtrailingzeros::Bool=false) where {T <: Base.IEEEFloat}
     with_scratch(precision + neededdigits(T)) do buf
-        pos = @inbounds writefixed(buf, 1, x, precision, plus, space, hash, decchar, trimtrailingzeros)
+        pos = writefixed(buf, 1, x, precision, plus, space, hash, decchar, trimtrailingzeros)
         return String(@inbounds view(buf, 1:pos - 1))
     end
 end
@@ -107,7 +107,7 @@ function writeexp(x::T,
     decchar::UInt8=UInt8('.'),
     trimtrailingzeros::Bool=false) where {T <: Base.IEEEFloat}
     with_scratch(precision + neededdigits(T)) do buf
-        pos = @inbounds writeexp(buf, 1, x, precision, plus, space, hash, expchar, decchar, trimtrailingzeros)
+        pos = writeexp(buf, 1, x, precision, plus, space, hash, expchar, decchar, trimtrailingzeros)
         return String(@inbounds view(buf, 1:pos - 1))
     end
 end
@@ -116,7 +116,7 @@ function Base.show(io::IO, x::T, forceuntyped::Bool=false, fromprint::Bool=false
     compact = get(io, :compact, false)::Bool
     with_scratch(neededdigits(T)) do buf
         typed = !forceuntyped && !compact && get(io, :typeinfo, Any) != typeof(x)
-        pos = @inbounds writeshortest(buf, 1, x, false, false, true, -1,
+        pos = writeshortest(buf, 1, x, false, false, true, -1,
             (x isa Float32 && !fromprint) ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed, compact)
         write(io, @inbounds view(buf, 1:pos - 1))
         return
@@ -125,7 +125,7 @@ end
 
 function Base.string(x::T) where {T <: Base.IEEEFloat}
     with_scratch(neededdigits(T)) do buf
-        pos = @inbounds writeshortest(buf, 1, x, false, false, true, -1,
+        pos = writeshortest(buf, 1, x, false, false, true, -1,
             UInt8('e'), false, UInt8('.'), false, false)
         return String(@inbounds view(buf, 1:pos - 1))
     end
