@@ -54,6 +54,7 @@ end
 testall(joinpath(PKGPATH, "benchmark"))
 testall(joinpath(PKGPATH, "src"))
 testall(joinpath(PKGPATH, "test"))
+testall(joinpath(Sys.BINDIR, Base.DATAROOTDIR))
 
 println("Lexed ", tot_files, " files in ", @sprintf("%3.4f", tot_time),
         " seconds with a total of ", tot_tokens, " tokens with ", tot_errors, " errors")
