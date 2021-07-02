@@ -224,7 +224,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
     return b, e10
 end
 
-function writeshortest(buf::Vector{UInt8}, pos, x::T,
+function writeshortest(buf, pos, x::T,
                        plus=false, space=false, hash=true,
                        precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'),
                        typed=false, compact=false) where {T}
