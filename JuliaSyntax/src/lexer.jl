@@ -496,6 +496,13 @@ function lex_less(l::Lexer)
         return emit(l, Tokens.ISSUBTYPE)
     elseif accept(l, '|') # <|
         return emit(l, Tokens.LPIPE)
+    elseif dpeekchar(l) == ('-', '-') # <-- or <-->
+        readchar(l); readchar(l)
+        if accept(l, '>')
+            return emit(l, Tokens.DOUBLE_ARROW)
+        else
+            return emit(l, Tokens.LEFT_ARROW)
+        end
     else
         return emit(l, Tokens.LESS) # '<'
     end

@@ -118,6 +118,8 @@
         # Level 3
         begin_arrow,
             RIGHT_ARROW, # -->
+            LEFT_ARROW, # <--
+            DOUBLE_ARROW, # <-->
             LEFTWARDS_ARROW, # ←
             RIGHTWARDS_ARROW, # →
             LEFT_RIGHT_ARROW, # ↔
@@ -580,7 +582,7 @@
             DDOT, # ..
             LDOTS, # …
             TRICOLON, # ⁝
-            VDOTS, # ⋮ 
+            VDOTS, # ⋮
             DDOTS, # ⋱
             ADOTS, # ⋰
             CDOTS, # ⋯
@@ -1365,13 +1367,13 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '⋅' => UNICODE_DOT,
 '…' => LDOTS,
 '⁝' => TRICOLON,
-'⋮' => VDOTS, 
+'⋮' => VDOTS,
 '⋱' => DDOTS,
 '⋰' => ADOTS,
 '⋯' => CDOTS,
-'↻' => CIRCLE_ARROW_RIGHT, 
+'↻' => CIRCLE_ARROW_RIGHT,
 '⇜' => LEFT_SQUIGGLE_ARROW,
-'⇝' => RIGHT_SQUIGGLE_ARROW, 
+'⇝' => RIGHT_SQUIGGLE_ARROW,
 '↜' => LEFT_WAVE_ARROW,
 '↝' => RIGHT_WAVE_ARROW,
 '↩' => LEFTWARDS_ARROW_WITH_HOOK,
@@ -1396,7 +1398,7 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '↶' => CURVE_ARROW_LEFT,
 '↺' => CIRCLE_ARROW_LEFT,
 '¦' => BROKEN_BAR,
-'⌿' => NOT_SLASH, 
+'⌿' => NOT_SLASH,
 '⨟' => BB_SEMI)
 
 
