@@ -1,10 +1,12 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
     Tapir
 
-May-happen parallelism API.
+Optional parallelism API.
 
 This module provides two public API `Tapir.@sync` and `Tapir.@spawn` for
-denoting tasks that _may_ run in parallel.
+denoting tasks that _may or may not_ run in parallel.
 """
 module Tapir
 

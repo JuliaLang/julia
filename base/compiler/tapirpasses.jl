@@ -1,15 +1,21 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
-Passes on Julia IR to handle Tapir.
+Tapir for Julia IR.
 
 This file implements the compiler passes for the parallel instructions in
-Julia IR that are designed based on Tapir (Schardl et al., 2019). The main
-entry point is `lower_tapir!` that outlines the parallel instructions as
-closures wrapped in the standard Julia `Task`. By lowering parallel code at
-the end of Julia's optimization phase, the Julia compiler can analyze and
-optimize the code containing the parallel tasks. In the future, we may be
-able to push the outlining of the tasks further down in the compilation
-pipeline using the OpenCilk compiler, to unlock the optimizations in the LLVM
-passes.
+Julia IR that are designed based on Tapir (Schardl et al., 2019). By lowering
+parallel code at the end of Julia's optimization phase, the Julia compiler can
+analyze and optimize the code containing the parallel tasks.
+
+# Overview
+
+* `lower_tapir!`: Lowers Tapir constructs to the calls to the parallel task runtime.
+  This pass is called outside the usual `run_passes` to allow IPO across functions
+  containing Tapir constructs.
+
+* `lower_tapir_output!` called from `run_passes` via `early_tapir_pass!`. This
+  transforms task outputs (`Tapir.Output` struct) to Upsilon and PhiC nodes.
 
 # References
 
