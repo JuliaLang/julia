@@ -351,31 +351,32 @@ It is recommended that submodules refer to other modules within the enclosing pa
 
 Consider the following example, where the submodule `SubA` defines a function, which is then extended in its “sibling” module:
 
-```julia
-module ParentModule
+```jldoctest module_manual
+julia> module ParentModule
+       
+       module SubA
+       export add_D  # exported interface
+       const D = 3
+       add_D(x) = x + D
+       end
+       
+       using .SubA  # brings `add_D` into the namespace
+       export add_D # export it from ParentModule too
+       
+       module SubB
+       import ..SubA: add_D # relative path for a “sibling” module
+       struct Infinity end
+       add_D(x::Infinity) = x
+       end
+       
+       end;
 
-module SubA
-export add_D  # exported interface
-const D = 3
-add_D(x) = x + D
-end
-
-using .SubA  # brings `add_D` into the namespace
-
-export add_D # export it from ParentModule too
-
-module SubB
-import ..SubA: add_D # relative path for a “sibling” module
-struct Infinity end
-add_D(x::Infinity) = x
-end
-
-end
 ```
 
 You may see code in packages, which, in a similar situation, uses
-```julia
-import .ParentModule.SubA: add_D
+```jldoctest module_manual
+julia> import .ParentModule.SubA: add_D
+
 ```
 However, this operates through [code loading](@ref code-loading), and thus only works if `ParentModule` is in a package. It is better to use relative paths.
 
