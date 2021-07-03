@@ -398,14 +398,18 @@ end
 # issue 37280
 @testset "UInt8, Int8 vector" begin
     for T in [Int8, UInt8], VT in [Int8, UInt8]
-        A = T[0x40, 0x52, 0x62, 0x52, 0x62]
+        A = T[0x40, 0x52, 0x00, 0x52, 0x00]
 
-        @test findfirst(VT[0x30], A) === nothing
+        @test findfirst(VT[0x30], A) === findfirst(==(VT(0x30)), A) == nothing
         @test findfirst(VT[0x52], A) === 2:2
-        @test findlast(VT[0x30], A) === nothing
+        @test findfirst(==(VT(0x52)), A) === 2
+        @test findlast(VT[0x30], A) === findlast(==(VT(0x30)), A) === nothing
         @test findlast(VT[0x52], A) === 4:4
+        @test findlast(==(VT(0x52)), A) === 4
+        @test findfirst(iszero, A) === 3 === findprev(iszero, A, 4)
+        @test findlast(iszero, A) === 5 === findnext(iszero, A, 4)
 
-        pattern = VT[0x52, 0x62]
+        pattern = VT[0x52, 0x00]
 
         @test findfirst(pattern, A) === 2:3
         @test findnext(pattern, A, 2) === 2:3
