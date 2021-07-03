@@ -196,8 +196,9 @@ function fixup_uses!(ir::IRCode, ci::CodeInfo, code::Vector{Any}, uses::Vector{I
     end
 end
 
-function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Any})
-    return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
+function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Any}, task_outputs::BitSet)
+    not_output(val) = !(val isa Union{SlotNumber, TypedSlot} && slot_id(val) in task_outputs)
+    return fixemup!(not_output, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
 function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}, flags::Vector{UInt8})
@@ -622,6 +623,12 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         end
     end
 
+    # [Tapir] Do not transform task output slots yet:
+    task_outputs = task_output_slots(ci, code) # set of slot IDs to keep in IRCode
+    for id in task_outputs
+        empty!(defuse[id].uses)
+    end
+
     exc_handlers = IdDict{Int, Tuple{Int, Int}}()
     # Record the correct exception handler for all cricitcal sections
     for (enter_block, exc) in catch_entry_blocks
@@ -720,7 +727,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 from_bb = edge == 0 ? 0 : block_for_inst(cfg, Int(edge))
                 from_bb == pred || continue
                 isassigned(stmt.values, edgeidx) || break
-                stmt.values[edgeidx] = rename_uses!(ir, ci, Int(edge), stmt.values[edgeidx], incoming_vals)
+                stmt.values[edgeidx] = rename_uses!(ir, ci, Int(edge), stmt.values[edgeidx], incoming_vals, task_outputs)
                 break
             end
         end
@@ -782,7 +789,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 incoming_vals[slot_id(stmt.slot)] = undef_token
                 code[idx] = nothing
             else
-                stmt = rename_uses!(ir, ci, idx, stmt, incoming_vals)
+                stmt = rename_uses!(ir, ci, idx, stmt, incoming_vals, task_outputs)
                 if stmt === nothing && isa(code[idx], Union{ReturnNode, GotoIfNot}) && idx == last(cfg.blocks[item].stmts)
                     # preserve the CFG
                     stmt = ReturnNode()
@@ -795,7 +802,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                     typ = typ_for_val(val, ci, ir.sptypes, idx, slottypes)
                     # Having undef_token appear on the RHS is possible if we're on a dead branch.
                     # Do something reasonable here, by marking the LHS as undef as well.
-                    if val !== undef_token
+                    if id in task_outputs
+                        # Keep task outputs as slots
+                        ci.ssavaluetypes[idx] = typ  # see: make_ssa!
+                    elseif val !== undef_token
                         incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ)::Int)
                     else
                         code[idx] = nothing
@@ -861,6 +871,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)
             new_code[idx] = stmt
+            if isexpr(stmt, :(=)) && stmt.args[1] isa SlotNumber && slot_id(stmt.args[1]) in task_outputs
+                result_types[idx] = ci.ssavaluetypes[idx]
+            end
         else
             ssavalmap[idx] = SSAValue(idx)
             result_types[idx] = ci.ssavaluetypes[idx]

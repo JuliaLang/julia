@@ -190,7 +190,8 @@ corresponding "fields" updated by these functions.
 
 # Arguments
 * `stmt`: an IR statement (e.g., an `Expr(:call, ...)`)
-* `on_value`: a function that accepts an `SSAValue` or `Argument`
+* `on_value`: a function that accepts an `SSAValue`, `Argument`, `SlotNumber`,
+  or `TypedSlot`.
 * `on_label`: a function that accepts a basic block label (e.g., `goto.label`
   of a `goto::GotoNode` statement)
 """
@@ -198,9 +199,7 @@ map_id(on_value, on_label, @nospecialize(stmt)) = map_id(on_value, on_label, on_
 
 function map_id(on_value, on_phi_label, on_goto_label, @nospecialize(stmt))
     recurse(@nospecialize x) = map_id(on_value, on_phi_label, on_goto_label, x)
-    if stmt isa SSAValue
-        on_value(stmt)
-    elseif stmt isa Argument
+    if stmt isa Union{SSAValue,Argument,SlotNumber,TypedSlot}
         on_value(stmt)
     elseif stmt isa GotoNode
         GotoNode(on_goto_label(stmt.label))
@@ -448,7 +447,7 @@ function insert_new_nodes(ir::IRCode)
     @assert all(>(0), ssachangemap)
 
     on_value(v::SSAValue) = SSAValue(ssachangemap[v.id])
-    on_value(v::Argument) = v
+    on_value(v) = v
     for i in 1:length(stmts)
         stmts.inst[i] = map_id(on_value, identity, stmts.inst[i])
     end
@@ -788,30 +787,59 @@ function remove_stmt!(stmt::Instruction)
     stmt[:type] = Any
 end
 
-function resolve_callee(ir::IRCode, @nospecialize(inst))::Tuple{Any,Bool}
+"""
+    resolve_linear_chain(ir, v::Union{PiNode,SSAValue}) -> v′::SSAValue
+
+Resolve simple chain of statements that are SSAValue or PiNode.
+"""
+function resolve_linear_chain end
+resolve_linear_chain(ir::IRCode, v::PiNode) = resolve_linear_chain(ir, v.val)
+function resolve_linear_chain(ir::IRCode, v::SSAValue)
+    v0 = v
+    while true
+        n = ir[v]
+        if n isa PiNode
+            n = n.val
+        end
+        if n isa SSAValue
+            v = n
+        else
+            break
+        end
+        v === v0 && error("cycle detected")
+    end
+    return v
+end
+
+# Ref: abstract_eval_special_value
+function resolve_special_value(@nospecialize(v))
+    if v isa GlobalRef
+        isdefined(v.mod, v.name) || return nothing, false
+        v = getfield(v.mod, v.name)
+    elseif v isa QuoteNode
+        return v.value, true
+    end
+    return v, true
+end
+
+resolve_ssavalue(ir::IRCode, v::SSAValue) = resolve_ssavalue(ir.stmts.inst, v)
+function resolve_ssavalue(code::Vector{Any}, v::SSAValue)
+    v0 = v
+    while v isa SSAValue
+        v = code[v.id]
+        v === v0 && error("cycle detected")
+    end
+    return v
+end
+
+function resolve_callee(code::Vector{Any}, @nospecialize(inst))::Tuple{Any,Bool}
     isexpr(inst, :call) || return nothing, false
     isempty(inst.args) && return nothing, false
     f, = inst.args
-    f0 = f
-    while f isa SSAValue
-        f = ir[f]
-        f === f0 && error("cycle detected")
+    if f isa SSAValue
+        f = resolve_ssavalue(code, f)
     end
-    if f isa GlobalRef
-        isdefined(f.mod, f.name) || return nothing, false
-        f = getfield(f.mod, f.name)
-    end
-    return f, true
-end
-
-function constructs(stmt::Instruction, @nospecialize(T::Type))
-    inst = stmt[:inst]
-    if isexpr(inst, :new)
-        return get(inst.args, 1, nothing) <: T
-    elseif isexpr(inst, :call)
-        return widenconst(stmt[:type]) <: T
-    end
-    return false
+    return resolve_special_value(f)
 end
 
 function calls(inst, r::GlobalRef, nargs::Int)
@@ -902,7 +930,7 @@ end
 function is_trivial_for_spawn(@nospecialize(inst))
     if isterminator(inst)
         return true
-    elseif inst isa Union{PhiNode,PhiCNode,UpsilonNode,Nothing}
+    elseif inst isa Union{PhiNode,PhiCNode,UpsilonNode,PiNode,Nothing}
         return true
     elseif inst isa Expr
         if is_meta_expr_head(inst.head)
@@ -1026,10 +1054,10 @@ Mainly operates on task output variables.
 """
 function early_tapir_pass!(ir::IRCode)
     is_sequential(ir) && return ir, false
+    @timeit "Lower task output" ir = lower_tapir_output!(ir)
     @timeit "Check task output" ir, racy = check_tapir_race!(ir)
     racy && return ir, racy
     @timeit "Fixup syncregion" ir = fixup_syncregion_phic!(ir)
-    @timeit "Lower task output" ir = lower_tapir_output!(ir)
     return ir, racy
 end
 
@@ -1072,20 +1100,57 @@ function fixup_syncregion_phic!(ir::IRCode)
     return ir
 end
 
+foreach_task_output_load(f::F, ir::IRCode) where {F} =
+    foreach_task_output_load(f, ir.stmts.inst)
+
+function foreach_task_output_load(f, code::Vector{Any})
+    Tapir = tapir_module()
+    Tapir isa Module || return
+    isdefined(Tapir, :_load) || return  # avoid error while bootstrapping
+
+    for (i, inst) in pairs(code)
+        if isexpr(inst, :(=))
+            _, call = inst.args
+        else
+            call = inst
+        end
+        callee, = resolve_callee(code, call)
+        if callee === Tapir._load && length(call.args) == 3
+            f(i, inst, call.args)
+        end
+    end
+end
+
+"""
+    task_output_slots(ci::CodeInfo, code::Vector{Any}) -> slotids::BitSet
+
+Return a set of slot IDs that should be kept in the `IRCode` genrated by
+slot2reg.  These slots are processed later in `lower_tapir_output!`.
+"""
+function task_output_slots(::CodeInfo, code::Vector{Any})
+    outputs = BitSet()
+    foreach_task_output_load(code) do _i, _inst, (_f, out, _name)
+        if out isa SSAValue
+            out = resolve_ssavalue(code, out)
+        end
+        if out isa Union{SlotNumber,TypedSlot}
+            push!(outputs, slot_id(out))
+        end
+    end
+    return outputs
+end
+
 """
     lower_tapir_output!(ir::IRCode) -> ir′
 
-Lower output variables marked by `Tapir.Output` as Upsilon nodes.
-This removes the Phi nodes forbidden by Tapir.
+Lower output slots marked by `Tapir._load` using Upsilon and PhiC nodes.
 
 It transforms
 
     ...
-        %ref = Tapir.Output{%name}()
+        slot = %value
     ...
-        %ref.x = %value
-    ...
-        %out = %ref.x
+        %out = Tapir._load(slot, %name)
 
 to
 
@@ -1111,75 +1176,143 @@ function lower_tapir_output!(ir::IRCode)
     ir = insert_new_nodes(ir)
 
     outputs = BitSet()
-    for i in 1:length(ir.stmts)
-        constructs(ir.stmts[i], Tapir.Output) && push!(outputs, i)
+    loads = Tuple{Int,Int}[]  # pairs of (load position, slot id)
+    load_positions = BitSet()
+    output_names = Vector{Any}(undef, length(ir.stmts)) # big enough since #stmts >= #slots
+    # nouts = RefValue(0)
+    # fromkey = zeros(Int, length(ir.stmts))
+    foreach_task_output_load(ir) do i, _inst,  (_f, out, name)
+        if out isa SSAValue
+            # out = resolve_linear_chain(ir, out)  # maybe required to resolve Pi?
+            out = resolve_ssavalue(ir, out)
+        end
+        if out isa Union{SlotNumber,TypedSlot}
+            push!(outputs, slot_id(out))
+            push!(loads, (i, slot_id(out)))
+            push!(load_positions, i)
+            output_names[slot_id(out)] = name
+            # key = (nouts.x += 1)
+            # fromkey[key] = slot_id(slot)
+        end
     end
-    isempty(outputs) && return ir
 
-    # Handle stores
-    storemap = undefmap = nothing
+    # Find stores and escapes:
+    stores = Tuple{Int,Int}[]  # pairs of (store position, slot id)
+    deletelater = Int[]
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
         inst = stmt[:inst]
-        f, = resolve_callee(ir, inst)
-        f === setfield! || f === Base.setproperty! || continue
-        _, r, _, value = inst.args
-        r isa SSAValue && r.id in outputs || continue
+        if (
+            isexpr(inst, :(=)) &&
+            begin
+                lhs, _ = inst.args
+                lhs isa Union{SlotNumber,TypedSlot}
+            end &&
+            slot_id(lhs) in outputs
+        )
+            push!(stores, (i, slot_id(lhs)))
+            continue
+        end
 
-        if storemap === nothing
-            storemap = Vector{Vector{Any}}(undef, length(ir.stmts))
-            undefmap = Vector{Vector{Any}}(undef, length(ir.stmts))
+        i in load_positions && continue
+
+        # Record SSA values that would not be used once this pass is done:
+        let out = inst
+            if out isa Union{SSAValue,PiNode}
+                out = resolve_linear_chain(ir, out)
+                out = resolve_ssavalue(ir, out)
+            end
+            if out isa Union{SlotNumber,TypedSlot} && slot_id(inst) in outputs
+                push!(deletelater, i)
+                continue
+            end
         end
-        if !isassigned(storemap, r.id)
+
+        # Handle escaped slots:
+        #
+        # The frontend does not produce escaping task outputs.  But it's
+        # possible (i.e., a valid Julia IR up to this point) that the output
+        # variables to be captured (e.g., due to metaprogramming).  Since
+        # loading slot other than well-defined locations marked by `Tapir._load`
+        # is potentially racy, let's insert a throw if we detect an escape.
+        escaped = RefValue(false)
+        local escaped_variable  # TODO: handle multiple variables?
+        foreach_id(identity, inst) do out
+            if out isa SSAValue
+                # out = resolve_linear_chain(ir, out)  # maybe required to resolve Pi?
+                out = resolve_ssavalue(ir, out)
+            end
+            if out isa Union{SlotNumber,TypedSlot}
+                if slot_id(out) in outputs
+                    escaped.x = true
+                    escaped_variable = output_names[slot_id(out)]
+                end
+            end
+        end
+        if escaped.x
+            stmt[:inst] = nothing
+            if escaped_variable isa SSAValue
+                th = Expr(:call, Tapir.escaping_task_output_error)
+            else
+                th = Expr(:call, Tapir.escaping_task_output_error, escaped_variable)
+            end
+            insert_node!(ir, i, NewInstruction(th, Union{}))
+        end
+    end
+
+    for i in deletelater
+        remove_stmt!(ir.stmts[i])
+    end
+
+    isempty(outputs) && return ir
+
+    # Handle stores
+    maxslotid = maximum(outputs)
+    storemap = Vector{Vector{Any}}(undef, maxslotid)
+    undefmap = Vector{Vector{Any}}(undef, maxslotid)
+    for (i, oid) in stores
+        oid in outputs || continue
+        stmt = ir.stmts[i]
+        _lhs, value = stmt[:inst].args
+
+        if !isassigned(storemap, oid)
             newup = NewInstruction(UpsilonNode(QuoteNode(true)), Const(true))
-            undefinit = insert_node!(ir, 1, newup)
-            undefs = undefmap[r.id] = Any[undefinit]
-            stores = storemap[r.id] = Any[]
+            undefinit = insert_node!(
+                ir,
+                1, # [^alloca-position]
+                newup,
+            )
+            undefs = undefmap[oid] = Any[undefinit]
+            stores = storemap[oid] = Any[]
         else
-            undefs = undefmap[r.id]
-            stores = storemap[r.id]
+            undefs = undefmap[oid]
+            stores = storemap[oid]
         end
+
+        # Reuse this statement to keep `MethodMatchInfo` (for inlining):
+        stmt[:inst] = value
+        ssavalue = SSAValue(i)
+
+        newinst = NewInstruction(UpsilonNode(ssavalue), stmt[:type])
+        ups = insert_node!(ir, i, newinst, true)
+        push!(stores, ups)
 
         newinst = NewInstruction(UpsilonNode(QuoteNode(false)), Const(false))
         ups = insert_node!(ir, i, newinst, true)
         push!(undefs, ups)
-
-        newinst = NewInstruction(UpsilonNode(value), stmt[:type])
-        ups = insert_node!(ir, i, newinst, true)
-        push!(stores, ups)
-    end
-    storemap === nothing && return ir
-
-    output_names = Vector{Symbol}(undef, length(ir.stmts))
-    for i in outputs
-        name = Symbol("?")
-        Output = widenconst(ir.stmts.type[i])
-        if Output <: Tapir.Output
-            name = try
-                Output.parameters[1]
-            catch
-                name
-            end
-        end
-        output_names[i] = name
     end
 
     # Handle loads
-    undef_checks = Tuple{Int,Symbol,SSAValue}[]
-    for i in 1:length(ir.stmts)
-        stmt = ir.stmts[i]
-        inst = stmt[:inst]
-        f, = resolve_callee(ir, inst)
-        f === getfield || f === Base.getproperty || continue
-        _, r, = inst.args
-        r isa SSAValue && r.id in outputs || continue
+    undef_checks = Tuple{Int,Any,SSAValue}[]
+    for (i, oid) in loads
+        oid in outputs || continue
 
-        # Replace getfield with PhiC
-        ir.stmts.inst[i] = PhiCNode(storemap[r.id])
+        # Replace load with PhiC
+        ir.stmts.inst[i] = PhiCNode(storemap[oid])
 
         # Preparing for undef check
-        name = output_names[r.id]
-        undefs = undefmap[r.id]
+        name = output_names[oid]
+        undefs = undefmap[oid]
         undefssa = insert_node!(ir, i, NewInstruction(PhiCNode(undefs), Bool))
         push!(undef_checks, (i, name, undefssa))
     end
@@ -1201,7 +1334,7 @@ function lower_tapir_output!(ir::IRCode)
         # If defined (not undef), skip over the throw:
         ir.stmts.inst[last(b0.stmts)] = GotoIfNot(undefssa, ibb + 2)
 
-        newex_ex = Expr(:call, GlobalRef(Base, :UndefVarError), QuoteNode(name))
+        newex_ex = Expr(:call, GlobalRef(Base, :UndefVarError), name)
         newex = insert_node!(ir, last(b1.stmts), NewInstruction(newex_ex, Any))
         throw_ex = Expr(:call, GlobalRef(Base, :throw), newex)
         insert_node!(ir, last(b1.stmts), NewInstruction(throw_ex, Union{}))
@@ -1216,6 +1349,9 @@ function lower_tapir_output!(ir::IRCode)
 
     return ir
 end
+# [^alloca-position]: TODO: The placement of the allocations of task output is not
+# optimal.  Ideally, we should use the inner-most `Expr(:syncregion)` that
+# dominates all loads.
 
 """
     check_tapir_race!(ir::IRCode) -> (ir′::IRCode, racy::Bool)

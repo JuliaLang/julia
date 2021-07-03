@@ -125,14 +125,87 @@ end
     )
 end
 
+@noinline function escaping_task_output_error(name = nothing)::Union{}
+    @nospecialize
+    msg = "Tapir: escaping task output variable"
+    if name !== nothing
+        msg = "$msg: $name"
+    end
+    throw(ConcurrencyViolationError(msg))
+end
+
 #####
 ##### Julia-Tapir Frontend
 #####
 
-mutable struct Output{Name}
-    x::Any
-    Output{Name}() where {Name} = new{Name}()
-end
+"""
+    Tapir._load(x, name::Symbol) -> x
+
+[INTERNAL] A placeholder for denoting where the task output variables named
+`name` should be loaded.
+
+The task output syntax
+
+    Tapir.@sync begin
+        ...
+        Tapir.@spawn \$output = rhs
+        ...
+    end
+
+is lowered to an AST equivalent to
+
+    local slot
+    Tapir.@sync begin
+        ...
+        Tapir.@spawn slot = rhs
+        ...
+    end
+    output = Tapir._load(slot, :output)
+
+The function `_load` returns the first argument as-is. This lets the inference
+to support task output without any change (given that the source program does
+not have a race).
+
+The function `_load` treated specially during slot2reg; i.e., the slots
+specified as the first argument are _not_ promoted to SSA registers (ref
+`task_output_slots`).  These leftover slots are transformed to PhiC and Upsilon
+nodes inside the `lower_tapir_output!` pass run just after slot2reg.  The PhiC
+and Upsilon nodes that cross task boundaries are finally lowered to
+`Tapir.UndefableRef` in `lower_tapir_task!`.  (Note: PhiC and Upsilon nodes
+translate to stack memory in LLVM.  So, this representation may also be useful
+for Tapir/LLVM integration.)
+
+* TODO: Add an IR node that directly represents `_load`? It would reduce the
+  transformation inside the macro.
+* TODO: Support conditionally defined task output.
+
+A possible extension is to forbid
+
+    Tapir.@sync begin
+        Tapir.@spawn if p()
+            ...
+            \$a = rhs1
+        end
+        if q()
+            ...
+            \$a = rhs2
+        end
+    end
+
+and
+
+    Tapir.@sync for x in xs
+        Tapir.@spawn if p(x)
+            \$a = rhs1
+        end
+    end
+
+_by default_ so that we can detect this possibly-racy pattern. It should be
+possible to opt-in the above pattern by a special syntax such as
+`\$(a::@norace) = rhs`; i.e., the user declares that at most one task executes
+this line of code.
+"""
+_load(x, ::Symbol) = x
 
 macro syncregion()
     Expr(:syncregion)
@@ -152,44 +225,45 @@ end
 
 isassignment(ex) = Meta.isexpr(ex, :(=)) && length(ex.args) > 1
 
-output_vars!(ex) = output_vars!(Dict{Symbol,Symbol}(), ex)
-output_vars!(outputs, _) = outputs
-function output_vars!(outputs, ex::Expr)
-    if isassignment(ex)
-        lhs_output_vars!(outputs, ex, 1:1)
-        for a in @view ex.args[2:end]
-            output_vars!(outputs, a)
-        end
-    elseif Meta.isexpr(ex, :tuple) && (i = findfirst(isassignment, ex.args)) !== nothing
-        # Handle: a, b, c = d, e, f
-        lhs_output_vars!(outputs, ex, 1:i-1)  # a, b
-        lhs_output_vars!(outputs, ex.args[i], 1:1)  # c
-        for a in @view ex.args[i].args[2:end]
-            output_vars!(outputs, a) # d
-        end
-        for a in @view ex.args[i+1:end]
-            output_vars!(outputs, a) # e, f
-        end
-    else
-        for a in ex.args
-            output_vars!(outputs, a)
-        end
-    end
-    return outputs
-end
+function output_vars(ex::Expr)
+    outputs = Dict{Symbol,Symbol}()
 
-function lhs_output_vars!(outputs, ex, indices = eachindex(ex.args))
-    for i in indices
-        if Meta.isexpr(ex.args[i], :$, 1)
-            v, = ex.args[i].args
+    function lhs_output_vars(ex)
+        if Meta.isexpr(ex, :$, 1)
+            v, = ex.args
             if v isa Symbol
-                tmp = get!(() -> gensym("output_$(v)_"), outputs, v)
-                ex.args[i] = :($tmp.x)
+                slot = get!(outputs, v) do
+                    gensym("output_$(v)_")
+                end
+                return slot
             end
-        elseif Meta.isexpr(ex.args[i], :tuple)
-            lhs_output_vars!(outputs, ex.args[i])
+        elseif Meta.isexpr(ex, :tuple)
+            return Expr(:tuple, map(lhs_output_vars, ex.args)...)
+        end
+        return ex
+    end
+
+    process(x) = x
+    function process(ex::Expr)
+        if isassignment(ex)
+            a1 = lhs_output_vars(ex.args[1])
+            rest = map(process, ex.args[2:end])
+            return Expr(ex.head, a1, rest...)
+        elseif Meta.isexpr(ex, :tuple) && (i = findfirst(isassignment, ex.args)) !== nothing
+            # Handle: a, b, c = d, e, f
+            args1 = map(lhs_output_vars, ex.args[1:i-1])        # a, b
+            arg2 = lhs_output_vars(ex.args[i].args[1])          # c
+            args3 = map(process, ex.args[i].args[2:end])        # d
+            args4 = map(process, ex.args[i+1:end])              # e, f
+            return Expr(:tuple, args1..., Expr(:(=), arg2, args3...), args4...)
+        elseif ex.head in (:meta, :inbounds)
+            return ex
+        else
+            return Expr(ex.head, map(process, ex.args)...)
         end
     end
+
+    return outputs, process(ex)
 end
 
 const tokenname = gensym(:token)
@@ -201,10 +275,11 @@ macro sync(block)
     var = esc(tokenname)
     block = macroexpand(__module__, block)  # for nested @sync
     block = Expr(:block, __source__, block)
-    dict = output_vars!(block)
+    dict, block = output_vars(block)
     outputs = sort!(collect(dict))
-    header = [:(local $(esc(tmp)) = Output{$(QuoteNode(v))}()) for (v, tmp) in outputs]
-    footer = [:($(esc(v)) = $(esc(tmp)).x) for (v, tmp) in outputs]
+    header = [:(local $(esc(slot))) for (_, slot) in outputs]
+    footer =
+        [:($(esc(v)) = _load($(esc(slot)), $((QuoteNode(v))))) for (v, slot) in outputs]
     quote
         $(header...)
         let $var = @syncregion()

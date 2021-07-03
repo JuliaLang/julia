@@ -87,6 +87,8 @@ end
 
 @testset "`Tapir.Output`" begin
     @test @inferred(TaskOutputs.simple()) == 2
+    @test TaskOutputs.simple_closure_set_by_one(true) == 111
+    @test TaskOutputs.simple_closure_set_by_one(false) == 222
     @test @inferred(TaskOutputs.f()) == (('a', 1), 1)
     @test @inferred(TaskOutputs.set_distinct(true)) == 4
     @test @inferred(TaskOutputs.set_distinct(false)) == 6
@@ -99,6 +101,11 @@ end
     @test @inferred(tmap(x -> x + 0.5, 1:10)) == 1.5:1:10.5
 
     @test_throws UndefVarError(:a) TaskOutputs.conditional_output(false)
+
+    @testset "`simple_escaping_task_output`" begin
+        err = @test_error TaskOutputs.simple_escaping_task_output()
+        @test occursin("escaping task output variable", sprint(showerror, err))
+    end
 end
 
 @testset "Race detection" begin

@@ -1411,85 +1411,12 @@ function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, vtypes::
     return argtypes
 end
 
-"""
-    try_abstract_eval_task_output(inerp, e, argtypes, vtypes, sv)
-
-If `e::Expr` is a call of form `ref.x` where `ref` is of type
-`Base.Experimental.Tapir.Output`, return the `CallMeta` wrapping the type of `v`
-in `ref.x = v`; otherwise, return `nothing`.
-"""
-function try_abstract_eval_task_output(
-        interp::AbstractInterpreter, e::Expr, argtypes::Union{Nothing,Vector{Any}},
-        vtypes::VarTable, sv::InferenceState)
-
-    argtypes === nothing && return
-    e.head === :call && length(e.args) === 3 || return
-
-    ft = argtypes[1]
-    if isa(ft, Const)
-        f = ft.val
-    else
-        return
-    end
-
-    # Check if this is a call of the form `lhs = ref.x`:
-    src = sv.src::CodeInfo
-    Tapir = tapir_module()
-    Tapir isa Module || return
-    Base = Main.Base::Module
-    f === getfield || isdefined(Base, :getproperty) && f === Base.getproperty || return
-    e.args[3] === QuoteNode(:x) || return
-    s = e.args[2]
-    s isa SlotNumber || return
-
-    # Check if `ref isa Tapir.Output`:
-    for (i, e) in pairs(src.code)
-        isexpr(e, :(=)) && length(e.args) == 2 || continue
-        lhs, _ = e.args
-        if lhs === s
-            widenconst(src.ssavaluetypes[i]) <: Tapir.Output || return
-            @goto found
-        end
-    end
-    return
-    @label found
-
-    # Merge all type of `rhs` for all `ref.x = rhs`:
-    setfield_ref = GlobalRef(Base, :setfield!)
-    setproperty_ref = GlobalRef(Base, :setproperty!)
-    t = Union{}
-    for e in src.code
-        # TODO: Don't merge the value from the "future".
-        # (By construction, there is no getfield before setfield!. But there
-        # should be a better way to do it. Also, linear scan is not great.)
-        isexpr(e, :call) &&
-            length(e.args) == 4 &&
-            (e.args[1] === setfield_ref || e.args[1] === setproperty_ref) &&
-            e.args[3] === QuoteNode(:x) || continue
-        _, receiver, _, value = e.args
-        receiver === s || continue
-        t = tmerge(t, abstract_eval_special_value(interp, value, vtypes, sv))
-    end
-    t === Union{} && return  # or should we just return it as-is?
-    return CallMeta(t, false)
-end
-
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         return abstract_eval_special_value(interp, e, vtypes, sv)
     end
     e = e::Expr
-    if (
-        callinfo = try_abstract_eval_task_output(
-            interp,
-            e,
-            collect_argtypes(interp, e.args, vtypes, sv),
-            vtypes,
-            sv,
-        )
-    ) !== nothing
-        t = callinfo.rt
-    elseif e.head === :call
+    if e.head === :call
         ea = e.args
         argtypes = collect_argtypes(interp, ea, vtypes, sv)
         if argtypes === nothing
