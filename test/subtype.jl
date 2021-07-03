@@ -1062,11 +1062,24 @@ function test_intersection_properties()
         for S in menagerie
             I = _type_intersect(T,S)
             I2 = _type_intersect(S,T)
+            if !isequal_type(I, I2)
+                println("!isequal_type:")
+                @show T
+                @show S
+                @show I
+                @show I2
+            end
             @test isequal_type(I, I2)
             if I == approx
                 # TODO: some of these cases give a conservative answer
                 @test issub(I, T) || issub(I, S)
             else
+                if !(issub(I, T) && issub(I, S))
+                    println("!issub:")
+                    @show T
+                    @show S
+                    @show I
+                end
                 @test issub(I, T) && issub(I, S)
             end
             if issub(T, S)
@@ -1890,7 +1903,7 @@ end
 let T = Type{T} where T<:(AbstractArray{I}) where I<:(Base.IteratorsMD.CartesianIndex),
     S = Type{S} where S<:(Base.IteratorsMD.CartesianIndices{A, B} where B<:Tuple{Vararg{Any, A}} where A)
     I = typeintersect(T, S)
-    @test_broken I <: T
+    @test I <: T
     @test I <: S
     @test_broken I == typeintersect(S, T)
 end
@@ -1898,8 +1911,8 @@ end
 # issue #39948
 let A = Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1} where T, Vector},
     I = typeintersect(A, Tuple{Vararg{Vector{T}}} where T)
-    @test_broken I <: A
-    @test_broken !Base.has_free_typevars(I)
+    @test I <: A
+    @test !Base.has_free_typevars(I)
 end
 
 # issue #8915
