@@ -590,6 +590,33 @@ macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
 
+"""
+    @repeat n call
+    @repeat bool_expr call
+
+Repeat `call` `n` times and discard the output.
+If an expression that returns a boolean is given as a first argument, repeat while true and disregard output.
+"""
+macro repeat(terms, ex)
+    if isa(terms, Integer)
+        quote
+            for _ = 1:$(esc(terms))
+                $(esc(ex))
+            end
+            return nothing
+        end
+    elseif isa(terms, Expr)
+        quote
+            while $(esc(terms))
+                $(esc(ex))
+            end
+            return nothing
+        end
+    else
+        throw(ArgumentError("@repeat first argument must be an Integer or an expression that returns a boolean"))
+    end
+end
+
 # SimpleVector
 
 function getindex(v::SimpleVector, i::Int)

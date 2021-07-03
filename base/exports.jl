@@ -1025,6 +1025,7 @@ export
     @enum,
     @label,
     @goto,
+    @repeat,
     @view,
     @views,
     @static
