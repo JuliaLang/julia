@@ -2883,6 +2883,9 @@ julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is 
 """
 map(f, iters...) = collect(Generator(f, iters...))
 
+# since map(f, itr) is defined here:
+filter(f, itr) = collect(Iterators.filter(f, itr))
+
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A, a, b) = push!(push!(A, a), b)
