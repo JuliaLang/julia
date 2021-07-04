@@ -180,6 +180,20 @@ function simple_escaping_task_output()
     return out
 end
 
+function simple_conditional_task_output(x::Bool)
+    local slot
+    token = Tapir.@syncregion
+    Tapir.@spawnin token if x
+        slot = produce(111)
+    end
+    b = produce(222)
+    Tapir.@sync_end token
+    if @isdefined(slot)
+        a = Tapir._load(slot, :a)
+    end
+    return b + (x ? a : 0)
+end
+
 function f()
     v = 'a'
     Tapir.@sync begin
@@ -230,9 +244,9 @@ function update_distinct(bool::Bool)
     y = 0
     Tapir.@sync begin
         Tapir.@spawn if bool
-            $x = id(x + 1)
+            $x = id($x + 1)
         else
-            $y = id(y + 2)
+            $y = id($y + 2)
         end
         if bool
             $y = id(y + 3)

@@ -177,7 +177,6 @@ for Tapir/LLVM integration.)
 
 * TODO: Add an IR node that directly represents `_load`? It would reduce the
   transformation inside the macro.
-* TODO: Support conditionally defined task output.
 
 A possible extension is to forbid
 
@@ -211,8 +210,156 @@ macro syncregion()
     Expr(:syncregion)
 end
 
-macro spawnin(token, expr)
-    Expr(:spawn, esc(token), esc(Expr(:block, __source__, expr)))
+"""
+    shadow_vars(ex::Expr) -> ex′::Expr
+
+If the syntax `\$x` is used in lhs/lvalue _or_ rhs/rvalue, replace it with a
+local variable `x_shadow` that acts as a local copy of `\$x`. If `\$x` appears
+as in lhs, also insert the "store" `\$x = x_shadow` (so that it can be
+translated into set-many-load-once PhiC/Upsilon nodes).  If `\$x` appears in
+`ex`, the variable `x` is declared to be local in `ex` to avoid introducing the
+phi nodes in the continuation [^no_racy_phi].
+
+That is to say, it transforms
+
+    @spawn begin
+        ...
+        \$a = f(\$x)
+    end
+
+to
+
+    let x_shadow
+        if @isdefined x
+            x_shadow = x
+        end
+        @raw_spawn begin
+            local x  # required for avoiding "racy phi" [^no_racy_phi]
+            # if @isdefined x_shadow
+            #     x = x_shadow   # TODO: should we?
+            # end
+            ...
+            x_shadow = f(x_shadow)
+            \$x = x_shadow
+        end
+    end
+
+[^no_racy_phi]: We need to make `x` a local variable when we have `\$x` because
+    `x` may appear after the `end` of `@sync`. Since we "load" `\$x` only when
+    it is defined (to support conditional task outputs; see `@sync` definition),
+    a phi node has to be inserted after reattach for the variable live through
+    the `else` branch of `@isdefined \$x`.
+"""
+function shadow_vars(ex::Expr)
+    mapping = Dict{Symbol,Symbol}()  # x => x_shadow
+
+    lookup(var::Symbol) =
+        get!(mapping, var) do
+            gensym(Symbol('_', '$', var, '_'))
+        end
+
+    function process(ex)
+        @nospecialize
+        ex isa Expr || return ex
+        if (
+            isassignment(ex) ||
+            ex.head === :tuple && (i = findfirst(isassignment, ex.args)) !== nothing
+        )
+            lvars = Symbol[]
+            if isassignment(ex)
+                a1 = process_lhs!(lvars, ex.args[1])
+                as = map(process, ex.args[2:end])
+                ex = Expr(:(=), a1, as...)
+            else
+                # Handle: a, b, c = d, e, f
+                args1 = [process_lhs!(lvars, a) for a in ex.args[1:i-1]]  # a, b
+                arg2 = process_lhs!(lvars, ex.args[i].args[1])            # c
+                args3 = map(process, ex.args[i].args[2:end])              # d
+                args4 = map(process, ex.args[i+1:end])                    # e, f
+                ex = Expr(:tuple, args1..., Expr(:(=), arg2, args3...), args4...)
+            end
+            if isempty(lvars)
+                return ex
+            else
+                stores = map(lvars) do var
+                    quote
+                        $(Expr(:$, var)) = $(mapping[var])
+                    end
+                end
+                return Expr(:block, ex, stores...)
+            end
+        elseif ex.head === :$
+            if length(ex.args) == 1
+                return lookup(ex.args[1])
+            else
+                return ex
+            end
+        elseif ex.head in (:macrocall, :meta, :inbounds, :loopinfo)
+            return ex  # no recursion
+        else
+            return Expr(ex.head, map(process, ex.args)...)
+        end
+    end
+
+    function process_lhs!(lvars::Vector{Symbol}, ex)
+        @nospecialize
+        ex isa Expr || return ex
+        if ex.head === :$
+            if length(ex.args) == 1
+                var = ex.args[1]
+                if var isa Symbol
+                    shadow = lookup(var)
+                    push!(lvars, var)
+                    return shadow
+                end
+            end
+        elseif ex.head === :tuple
+            return Expr(ex.head, (process_lhs!(lvars, a) for a in ex.args)...)
+        end
+        return ex
+    end
+
+    ex = process(ex)
+
+    vars_shadows = sort!(collect(mapping))
+
+    header_locals = map(vars_shadows) do (var, shadow)
+        quote
+            local $shadow
+            if $(Expr(:isdefined, var))
+                $shadow = $var
+            end
+        end
+    end
+    header = Expr(:block, header_locals...)
+
+    body = quote
+        let $(map(first, vars_shadows)...)  # `let x1, x2, ...`
+            $ex
+        end
+    end
+
+    return header, body
+end
+
+function ensure_linenumbernode(__source__, @nospecialize(ex))
+    if Meta.isexpr(ex, :block) && length(ex.args) > 0 && ex.args[1] isa LineNumberNode
+        return ex
+    else
+        return Expr(:block, __source__, ex)
+    end
+end
+
+macro spawnin(token, block)
+    block = ensure_linenumbernode(__source__, block)
+    header, body = shadow_vars(block)
+    spawn = Expr(:spawn, esc(token), esc(body))
+    return quote
+        let
+            $(esc(header))
+            $spawn
+        end
+    end
 end
 
 macro sync_end(token)
@@ -229,6 +376,8 @@ function output_vars(ex::Expr)
     outputs = Dict{Symbol,Symbol}()
 
     function lhs_output_vars(ex)
+        @nospecialize
+        ex isa Expr || return ex
         if Meta.isexpr(ex, :$, 1)
             v, = ex.args
             if v isa Symbol
@@ -243,8 +392,9 @@ function output_vars(ex::Expr)
         return ex
     end
 
-    process(x) = x
-    function process(ex::Expr)
+    function process(ex)
+        @nospecialize
+        ex isa Expr || return ex
         if isassignment(ex)
             a1 = lhs_output_vars(ex.args[1])
             rest = map(process, ex.args[2:end])
@@ -270,6 +420,66 @@ const tokenname = gensym(:token)
 
 """
     Tapir.@sync block
+
+Declare a scope in which Tapir tasks can be spawned using `Tapir.@spawn`.  The
+tasks are synchronized upon exiting this block.
+
+# Extended help
+
+## Task output syntax `\$output`
+
+Inside `Tapir.@sync` and `Tapir.@spawn`, the syntax `\$output` can be used for
+writing (and reading, in `Tapir.@spawn`) variables outside `Tapir.@sync` block:
+
+```julia
+Tapir.@sync begin
+    Tapir.@spawn \$x = f()
+    \$y = g()
+end
+use(x, y)
+```
+
+If `\$x` is used inside a `Tapir.@spawn`, the variable `x` is automatically
+marked as a local:
+
+```julia
+x = 0
+y = 1
+Tapir.@sync begin
+    Tapir.@spawn begin
+
+        x       # => throws UndefVarError
+        x = \$x  # instead, we need to read the value explicitly
+
+        v = y    # if we don't have `\$y`, we can read `y` in the outer scope
+
+        \$x = \$x + v  # we can read and write \$x`
+    end
+    ...
+end
+use(x, y)
+```
+
+If `\$output` syntax is used, the user must make sure that there is only one
+task writing to the `\$output` variable.  Note that `\$output` can appear
+syntactically in multiple tasks.  That is to say, the following is valid as long
+as `!(p && q)`:
+
+```julia
+Tapir.@sync begin
+    Tapir.@spawn begin
+        if p
+            \$x = ...
+        end
+    end
+    if q
+        \$x = ...
+    end
+end
+if p || q
+    use(x)
+end
+```
 """
 macro sync(block)
     var = esc(tokenname)
@@ -278,8 +488,16 @@ macro sync(block)
     dict, block = output_vars(block)
     outputs = sort!(collect(dict))
     header = [:(local $(esc(slot))) for (_, slot) in outputs]
-    footer =
-        [:($(esc(v)) = _load($(esc(slot)), $((QuoteNode(v))))) for (v, slot) in outputs]
+    footer = map(outputs) do (v, slot)
+        quote
+            if $(Expr(:isdefined, esc(slot)))
+                $(esc(v)) = _load($(esc(slot)), $((QuoteNode(v))))
+            else
+                # We don't see `v` set in spawn since `v` would be declared to
+                # be local by the `@spawn` macro [^no_racy_phi].
+            end
+        end
+    end
     quote
         $(header...)
         let $var = @syncregion()
@@ -316,10 +534,8 @@ end
     Tapir.@spawn expression
 """
 macro spawn(expr)
-    var = esc(tokenname)
-    quote
-        @spawnin $var $(esc(expr))
-    end
+    expr = ensure_linenumbernode(__source__, expr)
+    esc(:($Tapir.@spawnin $tokenname $expr))
 end
 
 # precompile

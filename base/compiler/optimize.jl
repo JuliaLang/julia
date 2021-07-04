@@ -309,7 +309,12 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     if tapir
         # This must be run just after `slot2ref`:
         @timeit "Early tapir pass" ir, racy = early_tapir_pass!(ir)
-        racy && return ir
+        if racy
+            # type_lift_pass! is required as a fixup of slot2reg
+            @timeit "post-racy: type lift" ir = type_lift_pass!(ir)
+            @timeit "post-racy: compact" ir = compact!(ir)
+            return ir
+        end
     end
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)

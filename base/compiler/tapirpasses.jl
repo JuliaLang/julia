@@ -1145,6 +1145,9 @@ end
 
 Lower output slots marked by `Tapir._load` using Upsilon and PhiC nodes.
 
+This pass relies on the frontend to use the slots in write-many-load-once
+manner.  TODO: verify?
+
 It transforms
 
     ...
@@ -1183,7 +1186,10 @@ function lower_tapir_output!(ir::IRCode)
     # fromkey = zeros(Int, length(ir.stmts))
     foreach_task_output_load(ir) do i, _inst,  (_f, out, name)
         if out isa SSAValue
-            # out = resolve_linear_chain(ir, out)  # maybe required to resolve Pi?
+            # Since the frontend ensures that this slot is read once, resolving
+            # a linear chain of SSA values and Pi nodes is equivalent to
+            # deferring the load (which is fine).
+            out = resolve_linear_chain(ir, out)
             out = resolve_ssavalue(ir, out)
         end
         if out isa Union{SlotNumber,TypedSlot}
@@ -1195,9 +1201,11 @@ function lower_tapir_output!(ir::IRCode)
             # fromkey[key] = slot_id(slot)
         end
     end
+    maxslotid = isempty(outputs) ? 0 : maximum(outputs)
 
-    # Find stores and escapes:
+    # Find stores, isdefined and escapes:
     stores = Tuple{Int,Int}[]  # pairs of (store position, slot id)
+    defchecks = Vector{Vector{SSAValue}}(undef, maxslotid)
     deletelater = Int[]
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
@@ -1219,6 +1227,9 @@ function lower_tapir_output!(ir::IRCode)
         # Record SSA values that would not be used once this pass is done:
         let out = inst
             if out isa Union{SSAValue,PiNode}
+                # The way SSA/Pi are resolved should match with the escape check
+                # below (i.e., to ensure that these instructions are indeed not
+                # used).
                 out = resolve_linear_chain(ir, out)
                 out = resolve_ssavalue(ir, out)
             end
@@ -1226,6 +1237,23 @@ function lower_tapir_output!(ir::IRCode)
                 push!(deletelater, i)
                 continue
             end
+        end
+
+        if (
+            isexpr(inst, :isdefined) &&
+            begin
+                slot, = inst.args
+                slot isa Union{SlotNumber,TypedSlot}
+            end &&
+            slot_id(slot) in outputs
+        )
+            if isassigned(defchecks, slot_id(slot))
+                ssas = defchecks[slot_id(slot)]
+            else
+                ssas = defchecks[slot_id(slot)] = SSAValue[]
+            end
+            push!(ssas, SSAValue(i))
+            continue
         end
 
         # Handle escaped slots:
@@ -1239,7 +1267,7 @@ function lower_tapir_output!(ir::IRCode)
         local escaped_variable  # TODO: handle multiple variables?
         foreach_id(identity, inst) do out
             if out isa SSAValue
-                # out = resolve_linear_chain(ir, out)  # maybe required to resolve Pi?
+                out = resolve_linear_chain(ir, out)
                 out = resolve_ssavalue(ir, out)
             end
             if out isa Union{SlotNumber,TypedSlot}
@@ -1257,6 +1285,16 @@ function lower_tapir_output!(ir::IRCode)
                 th = Expr(:call, Tapir.escaping_task_output_error, escaped_variable)
             end
             insert_node!(ir, i, NewInstruction(th, Union{}))
+
+            # Insert unreachable and rewire CFG:
+            ibb = block_for_inst(ir.cfg, i)
+            bb = ir.cfg.blocks[ibb]
+            ir.stmts.inst[bb.stmts[end]] = ReturnNode()
+            for s in bb.succs
+                filter!(x -> x != ibb, ir.cfg.blocks[s].preds)
+            end
+            empty!(bb.succs)
+            # ref: cfg_delete_edge!
         end
     end
 
@@ -1267,7 +1305,6 @@ function lower_tapir_output!(ir::IRCode)
     isempty(outputs) && return ir
 
     # Handle stores
-    maxslotid = maximum(outputs)
     storemap = Vector{Vector{Any}}(undef, maxslotid)
     undefmap = Vector{Vector{Any}}(undef, maxslotid)
     for (i, oid) in stores
@@ -1302,6 +1339,22 @@ function lower_tapir_output!(ir::IRCode)
         push!(undefs, ups)
     end
 
+    for oid in outputs
+        isassigned(defchecks, oid) || continue
+        for ssa in defchecks[oid]
+            # Duplicate upsilons to respect the load-once semantics:
+            undefs = Iterators.map(undefmap[oid]) do ssa::SSAValue
+                stmt = stmt_at(ir, ssa.id)
+                ups = stmt[:inst]::UpsilonNode
+                typ = stmt[:type]
+                insert_node!(ir, insert_pos(ir, ssa.id), NewInstruction(ups, typ))
+            end
+            undefs = collect(Any, undefs)
+            undefssa = insert_node!(ir, ssa.id, NewInstruction(PhiCNode(undefs), Bool))
+            ir[ssa] = Expr(:call, GlobalRef(Intrinsics, :not_int), undefssa)
+        end
+    end
+
     # Handle loads
     undef_checks = Tuple{Int,Any,SSAValue}[]
     for (i, oid) in loads
@@ -1334,7 +1387,7 @@ function lower_tapir_output!(ir::IRCode)
         # If defined (not undef), skip over the throw:
         ir.stmts.inst[last(b0.stmts)] = GotoIfNot(undefssa, ibb + 2)
 
-        newex_ex = Expr(:call, GlobalRef(Base, :UndefVarError), name)
+        newex_ex = Expr(:call, GlobalRef(Base, :KeyError), name)
         newex = insert_node!(ir, last(b1.stmts), NewInstruction(newex_ex, Any))
         throw_ex = Expr(:call, GlobalRef(Base, :throw), newex)
         insert_node!(ir, last(b1.stmts), NewInstruction(throw_ex, Union{}))
@@ -1919,29 +1972,31 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
     # Vector of 4-tuple (use position, original def potision, type, ref SSA value):
     task_outputs = Tuple{Int,Int,Type,SSAValue}[]
     output_users = BitSet()
-    for i in 1:length(ir.stmts)
-        foreach_id(identity, ir.stmts[i][:inst]) do v
+    for iuse in 1:length(ir.stmts)
+        foreach_id(identity, ir.stmts[iuse][:inst]) do v
             if v isa SSAValue
                 tbl = get(tobeloaded, v.id, nothing)
                 if tbl !== nothing
-                    push!(output_users, i)
+                    push!(output_users, iuse)
                     T, ref = tbl
-                    push!(task_outputs, (i, v.id, T, ref))
+                    push!(task_outputs, (iuse, v.id, T, ref))
                 end
             end
         end
     end
+    ir1 = copy(ir)
 
     undef_checks = allocate_gotoifnot_sequence!(ir, map(first, task_outputs))
     original_outputs = BitSet()
-    output_upsilon = zeros(Int, length(ir.stmts))
-    output_value = zeros(Int, length(ir.stmts))
-    output_isset = zeros(Int, length(ir.stmts))
+    output_upsilon = IdDict{Tuple{Int,Int},Int}()  # (use pos, def pos) -> pos
+    output_value = IdDict{Tuple{Int,Int},Int}()
+    output_isset = IdDict{Tuple{Int,Int},Int}()
     output_index = RefValue(0)
     foreach_allocated_gotoifnot_block(undef_checks) do ibb
         # `ibb` is the index of BB inserted at the use position `task_outputs[i][1]`
         i = output_index.x += 1
-        (_, iout, T, ref) = task_outputs[i]
+        (iuse, iout, T, ref) = task_outputs[i]
+        iuse = undef_checks.ssachangemap[iuse]
         iout = undef_checks.ssachangemap[iout]
         ref = SSAValue(undef_checks.ssachangemap[ref.id])
 
@@ -1960,30 +2015,31 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
 
         ups = insert_node!(ir, last(b1.stmts), NewInstruction(UpsilonNode(load), T))
 
-        output_upsilon[iout] = ups.id
-        output_value[iout] = load.id
-        output_isset[iout] = isset.id
+        output_upsilon[iuse, iout] = ups.id
+        output_value[iuse, iout] = load.id
+        output_isset[iuse, iout] = isset.id
         push!(original_outputs, iout)
     end
     # TODO: check that all getfield calls are dominated by sync!
 
-    for i in output_users
-        stmt = ir.stmts[undef_checks.ssachangemap[i]]
+    for iuse in output_users
+        iuse = undef_checks.ssachangemap[iuse]
+        stmt = ir.stmts[iuse]
         isphic = stmt[:inst] isa PhiCNode
         stmt[:inst] = map_id(identity, stmt[:inst]) do v
             if v isa SSAValue
                 if v.id in original_outputs
                     if isphic
-                        return SSAValue(output_upsilon[v.id])
+                        return SSAValue(output_upsilon[iuse, v.id])
                     else
                         # If the original use is not PhiC, it was used
                         # unconditionally; thus, we always load the value.
                         println(stderr, "** tapir: icnomplte concversion to PhiC/Upsilon **")
                         # TODO: turn this into a proper verification pass
-                        oid = output_value[v.id]
+                        oid = output_value[iuse, v.id]
                         load = stmt_at(ir, oid)
                         newinst = NewInstruction(load[:inst], load[:type])
-                        return insert_node!(ir, insert_pos(ir, output_isset[v.id]), newinst)
+                        return insert_node!(ir, insert_pos(ir, output_isset[iuse, v.id]), newinst)
                     end
                 end
             end

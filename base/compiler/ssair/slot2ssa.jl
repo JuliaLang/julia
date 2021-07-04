@@ -155,7 +155,7 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
     end
     if isexpr(stmt, :isdefined)
         val = stmt.args[1]
-        if isa(val, Union{SlotNumber, TypedSlot})
+        if isa(val, Union{SlotNumber, TypedSlot}) && cond(val)
             slot = slot_id(val)
             if (ci.slotflags[slot] & SLOT_USEDUNDEF) == 0
                 return true
@@ -832,6 +832,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             push!(worklist, (succ, item, copy(incoming_vals)))
         end
     end
+    code1 = copy(code)
     # Delete any instruction in unreachable blocks (except for terminators)
     for bb in setdiff(BitSet(1:length(cfg.blocks)), visited)
         for idx in cfg.blocks[bb].stmts
