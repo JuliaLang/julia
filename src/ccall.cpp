@@ -493,7 +493,7 @@ static Value *julia_to_native(
         assert(!byRef); // don't expect any ABI to pass pointers by pointer
         return boxed(ctx, jvinfo);
     }
-    assert(jl_is_datatype(jlto) && julia_struct_has_layout((jl_datatype_t*)jlto));
+    assert(jl_is_datatype(jlto) && jl_struct_try_layout((jl_datatype_t*)jlto));
 
     typeassert_input(ctx, jvinfo, jlto, jlto_env, argn);
     if (!byRef)

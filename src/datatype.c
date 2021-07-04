@@ -220,27 +220,36 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
     return next_power_of_two(size);
 }
 
-STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
+STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d) JL_NOTSAFEPOINT
 {
     return (!d->name->abstract && jl_datatype_size(d) == 0 && d != jl_symbol_type && d->name != jl_array_typename &&
             d->isconcretetype && !d->name->mutabl);
 }
 
-STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st)
+STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
     if (jl_is_datatype_make_singleton(st)) {
         // It's possible for st to already have an ->instance if it was redefined
-        if (!st->instance) {
-            jl_task_t *ct = jl_current_task;
-            st->instance = jl_gc_alloc(ct->ptls, 0, st);
-            jl_gc_wb(st, st->instance);
-        }
+        if (!st->instance)
+            st->instance = jl_gc_permobj(0, st);
     }
+}
+
+// return whether all concrete subtypes of this type have the same layout
+int jl_struct_try_layout(jl_datatype_t *dt)
+{
+    if (dt->layout)
+        return 1;
+    else if (!jl_has_fixed_layout(dt))
+        return 0;
+    jl_compute_field_offsets(dt);
+    assert(dt->layout);
+    return 1;
 }
 
 int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree) JL_NOTSAFEPOINT
 {
-    if (ty->name->mayinlinealloc && ty->layout) {
+    if (ty->name->mayinlinealloc && (ty->isconcretetype || ((jl_datatype_t*)jl_unwrap_unionall(ty->name->wrapper))->layout)) { // TODO: use jl_struct_try_layout(dt) (but it is a safepoint)
         if (ty->layout->npointers > 0) {
             if (pointerfree)
                 return 0;
@@ -348,9 +357,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->name->wrapper == NULL)
         return; // we got called too early--we'll be back
     jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
-    assert(st->types && w->types);
-    size_t i, nfields = jl_svec_len(st->types);
-    assert(st->name->n_uninitialized <= nfields);
     if (st == w && st->layout) {
         // this check allows us to force re-computation of the layout for some types during init
         st->layout = NULL;
@@ -358,6 +364,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         st->zeroinit = 0;
         st->has_concrete_subtype = 1;
     }
+    int isbitstype = st->isconcretetype && st->name->mayinlinealloc;
     // If layout doesn't depend on type parameters, it's stored in st->name->wrapper
     // and reused by all subtypes.
     if (w->layout) {
@@ -365,11 +372,16 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         st->size = w->size;
         st->zeroinit = w->zeroinit;
         st->has_concrete_subtype = w->has_concrete_subtype;
-        if (jl_is_layout_opaque(st->layout)) { // e.g. jl_array_typename
-            return;
+        if (!jl_is_layout_opaque(st->layout)) { // e.g. jl_array_typename
+            st->isbitstype = isbitstype && st->layout->npointers == 0;
+            jl_maybe_allocate_singleton_instance(st);
         }
+        return;
     }
-    else if (nfields == 0) {
+    assert(st->types && w->types);
+    size_t i, nfields = jl_svec_len(st->types);
+    assert(st->name->n_uninitialized <= nfields);
+    if (nfields == 0) {
         // if we have no fields, we can trivially skip the rest
         if (st == jl_symbol_type || st == jl_string_type) {
             // opaque layout - heap-allocated blob
@@ -404,7 +416,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
     }
 
-    int isbitstype = st->isconcretetype && st->name->mayinlinealloc;
     for (i = 0; isbitstype && i < nfields; i++) {
         jl_value_t *fld = jl_field_type(st, i);
         isbitstype = jl_isbits(fld);

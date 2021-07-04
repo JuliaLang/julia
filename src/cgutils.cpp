@@ -321,7 +321,7 @@ static size_t dereferenceable_size(jl_value_t *jt)
         // Array has at least this much data
         return sizeof(jl_array_t);
     }
-    else if (jl_is_datatype(jt) && ((jl_datatype_t*)jt)->layout) {
+    else if (jl_is_datatype(jt) && jl_struct_try_layout((jl_datatype_t*)jt)) {
         return jl_datatype_size(jt);
     }
     return 0;
@@ -339,7 +339,7 @@ static unsigned julia_alignment(jl_value_t *jt)
         // and this is the guarantee we have for the GC bits
         return 16;
     }
-    assert(jl_is_datatype(jt) && ((jl_datatype_t*)jt)->layout);
+    assert(jl_is_datatype(jt) && jl_struct_try_layout((jl_datatype_t*)jt));
     unsigned alignment = jl_datatype_align(jt);
     if (alignment > JL_HEAP_ALIGNMENT)
         return JL_HEAP_ALIGNMENT;
@@ -555,14 +555,8 @@ static Type *bitstype_to_llvm(jl_value_t *bt, bool llvmcall = false)
 }
 
 static bool jl_type_hasptr(jl_value_t* typ)
-{ // assumes that jl_stored_inline(typ) is true
+{ // assumes that jl_stored_inline(typ) is true (and therefore that layout is defined)
     return jl_is_datatype(typ) && ((jl_datatype_t*)typ)->layout->npointers > 0;
-}
-
-// return whether all concrete subtypes of this type have the same layout
-static bool julia_struct_has_layout(jl_datatype_t *dt)
-{
-    return dt->layout || jl_has_fixed_layout(dt);
 }
 
 static unsigned jl_field_align(jl_datatype_t *dt, size_t i)
@@ -588,11 +582,8 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, jl_value_t *jt, boo
         bool isTuple = jl_is_tuple_type(jt);
         jl_svec_t *ftypes = jl_get_fieldtypes(jst);
         size_t i, ntypes = jl_svec_len(ftypes);
-        if (!julia_struct_has_layout(jst))
+        if (!jl_struct_try_layout(jst))
             return NULL; // caller should have checked jl_type_mappable_to_c already, but we'll be nice
-        if (jst->layout == NULL)
-            jl_compute_field_offsets(jst);
-        assert(jst->layout);
         if (ntypes == 0 || jl_datatype_nbits(jst) == 0)
             return T_void;
         Type *_struct_decl = NULL;
@@ -1904,6 +1895,9 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         return true;
     }
     if (nfields == 1) {
+        if (jl_has_free_typevars(jl_field_type(stt, 0))) {
+            return false;
+        }
         (void)idx0();
         *ret = emit_getfield_knownidx(ctx, strct, 0, stt, order);
         return true;
