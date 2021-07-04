@@ -146,6 +146,17 @@ function simple()
     a + b
 end
 
+function simple_task_output()
+    Tapir.@output a b
+    token = Tapir.@syncregion
+    Tapir.@spawnin token begin
+        a = produce()
+    end
+    b = produce()
+    Tapir.@sync_end token
+    a + b
+end
+
 call(f) = f()
 
 function simple_closure_set_by_one(flag)

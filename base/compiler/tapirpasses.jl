@@ -1121,6 +1121,15 @@ function foreach_task_output_load(f, code::Vector{Any})
     end
 end
 
+foreach_task_output_decl(f::F, ir::IRCode) where {F} =
+    foreach_task_output_decl(f, ir.stmts.inst)
+function foreach_task_output_decl(f, code::Vector{Any})
+    for (i, inst) in pairs(code)
+        isexpr(inst, :task_output) || continue
+        f(i, inst.args[1])
+    end
+end
+
 """
     task_output_slots(ci::CodeInfo, code::Vector{Any}) -> slotids::BitSet
 
@@ -1137,11 +1146,154 @@ function task_output_slots(::CodeInfo, code::Vector{Any})
             push!(outputs, slot_id(out))
         end
     end
+    foreach_task_output_decl(code) do _, out
+        if out isa Union{SlotNumber,TypedSlot}
+            push!(outputs, slot_id(out))
+        end
+    end
     return outputs
 end
 
 """
     lower_tapir_output!(ir::IRCode) -> ir′
+
+Lower task output slots.
+"""
+function lower_tapir_output!(ir::IRCode)
+    ir = lower_tapir_task_output!(ir)
+    ir = lower_tapir_phic_output!(ir)
+    return ir
+end
+
+"""
+    lower_tapir_task_output!(ir::IRCode) -> ir′
+
+Lower task outputs marked by `Tapir.@output`.
+"""
+function lower_tapir_task_output!(ir::IRCode)
+    Tapir = tapir_module()
+    Tapir isa Module || return ir
+
+    # TODO: make it work without compaction?
+    ir = insert_new_nodes(ir)
+
+    # TODO: turn slots into PhiC/Upsilon nodes if possible?
+
+    outputinfo = IdDict{Int,Tuple{Symbol,LineNumberNode}}()
+    foreach_task_output_decl(ir) do i, out
+        if out isa Union{SlotNumber,TypedSlot}
+            stmt = ir.stmts[i]
+            _, qnode, lineno = stmt[:inst].args
+            name = (qnode::QuoteNode).value::Symbol
+            lineno::LineNumberNode
+            outputinfo[slot_id(out)] = (name, lineno)
+            remove_stmt!(stmt)
+        end
+    end
+
+    isempty(outputinfo) && return ir
+
+    # Determine the type of each slot
+    slottypes = IdDict{Int,Type}()      # slot id -> type
+    stores = IdDict{Int,Vector{Int}}()  # slot id -> statement positions
+    loaded_slots = BitSet()
+    loaded_positions = BitSet()
+    for i in 1:length(ir.stmts)
+        stmt = ir.stmts[i]
+        inst = stmt[:inst]
+
+        if (
+            isexpr(inst, :(=)) &&
+            begin
+                lhs, rhs = inst.args
+                lhs isa Union{SlotNumber,TypedSlot}
+            end &&
+            haskey(outputinfo, slot_id(lhs))
+        )
+            t0 = get(slottypes, slot_id(lhs), Union{})
+            t1 = widenconst(stmt[:type])
+            slottypes[slot_id(lhs)] = Union{t0,t1}
+            push!(get!(() -> Int[], stores, slot_id(lhs)), i)
+            inst = rhs
+        end
+
+        foreach_id(identity, inst) do out
+            if out isa Union{SlotNumber,TypedSlot}
+                if haskey(outputinfo, slot_id(out))
+                    push!(loaded_positions, i)
+                    push!(loaded_slots, slot_id(out))
+                end
+            end
+        end
+    end
+
+    unused = setdiff!(BitSet(keys(stores)), loaded_slots)
+    for oid in unused
+        for i in stores[oid]
+            stmt = ir.stmts[i]
+            _, rhs = stmt[:inst].args
+            stmt[:inst] = rhs
+        end
+    end
+    isempty(loaded_slots) && return ir
+
+    # Insert Refs
+    outputrefs = IdDict{Int,SSAValue}()
+    for oid in keys(outputinfo)
+        T = get(slottypes, oid, Union{})
+        R = Tapir.UndefableRef{T}
+        alloc_pos = 1   # [^alloca-position]
+        ref = insert_node!(ir, alloc_pos, NewInstruction(Expr(:new, R), R))
+        outputrefs[oid] = ref
+        setset = NewInstruction(
+            Expr(:call, setfield!, ref, QuoteNode(:set), QuoteNode(false)),
+            Any,
+        )
+        insert_node!(ir, alloc_pos, setset)
+    end
+
+    # Isnert loads
+    for i in loaded_positions
+        stmt = ir.stmts[i]
+        stmt[:inst] = map_id(identity, stmt[:inst]) do out
+            if out isa Union{SlotNumber,TypedSlot}
+                ref = get(outputrefs, slot_id(out), nothing)
+                if ref isa SSAValue
+                    isset_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:set))
+                    isset = insert_node!(ir, i, NewInstruction(isset_ex, Bool))
+                    name, = outputinfo[slot_id(out)]
+                    undefcheck = Expr(:throw_undef_if_not, name, isset)
+                    insert_node!(ir, i, NewInstruction(undefcheck, Any))
+                    value_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:x))
+                    T = get(slottypes, slot_id(out), Union{})
+                    return insert_node!(ir, i, NewInstruction(value_ex, T))
+                end
+            end
+            return out
+        end
+    end
+
+    # Isnert stores (that are loaded somewhere)
+    for oid in setdiff!(BitSet(keys(stores)), unused)
+        ref = outputrefs[oid]
+        for i in stores[oid]
+            stmt = ir.stmts[i]
+            _, rhs = stmt[:inst].args
+            stmt[:inst] = rhs
+
+            value = SSAValue(i)
+            ex = Expr(:call, GlobalRef(Core, :setfield!), ref, QuoteNode(:x), value)
+            insert_node!(ir, i, NewInstruction(ex, Any), true)
+            ex = Expr(:call, GlobalRef(Core, :setfield!), ref, QuoteNode(:set), true)
+            insert_node!(ir, i, NewInstruction(ex, Any), true)
+        end
+    end
+
+    return ir
+end
+
+"""
+    lower_tapir_phic_output!(ir::IRCode) -> ir′
 
 Lower output slots marked by `Tapir._load` using Upsilon and PhiC nodes.
 
@@ -1170,7 +1322,7 @@ to
     #ok
         %out = φᶜ(%store)
 """
-function lower_tapir_output!(ir::IRCode)
+function lower_tapir_phic_output!(ir::IRCode)
     Tapir = tapir_module()
     Tapir isa Module || return ir
     Base = Main.Base::Module

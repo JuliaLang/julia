@@ -169,7 +169,7 @@ not have a race).
 The function `_load` treated specially during slot2reg; i.e., the slots
 specified as the first argument are _not_ promoted to SSA registers (ref
 `task_output_slots`).  These leftover slots are transformed to PhiC and Upsilon
-nodes inside the `lower_tapir_output!` pass run just after slot2reg.  The PhiC
+nodes inside the `lower_tapir_phic_output!` pass run just after slot2reg.  The PhiC
 and Upsilon nodes that cross task boundaries are finally lowered to
 `Tapir.UndefableRef` in `lower_tapir_task!`.  (Note: PhiC and Upsilon nodes
 translate to stack memory in LLVM.  So, this representation may also be useful
@@ -536,6 +536,32 @@ end
 macro spawn(expr)
     expr = ensure_linenumbernode(__source__, expr)
     esc(:($Tapir.@spawnin $tokenname $expr))
+end
+
+"""
+    Tapir.@output v₍ v₂ … vₙ
+
+Mark variables named `v₍`, `v₂`, ..., and `vₙ` as task outputs. This is
+equivalent to `local v₍, v₂, …, vₙ` in terms of the scoping rule. However, they
+must not be written or read in the code regions that may potentially be run in
+parallel.
+"""
+macro output(exprs::Union{Symbol,Expr}...)
+    variables = Symbol[]
+    assignments = Expr[]
+    for ex in exprs
+        if ex isa Symbol
+            push!(variables, ex)
+        elseif Meta.isexpr(ex, :(=), 2) && ex.args[1] isa Symbol
+            push!(variables, ex.args[1])
+            push!(assignments, ex)
+        end
+    end
+
+    locals = Expr(:local, variables...)
+    outinfo = [Expr(:task_output, v, QuoteNode(v), __source__) for v in variables]
+
+    esc(Expr(:block, __source__, locals, assignments..., outinfo...))
 end
 
 # precompile

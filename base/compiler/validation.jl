@@ -29,6 +29,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange}(
     :reattach => 2:2,
     :sync => 1:1,
     :syncregion => 0:0,
+    :task_output => 0:typemax(Int),
     :gc_preserve_begin => 0:typemax(Int),
     :gc_preserve_end => 0:typemax(Int),
     :thunk => 1:1,
