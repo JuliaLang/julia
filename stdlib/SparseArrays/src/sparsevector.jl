@@ -1083,23 +1083,26 @@ const _Triangular_DenseArrays{T,A<:Matrix} = LinearAlgebra.AbstractTriangular{T,
 const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
 const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
 
-const _SparseConcatGroup = Union{Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
-const _DenseConcatGroup = Union{Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _Annotated_DenseArrays}
+const _SparseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
+const _DenseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _Annotated_DenseArrays}
 const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpose{T,Vector{T}}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
+_makesparse(x::Number) = x
+_makesparse(x::AbstractArray) = SparseMatrixCSC(issparse(x) ? x : sparse(x))
+
 function Base._cat(dims, Xin::_SparseConcatGroup...)
-    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
+    X = map(_makesparse, Xin)
     T = promote_eltype(Xin...)
     Base.cat_t(T, X...; dims=dims)
 end
 function hcat(Xin::_SparseConcatGroup...)
-    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
-    hcat(X...)
+    X = map(_makesparse, Xin)
+    return cat(X..., dims=Val(2))
 end
 function vcat(Xin::_SparseConcatGroup...)
-    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
-    vcat(X...)
+    X = map(_makesparse, Xin)
+    return cat(X..., dims=Val(1))
 end
 hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...) =
     vcat(_hvcat_rows(rows, X...)...)
