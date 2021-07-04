@@ -180,7 +180,7 @@ end
 ```
 
 This is a *convention* in the sense that `nothing` is not a Julia keyword
-but a only singleton object of type `Nothing`.
+but only a singleton object of type `Nothing`.
 Also, you may notice that the `printx` function example above is contrived,
 because `println` already returns `nothing`, so that the `return` line is redundant.
 
