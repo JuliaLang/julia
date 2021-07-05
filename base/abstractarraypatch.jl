@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## copy between abstract arrays - generally more efficient
 ## since a single index variable can be used.
 ## copyto_unaliased! use @simd to speed up, so these definition is seperated from abstractarray.jl
