@@ -18,7 +18,8 @@ end
 
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     isempty(src) && return dest
-    length(dest) >= length(src) || throw(BoundsError(dest, LinearIndices(src)))
+    len = length(src)
+    length(dest) >= len || throw(BoundsError(dest, LinearIndices(src)))
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             Δi = firstindex(dest) - firstindex(src)
@@ -34,9 +35,8 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     else
         if srcstyle isa IndexLinear
             i = firstindex(src) - 1
-            # TODO: 1:length(src) is much faster than OneTo(length(src)), but why?
-            iter = @view eachindex(dest)[1:length(src)]
-            @inbounds @simd for J in iter
+            # TODO: 1:len is much faster than OneTo(len), but why?
+            @inbounds @simd for J in view(eachindex(dest), 1:len)
                 dest[J] = src[i+=1]
             end
         else
