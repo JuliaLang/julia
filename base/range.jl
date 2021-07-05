@@ -137,6 +137,7 @@ range_stop_length(a,                len::Integer) = range_step_stop_length(oftyp
 
 range_step_stop_length(step, stop, length) = reverse(range_start_step_length(stop, -step, length))
 
+range_start_length(a::Bool,          len::Integer) = len == 0 ? (true:false) : UnitRange{Bool}(a, Bool(a+len-1))
 range_start_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
 range_start_length(a::AbstractFloat, len::Integer) = range_start_step_length(a, oftype(a, 1), len)
 range_start_length(a,                len::Integer) = range_start_step_length(a, oftype(a-a, 1), len)
@@ -899,6 +900,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
     if T === Bool
         range(first(s) ? first(r) : last(r), length = Int(last(s)))
     else
+        isempty(s) && return range(first(r), length = 0)
         f = first(r)
         st = oftype(f, f + first(s)-1)
         return range(st, length=length(s))
@@ -918,6 +920,7 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     if T === Bool
         range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length = Int(last(s)))
     else
+        isempty(s) && return range(first(r), step = step(s), length = 0)
         st = oftype(first(r), first(r) + s.start-1)
         return range(st, step=step(s), length=length(s))
     end
@@ -928,18 +931,9 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        if length(s) == 0
-            return range(first(r), step=step(r), length=0)
-        elseif length(s) == 1
-            if first(s)
-                return range(first(r), step=step(r), length=1)
-            else
-                return range(first(r), step=step(r), length=0)
-            end
-        else # length(s) == 2
-            return range(last(r), step=step(r), length=1)
-        end
+        range(first(s) ? first(r) : last(r), step = step(r), length = Int(last(s)))
     else
+        isempty(s) && return range(first(r), step = step(r)*step(s), length = 0)
         st = oftype(r.start, r.start + (first(s)-1)*step(r))
         return range(st, step=step(r)*step(s), length=length(s))
     end

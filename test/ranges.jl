@@ -497,11 +497,19 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (3:6)[5:4] === 7:6
+    @test (3:6)[5:4] == 3:2
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (0:2:10)[7:6] === 12:2:10
+    @test (0:2:10)[7:6] == 0:2:-1
     @test_throws BoundsError (0:2:10)[7:7]
+
+    @testset "issue #40760" begin
+        empty_range = 1:0
+        for r in Any[false:false, false:true:false, 1:2, 1:1:2]
+            @test r[1:0] == empty_range
+            @test r[1:1:0] == empty_range
+        end
+    end
 end
 # indexing with negative ranges (#8351)
 for a=AbstractRange[3:6, 0:2:10], b=AbstractRange[0:1, 2:-1:0]
