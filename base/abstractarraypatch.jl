@@ -18,45 +18,65 @@ end
 
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     isempty(src) && return dest
-    lendest, lensrc = length(dest), length(src)
-    lendest < lensrc && throw(BoundsError(dest, LinearIndices(src)))
+    length(dest) < length(src) && throw(BoundsError(dest, LinearIndices(src)))
     if deststyle isa IndexLinear
-        if srcstyle isa IndexLinear
-            Δi = firstindex(dest) - firstindex(src)
-            for i in eachindex(src)
-                @inbounds dest[i + Δi] = src[i]
-            end
-        else
-            j = firstindex(dest) - 1
-            @inbounds @simd for I in eachindex(src)
-                dest[j+=1] = src[I]
-            end
+        # Cartesian --> Linear
+        srcstyle isa IndexCartesian && return C2Lcopyto!(dest, src)
+        # Linear --> Linear
+        Δi = firstindex(dest) - firstindex(src)
+        for i in eachindex(src)
+            @inbounds dest[i + Δi] = src[i]
         end
     else
-        if srcstyle isa IndexLinear
-            i = firstindex(src) - 1
-            if lendest ==  lensrc # this branch is faster than the view one
-                @inbounds @simd for J in eachindex(dest)
-                    dest[J] = src[i+=1]
-                end
-            else
-                # TODO: 1:lensrc is much faster than OneTo(lensrc), but why?
-                @inbounds @simd for J in view(eachindex(dest), 1:lensrc)
-                    dest[J] = src[i+=1]
-                end
+        # Linear --> Cartesian
+        srcstyle isa IndexLinear && return L2Ccopyto!(dest, src)
+        # Cartesian --> Cartesian
+        iterdest, itersrc = eachindex(dest), eachindex(src)
+        if iterdest == itersrc #shared iterator
+            @inbounds @simd for I in iterdest
+                dest[I] = src[I]
             end
         else
-            iterdest, itersrc = eachindex(dest), eachindex(src)
-            if iterdest == itersrc #shared iterator
-                @inbounds @simd for I in iterdest
-                    dest[I] = src[I]
-                end
-            else
-                @inbounds for (J, I) in zip(iterdest, itersrc)
-                    dest[J] = src[I]
-                end
+            @inbounds for (J, I) in zip(iterdest, itersrc)
+                dest[J] = src[I]
             end
         end
     end
     return dest
+end
+
+# Manually expanded SIMD kernal for Cartesian to Linear copy
+@eval @inline function C2Lcopyto!(dest::AbstractArray, src::AbstractArray)
+    iter = eachindex(src)
+    Δj = firstindex(dest)
+    @inbounds for I in simd_outer_range(iter)
+        n = simd_inner_length(iter, I)
+        j = zero(n)
+        while j < n
+            I′ = simd_index(iter, I, j)
+            dest[Δj + j] = src[I′]
+            j += 1
+            $(Expr(:loopinfo, Symbol("julia.simdloop"), nothing))
+        end
+        Δj += n
+    end
+    dest
+end
+
+# Manually expanded SIMD kernal for Linear to Cartesian copy
+@eval @inline function L2Ccopyto!(dest::AbstractArray, src::AbstractArray)
+    iter = eachindex(dest)
+    Δi, final = firstindex(src), lastindex(src) + 1
+    @inbounds for J in simd_outer_range(iter)
+        n = min(final - Δi, simd_inner_length(iter, J))
+        i = zero(n)
+        while i < n
+            J′ = simd_index(iter, J, i)
+            dest[J′] = src[i + Δi]
+            i += 1
+            $(Expr(:loopinfo, Symbol("julia.simdloop"), nothing))
+        end
+        Δi += n >= final && break
+    end
+    dest
 end
