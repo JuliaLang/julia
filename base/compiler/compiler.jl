@@ -70,6 +70,11 @@ add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x+y, false)
 
+# SIMD loops (The new copyto_unalias! use @simd)
+@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
+include("simdloop.jl")
+using .SimdLoop
+
 # core array operations
 include("indices.jl")
 include("array.jl")
