@@ -34,19 +34,20 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     else
         if srcstyle isa IndexLinear
             i = firstindex(src) - 1
-            @inbounds @simd for J in eachindex(dest)
+            # TODO: 1:length(src) is much faster than OneTo(length(src)), but why?
+            iter = @view eachindex(dest)[1:length(src)]
+            @inbounds @simd for J in iter
                 dest[J] = src[i+=1]
             end
         else
             iterdest, itersrc = eachindex(dest), eachindex(src)
             if iterdest == itersrc
-                # Shared-iterator implementation
-                @inbounds @simd for I in itersrc
+                @inbounds @simd for I in iterdest
                     dest[I] = src[I]
                 end
             else
-                for (I,J) in zip(itersrc, iterdest)
-                    @inbounds dest[J] = src[I]
+                @inbounds for (J,I) in zip(iterdest, itersrc)
+                    dest[J] = src[I]
                 end
             end
         end
