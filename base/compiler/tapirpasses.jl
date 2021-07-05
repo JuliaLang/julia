@@ -91,6 +91,33 @@ function foreach_task_depth_first(f, tasks)
 end
 
 """
+    task_by_detach(tasks::Vector{ChildTask}, detach::Int) -> nothing or task::ChildTask
+"""
+function task_by_detach(tasks, detach::Int)
+    worklist = collect(ChildTask, tasks)
+    while !isempty(worklist)
+        local task::ChildTask
+        task = pop!(worklist)
+        if task.detach == detach
+            return task
+        end
+        if task.subtasks !== nothing
+            append!(worklist, task.subtasks)
+        end
+    end
+    return nothing
+end
+
+function is_stmt_in_task(task::ChildTask, ir::IRCode, position::Int)
+    for ibb in task.blocks
+        if position in ir.cfg.blocks[ibb].stmts
+            return true
+        end
+    end
+    return false
+end
+
+"""
     child_tasks(ir::IRCode) -> tasks::Vector{ChildTask}
 
 Discover immediate child tasks.
@@ -144,6 +171,11 @@ function detached_sub_cfg!(detacher::Int, ir::IRCode, visited)
                 end
             end
             error("unbalanced detach-reattach")
+            # TODO: handle missing reattach?
+            # This can happen when reattach nodes are replaced with unreachable.
+            # Currently, handling this case has not been required so far as we
+            # detect such tasks in `always_throws` and serial-project before the
+            # CFG is altered.
         end
         return true
     end
@@ -346,7 +378,7 @@ function foreach_def(
         acc.x &= c
         foreach_id(identity, inst) do v
             if v isa SSAValue
-                c && push!(worklist, i)
+                c && push!(worklist, v.id)
             else
                 acc.x &= f(v)
             end
@@ -895,7 +927,7 @@ function always_throws(ir::IRCode, task::ChildTask)
     visited = falses(length(ir.cfg.blocks))
     detacher = block_for_inst(ir, task.detach)
     for i in task.reattaches
-        # If all non-terminator instructions just beofer all reattach nodes have
+        # If all non-terminator instructions just before all reattach nodes have
         # `Union{}`, this task always throw.  Handle the case where there is
         # only one terminator instruction in a BB using `foreach_ancestor`:
         throws = RefValue(true)
@@ -1436,17 +1468,8 @@ function lower_tapir_phic_output!(ir::IRCode)
             else
                 th = Expr(:call, Tapir.escaping_task_output_error, escaped_variable)
             end
-            insert_node!(ir, i, NewInstruction(th, Union{}))
-
-            # Insert unreachable and rewire CFG:
-            ibb = block_for_inst(ir.cfg, i)
-            bb = ir.cfg.blocks[ibb]
-            ir.stmts.inst[bb.stmts[end]] = ReturnNode()
-            for s in bb.succs
-                filter!(x -> x != ibb, ir.cfg.blocks[s].preds)
-            end
-            empty!(bb.succs)
-            # ref: cfg_delete_edge!
+            insert_node!(ir, i, NewInstruction(th, Any))
+            # Not using `Union{}` so that we can preserve CFG.
         end
     end
 
@@ -1605,8 +1628,8 @@ function check_tapir_race!(ir::IRCode)
 
     ir = insert_new_nodes(ir)
 
+    local tasks, throw_if_uses
     racy = false
-    throw_if_uses = nothing
     for (ibb, bb) in pairs(ir.cfg.blocks)
         det = ir.stmts.inst[bb.stmts[end]]
         det isa DetachNode || continue
@@ -1615,20 +1638,35 @@ function check_tapir_race!(ir::IRCode)
             phi = ir.stmts.inst[iphi]
             phi isa PhiNode || continue
             # Racy Phi node found
-            racy = true
-            # Insert a throw after "store" (def in child task):
-            for (i, e) in pairs(phi.edges)
-                e == ibb && continue  # skip the continue edge
-                isassigned(phi.values, i) && continue  # impossible?
-                v = phi.values[i]
-                v isa SSAValue || continue  # let's handle this on "load" side
-                th = Expr(:call, Tapir.racy_store, v)
-                insert_node!(ir, v.id, NewInstruction(th, Union{}), true)
-            end
-            # Insert a throw before "load" (use in continuation):
-            if throw_if_uses === nothing
+            if !racy
+                tasks = child_tasks(ir)
                 throw_if_uses = BitSet()
             end
+            racy = true
+            # Insert a throw after "store" (def in child task):
+            task = task_by_detach(tasks, bb.stmts[end])::ChildTask
+            for (i, e) in pairs(phi.edges)
+                e == ibb && continue  # skip the continue edge
+                isassigned(phi.values, i) || continue  # impossible?
+                v = phi.values[i]
+                v isa SSAValue || continue  # constant? let's handle this on "load" side
+                foreach_def(v, ir) do stmt
+                    if stmt isa Instruction
+                        is_stmt_in_task(task, ir, stmt.idx) || return false # break
+                        stmt[:inst] isa Union{PhiNode,PiNode} && return true  # keep going
+
+                        # This instruction is in the task and is not a branch.
+                        # Insert the racy store error:
+                        th = Expr(:call, Tapir.racy_store, SSAValue(stmt.idx))
+                        pos = insert_pos(ir, stmt.idx)
+                        attach_after = pos == stmt.idx
+                        insert_node!(ir, pos, NewInstruction(th, Any), attach_after)
+                        # Not using `Union{}` so that we can preserve CFG.
+                    end
+                    return false # break
+                end
+            end
+            # Insert a throw before "load" (use in continuation):
             push!(throw_if_uses, iphi)
         end
     end
@@ -1643,14 +1681,16 @@ function check_tapir_race!(ir::IRCode)
                     iterm = bb.stmts[end]
                     attach_after = !isterminator(ir.stmts.inst[iterm])
                     th = Expr(:call, Tapir.racy_load, v)
-                    insert_node!(ir, iterm, NewInstruction(th, Union{}), attach_after)
+                    insert_node!(ir, iterm, NewInstruction(th, Any), attach_after)
+                    # Not using `Union{}` so that we can preserve CFG.
                 end
             end
         else
             foreach_id(identity, inst) do v
                 if v isa SSAValue && v.id in throw_if_uses
                     th = Expr(:call, Tapir.racy_load, v)
-                    insert_node!(ir, i, NewInstruction(th, Union{}))
+                    insert_node!(ir, i, NewInstruction(th, Any))
+                    # Not using `Union{}` so that we can preserve CFG.
                 end
             end
         end
@@ -2186,7 +2226,7 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
                     else
                         # If the original use is not PhiC, it was used
                         # unconditionally; thus, we always load the value.
-                        println(stderr, "** tapir: icnomplte concversion to PhiC/Upsilon **")
+                        println(stderr, "** tapir: incomplete concversion to PhiC/Upsilon **")
                         # TODO: turn this into a proper verification pass
                         oid = output_value[iuse, v.id]
                         load = stmt_at(ir, oid)
