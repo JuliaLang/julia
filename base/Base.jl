@@ -124,6 +124,11 @@ include("refpointer.jl")
 include("checked.jl")
 using .Checked
 
+# SIMD loops
+@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
+include("simdloop.jl")
+using .SimdLoop
+
 # array structures
 include("indices.jl")
 include("array.jl")
@@ -171,11 +176,6 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
-
-# SIMD loops
-@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
-include("simdloop.jl")
-using .SimdLoop
 
 # map-reduce operators
 include("reduce.jl")
