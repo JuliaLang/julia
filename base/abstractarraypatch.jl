@@ -18,8 +18,8 @@ end
 
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     isempty(src) && return dest
-    len = length(src)
-    length(dest) >= len || throw(BoundsError(dest, LinearIndices(src)))
+    lendest, lensrc = length(dest), length(src)
+    lendest < lensrc && throw(BoundsError(dest, LinearIndices(src)))
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             Δi = firstindex(dest) - firstindex(src)
@@ -35,18 +35,24 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     else
         if srcstyle isa IndexLinear
             i = firstindex(src) - 1
-            # TODO: 1:len is much faster than OneTo(len), but why?
-            @inbounds @simd for J in view(eachindex(dest), 1:len)
-                dest[J] = src[i+=1]
+            if lendest ==  lensrc # this branch is faster than the view one
+                @inbounds @simd for J in eachindex(dest)
+                    dest[J] = src[i+=1]
+                end
+            else
+                # TODO: 1:lensrc is much faster than OneTo(lensrc), but why?
+                @inbounds @simd for J in view(eachindex(dest), 1:lensrc)
+                    dest[J] = src[i+=1]
+                end
             end
         else
             iterdest, itersrc = eachindex(dest), eachindex(src)
-            if iterdest == itersrc
+            if iterdest == itersrc #shared iterator
                 @inbounds @simd for I in iterdest
                     dest[I] = src[I]
                 end
             else
-                @inbounds for (J,I) in zip(iterdest, itersrc)
+                @inbounds for (J, I) in zip(iterdest, itersrc)
                     dest[J] = src[I]
                 end
             end
