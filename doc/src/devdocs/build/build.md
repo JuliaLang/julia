@@ -66,7 +66,7 @@ Now you should be able to run Julia like this:
 
 If you are building a Julia package for distribution on Linux, macOS,
 or Windows, take a look at the detailed notes in
-[distributing.md](https://github.com/JuliaLang/julia/blob/master/doc/build/distributing.md).
+[distributing.md](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/distributing.md).
 
 ## Updating an existing source tree
 
@@ -130,14 +130,14 @@ latest version.
 
 Notes for various operating systems:
 
-* [Linux](https://github.com/JuliaLang/julia/blob/master/doc/build/linux.md)
-* [macOS](https://github.com/JuliaLang/julia/blob/master/doc/build/macos.md)
-* [Windows](https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md)
-* [FreeBSD](https://github.com/JuliaLang/julia/blob/master/doc/build/freebsd.md)
+* [Linux](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/linux.md)
+* [macOS](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/macos.md)
+* [Windows](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/windows.md)
+* [FreeBSD](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/freebsd.md)
 
 Notes for various architectures:
 
-* [ARM](https://github.com/JuliaLang/julia/blob/master/doc/build/arm.md)
+* [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
 
 ## Required Build Tools and External Libraries
 
