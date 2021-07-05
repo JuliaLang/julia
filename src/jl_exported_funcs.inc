@@ -247,6 +247,7 @@
     XX(jl_get_nth_field_checked) \
     XX(jl_get_nth_field_noalloc) \
     XX(jl_getpagesize) \
+    XX(jl_get_pgcstack) \
     XX(jl_getpid) \
     XX(jl_get_ptls_states) \
     XX(jl_get_root_symbol) \
@@ -273,10 +274,10 @@
     XX(jl_id_start_char) \
     XX(jl_idtable_rehash) \
     XX(jl_infer_thunk) \
-    XX(jl_init_restored_modules) \
     XX(jl_init) \
-    XX(jl_init_with_image) \
     XX(jl_init__threading) \
+    XX(jl_init_restored_modules) \
+    XX(jl_init_with_image) \
     XX(jl_init_with_image__threading) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
@@ -391,6 +392,7 @@
     XX(jl_pop_handler) \
     XX(jl_preload_sysimg_so) \
     XX(jl_prepend_cwd) \
+    XX(jl_print_backtrace) \
     XX(jl_printf) \
     XX(jl_process_events) \
     XX(jl_profile_clear_data) \
@@ -541,5 +543,3 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_yield) \
-    XX(jl_print_backtrace) \
-    XX(jl_get_pgcstack)
