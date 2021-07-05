@@ -991,17 +991,11 @@ preprocess_args(dest, args::Tuple{}) = ()
 # Specialize this method if all you want to do is specialize on typeof(dest)
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
-    # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match.
-    # However copyto!(dest, A) is very slow in many cases, implement a faster version here.
+    # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
     if bc.f === identity && bc.args isa Tuple{AbstractArray} # only a single input argument to broadcast!
         A = bc.args[1]
         if axes(dest) == axes(A)
-            A′ = broadcast_unalias(dest, A)
-            iter = IndexStyle(dest) isa IndexCartesian ? dest : A′
-            @inbounds @simd for I in eachindex(iter)
-                dest[I] = A′[I]
-            end
-            return dest
+            return copyto!(dest, A)
         end
     end
     bc′ = preprocess(dest, bc)
