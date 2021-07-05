@@ -116,9 +116,6 @@ axes1(A::AbstractArray{<:Any,0}) = OneTo(1)
 axes1(A::AbstractArray) = (@_inline_meta; axes(A)[1])
 axes1(iter) = oneto(length(iter))
 
-unsafe_indices(A) = axes(A)
-unsafe_indices(r::AbstractRange) = (oneto(unsafe_length(r)),) # Ranges use checked_sub for size
-
 """
     keys(a::AbstractArray)
 
@@ -580,14 +577,14 @@ end
 function trailingsize(inds::Indices, n)
     s = 1
     for i=n:length(inds)
-        s *= unsafe_length(inds[i])
+        s *= length(inds[i])
     end
     return s
 end
 # This version is type-stable even if inds is heterogeneous
 function trailingsize(inds::Indices)
     @_inline_meta
-    prod(map(unsafe_length, inds))
+    prod(map(length, inds))
 end
 
 ## Bounds checking ##
@@ -688,7 +685,7 @@ function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple)
     @_inline_meta
     checkindex(Bool, OneTo(1), I[1])::Bool & checkbounds_indices(Bool, (), tail(I))
 end
-checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@_inline_meta; all(x->unsafe_length(x)==1, IA))
+checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@_inline_meta; all(x->length(x)==1, IA))
 checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
@@ -886,7 +883,35 @@ function copy!(dst::AbstractArray, src::AbstractArray)
 end
 
 ## from general iterable to any array
+                                                                                                                                                    
+"""
+    copyto!(dest::AbstractArray, src) -> dest
 
+Copy all elements from collection `src` to array `dest`, whose length must be greater than
+or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
+the other elements are left untouched.
+
+See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
+
+# Examples
+```jldoctest
+julia> x = [1., 0., 3., 0., 5.];
+
+julia> y = zeros(7);
+
+julia> copyto!(y, x);
+
+julia> y
+7-element Vector{Float64}:
+ 1.0
+ 0.0
+ 3.0
+ 0.0
+ 5.0
+ 0.0
+ 0.0
+```
+"""
 function copyto!(dest::AbstractArray, src)
     destiter = eachindex(dest)
     y = iterate(destiter)
@@ -961,87 +986,6 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
         i += 1
     end
     i <= dmax && throw(BoundsError(dest, i))
-    return dest
-end
-
-## copy between abstract arrays - generally more efficient
-## since a single index variable can be used.
-
-"""
-    copyto!(dest::AbstractArray, src) -> dest
-
-Copy all elements from collection `src` to array `dest`, whose length must be greater than
-or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
-the other elements are left untouched.
-
-See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
-
-# Examples
-```jldoctest
-julia> x = [1., 0., 3., 0., 5.];
-
-julia> y = zeros(7);
-
-julia> copyto!(y, x);
-
-julia> y
-7-element Vector{Float64}:
- 1.0
- 0.0
- 3.0
- 0.0
- 5.0
- 0.0
- 0.0
-```
-"""
-function copyto!(dest::AbstractArray, src::AbstractArray)
-    isempty(src) && return dest
-    src′ = unalias(dest, src)
-    copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
-end
-
-function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
-    isempty(src) && return dest
-    src′ = unalias(dest, src)
-    copyto_unaliased!(deststyle, dest, srcstyle, src′)
-end
-
-function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
-    isempty(src) && return dest
-    length(dest) >= length(src) || throw(BoundsError(dest, LinearIndices(src)))
-    if deststyle isa IndexLinear
-        if srcstyle isa IndexLinear
-            Δi = firstindex(dest) - firstindex(src)
-            for i in eachindex(src)
-                @inbounds dest[i + Δi] = src[i]
-            end
-        else
-            j = firstindex(dest) - 1
-            @inbounds @simd for I in eachindex(src)
-                dest[j+=1] = src[I]
-            end
-        end
-    else
-        if srcstyle isa IndexLinear
-            i = firstindex(src) - 1
-            @inbounds @simd for J in eachindex(dest)
-                dest[J] = src[i+=1]
-            end
-        else
-            iterdest, itersrc = eachindex(dest), eachindex(src)
-            if iterdest == itersrc
-                # Shared-iterator implementation
-                @inbounds @simd for I in itersrc
-                    dest[I] = src[I]
-                end
-            else
-                for (I,J) in zip(itersrc, iterdest)
-                    @inbounds dest[J] = src[I]
-                end
-            end
-        end
-    end
     return dest
 end
 
@@ -2497,8 +2441,8 @@ function _sub2ind_recurse(inds, L, ind, i::Integer, I::Integer...)
 end
 
 nextL(L, l::Integer) = L*l
-nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
-nextL(L, r::Slice) = L*unsafe_length(r.indices)
+nextL(L, r::AbstractUnitRange) = L*length(r)
+nextL(L, r::Slice) = L*length(r.indices)
 offsetin(i, l::Integer) = i-1
 offsetin(i, r::AbstractUnitRange) = i-first(r)
 
@@ -2524,7 +2468,7 @@ end
 _lookup(ind, d::Integer) = ind+1
 _lookup(ind, r::AbstractUnitRange) = ind+first(r)
 _div(ind, d::Integer) = div(ind, d), 1, d
-_div(ind, r::AbstractUnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
+_div(ind, r::AbstractUnitRange) = (d = length(r); (div(ind, d), first(r), d))
 
 # Vectorized forms
 function _sub2ind(inds::Indices{1}, I1::AbstractVector{T}, I::AbstractVector{T}...) where T<:Integer

@@ -20,7 +20,7 @@ Furlong{p}(x::Furlong{q}) where {p,q} = (@assert(p==q); Furlong{p,typeof(x.val)}
 Furlong{p,T}(x::Furlong{q}) where {T,p,q} = (@assert(p==q); Furlong{p,T}(T(x.val)))
 
 Base.promote_type(::Type{Furlong{p,T}}, ::Type{Furlong{p,S}}) where {p,T,S} =
-    (Base.@_pure_meta; Furlong{p,promote_type(T,S)})
+    Furlong{p,promote_type(T,S)}
 
 Base.one(x::Furlong{p,T}) where {p,T} = one(T)
 Base.one(::Type{Furlong{p,T}}) where {p,T} = one(T)
@@ -38,14 +38,12 @@ Base.floatmax(::Type{Furlong{p,T}}) where {p,T<:AbstractFloat} = Furlong{p}(floa
 Base.floatmax(::Furlong{p,T}) where {p,T<:AbstractFloat} = floatmax(Furlong{p,T})
 Base.conj(x::Furlong{p,T}) where {p,T} = Furlong{p,T}(conj(x.val))
 
-# convert Furlong exponent p to a canonical form.  This
-# is not type stable, but it doesn't matter since it is used
-# at compile time (in generated functions), not runtime
+# convert Furlong exponent p to a canonical form
 canonical_p(p) = isinteger(p) ? Int(p) : Rational{Int}(p)
 
 Base.abs(x::Furlong{p}) where {p} = Furlong{p}(abs(x.val))
-@generated Base.abs2(x::Furlong{p}) where {p} = :(Furlong{$(canonical_p(2p))}(abs2(x.val)))
-@generated Base.inv(x::Furlong{p}) where {p} = :(Furlong{$(canonical_p(-p))}(inv(x.val)))
+Base.abs2(x::Furlong{p}) where {p} = Furlong{canonical_p(2p)}(abs2(x.val))
+Base.inv(x::Furlong{p}) where {p} = Furlong{canonical_p(-p)}(inv(x.val))
 
 for f in (:isfinite, :isnan, :isreal, :isinf)
     @eval Base.$f(x::Furlong) = $f(x.val)
@@ -64,11 +62,10 @@ end
 for op in (:(==), :(!=), :<, :<=, :isless, :isequal)
     @eval $op(x::Furlong{p}, y::Furlong{p}) where {p} = $op(x.val, y.val)
 end
-# generated functions to allow type inference of the value of the exponent:
 for (f,op) in ((:_plus,:+),(:_minus,:-),(:_times,:*),(:_div,://))
-    @eval @generated function $f(v::T, ::Furlong{p}, ::Union{Furlong{q},Val{q}}) where {T,p,q}
+    @eval function $f(v::T, ::Furlong{p}, ::Union{Furlong{q},Val{q}}) where {T,p,q}
         s = $op(p, q)
-        :(Furlong{$(canonical_p(s)),$T}(v))
+        Furlong{canonical_p(s),T}(v)
     end
 end
 for (op,eop) in ((:*, :_plus), (:/, :_minus), (://, :_minus), (:div, :_minus))

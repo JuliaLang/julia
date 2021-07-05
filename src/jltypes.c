@@ -223,7 +223,9 @@ int jl_has_fixed_layout(jl_datatype_t *dt)
 {
     if (dt->layout || dt->isconcretetype)
         return 1;
-    if (jl_is_tuple_type(dt))
+    if (dt->name->abstract)
+        return 0;
+    if (jl_is_tuple_type(dt) || jl_is_namedtuple_type(dt))
         return 0; // TODO: relax more?
     jl_svec_t *types = jl_get_fieldtypes(dt);
     size_t i, l = jl_svec_len(types);
@@ -242,9 +244,10 @@ int jl_type_mappable_to_c(jl_value_t *ty)
     assert(!jl_is_typevar(ty) && jl_is_type(ty));
     if (jl_is_structtype(ty)) {
         jl_datatype_t *jst = (jl_datatype_t*)ty;
-        return jst->layout || jl_has_fixed_layout(jst);
+        return jl_has_fixed_layout(jst);
     }
-    if (jl_is_tuple_type(jl_unwrap_unionall(ty)))
+    ty = jl_unwrap_unionall(ty);
+    if (jl_is_tuple_type(ty) || jl_is_namedtuple_type(ty))
         return 0; // TODO: relax some?
     return 1; // as boxed or primitive
 }
@@ -1437,7 +1440,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     jl_gc_wb(ndt, ndt->parameters);
     ndt->types = NULL; // to be filled in below
     if (istuple) {
-        ndt->types = p;
+        ndt->types = p; // TODO: this may need to filter out certain types
     }
     else if (isnamedtuple) {
         jl_value_t *names_tup = jl_svecref(p, 0);
@@ -1463,19 +1466,16 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_gc_wb(ndt, ndt->types);
         }
         else {
-            ndt->types = jl_emptysvec;
+            ndt->types = jl_emptysvec; // XXX: this is essentially always false
         }
-    }
-    ndt->size = 0;
-    jl_precompute_memoized_dt(ndt, cacheable);
-
-    if (jl_is_primitivetype(dt)) {
-        ndt->size = dt->size;
-        ndt->layout = dt->layout;
-        ndt->isbitstype = ndt->isconcretetype;
     }
 
     jl_datatype_t *primarydt = ((jl_datatype_t*)jl_unwrap_unionall(tn->wrapper));
+    jl_precompute_memoized_dt(ndt, cacheable);
+    ndt->size = 0;
+    if (primarydt->layout)
+        jl_compute_field_offsets(ndt);
+
     if (istuple || isnamedtuple) {
         ndt->super = jl_any_type;
     }
@@ -1516,7 +1516,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     // leading to incorrect layouts and data races (#40050: the A{T} should be
     // an isbitstype singleton of size 0)
     if (cacheable) {
-        if (!jl_is_primitivetype(dt) && ndt->types != NULL && ndt->isconcretetype) {
+        if (dt->layout == NULL && !jl_is_primitivetype(dt) && ndt->types != NULL && ndt->isconcretetype) {
             jl_compute_field_offsets(ndt);
         }
         jl_cache_type_(ndt);
