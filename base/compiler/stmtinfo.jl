@@ -108,7 +108,6 @@ method being processed.
 """
 struct InvokeCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult}
 end
 
 struct OpaqueClosureCallInfo
