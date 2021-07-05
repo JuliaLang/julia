@@ -51,7 +51,7 @@ The *direct* subtypes of any `DataType` may be listed using [`subtypes`](@ref). 
 the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
 ```jldoctest; setup = :(using InteractiveUtils)
-julia> subtypes(AbstractFloat)
+julia> InteractiveUtils.subtypes(AbstractFloat)
 4-element Vector{Any}:
  BigFloat
  Float16
@@ -60,7 +60,10 @@ julia> subtypes(AbstractFloat)
 ```
 
 Any abstract subtype will also be included in this list, but further subtypes thereof will not;
-recursive application of [`subtypes`](@ref) may be used to inspect the full type tree.
+recursive application of [`subtypes`](@ref) may be used to inspect the full type tree. 
+
+Note that [`subtypes`](@ref) is located inside [`InteractiveUtils`](@ref) but is automatically
+exported when using the REPL.
 
 ## DataType layout
 
@@ -82,7 +85,7 @@ the unquoted and interpolated expression ([`Expr`](@ref)) form for a given macro
 be passed instead!). For example:
 
 ```jldoctest; setup = :(using InteractiveUtils)
-julia> macroexpand(@__MODULE__, :(@edit println("")) )
+julia> InteractiveUtils.macroexpand(@__MODULE__, :(@edit println("")) )
 :(InteractiveUtils.edit(println, (Base.typesof)("")))
 ```
 
@@ -138,8 +141,8 @@ For more informations see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@cod
 The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
 debug information printed.
 
-```
-julia> @code_typed debuginfo=:source +(1,1)
+```jldoctest; setup = :(using InteractiveUtils)
+julia> InteractiveUtils.@code_typed debuginfo=:source +(1,1)
 CodeInfo(
     @ int.jl:53 within `+'
 1 ─ %1 = Base.add_int(x, y)::Int64
