@@ -311,6 +311,8 @@ end
     # Issue 36953
     @test replace("abc", "" => "_", count=1) == "_abc"
 
+    # test replace with a RegexReplacer
+    @test replace("ax ay bx by", r"([ab])([xy])" => RegexReplacer(m -> uppercase(m[1]) * m[2])) === "Ax Ay Bx By"
 end
 
 @testset "replace many" begin
@@ -483,6 +485,14 @@ end
         @test_throws ErrorException("PCRE error: unknown substring") replace(s, r"q" => s"a\1b")
         @test_throws ErrorException("Bad replacement string: pattern is not a Regex") replace(s, "q" => s"a\1b")
     end
+
+    # test replace with a RegexReplacer
+    @test replace("ax ay bx by",
+        "ay" => "cy",
+        r"([ab])([xy])" => RegexReplacer(m -> uppercase(m[1]) * m[2])) === "Ax cy Bx By"
+    @test replace("ax ay bx by",
+        r"([a])([xy])" => RegexReplacer(m -> uppercase(m[1]) * m[2]),
+        r"([ab])([xy])" => RegexReplacer(m -> "<" * m[1] * ">" * m[2]), count=3) === "Ax Ay <b>x by"
 end
 
 @testset "chomp/chop" begin

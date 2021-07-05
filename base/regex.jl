@@ -364,6 +364,17 @@ true
 """
 function match end
 
+function _create_match(str::Union{SubString{String}, String}, re::Regex, data::Ptr{Cvoid})
+    n = div(PCRE.ovec_length(data), 2) - 1
+    p = PCRE.ovec_ptr(data)
+    mat = SubString(str, unsafe_load(p, 1)+1, prevind(str, unsafe_load(p, 2)+1))
+    cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
+                                        SubString(str, unsafe_load(p,2i+1)+1,
+                                                  prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
+    off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
+    RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
+end
+
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
                add_opts::UInt32=UInt32(0))
     compile(re)
@@ -373,14 +384,7 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
         PCRE.free_match_data(data)
         return nothing
     end
-    n = div(PCRE.ovec_length(data), 2) - 1
-    p = PCRE.ovec_ptr(data)
-    mat = SubString(str, unsafe_load(p, 1)+1, prevind(str, unsafe_load(p, 2)+1))
-    cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
-                                        SubString(str, unsafe_load(p,2i+1)+1,
-                                                  prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
-    off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
-    result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
+    result = _create_match(str, re, data)
     PCRE.free_match_data(data)
     return result
 end
@@ -528,6 +532,8 @@ end
 Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
+See also [`RegexReplacer`](@ref).
+
 ```jldoctest
 julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
 s"Hello \\g<name>, it's \\1"
@@ -563,6 +569,8 @@ end
 Construct a substitution string, used for regular expression substitutions.  Within the
 string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
 `\\g<groupname>` refers to a named capture group with name `groupname`.
+
+See also [`RegexReplacer`](@ref).
 
 ```jldoctest
 julia> msg = "#Hello# from Julia";
@@ -666,6 +674,42 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
             i = nextind(repl, i)
         end
     end
+end
+
+"""
+    RegexReplacer(f::Function)
+
+Create a `RegexReplacer` that can be used to
+[`replace`](@ref replace(::AbstractString, ::Pair))
+[`Regex`](@ref)-matched text using the given function `f`
+with access to the current match and capture groups.
+
+`f` must be callable with a [`RegexMatch`](@ref) and return a [`print`](@ref)-able object.
+
+See also [`SubstitutionString`](@ref), [`@s_str`](@ref).
+
+# Examples
+```jldoctest
+julia> s = "ax ay az bx by bz";
+
+julia> replace(s, r"([ab])([xy])" => RegexReplacer(match -> uppercase(match[1]) * match[2]))
+"Ax Ay az Bx By bz"
+
+julia> template = "the {animal} is {activity}";
+
+julia> variables = Dict("animal" => "fox", "activity" => "running");
+
+julia> replace(template, r"{(.*?)}" => RegexReplacer(match -> variables[match[1]]))
+"the fox is running"
+```
+"""
+struct RegexReplacer
+    f::Function
+end
+
+function _replace(io, repl::RegexReplacer, str, r, re::RegexAndMatchData)
+    match = _create_match(str, re.re, re.match_data)
+    print(io, repl.f(match))
 end
 
 struct RegexMatchIterator
