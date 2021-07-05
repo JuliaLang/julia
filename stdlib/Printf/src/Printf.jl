@@ -832,11 +832,11 @@ const UNROLL_UPTO = 16
 end
 
 
-
 @inline function plength(f::Spec{T}, args, argp) where {T}
     f, argp = rmdynamic(f, args, argp)
     (plength(f, args[argp]), argp+1)
 end
+
 
 
 function plength(f::Spec{T}, x) where {T <: Chars}
