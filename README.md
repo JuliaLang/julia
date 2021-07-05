@@ -8,7 +8,16 @@
 Documentation:
 [![version 1][docs-img]](https://docs.julialang.org)
 
+Code coverage:
+[![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
+[![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
+
+Continuous integration: [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master)](https://buildkite.com/julialang/julia)
+
 [docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
+[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
+[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
+
 
 ## The Julia Language
 
@@ -141,19 +150,3 @@ Supported IDEs include: [julia-vscode](https://github.com/JuliaEditorSupport/jul
 Code plugin), [Juno](http://junolab.org/) (Atom plugin). [Jupyter](https://jupyter.org/)
 notebooks are available through the [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
 [Pluto](https://github.com/fonsp/Pluto.jl) notebooks through the Pluto.jl package.
-
-## Continuous Integration (CI) Builders
-
-Code coverage:
-[![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
-[![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
-
-| Builder    | Status |
-| ---------- | ------ |
-| Overall    | [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master)](https://buildkite.com/julialang/julia) |
-| analyzegc  | [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master&step=analyzegc)](https://buildkite.com/julialang/julia) |
-| llvmpasses | [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master&step=llvmpasses)](https://buildkite.com/julialang/julia) |
-| coverage   | [![Build status](https://badge.buildkite.com/d5ae34dbbf6fefe615300c4f3118bf63cb4a5ae7fd962263c1.svg?branch=master)](https://buildkite.com/julialang/julia-coverage-linux64) |
-
-[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
-[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov

@@ -933,12 +933,12 @@ static MDNode *best_tbaa(jl_value_t *jt) {
 // note that this includes jl_isbits, although codegen should work regardless
 static bool jl_is_concrete_immutable(jl_value_t* t)
 {
-    return jl_is_immutable_datatype(t) && ((jl_datatype_t*)t)->layout;
+    return jl_is_immutable_datatype(t) && ((jl_datatype_t*)t)->isconcretetype;
 }
 
 static bool jl_is_pointerfree(jl_value_t* t)
 {
-    if (!jl_is_immutable_datatype(t))
+    if (!jl_is_concrete_immutable(t))
         return 0;
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)t)->layout;
     return layout && layout->npointers == 0;
@@ -3033,9 +3033,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 return true;
             }
 
-            if (jl_is_datatype(utt) && utt->layout) {
+            if (jl_is_datatype(utt) && jl_struct_try_layout(utt)) {
                 ssize_t idx = jl_field_index(utt, name, 0);
-                if (idx != -1) {
+                if (idx != -1 && !jl_has_free_typevars(jl_field_type(utt, idx))) {
                     *ret = emit_getfield_knownidx(ctx, obj, idx, utt, order);
                     return true;
                 }
@@ -3063,14 +3063,16 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
 
             if (jl_is_datatype(utt)) {
-                if (jl_is_structtype(utt) && utt->layout) {
+                if (jl_struct_try_layout(utt)) {
                     size_t nfields = jl_datatype_nfields(utt);
                     // integer index
                     size_t idx;
                     if (fld.constant && (idx = jl_unbox_long(fld.constant) - 1) < nfields) {
-                        // known index
-                        *ret = emit_getfield_knownidx(ctx, obj, idx, utt, order);
-                        return true;
+                        if (!jl_has_free_typevars(jl_field_type(utt, idx))) {
+                            // known index
+                            *ret = emit_getfield_knownidx(ctx, obj, idx, utt, order);
+                            return true;
+                        }
                     }
                     else {
                         // unknown index
@@ -3115,8 +3117,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
             }
         }
-        // TODO: attempt better codegen for approximate types, if the types
-        // and offsets of some fields are independent of parameters.
         // TODO: generic getfield func with more efficient calling convention
         return false;
     }
@@ -3155,7 +3155,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
 
         jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
-        if (jl_is_structtype(uty) && uty->layout) {
+        if (jl_is_datatype(uty) && jl_struct_try_layout(uty)) {
             ssize_t idx = -1;
             if (fld.constant && fld.typ == (jl_value_t*)jl_symbol_type) {
                 idx = jl_field_index(uty, (jl_sym_t*)fld.constant, 0);
