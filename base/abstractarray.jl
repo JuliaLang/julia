@@ -989,6 +989,37 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
     return dest
 end
 
+## copy between abstract arrays - generally more efficient
+## since a single index variable can be used.
+
+function copyto!(dest::AbstractArray, src::AbstractArray)
+    isempty(src) && return dest
+    src′ = unalias(dest, src)
+    copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
+end
+
+function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    isempty(src) && return dest
+    src′ = unalias(dest, src)
+    copyto_unaliased!(deststyle, dest, srcstyle, src′)
+end
+
+function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    isempty(src) && return dest
+    length(dest) < length(src) && throw(BoundsError(dest, LinearIndices(src)))
+    _unaliased_copyto!(deststyle, dest, srcstyle, src)
+    return dest
+end
+
+# IndexCartesian and CartesianIndices has not been defined, only implement Linear to Linear here.
+function _unaliased_copyto!(::IndexLinear, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
+    @_inline_meta
+    Δi = firstindex(dest) - firstindex(src)
+    for i in eachindex(src)
+        @inbounds dest[i + Δi] = src[i]
+    end
+end 
+
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
     copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
 end
