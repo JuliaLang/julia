@@ -177,9 +177,6 @@ include("arraymath.jl")
 include("simdloop.jl")
 using .SimdLoop
 
-# functions for AbstractArray with @simd
-include("abstractarraypatch.jl")
-
 # map-reduce operators
 include("reduce.jl")
 
