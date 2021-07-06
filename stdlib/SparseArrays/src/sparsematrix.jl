@@ -81,6 +81,7 @@ size(S::SparseMatrixCSC) = (getfield(S, :m), getfield(S, :n))
 
 _goodbuffers(S::SparseMatrixCSC) = _goodbuffers(size(S)..., getcolptr(S), getrowval(S), nonzeros(S))
 _checkbuffers(S::SparseMatrixCSC) = (@assert _goodbuffers(S); S)
+_checkbuffers(S::Union{Adjoint, Transpose}) = (_checkbuffers(parent(S)); S)
 
 function _goodbuffers(m, n, colptr, rowval, nzval)
     (length(colptr) == n + 1 && colptr[end] - 1 == length(rowval) == length(nzval))
