@@ -81,6 +81,7 @@ size(S::SparseMatrixCSC) = (getfield(S, :m), getfield(S, :n))
 
 _goodbuffers(S::SparseMatrixCSC) = _goodbuffers(size(S)..., getcolptr(S), getrowval(S), nonzeros(S))
 _checkbuffers(S::SparseMatrixCSC) = (@assert _goodbuffers(S); S)
+_checkbuffers(S::Union{Adjoint, Transpose}) = (_checkbuffers(parent(S)); S)
 
 function _goodbuffers(m, n, colptr, rowval, nzval)
     (length(colptr) == n + 1 && colptr[end] - 1 == length(rowval) == length(nzval))
@@ -125,6 +126,8 @@ julia> nnz(A)
 """
 nnz(S::AbstractSparseMatrixCSC) = Int(getcolptr(S)[size(S, 2) + 1]) - 1
 nnz(S::ReshapedArray{<:Any,1,<:AbstractSparseMatrixCSC}) = nnz(parent(S))
+nnz(S::Adjoint{<:Any,<:AbstractSparseMatrixCSC}) = nnz(parent(S))
+nnz(S::Transpose{<:Any,<:AbstractSparseMatrixCSC}) = nnz(parent(S))
 nnz(S::UpperTriangular{<:Any,<:AbstractSparseMatrixCSC}) = nnz1(S)
 nnz(S::LowerTriangular{<:Any,<:AbstractSparseMatrixCSC}) = nnz1(S)
 nnz(S::SparseMatrixCSCView) = nnz1(S)
@@ -215,6 +218,7 @@ nzrange(S::SparseMatrixCSCView, col::Integer) = nzrange(S.parent, S.indices[2][c
 nzrange(S::UpperTriangular{<:Any,<:SparseMatrixCSCUnion}, i::Integer) = nzrangeup(S.data, i)
 nzrange(S::LowerTriangular{<:Any,<:SparseMatrixCSCUnion}, i::Integer) = nzrangelo(S.data, i)
 
+const AbstractSparseMatrixCSCInclAdjointAndTranspose = Union{AbstractSparseMatrixCSC,Adjoint{<:Any,<:AbstractSparseMatrixCSC},Transpose{<:Any,<:AbstractSparseMatrixCSC}}
 function Base.isstored(A::AbstractSparseMatrixCSC, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     rows = rowvals(A)
@@ -224,11 +228,21 @@ function Base.isstored(A::AbstractSparseMatrixCSC, i::Integer, j::Integer)
     return false
 end
 
-Base.replace_in_print_matrix(A::AbstractSparseMatrix, i::Integer, j::Integer, s::AbstractString) =
+function Base.isstored(A::Union{Adjoint{<:Any,<:AbstractSparseMatrixCSC},Transpose{<:Any,<:AbstractSparseMatrixCSC}}, i::Integer, j::Integer)
+    @boundscheck checkbounds(A, i, j)
+    cols = rowvals(parent(A))
+    for istored in nzrange(parent(A), i)
+        j == cols[istored] && return true
+    end
+    return false
+end
+
+Base.replace_in_print_matrix(A::AbstractSparseMatrixCSCInclAdjointAndTranspose, i::Integer, j::Integer, s::AbstractString) =
     Base.isstored(A, i, j) ? s : Base.replace_with_centered_mark(s)
 
-function Base.array_summary(io::IO, S::AbstractSparseMatrixCSC, dims::Tuple{Vararg{Base.OneTo}})
+function Base.array_summary(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose, dims::Tuple{Vararg{Base.OneTo}})
     _checkbuffers(S)
+
     xnnz = nnz(S)
     m, n = size(S)
     print(io, m, "×", n, " ", typeof(S), " with ", xnnz, " stored ",
@@ -236,8 +250,8 @@ function Base.array_summary(io::IO, S::AbstractSparseMatrixCSC, dims::Tuple{Vara
     nothing
 end
 
-# called by `show(io, MIME("text/plain"), ::AbstractSparseMatrixCSC)`
-function Base.print_array(io::IO, S::AbstractSparseMatrixCSC)
+# called by `show(io, MIME("text/plain"), ::AbstractSparseMatrixCSCInclAdjointAndTranspose)`
+function Base.print_array(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose)
     if max(size(S)...) < 16
         Base.print_matrix(io, S)
     else
@@ -246,7 +260,7 @@ function Base.print_array(io::IO, S::AbstractSparseMatrixCSC)
 end
 
 # always show matrices as `sparse(I, J, K)`
-function Base.show(io::IO, S::AbstractSparseMatrixCSC)
+function Base.show(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose)
     _checkbuffers(S)
     # can't use `findnz`, because that expects all values not to be #undef
     I = rowvals(S)
@@ -257,7 +271,7 @@ function Base.show(io::IO, S::AbstractSparseMatrixCSC)
 end
 
 const brailleBlocks = UInt16['⠁', '⠂', '⠄', '⡀', '⠈', '⠐', '⠠', '⢀']
-function _show_with_braille_patterns(io::IO, S::AbstractSparseMatrixCSC)
+function _show_with_braille_patterns(io::IO, S::AbstractSparseMatrixCSCInclAdjointAndTranspose)
     m, n = size(S)
     (m == 0 || n == 0) && return show(io, MIME("text/plain"), S)
 
@@ -291,28 +305,43 @@ function _show_with_braille_patterns(io::IO, S::AbstractSparseMatrixCSC)
     brailleGrid = fill(UInt16(10240), (scaleWidth - 1) ÷ 2 + 2, (scaleHeight - 1) ÷ 4 + 1)
     brailleGrid[end, :] .= '\n'
 
-    rvals = rowvals(S)
+    rvals = rowvals(parent(S))
     rowscale = max(1, scaleHeight - 1) / max(1, m - 1)
     colscale = max(1, scaleWidth - 1) / max(1, n - 1)
-    @inbounds for j = 1:n
-        # Scale the column index `j` to the best matching column index
-        # of a matrix of size `scaleHeight × scaleWidth`
-        sj = round(Int, (j - 1) * colscale + 1)
-        for x in nzrange(S, j)
-            # Scale the row index `i` to the best matching row index
+    if isa(S, AbstractSparseMatrixCSC)
+        @inbounds for j = 1:n
+            # Scale the column index `j` to the best matching column index
             # of a matrix of size `scaleHeight × scaleWidth`
-            si = round(Int, (rvals[x] - 1) * rowscale + 1)
+            sj = round(Int, (j - 1) * colscale + 1)
+            for x in nzrange(S, j)
+                # Scale the row index `i` to the best matching row index
+                # of a matrix of size `scaleHeight × scaleWidth`
+                si = round(Int, (rvals[x] - 1) * rowscale + 1)
 
-            # Given the index pair `(si, sj)` of the scaled matrix,
-            # calculate the corresponding triple `(k, l, p)` such that the
-            # element at `(si, sj)` can be found at position `(k, l)` in the
-            # braille grid `brailleGrid` and corresponds to the 1-dot braille
-            # character `brailleBlocks[p]`
-            k = (sj - 1) ÷ 2 + 1
-            l = (si - 1) ÷ 4 + 1
-            p = ((sj - 1) % 2) * 4 + ((si - 1) % 4 + 1)
+                # Given the index pair `(si, sj)` of the scaled matrix,
+                # calculate the corresponding triple `(k, l, p)` such that the
+                # element at `(si, sj)` can be found at position `(k, l)` in the
+                # braille grid `brailleGrid` and corresponds to the 1-dot braille
+                # character `brailleBlocks[p]`
+                k = (sj - 1) ÷ 2 + 1
+                l = (si - 1) ÷ 4 + 1
+                p = ((sj - 1) % 2) * 4 + ((si - 1) % 4 + 1)
 
-            brailleGrid[k, l] |= brailleBlocks[p]
+                brailleGrid[k, l] |= brailleBlocks[p]
+            end
+        end
+    else
+        # If `S` is a adjoint or transpose of a sparse matrix we invert the
+        # roles of the indices `i` and `j`
+        @inbounds for i = 1:m
+            si = round(Int, (i - 1) * rowscale + 1)
+            for x in nzrange(parent(S), i)
+                sj = round(Int, (rvals[x] - 1) * colscale + 1)
+                k = (sj - 1) ÷ 2 + 1
+                l = (si - 1) ÷ 4 + 1
+                p = ((sj - 1) % 2) * 4 + ((si - 1) % 4 + 1)
+                brailleGrid[k, l] |= brailleBlocks[p]
+            end
         end
     end
     foreach(c -> print(io, Char(c)), @view brailleGrid[1:end-1])
