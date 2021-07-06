@@ -681,8 +681,8 @@ end
 
 function length(r::AbstractUnitRange{T}) where T
     @_inline_meta
-    a = Integer(last(r) - first(r)) # even when isempty, by construction (with overflow)
-    return a + one(a)
+    a = last(r) - first(r) # even when isempty, by construction (with overflow)
+    return Integer(a + one(a))
 end
 
 length(r::OneTo) = Integer(r.stop - zero(r.stop))

@@ -533,3 +533,10 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
     h = hash_integer(num, h)
     return h
 end
+
+function length(r::AbstractUnitRange{T}) where T<:Rational
+    @_inline_meta
+    f = first(r)
+    l = last(r)
+    return div(l.num - f.num + f.den, f.den)
+end
