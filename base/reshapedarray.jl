@@ -226,7 +226,8 @@ offset_if_vec(i::Integer, axs::Tuple) = i
 
 @inline function getindex(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(A, index)
-    @inbounds ret = parent(A)[index]
+    indexparent = index - firstindex(A) + firstindex(parent(A))
+    @inbounds ret = parent(A)[indexparent]
     ret
 end
 @inline function getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
@@ -250,7 +251,8 @@ end
 
 @inline function setindex!(A::ReshapedArrayLF, val, index::Int)
     @boundscheck checkbounds(A, index)
-    @inbounds parent(A)[index] = val
+    indexparent = index - firstindex(A) + firstindex(parent(A))
+    @inbounds parent(A)[indexparent] = val
     val
 end
 @inline function setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
