@@ -467,7 +467,7 @@ Compared to using [`range`](@ref), directly constructing a `LinRange` should
 have less overhead but won't try to correct for floating point errors:
 ```julia
 julia> collect(range(-0.1, 0.3, length=5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.1
   0.0
   0.1
@@ -475,7 +475,7 @@ julia> collect(range(-0.1, 0.3, length=5))
   0.3
 
 julia> collect(LinRange(-0.1, 0.3, 5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.1
  -1.3877787807814457e-17
   0.09999999999999999
