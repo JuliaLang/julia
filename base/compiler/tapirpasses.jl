@@ -1366,8 +1366,6 @@ function lower_tapir_phic_output!(ir::IRCode)
     loads = Tuple{Int,Int}[]  # pairs of (load position, slot id)
     load_positions = BitSet()
     output_names = Vector{Any}(undef, length(ir.stmts)) # big enough since #stmts >= #slots
-    # nouts = RefValue(0)
-    # fromkey = zeros(Int, length(ir.stmts))
     foreach_task_output_load(ir) do i, _inst,  (_f, out, name)
         if out isa SSAValue
             # Since the frontend ensures that this slot is read once, resolving
@@ -1381,8 +1379,6 @@ function lower_tapir_phic_output!(ir::IRCode)
             push!(loads, (i, slot_id(out)))
             push!(load_positions, i)
             output_names[slot_id(out)] = name
-            # key = (nouts.x += 1)
-            # fromkey[key] = slot_id(slot)
         end
     end
     maxslotid = isempty(outputs) ? 0 : maximum(outputs)
