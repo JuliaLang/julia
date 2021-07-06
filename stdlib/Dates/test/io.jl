@@ -60,11 +60,11 @@ end
 end
 
 @testset "DateFormat printing" begin
-    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SSP\""
+    @test sprint(show, DateFormat("yyymmdd\\MHH:MM:SS\\P")) == "dateformat\"yyymmdd\\MHH:MM:SSP\""
     @test sprint(show, DateFormat("yyy").tokens[1]) == "DatePart(yyy)"
-    @test sprint(show, DateFormat("mmzzdd").tokens[2]) == "Delim(zz)"
-    @test sprint(show, DateFormat("ddxmm").tokens[2]) == "Delim(x)"
-    @test sprint(show, DateFormat("xxmmxx").tokens[2]) == "DatePart(mm)"
+    @test sprint(show, DateFormat("mm\\z\\zdd").tokens[2]) == "Delim(zz)"
+    @test sprint(show, DateFormat("dd\\xmm").tokens[2]) == "Delim(x)"
+    @test sprint(show, DateFormat("\\x\\xmm\\x\\x").tokens[2]) == "DatePart(mm)"
 end
 
 @testset "Common Parsing Patterns" begin
@@ -100,14 +100,14 @@ end
     b3 = "96/2/15"
     @test_throws ArgumentError Dates.DateTime(b3, f)
     try
-        Dates.parse(DateTime, "2012/2/20T9:9:31.25i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
+        Dates.parse(DateTime, "2012/2/20T9:9:31.25i90", dateformat"yyyy/mm/dd\THH:MM:SS.s")
         @test false
     catch err
         @test isa(err, ArgumentError)
         @test err.msg == "Found extra characters at the end of date time string"
     end
     try
-        Dates.parse(DateTime, "2012/2/20T9:9:3i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
+        Dates.parse(DateTime, "2012/2/20T9:9:3i90", dateformat"yyyy/mm/dd\THH:MM:SS.s")
         @test false
     catch err
         @test isa(err, ArgumentError)
@@ -163,15 +163,15 @@ end
     @test Dates.format(dt - Dates.Day(14), "yyyy m d") == f2
 
     j = "1996-01-15"
-    f = "yyyy-mm-dd zzz"
+    f = "yyyy-mm-dd \\z\\z\\z"
     @test Dates.DateTime(j, f) == dt
     @test Dates.format(dt, f) == j * " zzz"
     k = "1996-01-15 10:00:00"
-    f = "yyyy-mm-dd HH:MM:SS zzz"
+    f = "yyyy-mm-dd HH:MM:SS \\z\\z\\z"
     @test Dates.DateTime(k, f) == dt + Dates.Hour(10)
     @test Dates.format(dt + Dates.Hour(10), f) == k * " zzz"
     l = "1996-01-15 10:10:10.25"
-    f = "yyyy-mm-dd HH:MM:SS.ss zzz"
+    f = "yyyy-mm-dd HH:MM:SS.ss \\z\\z\\z"
     @test Dates.DateTime(l, f) == dt + Dates.Hour(10) + Dates.Minute(10) + Dates.Second(10) + Dates.Millisecond(250)
     @test Dates.format(dt + Dates.Hour(10) + Dates.Minute(10) + Dates.Second(10) + Dates.Millisecond(250), f) == l * " zzz"
 
@@ -188,7 +188,7 @@ end
     @test Dates.DateTime(v, f) == dt + Dates.Hour(10)
     @test Dates.format(dt + Dates.Hour(10), f) == v
     w = "1996-01-15T10:00:00"
-    f = "yyyy-mm-ddTHH:MM:SS zzz"
+    f = "yyyy-mm-dd\\THH:MM:SS \\z\\z\\z"
     @test Dates.DateTime(w, f) == dt + Dates.Hour(10)
     @test Dates.format(dt + Dates.Hour(10), f) == w * " zzz"
 
@@ -321,16 +321,16 @@ end
     @test Dates.format(Dates.Date(2014, 1, 1), f; locale=locale) == "1F4"
 
     # From Matt Bauman
-    f = "yyyy-mm-ddTHH:MM:SS"
+    f = "yyyy-mm-dd\\THH:MM:SS"
     @test Dates.DateTime("2014-05-28T16:46:04", f) == Dates.DateTime(2014, 5, 28, 16, 46, 04)
 end
 
 @testset "Error handling" begin
     # Specified mm/dd, but date string has day/mm
     @test_throws ArgumentError Dates.DateTime("18/05/2009", "mm/dd/yyyy")
-    @test_throws ArgumentError Dates.DateTime("18/05/2009 16", "mm/dd/yyyy hh")
+    @test_throws ArgumentError Dates.DateTime("18/05/2009 16", "mm/dd/yyyy HH")
     # Used "mm" for months AND minutes
-    @test_throws ArgumentError Dates.DateTime("18/05/2009 16:12", "mm/dd/yyyy hh:mm")
+    @test_throws ArgumentError Dates.DateTime("18/05/2009 16:12", "mm/dd/yyyy HH:mm")
     # Date string has different delimiters than format string
     @test_throws ArgumentError Dates.DateTime("18:05:2009", "mm/dd/yyyy")
 
@@ -368,7 +368,7 @@ end
     @test Dates.DateTime("14:51:00.118", "HH:MM:SS.sss") == t
     @test Dates.DateTime("[14:51:00.118?", "[HH:MM:SS.sss?") == t
     @test Dates.DateTime("?14:51:00.118?", "?HH:MM:SS.sss?") == t
-    @test Dates.DateTime("x14:51:00.118", "xHH:MM:SS.sss") == t
+    @test Dates.DateTime("x14:51:00.118", "\\xHH:MM:SS.sss") == t
     @test Dates.DateTime("14:51:00.118]", "HH:MM:SS.sss]") == t
 end
 
@@ -376,8 +376,8 @@ end
     dt = Dates.DateTime(2014, 8, 23, 17, 22, 15)
     @test Dates.format(dt, Dates.RFC1123Format) == "Sat, 23 Aug 2014 17:22:15"
     @test Dates.DateTime(Dates.format(dt, Dates.RFC1123Format), Dates.RFC1123Format) == dt
-    @test Dates.format(dt, "yyyy-mm-ddTHH:MM:SS E") == "2014-08-23T17:22:15 Saturday"
-    @test Dates.format(dt, "yyyy-mm-ddTHH:MM:SS e") == "2014-08-23T17:22:15 Sat"
+    @test Dates.format(dt, "yyyy-mm-dd\\THH:MM:SS E") == "2014-08-23T17:22:15 Saturday"
+    @test Dates.format(dt, "yyyy-mm-dd\\THH:MM:SS e") == "2014-08-23T17:22:15 Sat"
     @test Dates.format(dt, "yyyy-mm-dd E") == "2014-08-23 Saturday"
     @test Dates.format(dt, "yyyy-mm-dd e") == "2014-08-23 Sat"
     @test Dates.format(dt, "yyyy-e-mm-dd") == "2014-Sat-08-23"
@@ -408,7 +408,7 @@ end
     @test Dates.format(typemax(Dates.Date), f) == "252522163911149"
 end
 
-@testset "TimeZones.jl Issue #19" begin
+@testset "TimeZones.jl Issue #19, #303" begin
     Zulu = String
 
     function Dates.tryparsenext(d::Dates.DatePart{'Z'}, str, i, len)
@@ -422,11 +422,11 @@ end
         Dates.Hour(5), Dates.Minute(38), Dates.Second(19), Dates.Millisecond(591)
     ]
 
-    format = "yyyy-mm-ddTHH:MM:SS.sssZ"
+    format = "yyyy-mm-dd\\THH:MM:SS.sssZ"
     escaped_format = "yyyy-mm-dd\\THH:MM:SS.sss\\Z"
 
     # Typically 'Z' isn't treated as a specifier so it doesn't have to be escaped
-    @test Dates.parse_components(str, Dates.DateFormat(format)) == parsed
+    @test_throws Dates.UndefDateFormatCode Dates.DateFormat(format)
     @test Dates.parse_components(str, Dates.DateFormat(escaped_format)) == parsed
 
     try
@@ -442,13 +442,13 @@ end
     end
 
     # Ensure that the default behaviour has been restored
-    @test Dates.parse_components(str, Dates.DateFormat(format)) == parsed
+    @test_throws Dates.UndefDateFormatCode Dates.DateFormat(format)
     @test Dates.parse_components(str, Dates.DateFormat(escaped_format)) == parsed
 end
 
 @testset "Issue 10817" begin
     @test Dates.Date("Apr 01 2014", "uuu dd yyyy") == Dates.Date(2014, 4, 1)
-    @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd zz yyyy")
+    @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd \\z\\z yyyy")
     @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd    yyyy")
 end
 
@@ -513,7 +513,7 @@ end
         @test_throws ArgumentError Dates.Time("00:60")  # invalid minutes
         @test_throws ArgumentError Dates.Time("00:00:60")  # invalid seconds
         @test_throws ArgumentError Dates.Time("20:03:20", DateFormat("HH:MM"))  # too much precision
-        @test_throws ArgumentError Dates.Time("10:33:51", DateFormat("YYYY-MM-DD HH:MM:SS"))  # Time can't hold year/month/day
+        @test_throws ArgumentError Dates.Time("10:33:51", DateFormat("yyyy-mm-dd HH:MM:SS"))  # Time can't hold year/month/day
     end
 end
 
