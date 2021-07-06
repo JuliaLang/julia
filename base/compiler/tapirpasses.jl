@@ -20,7 +20,7 @@ analyze and optimize the code containing the parallel tasks.
 # References
 
 * Schardl, Tao B., William S. Moses, and Charles E. Leiserson.
-  "Tapir: Embedding Recursive Fork-Join Parallelism into LLVM’s Intermediate
+  "Tapir: Embedding Recursive Fork-Join Parallelism into LLVM's Intermediate
   Representation." ACM Transactions on Parallel Computing 6, no. 4 (December
   17, 2019): 19:1–19:33. https://doi.org/10.1145/3365655.
 
@@ -1284,7 +1284,7 @@ function lower_tapir_task_output!(ir::IRCode)
         insert_node!(ir, alloc_pos, setset)
     end
 
-    # Isnert loads
+    # Insert loads
     for i in loaded_positions
         stmt = ir.stmts[i]
         stmt[:inst] = map_id(identity, stmt[:inst]) do out
@@ -1305,7 +1305,7 @@ function lower_tapir_task_output!(ir::IRCode)
         end
     end
 
-    # Isnert stores (that are loaded somewhere)
+    # Insert stores (that are loaded somewhere)
     for oid in setdiff!(BitSet(keys(stores)), unused)
         ref = outputrefs[oid]
         for i in stores[oid]
@@ -1618,7 +1618,7 @@ best thing we can do is to insert helpful errors in the generated code; which is
 a nonlocal transformation.  Since `slot2reg` is a delicate chain of processing
 on half-constructed `IRCode`, it is more convenient and concise to do this after
 `slot2reg`.  Furthermore, since the promotion checking works by "attempting" to
-do `slot2reg` (i.e., requires IDF) anyway, actualy doing `slot2reg` first is
+do `slot2reg` (i.e., requires IDF) anyway, actually doing `slot2reg` first is
 equivalent.  Additionally, separating this out as a pass makes it easy to
 short-circuit `run_passes`.
 """
@@ -1994,7 +1994,7 @@ function outline_child_task!(task::ChildTask, ir::IRCode)
     return result
 end
 # TODO: Calling this at each recurse of `lower_tapir_tasks!` is not great
-# (quadraic in depth). Maybe keep the stack of changemaps and renumber lazily?
+# (quadratic in depth). Maybe keep the stack of changemaps and renumber lazily?
 
 function renumber_subtasks!(task::ChildTask, ssachangemap, labelchangemap)
     subtasks = task.subtasks
@@ -2161,7 +2161,7 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
     #         %phic = φᶜ(%upsilon, ...)
     #     ...
 
-    # Vector of 4-tuple (use position, original def potision, type, ref SSA value):
+    # Vector of 4-tuple (use position, original def position, type, ref SSA value):
     task_outputs = Tuple{Int,Int,Type,SSAValue}[]
     output_users = BitSet()
     for iuse in 1:length(ir.stmts)
@@ -2274,7 +2274,7 @@ end
 """
     opaque_closure_method_from_ssair(ir::IRCode) -> closure::Method
 
-Create an oaque `closure` from an SSA `ir`.
+Create an opaque `closure` from an SSA `ir`.
 """
 function opaque_closure_method_from_ssair(ir::IRCode)
     # TODO: more accurate module/functionloc detection
