@@ -404,95 +404,6 @@ function foreach_assigned_pair(f, xs::Array)
     end
 end
 
-"""
-    for_each_statement_in_each_block(ir) do foreach_statement, ibb, bb
-        # use bb
-        foreach_statement() do insert_position, stmt
-            # use stmt
-        end
-    end
-
-Iterate over basic blocks and statements including inserted nodes in the correct order.
-"""
-function for_each_statement_in_each_block(bb_user, ir::IRCode)
-    new_nodes_info = ir.new_nodes.info
-    indices = sortperm(
-        new_nodes_info;
-        alg = Sort.DEFAULT_STABLE,
-        by = nni -> (nni.pos, nni.attach_after),
-    )
-    order = Order.By() do i
-        if i isa NewNodeInfo
-            nni = i
-        else
-            nni = new_nodes_info[i]
-        end
-        (nni.pos, nni.attach_after)
-    end
-    hi = length(indices)
-    lo::Int = 1
-    for (ibb, bb) in enumerate(ir.cfg.blocks)
-        bb_user(ibb, bb) do stmt_user
-            for i in bb.stmts
-                nni1 = NewNodeInfo(i, false)
-                nni2 = NewNodeInfo(i, true)
-                before = searchsorted(indices, nni1, lo, hi, order)
-                after = searchsorted(indices, nni2, last(before) + 1, hi, order)
-                lo = last(after) + 1
-                for j in before
-                    stmt = ir.new_nodes.stmts[indices[j]]
-                    stmt_user(stmt.idx + length(ir.stmts), stmt)
-                end
-                stmt_user(i, ir.stmts[i])
-                for j in after
-                    stmt = ir.new_nodes.stmts[indices[j]]
-                    stmt_user(stmt.idx + length(ir.stmts), stmt)
-                end
-            end
-        end
-    end
-end
-
-"""
-    insert_new_nodes(ir::IRCode) -> ir′::IRCode
-
-Process `ir.new_nodes` and create an equivalent `ir′` such that `ir′.new_nodes` is empty.
-Return `ir` as-is if `ir.new_node)` is already empty.  It differs from `compact!(ir)` in
-that it does not perform any DCE.
-"""
-function insert_new_nodes(ir::IRCode)
-    isempty(ir.new_nodes.stmts.inst) && return ir
-    stmts = InstructionStream(length(ir.stmts) + length(ir.new_nodes.stmts))
-    ssachangemap = zeros(Int, length(stmts))
-    bbstarts = zeros(Int, length(ir.cfg.blocks))
-    bbstops = zeros(Int, length(ir.cfg.blocks))
-    newpos::Int = 1
-    for_each_statement_in_each_block(ir) do foreach_statement, ibb, _bb
-        bbstarts[ibb] = newpos
-        foreach_statement() do idx, stmt
-            stmts[newpos] = stmt
-            ssachangemap[idx] = newpos
-            newpos += 1
-        end
-        bbstops[ibb] = newpos - 1
-    end
-    @assert all(>(0), ssachangemap)
-
-    on_value(v::SSAValue) = SSAValue(ssachangemap[v.id])
-    on_value(v) = v
-    for i in 1:length(stmts)
-        stmts.inst[i] = map_id(on_value, identity, stmts.inst[i])
-    end
-
-    blocks = BasicBlock[
-        BasicBlock(bb, StmtRange(bbstarts[i], bbstops[i]))
-        for (i, bb) in enumerate(ir.cfg.blocks)
-    ]
-    popfirst!(bbstarts)
-    cfg = CFG(blocks, bbstarts)
-    return IRCode(ir, stmts, cfg, NewNodeStream())
-end
-
 function empty_ircode(ir::IRCode, len::Int)
     stmts = InstructionStream(len)
     for i in 1:len
@@ -820,12 +731,19 @@ function remove_stmt!(stmt::Instruction)
 end
 
 """
-    resolve_linear_chain(ir, v::Union{PiNode,SSAValue}) -> v′::SSAValue
+    resolve_linear_chain(ir, v::Union{PiNode,SSAValue}) -> v′::Union{PiNode,SSAValue}
 
 Resolve simple chain of statements that are SSAValue or PiNode.
 """
 function resolve_linear_chain end
-resolve_linear_chain(ir::IRCode, v::PiNode) = resolve_linear_chain(ir, v.val)
+function resolve_linear_chain(ir::IRCode, v::PiNode)
+    n = v.val
+    if n isa SSAValue
+        return resolve_linear_chain(ir, n)
+    else
+        return v
+    end
+end
 function resolve_linear_chain(ir::IRCode, v::SSAValue)
     v0 = v
     while true
@@ -1116,7 +1034,9 @@ end
     fixup_syncregion_phic!(ir::IRCode) -> ir′
 """
 function fixup_syncregion_phic!(ir::IRCode)
-    ir = insert_new_nodes(ir)
+    if !isempty(ir.new_nodes.stmts.inst)
+        ir = compact!(ir)
+    end
 
     for bb in ir.cfg.blocks
         isync = last(bb.stmts)
@@ -1207,7 +1127,9 @@ function lower_tapir_task_output!(ir::IRCode)
     Tapir isa Module || return ir
 
     # TODO: make it work without compaction?
-    ir = insert_new_nodes(ir)
+    if !isempty(ir.new_nodes.stmts.inst)
+        ir = compact!(ir)
+    end
 
     # TODO: turn slots into PhiC/Upsilon nodes if possible?
 
@@ -1360,7 +1282,9 @@ function lower_tapir_phic_output!(ir::IRCode)
     Base = Main.Base::Module
 
     # TODO: make it work without compaction?
-    ir = insert_new_nodes(ir)
+    if !isempty(ir.new_nodes.stmts.inst)
+        ir = compact!(ir)
+    end
 
     outputs = BitSet()
     loads = Tuple{Int,Int}[]  # pairs of (load position, slot id)
@@ -1372,7 +1296,9 @@ function lower_tapir_phic_output!(ir::IRCode)
             # a linear chain of SSA values and Pi nodes is equivalent to
             # deferring the load (which is fine).
             out = resolve_linear_chain(ir, out)
-            out = resolve_ssavalue(ir, out)
+            if out isa SSAValue
+                out = ir[out]
+            end
         end
         if out isa Union{SlotNumber,TypedSlot}
             push!(outputs, slot_id(out))
@@ -1411,7 +1337,9 @@ function lower_tapir_phic_output!(ir::IRCode)
                 # below (i.e., to ensure that these instructions are indeed not
                 # used).
                 out = resolve_linear_chain(ir, out)
-                out = resolve_ssavalue(ir, out)
+                if out isa SSAValue
+                    out = ir[out]
+                end
             end
             if out isa Union{SlotNumber,TypedSlot} && slot_id(inst) in outputs
                 push!(deletelater, i)
@@ -1448,7 +1376,9 @@ function lower_tapir_phic_output!(ir::IRCode)
         foreach_id(identity, inst) do out
             if out isa SSAValue
                 out = resolve_linear_chain(ir, out)
-                out = resolve_ssavalue(ir, out)
+                if out isa SSAValue
+                    out = ir[out]
+                end
             end
             if out isa Union{SlotNumber,TypedSlot}
                 if slot_id(out) in outputs
@@ -1622,7 +1552,9 @@ function check_tapir_race!(ir::IRCode)
     Tapir = tapir_module()
     Tapir isa Module || return ir, false
 
-    ir = insert_new_nodes(ir)
+    if !isempty(ir.new_nodes.stmts.inst)
+        ir = compact!(ir)
+    end
 
     local tasks, throw_if_uses
     racy = false
