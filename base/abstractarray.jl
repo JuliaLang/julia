@@ -884,34 +884,6 @@ end
 
 ## from general iterable to any array
                                                                                                                                                     
-"""
-    copyto!(dest::AbstractArray, src) -> dest
-
-Copy all elements from collection `src` to array `dest`, whose length must be greater than
-or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
-the other elements are left untouched.
-
-See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
-
-# Examples
-```jldoctest
-julia> x = [1., 0., 3., 0., 5.];
-
-julia> y = zeros(7);
-
-julia> copyto!(y, x);
-
-julia> y
-7-element Vector{Float64}:
- 1.0
- 0.0
- 3.0
- 0.0
- 5.0
- 0.0
- 0.0
-```
-"""
 function copyto!(dest::AbstractArray, src)
     destiter = eachindex(dest)
     y = iterate(destiter)
@@ -992,6 +964,34 @@ end
 ## copy between abstract arrays - generally more efficient
 ## since a single index variable can be used.
 
+"""
+    copyto!(dest::AbstractArray, src) -> dest
+
+Copy all elements from collection `src` to array `dest`, whose length must be greater than
+or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
+the other elements are left untouched.
+
+See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
+
+# Examples
+```jldoctest
+julia> x = [1., 0., 3., 0., 5.];
+
+julia> y = zeros(7);
+
+julia> copyto!(y, x);
+
+julia> y
+7-element Vector{Float64}:
+ 1.0
+ 0.0
+ 3.0
+ 0.0
+ 5.0
+ 0.0
+ 0.0
+```
+"""
 function copyto!(dest::AbstractArray, src::AbstractArray)
     isempty(src) && return dest
     src′ = unalias(dest, src)
