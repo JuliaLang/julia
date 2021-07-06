@@ -1134,6 +1134,29 @@ function _unaliased_copyto!(::IndexCartesian, dest::AbstractArray, ::IndexLinear
     end
 end
 
+# Cartesian to Cartesian unaliased copy
+function _unaliased_copyto!(::IndexCartesian, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
+    @_inline_meta
+    axdest, axsrc = axes(dest), axes(src)
+    if axdest == axsrc 
+        # shared iterator (manually expended)
+        ax, iter = axsrc[1], CartesianIndices(tail(axsrc))
+        @inbounds for I in iter
+            for i in ax
+                I′ = CartesianIndex(i, I.I...)
+                dest[I′] = src[I′]
+            end
+        end
+    else 
+        # zip iterator
+        itersrc = CartesianIndices(axsrc)
+        iterdest = CartesianIndices(axdest)
+        @inbounds for (J, I) in zip(iterdest, itersrc) 
+            dest[J] = src[I]
+        end
+    end
+end
+
 # circshift!
 circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
 """
