@@ -480,7 +480,28 @@ function _fixup_linetable!(linetable::Vector{LineInfoNode})
     return indexmap
 end
 
-function allocate_blocks!(ir::IRCode, statement_positions)
+"""
+    allocate_new_blocks!(ir::IRCode, statement_positions) -> info
+
+Create new "singleton" basic blocks (i.e., it contains a single instruction)
+before `statement_positions`.  This function adds `2 * length(statement_positions)`
+blocks; i.e., `length(statement_positions)` blocks for the new singleton basic
+blocks and the remaining `length(statement_positions)` blocks for the basic
+block containing the instructions starting at each `statement_positions`.  This
+function expects that `statement_positions` is sorted.
+
+Note that this function does not wire up the CFG for newly created BBs. It just
+inserts the dummy `GotoNode(0)` at the end of the new singleton BBs and the BB
+_before_ (in terms of `ir.cfg.bocks`) it.  The predecessors of the BB just
+before the newly added singleton BB and the successors of the BB just after the
+newly added singleton BB are re-wired.  See `allocate_gotoifnot_sequence!` for
+an example for creating a valid CFG.
+
+The returned object `info` can be passed to `foreach_allocated_new_block` for
+iterating over allocated basic blocks.  An indexable object `info.ssachangemap`
+can be used for mapping old SSA values to the new locations.
+"""
+function allocate_new_blocks!(ir::IRCode, statement_positions)
     @assert issorted(statement_positions)
     ssachangemap = Vector{Int}(undef, length(ir.stmts) + length(ir.new_nodes.stmts))
     let iold = 1, inew = 1
@@ -653,32 +674,39 @@ function allocate_blocks!(ir::IRCode, statement_positions)
     return (; target_blocks, block_to_positions, ssachangemap, bbchangemap)
 end
 
+"""
+    allocate_new_blocks!(ir::IRCode, statement_positions) -> info
+
+Insert a new basic block before each `statement_positions` and a `GotoIfNot`
+that jumps over the newly added BB.  Unlike `allocate_new_blocks!`, this
+function results in an IR with valid CFG.
+"""
 function allocate_gotoifnot_sequence!(ir::IRCode, statement_positions)
     isempty(statement_positions) && return nothing
-    blocks = allocate_blocks!(ir, statement_positions)
+    blocks = allocate_new_blocks!(ir, statement_positions)
     (; target_blocks, block_to_positions, bbchangemap) = blocks
     for iold in target_blocks
         ibb = get(bbchangemap, iold - 1, 0) + 1
         for _ in block_to_positions[iold]
-            b1 = ir.cfg.blocks[ibb]
-            b2 = ir.cfg.blocks[ibb+1]
-            b3 = ir.cfg.blocks[ibb+2]
-            push!(b1.succs, ibb + 1, ibb + 2)
-            push!(b2.preds, ibb)
-            push!(b2.succs, ibb + 2)
-            push!(b3.preds, ibb, ibb + 1)
+            b0 = ir.cfg.blocks[ibb]
+            b1 = ir.cfg.blocks[ibb+1]
+            b2 = ir.cfg.blocks[ibb+2]
+            push!(b0.succs, ibb + 1, ibb + 2)
+            push!(b1.preds, ibb)
+            push!(b1.succs, ibb + 2)
+            push!(b2.preds, ibb, ibb + 1)
+            @assert ir.stmts.inst[last(b0.stmts)] === GotoNode(0)
             @assert ir.stmts.inst[last(b1.stmts)] === GotoNode(0)
-            @assert ir.stmts.inst[last(b2.stmts)] === GotoNode(0)
-            ir.stmts.inst[last(b1.stmts)] = GotoIfNot(false, ibb + 2)  # dummy
-            ir.stmts.inst[last(b2.stmts)] = GotoNode(ibb + 2)
+            ir.stmts.inst[last(b0.stmts)] = GotoIfNot(false, ibb + 2)  # dummy
+            ir.stmts.inst[last(b1.stmts)] = GotoNode(ibb + 2)
             ibb += 2
         end
     end
     return blocks
 end
 
-foreach_allocated_gotoifnot_block(_, ::Nothing) = nothing
-function foreach_allocated_gotoifnot_block(f, blocks)
+foreach_allocated_new_block(_, ::Nothing) = nothing
+function foreach_allocated_new_block(f, blocks)
     (; target_blocks, block_to_positions, bbchangemap) = blocks
     for iold in target_blocks
         inew = get(bbchangemap, iold - 1, 0)
@@ -1474,7 +1502,7 @@ function lower_tapir_phic_output!(ir::IRCode)
     # Insert throw on undef:
     allocated = allocate_gotoifnot_sequence!(ir, map(first, undef_checks))
     undef_checks_index = RefValue(0)
-    foreach_allocated_gotoifnot_block(allocated) do ibb
+    foreach_allocated_new_block(allocated) do ibb
         # `ibb` is the index of BB inserted at the use position `undef_checks[i][1]`
         i = undef_checks_index.x += 1
         (_, name, undefssa) = undef_checks[i]
@@ -2112,7 +2140,7 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
     output_value = IdDict{Tuple{Int,Int},Int}()
     output_isset = IdDict{Tuple{Int,Int},Int}()
     output_index = RefValue(0)
-    foreach_allocated_gotoifnot_block(undef_checks) do ibb
+    foreach_allocated_new_block(undef_checks) do ibb
         # `ibb` is the index of BB inserted at the use position `task_outputs[i][1]`
         i = output_index.x += 1
         (iuse, iout, T, ref) = task_outputs[i]
