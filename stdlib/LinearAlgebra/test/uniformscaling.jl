@@ -10,7 +10,7 @@ using .Main.Quaternions
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
-Random.seed!(123)
+Random.seed!(1234543)
 
 @testset "basic functions" begin
     @test I === I' # transpose
@@ -335,10 +335,19 @@ end
         B = T(rand(3,3))
         C = T(rand(0,3))
         D = T(rand(2,0))
+        E = T(rand(1,3))
+        F = T(rand(3,1))
+        α = rand()
         @test (hcat(A, 2I))::T == hcat(A, Matrix(2I, 3, 3))
+        @test (hcat(E, α))::T == hcat(E, [α])
+        @test (hcat(E, α, 2I))::T == hcat(E, [α], fill(2, 1, 1))
         @test (vcat(A, 2I))::T == vcat(A, Matrix(2I, 4, 4))
+        @test (vcat(F, α))::T == vcat(F, [α])
+        @test (vcat(F, α, 2I))::T == vcat(F, [α], fill(2, 1, 1))
         @test (hcat(C, 2I))::T == C
+        @test_throws DimensionMismatch hcat(C, α)
         @test (vcat(D, 2I))::T == D
+        @test_throws DimensionMismatch vcat(D, α)
         @test (hcat(I, 3I, A, 2I))::T == hcat(Matrix(I, 3, 3), Matrix(3I, 3, 3), A, Matrix(2I, 3, 3))
         @test (vcat(I, 3I, A, 2I))::T == vcat(Matrix(I, 4, 4), Matrix(3I, 4, 4), A, Matrix(2I, 4, 4))
         @test (hvcat((2,1,2), B, 2I, I, 3I, 4I))::T ==
@@ -353,6 +362,9 @@ end
             hvcat((2,2,2), B, Matrix(2I, 3, 3), C, C, Matrix(3I, 3, 3), Matrix(4I, 3, 3))
         @test hvcat((3,2,1), C, C, I, B ,3I, 2I)::T ==
             hvcat((2,2,1), C, C, B, Matrix(3I,3,3), Matrix(2I,6,6))
+        @test (hvcat((1,2), A, E, α))::T == hvcat((1,2), A, E, [α]) == hvcat((1,2), A, E, α*I)
+        @test (hvcat((2,2), α, E, F, 3I))::T == hvcat((2,2), [α], E, F, Matrix(3I, 3, 3))
+        @test (hvcat((2,2), 3I, F, E, α))::T == hvcat((2,2), Matrix(3I, 3, 3), F, E, [α])
     end
 end
 
@@ -454,6 +466,17 @@ end
     target = J * A * alpha + C * beta
     @test mul!(copy(C), J, A, alpha, beta) ≈ target
     @test mul!(copy(C), A, J, alpha, beta) ≈ target
+
+    a = randn()
+    C = randn(3, 3)
+    target_5mul = a*alpha*J + beta*C
+    @test mul!(copy(C), a, J, alpha, beta) ≈ target_5mul
+    @test mul!(copy(C), J, a, alpha, beta) ≈ target_5mul
+    target_5mul = beta*C # alpha = 0
+    @test mul!(copy(C), a, J, 0, beta) ≈ target_5mul
+    target_5mul = a*alpha*Matrix(J, 3, 3) # beta = 0
+    @test mul!(copy(C), a, J, alpha, 0) ≈ target_5mul
+
 end
 
 @testset "Construct Diagonal from UniformScaling" begin
@@ -489,7 +512,7 @@ end
 
 @testset "Factorization solutions" begin
     J = complex(randn(),randn()) * I
-    qrp = A -> qr(A, Val(true))
+    qrp = A -> qr(A, ColumnNorm())
 
     # thin matrices
     X = randn(3,2)

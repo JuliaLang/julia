@@ -117,8 +117,9 @@ function lcm(a::T, b::T) where T<:Integer
     end
 end
 
-gcd(a::Union{Integer,Rational}) = a
-lcm(a::Union{Integer,Rational}) = a
+gcd(a::Integer) = checked_abs(a)
+gcd(a::Rational) = checked_abs(a.num) // a.den
+lcm(a::Union{Integer,Rational}) = gcd(a)
 gcd(a::Unsigned, b::Signed) = gcd(promote(a, abs(b))...)
 gcd(a::Signed, b::Unsigned) = gcd(promote(abs(a), b)...)
 gcd(a::Real, b::Real) = gcd(promote(a,b)...)
@@ -387,6 +388,8 @@ _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) :
 
 Test whether `n` is an integer power of two.
 
+See also [`count_ones`](@ref), [`prevpow`](@ref), [`nextpow`](@ref).
+
 # Examples
 ```jldoctest
 julia> ispow2(4)
@@ -418,6 +421,8 @@ ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
 greater than 1, and `x` must be greater than 0.
 
+See also [`prevpow`](@ref).
+
 # Examples
 ```jldoctest
 julia> nextpow(2, 7)
@@ -432,8 +437,6 @@ julia> nextpow(5, 20)
 julia> nextpow(4, 16)
 16
 ```
-
-See also [`prevpow`](@ref).
 """
 function nextpow(a::Real, x::Real)
     x <= 0 && throw(DomainError(x, "`x` must be positive."))
@@ -455,6 +458,8 @@ end
 The largest `a^n` not greater than `x`, where `n` is a non-negative integer.
 `a` must be greater than 1, and `x` must not be less than 1.
 
+See also [`nextpow`](@ref), [`isqrt`](@ref).
+
 # Examples
 ```jldoctest
 julia> prevpow(2, 7)
@@ -469,7 +474,6 @@ julia> prevpow(5, 20)
 julia> prevpow(4, 16)
 16
 ```
-See also [`nextpow`](@ref).
 """
 function prevpow(a::Real, x::Real)
     x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
@@ -611,6 +615,8 @@ Compute the number of digits in integer `n` written in base `base`
 (`base` must not be in `[-1, 0, 1]`), optionally padded with zeros
 to a specified size (the result will never be less than `pad`).
 
+See also [`digits`](@ref), [`count_ones`](@ref).
+
 # Examples
 ```jldoctest
 julia> ndigits(12345)
@@ -624,6 +630,9 @@ julia> string(1022, base=16)
 
 julia> ndigits(123, pad=5)
 5
+
+julia> ndigits(-123)
+3
 ```
 """
 ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, base))
@@ -748,12 +757,15 @@ split_sign(n::Unsigned) = n, false
 Convert an integer `n` to a string in the given `base`,
 optionally specifying a number of digits to pad to.
 
+See also [`digits`](@ref), [`bitstring`](@ref), [`count_zeros`](@ref).
+
+# Examples
 ```jldoctest
 julia> string(5, base = 13, pad = 4)
 "0005"
 
-julia> string(13, base = 5, pad = 4)
-"0023"
+julia> string(-13, base = 5, pad = 4)
+"-0023"
 ```
 """
 function string(n::Integer; base::Integer = 10, pad::Integer = 1)
@@ -782,10 +794,12 @@ string(b::Bool) = b ? "true" : "false"
 
 A string giving the literal bit representation of a number.
 
+See also [`count_ones`](@ref), [`count_zeros`](@ref), [`digits`](@ref).
+
 # Examples
 ```jldoctest
-julia> bitstring(4)
-"0000000000000000000000000000000000000000000000000000000000000100"
+julia> bitstring(Int32(4))
+"00000000000000000000000000000100"
 
 julia> bitstring(2.2)
 "0100000000000001100110011001100110011001100110011001100110011010"
@@ -806,9 +820,12 @@ Return an array with element type `T` (default `Int`) of the digits of `n` in th
 base, optionally padded with zeros to a specified size. More significant digits are at
 higher indices, such that `n == sum(digits[k]*base^(k-1) for k=1:length(digits))`.
 
+See also [`ndigits`](@ref), [`digits!`](@ref),
+and for base 2 also [`bitstring`](@ref), [`count_ones`](@ref).
+
 # Examples
 ```jldoctest
-julia> digits(10, base = 10)
+julia> digits(10)
 2-element Vector{Int64}:
  0
  1
@@ -820,14 +837,18 @@ julia> digits(10, base = 2)
  0
  1
 
-julia> digits(10, base = 2, pad = 6)
-6-element Vector{Int64}:
- 0
- 1
- 0
- 1
- 0
- 0
+julia> digits(-256, base = 10, pad = 5)
+5-element Vector{Int64}:
+ -6
+ -5
+ -2
+  0
+  0
+
+julia> n = rand(-999:999);
+
+julia> n == evalpoly(13, digits(n, base = 13))
+true
 ```
 """
 digits(n::Integer; base::Integer = 10, pad::Integer = 1) =
@@ -933,6 +954,8 @@ Factorial of `n`. If `n` is an [`Integer`](@ref), the factorial is computed as a
 integer (promoted to at least 64 bits). Note that this may overflow if `n` is not small,
 but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
 
+See also [`binomial`](@ref).
+
 # Examples
 ```jldoctest
 julia> factorial(6)
@@ -946,9 +969,6 @@ Stacktrace:
 julia> factorial(big(21))
 51090942171709440000
 ```
-
-# See also
-* [`binomial`](@ref)
 
 # External links
 * [Factorial](https://en.wikipedia.org/wiki/Factorial) on Wikipedia.
@@ -979,6 +999,8 @@ If ``n`` is negative, then it is defined in terms of the identity
 \\binom{n}{k} = (-1)^k \\binom{k-n-1}{k}
 ```
 
+See also [`factorial`](@ref).
+
 # Examples
 ```jldoctest
 julia> binomial(5, 3)
@@ -990,9 +1012,6 @@ julia> factorial(5) ÷ (factorial(5-3) * factorial(3))
 julia> binomial(-5, 3)
 -35
 ```
-
-# See also
-* [`factorial`](@ref)
 
 # External links
 * [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.

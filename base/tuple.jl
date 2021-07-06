@@ -32,6 +32,9 @@ getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
 
+get(t::Tuple, i::Integer, default) = i in 1:length(t) ? getindex(t, i) : default
+get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
+
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
 
 """
@@ -52,11 +55,10 @@ function setindex(x::Tuple, v, i::Integer)
     _setindex(v, i, x...)
 end
 
-function _setindex(v, i::Integer, first, tail...)
+function _setindex(v, i::Integer, args...)
     @_inline_meta
-    return (ifelse(i == 1, v, first), _setindex(v, i - 1, tail...)...)
+    return ntuple(j -> ifelse(j == i, v, args[j]), length(args))
 end
-_setindex(v, i::Integer) = ()
 
 
 ## iterating ##
@@ -324,7 +326,11 @@ function _totuple(T, itr, s...)
     @_inline_meta
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    return (convert(fieldtype(T, 1), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
+    t1 = convert(fieldtype(T, 1), y[1])
+    # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
+    rT = tuple_type_tail(T)
+    ts = _totuple(rT, itr, y[2])::rT
+    return (t1, ts...)
 end
 
 # use iterative algorithm for long tuples

@@ -1,0 +1,44 @@
+# These steps should only run on `sandbox.jl` machines, not `docker`-isolated ones
+# since we need nestable sandboxing.  The rootfs images being used here are built from
+# the `.buildkite/rootfs_images/llvm-passes.jl` file.
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+
+steps:
+  - label: ":unlock: :coverage: Run coverage test"
+    plugins:
+      - staticfloat/cryptic:
+          variables:
+            - CODECOV_TOKEN="U2FsdGVkX19l0fhdBabbuiEdysyEabkJLRHfxm7CNRkuGbnwPV365sxxC7Czs/CVcws0N1oB4pVwALRRMe36oA=="
+            - COVERALLS_TOKEN="U2FsdGVkX19zopI0hMNzzi2UUOvNVFD8Y0iisFnO/ryVxU7Tit8ZEaeN+gxodRx4CosUUh192F1+q3dTMWRIvw=="
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v1/llvm-passes.tar.gz
+          rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
+          uid: 1000
+          gid: 1000
+    commands: |
+      echo "--- Build Julia from source"
+      make -j 6
+
+      echo "--- Print Julia version info"
+      ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
+      ./julia -e '@info "" Sys.CPU_THREADS'
+      # this is necessary to make sure that the LibGit2 tests passes
+      git config --global init.defaultBranch master
+
+      echo "--- Run Julia tests with code coverage enabled"
+      # Run the actual tests
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_base.jl
+
+      echo "--- Process and upload coverage information"
+      ./julia .buildkite/coverage-linux64/upload_coverage.jl
+    timeout_in_minutes: 600 # 600 minutes = 10 hours
+
+# We must accept the signed job id secret in order to propagate secrets
+env:
+  BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET: ${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET?}

@@ -561,3 +561,35 @@ function f32843(vals0, v)
     vals
 end
 @test_throws UndefVarError f32843([6], Vector[[1]])
+
+# issue #40855, struct constants with union fields
+@enum T40855 X40855
+struct A40855
+    d::Union{Nothing, T40855}
+    b::Union{Nothing, Int}
+end
+g() = string(A40855(X40855, 1))
+@test g() == "$(@__MODULE__).A40855($(@__MODULE__).X40855, 1)"
+
+# issue #40612
+f40612(a, b) = a|b === a|b
+g40612(a, b) = a[]|a[] === b[]|b[]
+@test f40612(true, missing)
+@test !g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[true])
+@test !g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[missing])
+@test g40612(Union{Bool,Missing}[true], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[false])
+
+# issue #41438
+struct A41438{T}
+  x::Ptr{T}
+end
+struct B41438{T}
+  x::T
+end
+f41438(y) = y[].x
+@test A41438.body.layout != C_NULL
+@test B41438.body.layout === C_NULL
+@test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
+@test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL

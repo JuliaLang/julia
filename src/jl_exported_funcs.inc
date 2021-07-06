@@ -149,6 +149,7 @@
     XX(jl_expand_with_loc) \
     XX(jl_expand_with_loc_warn) \
     XX(jl_extern_c) \
+    XX(jl_field_index) \
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
@@ -273,6 +274,8 @@
     XX(jl_idtable_rehash) \
     XX(jl_infer_thunk) \
     XX(jl_init_restored_modules) \
+    XX(jl_init) \
+    XX(jl_init_with_image) \
     XX(jl_init__threading) \
     XX(jl_init_with_image__threading) \
     XX(jl_install_sigint_handler) \
@@ -434,7 +437,6 @@
     XX(jl_set_module_uuid) \
     XX(jl_set_next_task) \
     XX(jl_set_nth_field) \
-    XX(jl_set_ptls_states_getter) \
     XX(jl_set_safe_restore) \
     XX(jl_set_sysimg_so) \
     XX(jl_set_task_tid) \
@@ -538,4 +540,6 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
-    XX(jl_yield)
+    XX(jl_yield) \
+    XX(jl_print_backtrace) \
+    XX(jl_get_pgcstack)

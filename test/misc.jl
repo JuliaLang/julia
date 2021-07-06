@@ -182,6 +182,17 @@ end
 
 @test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
 
+# issue #41347
+let t = @async 1
+    wait(t)
+    @test_throws ErrorException yield(t)
+end
+
+let t = @async error(42)
+    Base._wait(t)
+    @test_throws ErrorException("42") yieldto(t)
+end
+
 # test that @sync is lexical (PR #27164)
 
 const x27164 = Ref(0)

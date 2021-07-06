@@ -1704,3 +1704,10 @@ end
     @check_bit_operation all!(falses(100), trues(100, 100))
     @check_bit_operation all!(falses(1000), trues(1000, 100))
 end
+
+@testset "multidimensional concatenation returns BitArrays" begin
+    a = BitVector(ones(5))
+    @test typeof([a ;;; a]) <: BitArray
+    @test typeof([a a ;;; a a]) <: BitArray
+    @test typeof([a a ;;; [a a]]) <: BitArray
+end

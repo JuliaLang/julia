@@ -290,8 +290,18 @@ float(::Type{T}) where {T<:AbstractFloat} = T
     unsafe_trunc(T, x)
 
 Return the nearest integral value of type `T` whose absolute value is
-less than or equal to `x`. If the value is not representable by `T`, an arbitrary value will
-be returned.
+less than or equal to the absolute value of `x`. If the value is not representable by `T`,
+an arbitrary value will be returned.
+See also [`trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> unsafe_trunc(Int, -2.2)
+-2
+
+julia> unsafe_trunc(Int, NaN)
+-9223372036854775808
+```
 """
 function unsafe_trunc end
 
@@ -467,7 +477,7 @@ end
 #  b. unsafe_convert undefined behaviour if fy == Tf(typemax(Ti))
 #     (but consequently x == fy > y)
 for Ti in (Int64,UInt64,Int128,UInt128)
-    for Tf in (Float16,Float32,Float64)
+    for Tf in (Float32,Float64)
         @eval begin
             function ==(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)

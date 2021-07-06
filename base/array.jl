@@ -499,7 +499,7 @@ function zeros end
     ones([T=Float64,] dims...)
 
 Create an `Array`, with element type `T`, of all ones with size specified by `dims`.
-See also: [`fill`](@ref), [`zeros`](@ref).
+See also [`fill`](@ref), [`zeros`](@ref).
 
 # Examples
 ```jldoctest
@@ -816,6 +816,8 @@ iterate(A::Array, i=1) = (@_inline_meta; (i % UInt) - 1 < length(A) ? (@inbounds
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
 `a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
 
+See also [`get`](@ref), [`keys`](@ref), [`eachindex`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
@@ -834,16 +836,20 @@ function getindex end
 @eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for UnitRange and Colon
-function getindex(A::Array, I::UnitRange{Int})
+function getindex(A::Array, I::AbstractUnitRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
-    X = similar(A, lI)
+    X = similar(A, axes(I))
     if lI > 0
-        unsafe_copyto!(X, 1, A, first(I), lI)
+        copyto!(X, firstindex(X), A, first(I), lI)
     end
     return X
 end
+
+# getindex for carrying out logical indexing for AbstractUnitRange{Bool} as Bool <: Integer
+getindex(a::Array, r::AbstractUnitRange{Bool}) = getindex(a, to_index(r))
+
 function getindex(A::Array, c::Colon)
     lI = length(A)
     X = similar(A, lI)
@@ -961,7 +967,7 @@ function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
     _growend!(a, 1)
-    a[end] = itemT
+    @inbounds a[end] = itemT
     return a
 end
 
@@ -1348,14 +1354,15 @@ See also: [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref
 
 # Examples
 ```jldoctest
-julia> insert!([6, 5, 4, 2, 1], 4, 3)
-6-element Vector{Int64}:
- 6
- 5
- 4
- 3
- 2
+julia> insert!(Any[1:6;], 3, "here")
+7-element Vector{Any}:
  1
+ 2
+  "here"
+ 3
+ 4
+ 5
+ 6
 ```
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T

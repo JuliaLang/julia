@@ -57,7 +57,7 @@ Mathematically a range is uniquely determined by any three of `start`, `step`, `
 Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
+  to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
 
 # Examples
 ```jldoctest
@@ -465,9 +465,9 @@ julia> LinRange(1.5, 5.5, 9)
 
 Compared to using [`range`](@ref), directly constructing a `LinRange` should
 have less overhead but won't try to correct for floating point errors:
-```julia
+```jldoctest
 julia> collect(range(-0.1, 0.3, length=5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.1
   0.0
   0.1
@@ -475,7 +475,7 @@ julia> collect(range(-0.1, 0.3, length=5))
   0.3
 
 julia> collect(LinRange(-0.1, 0.3, 5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.1
  -1.3877787807814457e-17
   0.09999999999999999
@@ -585,9 +585,11 @@ end
 
 ## interface implementations
 
+length(r::AbstractRange) = error("length implementation missing") # catch mistakes
 size(r::AbstractRange) = (length(r),)
 
 isempty(r::StepRange) =
+    # steprange_last_empty(r.start, r.step, r.stop) == r.stop
     (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
 isempty(r::AbstractUnitRange) = first(r) > last(r)
 isempty(r::StepRangeLen) = length(r) == 0
@@ -614,7 +616,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 ```
 """
 step(r::StepRange) = r.step
-step(r::AbstractUnitRange{T}) where{T} = oneunit(T) - zero(T)
+step(r::AbstractUnitRange{T}) where {T} = oneunit(T) - zero(T)
 step(r::StepRangeLen) = r.step
 step(r::StepRangeLen{T}) where {T<:AbstractFloat} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
@@ -622,60 +624,127 @@ step(r::LinRange) = (last(r)-first(r))/r.lendiv
 step_hp(r::StepRangeLen) = r.step
 step_hp(r::AbstractRange) = step(r)
 
-unsafe_length(r::AbstractRange) = length(r)  # generic fallback
-
-function unsafe_length(r::StepRange)
-    n = Integer(div((r.stop - r.start) + r.step, r.step))
-    isempty(r) ? zero(n) : n
-end
-length(r::StepRange) = unsafe_length(r)
-unsafe_length(r::AbstractUnitRange) = Integer(last(r) - first(r) + step(r))
-unsafe_length(r::OneTo) = Integer(r.stop - zero(r.stop))
-length(r::AbstractUnitRange) = unsafe_length(r)
-length(r::OneTo) = unsafe_length(r)
-length(r::StepRangeLen) = r.len
-length(r::LinRange) = r.len
+axes(r::AbstractRange) = (oneto(length(r)),)
 
 # Needed to fold the `firstindex` call in SimdLoop.simd_index
 firstindex(::UnitRange) = 1
 firstindex(::StepRange) = 1
 firstindex(::LinRange) = 1
 
-function length(r::StepRange{T}) where T<:Union{Int,UInt,Int64,UInt64,Int128,UInt128}
-    isempty(r) && return zero(T)
-    if r.step > 1
-        return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
-    elseif r.step < -1
-        return checked_add(convert(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
-    elseif r.step > 0
-        return checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
+# n.b. checked_length for these is defined iff checked_add and checked_sub are
+# defined between the relevant types
+function checked_length(r::OrdinalRange{T}) where T
+    s = step(r)
+    # s != 0, by construction, but avoids the division error later
+    start = first(r)
+    if s == zero(s) || isempty(r)
+        return Integer(start - start + zero(s))
+    end
+    stop = last(r)
+    if isless(s, zero(s))
+        diff = checked_sub(start, stop)
+        s = -s
     else
-        return checked_add(div(checked_sub(r.start, r.stop), -r.step), one(T))
+        diff = checked_sub(stop, start)
+    end
+    a = Integer(div(diff, s))
+    return checked_add(a, one(a))
+end
+
+function checked_length(r::AbstractUnitRange{T}) where T
+    # compiler optimization: remove dead cases from above
+    if isempty(r)
+        return Integer(first(r) - first(r))
+    end
+    a = Integer(checked_add(checked_sub(last(r), first(r))))
+    return checked_add(a, one(a))
+end
+
+function length(r::OrdinalRange{T}) where T
+    s = step(r)
+    # s != 0, by construction, but avoids the division error later
+    start = first(r)
+    if s == zero(s) || isempty(r)
+        return Integer(start - start + zero(s))
+    end
+    stop = last(r)
+    if isless(s, zero(s))
+        diff = start - stop
+        s = -s
+    else
+        diff = stop - start
+    end
+    a = Integer(div(diff, s))
+    return a + one(a)
+end
+
+
+function length(r::AbstractUnitRange{T}) where T
+    @_inline_meta
+    a = Integer(last(r) - first(r)) # even when isempty, by construction (with overflow)
+    return a + one(a)
+end
+
+length(r::OneTo) = Integer(r.stop - zero(r.stop))
+length(r::StepRangeLen) = r.len
+length(r::LinRange) = r.len
+
+let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
+    global length, checked_length
+    # compile optimization for which promote_type(T, Int) == T
+    length(r::OneTo{T}) where {T<:bigints} = r.stop
+    # slightly more accurate length and checked_length in extreme cases
+    # (near typemax) for types with known `unsigned` functions
+    function length(r::OrdinalRange{T}) where T<:bigints
+        s = step(r)
+        s == zero(s) && return zero(T) # unreachable, by construction, but avoids the error case here later
+        isempty(r) && return zero(T)
+        diff = last(r) - first(r)
+        # if |s| > 1, diff might have overflowed, but unsigned(diff)÷s should
+        # therefore still be valid (if the result is representable at all)
+        # n.b. !(s isa T)
+        if s isa Unsigned || -1 <= s <= 1 || s == -s
+            a = div(diff, s)
+        elseif s < 0
+            a = div(unsigned(-diff), -s) % typeof(diff)
+        else
+            a = div(unsigned(diff), s) % typeof(diff)
+        end
+        return Integer(a) + one(a)
+    end
+    function checked_length(r::OrdinalRange{T}) where T<:bigints
+        s = step(r)
+        s == zero(s) && return zero(T) # unreachable, by construction, but avoids the error case here later
+        isempty(r) && return zero(T)
+        stop, start = last(r), first(r)
+        # n.b. !(s isa T)
+        if s > 1
+            diff = stop - start
+            a = convert(T, div(unsigned(diff), s))
+        elseif s < -1
+            diff = start - stop
+            a = convert(T, div(unsigned(diff), -s))
+        elseif s > 0
+            a = div(checked_sub(stop, start), s)
+        else
+            a = div(checked_sub(start, stop), -s)
+        end
+        return checked_add(a, one(a))
     end
 end
-
-function length(r::AbstractUnitRange{T}) where T<:Union{Int,Int64,Int128}
-    @_inline_meta
-    checked_add(checked_sub(last(r), first(r)), one(T))
-end
-length(r::OneTo{T}) where {T<:Union{Int,Int64}} = T(r.stop)
-
-length(r::AbstractUnitRange{T}) where {T<:Union{UInt,UInt64,UInt128}} =
-    r.stop < r.start ? zero(T) : checked_add(last(r) - first(r), one(T))
 
 # some special cases to favor default Int type
-let smallint = (Int === Int64 ?
-                Union{Int8,UInt8,Int16,UInt16,Int32,UInt32} :
-                Union{Int8,UInt8,Int16,UInt16})
-    global length
-
-    function length(r::StepRange{<:smallint})
-        isempty(r) && return Int(0)
-        div(Int(r.stop)+Int(r.step) - Int(r.start), Int(r.step))
-    end
-
-    length(r::AbstractUnitRange{<:smallint}) = Int(last(r)) - Int(first(r)) + 1
-    length(r::OneTo{<:smallint}) = Int(r.stop)
+let smallints = (Int === Int64 ?
+                Union{Int8, UInt8, Int16, UInt16, Int32, UInt32} :
+                Union{Int8, UInt8, Int16, UInt16})
+    global length, checked_length
+    # n.b. !(step isa T)
+    length(r::OrdinalRange{<:smallints}) = div(Int(last(r)) - Int(first(r)), step(r)) + 1
+    length(r::AbstractUnitRange{<:smallints}) = Int(last(r)) - Int(first(r)) + 1
+    length(r::OneTo{<:smallints}) = Int(r.stop)
+    checked_length(r::OrdinalRange{<:smallints}) = length(r)
+    checked_length(r::AbstractUnitRange{<:smallints}) = length(r)
+    checked_length(r::OneTo{<:smallints}) = length(r)
 end
 
 first(r::OrdinalRange{T}) where {T} = convert(T, r.start)
@@ -927,6 +996,14 @@ end
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
+function show(io::IO, r::StepRangeLen)
+    if step(r) != 0
+        print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
+    else
+        # ugly temporary printing, to avoid 0:0:0 etc.
+        print(io, "StepRangeLen(", repr(first(r)), ", ", repr(step(r)), ", ", repr(length(r)), ")")
+    end
+end
 
 function ==(r::T, s::T) where {T<:AbstractRange}
     isempty(r) && return isempty(s)
@@ -1209,7 +1286,9 @@ function sum(r::AbstractRange{<:Real})
 end
 
 function _in_range(x, r::AbstractRange)
-    if step(r) == 0
+    if !isfinite(x)
+        return false
+    elseif iszero(step(r))
         return !isempty(r) && first(r) == x
     else
         n = round(Integer, (x - first(r)) / step(r)) + 1
@@ -1238,7 +1317,7 @@ function _define_range_op(@nospecialize f)
             r1l = length(r1)
             (r1l == length(r2) ||
              throw(DimensionMismatch("argument dimensions must match: length of r1 is $r1l, length of r2 is $(length(r2))")))
-            range($f(first(r1), first(r2)), step=$f(step(r1), step(r2)), length=r1l)
+            StepRangeLen($f(first(r1), first(r2)), $f(step(r1), step(r2)), r1l)
         end
 
         function $f(r1::LinRange{T}, r2::LinRange{T}) where T
@@ -1274,14 +1353,14 @@ end
 Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
 i.e. `y = mod(x - first(r), n) + first(r)`.
 
-See also: [`mod1`](@ref).
+See also [`mod1`](@ref).
 
 # Examples
 ```jldoctest
-julia> mod(0, Base.OneTo(3))
+julia> mod(0, Base.OneTo(3))  # mod1(0, 3)
 3
 
-julia> mod(3, 0:2)
+julia> mod(3, 0:2)  # mod(3, 3)
 0
 ```
 

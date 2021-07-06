@@ -214,7 +214,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     # If we didn't transform the src for caching, we may have to transform
     # it anyway for users like typeinf_ext. Do that here.
     opt = caller.src
-    if may_optimize(interp) && opt isa OptimizationState
+    if opt isa OptimizationState # implies `may_optimize(interp) === true`
         if opt.ir !== nothing
             caller.src = ir_to_codeinf!(opt)
         end
@@ -249,7 +249,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     empty!(frames)
     for (caller, _, _) in results
         opt = caller.src
-        if may_optimize(interp) && opt isa OptimizationState
+        if opt isa OptimizationState # implies `may_optimize(interp) === true`
             result_type = caller.result
             @assert !(result_type isa LimitedAccuracy)
             optimize(interp, opt, OptimizationParams(interp), result_type)
@@ -428,8 +428,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
     s_edges = me.stmt_edges[1]
     if s_edges === nothing
-        s_edges = []
-        me.stmt_edges[1] = s_edges
+        s_edges = me.stmt_edges[1] = []
     end
     for edges in me.stmt_edges
         edges === nothing && continue
@@ -473,7 +472,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # either because we are the outermost code, or we might use this later
         doopt = (me.cached || me.parent !== nothing)
         type_annotate!(me, doopt)
-        if doopt
+        if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
@@ -540,7 +539,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         subex = e.args[i]
         if isa(subex, Expr)
             annotate_slot_load!(subex, vtypes, sv, undefs)
-        elseif isa(subex, Slot)
+        elseif isa(subex, SlotNumber)
             e.args[i] = visit_slot_load!(subex, vtypes, sv, undefs)
         end
     end
@@ -549,13 +548,13 @@ end
 function annotate_slot_load(@nospecialize(e), vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     if isa(e, Expr)
         annotate_slot_load!(e, vtypes, sv, undefs)
-    elseif isa(e, Slot)
+    elseif isa(e, SlotNumber)
         return visit_slot_load!(e, vtypes, sv, undefs)
     end
     return e
 end
 
-function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
+function visit_slot_load!(sl::SlotNumber, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     id = slot_id(sl)
     s = vtypes[id]
     vt = widenconditional(ignorelimited(s.typ))
@@ -584,7 +583,7 @@ function record_slot_assign!(sv::InferenceState)
         if isa(st_i, VarTable) && isa(expr, Expr) && expr.head === :(=)
             lhs = expr.args[1]
             rhs = expr.args[2]
-            if isa(lhs, Slot)
+            if isa(lhs, SlotNumber)
                 vt = widenconst(sv.src.ssavaluetypes[i])
                 if vt !== Bottom
                     id = slot_id(lhs)
@@ -660,7 +659,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
                 body[i] = ReturnNode(annotate_slot_load(expr.val, st_i, sv, undefs))
             elseif isa(expr, GotoIfNot)
                 body[i] = GotoIfNot(annotate_slot_load(expr.cond, st_i, sv, undefs), expr.dest)
-            elseif isa(expr, Slot)
+            elseif isa(expr, SlotNumber)
                 body[i] = visit_slot_load!(expr, st_i, sv, undefs)
             end
         else
@@ -673,9 +672,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
                 deleteat!(src.codelocs, i)
                 deleteat!(sv.stmt_info, i)
                 nexpr -= 1
-                if oldidx < length(changemap)
-                    changemap[oldidx + 1] = -1
-                end
+                changemap[oldidx] = -1
                 continue
             else
                 body[i] = Const(expr) # annotate that this statement actually is dead
@@ -846,8 +843,8 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     frame === nothing && return (nothing, Any)
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
-        result.src = OptimizationState(frame, opt_params, interp)
-        optimize(interp, result.src, opt_params, ignorelimited(result.result))
+        result.src = src = OptimizationState(frame, opt_params, interp)
+        optimize(interp, src, opt_params, ignorelimited(result.result))
         frame.src = finish!(interp, result)
     end
     ccall(:jl_typeinf_end, Cvoid, ())

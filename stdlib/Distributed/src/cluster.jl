@@ -351,7 +351,7 @@ end
 function parse_connection_info(str)
     m = match(r"^julia_worker:(\d+)#(.*)", str)
     if m !== nothing
-        (m.captures[2], parse(UInt16, m.captures[1]))
+        (String(m.captures[2]), parse(UInt16, m.captures[1]))
     else
         ("", UInt16(0))
     end
@@ -851,7 +851,7 @@ julia> nprocs()
 3
 
 julia> workers()
-5-element Array{Int64,1}:
+2-element Array{Int64,1}:
  2
  3
 ```

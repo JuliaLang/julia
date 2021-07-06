@@ -78,6 +78,24 @@ end
     @test Array(SparseMatrixCSC{eltype(a), Int8}(a)) == Array(a)
 end
 
+@testset "conversion to special LinearAlgebra types" begin
+    # issue 40924
+    @test convert(Diagonal, sparse(Diagonal(1:2))) isa Diagonal
+    @test convert(Diagonal, sparse(Diagonal(1:2))) == Diagonal(1:2)
+    @test convert(Tridiagonal, sparse(Tridiagonal(1:3, 4:7, 8:10))) isa Tridiagonal
+    @test convert(Tridiagonal, sparse(Tridiagonal(1:3, 4:7, 8:10))) == Tridiagonal(1:3, 4:7, 8:10)
+    @test convert(SymTridiagonal, sparse(SymTridiagonal(1:4, 5:7))) isa SymTridiagonal
+    @test convert(SymTridiagonal, sparse(SymTridiagonal(1:4, 5:7))) == SymTridiagonal(1:4, 5:7)
+
+    lt = LowerTriangular([1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0])
+    @test convert(LowerTriangular, sparse(lt)) isa LowerTriangular
+    @test convert(LowerTriangular, sparse(lt)) == lt
+
+    ut = UpperTriangular([1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0])
+    @test convert(UpperTriangular, sparse(ut)) isa UpperTriangular
+    @test convert(UpperTriangular, sparse(ut)) == ut
+end
+
 @testset "sparse matrix construction" begin
     @test (A = fill(1.0+im,5,5); isequal(Array(sparse(A)), A))
     @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
@@ -94,6 +112,7 @@ end
     # with combine
     @test sparse([1, 1, 2, 2, 2], [1, 2, 1, 2, 2], 1.0, 2, 2, +) == sparse([1, 1, 2, 2], [1, 2, 1, 2], [1.0, 1.0, 1.0, 2.0], 2, 2)
     @test sparse([1, 1, 2, 2, 2], [1, 2, 1, 2, 2], -1.0, 2, 2, *) == sparse([1, 1, 2, 2], [1, 2, 1, 2], [-1.0, -1.0, -1.0, 1.0], 2, 2)
+    @test sparse(sparse(Int32.(1:5), Int32.(1:5), trues(5))') isa SparseMatrixCSC{Bool,Int32}
 end
 
 @testset "SparseMatrixCSC construction from UniformScaling" begin
@@ -165,7 +184,7 @@ end
     sz34 = spzeros(3, 4)
     se77 = sparse(1.0I, 7, 7)
     @testset "h+v concatenation" begin
-        @test [se44 sz42 sz41; sz34 se33] == se77
+        @test @inferred(hvcat((3, 2), se44, sz42, sz41, sz34, se33)) == se77 # [se44 sz42 sz41; sz34 se33]
         @test length(nonzeros([sp33 0I; 1I 0I])) == 6
     end
 
@@ -1336,10 +1355,10 @@ end
 @testset "argmax, argmin, findmax, findmin" begin
     S = sprand(100,80, 0.5)
     A = Array(S)
-    @test argmax(S) == argmax(A)
-    @test argmin(S) == argmin(A)
-    @test findmin(S) == findmin(A)
-    @test findmax(S) == findmax(A)
+    @test @inferred(argmax(S)) == argmax(A)
+    @test @inferred(argmin(S)) == argmin(A)
+    @test @inferred(findmin(S)) == findmin(A)
+    @test @inferred(findmax(S)) == findmax(A)
     for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
         @test m(S, dims=region) == m(A, dims=region)
     end
@@ -1723,7 +1742,7 @@ end
     local A = guardseed(1234321) do
         triu(sprand(10, 10, 0.2))
     end
-    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 2, 2, 3, 4, 5, 5, 6, 8, 10, 13]
+    @test getcolptr(SparseArrays.droptol!(A, 0.01)) == [1, 1, 1, 1, 3, 3, 5, 6, 8, 11, 12]
     @test isequal(SparseArrays.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1, 1, Int[1, 1], Int[], Int[]))
 end
 
@@ -2165,6 +2184,12 @@ end
     @test issparse(LinearAlgebra.UnitLowerTriangular(Array(m))) == false
     @test issparse(UpperTriangular(Array(m))) == false
     @test issparse(LinearAlgebra.UnitUpperTriangular(Array(m))) == false
+    @test issparse(Base.ReshapedArray(m, (20, 5), ()))
+    @test issparse(@view m[1:3, :])
+
+    # greater nesting
+    @test issparse(Symmetric(UpperTriangular(m)))
+    @test issparse(Symmetric(UpperTriangular(Array(m)))) == false
 end
 
 @testset "issparse for sparse vectors #34253" begin
@@ -2199,7 +2224,7 @@ end
     # Test that concatenations of pairs of sparse matrices yield sparse arrays
     @test issparse(vcat(spmat, spmat))
     @test issparse(hcat(spmat, spmat))
-    @test issparse(hvcat((2,), spmat, spmat))
+    @test issparse(@inferred(hvcat((2,), spmat, spmat)))
     @test issparse(cat(spmat, spmat; dims=(1,2)))
     # Test that concatenations of a sparse matrice with a dense matrix/vector yield sparse arrays
     @test issparse(vcat(spmat, densemat))
@@ -3215,6 +3240,23 @@ end
             end
         end
     end
+end
+
+@testset "issue #41135" begin
+    @test repr(SparseMatrixCSC([7;;])) == "sparse([1], [1], [7], 1, 1)"
+
+    m = SparseMatrixCSC([0 3; 4 0])
+    @test repr(m) == "sparse([2, 1], [1, 2], [4, 3], 2, 2)"
+    @test eval(Meta.parse(repr(m))) == m
+    @test summary(m) == "2×2 $SparseMatrixCSC{$Int, $Int} with 2 stored entries"
+
+    m = sprand(100, 100, .1)
+    @test occursin(r"^sparse\(\[.+\], \[.+\], \[.+\], \d+, \d+\)$", repr(m))
+    @test eval(Meta.parse(repr(m))) == m
+
+    m = sparse([85, 5, 38, 37, 59], [19, 72, 76, 98, 162], [0.8, 0.3, 0.2, 0.1, 0.5], 100, 200)
+    @test repr(m) == "sparse([85, 5, 38, 37, 59], [19, 72, 76, 98, 162], [0.8, 0.3, 0.2, 0.1, 0.5], 100, 200)"
+    @test eval(Meta.parse(repr(m))) == m
 end
 
 end # module

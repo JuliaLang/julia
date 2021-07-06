@@ -15,8 +15,9 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
-using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+    @propagate_inbounds, @pure, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
+    splat
 using Base.Broadcast: Broadcasted, broadcasted
 import Libdl
 
@@ -35,6 +36,7 @@ export
     BunchKaufman,
     Cholesky,
     CholeskyPivoted,
+    ColumnNorm,
     Eigen,
     GeneralizedEigen,
     GeneralizedSVD,
@@ -42,12 +44,14 @@ export
     Hessenberg,
     LU,
     LDLt,
+    NoPivot,
     QR,
     QRPivoted,
     LQ,
     Schur,
     SVD,
     Hermitian,
+    RowMaximum,
     Symmetric,
     LowerTriangular,
     UpperTriangular,
@@ -164,6 +168,10 @@ abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
 
+abstract type PivotingStrategy end
+struct NoPivot <: PivotingStrategy end
+struct RowMaximum <: PivotingStrategy end
+struct ColumnNorm <: PivotingStrategy end
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
@@ -347,8 +355,58 @@ control over the factorization of `B`.
 """
 rdiv!(A, B)
 
-copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
-copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
+
+
+"""
+    copy_oftype(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T)`.
+
+The resulting matrix typically has similar algebraic structure as `A`. For
+example, supplying a tridiagonal matrix results in another tridiagonal matrix.
+In general, the type of the output corresponds to that of `similar(A, T)`.
+
+There are three often used methods in LinearAlgebra to create a mutable copy
+of an array with a given eltype. These copies can be passed to in-place
+algorithms (such as ldiv!, rdiv!, lu! and so on). Which one to use in practice
+depends on what is known (or assumed) about the structure of the array in that
+algorithm.
+
+See also: `copy_similar`, `copy_to_array`.
+"""
+copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A,T), A)
+
+"""
+    copy_similar(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T, size(A))`.
+
+Compared to `copy_oftype`, the result can be more flexible. For example,
+supplying a tridiagonal matrix results in a sparse array. In general, the type
+of the output corresponds to that of the three-argument method `similar(A, T, size(s))`.
+
+See also: `copy_oftype`, `copy_to_array`.
+"""
+copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
+
+"""
+    copy_to_array(A, T)
+
+Copy `A` to a regular dense `Array` with element type `T`.
+
+The resulting array is mutable. It can be used, for example, to pass the data of
+`A` to an efficient in-place method for a matrix factorization such as `lu!`, in
+cases where a more specific implementation of `lu!` (or `lu`) is not available.
+
+See also: `copy_oftype`, `copy_similar`
+"""
+copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
+
+# The three copy functions above return mutable arrays with eltype T.
+# To only ensure a certain eltype, and if a mutable copy is not needed, it is
+# more efficient to use:
+# convert(AbstractArray{T}, A)
+
 
 include("adjtrans.jl")
 include("transpose.jl")
@@ -389,6 +447,63 @@ include("deprecated.jl")
 const ⋅ = dot
 const × = cross
 export ⋅, ×
+
+## convenience methods
+## return only the solution of a least squares problem while avoiding promoting
+## vectors to matrices.
+_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
+_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+
+## append right hand side with zeros if necessary
+_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
+_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
+
+# General fallback definition for handling under- and overdetermined system as well as square problems
+# While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
+# which is required by LAPACK but not SuiteSpase which allows real-complex solves in some cases. Hence,
+# we restrict this method to only the LAPACK factorizations in LinearAlgebra.
+# The definition is put here since it explicitly references all the Factorizion structs so it has
+# to be located after all the files that define the structs.
+const LAPACKFactorizations{T,S} = Union{
+    BunchKaufman{T,S},
+    Cholesky{T,S},
+    LQ{T,S},
+    LU{T,S},
+    QR{T,S},
+    QRCompactWY{T,S},
+    QRPivoted{T,S},
+    SVD{T,<:Real,S}}
+function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorizations}}, B::AbstractVecOrMat)
+    require_one_based_indexing(B)
+    m, n = size(F)
+    if m != size(B, 1)
+        throw(DimensionMismatch("arguments must have the same number of rows"))
+    end
+
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    FF = Factorization{TFB}(F)
+
+    # For wide problem we (often) compute a minimum norm solution. The solution
+    # is larger than the right hand side so we use size(F, 2).
+    BB = _zeros(TFB, B, n)
+
+    if n > size(B, 1)
+        # Underdetermined
+        copyto!(view(BB, 1:m, :), B)
+    else
+        copyto!(BB, B)
+    end
+
+    ldiv!(FF, BB)
+
+    # For tall problems, we compute a least squares solution so only part
+    # of the rhs should be returned from \ while ldiv! uses (and returns)
+    # the complete rhs
+    return _cut_B(BB, 1:n)
+end
+# disambiguate
+(\)(F::LAPACKFactorizations{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    invoke(\, Tuple{Factorization{T}, VecOrMat{Complex{T}}}, F, B)
 
 """
     LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
@@ -461,8 +576,13 @@ function __init__()
     try
         libblas_path = find_library_path(Base.libblas_name)
         liblapack_path = find_library_path(Base.liblapack_name)
+        # We manually `dlopen()` these libraries here, so that we search with `libjulia-internal`'s
+        # `RPATH` and not `libblastrampoline's`.  Once it's been opened, when LBT tries to open it,
+        # it will find the library already loaded.
+        libblas_path = Libdl.dlpath(Libdl.dlopen(libblas_path))
         BLAS.lbt_forward(libblas_path; clear=true)
         if liblapack_path != libblas_path
+            liblapack_path = Libdl.dlpath(Libdl.dlopen(liblapack_path))
             BLAS.lbt_forward(liblapack_path)
         end
         BLAS.check()

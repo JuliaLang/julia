@@ -221,10 +221,11 @@
 
 (define (method-expr-name m)
   (let ((name (cadr m)))
+     (let ((name (if (or (length= m 2) (not (pair? name)) (not (quoted? name))) name (cadr name))))
        (cond ((not (pair? name)) name)
              ((eq? (car name) 'outerref) (cadr name))
              ;((eq? (car name) 'globalref) (caddr name))
-             (else name))))
+             (else name)))))
 
 ;; extract static parameter names from a (method ...) expression
 (define (method-expr-static-parameters m)
@@ -251,6 +252,13 @@
             (or (atom? (cadr e)) (sym-ref? (cadr e)))
             (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
             (symbol? (cadr (caddr e))))))
+
+(define (overlay? e)
+  (and (pair? e) (eq? (car e) 'overlay)))
+
+(define (sym-ref-or-overlay? e)
+  (or (overlay? e)
+      (sym-ref? e)))
 
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
@@ -341,14 +349,15 @@
    (let* ((names (map car sparams))
           (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
           (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
-          (ename (if (nodot-sym-ref? name) name `(null))))
+          (ename (if (nodot-sym-ref? name) name
+                    (if (overlay? name) (cadr name) `(null)))))
      (if (has-dups unused_anames)
          (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
          (error "function static parameter names not unique"))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
          (error "function argument and static parameter names must be distinct"))
-     (if (or (and name (not (sym-ref? name))) (not (valid-name? name)))
+     (if (or (and name (not (sym-ref-or-overlay? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((loc (maybe-remove-functionloc! body))
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
@@ -431,9 +440,14 @@
          (body  (blockify body))
          (ftype (decl-type (car pargl)))
          ;; 1-element list of vararg argument, or empty if none
-         (vararg (let ((l (if (null? pargl) '() (last pargl))))
-                   (if (or (vararg? l) (varargexpr? l))
+         (vararg (let* ((l (if (null? pargl) '() (last pargl)))
+                        ;; handle vararg with default value
+                        (l- (if (kwarg? l) (cadr l) l)))
+                   (if (or (vararg? l-) (varargexpr? l-))
                        (list l) '())))
+         ;; expression to forward varargs to another call
+         (splatted-vararg (if (null? vararg) '()
+                              (list `(... ,(arg-name (car vararg))))))
          ;; positional args with vararg
          (pargl-all pargl)
          ;; positional args without vararg
@@ -509,8 +523,7 @@
                                        ,@(if ordered-defaults keynames vals)
                                        ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
                                        ,@(map arg-name pargl)
-                                       ,@(if (null? vararg) '()
-                                             (list `(... ,(arg-name (car vararg)))))))))
+                                       ,@splatted-vararg))))
                (if ordered-defaults
                    (scopenest keynames vals ret)
                    ret))))
@@ -568,16 +581,13 @@
                 ,@(if (null? restkw)
                       `((if (call (top isempty) ,rkw)
                             (null)
-                            (call (top kwerr) ,kw ,@(map arg-name pargl)
-                                  ,@(if (null? vararg) '()
-                                        (list `(... ,(arg-name (car vararg))))))))
+                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg)))
                       '())
                 (return (call ,mangled  ;; finally, call the core function
                               ,@keynames
                               ,@(if (null? restkw) '() (list rkw))
                               ,@(map arg-name pargl)
-                              ,@(if (null? vararg) '()
-                                    (list `(... ,(arg-name (car vararg)))))))))))
+                              ,@splatted-vararg))))))
         ;; return primary function
         ,(if (not (symbol? name))
              '(null) name)))))
@@ -664,8 +674,7 @@
   (define (throw-unassigned argname)
     `(call (core throw) (call (core UndefKeywordError) (inert ,argname))))
   (define (to-kw x)
-    (cond ((symbol? x) `(kw ,x ,(throw-unassigned x)))
-          ((decl? x) `(kw ,x ,(throw-unassigned (cadr x))))
+    (cond ((symdecl? x) `(kw ,x ,(throw-unassigned (decl-var x))))
           ((nospecialize-meta? x) `(meta ,(cadr x) ,(to-kw (caddr x))))
           (else x)))
   (if (has-parameters? argl)
@@ -882,9 +891,20 @@
 
 (define (struct-def-expr- name params bounds super fields0 mut)
   (receive
-   (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
+   (fields defs) (separate (lambda (x) (or (symbol? x) (eventually-decl? x)))
                            fields0)
-   (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
+   (let* ((attrs ())
+          (fields (let ((n 0))
+                    (map (lambda (x)
+                           (set! n (+ n 1))
+                           (if (and (pair? x) (not (decl? x)))
+                               (begin
+                                 (set! attrs (cons (quotify (car x)) (cons n attrs)))
+                                 (cadr x))
+                               x))
+                         fields)))
+          (attrs (reverse attrs))
+          (defs        (filter (lambda (x) (not (effect-free? x))) defs))
           (locs        (if (and (pair? fields0) (linenum? (car fields0)))
                            (list (car fields0))
                            '()))
@@ -912,6 +932,7 @@
          (toplevel-only struct (outerref ,name))
          (= ,name (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@params)
                         (call (core svec) ,@(map quotify field-names))
+                        (call (core svec) ,@attrs)
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
          (if (isdefined (outerref ,name))
@@ -1130,13 +1151,14 @@
                   (argl-stmts (lower-destructuring-args argl))
                   (argl       (car argl-stmts))
                   (name       (check-dotop (car argl)))
+                  (argname    (if (overlay? name) (caddr name) name))
                   ;; fill in first (closure) argument
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| |#self#| ,(cadr n))
                                             n)))
-                  (farg    (if (decl? name)
-                               (adj-decl name)
-                               `(|::| |#self#| (call (core Typeof) ,name))))
+                  (farg    (if (decl? argname)
+                               (adj-decl argname)
+                               `(|::| |#self#| (call (core Typeof) ,argname))))
                   (body       (insert-after-meta body (cdr argl-stmts)))
                   (argl    (cdr argl))
                   (argl    (fix-arglist
@@ -1194,7 +1216,7 @@
         (if (null? binds)
             blk
             (cond
-             ((or (symbol? (car binds)) (decl? (car binds)))
+             ((symdecl? (car binds))
               ;; just symbol -> add local
               (loop (cdr binds)
                     `(scope-block
@@ -1218,8 +1240,7 @@
                                 `(local-def ,name))
                            ,(car binds)
                            ,blk)))))
-               ((or (symbol? (cadar binds))
-                    (decl?   (cadar binds)))
+               ((symdecl?   (cadar binds))
                 (let ((vname (decl-var (cadar binds))))
                   (loop (cdr binds)
                         (let ((tmp (make-ssavalue)))
@@ -1274,9 +1295,9 @@
       (if (null? f)
           '()
           (let ((x (car f)))
-            (cond ((or (symbol? x) (decl? x) (linenum? x))
+            (cond ((or (symdecl? x) (linenum? x))
                    (loop (cdr f)))
-                  ((and (assignment? x) (or (symbol? (cadr x)) (decl? (cadr x))))
+                  ((and (assignment? x) (symdecl? (cadr x)))
                    (error (string "\"" (deparse x) "\" inside type definition is reserved")))
                   (else '())))))
     (expand-forms
@@ -1362,6 +1383,9 @@
            (expand-forms (expand-decls 'const (cdr e) #f)))
           (else e)))))
 
+(define (expand-atomic-decl e)
+  (error "unimplemented or unsupported atomic declaration"))
+
 (define (expand-local-or-global-decl e)
   (if (and (symbol? (cadr e)) (length= e 2))
       e
@@ -1432,7 +1456,7 @@
                        (cons R elts)))
                 ((vararg? L)
                  (if (null? (cdr lhss))
-                     (let ((temp (make-ssavalue)))
+                     (let ((temp (if (eventually-call? (cadr L)) (gensy) (make-ssavalue))))
                        `(block ,@(reverse stmts)
                                (= ,temp (tuple ,@rhss))
                                ,@(reverse after)
@@ -1599,7 +1623,7 @@
                    ,(expand-update-operator op op= (car e) rhs T))))
         (else
          (if (and (pair? lhs) (eq? op= '=)
-                  (not (memq (car lhs) '(|.| tuple vcat typed_hcat typed_vcat))))
+                  (not (memq (car lhs) '(|.| tuple vcat ncat typed_hcat typed_vcat typed_ncat))))
              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
          (expand-update-operator- op op= lhs rhs declT))))
 
@@ -1976,6 +2000,113 @@
                           ,@(apply append rows))))
              `(call ,@vcat ,@a))))))
 
+(define (expand-ncat e (hvncat '((top hvncat))))
+  (define (is-row a) (and (pair? a)
+                          (or (eq? (car a) 'row)
+                              (eq? (car a) 'nrow))))
+  (define (is-1d a) (not (any is-row a)))
+  (define (sum xs) (foldl + 0 xs))
+  (define (get-shape a is-row-first d)
+    (define (zip xss) (apply map list xss))
+    (define (get-next x)
+      (cond ((or (not (is-row x))
+                 (and (eq? (car x) 'nrow) (> d (1+ (cadr x))))
+                 (and (eq? (car x) 'row) (> d 1)))
+             (list x))
+            ((eq? (car x) 'nrow) (cddr x))
+            (else (cdr x))))
+    ; describe the shape of the concatenation
+    (cond ((or (= d 0)
+               (and (not is-row-first) (= d 1)))
+           (length a))
+          ((and is-row-first (= d 3))
+           (get-shape a is-row-first (1- d)))
+          (else
+           (let ((ashape
+                 (map (lambda (x)
+                        (get-shape (get-next x) is-row-first (1- d)))
+                      a)))
+             (if (pair? (car ashape))
+                 (let ((zipashape (zip ashape)))
+                   (cons (sum (car zipashape))
+                         (cons (car zipashape)
+                               (map (lambda (x)
+                                      (apply append x))
+                                    (cdr zipashape)))))
+                 (list (sum ashape) ashape))))))
+  (define (get-dims a is-row-first d)
+    (cond ((and (< d 2) (not (is-row (car a))))
+           (list (length a)))
+          ((= d 1)
+           (list (car (get-dims (cdar a) is-row-first 0)) (length a)))
+          ((and (= d 3) is-row-first)
+           (get-dims a is-row-first 2))
+          (else
+           (let ((anext (if (and (pair? (car a))
+                                 (eq? (caar a) 'nrow)
+                                 (= d (1+ (cadar a))))
+                            (cddar a)
+                            (list (car a)))))
+             (cons (length a) (get-dims anext is-row-first (1- d)))))))
+  (define (is-balanced s)
+    ; determine whether there are exactly the same number of elements along each axis
+    (= 0 (sum (map (lambda (x y)
+                     (sum (map (lambda (z)
+                                 (- z y))
+                               x)))
+                   (cdr s) (map car (cdr s))))))
+  (define (hasrows-flatten a)
+    ; (car <result>) stores if a row was observed
+    (foldl (lambda (x y)
+             (let ((r (car y))
+                   (yt (cdr y)))
+               (if (is-row x)
+                   (if (eq? (car x) 'nrow)
+                       (let* ((raflat (append (hasrows-flatten (cddr x))))
+                              (aflat (cdr raflat))
+                              (rinner (car raflat))
+                              (r (if (null? (or r rinner))
+                                     (and r rinner)
+                                     r)))
+                         (if (and (not (null? r))
+                                  (or (null? rinner) (and (not r) rinner))
+                                  (and (= (cadr x) 2) r))
+                             (error "cannot mix space and ;; separators in an array expression, except to wrap a line"))
+                         (cons (if (and (= (cadr x) 2) (null? r))
+                                   #f
+                                   r)
+                               (append aflat yt)))
+                     (if (or (null? r) r)
+                         (cons #t (append (reverse (cdr x)) yt))
+                         (error "cannot mix space and ;; separators in an array expression, except to wrap a line")))
+                 (cons r (cons x yt)))))
+           (list '()) a))
+  (define (tf a) (if a '(true) '(false)))
+  (define (tuplize s)
+    (cons 'tuple (reverse (map (lambda (x)
+                                 (cons 'tuple x))
+                               (cons (list (car s)) (cdr s))))))
+  (let* ((d (cadr e))
+         (a (cddr e))
+         (raflat (hasrows-flatten a))
+         (r (car raflat))
+         (is-row-first (if (null? r) #f r))
+         (aflat (reverse (cdr raflat))))
+    (if (any assignment? aflat)
+        (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+    (if (has-parameters? aflat)
+        (error "unexpected parameters in array expression"))
+    (expand-forms
+      (if (is-1d a)
+          `(call ,@hvncat ,d ,@aflat)
+          (if (any vararg? aflat)
+              (error (string "Splatting ... in an hvncat with multiple dimensions is not supported"))
+              (let ((shape (get-shape a is-row-first d)))
+                (if (is-balanced shape)
+                    (let ((dims `(tuple ,@(reverse (get-dims a is-row-first d)))))
+                     `(call ,@hvncat ,dims ,(tf is-row-first) ,@aflat))
+                    `(call ,@hvncat ,(tuplize shape) ,(tf is-row-first) ,@aflat))))))))
+
 (define (expand-property-destruct lhss x)
   (if (not (length= lhss 1))
       (error (string "invalid assignment location \"" (deparse lhs) "\"")))
@@ -2024,9 +2155,13 @@
                       ((eq? l x) #t)
                       (else (in-lhs? x (cdr lhss)))))))
         ;; in-lhs? also checks for invalid syntax, so always call it first
-        (let* ((xx  (if (or (and (not (in-lhs? x lhss)) (symbol? x))
-                            (ssavalue? x))
-                        x (make-ssavalue)))
+        (let* ((xx  (cond ((or (and (not (in-lhs? x lhss)) (symbol? x))
+                               (ssavalue? x))
+                            x)
+                          ((and (pair? lhss) (vararg? (last lhss))
+                                (eventually-call? (cadr (last lhss))))
+                           (gensy))
+                          (else (make-ssavalue))))
                (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                (n   (length lhss))
                ;; skip last assignment if it is an all-underscore vararg
@@ -2036,22 +2171,40 @@
                               (- n 1)
                               n))
                         n))
-               (st  (gensy)))
+               (st  (gensy))
+               (end '()))
           `(block
             ,@(if (> n 0) `((local ,st)) '())
             ,@ini
             ,@(map (lambda (i lhs)
-                     (expand-forms
-                       (if (vararg? lhs)
-                           `(= ,(cadr lhs) (call (top rest) ,xx ,@(if (eq? i 0) '() `(,st))))
-                           (lower-tuple-assignment
-                             (if (= i (- n 1))
-                                 (list lhs)
-                                 (list lhs st))
-                             `(call (top indexed_iterate)
-                                    ,xx ,(+ i 1) ,@(if (eq? i 0) '() `(,st)))))))
+                     (let ((lhs- (cond ((or (symbol? lhs) (ssavalue? lhs))
+                                        lhs)
+                                       ((vararg? lhs)
+                                        (let ((lhs- (cadr lhs)))
+                                          (if (or (symbol? lhs-) (ssavalue? lhs-))
+                                              lhs
+                                              `(|...| ,(if (eventually-call? lhs-)
+                                                           (gensy)
+                                                           (make-ssavalue))))))
+                                       ;; can't use ssavalues if it's a function definition
+                                       ((eventually-call? lhs) (gensy))
+                                       (else (make-ssavalue)))))
+                       (if (not (eq? lhs lhs-))
+                           (if (vararg? lhs)
+                               (set! end (cons (expand-forms `(= ,(cadr lhs) ,(cadr lhs-))) end))
+                               (set! end (cons (expand-forms `(= ,lhs ,lhs-)) end))))
+                       (expand-forms
+                         (if (vararg? lhs-)
+                             `(= ,(cadr lhs-) (call (top rest) ,xx ,@(if (eq? i 0) '() `(,st))))
+                             (lower-tuple-assignment
+                               (if (= i (- n 1))
+                                   (list lhs-)
+                                   (list lhs- st))
+                               `(call (top indexed_iterate)
+                                      ,xx ,(+ i 1) ,@(if (eq? i 0) '() `(,st))))))))
                    (iota n)
                    lhss)
+            ,@(reverse end)
             (unnecessary ,xx))))))
 
 ;; move an assignment into the last statement of a block to keep more statements at top level
@@ -2149,6 +2302,7 @@
    (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
 
    'const  expand-const-decl
+   'atomic expand-atomic-decl
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
    'local-def expand-local-or-global-decl
@@ -2220,7 +2374,7 @@
                 (expand-tuple-destruct lhss x))))
          ((typed_hcat)
           (error "invalid spacing in left side of indexed assignment"))
-         ((typed_vcat)
+         ((typed_vcat typed_ncat)
           (error "unexpected \";\" in left side of indexed assignment"))
          ((ref)
           ;; (= (ref a . idxs) rhs)
@@ -2257,7 +2411,7 @@
                `(block ,@(cdr e)
                        (decl ,(car e) ,T)
                        (= ,(car e) ,rhs))))))
-         ((vcat)
+         ((vcat ncat)
           ;; (= (vcat . args) rhs)
           (error "use \"(a, b) = ...\" to assign multiple values"))
          (else
@@ -2493,6 +2647,8 @@
 
    'vcat expand-vcat
 
+   'ncat expand-ncat
+
    'typed_hcat
    (lambda (e)
      (if (any assignment? (cddr e))
@@ -2504,6 +2660,12 @@
      (let ((t (cadr e))
            (e (cdr e)))
        (expand-vcat e `((top typed_vcat) ,t) `((top typed_hvcat) ,t) `((top typed_hvcat_rows) ,t))))
+
+   'typed_ncat
+   (lambda (e)
+     (let ((t (cadr e))
+           (e (cdr e)))
+       (expand-ncat e `((top typed_hvncat) ,t))))
 
    '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
 
@@ -2611,15 +2773,13 @@
          ,result)))))
 
 (define (lhs-vars e)
-  (cond ((symbol? e) (list e))
-        ((decl? e)   (list (decl-var e)))
+  (cond ((symdecl? e)   (list (decl-var e)))
         ((and (pair? e) (eq? (car e) 'tuple))
          (apply append (map lhs-vars (cdr e))))
         (else '())))
 
 (define (lhs-decls e)
-  (cond ((symbol? e) (list e))
-        ((decl? e)   (list e))
+  (cond ((symdecl? e)   (list e))
         ((and (pair? e) (eq? (car e) 'tuple))
          (apply append (map lhs-decls (cdr e))))
         (else '())))
@@ -3096,6 +3256,7 @@ f(x) = yt(x)
                 ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
                 (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@P)
                             (call (core svec) ,@(map quotify fields))
+                            (call (core svec))
                             (false) ,(length fields)))
                 (= (outerref ,name) ,s)
                 (call (core _setsuper!) ,name ,super)
@@ -3109,6 +3270,7 @@ f(x) = yt(x)
                (block (global ,name) (const ,name)
                       (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec))
                                   (call (core svec) ,@(map quotify fields))
+                                  (call (core svec))
                                   (false) ,(length fields)))
                       (= (outerref ,name) ,s)
                       (call (core _setsuper!) ,name ,super)
@@ -3335,8 +3497,8 @@ f(x) = yt(x)
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
-         const null true false ssavalue isdefined toplevel module lambda error
-         gc_preserve_begin gc_preserve_end import using export)))
+         const atomic null true false ssavalue isdefined toplevel module lambda
+         error gc_preserve_begin gc_preserve_end import using export)))
 
 (define (local-in? s lam)
   (or (assq s (car  (lam:vinfo lam)))
@@ -3583,6 +3745,7 @@ f(x) = yt(x)
                      '(null)
                      `(newvar ,(cadr e))))))
           ((const) e)
+          ((atomic) e)
           ((const-if-global)
            (if (local-in? (cadr e) lam)
                '(null)
@@ -4366,6 +4529,7 @@ f(x) = yt(x)
                      (if (not global-const-error)
                          (set! global-const-error current-loc))
                      (emit e))))
+            ((atomic) (error "misplaced atomic declaration"))
             ((isdefined) (if tail (emit-return e) e))
             ((boundscheck) (if tail (emit-return e) e))
 

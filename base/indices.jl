@@ -352,17 +352,14 @@ struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
 end
 Slice(S::Slice) = S
 axes(S::Slice) = (IdentityUnitRange(S.indices),)
-unsafe_indices(S::Slice) = (IdentityUnitRange(S.indices),)
 axes1(S::Slice) = IdentityUnitRange(S.indices)
 axes(S::Slice{<:OneTo}) = (S.indices,)
-unsafe_indices(S::Slice{<:OneTo}) = (S.indices,)
 axes1(S::Slice{<:OneTo}) = S.indices
 
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
 size(S::Slice) = (length(S.indices),)
 length(S::Slice) = length(S.indices)
-unsafe_length(S::Slice) = unsafe_length(S.indices)
 getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 getindex(S::Slice, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
@@ -383,22 +380,23 @@ end
 IdentityUnitRange(S::IdentityUnitRange) = S
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
-unsafe_indices(S::IdentityUnitRange) = (S,)
 axes1(S::IdentityUnitRange) = S
 axes(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
-unsafe_indices(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
 axes1(S::IdentityUnitRange{<:OneTo}) = S.indices
 
 first(S::IdentityUnitRange) = first(S.indices)
 last(S::IdentityUnitRange) = last(S.indices)
 size(S::IdentityUnitRange) = (length(S.indices),)
 length(S::IdentityUnitRange) = length(S.indices)
-unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
 getindex(S::IdentityUnitRange, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
+
+# For OneTo, the values and indices of the values are identical, so this may be defined in Base.
+# In general such an indexing operation would produce offset ranges
+getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}}) = (@_inline_meta; @boundscheck checkbounds(S, I); I)
 
 """
     LinearIndices(A::AbstractArray)
@@ -475,7 +473,7 @@ convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R} =
 # AbstractArray implementation
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = map(axes1, iter.indices)
-size(iter::LinearIndices) = map(unsafe_length, iter.indices)
+size(iter::LinearIndices) = map(length, iter.indices)
 function getindex(iter::LinearIndices, i::Int)
     @_inline_meta
     @boundscheck checkbounds(iter, i)

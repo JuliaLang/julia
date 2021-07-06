@@ -242,7 +242,7 @@ function showerror(io::IO, ex::MethodError)
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
-    elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
+    elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
         print(io, "objects of type ", ft, " are not callable")
@@ -849,7 +849,7 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     return _simplify_include_frames(ret)
 end
 
-function show_exception_stack(io::IO, stack::Vector)
+function show_exception_stack(io::IO, stack)
     # Display exception stack with the top of the stack first.  This ordering
     # means that the user doesn't have to scroll up in the REPL to discover the
     # root cause.
@@ -878,6 +878,7 @@ end
 # the instance of a number (probably missing the operator)
 # eg: (1 + 2)(3 + 4)
 function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
     if ex.f isa Number
         print(io, "\nMaybe you forgot to use an operator such as ")
         printstyled(io, "*, ^, %, / etc. ", color=:cyan)
@@ -886,3 +887,15 @@ function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
+
+# ExceptionStack implementation
+size(s::ExceptionStack) = size(s.stack)
+getindex(s::ExceptionStack, i::Int) = s.stack[i]
+
+function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
+    nexc = length(stack)
+    printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
+    show_exception_stack(io, stack)
+end
+show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
+
