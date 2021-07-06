@@ -86,7 +86,7 @@ struct Pass <: Result
     data
     value
     source::Union{Nothing,LineNumberNode}
-    function Pass(test_type::Symbol, orig_expr, data, thrown, source)
+    function Pass(test_type::Symbol, orig_expr, data, thrown, source=nothing)
         return new(test_type, orig_expr, data, thrown isa String ? "String" : thrown, source)
     end
 end

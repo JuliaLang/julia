@@ -2660,7 +2660,7 @@ let TT = Union{UInt8, Int8}
     resize!(b, 1)
     @assert pointer(a) == pa
     @assert pointer(b) == pb
-    unsafe_store!(pa, 0x1, 2) # reset a[2] to 1
+    unsafe_store!(Ptr{UInt8}(pa), 0x1, 2) # reset a[2] to 1
     @test length(a) == length(b) == 1
     @test a[1] == b[1] == 0x0
     @test a == b
