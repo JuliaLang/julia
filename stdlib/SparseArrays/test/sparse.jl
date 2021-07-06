@@ -2386,9 +2386,9 @@ end
     A = spzeros(Float64, Int64, 0, 0)
     for (transform, showstring) in zip(
         (identity, adjoint, transpose), (
-        "0×0 SparseArrays.SparseMatrixCSC{Float64, Int64} with 0 stored entries",
-        "0×0 LinearAlgebra.Adjoint{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 0 stored entries",
-        "0×0 LinearAlgebra.Transpose{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 0 stored entries"
+        "0×0 $SparseMatrixCSC{Float64, Int64} with 0 stored entries",
+        "0×0 $Adjoint{Float64, $SparseMatrixCSC{Float64, Int64}} with 0 stored entries",
+        "0×0 $Transpose{Float64, $SparseMatrixCSC{Float64, Int64}} with 0 stored entries"
         ))
         show(io, MIME"text/plain"(), transform(A))
         @test String(take!(io)) == showstring
@@ -2397,9 +2397,9 @@ end
     A = sparse(Int64[1], Int64[1], [1.0])
     for (transform, showstring) in zip(
         (identity, adjoint, transpose), (
-        "1×1 SparseArrays.SparseMatrixCSC{Float64, Int64} with 1 stored entry:\n 1.0",
-        "1×1 LinearAlgebra.Adjoint{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 1 stored entry:\n 1.0",
-        "1×1 LinearAlgebra.Transpose{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 1 stored entry:\n 1.0",
+        "1×1 $SparseMatrixCSC{Float64, Int64} with 1 stored entry:\n 1.0",
+        "1×1 $Adjoint{Float64, $SparseMatrixCSC{Float64, Int64}} with 1 stored entry:\n 1.0",
+        "1×1 $Transpose{Float64, $SparseMatrixCSC{Float64, Int64}} with 1 stored entry:\n 1.0",
         ))
         show(io, MIME"text/plain"(), transform(A))
         @test String(take!(io)) == showstring
@@ -2408,9 +2408,9 @@ end
     A = spzeros(Float32, Int64, 2, 2)
     for (transform, showstring) in zip(
         (identity, adjoint, transpose), (
-        "2×2 SparseArrays.SparseMatrixCSC{Float32, Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
-        "2×2 LinearAlgebra.Adjoint{Float32, SparseArrays.SparseMatrixCSC{Float32, Int64}} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
-        "2×2 LinearAlgebra.Transpose{Float32, SparseArrays.SparseMatrixCSC{Float32, Int64}} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
+        "2×2 $SparseMatrixCSC{Float32, Int64} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
+        "2×2 $Adjoint{Float32, $SparseMatrixCSC{Float32, Int64}} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
+        "2×2 $Transpose{Float32, $SparseMatrixCSC{Float32, Int64}} with 0 stored entries:\n  ⋅    ⋅ \n  ⋅    ⋅ ",
         ))
         show(io, MIME"text/plain"(), transform(A))
         @test String(take!(io)) == showstring
@@ -2419,9 +2419,9 @@ end
     A = sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0])
     for (transform, showstring, braille) in zip(
         (identity, adjoint, transpose), (
-        "1×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:\n 1.0  2.0",
-        "2×1 LinearAlgebra.Adjoint{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 2 stored entries:\n 1.0\n 2.0",
-        "2×1 LinearAlgebra.Transpose{Float64, SparseArrays.SparseMatrixCSC{Float64, Int64}} with 2 stored entries:\n 1.0\n 2.0",
+        "1×2 $SparseMatrixCSC{Float64, Int64} with 2 stored entries:\n 1.0  2.0",
+        "2×1 $Adjoint{Float64, $SparseMatrixCSC{Float64, Int64}} with 2 stored entries:\n 1.0\n 2.0",
+        "2×1 $Transpose{Float64, $SparseMatrixCSC{Float64, Int64}} with 2 stored entries:\n 1.0\n 2.0",
         ),
         ("⠉", "⠃", "⠃"))
         show(io, MIME"text/plain"(), transform(A))
@@ -2450,9 +2450,9 @@ end
     A = sparse(Int64[1, 2, 4, 2, 3], Int64[1, 1, 1, 2, 2], Int64[1, 1, 1, 1, 1], 4, 2)
     for (transform, showstring, braille) in zip(
         (identity, adjoint, transpose), (
-        "4×2 SparseArrays.SparseMatrixCSC{Int64, Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅",
-        "2×4 LinearAlgebra.Adjoint{Int64, SparseArrays.SparseMatrixCSC{Int64, Int64}} with 5 stored entries:\n 1  1  ⋅  1\n ⋅  1  1  ⋅",
-        "2×4 LinearAlgebra.Transpose{Int64, SparseArrays.SparseMatrixCSC{Int64, Int64}} with 5 stored entries:\n 1  1  ⋅  1\n ⋅  1  1  ⋅",
+        "4×2 $SparseMatrixCSC{Int64, Int64} with 5 stored entries:\n 1  ⋅\n 1  1\n ⋅  1\n 1  ⋅",
+        "2×4 $Adjoint{Int64, $SparseMatrixCSC{Int64, Int64}} with 5 stored entries:\n 1  1  ⋅  1\n ⋅  1  1  ⋅",
+        "2×4 $Transpose{Int64, $SparseMatrixCSC{Int64, Int64}} with 5 stored entries:\n 1  1  ⋅  1\n ⋅  1  1  ⋅",
         ),
         ("⡳", "⠙⠊", "⠙⠊"))
         show(io, MIME"text/plain"(), transform(A))
@@ -2464,9 +2464,9 @@ end
     A = sparse(Int64[1, 3, 2, 4], Int64[1, 1, 2, 2], Int64[1, 1, 1, 1], 7, 3)
     for (transform, showstring, braille) in zip(
         (identity, adjoint, transpose), (
-        "7×3 SparseArrays.SparseMatrixCSC{Int64, Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅",
-        "3×7 LinearAlgebra.Adjoint{Int64, SparseArrays.SparseMatrixCSC{Int64, Int64}} with 4 stored entries:\n 1  ⋅  1  ⋅  ⋅  ⋅  ⋅\n ⋅  1  ⋅  1  ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅  ⋅  ⋅  ⋅  ⋅",
-        "3×7 LinearAlgebra.Transpose{Int64, SparseArrays.SparseMatrixCSC{Int64, Int64}} with 4 stored entries:\n 1  ⋅  1  ⋅  ⋅  ⋅  ⋅\n ⋅  1  ⋅  1  ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅  ⋅  ⋅  ⋅  ⋅",
+        "7×3 $SparseMatrixCSC{Int64, Int64} with 4 stored entries:\n 1  ⋅  ⋅\n ⋅  1  ⋅\n 1  ⋅  ⋅\n ⋅  1  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅",
+        "3×7 $Adjoint{Int64, $SparseMatrixCSC{Int64, Int64}} with 4 stored entries:\n 1  ⋅  1  ⋅  ⋅  ⋅  ⋅\n ⋅  1  ⋅  1  ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅  ⋅  ⋅  ⋅  ⋅",
+        "3×7 $Transpose{Int64, $SparseMatrixCSC{Int64, Int64}} with 4 stored entries:\n 1  ⋅  1  ⋅  ⋅  ⋅  ⋅\n ⋅  1  ⋅  1  ⋅  ⋅  ⋅\n ⋅  ⋅  ⋅  ⋅  ⋅  ⋅  ⋅",
         ),
         ("⢕" * Char(10240) * "\n" * Char(10240)^2, "⠑⠑" * Char(10240)^2, "⠑⠑" * Char(10240)^2))
         show(io, MIME"text/plain"(), transform(A))
@@ -2483,7 +2483,7 @@ end
     end
 
     # Issue #30589
-    @test repr("text/plain", sparse([true true])) == "1×2 SparseArrays.SparseMatrixCSC{Bool, $Int} with 2 stored entries:\n 1  1"
+    @test repr("text/plain", sparse([true true])) == "1×2 $SparseMatrixCSC{Bool, $Int} with 2 stored entries:\n 1  1"
 
     function _filled_sparse(m::Integer, n::Integer)
         C = CartesianIndices((m, n))[:]
