@@ -976,6 +976,12 @@ function remove_tapir_terminator!(stmt::Instruction)
     return term
 end
 
+"""
+    remove_tapir!(ir::IRCode) -> ir
+
+Remove Tapir instructions from `src` (if any). This transformation is always valid
+due to the (assumed) serial projection property of the source program.
+"""
 remove_tapir!(ir::IRCode) = remove_tapir_in_blocks!(ir, 1:length(ir.cfg.blocks))
 
 function remove_tapir_in_blocks!(ir::IRCode, blocklabels)
@@ -1993,7 +1999,7 @@ end
 
 function lower_tapir!(ir::IRCode, interp::AbstractInterpreter)
     Tapir = tapir_module()
-    Tapir isa Module || return ir
+    Tapir isa Module || return remove_tapir!(ir)
 
     tasks = child_tasks(ir)
     isempty(tasks) && return remove_tapir!(ir)
@@ -2208,7 +2214,7 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
 
     # TODO: remove redundant PhiC and Upsilon nodes
 
-    remove_syncregions!(ir)
+    ir = remove_tapir!(ir)
 
     # Finalize the changes in the IR (clears the node inserted to `ir.new_nodes`):
     ir = compact!(ir, true)
@@ -2294,7 +2300,7 @@ function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Cod
     finish(interp, opt, params, ir, Any) # Ref: optimize(interp, opt, params, result)
     src = ir_to_codeinf!(opt)
 
-    return remove_tapir!(src)
+    return src
 end
 
 """
@@ -2312,31 +2318,3 @@ lower_tapir_to_ircode(linfo::MethodInstance, ci::CodeInfo) =
     lower_tapir_to_ircode(NativeInterpreter(linfo.def.primary_world), linfo, ci)
 lower_tapir_to_ircode(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo) =
     first(_lower_tapir(interp, linfo, ci))
-
-"""
-    remove_tapir!(src::CodeInfo)
-    remove_tapir!(_::Any)
-
-Remove Tapir instructions from `src` (if any). This transformation is always valid
-due to the (assumed) serial projection property of the source program.
-"""
-function remove_tapir!(src::CodeInfo)
-    for (i, x) in pairs(src.code)
-        if x isa Union{DetachNode,SyncNode}
-            src.code[i] = nothing
-        elseif x isa ReattachNode
-            src.code[i] = GotoNode(x.label)
-        elseif isexpr(x, :syncregion)
-            src.code[i] = nothing
-        end
-    end
-    return src
-end
-remove_tapir!(::Any) = nothing
-
-function remove_tapir(src::CodeInfo)
-    any(src.code) do x
-        (x isa Union{DetachNode,ReattachNode,SyncNode}) || isexpr(x, :syncregion)
-    end && return remove_tapir!(copy(src))  # warn?
-    return src
-end
