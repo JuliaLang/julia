@@ -655,19 +655,32 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                 body[i] = ReturnNode(SSAValue(el.val.id + ssachangemap[el.val.id]))
             end
         elseif isa(el, DetachNode)
-            syncregion = el.syncregion
-            if isa(syncregion, SSAValue)
+            if labelchangemap[el.label] == typemin(Int)
+                body[i] = nothing
+            else
+                label = el.label + labelchangemap[el.label]
+                syncregion = el.syncregion
+                if isa(syncregion, SSAValue)
                     syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+                    body[i] = DetachNode(syncregion, label)
+                else
+                    body[i] = DetachNode(syncregion, label)
+                end
             end
-            label = el.label + labelchangemap[el.label]
-            body[i] = DetachNode(syncregion, label)
         elseif isa(el, ReattachNode)
-            syncregion = el.syncregion
-            if isa(syncregion, SSAValue)
+            if labelchangemap[el.label] == typemin(Int)
+                body[i] = nothing
+                # TODO: Make this always valid by using fallthrough in ReattachNode
+            else
+                label = el.label + labelchangemap[el.label]
+                syncregion = el.syncregion
+                if isa(syncregion, SSAValue)
                     syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+                    body[i] = ReattachNode(syncregion, label)
+                else
+                    body[i] = ReattachNode(syncregion, label)
+                end
             end
-            label = el.label + labelchangemap[el.label]
-            body[i] = ReattachNode(syncregion, label)
         elseif isa(el, SyncNode)
             syncregion = el.syncregion
             if isa(syncregion, SSAValue)

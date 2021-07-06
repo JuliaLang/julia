@@ -265,6 +265,8 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
             e = e.val
         elseif isa(e, GotoIfNot)
             e = e.cond
+        elseif isa(e, Union{DetachNode,ReattachNode,SyncNode})
+            e = e.syncregion
         end
         if isa(e, SSAValue)
             push!(uses[e.id], line)
