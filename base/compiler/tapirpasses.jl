@@ -820,21 +820,6 @@ function resolve_callee(code::Vector{Any}, @nospecialize(inst))::Tuple{Any,Bool}
     return resolve_special_value(f)
 end
 
-function calls(inst, r::GlobalRef, nargs::Int)
-    isexpr(inst, :call) || return nothing
-    length(inst.args) == nargs + 1 || return nothing
-    f, = inst.args
-    if f isa GlobalRef
-        f === r || return nothing
-    else
-        isdefined(r.mod, r.name) || return nothing
-        g = getfield(r.mod, r.name)
-        f === g || return nothing
-        # TODO: check if this path is required
-    end
-    return inst.args
-end
-
 function find_method_instance_from_sig(
     interp::AbstractInterpreter,
     @nospecialize(sig::Type);
