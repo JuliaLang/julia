@@ -1100,6 +1100,40 @@ in the range of `Rdest`. The sizes of the two regions must match.
 """
 copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 
+# Cartesian to Linear unaliased copy
+function _unaliased_copyto!(::IndexLinear, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
+    @_inline_meta
+    axs = axes(src)
+    ax, iter = axs[1], CartesianIndices(tail(axs))
+    len, j = length(ax), firstindex(dest)
+    @inbounds for I in iter
+        n = 0
+        while n < len
+            dest[j + n] = src[first(ax) + n, I.I...]
+            n += 1
+        end
+        j += len
+    end
+end
+
+# Linear to Cartesian unaliased copy
+function _unaliased_copyto!(::IndexCartesian, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
+    @_inline_meta
+    axs = axes(dest)
+    ax, iter = axs[1], CartesianIndices(tail(axs))
+    len, i = length(ax), firstindex(src)
+    final = lastindex(src) + 1
+    @inbounds for I in iter
+        len′ = min(final - i, len)
+        n = 0
+        while n < len′
+            dest[first(ax) + n, I.I...] = src[i + n]
+            n += 1
+        end
+        (i += len′) == final && break
+    end
+end
+
 # circshift!
 circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
 """
