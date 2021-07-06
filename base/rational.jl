@@ -279,7 +279,7 @@ function -(x::Rational{T}) where T<:Unsigned
     x
 end
 
-function +(x::Rational, y::Rational)
+function +(x::Rational, y::Rational)::Rational
     xp, yp = promote(x, y)
     if isinf(x) && x == y
         return xp
@@ -288,7 +288,7 @@ function +(x::Rational, y::Rational)
     Rational(checked_add(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
 end
 
-function -(x::Rational, y::Rational)
+function -(x::Rational, y::Rational)::Rational
     xp, yp = promote(x, y)
     if isinf(x) && x == -y
         return xp
