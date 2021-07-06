@@ -246,10 +246,11 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::
     end
     isa(x, GlobalRef) && return abstract_eval_global(x.mod, x.name)
     isa(x, SSAValue) && return ci.ssavaluetypes[x.id]
+    isa(x, Union{SlotNumber,TypedSlot}) && return slottypes[slot_id(x)]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return DelayedTyp(x)
     isa(x, QuoteNode) && return Const(x.value)
-    isa(x, Union{Symbol, PiNode, PhiNode, SlotNumber, TypedSlot}) && error("unexpected val type")
+    isa(x, Union{Symbol, PiNode, PhiNode}) && error("unexpected val type")
     return Const(x)
 end
 

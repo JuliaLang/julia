@@ -313,6 +313,9 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
             # type_lift_pass! is required as a fixup of slot2reg
             @timeit "post-racy: type lift" ir = type_lift_pass!(ir)
             @timeit "post-racy: compact" ir = compact!(ir)
+            if JLOptions().debug_level == 2
+                @timeit "post-racy: verify" (verify_ir(ir); verify_linetable(ir.linetable))
+            end
             return ir
         end
     end

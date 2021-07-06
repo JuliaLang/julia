@@ -255,7 +255,7 @@ function map_id(on_value, on_phi_label, on_goto_label, @nospecialize(stmt))
     elseif stmt isa GotoIfNot
         GotoIfNot(recurse(stmt.cond), on_goto_label(stmt.dest))
     elseif stmt isa ReturnNode
-        if isdefined(stmt, :val) && stmt.val isa SSAValue
+        if isdefined(stmt, :val)
             ReturnNode(recurse(stmt.val))
         else
             stmt
