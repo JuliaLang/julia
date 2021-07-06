@@ -884,34 +884,6 @@ end
 
 ## from general iterable to any array
                                                                                                                                                     
-"""
-    copyto!(dest::AbstractArray, src) -> dest
-
-Copy all elements from collection `src` to array `dest`, whose length must be greater than
-or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
-the other elements are left untouched.
-
-See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
-
-# Examples
-```jldoctest
-julia> x = [1., 0., 3., 0., 5.];
-
-julia> y = zeros(7);
-
-julia> copyto!(y, x);
-
-julia> y
-7-element Vector{Float64}:
- 1.0
- 0.0
- 3.0
- 0.0
- 5.0
- 0.0
- 0.0
-```
-"""
 function copyto!(dest::AbstractArray, src)
     destiter = eachindex(dest)
     y = iterate(destiter)
@@ -988,6 +960,65 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
     i <= dmax && throw(BoundsError(dest, i))
     return dest
 end
+
+## copy between abstract arrays - generally more efficient
+## since a single index variable can be used.
+
+"""
+    copyto!(dest::AbstractArray, src) -> dest
+
+Copy all elements from collection `src` to array `dest`, whose length must be greater than
+or equal to the length `n` of `src`. The first `n` elements of `dest` are overwritten,
+the other elements are left untouched.
+
+See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
+
+# Examples
+```jldoctest
+julia> x = [1., 0., 3., 0., 5.];
+
+julia> y = zeros(7);
+
+julia> copyto!(y, x);
+
+julia> y
+7-element Vector{Float64}:
+ 1.0
+ 0.0
+ 3.0
+ 0.0
+ 5.0
+ 0.0
+ 0.0
+```
+"""
+function copyto!(dest::AbstractArray, src::AbstractArray)
+    isempty(src) && return dest
+    src′ = unalias(dest, src)
+    copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
+end
+
+function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    isempty(src) && return dest
+    src′ = unalias(dest, src)
+    copyto_unaliased!(deststyle, dest, srcstyle, src′)
+end
+
+function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    isempty(src) && return dest
+    length(dest) < length(src) && throw(BoundsError(dest, LinearIndices(src)))
+    _unaliased_copyto!(deststyle, dest, srcstyle, src)
+    return dest
+end
+
+# IndexCartesian and CartesianIndices has not been defined, only implement Linear to Linear here.
+function _unaliased_copyto!(::IndexLinear, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
+    @_inline_meta
+    Δi = firstindex(dest) - firstindex(src)
+    for i in eachindex(src)
+        @inbounds dest[i + Δi] = src[i]
+    end
+end 
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
     copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))

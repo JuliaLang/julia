@@ -1354,14 +1354,15 @@ See also: [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref
 
 # Examples
 ```jldoctest
-julia> insert!([6, 5, 4, 2, 1], 4, 3)
-6-element Vector{Int64}:
- 6
- 5
- 4
- 3
- 2
+julia> insert!(Any[1:6;], 3, "here")
+7-element Vector{Any}:
  1
+ 2
+  "here"
+ 3
+ 4
+ 5
+ 6
 ```
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
