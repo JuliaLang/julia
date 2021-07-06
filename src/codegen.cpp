@@ -1467,7 +1467,8 @@ static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block)
     if (create_new_block) {
         BasicBlock *newBB = BasicBlock::Create(irbuilder.getContext(), "after_noret", f);
         irbuilder.SetInsertPoint(newBB);
-    } else {
+    }
+    else {
         irbuilder.ClearInsertionPoint();
     }
 }
