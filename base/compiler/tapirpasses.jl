@@ -717,10 +717,14 @@ function foreach_allocated_new_block(f, blocks)
     end
 end
 
-is_sequential(stmts::InstructionStream) = !any(inst -> inst isa DetachNode, stmts.inst)
-is_sequential(ir::IRCode) = is_sequential(ir.stmts) && is_sequential(ir.new_nodes.stmts)
-
-has_tapir(x) = !is_sequential(x)
+has_tapir(src::CodeInfo) = has_tapir(src.code)
+has_tapir(ir::IRCode) = has_tapir(ir.stmts.inst) || has_tapir(ir.new_nodes.stmts.inst)
+has_tapir(code::Vector{Any}) =
+    any(code) do inst
+        return inst isa Union{DetachNode,ReattachNode,SyncNode} ||
+               isexpr(inst, :syncregion) ||
+               isexpr(inst, :task_output)
+    end
 
 function havecommon(x::AbstractSet, y::AbstractSet)
     (b, c) = length(x) > length(y) ? (x, y) : (y, x)
@@ -1016,7 +1020,7 @@ end
 Mainly operates on task output variables.
 """
 function early_tapir_pass!(ir::IRCode)
-    is_sequential(ir) && return ir, false
+    has_tapir(ir) || return ir, false
     @timeit "Lower task output" ir = lower_tapir_output!(ir)
     @timeit "Check task output" ir, racy = check_tapir_race!(ir)
     racy && return ir, racy
@@ -2238,8 +2242,6 @@ function opaque_closure_method_from_ssair(ir::IRCode)
     )
 end
 
-is_sequential(src::CodeInfo) = all(x -> !(x isa DetachNode), src.code)
-
 function _lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
     # Making a copy here, as `convert_to_ircode` mutates `ci`:
     ci = copy(ci)
@@ -2261,7 +2263,7 @@ function _lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::Co
 end
 
 function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
-    is_sequential(ci) && return remove_tapir(ci)
+    has_tapir(ci) || return ci
     ir, params, opt = _lower_tapir(interp, linfo, ci)
     if JLOptions().debug_level == 2
         @timeit "verify tapir" (verify_ir(ir); verify_linetable(ir.linetable))
