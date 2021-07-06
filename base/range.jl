@@ -465,7 +465,7 @@ julia> LinRange(1.5, 5.5, 9)
 
 Compared to using [`range`](@ref), directly constructing a `LinRange` should
 have less overhead but won't try to correct for floating point errors:
-```julia
+```jldoctest
 julia> collect(range(-0.1, 0.3, length=5))
 5-element Vector{Float64}:
  -0.1
