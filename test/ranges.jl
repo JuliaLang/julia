@@ -544,6 +544,19 @@ end
     end
 end
 
+# A number type with the overflow behavior of `UInt8`. Conversion to `Integer` returns an
+# `Int32`, i.e., a type with different `typemin`/`typemax`.
+struct OverflowingReal <: Real
+    val::UInt8
+end
+OverflowingReal(x::OverflowingReal) = x
+Base.:<=(x::OverflowingReal, y::OverflowingReal) = x.val <= y.val
+Base.:+(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val + y.val)
+Base.:-(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val - y.val)
+Base.round(x::OverflowingReal, ::RoundingMode) = x
+Base.Integer(x::OverflowingReal) = Int32(x.val)
+@test length(OverflowingReal(1):OverflowingReal(0)) == 0
+
 @testset "loops involving typemin/typemax" begin
     n = 0
     s = 0
