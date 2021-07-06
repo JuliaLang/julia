@@ -91,21 +91,38 @@ function foreach_task_depth_first(f, tasks)
 end
 
 """
-    task_by_detach(tasks::Vector{ChildTask}, detach::Int) -> nothing or task::ChildTask
+    foreach_task(f, tasks)
+
+Iterate `tasks` recursively in an unspecified order.
 """
-function task_by_detach(tasks, detach::Int)
+function foreach_task(f, tasks)
     worklist = collect(ChildTask, tasks)
+    acc = true
     while !isempty(worklist)
         local task::ChildTask
         task = pop!(worklist)
-        if task.detach == detach
-            return task
-        end
-        if task.subtasks !== nothing
+        c = f(task)
+        acc &= c
+        if c && task.subtasks !== nothing
             append!(worklist, task.subtasks)
         end
     end
-    return nothing
+    return acc
+end
+
+"""
+    task_by_detach(tasks::Vector{ChildTask}, detach::Int) -> nothing or task::ChildTask
+"""
+function task_by_detach(tasks, detach::Int)
+    found = RefValue{Union{Nothing,ChildTask}}(nothing)
+    foreach_task(tasks) do task
+        if task.detach == detach
+            found.x = task
+            return false
+        end
+        return true
+    end
+    return found.x
 end
 
 function is_stmt_in_task(task::ChildTask, ir::IRCode, position::Int)
@@ -1028,6 +1045,9 @@ function early_tapir_pass!(ir::IRCode)
     return ir, racy
 end
 
+"""
+    resolve_syncregion(ir::IRCode, inst) -> ssa::SSAValue or nothing
+"""
 function resolve_syncregion(ir::IRCode, inst)
     @nospecialize inst
     inst0 = inst
@@ -1040,6 +1060,8 @@ function resolve_syncregion(ir::IRCode, inst)
             sr = ir[inst]
             isexpr(sr, :syncregion) && return inst
             inst = sr
+        else
+            return nothing
         end
         if inst === inst0
             error("cycle detected")
