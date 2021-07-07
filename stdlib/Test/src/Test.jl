@@ -167,7 +167,7 @@ struct Error <: Result
             bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(Base.show_exception_stack, bt; context=stdout)
+            bt_str = sprint(Base.show_exception_stack, ExceptionStack([(exception = Nothing, backtrace = bt)]); context=stdout)
         else
             bt_str = ""
         end
