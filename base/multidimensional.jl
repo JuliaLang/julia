@@ -1129,7 +1129,7 @@ function _unaliased_copyto!(::IndexCartesian, dest::AbstractArray, ::IndexLinear
             j = first(ax) - 1
             while i < final
                 dest[j += 1, I] = src[i += 1]
-            end 
+            end
             break
         end
     end
@@ -1147,11 +1147,11 @@ function _unaliased_copyto!(::IndexCartesian, dest::AbstractArray, ::IndexCartes
                 dest[i, I] = src[i, I]
             end
         end
-    else 
+    else
         # zip iterator
         itersrc = CartesianIndices(axsrc)
         iterdest = CartesianIndices(axdest)
-        @inbounds for (J, I) in zip(iterdest, itersrc) 
+        @inbounds for (J, I) in zip(iterdest, itersrc)
             dest[J] = src[I]
         end
     end
