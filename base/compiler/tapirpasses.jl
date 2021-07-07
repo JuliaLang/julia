@@ -2149,7 +2149,6 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
             end
         end
     end
-    ir1 = copy(ir)
 
     undef_checks = allocate_gotoifnot_sequence!(ir, map(first, task_outputs))
     original_outputs = BitSet()
