@@ -9,6 +9,7 @@ agents:
 
 steps:
   - label: "analyzegc"
+    key: analyzegc
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
@@ -17,13 +18,14 @@ steps:
           rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
     commands: |
       echo "--- Install in-tree LLVM dependencies"
-      make -j 6 -C deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
+      make -j$${JULIA_NUM_CORES} -C deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
       echo "+++ run clangsa/analyzegc"
-      make -j 6 -C test/clangsa
-      make -j 6 -C src analyzegc
+      make -j$${JULIA_NUM_CORES} -C test/clangsa
+      make -j$${JULIA_NUM_CORES} -C src analyzegc
     timeout_in_minutes: 60
 
   - label: "llvmpasses"
+    key: llvmpasses
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
@@ -34,7 +36,7 @@ steps:
           gid: 1000
     commands: |
       echo "+++ run llvmpasses"
-      make -j 6 release
-      make -j 6 -C src install-analysis-deps
-      make -j 6 -C test/llvmpasses
+      make -j$${JULIA_NUM_CORES} release JULIA_PRECOMPILE=0
+      make -j$${JULIA_NUM_CORES} -C src install-analysis-deps
+      make -j$${JULIA_NUM_CORES} -C test/llvmpasses
     timeout_in_minutes: 60

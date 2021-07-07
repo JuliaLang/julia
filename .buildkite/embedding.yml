@@ -1,0 +1,34 @@
+# These steps should only run on `sandbox.jl` machines, not `docker`-isolated ones
+# since we need nestable sandboxing.  The rootfs images being used here are built from
+# the `.buildkite/rootfs_images/llvm-passes.jl` file.
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+
+steps:
+  - label: "Run embedding tests"
+    key: embedding
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v1/llvm-passes.tar.gz
+          rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
+          uid: 1000
+          gid: 1000
+    commands: |
+      prefix="/tmp/prefix"
+      echo "+++ Build julia, deploy to $${prefix}"
+      make -j$${JULIA_NUM_CORES} JULIA_PRECOMPILE=0 prefix=$${prefix} install
+
+      embedding_output="/tmp/embedding-test"
+      echo "+++ Run embedding tests, deploy to $${embedding_output}"
+      mkdir -p "$${embedding_output}"
+      make -j$${JULIA_NUM_CORES} -C test/embedding JULIA="$${prefix}/bin/julia" BIN="$${embedding_output}"
+
+    timeout_in_minutes: 60
+    notify:
+      - github_commit_status:
+          context: "embedding"
