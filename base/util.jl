@@ -590,8 +590,8 @@ end
     Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error=false, revise=false, [seed])
 
-Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
+Run the Julia unit tests listed in `tests` (which can be either a string, a module, or an
+array of either) using `ncores` processors. If `exit_on_error` is `false`, when one test
 fails, all remaining tests in other files will still be run; they are otherwise discarded,
 when `exit_on_error == true`.
 If `revise` is `true`, the `Revise` package is used to load any modifications to `Base` or
@@ -599,13 +599,11 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
+function runtests(tests::Union{Vector{T},Vector{Module}} = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
-                  seed::Union{BitInteger,Nothing}=nothing)
-    if isa(tests,AbstractString)
-        tests = split(tests)
-    end
+                  seed::Union{BitInteger,Nothing}=nothing) where {T<:AbstractString}
+    tests = string.(tests)
     exit_on_error && push!(tests, "--exit-on-error")
     revise && push!(tests, "--revise")
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
@@ -622,3 +620,11 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end
 end
+
+runtests(tests::String; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
+         exit_on_error::Bool=false, revise::Bool=false, seed::Union{BitInteger,Nothing}=nothing) =
+    runtests(split(tests); ncores, exit_on_error, revise, seed)
+
+runtests(tests::Module; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
+         exit_on_error::Bool=false, revise::Bool=false, seed::Union{BitInteger,Nothing}=nothing) =
+    runtests([tests]; ncores, exit_on_error, revise, seed)
