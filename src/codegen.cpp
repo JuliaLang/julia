@@ -1157,7 +1157,7 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0);
 static Value *get_current_task(jl_codectx_t &ctx);
 static Value *get_current_ptls(jl_codectx_t &ctx);
 static Value *get_current_signal_page(jl_codectx_t &ctx);
-static void CreateTrap(IRBuilder<> &irbuilder);
+static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
                              jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *theF,
@@ -1456,7 +1456,7 @@ static Constant *undef_value_for_type(Type *T) {
     return undef;
 }
 
-static void CreateTrap(IRBuilder<> &irbuilder)
+static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block)
 {
     Function *f = irbuilder.GetInsertBlock()->getParent();
     Function *trap_func = Intrinsic::getDeclaration(
@@ -1464,8 +1464,13 @@ static void CreateTrap(IRBuilder<> &irbuilder)
             Intrinsic::trap);
     irbuilder.CreateCall(trap_func);
     irbuilder.CreateUnreachable();
-    BasicBlock *newBB = BasicBlock::Create(irbuilder.getContext(), "after_noret", f);
-    irbuilder.SetInsertPoint(newBB);
+    if (create_new_block) {
+        BasicBlock *newBB = BasicBlock::Create(irbuilder.getContext(), "after_noret", f);
+        irbuilder.SetInsertPoint(newBB);
+    }
+    else {
+        irbuilder.ClearInsertionPoint();
+    }
 }
 
 #if 0 // this code is likely useful, but currently unused
@@ -6901,8 +6906,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         if (seq_next >= 0 && (unsigned)seq_next < stmtslen) {
             workstack.push_back(seq_next);
         }
-        else if (!ctx.builder.GetInsertBlock()->getTerminator()) {
-            ctx.builder.CreateUnreachable();
+        else if (ctx.builder.GetInsertBlock() && !ctx.builder.GetInsertBlock()->getTerminator()) {
+            CreateTrap(ctx.builder, false);
         }
         while (!workstack.empty()) {
             int item = workstack.back();
@@ -6912,7 +6917,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 cursor = item;
                 return;
             }
-            if (seq_next != -1 && !ctx.builder.GetInsertBlock()->getTerminator()) {
+            if (seq_next != -1 && ctx.builder.GetInsertBlock() && !ctx.builder.GetInsertBlock()->getTerminator()) {
                 come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
                 ctx.builder.CreateBr(nextbb->second);
             }
@@ -7050,7 +7055,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         if (jl_is_returnnode(stmt)) {
             jl_value_t *retexpr = jl_returnnode_value(stmt);
             if (retexpr == NULL) {
-                ctx.builder.CreateUnreachable();
+                CreateTrap(ctx.builder, false);
                 find_next_stmt(-1);
                 continue;
             }
@@ -7059,7 +7064,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             jl_cgval_t retvalinfo = emit_expr(ctx, retexpr);
             retvalinfo = convert_julia_type(ctx, retvalinfo, jlrettype);
             if (retvalinfo.typ == jl_bottom_type) {
-                ctx.builder.CreateUnreachable();
+                CreateTrap(ctx.builder, false);
                 find_next_stmt(-1);
                 continue;
             }

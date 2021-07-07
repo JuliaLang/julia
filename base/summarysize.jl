@@ -17,6 +17,20 @@ Compute the amount of memory, in bytes, used by all unique objects reachable fro
 - `exclude`: specifies the types of objects to exclude from the traversal.
 - `chargeall`: specifies the types of objects to always charge the size of all of their
   fields, even if those fields would normally be excluded.
+
+See also [`sizeof`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.summarysize(1.0)
+8
+
+julia> Base.summarysize(Ref(rand(100)))
+848
+
+julia> sizeof(Ref(rand(100)))
+8
+```
 """
 function summarysize(obj;
                      exclude = Union{DataType, Core.TypeName, Core.MethodInstance},
@@ -120,12 +134,13 @@ function (ss::SummarySize)(obj::Array)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
         dsize = Core.sizeof(obj)
-        if isbitsunion(eltype(obj))
+        T = eltype(obj)
+        if isbitsunion(T)
             # add 1 union selector byte for each element
             dsize += length(obj)
         end
         size += dsize
-        if !isempty(obj) && !Base.allocatedinline(eltype(obj))
+        if !isempty(obj) && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end
