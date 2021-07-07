@@ -883,7 +883,7 @@ function copy!(dst::AbstractArray, src::AbstractArray)
 end
 
 ## from general iterable to any array
-                                                                                                                                                    
+
 function copyto!(dest::AbstractArray, src)
     destiter = eachindex(dest)
     y = iterate(destiter)
@@ -1018,7 +1018,7 @@ function _unaliased_copyto!(::IndexLinear, dest::AbstractArray, ::IndexLinear, s
     for i in eachindex(src)
         @inbounds dest[i + Δi] = src[i]
     end
-end 
+end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
     copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
