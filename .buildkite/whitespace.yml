@@ -19,3 +19,6 @@ steps:
     commands: |
       make -j$${JULIA_NUM_CORES} check-whitespace
     timeout_in_minutes: 10
+    notify:
+      - github_commit_status:
+          context: "whitespace"
