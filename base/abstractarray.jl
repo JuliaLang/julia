@@ -2154,7 +2154,7 @@ _typed_hvncat_0d_only_one() =
 
 _typed_hvncat(::Type{T}, ::Val{N}) where {T, N} = Array{T, N}(undef, ntuple(x -> 0, Val(N)))
 
-function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
+function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}}, row_first::Bool, xs::Number...) where {T, N}
     A = Array{T, N}(undef, dims...)
     lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
     lengthx = length(xs) # Cuts from 3 allocations to 1.
