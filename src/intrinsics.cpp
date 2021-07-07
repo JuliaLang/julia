@@ -284,7 +284,6 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     Type *ty = unboxed->getType();
     if (ty == to)
         return unboxed;
-    assert(to->isIntOrPtrTy() || to->isFloatingPointTy());
     bool frompointer = ty->isPointerTy();
     bool topointer = to->isPointerTy();
     const DataLayout &DL = jl_data_layout;

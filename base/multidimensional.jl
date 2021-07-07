@@ -1103,48 +1103,48 @@ copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices
 # Cartesian to Linear unaliased copy
 function _unaliased_copyto!(::IndexLinear, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
     @_inline_meta
-    axs = axes(src)
-    ax, iter = axs[1], CartesianIndices(tail(axs))
-    len, j = length(ax), firstindex(dest)
+    ax = axes1(src)
+    iter = CartesianIndices(safe_tail(axes(src)))
+    j = firstindex(dest) - 1
     @inbounds for I in iter
-        n = 0
-        while n < len
-            dest[j + n] = src[first(ax) + n, I.I...]
-            n += 1
+        for i in ax
+            dest[j += 1] = src[i, I]
         end
-        j += len
     end
 end
 
 # Linear to Cartesian unaliased copy
 function _unaliased_copyto!(::IndexCartesian, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
     @_inline_meta
-    axs = axes(dest)
-    ax, iter = axs[1], CartesianIndices(tail(axs))
-    len, i = length(ax), firstindex(src)
-    final = lastindex(src) + 1
+    ax = axes1(dest)
+    iter = CartesianIndices(safe_tail(axes(dest)))
+    len = length(ax)
+    i, final = firstindex(src) - 1, lastindex(src)
     @inbounds for I in iter
-        len′ = min(final - i, len)
-        n = 0
-        while n < len′
-            dest[first(ax) + n, I.I...] = src[i + n]
-            n += 1
+        if final - i > len
+            for j in ax
+                dest[j, I] = src[i += 1]
+            end
+        else
+            j = first(ax) - 1
+            while i < final
+                dest[j += 1, I] = src[i += 1]
+            end 
+            break
         end
-        (i += len′) == final && break
     end
 end
 
-# Cartesian to Cartesian unaliased copy
 function _unaliased_copyto!(::IndexCartesian, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
     @_inline_meta
     axdest, axsrc = axes(dest), axes(src)
-    if axdest == axsrc 
+    if axdest == axsrc
         # shared iterator (manually expended)
-        ax, iter = axsrc[1], CartesianIndices(tail(axsrc))
+        ax = axes1(dest)
+        iter = CartesianIndices(safe_tail(axdest))
         @inbounds for I in iter
             for i in ax
-                I′ = CartesianIndex(i, I.I...)
-                dest[I′] = src[I′]
+                dest[i, I] = src[i, I]
             end
         end
     else 
