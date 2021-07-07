@@ -43,9 +43,11 @@ steps:
           workspaces:
             - "/cache/repos:/cache/repos"
     commands: |
-      echo "+++ run llvmpasses"
+      echo "--- make release"
       make -j$${JULIA_NUM_CORES} release JULIA_PRECOMPILE=0
+      echo "--- make src/install-analysis-deps"
       make -j$${JULIA_NUM_CORES} -C src install-analysis-deps
+      echo "+++ make test/llvmpasses"
       make -j$${JULIA_NUM_CORES} -C test/llvmpasses
     timeout_in_minutes: 60
     notify:
