@@ -635,12 +635,12 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             edges = el.edges
             values = el.values
             while i <= length(edges)
-                was_deleted = ssachangemap[edges[i]] == typemin(Int)
+                was_deleted = labelchangemap[edges[i]] == typemin(Int)
                 if was_deleted
                     deleteat!(edges, i)
                     deleteat!(values, i)
                 else
-                    edges[i] += ssachangemap[edges[i]]
+                    edges[i] += labelchangemap[edges[i]]
                     val = values[i]
                     if isa(val, SSAValue)
                         values[i] = SSAValue(val.id + ssachangemap[val.id])
