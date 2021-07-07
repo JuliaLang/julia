@@ -2106,6 +2106,7 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
 
 [:, :, 2] =
  4  5  6
+
 ```
 
 # Examples for construction of the arguments:
