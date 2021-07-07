@@ -204,6 +204,11 @@ julia> @time begin
 macro time(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+
+        ## ensure these are compiled as they are first called within the compilation-timed region
+        precompile(time_ns, ())
+        precompile(cumulative_compile_time_ns_after, ())
+
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
@@ -250,6 +255,11 @@ pool allocs:       1
 macro timev(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
+
+        ## ensure these are compiled as they are first called within the compilation-timed region
+        precompile(time_ns, ())
+        precompile(cumulative_compile_time_ns_after, ())
+
         local stats = gc_num()
         local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
