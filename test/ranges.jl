@@ -545,7 +545,7 @@ end
 end
 
 # A number type with the overflow behavior of `UInt8`. Conversion to `Integer` returns an
-# `Int32`, i.e., a type with different `typemin`/`typemax`.
+# `Int32`, i.e., a type with different `typemin`/`typemax`. See  #41479
 struct OverflowingReal <: Real
     val::UInt8
 end
