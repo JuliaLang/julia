@@ -24,6 +24,9 @@ Another thing to note: if your program uses multiple workers processes, it is li
 want all such worker processes to run under Valgrind, not just the parent process.  To do this,
 pass `--trace-children=yes` to `valgrind`.
 
+Yet another thing to note: if using `valgrind` errors with `Unable to find compatible target in system image`,
+try rebuilding the sysimage with target `generic` or julia with `JULIA_CPU_TARGET=generic`.
+
 ## Suppressions
 
 Valgrind will typically display spurious warnings as it runs.  To reduce the number of such warnings,
