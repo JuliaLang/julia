@@ -2147,17 +2147,31 @@ function typed_hvncat(T::Type, shape::Tuple{Vararg{Tuple, 1}}, ::Bool, xs...) # 
         throw(ArgumentError("last level of shape must contain only one integer"))
     return typed_vcat(T, xs...)
 end
+
 function typed_hvncat(T::Type, dims::Tuple{Vararg{Int, 1}}, ::Bool, xs...)
     all(>(0), dims) ||
         throw(ArgumentError("`dims` argument must consist of positive integers"))
     return typed_vcat(T, xs...)
 end
+                                                                                                                    
 typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs...) where T = Vector{T}()
-_typed_hvncat(::Type{T}, ::Tuple{}, ::Bool, xs::Number...) where T = Vector{T}()
+# 1-dimensional hvncat methods
+
+_typed_hvncat(::Type, ::Val{0}) = _typed_hvncat_0d_only_one()
+_typed_hvncat(T::Type, ::Val{0}, x) = fill(convert(T, x))
+_typed_hvncat(T::Type, ::Val{0}, x::Number) = fill(convert(T, x))
+_typed_hvncat(T::Type, ::Val{0}, x::AbstractArray) = convert.(T, x)
+_typed_hvncat(::Type, ::Val{0}, ::Any...) = _typed_hvncat_0d_only_one()
+_typed_hvncat(::Type, ::Val{0}, ::Number...) = _typed_hvncat_0d_only_one()
+_typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_only_one()
+
+_typed_hvncat_0d_only_one() =
+    throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
+
+_typed_hvncat(::Type{T}, ::Val{N}) where {T, N} = Array{T, N}(undef, ntuple(x -> 0, Val(N)))
+
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, xs::Number...) where {T, N}
     all(>(0), dims) ||
         throw(ArgumentError("`dims` argument must contain positive integers"))
@@ -2214,7 +2228,8 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         throw(ArgumentError("concatenation dimension must be nonnegative"))
     for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
-            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as)), false, as...)
+            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as), 1), false, as...)
+            # the extra 1 is to avoid an infinite cycle
     end
 
     nd = max(N, ndims(as[1]))
@@ -2272,6 +2287,31 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
         end
     end
     return A
+end
+
+
+# 0-dimensional cases for balanced and unbalanced hvncat method
+
+_typed_hvncat(T::Type, ::Tuple{}, ::Bool, x...) = _typed_hvncat(T, Val(0), x...)
+_typed_hvncat(T::Type, ::Tuple{}, ::Bool, x::Number...) = _typed_hvncat(T, Val(0), x...)
+
+
+# balanced dimensions hvncat methods
+
+_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
+_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
+
+function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T, row_first}
+    lengthas = length(as)
+    ds > 0 ||
+        throw(ArgumentError("`dimsshape` argument must consist of positive integers"))
+    lengthas == ds ||
+        throw(ArgumentError("number of elements does not match `dimshape` argument; expected $ds, got $lengthas"))
+    if row_first
+        return _typed_hvncat(T, Val(2), as...)
+    else
+        return _typed_hvncat(T, Val(1), as...)
+    end
 end
 
 function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, as...) where {T, N}
@@ -2338,11 +2378,21 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     return A
 end
 
-function _typed_hvncat(::Type{T}, shape::Tuple{Vararg{Tuple, N}}, row_first::Bool, as...) where {T, N}
+
+# unbalanced dimensions hvncat methods
+
+function _typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...)
+    length(shape[1]) > 0 ||
+        throw(ArgumentError("each level of `shape` argument must have at least one value"))
+    return _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
+end
+                                                                                                                    
+function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {T, N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     all(>(0), tuple((shape...)...)) ||
         throw(ArgumentError("`shape` argument must consist of positive integers"))
+
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
     shapev = collect(shape) # saves allocations later
