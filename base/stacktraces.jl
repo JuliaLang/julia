@@ -134,6 +134,14 @@ function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
         func = top_level_scope_sym
         file = empty_sym
         line = 0
+        for linfo in codeinfo.linetable
+            if linfo.inlined_at == 0
+                func = Symbol(linfo.method)::Symbol
+                file = linfo.file
+                line = linfo.line
+                break
+            end
+        end
     end
     i = max(ip.stmt+1, 1)  # ip.stmt is 0-indexed
     if i > length(codeinfo.codelocs) || codeinfo.codelocs[i] == 0
@@ -247,7 +255,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             Base.show_mi(io, linfo, true)
         end
     elseif linfo isa CodeInfo
-        print(io, "top-level scope")
+        print(io, frame.func)
     end
 end
 

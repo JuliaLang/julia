@@ -191,3 +191,17 @@ let bt
     end
     @test any(s->startswith(string(s), "f33065(x::Float32, y::Float32; b::Float64, a::String, c::"), bt)
 end
+
+# opaque closures
+let
+    foobar(x) = error(x)
+    ci = code_lowered(foobar, Tuple{Any})[]
+    oc = eval(Expr(:new_opaque_closure, Tuple{Any}, false, Any, Any,
+                   Expr(:opaque_closure_method, :foobar, 1, LineNumberNode(1, :foo), ci)))
+    bt = try
+        oc(1)
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test any(s->startswith(string(s), "foobar"), bt)
+end
