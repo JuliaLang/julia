@@ -35,11 +35,7 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
     end
     if isvarargtype(t)
         if !isdefined(t, :N)
-            if unwrapva(t) === Any
-                return string(s, "..."), ""
-            else
-                return s, string_with_env(env, unwrapva(t)) * "..."
-            end
+            return s, string_with_env(env, unwrapva(t)) * "..."
         end
         return s, string_with_env(env, "Vararg{", t.T, ", ", t.N, "}")
     end
@@ -197,7 +193,7 @@ function sym_to_string(sym)
     end
 end
 
-function show(io::IO, m::Method)
+function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width = -1)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
@@ -206,24 +202,41 @@ function show(io::IO, m::Method)
         return
     end
     print(io, decls[1][2], "(")
-    join(
-        io,
-        String[isempty(d[2]) ? d[1] : string(d[1], "::", d[2]) for d in decls[2:end]],
-        ", ",
-        ", ",
-    )
+
+    # arguments
+    for (i,d) in enumerate(decls[2:end])
+        printstyled(io, d[1], color=:light_black)
+        print(io, "::")
+        if isempty(d[2])
+            printstyled(io, "Any", color=:bold)
+        else
+            print_type_bicolor(io, d[2], color=:bold, inner_color=:normal)
+        end
+        i < length(decls)-1 && print(io, ", ")
+    end
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
         print(io, "; ")
-        join(io, map(sym_to_string, kwargs), ", ", ", ")
+        for kw in kwargs
+            skw = sym_to_string(kw)
+            if QuoteNode(kw) in m.roots # then it's required
+                printstyled(io, skw, color=:bold)
+            else
+                print(io, skw)
+            end
+            if kw != last(kwargs)
+                print(io, ", ")
+            end
+        end
     end
     print(io, ")")
     show_method_params(io, tv)
-    print(io, " in ", m.module)
-    if line > 0
-        file, line = updated_methodloc(m)
-        print(io, " at ", file, ":", line)
+
+    # module & flie, re-using function from errorshow.jl
+    if digit_align_width > 0
+        println(io)
     end
+    print_module_path_file(io, m.module, string(file), line, modulecolor, digit_align_width)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -242,15 +255,18 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
         namedisplay = namefmt(sname)
         if hasname
             what = startswith(sname, '@') ? "macro" : "generic function"
-            print(io, " for ", what, " ", namedisplay)
+            print(io, " for ", what, " ", namedisplay, " from ")
+            printstyled(io, ms.mt.module, color=:blue)
+            print(io, ":")
         elseif '#' in sname
-            print(io, " for anonymous function ", namedisplay)
+            print(io, " for anonymous function ", namedisplay, ":")
         elseif mt === _TYPE_NAME.mt
-            print(io, " for type constructor")
+            print(io, " for type constructor:")
         end
-        print(io, ":")
     end
 end
+
+const METHODLIST_MODULECOLORS = [:cyan, :green, :yellow]
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
     mt = ms.mt
@@ -266,12 +282,31 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
+    modul = if mt === _TYPE_NAME.mt  # type constructor
+            which(ms.ms[1].module, ms.ms[1].name)
+        else
+            mt.module
+        end
+    modulecolordict = Dict{Module, Symbol}()
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(METHODLIST_MODULECOLORS))
+    modulecolordict[parentmodule_before_main(modul)] = :blue
+
+    digit_align_width = length(string(max>0 ? max : length(ms)))
+
     for meth in ms
         if max==-1 || n<max
             n += 1
             println(io)
-            print(io, "[$n] ")
-            show(io, meth)
+            print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
+
+            modulecolor = if meth.module == modul
+                nothing
+            else
+                m = parentmodule_before_main(meth.module)
+                get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+            end
+            show(io, meth; modulecolor)
+
             file, line = updated_methodloc(meth)
             if last_shown_line_infos !== nothing
                 push!(last_shown_line_infos, (string(file), line))

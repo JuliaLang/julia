@@ -45,7 +45,7 @@ test_code_reflections(test_ir_reflection, code_typed)
 io = IOBuffer()
 Base.print_statement_costs(io, map, (typeof(sqrt), Tuple{Int}))
 str = String(take!(io))
-@test occursin("map(f, t::Tuple{Any})", str)
+@test occursin("map(f::Any, t::Tuple{Any})", str)
 @test occursin("sitofp", str)
 @test occursin(r"20 .*sqrt_llvm.*::Float64", str)
 
