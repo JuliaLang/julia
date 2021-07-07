@@ -1007,6 +1007,30 @@ preprocess_args(dest, args::Tuple{}) = ()
     return dest
 end
 
+# Performance optimization: for BitVector outputs, we cache the result
+# in a 64-bit register before writing into memory (to bypass LSQ)
+@inline function copyto!(dest::BitVector, bc::Broadcasted{Nothing})
+    axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
+    ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    destc = dest.chunks
+    length(destc)<=0 && return dest
+    bcp = preprocess(dest, bc)
+    @inbounds for i = 0:length(destc)-2
+        z = UInt64(0)
+        for j=0:63
+           z |= (bcp[i*64 + j + 1]::Bool) << (j&63)
+        end
+        destc[i+1] = z
+    end
+    i = length(destc)-1
+    z = UInt64(0)
+    @inbounds for j=0:(length(bcp)-1)&63
+         z |= (bcp[i*64 + j + 1]::Bool) << (j&63)
+    end
+    @inbounds destc[i+1] = z
+    return dest
+end
+
 # Performance optimization: for BitArray outputs, we cache the result
 # in a "small" Vector{Bool}, and then copy in chunks into the output
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
