@@ -102,10 +102,10 @@ end
 """
     unique(itr)
 
-Return an array containing only the unique elements of collection `itr`,
-as determined by [`isequal`](@ref), in the order that the first of each
-set of equivalent elements originally appears. The element type of the
-input is preserved.
+Return an array containing only the unique elements of collection `itr`, as
+determined by [`isequal`](@ref), in the order that the first of each set of
+equivalent elements originally appears. The element type of the input is
+preserved. Note that [`isequal`](@ref) requires equality of [`hash`](@ref).
 
 See also: [`unique!`](@ref), [`allunique`](@ref).
 
