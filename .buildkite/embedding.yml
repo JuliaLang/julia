@@ -18,6 +18,9 @@ steps:
           rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
           uid: 1000
           gid: 1000
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
     commands: |
       prefix="/tmp/prefix"
       echo "+++ Build julia, deploy to $${prefix}"
