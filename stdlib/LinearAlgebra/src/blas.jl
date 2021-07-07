@@ -400,24 +400,24 @@ end
 function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasReal
     require_one_based_indexing(DX, DY)
     n = length(DX)
-    if n != length(DY)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+    if axes(DX) != axes(DY)
+        throw(DimensionMismatch("The first array has axes $(axes(DX)) that do not match the axes of the second, $(axes(DY)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
     end
     return dot(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
     require_one_based_indexing(DX, DY)
     n = length(DX)
-    if n != length(DY)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+    if axes(DX) != axes(DY)
+        throw(DimensionMismatch("The first array has axes $(axes(DX)) that do not match the axes of the second, $(axes(DY)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
     end
     return dotc(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
     require_one_based_indexing(DX, DY)
     n = length(DX)
-    if n != length(DY)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+    if axes(DX) != axes(DY)
+        throw(DimensionMismatch("The first array has axes $(axes(DX)) that do not match the axes of the second, $(axes(DY)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
     end
     return dotu(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end

@@ -1487,7 +1487,9 @@ end
 function dot(x::AbstractVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
     require_one_based_indexing(x, y)
     n = length(x)
-    length(y) == n || throw(DimensionMismatch())
+    if axes(x) != axes(y)
+        throw(DimensionMismatch("The first array has axes $(axes(x)) that do not match the axes of the second, $(axes(y)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
+    end
     nzind = nonzeroinds(y)
     nzval = nonzeros(y)
     s = dot(zero(Tx), zero(Ty))
@@ -1500,7 +1502,9 @@ end
 function dot(x::SparseVectorUnion{Tx}, y::AbstractVector{Ty}) where {Tx<:Number,Ty<:Number}
     require_one_based_indexing(x, y)
     n = length(y)
-    length(x) == n || throw(DimensionMismatch())
+    if axes(x) != axes(y)
+        throw(DimensionMismatch("The first array has axes $(axes(x)) that do not match the axes of the second, $(axes(y)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
+    end
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
     s = dot(zero(Tx), zero(Ty))
@@ -1534,7 +1538,9 @@ end
 function dot(x::SparseVectorUnion{<:Number}, y::SparseVectorUnion{<:Number})
     x === y && return sum(abs2, x)
     n = length(x)
-    length(y) == n || throw(DimensionMismatch())
+    if axes(x) != axes(y)
+        throw(DimensionMismatch("The first array has axes $(axes(x)) that do not match the axes of the second, $(axes(y)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
+    end
 
     xnzind = nonzeroinds(x)
     ynzind = nonzeroinds(y)

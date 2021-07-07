@@ -905,11 +905,10 @@ end
 dot(x::Number, y::Number) = conj(x) * y
 
 function dot(x::AbstractArray, y::AbstractArray)
-    lx = length(x)
-    if lx != length(y)
-        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
+    if axes(x) != axes(y)
+        throw(DimensionMismatch("The first array has axes $(axes(x)) that do not match the axes of the second, $(axes(y)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
     end
-    if lx == 0
+    if length(x) == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
     s = zero(dot(first(x), first(y)))

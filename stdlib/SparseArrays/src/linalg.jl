@@ -300,7 +300,9 @@ ilog2(n::Integer) = sizeof(n)<<3 - leading_zeros(n)
 # Frobenius dot/inner product: trace(A'B)
 function dot(A::AbstractSparseMatrixCSC{T1,S1},B::AbstractSparseMatrixCSC{T2,S2}) where {T1,T2,S1,S2}
     m, n = size(A)
-    size(B) == (m,n) || throw(DimensionMismatch("matrices must have the same dimensions"))
+    if size(B) != (m,n)
+        throw(DimensionMismatch("The first array has size $(size(A)) which does not match the size of the second, $(size(B)). You might want to use `dot(vec(x), vec(y))` if `length(x) == length(y)`."))
+    end
     r = dot(zero(T1), zero(T2))
     @inbounds for j = 1:n
         ia = getcolptr(A)[j]; ia_nxt = getcolptr(A)[j+1]

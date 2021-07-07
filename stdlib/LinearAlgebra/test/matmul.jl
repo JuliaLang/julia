@@ -433,6 +433,10 @@ end
     @test dot(X, Y) == convert(elty, 35.0)
     Z = convert(Vector{Matrix{elty}},[reshape(1:4, 2, 2), fill(1, 2, 2)])
     @test dot(Z, Z) == convert(elty, 34.0)
+    Y2 = convert(Matrix{elty},[1.5 3.5 2.5 4.5])
+    @test_throws DimensionMismatch dot(X, Y2)
+    @test_throws DimensionMismatch dot(vec(X), Y2)
+    @test dot(X, Y) == dot(vec(X), vec(Y2))
 end
 
 dot1(x,y) = invoke(dot, Tuple{Any,Any}, x,y)
@@ -452,6 +456,21 @@ dot2(x,y) = invoke(dot, Tuple{AbstractArray,AbstractArray}, x,y)
             else
                 @test d(1:n1, 1:n2) ≈ norm(1:n1)^2
             end
+        end
+    end
+    for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        XX = convert(Matrix{elty},[1.0 2.0; 3.0 4.0])
+        YY = convert(Matrix{elty},[1.5 2.5; 3.5 4.5])
+        YY2 = convert(Matrix{elty},[1.5 3.5 2.5 4.5])
+        for X in (copy(XX), view(XX, 1:2, 1:2)), Y in (copy(YY), view(YY, 1:2, 1:2)), Y2 in (copy(YY2), view(YY2, 1:1, 1:4))
+            @test dot1(X, Y) == convert(elty, 35.0)
+            @test dot2(X, Y) == convert(elty, 35.0)
+            @test dot1(X, Y2) == convert(elty, 35.0) # dot1 considers general iterators and cannot check sizes
+            @test_throws DimensionMismatch dot2(X, Y2)
+            @test dot1(vec(X), Y2) == convert(elty, 35.0) # dot1 considers general iterators and cannot check sizes
+            @test_throws DimensionMismatch dot2(vec(X), Y2)
+            @test dot1(X, Y) == dot1(vec(X), vec(Y2))
+            @test dot2(X, Y) == dot2(vec(X), vec(Y2))
         end
     end
 end
