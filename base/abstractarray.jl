@@ -2153,7 +2153,7 @@ function typed_hvncat(T::Type, dims::Tuple{Vararg{Int, 1}}, ::Bool, xs...)
         throw(ArgumentError("`dims` argument must consist of positive integers"))
     return typed_vcat(T, xs...)
 end
-                                                                                                                    
+
 typed_hvncat(T::Type, dimsshape::Tuple, row_first::Bool, xs...) = _typed_hvncat(T, dimsshape, row_first, xs...)
 typed_hvncat(T::Type, dim::Int, xs...) = _typed_hvncat(T, Val(dim), xs...)
 
@@ -2386,7 +2386,7 @@ function _typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...)
         throw(ArgumentError("each level of `shape` argument must have at least one value"))
     return _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
 end
-                                                                                                                    
+
 function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {T, N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
