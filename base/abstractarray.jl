@@ -2274,7 +2274,7 @@ function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T,
         return _typed_hvncat(T, Val(1), as...)
     end
 end
-                                                                                                                    
+
 function _typed_hvncat(T::Type, dims::NTuple{N, Int}, row_first::Bool, as...) where {N}
     # function barrier after calculating the max is necessary for high performance
     nd = max(maximum(cat_ndims(a) for a ∈ as), N)
@@ -2348,7 +2348,7 @@ end
 
 
 # unbalanced dimensions hvncat methods
-                                                                                                                    
+
 function _typed_hvncat(T::Type, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {N}
     # function barrier after calculating the max is necessary for high performance
     nd = max(maximum(cat_ndims(a) for a ∈ as), N)
