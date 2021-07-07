@@ -96,8 +96,10 @@ end
 
 function display_error(io::IO, stack::ExceptionStack, compacttrace::Bool = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    stack = ExceptionStack([ (exception = x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack ])
-    show_exception_stack(IOContext(io, :limit => true, :compacttrace => isinteractive() ? compacttrace : false), stack)
+    stack = ExceptionStack([(exception = x[1], backtrace = scrub_repl_backtrace(x[2])) for x in stack ])
+    istrivial = length(stack) == 1 && length(stack[1].backtrace) ≤ 1 # frame 1 = top level
+    !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
+    show_exception_stack(IOContext(io, :limit => true), stack)
     println(io)
 end
 display_error(stack::ExceptionStack, compacttrace = false) = display_error(stderr, stack, compacttrace)
@@ -114,7 +116,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 print(color_normal)
             end
             if lasterr !== nothing
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
                 invokelatest(display_error, errio, lasterr, true)
                 errcount = 0
                 lasterr = nothing
@@ -146,7 +147,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
             end
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
         end
     end
     isa(stdin, TTY) && println()

@@ -160,7 +160,6 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 println(err)
             end
             lasterr = current_exceptions()
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
         end
     end
 
@@ -282,7 +281,6 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
         try
             Base.sigatomic_end()
             if iserr
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, val)
                 Base.invokelatest(Base.display_error, errio, val, true)
             else
                 if val !== nothing && show_value
@@ -305,7 +303,6 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
                     stack = current_exceptions()
-                    ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
                     Base.invokelatest(Base.display_error, errio, stack, true)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
