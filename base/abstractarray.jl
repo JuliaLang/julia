@@ -2170,8 +2170,6 @@ _typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_only_one(
 _typed_hvncat_0d_only_one() =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
-_typed_hvncat(::Type{T}, ::Val{N}) where {T, N} = Array{T, N}(undef, ntuple(x -> 0, Val(N)))
-
 function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {T, N}
     all(>(0), dims) ||
         throw(ArgumentError("`dims` argument must contain positive integers"))
@@ -2220,7 +2218,7 @@ end
 function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be nonnegative"))
-    return Vector{T}()
+    return Array{T, N}(undef, ntuple(x -> 0, Val(N)))
 end
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
