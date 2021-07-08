@@ -312,6 +312,9 @@ test_field_undef(ARefxy{UndefComplex{Any}})
 test_field_undef(ARefxy{UndefComplex{UndefComplex{Any}}})
 
 @test_throws ErrorException @macroexpand @atomic foo()
+@test_throws ErrorException @macroexpand @atomic foo.bar.baz
+@test_throws ErrorException @macroexpand @atomic foo[:bar].baz
+@test_throws ErrorException @macroexpand @atomic foo().bar
 @test_throws ErrorException @macroexpand @atomic foo += bar
 @test_throws ErrorException @macroexpand @atomic foo += bar
 @test_throws ErrorException @macroexpand @atomic foo = bar
@@ -319,7 +322,11 @@ test_field_undef(ARefxy{UndefComplex{UndefComplex{Any}}})
 @test_throws ErrorException @macroexpand @atomic foo(bar)
 @test_throws ErrorException @macroexpand @atomic foo(bar, baz)
 @test_throws ErrorException @macroexpand @atomic foo(bar, baz, bax)
+@test_throws ErrorException @macroexpand @atomicswap foo.bar.baz bar
+@test_throws ErrorException @macroexpand @atomicswap foo[:bar].baz bar
+@test_throws ErrorException @macroexpand @atomicswap foo().bar bar
 @test_throws ErrorException @macroexpand @atomicreplace foo bar
+@test_throws ErrorException @macroexpand @atomicreplace foo.bar.baz bar
 
 # test macroexpansions
 let a = ARefxy(1, -1)
