@@ -2193,7 +2193,7 @@ end
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
 _typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
-    cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
+    A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
     hvncat_fill!(A, false, xs)
     return A
 end
