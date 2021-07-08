@@ -11,6 +11,12 @@ An easy solution is to have an dedicated build folder for providing a matching t
 with `BUILD_LLVM_CLANG=1`. You can then refer to this toolchain from another build
 folder by specifying `USECLANG=1` while overriding the `CC` and `CXX` variables.
 
+The sanitizers error out when they detect a shared library being opened using `RTLD_DEEPBIND`
+(ref: [google/sanitizers#611](https://github.com/google/sanitizers/issues/611)).
+Since [libblastrampoline](https://github.com/staticfloat/libblastrampoline) by default
+uses `RTLD_DEEPBIND`, we need to set the environment variable `LBT_USE_RTLD_DEEPBIND=0`
+when using a sanitizer.
+
 To use one of of the sanitizers set `SANITIZE=1` and then the appropriate flag for the sanitizer you
 want to use.
 
