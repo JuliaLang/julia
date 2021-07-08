@@ -321,7 +321,14 @@ julia> "abc" == "αβγ"
 false
 ```
 """
-==(a::AbstractString, b::AbstractString) = cmp(a, b) == 0
+function ==(a::AbstractString, b::AbstractString)
+    a === b && return true
+    for (c::AbstractChar, d::AbstractChar) in zip(a, b)
+        c != d && return false
+    end
+    length(a) != length(b) && return false
+    return true
+end
 
 """
     isless(a::AbstractString, b::AbstractString) -> Bool
