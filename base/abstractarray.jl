@@ -584,7 +584,7 @@ end
 # This version is type-stable even if inds is heterogeneous
 function trailingsize(inds::Indices)
     @_inline_meta
-    _prod_simple(map(length, inds))
+    prod(map(length, inds))
 end
 
 ## Bounds checking ##
@@ -2296,7 +2296,7 @@ function _typed_hvncat(::Type{T}, dims::Tuple{Vararg{Int, N}}, row_first::Bool, 
     for a ∈ as
         len += cat_length(a)
     end
-    outlen = _prod_simple(outdims)
+    outlen = prod(outdims)
     outlen == 0 && throw(ArgumentError("too few elements in arguments, unable to infer dimensions"))
     len == outlen || throw(ArgumentError("too many elements in arguments; expected $(outlen), got $(len)"))
 
