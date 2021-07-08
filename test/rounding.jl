@@ -77,6 +77,16 @@ end
         end
     end
 end
+
+@testset "For issue #24021" begin
+    types = [Float16, Float32, Float64, BigFloat, Int16, Int32, Int64, BigInt]
+    for T in types, S in types[1:4]
+        x = round(T, S(1.1))
+        @test x == 1
+        @test x isa T
+    end
+end
+
 @testset "fenv" begin
     @test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundNearest)) == RoundNearest
     @test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundToZero)) == RoundToZero
