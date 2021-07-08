@@ -2143,7 +2143,7 @@ function typed_hvncat(T::Type, shape::Tuple{Vararg{Tuple, 1}}, ::Bool, xs...) # 
         throw(ArgumentError("each level of `shape` argument must have at least one value"))
     all(>(0), tuple((shape...)...)) ||
         throw(ArgumentError("`shape` argument must consist of positive integers"))
-    length(shapev[end]) == 1 ||
+    length(shape[end]) == 1 ||
         throw(ArgumentError("last level of shape must contain only one integer"))
     return typed_vcat(T, xs...)
 end
