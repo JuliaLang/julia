@@ -573,6 +573,8 @@ export
     bytes2hex,
     chomp,
     chop,
+    chopprefix,
+    chopsuffix,
     codepoint,
     codeunit,
     codeunits,
