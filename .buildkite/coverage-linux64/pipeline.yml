@@ -31,9 +31,18 @@ steps:
       # this is necessary to make sure that the LibGit2 tests passes
       git config --global init.defaultBranch master
 
-      echo "--- Run Julia tests with code coverage enabled"
-      # Run the actual tests
-      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_base.jl
+      echo "--- Run some Julia tests in serial"
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_serial.jl test/compiler/codegen.jl
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_serial.jl test/compiler/contextual.jl
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_serial.jl test/compiler/inference.jl
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_serial.jl test/compiler/inline.jl
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_serial.jl test/compiler/interpreter_exec.jl
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_serial.jl test/compiler/irpasses.jl
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_serial.jl test/compiler/ssair.jl
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_serial.jl test/compiler/validation.jl
+
+      echo "--- Run Julia tests in parallel with code coverage enabled"
+      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/coverage-linux64/run_tests_parallel.jl
 
       echo "--- Process and upload coverage information"
       ./julia .buildkite/coverage-linux64/upload_coverage.jl
