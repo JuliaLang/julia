@@ -134,19 +134,6 @@ P = 1
 
 """ A simple example with less macro tricks. """
 function simple()
-    local ao, bo
-    token = Tapir.@syncregion
-    Tapir.@spawnin token begin
-        ao = produce()
-    end
-    bo = produce()
-    Tapir.@sync_end token
-    a = Tapir._load(ao, :a)
-    b = Tapir._load(bo, :b)
-    a + b
-end
-
-function simple_task_output()
     Tapir.@output a b
     token = Tapir.@syncregion
     Tapir.@spawnin token begin
@@ -160,7 +147,7 @@ end
 call(f) = f()
 
 function simple_closure_set_by_one(flag)
-    local slot
+    Tapir.@output slot
     token = Tapir.@syncregion
     Tapir.@spawnin token begin
         call() do
@@ -175,24 +162,12 @@ function simple_closure_set_by_one(flag)
         end
     end
     Tapir.@sync_end token
-    out = Tapir._load(slot, :out)
-    return out
-end
-
-function simple_escaping_task_output()
-    local slot
-    token = Tapir.@syncregion
-    Tapir.@spawnin token begin
-        slot = produce(111)
-    end
-    Tapir.@sync_end token
-    identity(slot)  # escaping
-    out = Tapir._load(slot, :out)
+    out = slot
     return out
 end
 
 function simple_conditional_task_output(x::Bool)
-    local slot
+    Tapir.@output slot
     token = Tapir.@syncregion
     Tapir.@spawnin token if x
         slot = produce(111)
@@ -200,7 +175,7 @@ function simple_conditional_task_output(x::Bool)
     b = produce(222)
     Tapir.@sync_end token
     if @isdefined(slot)
-        a = Tapir._load(slot, :a)
+        a = slot
     end
     return b + (x ? a : 0)
 end

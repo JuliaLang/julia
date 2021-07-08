@@ -125,58 +125,55 @@ end
     )
 end
 
-@noinline function escaping_task_output_error(name = nothing)::Union{}
-    @nospecialize
-    msg = "Tapir: escaping task output variable"
-    if name !== nothing
-        msg = "$msg: $name"
-    end
-    throw(ConcurrencyViolationError(msg))
-end
-
 #####
 ##### Julia-Tapir Frontend
 #####
 
+macro syncregion()
+    Expr(:syncregion)
+end
+
 """
-    Tapir._load(x, name::Symbol) -> x
+    shadow_vars(ex::Expr) -> ex′::Expr
 
-[INTERNAL] A placeholder for denoting where the task output variables named
-`name` should be loaded.
+If the syntax `\$x` is used in lhs/lvalue _or_ rhs/rvalue, replace it with a
+local variable `x_shadow` that acts as a local copy of `\$x`. If `\$x` appears
+as in lhs, also insert the "store" `\$x = x_shadow` (so that it can be
+translated into set-many-load-once PhiC/Upsilon nodes).  If `\$x` appears in
+`ex`, the variable `x` is declared to be local in `ex` to avoid introducing the
+phi nodes in the continuation [^no_racy_phi].
 
-The task output syntax
+That is to say, it transforms
 
-    Tapir.@sync begin
+    @spawn begin
         ...
-        Tapir.@spawn \$output = rhs
-        ...
+        \$x = f(\$x)
     end
 
-is lowered to an AST equivalent to
+to
 
-    local slot
-    Tapir.@sync begin
-        ...
-        Tapir.@spawn slot = rhs
-        ...
+    let x_shadow
+        if @isdefined x
+            x_shadow = x
+        end
+        @raw_spawn begin
+            local x  # required for avoiding "racy phi" [^no_racy_phi]
+            # if @isdefined x_shadow
+            #     x = x_shadow   # TODO: should we?
+            # end
+            ...
+            x_shadow = f(x_shadow)
+            \$x = x_shadow
+        end
     end
-    output = Tapir._load(slot, :output)
 
-The function `_load` returns the first argument as-is. This lets the inference
-to support task output without any change (given that the source program does
-not have a race).
+[^no_racy_phi]: We need to make `x` a local variable when we have `\$x` because
+    `x` may appear after the `end` of `@sync`. Since we "load" `\$x` only when
+    it is defined (to support conditional task outputs; see `@sync` definition),
+    a phi node has to be inserted after reattach for the variable live through
+    the `else` branch of `@isdefined \$x`.
 
-The function `_load` treated specially during slot2reg; i.e., the slots
-specified as the first argument are _not_ promoted to SSA registers (ref
-`task_output_slots`).  These leftover slots are transformed to PhiC and Upsilon
-nodes inside the `lower_tapir_phic_output!` pass run just after slot2reg.  The PhiC
-and Upsilon nodes that cross task boundaries are finally lowered to
-`Tapir.UndefableRef` in `lower_tapir_task!`.  (Note: PhiC and Upsilon nodes
-translate to stack memory in LLVM.  So, this representation may also be useful
-for Tapir/LLVM integration.)
-
-* TODO: Add an IR node that directly represents `_load`? It would reduce the
-  transformation inside the macro.
+# Discussion
 
 A possible extension is to forbid
 
@@ -203,52 +200,6 @@ _by default_ so that we can detect this possibly-racy pattern. It should be
 possible to opt-in the above pattern by a special syntax such as
 `\$(a::@norace) = rhs`; i.e., the user declares that at most one task executes
 this line of code.
-"""
-_load(x, ::Symbol) = x
-
-macro syncregion()
-    Expr(:syncregion)
-end
-
-"""
-    shadow_vars(ex::Expr) -> ex′::Expr
-
-If the syntax `\$x` is used in lhs/lvalue _or_ rhs/rvalue, replace it with a
-local variable `x_shadow` that acts as a local copy of `\$x`. If `\$x` appears
-as in lhs, also insert the "store" `\$x = x_shadow` (so that it can be
-translated into set-many-load-once PhiC/Upsilon nodes).  If `\$x` appears in
-`ex`, the variable `x` is declared to be local in `ex` to avoid introducing the
-phi nodes in the continuation [^no_racy_phi].
-
-That is to say, it transforms
-
-    @spawn begin
-        ...
-        \$a = f(\$x)
-    end
-
-to
-
-    let x_shadow
-        if @isdefined x
-            x_shadow = x
-        end
-        @raw_spawn begin
-            local x  # required for avoiding "racy phi" [^no_racy_phi]
-            # if @isdefined x_shadow
-            #     x = x_shadow   # TODO: should we?
-            # end
-            ...
-            x_shadow = f(x_shadow)
-            \$x = x_shadow
-        end
-    end
-
-[^no_racy_phi]: We need to make `x` a local variable when we have `\$x` because
-    `x` may appear after the `end` of `@sync`. Since we "load" `\$x` only when
-    it is defined (to support conditional task outputs; see `@sync` definition),
-    a phi node has to be inserted after reattach for the variable live through
-    the `else` branch of `@isdefined \$x`.
 """
 function shadow_vars(ex::Expr)
     mapping = Dict{Symbol,Symbol}()  # x => x_shadow
@@ -487,11 +438,15 @@ macro sync(block)
     block = Expr(:block, __source__, block)
     dict, block = output_vars(block)
     outputs = sort!(collect(dict))
-    header = [:(local $(esc(slot))) for (_, slot) in outputs]
+    header = if isempty(outputs)
+        nothing
+    else
+        esc(Expr(:macrocall, Tapir.var"@output", __source__, map(last, outputs)...))
+    end
     footer = map(outputs) do (v, slot)
         quote
             if $(Expr(:isdefined, esc(slot)))
-                $(esc(v)) = _load($(esc(slot)), $((QuoteNode(v))))
+                $(esc(v)) = $(esc(slot))
             else
                 # We don't see `v` set in spawn since `v` would be declared to
                 # be local by the `@spawn` macro [^no_racy_phi].
@@ -499,7 +454,7 @@ macro sync(block)
         end
     end
     quote
-        $(header...)
+        $header
         let $var = @syncregion()
             local ans
             try
@@ -555,6 +510,8 @@ macro output(exprs::Union{Symbol,Expr}...)
         elseif Meta.isexpr(ex, :(=), 2) && ex.args[1] isa Symbol
             push!(variables, ex.args[1])
             push!(assignments, ex)
+        else
+            error("unsupported: $ex")
         end
     end
 
