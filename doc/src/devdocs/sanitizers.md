@@ -49,6 +49,71 @@ can be reduced by specifying `fast_unwind_on_malloc=0` and `malloc_context_size=
 of backtrace accuracy. For now, Julia also sets `detect_leaks=0`, but this should be removed in
 the future.
 
+### Example setup
+
+#### Step 1: Install toolchain
+
+Checkout a Git worktree (or create out-of-tree build directory) at
+`$TOOLCHAIN_WORKTREE` and create a config file `$TOOLCHAIN_WORKTREE/Make.user`
+with
+
+```
+USE_BINARYBUILDER_LLVM=1
+BUILD_LLVM_CLANG=1
+```
+
+Run:
+
+```sh
+cd $TOOLCHAIN_WORKTREE
+make -C deps install-llvm install-clang install-llvm-tools
+```
+
+to install toolchain binaries in `$TOOLCHAIN_WORKTREE/usr/tools`
+
+#### Step 2: Build Julia with ASAN
+
+Checkout a Git worktree (or create out-of-tree build directory) at
+`$BUILD_WORKTREE` and create a config file `$BUILD_WORKTREE/Make.user` with
+
+```
+TOOLCHAIN=$(TOOLCHAIN_WORKTREE)/usr/tools
+
+# use our new toolchain
+USECLANG=1
+override CC=$(TOOLCHAIN)/clang
+override CXX=$(TOOLCHAIN)/clang++
+export ASAN_SYMBOLIZER_PATH=$(TOOLCHAIN)/llvm-symbolizer
+
+USE_BINARYBUILDER_LLVM=1
+
+override SANITIZE=1
+override SANITIZE_ADDRESS=1
+
+# make the GC use regular malloc/frees, which are hooked by ASAN
+override WITH_GC_DEBUG_ENV=1
+
+# default to a debug build for better line number reporting
+override JULIA_BUILD_MODE=debug
+
+# make ASAN consume less memory
+export ASAN_OPTIONS=detect_leaks=0:fast_unwind_on_malloc=0:allow_user_segv_handler=1:malloc_context_size=2
+
+JULIA_PRECOMPILE=1
+
+# tell libblastrampoline to not use RTLD_DEEPBIND
+export LBT_USE_RTLD_DEEPBIND=0
+```
+
+Run:
+
+```sh
+cd $BUILD_WORKTREE
+make debug
+```
+
+to build `julia-debug` with ASAN.
+
 ## Memory Sanitizer (MSAN)
 
 For detecting use of uninitialized memory, you can use Clang's [memory sanitizer (MSAN)](http://clang.llvm.org/docs/MemorySanitizer.html)
