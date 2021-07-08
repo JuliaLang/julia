@@ -2211,7 +2211,8 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
 end
 
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
-_typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N = _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(xs)), false, xs...)
+_typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N =
+    hvncat_fill!(cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., N)), false, xs)
 
 function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
     N < 0 &&
