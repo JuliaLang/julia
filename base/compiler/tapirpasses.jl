@@ -1339,6 +1339,9 @@ end
 Extract `task` in `ir` as a new `taskir::IRCode`. Mutate `tasksir.subtasks` to
 respect the changes in SSA positions and BB labels.  The second argument `ir` is
 not mutated.
+
+The sub-CFG in `ir` corresponding to `task` must not have uncommitted new nodes
+in `ir.new_nodes`.
 """
 function outline_child_task!(task::ChildTask, ir::IRCode)
     result, (ssachangemap, labelchangemap) = outline_child_task(task, ir)
@@ -1383,6 +1386,8 @@ function lower_tapir!(ir::IRCode, interp::AbstractInterpreter)
     tasks = child_tasks(ir)
     isempty(tasks) && return remove_tapir!(ir)
 
+    ir, tasks = optimize_taskgroups!(ir, tasks, interp)
+
     # Replace `Expr(:syncregion)` with `%tg = Tapir.taskgroup()`.
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
@@ -1423,6 +1428,127 @@ function lower_tapir!(ir::IRCode, interp::AbstractInterpreter)
     return lower_tapir_tasks!(ir, tasks, interp)
 end
 
+function optimize_taskgroups!(
+    ir::IRCode,
+    tasks::Vector{ChildTask},
+    interp::AbstractInterpreter,
+)
+    Tapir = tapir_module()::Module
+
+    # TODO: another possible optimization is to use tree of taskgroups to avoid
+    # using the locked taskgroup (i.e., channel) entirely.
+
+    # Find syncregions that do not have to allocate TaskGroup
+    syncregions = BitSet()
+    isinlinable = trues(length(ir.stmts))
+    tasks_by_syncregion = IdDict{Int,Vector{ChildTask}}()
+    foreach_task(tasks) do task
+        det = ir.stmts.inst[task.detach]::DetachNode
+        sr = det.syncregion::SSAValue
+        push!(get!(() -> ChildTask[], tasks_by_syncregion, sr.id), task)
+        isinlinable[sr.id] || return true
+        push!(syncregions, sr.id)
+
+        detacher = block_for_inst(ir, task.detach)
+        visited = falses(length(ir.cfg.blocks))
+        foreach_descendant(detacher + 1, ir.cfg, visited) do ibb, bb
+            if ibb == detacher
+                # Detach is in a loop inside the syncregion.
+                isinlinable[sr.id] = false
+                return false
+            end
+            iterm = bb.stmts[end]
+            term = ir.stmts.inst[iterm]
+            if term isa SyncNode
+                if term.syncregion === sr
+                    return false
+                end
+            elseif term isa DetachNode
+                subtask = task_by_detach(tasks, iterm)
+                for ibb in subtask.blocks
+                    visited[ibb] = true
+                    local iterm = bb.stmts[end]
+                    local term = ir.stmts.inst[iterm]
+                    if term isa DetachNode
+                        if term.syncregion === sr
+                            # The syncregion is used from multiple tasks.
+                            isinlinable[sr.id] = false
+                            return false
+                        end
+                    end
+                end
+            end
+            return true
+        end
+    end
+
+    syncnodes_by_syncregion = IdDict{Int,Vector{Int}}()
+    for bb in ir.cfg.blocks
+        isync = bb.stmts[end]
+        sync = ir.stmts.inst[isync]
+        sync isa SyncNode || continue
+        sr = sync.syncregion::SSAValue
+        isinlinable[sr.id] || continue
+        push!(get!(() -> Int[], syncnodes_by_syncregion, sr.id), isync)
+    end
+    isempty(syncnodes_by_syncregion) && return ir, tasks
+
+    # Insert runtime calls
+    MaybeTask = Tapir.MaybeTask
+    for i in syncregions
+        isinlinable[i] || continue
+        ir.stmts[i][:inst] = nothing
+        taskgroup = Vector{PhiCNode}[PhiCNode[] for _ in syncnodes_by_syncregion[i]]
+        for task in tasks_by_syncregion[i]
+            detstmt = ir.stmts[task.detach]
+            det = detstmt[:inst]::DetachNode
+
+            # Place a dummy instruction for marking that this detach should be
+            # handled with Tapir.spawn and not Tapir.spawn!.
+            placeholder = Expr(:spawn_placeholder)
+            dest = insert_node!(ir, task.detach, NewInstruction(placeholder, Task))
+            detstmt[:inst] = DetachNode(dest, det.label)
+
+            for phics in taskgroup
+                t0 = insert_node!(ir, i, NewInstruction(UpsilonNode(nothing), Nothing))
+                t1 = insert_node!(ir, task.detach, NewInstruction(UpsilonNode(dest), Task))
+                push!(phics, PhiCNode(Any[t0, t1]))
+            end
+        end
+        # Insert `Tapir.synctasks(...)`
+        for (isync, phics) in zip(syncnodes_by_syncregion[i], taskgroup)
+            syncargs = map(phics) do phic
+                load = insert_node!(ir, isync, NewInstruction(phic, Union{Nothing,Task}))
+                insert_node!(
+                    ir,
+                    isync,
+                    NewInstruction(Expr(:new, MaybeTask, load), MaybeTask),
+                )
+            end
+            mi = find_method_instance_from_sig(
+                interp,
+                Tuple{typeof(Tapir.synctasks),[MaybeTask for _ in syncargs]...};
+                compilesig = true,
+            )
+            if mi === nothing
+                ir.stmts.inst[isync] =
+                    Expr(:call, GlobalRef(Tapir, :synctasks), syncargs...)
+            else
+                ir.stmts.inst[isync] =
+                    Expr(:invoke, mi, GlobalRef(Tapir, :synctasks), syncargs...)
+            end
+            ir.stmts.type[isync] = Any
+        end
+    end
+
+    # Require `compact!` here since `outline_child_task!` expects no pending new
+    # nodes.
+    ir = compact!(ir)
+
+    # TODO: Store BB labels in ChildTask so that we don't have to re-compute it here
+    return ir, child_tasks(ir)
+end
+
 """
     lower_tapir_task!(ir::IRCode, tasks::Vector{ChildTask}, interp) -> ir′
 
@@ -1431,7 +1557,6 @@ SyncNode are transformed to runtime function calls.
 """
 function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::AbstractInterpreter)
     Tapir = tapir_module()::Module
-    Tapir isa Module || return ir
 
     # Lower each detach of child task to the call to `Tapir.spawn!`.  It also
     # removes the detach edge to child.  That is to say, we transform
@@ -1455,11 +1580,9 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
     #     #continuation
     #     ...
     #
-    # and then remove the detach edge from #detacher to #child.
+    # and then remove the detach edge from #detacher to #child. Use
+    # `Tapir.spawn` instead if `%tg` points to `:spawn_placeholder`.
     for task in tasks
-        det = ir.stmts.inst[task.detach]::DetachNode
-        tg = det.syncregion::SSAValue
-
         taskir, arguments = outline_child_task!(task, ir)
         if task.subtasks !== nothing
             taskir = lower_tapir_tasks!(taskir, task.subtasks, interp)
@@ -1469,18 +1592,36 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
             Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any, meth, arguments...),
             Any,
         )
-        oc = insert_node!(ir, task.detach, oc_inst)
-        mi = find_method_instance_from_sig(
-            interp,
-            Tuple{typeof(Tapir.spawn!),Tapir.TaskGroup,Any};
-            compilesig = true,
-        )
-        if mi === nothing
-            spawn_ex = Expr(:call, Tapir.spawn!, tg, oc)
+
+        det = ir.stmts.inst[task.detach]::DetachNode
+        tg = det.syncregion::SSAValue
+        if isexpr(ir[tg], :spawn_placeholder)
+            oc = insert_node!(ir, tg.id, oc_inst)
+            mi = find_method_instance_from_sig(
+                interp,
+                Tuple{typeof(Tapir.spawn),Any};
+                compilesig = true,
+            )
+            if mi === nothing
+                spawn_ex = Expr(:call, GlobalRef(Tapir, :spawn), oc)
+            else
+                spawn_ex = Expr(:invoke, mi, GlobalRef(Tapir, :spawn), oc)
+            end
+            ir[tg] = spawn_ex
         else
-            spawn_ex = Expr(:invoke, mi, Tapir.spawn!, tg, oc)
+            oc = insert_node!(ir, task.detach, oc_inst)
+            mi = find_method_instance_from_sig(
+                interp,
+                Tuple{typeof(Tapir.spawn!),Tapir.TaskGroup,Any};
+                compilesig = true,
+            )
+            if mi === nothing
+                spawn_ex = Expr(:call, GlobalRef(Tapir, :spawn!), tg, oc)
+            else
+                spawn_ex = Expr(:invoke, mi, GlobalRef(Tapir, :spawn!), tg, oc)
+            end
+            insert_node!(ir, task.detach, NewInstruction(spawn_ex, Any))
         end
-        insert_node!(ir, task.detach, NewInstruction(spawn_ex, Any))
         ir.stmts.inst[task.detach] = GotoNode(det.label)
         detacher = block_for_inst(ir.cfg, task.detach)
         cfg_delete_edge!(ir.cfg, detacher, detacher + 1)

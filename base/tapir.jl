@@ -26,9 +26,40 @@ function spawn!(tasks::TaskGroup, @nospecialize(f))
     return nothing
 end
 
+function spawn(@nospecialize(f))
+    t = Task(f)
+    t.sticky = false
+    schedule(t)
+    return t
+end
+
 # Can we make it more efficient using the may-happen parallelism property
 # (i.e., the lack of concurrent synchronizations)?
 sync!(tasks::TaskGroup) = Base.sync_end(tasks)
+
+# Using `Some{Union{...}}` for "concretely typed Union". This avoids dynamic
+# dispatch (hopefully) without code bloat.
+const MaybeTask = Some{Union{Task,Nothing}}
+
+function synctasks(tasks::MaybeTask...)
+    c_ex = nothing
+    for s in tasks
+        t = something(s)
+        if t isa Task
+            try
+                wait(t)
+            catch err
+                if c_ex === nothing
+                    c_ex = CompositeException()
+                end
+                push!(c_ex, err)
+            end
+        end
+    end
+    if c_ex !== nothing
+        throw(c_ex)
+    end
+end
 
 mutable struct UndefableRef{T}
     set::Bool
@@ -528,6 +559,10 @@ function __init__()
     tg = taskgroup()
     spawn!(tg, () -> nothing)
     sync!(tg)
+    t = MaybeTask(spawn(() -> nothing))
+    synctasks(t)
+    synctasks(t, t)
+    synctasks(t, t, t)
 end
 
 end
