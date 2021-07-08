@@ -2,7 +2,7 @@
 # since we need nestable sandboxing.  The rootfs images being used here are built from
 # the `.buildkite/rootfs_images/llvm-passes.jl` file.
 agents:
-  queue: "julia"
+  queue: "julia" # hello world
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
   sandbox.jl: "true"
   os: "linux"
