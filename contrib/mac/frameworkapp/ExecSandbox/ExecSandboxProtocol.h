@@ -4,7 +4,7 @@
 
 @protocol TaskProtocol
 /// Launch the task and upon termination receive the exit status.
-- (void)launch:(void (^_Nullable)(int status))onTermination;
+- (void)launch:(void (^_Nullable)(int status, BOOL crashed))onTermination;
 /// Terminate (SIGTERM) the task.
 - (void)terminate;
 @end
