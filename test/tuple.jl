@@ -361,6 +361,21 @@ end
     @test prod(()) === 1
     @test prod((1,2,3)) === 6
 
+    # issue 39182
+    @test sum((0xe1, 0x1f)) === sum([0xe1, 0x1f])
+    @test sum((Int8(3),)) === Int(3)
+    @test sum((UInt8(3),)) === UInt(3)
+    @test sum((3,)) === Int(3)
+    @test sum((3.0,)) === 3.0
+    @test sum(["a"]) == sum(("a",))
+
+    # issue 39183
+    @test prod((Int8(100), Int8(100))) === 10000
+    @test prod((Int8(3),)) === Int(3)
+    @test prod((UInt8(3),)) === UInt(3)
+    @test prod((3,)) === Int(3)
+    @test prod((3.0,)) === 3.0
+
     @testset "all" begin
         @test all(()) === true
         @test all((false,)) === false
