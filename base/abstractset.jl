@@ -125,9 +125,28 @@ Set{Int64} with 1 element:
   2
 ```
 """
-intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
+function intersect(s::AbstractSet, itr, itrs...)
+    # determine if swap order is useful and viable
+    if length(s)>50 && haslength(itr) && all(map(haslength, itrs))
+        itrs_lengths = map(length, itrs)
+        min_idx = argmin(itrs_lengths)
+        min_length = itrs_lengths[min_idx]
+        # do nothing if s is longer than the rest or itr is already the shortest
+        if length(itr) > min_length >= length(s)
+            new_itrs = (itrs[1:min_idx-1]..., itr, itrs[min_idx+1:end]...)
+            return intersect!(intersect(s, itrs[min_idx]), new_itrs...)
+        end
+    end
+    intersect!(intersect(s, itr), itrs...)
+end
 intersect(s) = union(s)
-intersect(s::AbstractSet, itr) = mapfilter(_in(s), push!, itr, emptymutable(s))
+function intersect(s::AbstractSet, itr)
+    if haslength(itr) && hasfastin(itr) && length(s) < length(itr)
+        return mapfilter(_in(itr), push!, s, emptymutable(s))
+    else
+        return mapfilter(_in(s), push!, itr, emptymutable(s))
+    end
+end
 
 const ∩ = intersect
 
