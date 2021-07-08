@@ -292,14 +292,14 @@ BigInt(x::Union{Clong,Int32}) = MPZ.set_si(x)
 BigInt(x::Union{Culong,UInt32}) = MPZ.set_ui(x)
 BigInt(x::Bool) = BigInt(UInt(x))
 
-unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64}) = MPZ.set_d(x)
+unsafe_trunc(::Type{BigInt}, x::Union{Float16,Float32,Float64}) = MPZ.set_d(x)
 
-function BigInt(x::Union{Float32,Float64})
+function BigInt(x::Float64)
     isinteger(x) || throw(InexactError(:BigInt, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
-function trunc(::Type{BigInt}, x::Union{Float32,Float64})
+function trunc(::Type{BigInt}, x::Union{Float16,Float32,Float64})
     isfinite(x) || throw(InexactError(:trunc, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
