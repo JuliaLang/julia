@@ -2193,7 +2193,7 @@ end
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
 _typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
 _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N =
-    hvncat_fill!(cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., N)), false, xs)
+    hvncat_fill!(cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs))), false, xs)
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
