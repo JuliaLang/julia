@@ -2154,44 +2154,7 @@ _typed_hvncat_0d_only_one() =
 
 _typed_hvncat(::Type{T}, ::Val{N}) where {T, N} = Array{T, N}(undef, ntuple(x -> 0, Val(N)))
 
-function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {T, N}
-    A = Array{T, N}(undef, dims...)
-    lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
-    lengthx = length(xs) # Cuts from 3 allocations to 1.
-    if lengtha != lengthx
-       throw(ArgumentError("argument count does not match specified shape (expected $lengtha, got $lengthx)"))
-    end
-    hvncat_fill!(A, row_first, xs)
-    return A
-end
-
-function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
-    # putting these in separate functions leads to unnecessary allocations
-    if row_first
-        nr, nc = size(A, 1), size(A, 2)
-        nrc = nr * nc
-        na = prod(size(A)[3:end])
-        k = 1
-        for d ∈ 1:na
-            dd = nrc * (d - 1)
-            for i ∈ 1:nr
-                Ai = dd + i
-                for j ∈ 1:nc
-                    A[Ai] = xs[k]
-                    k += 1
-                    Ai += nr
-                end
-            end
-        end
-    else
-        for k ∈ eachindex(xs)
-            A[k] = xs[k]
-        end
-    end
-end
-
 _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
-_typed_hvncat(::Type{T}, ::Val) where T = Vector{T}()
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
     hvncat_fill!(A, false, xs)
@@ -2276,6 +2239,42 @@ function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T,
         return _typed_hvncat(T, Val(2), as...)
     else
         return _typed_hvncat(T, Val(1), as...)
+    end
+end
+
+function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {T, N}
+    A = Array{T, N}(undef, dims...)
+    lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
+    lengthx = length(xs) # Cuts from 3 allocations to 1.
+    if lengtha != lengthx
+       throw(ArgumentError("argument count does not match specified shape (expected $lengtha, got $lengthx)"))
+    end
+    hvncat_fill!(A, row_first, xs)
+    return A
+end
+
+function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
+    # putting these in separate functions leads to unnecessary allocations
+    if row_first
+        nr, nc = size(A, 1), size(A, 2)
+        nrc = nr * nc
+        na = prod(size(A)[3:end])
+        k = 1
+        for d ∈ 1:na
+            dd = nrc * (d - 1)
+            for i ∈ 1:nr
+                Ai = dd + i
+                for j ∈ 1:nc
+                    A[Ai] = xs[k]
+                    k += 1
+                    Ai += nr
+                end
+            end
+        end
+    else
+        for k ∈ eachindex(xs)
+            A[k] = xs[k]
+        end
     end
 end
 
