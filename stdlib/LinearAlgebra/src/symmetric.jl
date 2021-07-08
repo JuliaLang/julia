@@ -820,9 +820,9 @@ end
 
 
 for func in (:log, :sqrt)
-    # sqrt has rtol arg to handle matrices that are semidefinite up to roundoff errors
-    rtolarg = func === :sqrt ? Any[Expr(:kw, :(rtol::Real), :(eps(real(float(one(T))))*size(A,1)))] : Any[]
-    rtolval = func === :sqrt ? :(-maximum(abs, F.values) * rtol) : 0
+    # sqrt has reltol arg to handle matrices that are semidefinite up to roundoff errors
+    rtolarg = func === :sqrt ? Any[Expr(:kw, :(reltol::Real), :(eps(real(float(one(T))))*size(A,1)))] : Any[]
+    rtolval = func === :sqrt ? :(-maximum(abs, F.values) * reltol) : 0
     @eval begin
         function ($func)(A::HermOrSym{T}; $(rtolarg...)) where {T<:Real}
             F = eigen(A)
