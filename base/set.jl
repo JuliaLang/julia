@@ -416,8 +416,8 @@ function allunique(C)
 end
 
 allunique(::Union{AbstractSet,AbstractDict}) = true
-
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+allunique(::Number) = true
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
