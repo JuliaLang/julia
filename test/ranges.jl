@@ -2036,12 +2036,22 @@ end
     @test 0.2 * (-2:2:2) == [-0.4, 0, 0.4]
 end
 
-@testset "Indexing OneTo with IdentityUnitRange" begin
-    for endpt in Any[10, big(10), UInt(10)]
-        r = Base.OneTo(endpt)
-        inds = Base.IdentityUnitRange(3:5)
-        rs = r[inds]
-        @test rs === inds
-        @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+@testset "Indexing with IdentityUnitRange" begin
+    @testset "OneTo" begin
+        for endpt in Any[10, big(10), UInt(10)]
+            r = Base.OneTo(endpt)
+            inds = Base.IdentityUnitRange(3:5)
+            rs = r[inds]
+            @test rs === inds
+            @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+        end
+    end
+    @testset "IdentityUnitRange" begin
+        for r in Any[Base.IdentityUnitRange(1:4), Base.IdentityUnitRange(Base.OneTo(4)), Base.Slice(1:4), Base.Slice(Base.OneTo(4))]
+            for s in Any[Base.IdentityUnitRange(3:3), Base.IdentityUnitRange(Base.OneTo(2)), Base.Slice(3:3), Base.Slice(Base.OneTo(2))]
+                @test r[s] === s
+            end
+            @test_throws BoundsError r[Base.IdentityUnitRange(first(r):last(r) + 1)]
+        end
     end
 end
