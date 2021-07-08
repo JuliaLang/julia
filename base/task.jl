@@ -818,6 +818,7 @@ end
 end
 
 function wait()
+    GC.safepoint()
     W = Workqueues[Threads.threadid()]
     poptask(W)
     result = try_yieldto(ensure_rescheduled)

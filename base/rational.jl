@@ -280,7 +280,7 @@ function -(x::Rational{T}) where T<:Unsigned
 end
 
 function +(x::Rational, y::Rational)
-    xp, yp = promote(x, y)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
     if isinf(x) && x == y
         return xp
     end
@@ -289,7 +289,7 @@ function +(x::Rational, y::Rational)
 end
 
 function -(x::Rational, y::Rational)
-    xp, yp = promote(x, y)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
     if isinf(x) && x == -y
         return xp
     end
