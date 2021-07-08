@@ -2353,6 +2353,12 @@ end
 
 # unbalanced dimensions hvncat methods
 
+function _typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...)
+    length(shape[1]) > 0 ||
+        throw(ArgumentError("each level of `shape` argument must have at least one value"))
+    return _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
+end
+
 function _typed_hvncat(T::Type, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {N}
     # function barrier after calculating the max is necessary for high performance
     nd = max(maximum(cat_ndims(a) for a ∈ as), N)
