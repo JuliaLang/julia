@@ -141,6 +141,37 @@ julia> selectdim(A, 2, 3:4)
     return view(A, idxs...)
 end
 
+
+"""
+    selectslice(A::AbstractArray, dim::Integer, inds...)
+
+Return a view in to the vector shaped slice of `A` along the dimension `dim` with all the other indices set to `inds` in order.
+
+Equivalent to `view(A, inds[1], inds[2], ..., :, inds[dim], inds[dim+1], ...)`
+
+#Examples
+```jldoctest
+julia> A = [1 2 3 4; 5 6 7 8]
+2×4 Array{Int64,2}:
+ 1  2  3  4
+ 5  6  7  8
+
+julia> selectslice(A, 2, 2)
+4-element view(::Array{Int64,2}, 2, :) with eltype Int64:
+ 5
+ 6
+ 7
+ 8
+ ```
+"""
+@noinline function selectslice(A::AbstractArray{T,N}, dim, inds...) where {T,N}
+    dim >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $dim"))
+    dim > N && throw(ArgumentError("dimension must be ≤ ndims(A), got $dim"))
+    length(inds) == (N-1) || throw(BoundsError(A, Tuple(inds[1:dim-1]..., Slice(1:size(A,dim)), inds[dim:end]...)))
+    view(A, inds[1:dim-1]..., Slice(1:size(A,dim)), inds[dim:end]...)
+end
+
+
 function circshift(a::AbstractArray, shiftamt::Real)
     circshift!(similar(a), a, (Integer(shiftamt),))
 end

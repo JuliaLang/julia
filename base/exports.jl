@@ -432,6 +432,7 @@ export
     rotr90,
     size,
     selectdim,
+    selectslice,
     sort!,
     sort,
     sortperm,
