@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random: randcycle
+using Random: randcycle, shuffle
 
 @testset "binomial" begin
     @test binomial(5,-1) == 0
