@@ -1100,8 +1100,34 @@ for (line, expr) in Pair[
     "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "..."),
     "using Foo"    => :using,
     "import Foo"   => :import,
+    "# comment"    => Symbol("#"),
+    "#= foo\n=#"   => Symbol("#="),
+    "=#"           => Symbol("=#"),
+    "+"            => :+,
+    "+="           => :+=,
+    ".+"           => :.+,
+    ".+="          => :.+=,
+    "⊻"            => :⊻,
+    "⊻="           => :⊻=,
+    ".⊻"           => :.⊻,
+    ".⊻="          => :.⊻=,
+    "\u2212"       => :-,
+    "\u2212="      => :-=,
+    ".\u2212"      => :.-,
+    ".\u2212="     => :.-=,
+    "1+2"          => :(1 + 2),
+    "1⊻2"          => :(1 ⊻ 2),
+    "1\u22122"     => :(1 - 2),
+    "+ 1"          => :(+ 1),
+    "\u2212 1"     => :(- 1),
+    "+1"           => +1,
+    "\u22121"      => -1,
+    "2e-2"         => 2e-2,
+    "2e\u22122"    => 2e-2,
+    "\ub5"         => Symbol("\u03bc"), # µ (U+00B5 micro) -> μ (U+03BC greek small letter mu)
+    "\ub7"         => Symbol("\u22c5"), # \cdotp -> \cdot
     ]
-    @test REPL._helpmode(line).args[4] == expr
+    @test REPL._helpmode_parse(line) == expr
     @test help_result(line) isa Union{Markdown.MD,Nothing}
 end
 
