@@ -1100,6 +1100,87 @@ in the range of `Rdest`. The sizes of the two regions must match.
 """
 copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 
+function _unaliased_copyto!(::IndexLinear, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
+    @_inline_meta
+    iter, j = eachindex(src), firstindex(dest) - 1
+    if size(src, 1) >= 16
+        # manually expand the inner loop similar to @simd
+        @inbounds for II in simd_outer_range(iter)
+            n = 0
+            while n < simd_inner_length(iter, II)
+                dest[j += 1] = src[simd_index(iter, II, n)]
+                n += 1
+            end
+        end
+    else
+        for I in iter
+            @inbounds dest[j += 1] = src[I]
+        end
+    end
+end
+
+# Linear to Cartesian unaliased copy
+function _unaliased_copyto!(::IndexStyle, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
+    @_inline_meta
+    iter = eachindex(dest)
+    i, final = firstindex(src) - 1, lastindex(src)
+    if size(dest, 1) >= 16
+        # manually expand the inner loop similar to @simd
+        @inbounds for II in simd_outer_range(iter)
+            n, len = 0, simd_inner_length(iter, II)
+            if i + len < final
+                while n < len
+                    dest[simd_index(iter, II, n)] = src[i += 1]
+                    n += 1
+                end
+                continue
+            end
+            while i < final
+                dest[simd_index(iter, II, n)] = src[i += 1]
+                n += 1
+            end
+            break
+        end
+    elseif length(dest) == length(dest)
+        for I in iter
+            @inbounds dest[I] = src[i += 1]
+        end
+    else
+        # use zip based interator
+        invoke(_unaliased_copyto!, 
+                Tuple{IndexStyle, AbstractArray, IndexStyle, AbstractArray},
+                IndexStyle(dest), dest, IndexLinear(), src)
+    end
+end
+
+function _unaliased_copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
+    @_inline_meta
+    iterdest, itersrc = eachindex(dest), eachindex(src)
+    iterdest == itersrc && return _shared_unaliased_copyto!(dest, src, itersrc)
+    @inbounds for (J, I) in zip(iterdest, itersrc) 
+        dest[J] = src[I]
+    end
+end
+
+function _shared_unaliased_copyto!(dest::AbstractArray, src::AbstractArray, iter)
+    @_inline_meta
+    if size(src, 1) >= 16
+        # manually expand the inner loop similar to @simd
+        @inbounds for II in simd_outer_range(iter)
+            n = 0
+            while n < simd_inner_length(iter, II)
+                I′ = simd_index(iter, II, n)
+                dest[I′] = src[I′]
+                n += 1
+            end
+        end
+    else
+        for I in iter
+            @inbounds dest[I] = src[I]
+        end
+    end
+end
+
 # circshift!
 circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
 """
