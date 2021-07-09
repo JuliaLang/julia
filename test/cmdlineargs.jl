@@ -484,10 +484,20 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_DEPOT_PATH" => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile foo -bar --baz`) == output
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
+            @test readchomp(`$exename -- $testfile foo -bar --baz`) == output
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
                 output
             @test readchomp(`$exename --startup-file=yes -e 'exit(0)' -- foo -bar --baz`) ==
+                output
+
+            output = "[\"foo\", \"--\", \"-bar\", \"--baz\"]"
+            @test readchomp(`$exename $testfile foo -- -bar --baz`) == output
+            @test readchomp(`$exename -- $testfile foo -- -bar --baz`) == output
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' foo -- -bar --baz`) ==
+                output
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -- -bar --baz`) ==
+                output
+            @test readchomp(`$exename --startup-file=yes -e 'exit(0)' foo -- -bar --baz`) ==
                 output
 
             output = "String[]\nString[]"
@@ -495,8 +505,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test readchomp(`$exename --startup-file=yes $testfile`) == output
 
             @test !success(`$exename --foo $testfile`)
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
-                "[\"foo\", \"-bar\", \"--\", \"baz\"]"
         end
     end
 
