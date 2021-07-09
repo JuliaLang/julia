@@ -1100,63 +1100,6 @@ in the range of `Rdest`. The sizes of the two regions must match.
 """
 copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 
-# Cartesian to Linear unaliased copy
-function _unaliased_copyto!(::IndexLinear, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
-    @_inline_meta
-    ax = axes1(src)
-    iter = CartesianIndices(safe_tail(axes(src)))
-    j = firstindex(dest) - 1
-    @inbounds for I in iter
-        for i in ax
-            dest[j += 1] = src[i, I]
-        end
-    end
-end
-
-# Linear to Cartesian unaliased copy
-function _unaliased_copyto!(::IndexCartesian, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
-    @_inline_meta
-    ax = axes1(dest)
-    iter = CartesianIndices(safe_tail(axes(dest)))
-    len = length(ax)
-    i, final = firstindex(src) - 1, lastindex(src)
-    @inbounds for I in iter
-        if final - i > len
-            for j in ax
-                dest[j, I] = src[i += 1]
-            end
-        else
-            j = first(ax) - 1
-            while i < final
-                dest[j += 1, I] = src[i += 1]
-            end
-            break
-        end
-    end
-end
-
-function _unaliased_copyto!(::IndexCartesian, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
-    @_inline_meta
-    axdest, axsrc = axes(dest), axes(src)
-    if axdest == axsrc
-        # shared iterator (manually expended)
-        ax = axes1(dest)
-        iter = CartesianIndices(safe_tail(axdest))
-        @inbounds for I in iter
-            for i in ax
-                dest[i, I] = src[i, I]
-            end
-        end
-    else
-        # zip iterator
-        itersrc = CartesianIndices(axsrc)
-        iterdest = CartesianIndices(axdest)
-        @inbounds for (J, I) in zip(iterdest, itersrc)
-            dest[J] = src[I]
-        end
-    end
-end
-
 # circshift!
 circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
 """
