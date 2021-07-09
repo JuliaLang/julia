@@ -191,7 +191,11 @@ function mmap(io::IO,
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
-    len = prod(dims) * sizeof(T)
+    len = sizeof(T)
+    for l in dims
+        len, overflow = Base.Checked.mul_with_overflow(promote(len, l)...)
+        overflow && throw(ArgumentError("requested size prod($((sizeof(T), dims...))) too large, would overflow typeof(size(T)) == $(typeof(len))"))
+    end
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
     len == 0 && return Array{T}(undef, ntuple(x->0,Val(N)))
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
