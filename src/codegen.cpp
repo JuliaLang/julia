@@ -7590,6 +7590,8 @@ jl_compile_result_t jl_emit_code(
         jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN);
+    jl_value_t *src_root = NULL;
+    JL_GC_PUSH1(&src_root);
     // ASK: Is there a better place/way to call `lower_tapir`?
     if (jl_lower_tapir_func && jl_typeinf_world && code_info_has_tapir(src)) {
         // Lower task prallel IR (detach etc.) to the calls to the parallel task
@@ -7608,6 +7610,11 @@ jl_compile_result_t jl_emit_code(
         fargs[2] = (jl_value_t *)src;
         JL_TRY {
             src = (jl_code_info_t *)jl_apply(fargs, 3);
+            // `emit_function` only roots `src->code.  However, since
+            // `lower_tapir` typically returns a full copy of `src`, and other
+            // members like `src->codelocs` are accessed, we need to root this
+            // `src` while it is used.
+            src_root = (jl_value_t *)src;
         }
         JL_CATCH {
             jl_printf((JL_STREAM *)STDERR_FILENO,
@@ -7651,6 +7658,7 @@ jl_compile_result_t jl_emit_code(
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
     }
+    JL_GC_POP();
 
     return std::make_tuple(std::move(m), decls);
 }
