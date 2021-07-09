@@ -875,7 +875,7 @@ for more details on C `printf` support.
 function format end
 
 function format(io::IO, f::Format, args...) # => Nothing
-    length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
+    numargs(f) == length(args) || argmismatch(length(f.formats), length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
     write(io, resize!(buf, pos - 1))

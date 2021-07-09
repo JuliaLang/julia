@@ -790,6 +790,8 @@ end
     ptr_str = Sys.WORD_SIZE == 64 ? "  0x0000000000000123" : "          0x00000123"
     @test @sprintf("%*p", 20, Ptr{Nothing}(UInt(0x123))) == ptr_str
     @test @sprintf("%0*p", 20, Ptr{Nothing}(UInt(0x123))) == "0x000000000000000123"
+    io = IOBuffer()
+    @test (@printf(io, "%*d", 5, 42); String(take!(io)) == "   42")
 end
 
 end # @testset "Printf"
