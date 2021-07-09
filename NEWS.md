@@ -44,6 +44,8 @@ Standard library changes
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
   constructing the range. ([#40382])
 
+* The `printf` functions support now the variable width and precision secifiers in format strings.  ([#41525])
+
 #### Package Manager
 
 #### LinearAlgebra
