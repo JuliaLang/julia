@@ -84,6 +84,10 @@
 #endif
 #include <llvm/Target/TargetMachine.h>
 
+#include "llvm/Support/Path.h" // for llvm::sys::path
+#include <llvm/Bitcode/BitcodeReader.h>
+#include <llvm/Linker/Linker.h>
+
 using namespace llvm;
 
 typedef Instruction TerminatorInst;
