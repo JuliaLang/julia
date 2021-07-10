@@ -35,7 +35,7 @@ function main(args = ARGS)::Int
     timeout = Threads.Atomic{Bool}(false)
     isstarted = false
     mktemp() do tmppath, tmpio
-        cmd = setenv(
+        cmd = addenv(
             `$julia -e $code $tmppath`,
             "ASAN_OPTIONS" =>
                 "detect_leaks=0:fast_unwind_on_malloc=0:allow_user_segv_handler=1:malloc_context_size=2",
