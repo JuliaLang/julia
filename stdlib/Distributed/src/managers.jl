@@ -82,7 +82,10 @@ Keyword arguments:
 
 * `shell`: specifies the type of shell to which ssh connects on the workers.
 
-    + `shell=:posix`: a POSIX-compatible Unix/Linux shell (bash, sh, etc.). The default.
+    + `shell=:posix`: a POSIX-compatible Unix/Linux shell
+      (sh, ksh, bash, dash, zsh, etc.). The default.
+
+    + `shell=:csh`: a Unix C shell (csh, tcsh).
 
     + `shell=:wincmd`: Microsoft Windows `cmd.exe`.
 
@@ -280,6 +283,22 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
 
         # shell login (-l) with string command (-c) to launch julia process
         remotecmd = shell_escape_posixly(`sh -l -c $cmds`)
+
+    elseif shell == :csh
+        # ssh connects to (t)csh
+
+        remotecmd = "$(shell_escape_csh(exename)) $(shell_escape_csh(exeflags))"
+
+        # set environment variables
+        for (var, val) in env
+            occursin(r"^[a-zA-Z_][a-zA-Z_0-9]*\z", var) ||
+                throw(ArgumentError("invalid env key $var"))
+            remotecmd = "setenv $(var) $(shell_escape_csh(val))\n$remotecmd"
+        end
+        # change working directory
+        if dir !== nothing && dir != ""
+            remotecmd = "cd $(shell_escape_csh(dir))\n$remotecmd"
+        end
 
     elseif shell == :wincmd
         # ssh connects to Windows cmd.exe
