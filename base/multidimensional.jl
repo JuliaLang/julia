@@ -1141,7 +1141,7 @@ function _unaliased_copyto!(::IndexStyle, dest::AbstractArray, ::IndexLinear, sr
             end
             break
         end
-    elseif length(dest) == length(dest)
+    elseif length(dest) == length(src)
         for I in iter
             @inbounds dest[I] = src[i += 1]
         end
