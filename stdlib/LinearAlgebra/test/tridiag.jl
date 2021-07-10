@@ -668,21 +668,11 @@ end
 
 @testset "dot(x,A,y) for A::Tridiagonal or SymTridiagonal" begin
     for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
-        n = 4
-        v1 = rand(elty, n-1)
-        v2 = rand(elty, n)
-        v3 = rand(elty, n-1)
-        T = Tridiagonal(v1, v2, v3)
-        Tsym = SymTridiagonal(v2, v1)
-        x = fill(convert(elty, 1), n)
-        y = fill(convert(elty, 2), n)
-        x1 = fill(convert(elty, 1), 0)
-        T1 = Tridiagonal(x1, x1, x1)
-        Tsym1 = SymTridiagonal(x1, x1)
-        @test dot(x, T, y)  ≈ dot(x, T*y)
-        @test dot(x, Tsym, y)  ≈ dot(x, Tsym*y)
-        @test dot(x1, T1, x1)   ≈ 0.0
-        @test dot(x1, Tsym1, x1)   ≈ 0.0
+        x = fill(convert(elty, 1), 0)
+        T = Tridiagonal(x, x, x)
+        Tsym = SymTridiagonal(x, x)
+        @test dot(x, T, x)   ≈ 0.0
+        @test dot(x, Tsym, x)   ≈ 0.0
     end
 end
 

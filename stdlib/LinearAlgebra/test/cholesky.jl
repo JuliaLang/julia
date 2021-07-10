@@ -503,23 +503,10 @@ end
          2048 1920 2940 1008 2240 2740;
          4470 4200 6410 2240 4875 6015;
          5490 5140 7903 2740 6015 7370]
-    A1 = [4 12 -16;
-    12 37 -43;
-    -16 -43 98]
-    A2 = [ 6 15 55
-    15 55 225
-    55 225 979]
     B = cholesky(A, Val(true), check=false)
-    B1 = cholesky(A1, Val(true))
-    B2 = cholesky(A2, Val(true))
-    @test det(B)  ≈  0.0
+    @test det(B)  ==  0.0
     @test det(B)  ≈  det(A) atol=eps()
-    @test logdet(B)  ≈  -Inf
-    @test exp(logdet(B))  ≈  det(A) atol=eps()
-    @test det(B1)  ≈  det(A1)
-    @test logdet(B1)  ≈  log(det(A1))
-    @test det(B2)  ≈  det(A2)
-    @test logdet(B2)  ≈  log(det(A2))
+    @test logdet(B)  ==  -Inf
  end
 
 @testset "cholesky factorization success, and failure errors" begin
