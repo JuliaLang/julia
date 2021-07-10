@@ -664,5 +664,30 @@ using .Main.ImmutableArrays
     @test convert(AbstractArray{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
     @test convert(AbstractMatrix{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
 end
+                    
+@testset "Tri/Bidiagonal conversion" begin
+    BidiagU = Bidiagonal([1, 2, 3, 4] , [1, 2, 3], :U)
+    BidiagL = Bidiagonal([1, 2, 3, 4] , [1, 2, 3], :L)
+    Tridiag = Tridiagonal([1, 2, 3] , [1, 2, 3,4], [1, 2, 3])           
+    @test Tridiagonal(BidiagU) == BidiagU
+    @test Tridiagonal(BidiagL) == BidiagL
+    @test Bidiagonal(Tridiag, :U)  == BidiagU
+    @test Bidiagonal(Tridiag, :L)  == BidiagL               
+    for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
+        v1 = rand(elty, 3)
+        v2 = rand(elty, 4)
+        v3 = zeros(elty, 3)       
+        B = Bidiagonal(v2 , v1, :U)
+        Bdiag = Bidiagonal(v2 , v3, :U)               
+        @test Bidiagonal(B)  == B 
+        @test Bidiagonal(B, :U)  == B
+        @test Bidiagonal(B, :L)  == Diagonal(v2)
+        @test isdiag(B) == (v1 == [0, 0, 0])
+        @test Bidiagonal(Bdiag)  == Bdiag
+        @test Bidiagonal(Bdiag, :U)  == Bdiag
+        @test Bidiagonal(Bdiag, :L)  == Diagonal(v2)
+        @test isdiag(Bdiag) == (v3 == [0, 0, 0])              
+     end
+end
 
 end # module TestBidiagonal
