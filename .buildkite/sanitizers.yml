@@ -21,7 +21,9 @@ steps:
           workspaces:
             - "/cache/repos:/cache/repos"
     commands: |
+      echo "--- contrib/asan.sh"
       contrib/asan.sh ./tmp/test-asan -j$${JULIA_NUM_CORES} debug
+      echo "--- contrib/check-asan.jl"
       contrib/check-asan.jl ./tmp/test-asan/usr/bin/julia-debug
     timeout_in_minutes: 60
     notify:
