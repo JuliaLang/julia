@@ -1653,12 +1653,14 @@ lyap(a::Union{Real,Complex}, c::Union{Real,Complex}) = -c/(2real(a))
 Test whether a matrix is positive semidefinite (and Hermitian) by calling isposdef, which trys to perform a
 Cholesky factorization of `A`.
 See also [`isposdef`](@ref), [`cholesky`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [9 -15; -15 25]
 2×2 Matrix{Int64}:
  9   -15
  -15  25
+
 julia> ispos_sdef(A)
 true
 ```

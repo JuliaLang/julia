@@ -1804,21 +1804,23 @@ Compute the cross product of two matrices.
 
 # Examples
 ```jldoctest
-julia> a = [1 2;3 4;5 6]
+julia> A = [1 2;3 4;5 6]
 3×2 Matrix{Int64}:
  1  2
  3  4
  5  6
-julia> b = [1 3;2 4;3 6]
+
+julia> B = [1 3;2 4;3 6]
 3×2 Matrix{Int64}:
  1  3
  2  4
  3  6
-julia> cross(a,b)
-3-element Vector{Int64}:
- -1.0   0.0
-  2.0   6.0
- -1.0  -4.0
+
+julia> cross(A, B)
+3×2 Array{Int64,2}:
+ -1   0
+  2   6
+ -1  -4
 ```
 """
 function cross(A::AbstractMatrix, B::AbstractMatrix)
@@ -1828,9 +1830,9 @@ function cross(A::AbstractMatrix, B::AbstractMatrix)
         throw(DimensionMismatch("A and B must have same dimensions"))
     end
     cols = size(A)[2]
-    c = zeros(3, cols)
+    C = zeros(eltype(A), 3, cols)
     for i in 1:cols
-        c[:,i] = cross(A[:,i], B[:,i])
+        C[:,i] = cross(A[:,i], B[:,i])
     end
-    c
+    C
 end
