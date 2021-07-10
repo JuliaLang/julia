@@ -892,6 +892,19 @@ end
 
 getindex(r::AbstractRange, ::Colon) = copy(r)
 
+# The result of the indexing operation r[s] should have the same indices as s
+# However this is not possible to achieve in general without offset arrays
+# To get aroudn this we introduce methods that are intended to be pirated by OffsetArrays
+# This way it does not need to pirate getindex while dispatching on the second argument,
+# which introduces a host of ambiguities
+
+# Indexing with OneTo is guaranteed to produce correct indices
+withindices(r, axs::Tuple{OneTo, Vararg{OneTo}}) = r
+# This method is expected to be pirated by OffsetArrays to produce a result with the correct indices
+# A package that seeks to produce a specific return type (and not participate in the piracy by OffsetArrays)
+# may extend it themselves for their own types
+withindices(r, axs) = r
+
 function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integer}
     @_inline_meta
     @boundscheck checkbounds(r, s)
@@ -900,8 +913,9 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         range(first(s) ? first(r) : last(r), length = Int(last(s)))
     else
         f = first(r)
-        st = oftype(f, f + first(s)-1)
-        return range(st, length=length(s))
+        st = oftype(f, f + first(s)-firstindex(r))
+        ret = range(st, length=length(s))
+        return withindices(ret, axes(s))
     end
 end
 
@@ -918,7 +932,7 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     if T === Bool
         range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length = Int(last(s)))
     else
-        st = oftype(first(r), first(r) + s.start-1)
+        st = oftype(first(r), first(r) + s.start-firstindex(r))
         return range(st, step=step(s), length=length(s))
     end
 end
@@ -941,7 +955,8 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
         end
     else
         st = oftype(r.start, r.start + (first(s)-1)*step(r))
-        return range(st, step=step(r)*step(s), length=length(s))
+        ret = range(st, step=step(r)*step(s), length=length(s))
+        return withindices(ret, axes(s))
     end
 end
 
@@ -963,10 +978,11 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
         end
     else
         # Find closest approach to offset by s
-        ind = LinearIndices(s)
+        ind = 1:length(s)
         offset = max(min(1 + round(Int, (r.offset - first(s))/step(s)), last(ind)), first(ind))
         ref = _getindex_hiprec(r, first(s) + (offset-1)*step(s))
-        return StepRangeLen{T}(ref, r.step*step(s), length(s), offset)
+        ret = StepRangeLen{T}(ref, r.step*step(s), length(s), offset)
+        return withindices(ret, axes(s))
     end
 end
 
@@ -989,7 +1005,8 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     else
         vfirst = unsafe_getindex(r, first(s))
         vlast  = unsafe_getindex(r, last(s))
-        return LinRange{T}(vfirst, vlast, length(s))
+        ret = LinRange{T}(vfirst, vlast, length(s))
+        return withindices(ret, axes(s))
     end
 end
 

@@ -496,10 +496,11 @@ function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::Ordin
             newstep = twiceprecision(r.step*step(s), nbitslen(T, length(s), soffset))
         end
         if ioffset == r.offset
-            return StepRangeLen(r.ref, newstep, length(s), max(1,soffset))
+            ret = StepRangeLen(r.ref, newstep, length(s), max(1,soffset))
         else
-            return StepRangeLen(r.ref + (ioffset-r.offset)*r.step, newstep, length(s), max(1,soffset))
+            ret = StepRangeLen(r.ref + (ioffset-r.offset)*r.step, newstep, length(s), max(1,soffset))
         end
+        return withindices(ret, axes(s))
     end
 end
 
