@@ -1141,13 +1141,13 @@ function _unaliased_copyto!(::IndexStyle, dest::AbstractArray, ::IndexLinear, sr
             end
             break
         end
-    elseif length(dest) == length(dest)
+    elseif length(dest) == length(src)
         for I in iter
             @inbounds dest[I] = src[i += 1]
         end
     else
         # use zip based interator
-        invoke(_unaliased_copyto!, 
+        invoke(_unaliased_copyto!,
                 Tuple{IndexStyle, AbstractArray, IndexStyle, AbstractArray},
                 IndexStyle(dest), dest, IndexLinear(), src)
     end
@@ -1157,7 +1157,7 @@ function _unaliased_copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src
     @_inline_meta
     iterdest, itersrc = eachindex(dest), eachindex(src)
     iterdest == itersrc && return _shared_unaliased_copyto!(dest, src, itersrc)
-    @inbounds for (J, I) in zip(iterdest, itersrc) 
+    @inbounds for (J, I) in zip(iterdest, itersrc)
         dest[J] = src[I]
     end
 end
