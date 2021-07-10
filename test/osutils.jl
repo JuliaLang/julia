@@ -28,6 +28,11 @@
     else
         @test Sys.windows_version() >= v"1.0.0-"
     end
+
+    @test !Sys.detectwsl(:Windows)
+    if !Sys.islinux()
+        @test !Sys.detectwsl()
+    end
 end
 
 @testset "@static" begin
