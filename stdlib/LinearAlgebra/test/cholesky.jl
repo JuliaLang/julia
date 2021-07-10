@@ -495,7 +495,7 @@ end
     @test B.L ≈ B32.L
     @test B.UL ≈ B32.UL
 end
-                                
+
 @testset "det and logdet" begin
     A = [4083 3825 5876 2048 4470 5490;
          3825 3575 5520 1920 4200 5140;
