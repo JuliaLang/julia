@@ -4702,10 +4702,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             std::unique_ptr<Module> closure_m;
             jl_llvm_functions_t closure_decls;
 
-            jl_method_instance_t *li;
-            jl_value_t *closure_t;
-            jl_tupletype_t *env_t;
-            jl_svec_t *sig_args;
+            jl_method_instance_t *li = NULL;
+            jl_value_t *closure_t = NULL;
+            jl_tupletype_t *env_t = NULL;
+            jl_svec_t *sig_args = NULL;
             JL_GC_PUSH5(&li, &closure_src, &closure_t, &env_t, &sig_args);
 
             li = jl_new_method_instance_uninit();
