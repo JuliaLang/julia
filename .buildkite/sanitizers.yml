@@ -20,6 +20,9 @@ steps:
           gid: 1000
           workspaces:
             - "/cache/repos:/cache/repos"
+      # `contrib/check-asan.jl` needs a `julia` binary:
+      - JuliaCI/julia#v1:
+          version: 1.6
     commands: |
       echo "--- contrib/asan.sh"
       contrib/asan.sh ./tmp/test-asan -j$${JULIA_NUM_CORES} debug
