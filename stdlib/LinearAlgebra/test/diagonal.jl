@@ -819,5 +819,14 @@ using .Main.ImmutableArrays
     @test convert(AbstractArray{Float64}, D)::Diagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == D
     @test convert(AbstractMatrix{Float64}, D)::Diagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == D
 end
+                                            
+@testset "divisions, rmul! and lmul! functionality" for elty in (Int, Float64, ComplexF64)
+    B = Diagonal(rand(elty,5,5))
+    C = Diagonal(rand(elty,5,5))
+    x = rand(elty)                                  
+    @test \(x, B) == /(B, x)
+    @test rmul!(copy(B),C) == B*C
+    @test lmul!(B,copy(C)) == B*C
+end
 
 end # module TestDiagonal
