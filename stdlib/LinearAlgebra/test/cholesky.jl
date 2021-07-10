@@ -495,5 +495,70 @@ end
     @test B.L ≈ B32.L
     @test B.UL ≈ B32.UL
 end
+                                
+@testset "det and logdet" begin
+    A = [4083 3825 5876 2048 4470 5490;
+         3825 3575 5520 1920 4200 5140;
+         5876 5520 8427 2940 6410 7903; 
+         2048 1920 2940 1008 2240 2740; 
+         4470 4200 6410 2240 4875 6015; 
+         5490 5140 7903 2740 6015 7370]
+    A1 = [4 12 -16;
+    12 37 -43;
+    -16 -43 98]
+    A2 = [ 6 15 55
+    15 55 225
+    55 225 979]
+    B = cholesky(A, Val(true), check=false) 
+    B1 = cholesky(A1, Val(true))     
+    B2 = cholesky(A2, Val(true))  
+    @test det(B)  ≈  0.0
+    @test det(B)  ≈  det(A)
+    @test logdet(B)  ≈  -Inf
+    @test logdet(B)  ≈  log(det(A))
+    @test det(B1)  ≈  det(A1)
+    @test logdet(B1)  ≈  log(det(A1))                        
+    @test det(B2)  ≈  det(A2)
+    @test logdet(B2)  ≈  log(det(A2))                                
+ end
+                                
+@testset "cholesky factorization success, and failure errors" begin
+    for T in (Float32, Float64, ComplexF64)
+        A = T[  2 -1 0;
+            -1 2 -1;
+            0 -1 2 ]
+        @test isposdef(A)
+        @test Hermitian(A)==A
+        @test LinearAlgebra.issuccess(cholesky(A; check = false))
+        @test LinearAlgebra.issuccess(cholesky!(copy(A); check = false))
+        B = T[  2 -1 0;
+                -1 2 -1;
+                0 -1 -5 ]
+        C = T[  2 -1 1;
+                -1 2 -1;
+                0 -1 2 ]  
+        @test Hermitian(B)==B                              
+        @test Hermitian(C)!=C                              
+        for M in (B, C)
+            @test !isposdef(M)
+            @test_throws PosDefException cholesky(M)
+            @test_throws PosDefException cholesky!(copy(M))
+            @test_throws PosDefException cholesky(M; check = true)
+            @test_throws PosDefException cholesky!(copy(M); check = true)
+            @test !LinearAlgebra.issuccess(cholesky(M; check = false))
+            @test !LinearAlgebra.issuccess(cholesky!(copy(M); check = false))
+            @test_throws RankDeficientException cholesky(M, Val(true))
+            @test_throws RankDeficientException cholesky(M, Val(true); check = true)
+        end
+    end
+    D = ComplexF64[
+        5 2+3im 5im;
+        2-3im 7 1+7im;
+        -5im 1-7im 12]
+    @test isposdef(D)
+    @test Hermitian(D)==D
+    @test LinearAlgebra.issuccess(cholesky(D; check = false))
+    @test LinearAlgebra.issuccess(cholesky!(copy(D); check = false))
+end
 
 end # module TestCholesky
