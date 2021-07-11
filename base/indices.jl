@@ -142,7 +142,7 @@ julia> a = fill(1, (3,4,1,1,1));
 julia> b = fill(1, (3,4));
 
 julia> promote_shape(a,b)
-(Base.OneTo(3), Base.OneTo(4), Base.OneTo(1), Base.OneTo(1), Base.OneTo(1))
+(3, 4, 1, 1, 1)
 
 julia> promote_shape((2,3,1,4), (2, 3, 1, 4, 1))
 (2, 3, 1, 4, 1)
@@ -165,6 +165,9 @@ function promote_shape(a::Dims, b::Dims)
     return a
 end
 
+function promote_shape(a::Array{A}, b::Array{B}) where {A,B}
+    promote_shape(size(a), size(b))
+end
 function promote_shape(a::AbstractArray, b::AbstractArray)
     promote_shape(axes(a), axes(b))
 end
