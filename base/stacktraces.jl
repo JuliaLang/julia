@@ -211,7 +211,7 @@ is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing
 
 function show_spec_linfo(io::IO, frame::StackFrame)
     linfo = frame.linfo
-    if linfo === nothing
+    if linfo === nothing || (get(io, :compacttrace, false) && parse(Bool, get(ENV, "JULIA_STACKTRACE_MINIMAL", "false")))
         if frame.func === empty_sym
             print(io, "ip:0x", string(frame.pointer, base=16))
         elseif frame.func === top_level_scope_sym
@@ -223,25 +223,29 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         def = linfo.def
         if isa(def, Method)
             sig = linfo.specTypes
-            argnames = Base.method_argnames(def)
-            if def.nkw > 0
-                # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
-                kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
-                uw = Base.unwrap_unionall(sig)::DataType
-                pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
-                kwnames = argnames[2:(def.nkw+1)]
-                for i = 1:length(kwnames)
-                    str = string(kwnames[i])::String
-                    if endswith(str, "...")
-                        kwnames[i] = Symbol(str[1:end-3])
-                    end
-                end
-                Base.show_tuple_as_call(io, def.name, pos_sig;
-                                        demangle=true,
-                                        kwargs=zip(kwnames, kwarg_types),
-                                        argnames=argnames[def.nkw+2:end])
+            if isnothing(sig) # inlined, which is currently lacking the other information
+                Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
             else
-                Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
+                argnames = Base.method_argnames(def)
+                if def.nkw > 0
+                    # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
+                    kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
+                    uw = Base.unwrap_unionall(sig)::DataType
+                    pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
+                    kwnames = argnames[2:(def.nkw+1)]
+                    for i = 1:length(kwnames)
+                        str = string(kwnames[i])::String
+                        if endswith(str, "...")
+                            kwnames[i] = Symbol(str[1:end-3])
+                        end
+                    end
+                    Base.show_tuple_as_call(io, def.name, pos_sig;
+                                            demangle=true,
+                                            kwargs=zip(kwnames, kwarg_types),
+                                            argnames=argnames[def.nkw+2:end])
+                else
+                    Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
+                end
             end
         else
             Base.show_mi(io, linfo, true)

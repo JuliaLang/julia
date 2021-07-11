@@ -167,7 +167,7 @@ struct Error <: Result
             bt = scrub_exc_stack(bt)
         end
         if test_type === :test_error || test_type === :nontest_error
-            bt_str = sprint(Base.show_exception_stack, bt; context=stdout)
+            bt_str = sprint(Base.show_exception_stack, Base.ExceptionStack([(exception = b[1], backtrace = b[2]) for b in bt]); context=stdout)
         else
             bt_str = ""
         end
@@ -873,7 +873,7 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.broken, " broken.")
 end
 
-function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
+function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true, compacttrace=false)
     printstyled(io, string(ex), color=Base.error_color())
 end
 
@@ -891,7 +891,7 @@ struct FallbackTestSetException <: Exception
     msg::String
 end
 
-function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
+function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true, compacttrace=false)
     printstyled(io, ex.msg, color=Base.error_color())
 end
 

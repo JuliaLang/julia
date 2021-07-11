@@ -66,7 +66,7 @@ struct TaskFailedException <: Exception
     task::Task
 end
 
-function showerror(io::IO, ex::TaskFailedException, bt = nothing; backtrace=true)
+function showerror(io::IO, ex::TaskFailedException, bt = nothing; backtrace=true, compacttrace=false)
     print(io, "TaskFailedException")
     if bt !== nothing && backtrace
         show_backtrace(io, bt)

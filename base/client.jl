@@ -87,25 +87,24 @@ function scrub_repl_backtrace(bt)
         bt = stacktrace(bt)
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
+        # some sysimages don't have `eval`, but do have `eval_user_input`
+        eval_ind === nothing && (eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval_user_input, bt))
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
 end
 
-function display_error(io::IO, er, bt)
+function display_error(io::IO, stack::ExceptionStack, compacttrace::Bool = false)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
+    stack = ExceptionStack([(exception = x[1], backtrace = scrub_repl_backtrace(x[2])) for x in stack ])
+    istrivial = length(stack) == 1 && length(stack[1].backtrace) ≤ 1 # frame 1 = top level
+    !istrivial && ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, stack)
+    show_exception_stack(IOContext(io, :limit => true), stack)
     println(io)
 end
-function display_error(io::IO, stack::ExceptionStack)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
-    show_exception_stack(IOContext(io, :limit => true), bt)
-    println(io)
-end
-display_error(stack::ExceptionStack) = display_error(stderr, stack)
-display_error(er, bt=nothing) = display_error(stderr, er, bt)
+display_error(stack::ExceptionStack, compacttrace = false) = display_error(stderr, stack, compacttrace)
+display_error(io::IO, er, bt, compacttrace = false) = display_error(io, ExceptionStack([(exception = er, backtrace = bt)]), compacttrace)
+display_error(er, bt, compacttrace = false) = display_error(stderr, er, bt, compacttrace)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
@@ -117,7 +116,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 print(color_normal)
             end
             if lasterr !== nothing
-                invokelatest(display_error, errio, lasterr)
+                invokelatest(display_error, errio, lasterr, true)
                 errcount = 0
                 lasterr = nothing
             else
@@ -140,7 +139,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             break
         catch
             if errcount > 0
-                @error "SYSTEM: display_error(errio, lasterr) caused an error"
+                @error "SYSTEM: display_error(errio, lasterr, true) caused an error"
             end
             errcount += 1
             lasterr = current_exceptions()

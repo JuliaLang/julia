@@ -162,6 +162,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
             lasterr = current_exceptions()
         end
     end
+
     Base.sigatomic_end()
     nothing
 end
@@ -280,7 +281,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
         try
             Base.sigatomic_end()
             if iserr
-                Base.invokelatest(Base.display_error, errio, val)
+                Base.invokelatest(Base.display_error, errio, val, true)
             else
                 if val !== nothing && show_value
                     try
@@ -301,7 +302,8 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    Base.invokelatest(Base.display_error, errio, current_exceptions())
+                    stack = current_exceptions()
+                    Base.invokelatest(Base.display_error, errio, stack, true)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
