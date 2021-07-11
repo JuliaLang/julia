@@ -481,10 +481,21 @@ end
 isempty(x::Tuple{}) = true
 isempty(@nospecialize x::Tuple) = false
 
-revargs() = ()
-revargs(x, r...) = (revargs(r...)..., x)
+# unrolled definition for for tuples not greater than 20
+for N in 0:20
+    head = :(reverse(t::NTuple{$N, Any}))
+    tail = Expr(:tuple, (:(t[$i]) for i in :($N):-1:1)...)
+    eval(Expr(Symbol("="), head, tail))
+end
 
-reverse(t::Tuple) = revargs(t...)
+# we have 20+1 Ts in the definition
+function reverse(t::Tuple{T, T, T, T, T, T, T, T, T, T,
+                          T, T, T, T, T, T, T, T, T, T,
+                          T, Vararg{T}}) where T
+    ([t[i] for i in length(t):-1:1]...)::NTuple{nfields(t), T}
+end
+
+reverse(t::Tuple) = ([t[i] for i in length(t):-1:1]...)
 
 ## specialized reduction ##
 
