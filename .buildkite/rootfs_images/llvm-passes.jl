@@ -8,6 +8,7 @@ include("rootfs_utils.jl")
 
 # Build debian-based image with the following extra packages:
 packages = [
+    "bash",
     "build-essential",
     "cmake",
     "curl",
