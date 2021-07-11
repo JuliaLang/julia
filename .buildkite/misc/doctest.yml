@@ -8,30 +8,32 @@ agents:
   os: "linux"
 
 steps:
-  - label: "embedding"
-    key: "embedding"
+  - label: "doctest"
+    key: doctest
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
       - staticfloat/sandbox#v1:
-          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v1/llvm-passes.tar.gz
-          rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.0/package_linux.x86_64.tar.gz
+          rootfs_treehash: "d5722d586b93eb307bb6340d275afdbf7578a756"
           uid: 1000
           gid: 1000
           workspaces:
             # Include `/cache/repos` so that our `git` version introspection works.
             - "/cache/repos:/cache/repos"
     commands: |
-      prefix="/tmp/prefix"
-      echo "+++ Build julia, deploy to $${prefix}"
-      make -j$${JULIA_NUM_CORES} JULIA_PRECOMPILE=0 prefix=$${prefix} install
+      echo "--- Build Julia from source"
+      make -j 6
 
-      embedding_output="/tmp/embedding-test"
-      echo "+++ Run embedding tests, deploy to $${embedding_output}"
-      mkdir -p "$${embedding_output}"
-      make -j$${JULIA_NUM_CORES} -C test/embedding JULIA="$${prefix}/bin/julia" BIN="$${embedding_output}"
+      echo "--- Print Julia version info"
+      ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
 
-    timeout_in_minutes: 60
+      echo "--- Build Julia docs"
+      make docs
+
+      echo "--- Run Julia doctests"
+      JULIA_NUM_THREADS=1 make -C doc doctest=true
+    timeout_in_minutes: 120
     notify:
       - github_commit_status:
-          context: "embedding"
+          context: "doctest"
