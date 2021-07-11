@@ -352,7 +352,7 @@
                                    ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))))
                              (else
                               `(global ,(resolve-expansion-vars-with-new-env arg env m parent-scope inarg))))))
-           ((using import export meta line inbounds boundscheck loopinfo syncregion) (map unescape e))
+           ((using import export meta line inbounds boundscheck loopinfo) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
@@ -383,7 +383,7 @@
             `(-> ,(resolve-in-function-lhs (tuple-wrap-arrow-sig (cadr e)) env m parent-scope inarg)
                  ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
 
-           ((= function)
+           ((= function syncregion)
             (if (and (pair? (cadr e)) (function-def? e) (length> e 2))
                 ;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
                 `(,(car e) ,(resolve-in-function-lhs (cadr e) env m parent-scope inarg)

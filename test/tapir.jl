@@ -166,6 +166,23 @@ end
     @test unreachable_spawn() === nothing
 end
 
+@testset "CapturedToken" begin
+    @test CapturedToken.iife() == 333
+    @test CapturedToken.iife_optimizable() == 333
+
+    @testset "invoke_escaped_spawn" begin
+        err = @test_error CapturedToken.invoke_escaped_spawn()
+        @test occursin("detach invoked after sync", sprint(showerror, err))
+    end
+
+    @testset "escaped_spawn" begin
+        closure = CapturedToken.escaped_spawn()
+        err = @test_error closure()
+        @test occursin("Channel is closed", sprint(showerror, err))
+        # TODO: better error?
+    end
+end
+
 @testset "OptimizableTasks" begin
     @testset "$label" for (label, ci) in [
         :trivial_detach => first(@code_typed OptimizableTasks.trivial_detach(0, 0)),
@@ -174,6 +191,7 @@ end
         :always_throw => first(@code_typed OptimizableTasks.always_throw()),
         :set_distinct =>
             first(@code_typed TaskOutputs.set_distinct_optimizable(true)),
+        :iife_optimizable => first(@code_typed CapturedToken.iife_optimizable()),
     ]
         @test !Core.Compiler.has_tapir(ci::Core.Compiler.CodeInfo)
     end

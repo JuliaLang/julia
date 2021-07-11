@@ -453,6 +453,72 @@ tak(x, y, z) =
         z
     end
 
+module CapturedToken
+using Base.Experimental: Tapir
+
+@noinline produce(x) = Base.inferencebarrier(x)::typeof(x)
+
+""" Immediately-invoked Function Expression (IIFE) is OK. """
+function iife()
+    Tapir.@output a b
+    Tapir.@sync begin
+        function closure()
+            Tapir.@spawn a = produce(111)
+        end
+        closure()
+        b = produce(222)
+    end
+    return a + b
+end
+
+""" Some trivial IIFE can be optimized out. """
+function iife_optimizable()
+    Tapir.@output a b
+    Tapir.@sync begin
+        function closure()
+            Tapir.@spawn a = 111
+        end
+        closure()
+        b = produce(222)
+    end
+    return a + b
+end
+
+"""
+    escaped_spawn() -> closure
+
+Return an "invalid" `closure` that throws as it captures the syncregion token.
+"""
+function escaped_spawn()
+    local closure
+    Tapir.@sync begin
+        closure = function ()
+            Tapir.@spawn produce(111)
+        end
+        produce(222)
+    end
+    return closure
+end
+
+"""
+    invoke_escaped_spawn()::Union{}
+
+Invoke a closure that captures syncregion after sync, which should be disallowed.
+"""
+function invoke_escaped_spawn()
+    local closure
+    Tapir.@sync begin
+        closure = function ()
+            Tapir.@spawn produce(111)
+        end
+        produce(222)
+    end
+    closure()
+    return
+end
+
+end # module CapturedToken
+
 module OptimizableTasks
 using Base.Experimental: Tapir
 

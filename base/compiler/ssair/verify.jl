@@ -227,12 +227,12 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     error("")
                 end
             end
-        elseif (
-            isa(stmt, Union{DetachNode,ReattachNode,SyncNode}) &&
-            resolve_syncregion(ir, stmt.syncregion) === nothing
-        )
-            @verify_error "$(typeof(stmt)) $idx does not have a valid syncregion."
+        elseif (isa(stmt, SyncNode) && resolve_syncregion(ir, stmt.syncregion) === nothing)
+            @verify_error "SyncNode $idx does not have a valid syncregion."
             error("")
+            # Note: We can't do the same check for DetachNode and ReattachNode
+            # since they may be inside a closure that captures the syncregion
+            # token.
         else
             if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
                 if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker

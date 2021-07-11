@@ -1582,6 +1582,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 end
             end
         end
+    elseif e.head === :syncregion
+        t = abstract_eval_statement(interp, e.args[1], vtypes, sv)
     else
         t = abstract_eval_value_expr(interp, e, vtypes, sv)
     end

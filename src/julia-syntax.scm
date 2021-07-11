@@ -4610,7 +4610,7 @@ f(x) = yt(x)
 
             ((syncregion)
              (let ((s (make-ssavalue)))
-               (emit `(= ,s ,(cons (car e) ())))
+               (emit `(= ,s ,e))
                s))
 
             ;; metadata expressions

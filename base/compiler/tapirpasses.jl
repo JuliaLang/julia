@@ -540,15 +540,16 @@ end
 function find_method_instance_from_sig(
     interp::AbstractInterpreter,
     @nospecialize(sig::Type);
-    sparms::SimpleVector = svec(),
+    sparams::SimpleVector = svec(),
     preexisting::Bool = false,
     compilesig::Bool = false,
 )
     result = findsup(sig, method_table(interp))
     result === nothing && return nothing
     method, = result
-    return specialize_method(method, sig, sparms, preexisting, compilesig)
+    return specialize_method(method, sig, sparams, preexisting, compilesig)
 end
+# TODO: backedge?
 
 function is_in_loop(cfg::CFG, subcfg, needle::Int)
     subcfg = BitSet(subcfg)
@@ -651,11 +652,27 @@ function is_trivial_for_spawn(ir::IRCode, task::ChildTask)
     return true
 end
 
+""" Remove syncregion and tyr to remove the corresponding call to the taskgroup factory """
+function remove_syncregion!(ir::IRCode, position::Integer)
+    stmt = ir.stmts[position]
+    ex = stmt[:inst]::Expr
+    @assert ex.head === :syncregion
+
+    # Remove `Expr(:syncregion, ...)` itself
+    stmt[:inst] = nothing
+
+    # Remove call to `Tapir.taskgroup()`
+    tg = ex.args[1]
+    if tg isa SSAValue
+        ir[tg] = nothing
+    end
+end
+
 function remove_syncregions!(ir::IRCode, stmts = 1:length(ir.stmts))
     for i in stmts
         stmt = ir.stmts[i]
         if isexpr(stmt[:inst], :syncregion)
-            stmt[:inst] = nothing
+            remove_syncregion!(ir, i)
         end
     end
 end
@@ -743,12 +760,15 @@ function early_tapir_pass!(ir::IRCode)
     @timeit "Lower task output" ir = lower_tapir_output!(ir)
     @timeit "Check task output" ir, racy = check_tapir_race!(ir)
     racy && return ir, racy
-    @timeit "Fixup syncregion" ir = fixup_syncregion_phic!(ir)
+    @timeit "Normalize syncregion" ir = normalize_syncregions!(ir)
     return ir, racy
 end
 
 """
     resolve_syncregion(ir::IRCode, inst) -> ssa::SSAValue or nothing
+
+Return an `SSAValue` `ssa` such that `ir[ssa]` is a syncregion expression if
+found. Return `nothing` otherwise.
 """
 function resolve_syncregion(ir::IRCode, inst)
     @nospecialize inst
@@ -772,22 +792,33 @@ function resolve_syncregion(ir::IRCode, inst)
 end
 
 """
-    fixup_syncregion_phic!(ir::IRCode) -> ir′
+    normalize_syncregions!(ir::IRCode) -> ir′
 """
-function fixup_syncregion_phic!(ir::IRCode)
+function normalize_syncregions!(ir::IRCode)
     if !isempty(ir.new_nodes.stmts.inst)
         ir = compact!(ir)
     end
 
     for bb in ir.cfg.blocks
-        isync = last(bb.stmts)
-        sync = ir.stmts[isync][:inst]
-        sync isa SyncNode || continue
-        inst = ir[sync.syncregion::SSAValue]
-        isexpr(inst, :syncregion) && continue
-        ssa = resolve_syncregion(ir, inst)
-        # TODO: validate that syncregion dominates sync
-        ir.stmts.inst[isync] = SyncNode(ssa)
+        stmt = ir.stmts[bb.stmts[end]]
+        inst = stmt[:inst]
+        if inst isa SyncNode
+            inst = ir[inst.syncregion::SSAValue]
+            isexpr(inst, :syncregion) && continue
+            ssa = resolve_syncregion(ir, inst)
+            # TODO: validate that syncregion dominates sync
+            stmt[:inst] = SyncNode(ssa)
+        elseif inst isa Union{DetachNode, ReattachNode}
+            # Inside a closure, syncregion may not be an SSAValue
+            inst.syncregion isa SSAValue && continue
+            ssa = insert_node!(ir, bb.stmts[end], NewInstruction(inst.syncregion, Any))
+            if inst isa DetachNode
+                stmt[:inst] = DetachNode(ssa, inst.label)
+            else
+                inst::ReattachNode
+                stmt[:inst] = ReattachNode(ssa, inst.label)
+            end
+        end
     end
 
     return ir
@@ -1127,51 +1158,126 @@ end
 # any more.
 
 """
-    remove_trivial_spawns!(ir::IRCode) -> ir′
+    late_tapir_pass!(ir::IRCode) -> ir′
 
-Replace detached tasks containing only trivial code with the serial projection.
+Late but not final.
 """
-function remove_trivial_spawns!(ir::IRCode)
+function late_tapir_pass!(ir::IRCode)
+    tasks = nothing
+    @timeit "Detect misplaced detach" (ir, tasks) = disallow_detach_after_sync!(ir, tasks)
+    @timeit "Remove trivial Tapir" (ir, tasks) = remove_trivial_tapir!(ir, tasks)
+    return ir
+end
+
+"""
+    disallow_detach_after_sync!(ir::IRCode, tasks) -> ir′
+
+Detect detach after sync and insert runtime errors.
+"""
+function disallow_detach_after_sync!(ir::IRCode, tasks)
     # This pass only looks into `ir.stmts` at the moment:
     @assert isempty(ir.new_nodes.stmts.inst)
 
-    tasks = child_tasks(ir)
-    isempty(tasks) && return ir
+    Tapir = tapir_module()
+    Tapir isa Module || return remove_tapir!(ir)
 
-    cache = RefValue{Union{Vector{Vector{Int}},Nothing}}(nothing)
-    function get_syncregion_to_syncs()
-        syncregion_to_syncs = cache[]
-        syncregion_to_syncs === nothing || return syncregion_to_syncs
-        syncregion_to_syncs = Vector{Vector{Int}}(undef, length(ir.stmts))
-        for bb in ir.cfg.blocks
-            isync = last(bb.stmts)
-            sync = ir.stmts.inst[isync]
-            sync isa SyncNode || continue
-            sr = (sync.syncregion::SSAValue).id
-            if isassigned(syncregion_to_syncs, sr)
-                ids = syncregion_to_syncs[sr]
-            else
-                ids = syncregion_to_syncs[sr] = Int[]
-            end
-            push!(ids, isync)
-        end
-        cache[] = syncregion_to_syncs
-        return syncregion_to_syncs
+    if tasks === nothing
+        tasks = child_tasks(ir)
     end
 
-    syncregion_to_ntasks = zeros(Int, length(ir.stmts))
+    changed = RefValue(false)
+    foreach_task(tasks) do task
+        det = ir.stmts.inst[task.detach]::DetachNode
+        sr = resolve_syncregion(ir, det.syncregion::SSAValue)
+        sr isa SSAValue || return true
+
+        should_remove = RefValue(false)
+        detacher = block_for_inst(ir, task.detach)
+        foreach_ancestor(detacher, ir.cfg) do ibb, bb
+            should_remove.x && return false  # short-circuit
+
+            inst = ir.stmts.inst[bb.stmts[end]]
+            if inst isa SyncNode
+                if resolve_syncregion(ir, inst.syncregion) === sr
+                    should_remove.x = true
+                end
+            end
+
+            if sr.id in bb.stmts
+                # This block contains the corresponding syncregion. Stop ascending.
+                return false
+            end
+            return true
+        end
+
+        if should_remove.x
+            changed.x = true
+            ex = Expr(:call, GlobalRef(Tapir, :detach_after_sync_error))
+            insert_node!(ir, task.detach, NewInstruction(ex, Any))
+            remove_tapir!(ir, task)
+        end
+        return true
+    end
+
+    if changed.x
+        ir = compact!(ir)
+        return ir, nothing
+    else
+        return ir, tasks
+    end
+end
+
+"""
+    remove_trivial_tapir!(ir::IRCode, tasks) -> ir′
+
+Remove trivial spawns and syncregions.
+
+* Remove trivial spawns (serial projection).
+* Remove empty syncregions.
+
+This is a single monolithic function at the moment for sharing the computed
+mapping `syncregion_to_syncs` between the above semantically distinct passes.
+"""
+function remove_trivial_tapir!(ir::IRCode, tasks)
+    # This pass only looks into `ir.stmts` at the moment:
+    @assert isempty(ir.new_nodes.stmts.inst)
+
+    if tasks === nothing
+        tasks = child_tasks(ir)
+    end
+    # [^empty-tasks]: we can't bail out here even if `isempty(tasks)` since `ir`
+    # may also have some empty syncregions (which are processed below).
+
+    # Scan syncregion and SyncNode
     syncregions = BitSet()
+    syncregion_to_syncs = Vector{Vector{Int}}(undef, length(ir.stmts))
+    for bb in ir.cfg.blocks
+        isync = last(bb.stmts)
+        sync = ir.stmts.inst[isync]
+        sync isa SyncNode || continue
+        sr = (sync.syncregion::SSAValue).id
+        push!(syncregions, sr)
+        if isassigned(syncregion_to_syncs, sr)
+            ids = syncregion_to_syncs[sr]
+        else
+            ids = syncregion_to_syncs[sr] = Int[]
+        end
+        push!(ids, isync)
+    end
+
+    # Remove trivial spawns:
     foreach_task_depth_first(tasks) do task
         det = ir.stmts.inst[task.detach]::DetachNode
-        sr = (det.syncregion::SSAValue).id
-        push!(syncregions, sr)
+        sr = det.syncregion::SSAValue
 
         if is_trivial_for_spawn(ir, task)
             remove_tapir!(ir, task)
-        else
-            # Check if continuation is trivial:
+        elseif isassigned(syncregion_to_syncs, sr.id) # has a SyncNode
+            # Check if the continuation is trivial. This is done only when the
+            # task is not spawned from a closure (that captures the syncregion
+            # token). If so, it's not possible to see the entire continuation.
             is_trivial = RefValue(true)
-            syncs = get_syncregion_to_syncs()[sr]
+            syncs = syncregion_to_syncs[sr.id]
             foreach_descendant(det.label, ir.cfg) do _ibb, bb
                 is_trivial.x || return false
                 if det.label in bb.succs  # loop
@@ -1186,26 +1292,40 @@ function remove_trivial_spawns!(ir::IRCode)
             end
             if is_trivial.x
                 remove_tapir!(ir, task)
-            else
-                syncregion_to_ntasks[sr] += 1
             end
         end
 
         return true  # continue
     end
 
-    # Remove empty syncregions
-    for sr in syncregions
-        syncregion_to_ntasks[sr] > 0 && continue
+    isempty(syncregions) && return ir, tasks
 
-        ir.stmts.inst[sr] = nothing
-        for isync in get_syncregion_to_syncs()[sr]
+    # Find used syncregions:
+    # Note: Scanning all statements (not just detach and reattach) since the
+    # syncregion token may be captured by closures.
+    used = BitSet()
+    for i in 1:length(ir.stmts)
+        inst = ir.stmts.inst[i]
+        inst isa SyncNode && continue
+        foreach_id(identity, inst) do v
+            if v isa SSAValue
+                if v.id in syncregions
+                    push!(used, v.id)
+                end
+            end
+        end
+    end
+
+    # Remove empty syncregions:
+    for sr in syncregions
+        sr in used && continue
+        remove_syncregion!(ir, sr)
+        for isync in syncregion_to_syncs[sr]
             ir.stmts.inst[isync] = nothing
         end
     end
 
-    @assert isempty(ir.new_nodes.stmts.inst)
-    return ir
+    return ir, tasks
 end
 
 """
@@ -1383,26 +1503,15 @@ function lower_tapir!(ir::IRCode, interp::AbstractInterpreter)
     Tapir = tapir_module()
     Tapir isa Module || return remove_tapir!(ir)
 
-    tasks = child_tasks(ir)
-    isempty(tasks) && return remove_tapir!(ir)
+    tasks = child_tasks(ir)  # [^empty-tasks]
 
     ir, tasks = optimize_taskgroups!(ir, tasks, interp)
 
-    # Replace `Expr(:syncregion)` with `%tg = Tapir.taskgroup()`.
+    # Replace `Expr(:syncregion, %tg)` with `%tg`.
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
         if isexpr(stmt[:inst], :syncregion)
-            mi = find_method_instance_from_sig(
-                interp,
-                Tuple{typeof(Tapir.taskgroup)};
-                compilesig = true,
-            )
-            if mi === nothing
-                stmt[:inst] = Expr(:call, GlobalRef(Tapir, :taskgroup))
-            else
-                stmt[:inst] = Expr(:invoke, mi, GlobalRef(Tapir, :taskgroup))
-            end
-            stmt[:type] = Tapir.TaskGroup
+            stmt[:inst] = stmt[:inst].args[1]
         end
     end
 
@@ -1412,9 +1521,10 @@ function lower_tapir!(ir::IRCode, interp::AbstractInterpreter)
         sync = ir.stmts[isync][:inst]
         sync isa SyncNode || continue
         tg = sync.syncregion::SSAValue
+        TaskGroup = widenconst(ir.stmts[tg.id][:type])::Type
         mi = find_method_instance_from_sig(
             interp,
-            Tuple{typeof(Tapir.sync!),Tapir.TaskGroup};
+            Tuple{typeof(Tapir.sync!),TaskGroup};
             compilesig = true,
         )
         if mi === nothing
@@ -1497,7 +1607,7 @@ function optimize_taskgroups!(
     MaybeTask = Tapir.MaybeTask
     for i in syncregions
         isinlinable[i] || continue
-        ir.stmts[i][:inst] = nothing
+        remove_syncregion!(ir, i)
         taskgroup = Vector{PhiCNode}[PhiCNode[] for _ in syncnodes_by_syncregion[i]]
         for task in tasks_by_syncregion[i]
             detstmt = ir.stmts[task.detach]
@@ -1595,6 +1705,7 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
 
         det = ir.stmts.inst[task.detach]::DetachNode
         tg = det.syncregion::SSAValue
+        TaskGroup = widenconst(ir.stmts[tg.id][:type])::Type
         if isexpr(ir[tg], :spawn_placeholder)
             oc = insert_node!(ir, tg.id, oc_inst)
             mi = find_method_instance_from_sig(
@@ -1612,7 +1723,7 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
             oc = insert_node!(ir, task.detach, oc_inst)
             mi = find_method_instance_from_sig(
                 interp,
-                Tuple{typeof(Tapir.spawn!),Tapir.TaskGroup,Any};
+                Tuple{typeof(Tapir.spawn!),TaskGroup,Any};
                 compilesig = true,
             )
             if mi === nothing

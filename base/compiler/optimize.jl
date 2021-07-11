@@ -331,7 +331,7 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
-    tapir && @timeit "Remove tirival spawns" ir = remove_trivial_spawns!(ir)
+    tapir && @timeit "Late tapir pass" ir = late_tapir_pass!(ir)
     #@Base.show ir
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))

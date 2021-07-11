@@ -16,7 +16,7 @@ module Tapir
 
 const TaskGroup = Channel{Any}
 
-taskgroup() = Channel{Any}(Inf)::TaskGroup
+@noinline taskgroup() = Channel{Any}(Inf)::TaskGroup
 
 function spawn!(tasks::TaskGroup, @nospecialize(f))
     t = Task(f)
@@ -35,7 +35,10 @@ end
 
 # Can we make it more efficient using the may-happen parallelism property
 # (i.e., the lack of concurrent synchronizations)?
-sync!(tasks::TaskGroup) = Base.sync_end(tasks)
+function sync!(tasks::TaskGroup)
+    Base.sync_end(tasks)
+    close(tasks)
+end
 
 # Using `Some{Union{...}}` for "concretely typed Union". This avoids dynamic
 # dispatch (hopefully) without code bloat.
@@ -156,12 +159,19 @@ end
     )
 end
 
+@noinline detach_after_sync_error()::Union{} = error("Tapir: detach invoked after sync")
+
 #####
 ##### Julia-Tapir Frontend
 #####
 
 macro syncregion()
-    Expr(:syncregion)
+    Expr(
+        :block,
+        __source__,
+        :(tg = Tapir.taskgroup()),
+        Expr(:syncregion, :tg),  # acts as the identity function
+    )
 end
 
 """
