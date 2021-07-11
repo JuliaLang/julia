@@ -1648,7 +1648,7 @@ lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A
 lyap(a::Union{Real,Complex}, c::Union{Real,Complex}) = -c/(2real(a))
 
 """
-    ispos_sdef(A) -> Bool
+    ispos_sdef(A, atol) -> Bool
 
 Test whether a matrix is positive semidefinite (and Hermitian) by calling isposdef, which trys to perform a
 Cholesky factorization of `A`.
@@ -1658,12 +1658,12 @@ See also [`isposdef`](@ref), [`cholesky`](@ref).
 ```jldoctest
 julia> A = [9 -15; -15 25]
 2×2 Matrix{Int64}:
- 9   -15
- -15  25
+   9  -15
+ -15   25
 
 julia> ispos_sdef(A)
 true
 ```
 """
-ispos_sdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky(Hermitian(A) + eps() * I(size(A)[1]); check = false))
+ispos_sdef(A::AbstractMatrix, atol::Real=1e-8) = ishermitian(A) && isposdef(cholesky(Hermitian(A) + atol * I(size(A)[1]); check = false))
 ispos_sdef(x::Number) = imag(x) == 0 && real(x) >= 0
