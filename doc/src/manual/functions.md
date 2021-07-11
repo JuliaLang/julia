@@ -537,6 +537,22 @@ julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
  7
 ```
 
+## Argument evaluation order
+
+All arguments passed to a function are evaluated in lexical left-to-right order.
+
+```jldoctest
+julia> f(a, b, c, d=println("d default")) = a
+f (generic function with 1 method)
+
+julia> f(println("a"), println("b"), println("c"))
+a
+b
+c
+d default
+
+```
+
 ## Varargs Functions
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
