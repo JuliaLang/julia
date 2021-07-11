@@ -9,17 +9,18 @@ include("rootfs_utils.jl")
 # Build debian-based image with the following extra packages:
 packages = [
     "build-essential",
+    "cmake",
+    "curl",
+    "gfortran",
+    "git",
+    "less",
     "libatomic1",
+    "m4",
+    "perl",
+    "pkg-config",
     "python",
     "python3",
-    "gfortran",
-    "perl",
     "wget",
-    "m4",
-    "cmake",
-    "pkg-config",
-    "curl",
-    "git",
 ]
 tarball_path = debootstrap("llvm-passes"; packages)
 
