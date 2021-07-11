@@ -1666,4 +1666,4 @@ true
 ```
 """
 ispos_sdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholesky(Hermitian(A) + eps() * I(size(A)[1]); check = false))
-ispos_sdef(x::Number) = imag(x)==0 && real(x) >=0
+ispos_sdef(x::Number) = imag(x) == 0 && real(x) >= 0

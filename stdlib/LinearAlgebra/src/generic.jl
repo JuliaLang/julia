@@ -1817,7 +1817,7 @@ julia> B = [1 3;2 4;3 6]
  3  6
 
 julia> cross(A, B)
-3×2 Array{Int64,2}:
+3×2 Array{Int64}:
  -1   0
   2   6
  -1  -4
