@@ -8,8 +8,8 @@ agents:
   os: "linux"
 
 steps:
-  - label: "Run embedding tests"
-    key: embedding
+  - label: "embedding"
+    key: "embedding"
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6

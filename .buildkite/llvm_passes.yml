@@ -9,7 +9,7 @@ agents:
 
 steps:
   - label: "analyzegc"
-    key: analyzegc
+    key: "analyzegc"
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
@@ -31,7 +31,7 @@ steps:
           context: "analyzegc"
 
   - label: "llvmpasses"
-    key: llvmpasses
+    key: "llvmpasses"
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
@@ -52,4 +52,4 @@ steps:
     timeout_in_minutes: 60
     notify:
       - github_commit_status:
-          context: "llvm passes"
+          context: "llvmpasses"
