@@ -62,6 +62,16 @@ replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatom
     (@_inline_meta; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
 
+# for closures
+function _typeof_captured_variable(Core.@nospecialize x)
+    if x isa DataType
+        if x.layout === C_NULL
+            return DataType
+        end
+    end
+    return Core.Typeof(x)
+end
+
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)

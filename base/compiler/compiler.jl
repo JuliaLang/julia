@@ -22,6 +22,8 @@ eval(m, x) = Core.eval(m, x)
 include(x) = Core.include(Compiler, x)
 include(mod, x) = Core.include(mod, x)
 
+const _typeof_captured_variable = Core.typeof
+
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
 macro _inline_meta()
