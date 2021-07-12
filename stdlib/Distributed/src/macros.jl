@@ -1,14 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-let nextidx = 0
+let nextidx = Threads.Atomic{Int}(0)
     global nextproc
     function nextproc()
-        p = -1
-        if p == -1
-            p = workers()[(nextidx % nworkers()) + 1]
-            nextidx += 1
-        end
-        p
+        idx = Threads.atomic_add!(nextidx, 1)
+        return workers()[(idx % nworkers()) + 1]
     end
 end
 
@@ -234,7 +230,7 @@ function remotecall_eval(m::Module, procs, ex)
         # execute locally last as we do not want local execution to block serialization
         # of the request to remote nodes.
         for _ in 1:run_locally
-            @async Core.eval(m, ex)
+            Threads.@spawn Core.eval(m, ex)
         end
     end
     nothing
