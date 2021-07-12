@@ -16,8 +16,20 @@ function rstrip_shell(s::AbstractString)
     SubString(s, 1, 0)
 end
 
+# trailing double-backslashes in custom string literals are only parsed as single backslashes
+# as to still allow escaping the delimiter. This is needed to parse e.g. `\\` correctly
+function fix_trailing_backslashes(s::AbstractString)
+    i = lastindex(s)
+    while i > 0 && s[i] == '\\'
+        s *= '\\'
+        i = prevind(s, i)
+    end
+    return s
+end
+
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="", filename="none")
+    str = fix_trailing_backslashes(str)
     s = SubString(str, firstindex(str))
     s = rstrip_shell(lstrip(s))
 
