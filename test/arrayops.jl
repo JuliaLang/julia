@@ -2127,17 +2127,60 @@ end
 # row/column/slice iterator tests
 using Base: eachrow, eachcol
 @testset "row/column/slice iterators" begin
+    # check type aliases
+    @test Rows <: AbstractVector{<:AbstractVector}
+    @test eachrow(ones(3)) isa Rows
+    @test eachrow(ones(3,3)) isa Rows
+    @test Columns <: AbstractVector{<:AbstractVector}
+    @test eachcol(ones(3)) isa Columns
+    @test eachcol(ones(3,3)) isa Columns
+
     # Simple ones
     M = [1 2 3; 4 5 6; 7 8 9]
-    @test collect(eachrow(M)) == collect(eachslice(M, dims = 1)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    @test collect(eachcol(M)) == collect(eachslice(M, dims = 2)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test eachrow(M) == eachslice(M, dims = 1) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    @test eachcol(M) == eachslice(M, dims = 2) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
     @test_throws DimensionMismatch eachslice(M, dims = 4)
 
-    # Higher-dimensional case
-    M = reshape([(1:16)...], 2, 2, 2, 2)
+    SR = @inferred eachrow(M)
+    @test SR[2] isa eltype(SR)
+    SR[2] = [14,15,16]
+    @test SR[2] == M[2,:] == [14,15,16]
+    @test parent(SR) === M
+
+    SC = @inferred eachcol(M)
+    @test SC[3] isa eltype(SC)
+    SC[3] = [23,26,29]
+    @test SC[3] == M[:,3] == [23,26,29]
+    @test parent(SC) === M
+
+    # Higher-dimensional cases
+    M = reshape(collect(1:16), (2,2,2,2))
     @test_throws MethodError collect(eachrow(M))
     @test_throws MethodError collect(eachcol(M))
-    @test collect(eachslice(M, dims = 1))[1][:, :, 1] == [1 5; 3 7]
+
+    S1 = eachslice(M, dims = 1)
+    @test size(S1) == (2,)
+    @test S1[1] == M[1,:,:,:]
+
+    S1K = eachslice(M, dims = 1, drop=false)
+    @test size(S1K) == (2,1,1,1)
+    @test S1K[1,1,1,1] == M[1,:,:,:]
+
+    S23 = eachslice(M, dims = (2,3))
+    @test size(S23) == (2,2)
+    @test S23[2,1] == M[:,2,1,:]
+
+    S23K = eachslice(M, dims = (2,3), drop=false)
+    @test size(S23K) == (1,2,2,1)
+    @test S23K[1,2,1,1] == M[:,2,1,:]
+
+    S32 = eachslice(M, dims = (3,2))
+    @test size(S32) == (2,2)
+    @test S32[2,1] == M[:,1,2,:]
+
+    S32K = eachslice(M, dims = (3,2), drop=false)
+    @test size(S32K) == (1,2,2,1)
+    @test S32K[1,2,1,1] == M[:,2,1,:]
 end
 
 ###
