@@ -12,7 +12,7 @@
 
 set -ue
 
-# `$WORKSPACE` is a directory in which we careate `toolchain` and `asan`
+# `$WORKSPACE` is a directory in which we create `toolchain` and `asan`
 # sub-directories.
 WORKSPACE="$1"
 shift
