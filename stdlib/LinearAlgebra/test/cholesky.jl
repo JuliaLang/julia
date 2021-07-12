@@ -509,43 +509,4 @@ end
     @test logdet(B)  ==  -Inf
  end
 
-@testset "cholesky factorization success, and failure errors" begin
-    for T in (Float32, Float64, ComplexF64)
-        A = T[  2 -1 0;
-            -1 2 -1;
-            0 -1 2 ]
-        @test isposdef(A)
-        @test Hermitian(A)==A
-        @test LinearAlgebra.issuccess(cholesky(A; check = false))
-        @test LinearAlgebra.issuccess(cholesky!(copy(A); check = false))
-        B = T[  2 -1 0;
-                -1 2 -1;
-                0 -1 -5 ]
-        C = T[  2 -1 1;
-                -1 2 -1;
-                0 -1 2 ]
-        @test Hermitian(B)==B
-        @test Hermitian(C)!=C
-        for M in (B, C)
-            @test !isposdef(M)
-            @test_throws PosDefException cholesky(M)
-            @test_throws PosDefException cholesky!(copy(M))
-            @test_throws PosDefException cholesky(M; check = true)
-            @test_throws PosDefException cholesky!(copy(M); check = true)
-            @test !LinearAlgebra.issuccess(cholesky(M; check = false))
-            @test !LinearAlgebra.issuccess(cholesky!(copy(M); check = false))
-            @test_throws RankDeficientException cholesky(M, Val(true))
-            @test_throws RankDeficientException cholesky(M, Val(true); check = true)
-        end
-    end
-    D = ComplexF64[
-        5 2+3im 5im;
-        2-3im 7 1+7im;
-        -5im 1-7im 12]
-    @test isposdef(D)
-    @test Hermitian(D)==D
-    @test LinearAlgebra.issuccess(cholesky(D; check = false))
-    @test LinearAlgebra.issuccess(cholesky!(copy(D); check = false))
-end
-
 end # module TestCholesky
