@@ -2700,3 +2700,7 @@ end
 
 @test eval(Expr(:string, "a", Expr(:string, "b", "c"))) == "abc"
 @test eval(Expr(:string, "a", Expr(:string, "b", Expr(:string, "c")))) == "abc"
+
+# issue #39705
+@eval f39705(x) = $(Expr(:||)) && x
+@test f39705(1) === false
