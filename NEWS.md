@@ -11,6 +11,9 @@ New language features
 Language changes
 ----------------
 
+* There is a now an abstract type, `AbstractComplex` which is between `Complex` and `Number`
+  in the type hierarchy, i.e. `Complex{T<:Real} <: AbstractComplex <: Number`.
+
 
 Compiler/Runtime improvements
 -----------------------------
