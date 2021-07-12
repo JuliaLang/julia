@@ -4429,6 +4429,8 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
 }
 
+void jl_add_code_in_flight(StringRef name, jl_method_instance_t *methodinst, const DataLayout &DL);
+
 // `expr` is not clobbered in JL_TRY
 JL_GCC_IGNORE_START("-Wclobbered")
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
@@ -4750,6 +4752,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             std::string fname = isspecsig ?
                 closure_decls.functionObject :
                 closure_decls.specFunctionObject;
+            jl_add_code_in_flight(fname, li, closure_m->getDataLayout());
             if (GlobalValue *V = jl_Module->getNamedValue(fname)) {
                 F = cast<Function>(V);
             }
@@ -4771,12 +4774,14 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                     jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module,
                         closure_decls.specFunctionObject, li->specTypes, ub.constant, true);
                     fptr = mark_julia_type(ctx, returninfo.decl, false, jl_voidpointer_type);
+                    jl_add_code_in_flight(closure_decls.specFunctionObject, li, closure_m->getDataLayout());
                 } else {
                     fptr = mark_julia_type(ctx,
                         (llvm::Value*)Constant::getNullValue(T_size),
                         false, jl_voidpointer_type);
                 }
             }
+            jl_add_method_root(ctx, (jl_value_t*)li);
 
             jl_cgval_t world_age = mark_julia_type(ctx,
                 tbaa_decorate(tbaa_gcframe,
@@ -7549,7 +7554,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 Exports.push_back(F.getName().str());
         jl_merge_module(jl_Module, std::move(Mod));
         for (auto FN: Exports)
-            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::PrivateLinkage);
+            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     JL_GC_POP();
@@ -7557,8 +7562,6 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 }
 
 // --- entry point ---
-
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
 
 JL_GCC_IGNORE_START("-Wclobbered")
 jl_compile_result_t jl_emit_code(
@@ -7637,9 +7640,9 @@ jl_compile_result_t jl_emit_codeinst(
             // they may not be rooted in the gc for the life of the program,
             // and the runtime doesn't notify us when the code becomes unreachable :(
             if (!specf.empty())
-                jl_add_code_in_flight(specf, codeinst, DL);
+                jl_add_code_in_flight(specf, codeinst->def, DL);
             if (!f.empty() && f != "jl_fptr_args" && f != "jl_fptr_sparam")
-                jl_add_code_in_flight(f, codeinst, DL);
+                jl_add_code_in_flight(f, codeinst->def, DL);
         }
 
         if (// don't alter `inferred` when the code is not directly being used

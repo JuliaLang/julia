@@ -98,7 +98,7 @@ struct ObjectInfo {
 // Maintain a mapping of unrealized function names -> linfo objects
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
-static StringMap<jl_code_instance_t*> codeinst_in_flight;
+static StringMap<jl_method_instance_t*> methodinst_in_flight;
 static std::string mangle(StringRef Name, const DataLayout &DL)
 {
     std::string MangledName;
@@ -108,11 +108,10 @@ static std::string mangle(StringRef Name, const DataLayout &DL)
     }
     return MangledName;
 }
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
+void jl_add_code_in_flight(StringRef name, jl_method_instance_t *mi, const DataLayout &DL)
 {
-    codeinst_in_flight[mangle(name, DL)] = codeinst;
+    methodinst_in_flight[mangle(name, DL)] = mi;
 }
-
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
@@ -384,15 +383,15 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
-            jl_code_instance_t *codeinst = NULL;
-            if (codeinst_it != codeinst_in_flight.end()) {
-                codeinst = codeinst_it->second;
-                codeinst_in_flight.erase(codeinst_it);
+            StringMap<jl_method_instance_t*>::iterator methodinst_it = methodinst_in_flight.find(sName);
+            jl_method_instance_t *methodinst = NULL;
+            if (methodinst_it != methodinst_in_flight.end()) {
+                methodinst = methodinst_it->second;
+                methodinst_in_flight.erase(methodinst_it);
             }
             jl_profile_atomic([&]() {
-                if (codeinst)
-                    linfomap[Addr] = std::make_pair(Size, codeinst->def);
+                if (methodinst)
+                    linfomap[Addr] = std::make_pair(Size, methodinst);
                 if (first) {
                     ObjectInfo tmp = {&debugObj,
                         (size_t)SectionSize,
