@@ -469,6 +469,8 @@ export
     searchsortedlast,
     insorted,
     startswith,
+    indmax,
+    indmin,
 
 # linear algebra
     var"'", # to enable syntax a' for adjoint

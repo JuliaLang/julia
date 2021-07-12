@@ -768,7 +768,7 @@ Inf
 """
 minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 
-## findmax, findmin, argmax & argmin
+## findmax, findmin, argmax, argmin, indmax & indmin
 
 """
     findmax(f, domain) -> (f(x), index)
@@ -993,6 +993,118 @@ julia> argmin([7, 1, 1, NaN])
 ```
 """
 argmin(itr) = findmin(itr)[2]
+
+"""
+    indmin(itr) -> idx
+
+Return the index of the minimal element of the collection `itr`.
+If there are multiple minimal elements, then the first index will be returned.
+`NaN` is treated as less than all other values except `missing`.
+
+!!! compat "Julia 1.8"
+    This method requires Julia 1.8 or later.
+
+See also: [`indmax`](@ref), [`findmin`](@ref).
+
+# Examples
+```jldoctest
+julia> indmin([8, 0.1, -9, pi])
+3
+
+julia> indmin([1, 7, 7, 6])
+1
+
+julia> indmin([1, 7, 7, NaN])
+4
+```
+"""
+indmin(itr) = findmin(itr)[2]
+
+"""
+    indmin(f, itr) -> idx
+
+Return the index of an `x` of the collection `itr` such that `f(x)` is minimised.
+If there are multiple minimal elements, then the first index will be returned.
+`NaN` is treated as less than all other values except `missing`.
+
+!!! compat "Julia 1.8"
+    This method requires Julia 1.8 or later.
+
+See also: [`indmax`](@ref), [`findmin`](@ref).
+
+# Examples
+```jldoctest
+julia> indmin(identity, 5:9)
+1
+
+julia> indmin(-, 1:10)
+10
+
+julia> indmin(first, [(2, :a), (2, :b), (3, :c)])
+1
+
+julia> indmin(cos, 0:π/2:2π)
+3
+```
+"""
+indmin(f, itr) = findmin(f, itr)[2]
+
+"""
+    indmax(itr) -> idx
+
+Return the index of the maximal element of the collection `itr`.
+If there are multiple maximal elements, then the first index will be returned.
+
+Values are compared using `isless`.
+
+!!! compat "Julia 1.8"
+    This method requires Julia 1.8 or later.
+
+See also: [`indmin`](@ref), [`findmax`](@ref).
+
+# Examples
+```jldoctest
+julia> indmax([8, 0.1, -9, pi])
+1
+
+julia> indmax([1, 7, 7, 6])
+2
+
+julia> indmax([1, 7, 7, NaN])
+4
+```
+"""
+indmax(itr) = findmax(itr)[2]
+
+"""
+    indmax(f, itr) -> idx
+
+Return the index of an `x` of the collection `itr` such that `f(x)` is maximised.
+If there are multiple maximal elements, then the first index will be returned.
+
+Values are compared using `isless`.
+
+!!! compat "Julia 1.8"
+    This method requires Julia 1.8 or later.
+
+See also: [`indmin`](@ref), [`findmax`](@ref).
+
+# Examples
+```jldoctest
+julia> indmax(identity, 5:9)
+5
+
+julia> indmax(-, 1:10)
+1
+
+julia> indmax(first, [(1, :a), (3, :b), (3, :c)])
+2
+
+julia> indmax(cos, 0:π/2:2π)
+1
+```
+"""
+indmax(f, itr) = findmax(f, itr)[2]
 
 ## all & any
 
