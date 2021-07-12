@@ -1557,6 +1557,16 @@ function optimize_taskgroups!(
         sr = det.syncregion::SSAValue
         push!(get!(() -> ChildTask[], tasks_by_syncregion, sr.id), task)
         isinlinable[sr.id] || return true
+
+        srstmt = stmt_at(ir, sr.id)
+        if !isexpr(srstmt[:inst], :syncregion)
+            isinlinable[sr.id] = false
+            return true
+        elseif !isconcretetype(widenconst(srstmt[:type]))
+            isinlinable[sr.id] = false
+            return true
+        end
+
         push!(syncregions, sr.id)
 
         detacher = block_for_inst(ir, task.detach)
@@ -1607,6 +1617,7 @@ function optimize_taskgroups!(
     MaybeTask = Tapir.MaybeTask
     for i in syncregions
         isinlinable[i] || continue
+        TaskGroup = widenconst(ir.stmts[i][:type])
         remove_syncregion!(ir, i)
         taskgroup = Vector{PhiCNode}[PhiCNode[] for _ in syncnodes_by_syncregion[i]]
         for task in tasks_by_syncregion[i]
@@ -1615,7 +1626,7 @@ function optimize_taskgroups!(
 
             # Place a dummy instruction for marking that this detach should be
             # handled with Tapir.spawn and not Tapir.spawn!.
-            placeholder = Expr(:spawn_placeholder)
+            placeholder = Expr(:spawn_placeholder, TaskGroup)
             dest = insert_node!(ir, task.detach, NewInstruction(placeholder, Task))
             detstmt[:inst] = DetachNode(dest, det.label)
 
@@ -1705,21 +1716,22 @@ function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::Abstra
 
         det = ir.stmts.inst[task.detach]::DetachNode
         tg = det.syncregion::SSAValue
-        TaskGroup = widenconst(ir.stmts[tg.id][:type])::Type
         if isexpr(ir[tg], :spawn_placeholder)
+            TaskGroup = ir[tg].args[1]::Type
             oc = insert_node!(ir, tg.id, oc_inst)
             mi = find_method_instance_from_sig(
                 interp,
-                Tuple{typeof(Tapir.spawn),Any};
+                Tuple{typeof(Tapir.spawn),Type{TaskGroup},Any};
                 compilesig = true,
             )
             if mi === nothing
-                spawn_ex = Expr(:call, GlobalRef(Tapir, :spawn), oc)
+                spawn_ex = Expr(:call, GlobalRef(Tapir, :spawn), TaskGroup, oc)
             else
-                spawn_ex = Expr(:invoke, mi, GlobalRef(Tapir, :spawn), oc)
+                spawn_ex = Expr(:invoke, mi, GlobalRef(Tapir, :spawn), TaskGroup, oc)
             end
             ir[tg] = spawn_ex
         else
+            TaskGroup = widenconst(ir.stmts[tg.id][:type])
             oc = insert_node!(ir, task.detach, oc_inst)
             mi = find_method_instance_from_sig(
                 interp,

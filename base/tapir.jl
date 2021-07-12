@@ -26,7 +26,7 @@ function spawn!(tasks::TaskGroup, @nospecialize(f))
     return nothing
 end
 
-function spawn(@nospecialize(f))
+function spawn(::Type{TaskGroup}, @nospecialize(f))
     t = Task(f)
     t.sticky = false
     schedule(t)
@@ -569,7 +569,7 @@ function __init__()
     tg = taskgroup()
     spawn!(tg, () -> nothing)
     sync!(tg)
-    t = MaybeTask(spawn(() -> nothing))
+    t = MaybeTask(spawn(typeof(tg), () -> nothing))
     synctasks(t)
     synctasks(t, t)
     synctasks(t, t, t)
