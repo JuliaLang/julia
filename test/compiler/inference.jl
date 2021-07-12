@@ -1851,6 +1851,138 @@ end
     end == Any[Union{Bool,Nothing}]
 end
 
+@testset "limited pointer/alias analysis" begin
+    m = Module() # some of the following tests don't work for closures, so test at top-level
+
+    @eval m using Test # should happen here, error at macro expansion otherwise
+
+    @eval m begin
+        struct AliasField{T}
+            f::T
+        end
+        struct AliasFields{T}
+            f1::T
+            f2::T
+        end
+
+        # isa constraint propagation
+        # --------------------------
+
+        # simple case
+        @test Base.return_types((AliasField,)) do a
+            if isa(a.f, Int)
+                return a.f
+            end
+            return 0
+        end == Any[Int]
+
+        # should work for indexed field
+        @test Base.return_types((AliasField,)) do a
+            if isa(getfield(a, 1), Int)
+                return getfield(a, 1)
+            end
+            return 0
+        end == Any[Int]
+
+        # should for `Tuple`
+        @test Base.return_types((Tuple{Any},)) do t
+            if isa(t[1], Int)
+                return t[1]
+            end
+            return 0
+        end == Any[Int]
+
+        # should work for `PartialStruct`
+        @test Base.return_types((Any,)) do a
+            a = AliasFields(a, 0) # ::PartialStruct(AliasFields, Any[Any, Const(0)])
+            if isa(a.f1, Int)
+                return a.f1
+            end
+            return 0
+        end == Any[Int]
+
+        # works inter-procedurally
+        getf(a) = a.f
+        @test Base.return_types((AliasField,)) do a
+            if isa(getf(a), Int)
+                return getf(a)
+            end
+            return 0
+        end == Any[Int]
+
+        # call-site refinement
+        isaint(a) = isa(a, Int)
+        @test Base.return_types((AliasField,)) do a
+            if isaint(a.f)
+                return a.f
+            end
+            return 0
+        end == Any[Int]
+
+        # should use refinement information only when worthwhile
+        @test Base.return_types((AliasField{Int},)) do a
+            if isa(a.f, Any)
+                return a.f # should still be Int
+            end
+            return 0
+        end == Any[Int]
+
+        # when abstract type, we shouldn't assume anything
+        @test Base.return_types((Any,)) do a
+            if isa(getfield(a, :mayexist), Int)
+                return getfield(a, :mayexist)
+            end
+            return 0
+        end == Any[Any]
+
+        # merge of same `MustAlias`s
+        merge_same_aliases(b, a) = b ? _merge_same_aliases1(a) : _merge_same_aliases2(a) # MustAlias(a, Const(:f1), Union{Int,Nothing})
+        _merge_same_aliases1(a) = (@assert isa(a.f, Int); a.f) # ::MustAlias(a, Const(:f1), Int)
+        _merge_same_aliases2(a) = (@assert isa(a.f, Nothing); a.f) # ::MustAlias(a, Const(:f1), Nothing)
+        @test Base.return_types((Bool,AliasField,)) do b, a
+            return merge_same_aliases(b, a) # ::Union{Int,Nothing}
+        end == Any[Union{Nothing,Int}]
+
+        # === constraint propagation
+        # --------------------------
+
+        # simple symmetric tests
+        @test Base.return_types((AliasField,)) do x
+            if x.f === 0
+                return x.f
+            end
+            return 0
+        end == Any[Int]
+        @test Base.return_types((AliasField,)) do x
+            if 0 === x.f
+                return x.f
+            end
+            return 0
+        end == Any[Int]
+        # NOTE we prioritize constraints on aliased field over those on slots
+        @test Base.return_types((AliasField,Int,)) do x, a
+            if x.f === a
+                return x.f
+            end
+            return 0
+        end == Any[Int]
+        @test Base.return_types((AliasField,Int,)) do x, a
+            if a === x.f
+                return x.f
+            end
+            return 0
+        end == Any[Int]
+        # works inter-procedurally
+        isnothing′(x) = x === nothing
+        @test Base.return_types((AliasField{Union{Nothing,Int}},)) do x
+            if !isnothing′(x.f)
+                return x.f
+            end
+            return 0
+        end == Any[Int]
+    end
+end
+
 function f25579(g)
     h = g[]
     t = (h === nothing)

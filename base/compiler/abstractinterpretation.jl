@@ -25,7 +25,7 @@ function is_improvable(@nospecialize(rtype))
         return rtype !== Union{}
     end
     # Could be improved to `Const` or a more precise wrapper
-    return isa(rtype, PartialStruct) || isa(rtype, InterConditional)
+    return isa(rtype, PartialStruct) || isa(rtype, InterConditional) || isa(rtype, InterMustAlias)
 end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
@@ -174,24 +174,26 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 any_const_result = true
             end
         end
-        this_conditional = ignorelimited(this_rt)
+        maybe_constraint = ignorelimited(this_rt)
+        @assert !(maybe_constraint isa Conditional || maybe_constraint isa MustAlias) "invalid lattice element returned from inter-procedural context"
         this_rt = widenwrappedconditional(this_rt)
-        @assert !(this_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
-        seen += 1
         rettype = tmerge(rettype, this_rt)
-        if this_conditional !== Bottom && is_lattice_bool(rettype) && fargs !== nothing
+        seen += 1
+        if maybe_constraint !== Bottom && is_lattice_bool(rettype) && fargs !== nothing
             if conditionals === nothing
                 conditionals = Any[Bottom for _ in 1:length(argtypes)],
                                Any[Bottom for _ in 1:length(argtypes)]
             end
-            condval = maybe_extract_const_bool(this_conditional)
+            condval = maybe_extract_const_bool(maybe_constraint)
             for i = 1:length(argtypes)
-                fargs[i] isa SlotNumber || continue
-                if this_conditional isa InterConditional && this_conditional.slot == i
-                    vtype = this_conditional.vtype
-                    elsetype = this_conditional.elsetype
+                arg = fargs[i]
+                argtyp = argtypes[i]
+                arg isa SlotNumber || argtyp isa MustAlias || continue
+                if maybe_constraint isa InterConditional && maybe_constraint.slot == i
+                    vtype = maybe_constraint.vtype
+                    elsetype = maybe_constraint.elsetype
                 else
-                    elsetype = vtype = tmeet(argtypes[i], fieldtype(sig, i))
+                    elsetype = vtype = tmeet(argtyp, fieldtype(sig, i))
                     condval === true && (elsetype = Union{})
                     condval === false && (vtype = Union{})
                 end
@@ -218,16 +220,26 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     # if we have argument refinement information, apply that now to get the result
     if is_lattice_bool(rettype) && conditionals !== nothing && fargs !== nothing
         slot = 0
+        alias = nothing
         vtype = elsetype = Any
         condval = maybe_extract_const_bool(rettype)
         for i in 1:length(fargs)
             # find the first argument which supports refinment,
             # and intersect all equvalent arguments with it
             arg = fargs[i]
-            arg isa SlotNumber || continue # can't refine
-            old = argtypes[i]
-            old isa Type || continue # unlikely to refine
-            id = slot_id(arg)
+            argtyp = argtypes[i]
+            onalias = false
+            if isa(arg, SlotNumber)
+                oldtyp = argtyp
+                oldtyp isa Type || continue # unlikely to refine
+                id = slot_id(arg)
+            elseif isa(argtyp, MustAlias)
+                oldtyp = argtyp.fldtyp
+                id = slot_id(argtyp.var)
+                onalias = true
+            else
+                continue # can't refine
+            end
             if slot == 0 || id == slot
                 new_vtype = conditionals[1][i]
                 if condval === false
@@ -245,14 +257,21 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 else
                     elsetype = tmeet(elsetype, widenconst(new_elsetype))
                 end
-                if (slot > 0 || condval !== false) && !(old ⊑ vtype) # essentially vtype ⋤ old
+                if (slot > 0 || condval !== false) && vtype ⋤ oldtyp
                     slot = id
-                elseif (slot > 0 || condval !== true) && !(old ⊑ elsetype) # essentially elsetype ⋤ old
+                    if onalias
+                        alias = argtyp::MustAlias
+                    end
+                elseif (slot > 0 || condval !== true) && elsetype ⋤ oldtyp
                     slot = id
+                    if onalias
+                        alias = argtyp::MustAlias
+                    end
                 else # reset: no new useful information for this slot
                     vtype = elsetype = Any
                     if slot > 0
                         slot = 0
+                        alias = nothing
                     end
                 end
             end
@@ -260,10 +279,29 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         if vtype === Bottom && elsetype === Bottom
             rettype = Bottom # accidentally proved this call to be dead / throw !
         elseif slot > 0
-            rettype = Conditional(SlotNumber(slot), vtype, elsetype) # record a Conditional improvement to this slot
+            if alias !== nothing
+                validate_mustalias!(alias, sv)
+                rettype = form_alias_condition(alias, vtype, elsetype)
+            else
+                rettype = Conditional(SlotNumber(slot), vtype, elsetype) # record a Conditional improvement to this slot
+            end
         end
     end
-    @assert !(rettype isa InterConditional) "invalid lattice element returned from inter-procedural context"
+    if isa(rettype, InterMustAlias) && fargs !== nothing
+        if 1 ≤ rettype.slot ≤ length(argtypes)
+            var = fargs[rettype.slot]
+            if var isa SlotNumber
+                argtyp = argtypes[rettype.slot]
+                if has_alias_field(argtyp)
+                    rettype = MustAlias(var, argtyp, rettype.fld, rettype.fldtyp)
+                end
+            end
+        end
+    end
+    if isa(rettype, InterMustAlias)
+        rettype = widenmustalias(rettype)
+    end
+    @assert !(rettype isa InterConditional || rettype isa InterMustAlias) "invalid lattice element returned from inter-procedural context"
 
     if call_result_unused(sv) && !(rettype === Bottom)
         add_remark!(interp, sv, "Call result type was widened because the return value is unused")
@@ -572,7 +610,7 @@ end
 # see if propagating constants may be worthwhile
 function const_prop_argument_heuristic(interp::AbstractInterpreter, argtypes::Vector{Any})
     for a in argtypes
-        a = widenconditional(a)
+        a = widenslotwrappers(a)
         if has_nontrivial_const_info(a) && is_const_prop_profitable_arg(a)
             return true
         end
@@ -601,7 +639,7 @@ end
 
 function is_allconst(argtypes::Vector{Any})
     for a in argtypes
-        a = widenconditional(a)
+        a = widenslotwrappers(a)
         if !isa(a, Const) && !isconstType(a) && !isa(a, PartialStruct) && !isa(a, PartialOpaque)
             return false
         end
@@ -959,13 +997,13 @@ is_method_pure(match::MethodMatch) = is_method_pure(match.method, match.spec_typ
 
 function pure_eval_call(@nospecialize(f), argtypes::Vector{Any})
     for i = 2:length(argtypes)
-        a = widenconditional(argtypes[i])
+        a = widenslotwrappers(argtypes[i])
         if !(isa(a, Const) || isconstType(a))
             return false
         end
     end
 
-    args = Any[ (a = widenconditional(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
+    args = Any[ (a = widenslotwrappers(argtypes[i]); isa(a, Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
     try
         value = Core._apply_pure(f, args)
         return Const(value)
@@ -1020,14 +1058,27 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         end
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
-    if f === getfield && isa(fargs, Vector{Any}) && la == 3 &&
-       (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
-       (a2 = argtypes[2]; a2 ⊑ Tuple)
-        # TODO: why doesn't this use the getfield_tfunc?
-        cti_info = precise_container_type(interp, iterate, a2, sv)
-        cti = cti_info[1]::Vector{Any}
-        if 1 <= idx <= length(cti)
-            rt = unwrapva(cti[idx])
+    if f === getfield && isa(fargs, Vector{Any}) && la ≥ 3
+        a3 = argtypes[3]
+        if isa(a3, Const)
+            if (idx = a3.val; isa(idx, Int)) && (a2 = argtypes[2]; a2 ⊑ Tuple)
+                # TODO: why doesn't this use the getfield_tfunc?
+                cti_info = precise_container_type(interp, iterate, a2, sv)
+                cti = cti_info[1]::Vector{Any}
+                if 1 <= idx <= length(cti)
+                    rt = unwrapva(cti[idx])
+                end
+            end
+            if rt !== Bottom && !isa(rt, Const)
+                var = fargs[2]
+                if isa(var, SlotNumber)
+                    argtyp = argtypes[2]
+                    if has_alias_field(argtyp)
+                        # wrap this aliasable field into `MustAlias` for possible constraint propagations
+                        rt = MustAlias(var, argtyp, a3, rt)
+                    end
+                end
+            end
         end
     elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
         # perform very limited back-propagation of type information for `is` and `isa`
@@ -1050,37 +1101,99 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
                     end
                 end
             end
+            a2 = argtypes[2]
+            if isa(a2, MustAlias)
+                if !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
+                    tty = widenconst(a2)
+                    tty_ub, isexact_tty = instanceof_tfunc(argtypes[3])
+                    if isexact_tty && !isa(tty_ub, TypeVar) && tty_ub ⋤ tty
+                        tty_lb = tty_ub # TODO: this would be wrong if !isexact_tty, but instanceof_tfunc doesn't preserve this info
+                        if !has_free_typevars(tty_lb) && !has_free_typevars(tty_ub)
+                            ifty = typeintersect(tty, tty_ub)
+                            elty = typesubtract(tty, tty_lb, InferenceParams(interp).MAX_UNION_SPLITTING)
+                            validate_mustalias!(a2, sv)
+                            return form_alias_condition(a2, ifty, elty)
+                        end
+                    end
+                end
+            end
         elseif f === (===)
             a = ssa_def_slot(fargs[2], sv)
             b = ssa_def_slot(fargs[3], sv)
             aty = argtypes[2]
             bty = argtypes[3]
             # if doing a comparison to a singleton, consider returning a `Conditional` instead
-            if isa(aty, Const) && isa(b, SlotNumber)
-                if rt === Const(false)
-                    aty = Union{}
-                elseif rt === Const(true)
-                    bty = Union{}
-                elseif bty isa Type && isdefined(typeof(aty.val), :instance) # can only widen a if it is a singleton
-                    bty = typesubtract(bty, typeof(aty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
+            if isa(aty, Const)
+                if isa(b, SlotNumber)
+                    if rt === Const(false)
+                        aty = Union{}
+                    elseif rt === Const(true)
+                        bty = Union{}
+                    elseif bty isa Type && isdefined(typeof(aty.val), :instance) # can only widen a if it is a singleton
+                        bty = typesubtract(bty, typeof(aty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
+                    end
+                    return Conditional(b, aty, bty)
+                elseif isa(bty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
+                    thentype = aty
+                    elsetype = bty.fldtyp
+                    if elsetype isa Type && isdefined(typeof(aty.val), :instance) # can only widen a if it is a singleton
+                        elsetype = typesubtract(elsetype, typeof(aty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
+                    end
+                    if thentype ⋤ bty.fldtyp || elsetype ⋤ bty.fldtyp
+                        validate_mustalias!(bty, sv)
+                        return form_alias_condition(bty, thentype, elsetype)
+                    end
                 end
-                return Conditional(b, aty, bty)
             end
-            if isa(bty, Const) && isa(a, SlotNumber)
-                if rt === Const(false)
-                    bty = Union{}
-                elseif rt === Const(true)
-                    aty = Union{}
-                elseif aty isa Type && isdefined(typeof(bty.val), :instance) # same for b
-                    aty = typesubtract(aty, typeof(bty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
+            if isa(bty, Const)
+                if isa(a, SlotNumber)
+                    if rt === Const(false)
+                        bty = Union{}
+                    elseif rt === Const(true)
+                        aty = Union{}
+                    elseif aty isa Type && isdefined(typeof(bty.val), :instance) # can only widen a if it is a singleton
+                        aty = typesubtract(aty, typeof(bty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
+                    end
+                    return Conditional(a, bty, aty)
+                elseif isa(aty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
+                    thentype = bty
+                    elsetype = aty.fldtyp
+                    if elsetype isa Type && isdefined(typeof(bty.val), :instance) # can only widen a if it is a singleton
+                        elsetype = typesubtract(elsetype, typeof(bty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
+                    end
+                    if thentype ⋤ aty.fldtyp || elsetype ⋤ aty.fldtyp
+                        validate_mustalias!(aty, sv)
+                        return form_alias_condition(aty, thentype, elsetype)
+                    end
                 end
-                return Conditional(a, bty, aty)
             end
-            # narrow the lattice slightly (noting the dependency on one of the slots), to promote more effective smerge
+            # TODO enable multiple constraints propagation here, there are two possible improvements:
+            # 1. propagate constraints for both lhs and rhs
+            # 2. we can propagate both constraints on aliased fields and slots
+            # As for 2, for now, we prioritize constraints on aliased fields, since currently
+            # different slots that represent the same object can't share same field constraint,
+            # and thus binding `MustAlias` to the other slot is less likely useful
+            if !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
+                if isa(bty, MustAlias)
+                    thentype = aty
+                    elsetype = bty.fldtyp
+                    if thentype ⋤ elsetype
+                        validate_mustalias!(bty, sv)
+                        return form_alias_condition(bty, thentype, elsetype)
+                    end
+                elseif isa(aty, MustAlias)
+                    thentype = bty
+                    elsetype = aty.fldtyp
+                    if thentype ⋤ elsetype
+                        validate_mustalias!(aty, sv)
+                        return form_alias_condition(aty, thentype, elsetype)
+                    end
+                end
+            end
+            # Narrow the lattice slightly (noting the dependency on one of the slots), to promote more effective smerge
             if isa(b, SlotNumber)
                 return Conditional(b, rt === Const(false) ? Union{} : bty, rt === Const(true) ? Union{} : bty)
-            end
-            if isa(a, SlotNumber)
+            elseif isa(a, SlotNumber)
                 return Conditional(a, rt === Const(false) ? Union{} : aty, rt === Const(true) ? Union{} : aty)
             end
         elseif f === Core.Compiler.not_int
@@ -1098,6 +1211,43 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         end
     end
     return isa(rt, TypeVar) ? rt.ub : rt
+end
+
+function form_alias_condition(alias::MustAlias, @nospecialize(thentype), @nospecialize(elsetype))
+    (; var, vartyp, fld) = alias
+    vartyp_widened = widenconst(vartyp)
+    # NOTE `has_alias_field` assured this `fieldindex` to succeed aforehand
+    idx = isa(fld.val, Int) ? fld.val : fieldindex(vartyp_widened, fld.val::Symbol)
+    if isa(vartyp, PartialStruct)
+        fields = vartyp.fields
+        thenfields = thentype === Bottom ? nothing : copy(fields)
+        elsefields = elsetype === Bottom ? nothing : copy(fields)
+        for i in 1:length(fields)
+            if i == idx
+                thenfields === nothing || (thenfields[i] = thentype)
+                elsefields === nothing || (elsefields[i] = elsetype)
+            end
+        end
+        return Conditional(var,
+                           thenfields === nothing ? Bottom : PartialStruct(vartyp.typ, thenfields),
+                           elsefields === nothing ? Bottom : PartialStruct(vartyp.typ, elsefields))
+    else
+        thenfields = thentype === Bottom ? nothing : Any[]
+        elsefields = elsetype === Bottom ? nothing : Any[]
+        for i in 1:fieldcount(vartyp_widened)
+            if i == idx
+                thenfields === nothing || push!(thenfields, thentype)
+                elsefields === nothing || push!(elsefields, elsetype)
+            else
+                t = fieldtype(vartyp_widened, i)
+                thenfields === nothing || push!(thenfields, t)
+                elsefields === nothing || push!(elsefields, t)
+            end
+        end
+        return Conditional(var,
+                           thenfields === nothing ? Bottom : PartialStruct(vartyp_widened, thenfields),
+                           elsefields === nothing ? Bottom : PartialStruct(vartyp_widened, elsefields))
+    end
 end
 
 function abstract_call_unionall(argtypes::Vector{Any})
@@ -1559,7 +1709,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         sym = e.args[1]
         t = Bool
         if isa(sym, SlotNumber)
-            vtyp = vtypes[slot_id(sym)]
+            vtyp = vtypes[slot_id(sym)]::VarState
             if vtyp.typ === Bottom
                 t = Const(false) # never assigned previously
             elseif !vtyp.undef
@@ -1659,11 +1809,20 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
             end
         end
     end
+    if isa(rt, MustAlias)
+        id = slot_id(rt.var)
+        if 1 ≤ id ≤ nslots
+            rt = InterMustAlias(id, rt.fld, rt.fldtyp)
+        else
+            rt = widenmustalias(rt)
+        end
+    end
 
     # only propagate information we know we can store
     # and is valid and good inter-procedurally
     isa(rt, Conditional) && return InterConditional(slot_id(rt.var), rt.vtype, rt.elsetype)
     isa(rt, InterConditional) && return rt
+    isa(rt, InterMustAlias) && return rt
     isa(rt, Const) && return rt
     isa(rt, Type) && return rt
     if isa(rt, PartialStruct)

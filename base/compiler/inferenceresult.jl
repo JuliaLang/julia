@@ -17,7 +17,7 @@ function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector, 
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
     @assert length(given_argtypes) >= (nargs - 1)
-    given_argtypes = anymap(widenconditional, given_argtypes)
+    given_argtypes = anymap(widenslotwrappers, given_argtypes)
     if va_override || linfo.def.isva
         isva_given_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs - 1)
