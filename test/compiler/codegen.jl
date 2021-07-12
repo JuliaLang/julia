@@ -580,3 +580,20 @@ g40612(a, b) = a[]|a[] === b[]|b[]
 @test g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[missing])
 @test g40612(Union{Bool,Missing}[true], Union{Bool,Missing}[true])
 @test g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[false])
+
+# issue #41438
+struct A41438{T}
+  x::Ptr{T}
+end
+struct B41438{T}
+  x::T
+end
+f41438(y) = y[].x
+@test A41438.body.layout != C_NULL
+@test B41438.body.layout === C_NULL
+@test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
+@test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL
+
+# issue #41157
+f41157(a, b) = a[1] = b[1]
+@test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])

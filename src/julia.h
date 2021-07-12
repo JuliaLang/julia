@@ -1840,24 +1840,24 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *logstate;
     jl_function_t *start;
-    uint8_t _state;
-    uint8_t sticky; // record whether this Task can be migrated to a new thread
-    uint8_t _isexception; // set if `result` is an exception to throw or that we exited with
     uint64_t rngState0; // really rngState[4], but more convenient to split
     uint64_t rngState1;
     uint64_t rngState2;
     uint64_t rngState3;
+    uint8_t _state;
+    uint8_t sticky; // record whether this Task can be migrated to a new thread
+    uint8_t _isexception; // set if `result` is an exception to throw or that we exited with
 
 // hidden state:
+    // id of owning thread - does not need to be defined until the task runs
+    int16_t tid;
+    // multiqueue priority
+    int16_t prio;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
     // quick lookup for current ptls
     jl_tls_states_t *ptls; // == jl_all_tls_states[tid]
-    // id of owning thread - does not need to be defined until the task runs
-    int16_t tid;
-    // multiqueue priority
-    int16_t prio;
     // saved exception stack
     jl_excstack_t *excstack;
     // current exception handler

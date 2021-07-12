@@ -1182,148 +1182,157 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
 end
 
 #Generic solver using naive substitution
-# manually hoisting x[j] significantly improves performance as of Dec 2015
+# manually hoisting b[j] significantly improves performance as of Dec 2015
 # manually eliding bounds checking significantly improves performance as of Dec 2015
 # directly indexing A.data rather than A significantly improves performance as of Dec 2015
 # replacing repeated references to A.data with [Adata = A.data and references to Adata]
 # does not significantly impact performance as of Dec 2015
 # replacing repeated references to A.data[j,j] with [Ajj = A.data[j,j] and references to Ajj]
 # does not significantly impact performance as of Dec 2015
-function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::UpperTriangular, b::AbstractVector)
+    require_one_based_indexing(A, b)
     n = size(A, 2)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    if !(n == length(b))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in n:-1:1
         iszero(A.data[j,j]) && throw(SingularException(j))
-        xj = x[j] = A.data[j,j] \ b[j]
+        bj = b[j] = A.data[j,j] \ b[j]
         for i in j-1:-1:1 # counterintuitively 1:j-1 performs slightly better
-            b[i] -= A.data[i,j] * xj
+            b[i] -= A.data[i,j] * bj
         end
     end
-    x
+    return b
 end
-function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector = b)
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::UnitUpperTriangular, b::AbstractVector)
+    require_one_based_indexing(A, b)
     n = size(A, 2)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    if !(n == length(b))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in n:-1:1
-        xj = x[j] = b[j]
+        bj = b[j]
         for i in j-1:-1:1 # counterintuitively 1:j-1 performs slightly better
-            b[i] -= A.data[i,j] * xj
+            b[i] -= A.data[i,j] * bj
         end
     end
-    x
+    return b
 end
-function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector = b)
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::LowerTriangular, b::AbstractVector)
+    require_one_based_indexing(A, b)
     n = size(A, 2)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    if !(n == length(b))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in 1:n
         iszero(A.data[j,j]) && throw(SingularException(j))
-        xj = x[j] = A.data[j,j] \ b[j]
+        bj = b[j] = A.data[j,j] \ b[j]
         for i in j+1:n
-            b[i] -= A.data[i,j] * xj
+            b[i] -= A.data[i,j] * bj
         end
     end
-    x
+    return b
 end
-function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
-    require_one_based_indexing(A, b, x)
+function ldiv!(A::UnitLowerTriangular, b::AbstractVector)
+    require_one_based_indexing(A, b)
     n = size(A, 2)
-    if !(n == length(b) == length(x))
-        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+    if !(n == length(b))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
     end
     @inbounds for j in 1:n
-        xj = x[j] = b[j]
+        bj = b[j]
         for i in j+1:n
-            b[i] -= A.data[i,j] * xj
+            b[i] -= A.data[i,j] * bj
         end
     end
-    x
+    return b
 end
+function ldiv!(A::AbstractTriangular, B::AbstractMatrix)
+    require_one_based_indexing(A, B)
+    nA, mA = size(A)
+    n = size(B, 1)
+    if nA != n
+        throw(DimensionMismatch("second dimension of left hand side A, $mA, and first dimension of right hand side B, $n, must be equal"))
+    end
+    for b in eachcol(B)
+        ldiv!(A, b)
+    end
+    B
+end
+
 # in the following transpose and conjugate transpose naive substitution variants,
-# accumulating in z rather than b[j] significantly improves performance as of Dec 2015
+# accumulating in z rather than b[j,k] significantly improves performance as of Dec 2015
 for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
-        function ldiv!(xA::UpperTriangular{<:Any,<:$t}, b::AbstractVector, x::AbstractVector)
-            require_one_based_indexing(xA, b, x)
+        function ldiv!(xA::UpperTriangular{<:Any,<:$t}, b::AbstractVector)
+            require_one_based_indexing(xA, b)
             A = parent(parent(xA))
             n = size(A, 1)
-            if !(n == length(b) == length(x))
-                throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+            if !(n == length(b))
+                throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
             end
             @inbounds for j in n:-1:1
                 z = b[j]
                 for i in n:-1:j+1
-                    z -= $tfun(A[i,j]) * x[i]
+                    z -= $tfun(A[i,j]) * b[i]
                 end
                 iszero(A[j,j]) && throw(SingularException(j))
-                x[j] = $tfun(A[j,j]) \ z
+                b[j] = $tfun(A[j,j]) \ z
             end
-            x
+            return b
         end
-        ldiv!(xA::UpperTriangular{<:Any,<:$t}, b::AbstractVector) = ldiv!(xA, b, b)
 
-        function ldiv!(xA::UnitUpperTriangular{<:Any,<:$t}, b::AbstractVector, x::AbstractVector)
-            require_one_based_indexing(xA, b, x)
+        function ldiv!(xA::UnitUpperTriangular{<:Any,<:$t}, b::AbstractVector)
+            require_one_based_indexing(xA, b)
             A = parent(parent(xA))
             n = size(A, 1)
-            if !(n == length(b) == length(x))
-                throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+            if !(n == length(b))
+                throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
             end
             @inbounds for j in n:-1:1
                 z = b[j]
                 for i in n:-1:j+1
-                    z -= $tfun(A[i,j]) * x[i]
+                    z -= $tfun(A[i,j]) * b[i]
                 end
-                x[j] = z
+                b[j] = z
             end
-            x
+            return b
         end
-        ldiv!(xA::UnitUpperTriangular{<:Any,<:$t}, b::AbstractVector) = ldiv!(xA, b, b)
 
-        function ldiv!(xA::LowerTriangular{<:Any,<:$t}, b::AbstractVector, x::AbstractVector)
-            require_one_based_indexing(xA, b, x)
+        function ldiv!(xA::LowerTriangular{<:Any,<:$t}, b::AbstractVector)
+            require_one_based_indexing(xA, b)
             A = parent(parent(xA))
             n = size(A, 1)
-            if !(n == length(b) == length(x))
-                throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+            if !(n == length(b))
+                throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
             end
             @inbounds for j in 1:n
                 z = b[j]
                 for i in 1:j-1
-                    z -= $tfun(A[i,j]) * x[i]
+                    z -= $tfun(A[i,j]) * b[i]
                 end
                 iszero(A[j,j]) && throw(SingularException(j))
-                x[j] = $tfun(A[j,j]) \ z
+                b[j] = $tfun(A[j,j]) \ z
             end
-            x
+            return b
         end
-        ldiv!(xA::LowerTriangular{<:Any,<:$t}, b::AbstractVector) = ldiv!(xA, b, b)
 
-        function ldiv!(xA::UnitLowerTriangular{<:Any,<:$t}, b::AbstractVector, x::AbstractVector)
-            require_one_based_indexing(xA, b, x)
+        function ldiv!(xA::UnitLowerTriangular{<:Any,<:$t}, b::AbstractVector)
+            require_one_based_indexing(xA, b)
             A = parent(parent(xA))
             n = size(A, 1)
-            if !(n == length(b) == length(x))
-                throw(DimensionMismatch("first dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
+            if !(n == length(b))
+                throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
             end
             @inbounds for j in 1:n
                 z = b[j]
                 for i in 1:j-1
-                    z -= $tfun(A[i,j]) * x[i]
+                    z -= $tfun(A[i,j]) * b[i]
                 end
-                x[j] = z
+                b[j] = z
             end
-            x
+            return b
         end
-        ldiv!(xA::UnitLowerTriangular{<:Any,<:$t}, b::AbstractVector) = ldiv!(xA, b, b)
     end
 end
 
@@ -2314,7 +2323,7 @@ sqrt(A::UnitLowerTriangular) = copy(transpose(sqrt(copy(transpose(A)))))
 # Auxiliary functions for matrix square root
 
 # square root of upper triangular or real upper quasitriangular matrix
-function sqrt_quasitriu(A0)
+function sqrt_quasitriu(A0; blockwidth = eltype(A0) <: Complex ? 512 : 256)
     n = checksquare(A0)
     T = eltype(A0)
     Tr = typeof(sqrt(real(zero(T))))
@@ -2341,7 +2350,7 @@ function sqrt_quasitriu(A0)
         A = A0
         R = zeros(Tc, n, n)
     end
-    _sqrt_quasitriu!(R, A)
+    _sqrt_quasitriu!(R, A; blockwidth=blockwidth, n=n)
     Rc = eltype(A0) <: Real ? R : complex(R)
     if A0 isa UpperTriangular
         return UpperTriangular(Rc)
@@ -2352,7 +2361,32 @@ function sqrt_quasitriu(A0)
     end
 end
 
-function _sqrt_quasitriu!(R, A)
+# in-place recursive sqrt of upper quasi-triangular matrix A from
+# Deadman E., Higham N.J., Ralha R. (2013) Blocked Schur Algorithms for Computing the Matrix
+# Square Root. Applied Parallel and Scientific Computing. PARA 2012. Lecture Notes in
+# Computer Science, vol 7782. https://doi.org/10.1007/978-3-642-36803-5_12
+function _sqrt_quasitriu!(R, A; blockwidth=64, n=checksquare(A))
+    if n ≤ blockwidth || !(eltype(R) <: BlasFloat) # base case, perform "point" algorithm
+        _sqrt_quasitriu_block!(R, A)
+    else  # compute blockwise recursion
+        split = div(n, 2)
+        iszero(A[split+1, split]) || (split += 1) # don't split 2x2 diagonal block
+        r1 = 1:split
+        r2 = (split + 1):n
+        n1, n2 = split, n - split
+        A11, A12, A22 = @views A[r1,r1], A[r1,r2], A[r2,r2]
+        R11, R12, R22 = @views R[r1,r1], R[r1,r2], R[r2,r2]
+        # solve diagonal blocks recursively
+        _sqrt_quasitriu!(R11, A11; blockwidth=blockwidth, n=n1)
+        _sqrt_quasitriu!(R22, A22; blockwidth=blockwidth, n=n2)
+        # solve off-diagonal block
+        R12 .= .- A12
+        _sylvester_quasitriu!(R11, R22, R12; blockwidth=blockwidth, nA=n1, nB=n2, raise=false)
+    end
+    return R
+end
+
+function _sqrt_quasitriu_block!(R, A)
     _sqrt_quasitriu_diag_block!(R, A)
     _sqrt_quasitriu_offdiag_block!(R, A)
     return R
@@ -2503,6 +2537,83 @@ Base.@propagate_inbounds function _sqrt_quasitriu_offdiag_block_2x2!(R, A, i, j)
         _sylvester_2x2!(Rii, Rjj, Rij)
     end
     return R
+end
+
+# solve Sylvester's equation AX + XB = -C using blockwise recursion until the dimension of
+# A and B are no greater than blockwidth, based on Algorithm 1 from
+# Jonsson I, Kågström B. Recursive blocked algorithms for solving triangular systems—
+# Part I: one-sided and coupled Sylvester-type matrix equations. (2002) ACM Trans Math Softw.
+# 28(4), https://doi.org/10.1145/592843.592845.
+# specify raise=false to avoid breaking the recursion if a LAPACKException is thrown when
+# computing one of the blocks.
+function _sylvester_quasitriu!(A, B, C; blockwidth=64, nA=checksquare(A), nB=checksquare(B), raise=true)
+    if 1 ≤ nA ≤ blockwidth && 1 ≤ nB ≤ blockwidth
+        _sylvester_quasitriu_base!(A, B, C; raise=raise)
+    elseif nA ≥ 2nB ≥ 2
+        _sylvester_quasitriu_split1!(A, B, C; blockwidth=blockwidth, nA=nA, nB=nB, raise=raise)
+    elseif nB ≥ 2nA ≥ 2
+        _sylvester_quasitriu_split2!(A, B, C; blockwidth=blockwidth, nA=nA, nB=nB, raise=raise)
+    else
+        _sylvester_quasitriu_splitall!(A, B, C; blockwidth=blockwidth, nA=nA, nB=nB, raise=raise)
+    end
+    return C
+end
+function _sylvester_quasitriu_base!(A, B, C; raise=true)
+    try
+        _, scale = LAPACK.trsyl!('N', 'N', A, B, C)
+        rmul!(C, -inv(scale))
+    catch e
+        if !(e isa LAPACKException) || raise
+            throw(e)
+        end
+    end
+    return C
+end
+function _sylvester_quasitriu_split1!(A, B, C; nA=checksquare(A), kwargs...)
+    iA = div(nA, 2)
+    iszero(A[iA + 1, iA]) || (iA += 1)  # don't split 2x2 diagonal block
+    rA1, rA2 = 1:iA, (iA + 1):nA
+    nA1, nA2 = iA, nA-iA
+    A11, A12, A22 = @views A[rA1,rA1], A[rA1,rA2], A[rA2,rA2]
+    C1, C2 = @views C[rA1,:], C[rA2,:]
+    _sylvester_quasitriu!(A22, B, C2; nA=nA2, kwargs...)
+    mul!(C1, A12, C2, true, true)
+    _sylvester_quasitriu!(A11, B, C1; nA=nA1, kwargs...)
+    return C
+end
+function _sylvester_quasitriu_split2!(A, B, C; nB=checksquare(B), kwargs...)
+    iB = div(nB, 2)
+    iszero(B[iB + 1, iB]) || (iB += 1)  # don't split 2x2 diagonal block
+    rB1, rB2 = 1:iB, (iB + 1):nB
+    nB1, nB2 = iB, nB-iB
+    B11, B12, B22 = @views B[rB1,rB1], B[rB1,rB2], B[rB2,rB2]
+    C1, C2 = @views C[:,rB1], C[:,rB2]
+    _sylvester_quasitriu!(A, B11, C1; nB=nB1, kwargs...)
+    mul!(C2, C1, B12, true, true)
+    _sylvester_quasitriu!(A, B22, C2; nB=nB2, kwargs...)
+    return C
+end
+function _sylvester_quasitriu_splitall!(A, B, C; nA=checksquare(A), nB=checksquare(B), kwargs...)
+    iA = div(nA, 2)
+    iszero(A[iA + 1, iA]) || (iA += 1)  # don't split 2x2 diagonal block
+    iB = div(nB, 2)
+    iszero(B[iB + 1, iB]) || (iB += 1)  # don't split 2x2 diagonal block
+    rA1, rA2 = 1:iA, (iA + 1):nA
+    nA1, nA2 = iA, nA-iA
+    rB1, rB2 = 1:iB, (iB + 1):nB
+    nB1, nB2 = iB, nB-iB
+    A11, A12, A22 = @views A[rA1,rA1], A[rA1,rA2], A[rA2,rA2]
+    B11, B12, B22 = @views B[rB1,rB1], B[rB1,rB2], B[rB2,rB2]
+    C11, C21, C12, C22 = @views C[rA1,rB1], C[rA2,rB1], C[rA1,rB2], C[rA2,rB2]
+    _sylvester_quasitriu!(A22, B11, C21; nA=nA2, nB=nB1, kwargs...)
+    mul!(C11, A12, C21, true, true)
+    _sylvester_quasitriu!(A11, B11, C11; nA=nA1, nB=nB1, kwargs...)
+    mul!(C22, C21, B12, true, true)
+    _sylvester_quasitriu!(A22, B22, C22; nA=nA2, nB=nB2, kwargs...)
+    mul!(C12, A12, C22, true, true)
+    mul!(C12, C11, B12, true, true)
+    _sylvester_quasitriu!(A11, B22, C12; nA=nA1, nB=nB2, kwargs...)
+    return C
 end
 
 # End of auxiliary functions for matrix square root

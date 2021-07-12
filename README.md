@@ -5,17 +5,19 @@
 </a>
 </div>
 
+Documentation:
+[![version 1][docs-img]](https://docs.julialang.org)
+
 Code coverage:
 [![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
 [![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
 
-Documentation:
-[![version 1][docs-img]](https://docs.julialang.org)
+Continuous integration: [![Build status](https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master)](https://buildkite.com/julialang/julia)
 
-[appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
+[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
 [coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
 [codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
-[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
+
 
 ## The Julia Language
 

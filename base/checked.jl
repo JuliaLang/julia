@@ -6,14 +6,14 @@ module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
        checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
-       add_with_overflow, sub_with_overflow, mul_with_overflow
+       checked_length, add_with_overflow, sub_with_overflow, mul_with_overflow
 
 import Core.Intrinsics:
        checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import ..no_op_err, ..@_inline_meta, ..@_noinline_meta
+import ..no_op_err, ..@_inline_meta, ..@_noinline_meta, ..checked_length
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -348,5 +348,13 @@ Calculates `cld(x,y)`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 checked_cld(x::T, y::T) where {T<:Integer} = cld(x, y) # Base.cld already checks
+
+"""
+    Base.checked_length(r)
+
+Calculates `length(r)`, but may check for overflow errors where applicable when
+the result doesn't fit into `Union{Integer(eltype(r)),Int}`.
+"""
+checked_length(r) = length(r) # for most things, length doesn't error
 
 end

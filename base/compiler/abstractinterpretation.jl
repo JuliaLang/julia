@@ -541,7 +541,12 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
     const_prop_argument_heuristic(interp, argtypes) || const_prop_rettype_heuristic(interp, result.rt) || return nothing
     allconst = is_allconst(argtypes)
     force = force_const_prop(interp, f, method)
-    force || const_prop_function_heuristic(interp, f, argtypes, nargs, allconst) || return nothing
+    if !force
+        if !const_prop_function_heuristic(interp, f, argtypes, nargs, allconst)
+            add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
+            return nothing
+        end
+    end
     force |= allconst
     mi = specialize_method(match, !force)
     if mi === nothing
@@ -550,14 +555,17 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
     end
     mi = mi::MethodInstance
     if !force && !const_prop_methodinstance_heuristic(interp, method, mi)
-        add_remark!(interp, sv, "[constprop] Disabled by heuristic")
+        add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
     end
     return mi
 end
 
 function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, sv::InferenceState)
-    call_result_unused(sv) && result.edgecycle && return false
+    if call_result_unused(sv) && result.edgecycle
+        add_remark!(interp, sv, "[constprop] Edgecycle with unused result")
+        return false
+    end
     return is_improvable(result.rt) && InferenceParams(interp).ipo_constant_propagation
 end
 
@@ -1127,7 +1135,8 @@ function abstract_call_unionall(argtypes::Vector{Any})
 end
 
 function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
-    ft = widenconst(argtype_by_index(argtypes, 2))
+    ft′ = argtype_by_index(argtypes, 2)
+    ft = widenconst(ft′)
     ft === Bottom && return CallMeta(Bottom, false)
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
     types === Bottom && return CallMeta(Bottom, false)
@@ -1141,15 +1150,30 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
     result = findsup(types, method_table(interp))
-    if result === nothing
-        return CallMeta(Any, false)
-    end
+    result === nothing && return CallMeta(Any, false)
     method, valid_worlds = result
     update_valid_age!(sv, valid_worlds)
     (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
-    rt, edge = typeinf_edge(interp, method, ti, env, sv)
+    (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
-    return CallMeta(rt, InvokeCallInfo(MethodMatch(ti, env, method, argtype <: method.sig)))
+    match = MethodMatch(ti, env, method, argtype <: method.sig)
+    # try constant propagation with manual inlinings of some of the heuristics
+    # since some checks within `abstract_call_method_with_const_args` seem a bit costly
+    const_prop_entry_heuristic(interp, result, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
+    argtypes′ = argtypes[4:end]
+    const_prop_argument_heuristic(interp, argtypes′) || const_prop_rettype_heuristic(interp, rt) || return CallMeta(rt, InvokeCallInfo(match, nothing))
+    pushfirst!(argtypes′, ft)
+    # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons
+    # for i in 1:length(argtypes′)
+    #     t, a = ti.parameters[i], argtypes′[i]
+    #     argtypes′[i] = t ⊑ a ? t : a
+    # end
+    const_rt, const_result = abstract_call_method_with_const_args(interp, result, argtype_to_function(ft′), argtypes′, match, sv, false)
+    if const_rt !== rt && const_rt ⊑ rt
+        return CallMeta(const_rt, InvokeCallInfo(match, const_result))
+    else
+        return CallMeta(rt, InvokeCallInfo(match, nothing))
+    end
 end
 
 # call where the function is known exactly
@@ -1283,17 +1307,12 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
                        sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
     #print("call ", e.args[1], argtypes, "\n\n")
     ft = argtypes[1]
-    if isa(ft, Const)
-        f = ft.val
-    elseif isconstType(ft)
-        f = ft.parameters[1]
-    elseif isa(ft, DataType) && isdefined(ft, :instance)
-        f = ft.instance
-    elseif isa(ft, PartialOpaque)
+    f = argtype_to_function(ft)
+    if isa(ft, PartialOpaque)
         return abstract_call_opaque_closure(interp, ft, argtypes[2:end], sv)
     elseif isa(unwrap_unionall(ft), DataType) && unwrap_unionall(ft).name === typename(Core.OpaqueClosure)
         return CallMeta(rewrap_unionall(unwrap_unionall(ft).parameters[2], ft), false)
-    else
+    elseif f === nothing
         # non-constant function, but the number of arguments is known
         # and the ft is not a Builtin or IntrinsicFunction
         if typeintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure}) != Union{}
@@ -1303,6 +1322,18 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
         return abstract_call_gf_by_type(interp, nothing, fargs, argtypes, argtypes_to_type(argtypes), sv, max_methods)
     end
     return abstract_call_known(interp, f, fargs, argtypes, sv, max_methods)
+end
+
+function argtype_to_function(@nospecialize(ft))
+    if isa(ft, Const)
+        return ft.val
+    elseif isconstType(ft)
+        return ft.parameters[1]
+    elseif isa(ft, DataType) && isdefined(ft, :instance)
+        return ft.instance
+    else
+        return nothing
+    end
 end
 
 function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
@@ -1413,6 +1444,13 @@ end
 
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
+        if isa(e, PhiNode)
+            rt = Union{}
+            for val in e.values
+                rt = tmerge(rt, abstract_eval_special_value(interp, val, vtypes, sv))
+            end
+            return rt
+        end
         return abstract_eval_special_value(interp, e, vtypes, sv)
     end
     e = e::Expr

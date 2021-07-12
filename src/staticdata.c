@@ -786,14 +786,23 @@ static void jl_write_values(jl_serializer_state *s)
 #define JL_ARRAY_ALIGN(jl_value, nbytes) LLT_ALIGN(jl_value, nbytes)
             jl_array_t *ar = (jl_array_t*)v;
             jl_value_t *et = jl_tparam0(jl_typeof(v));
+            size_t alen = jl_array_len(ar);
+            size_t datasize = alen * ar->elsize;
+            size_t tot = datasize;
+            int isbitsunion = jl_array_isbitsunion(ar);
+            if (isbitsunion)
+                tot += alen;
+            else if (ar->elsize == 1)
+                tot += 1;
             int ndimwords = jl_array_ndimwords(ar->flags.ndims);
-            size_t tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords * sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
+            size_t headersize = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
             // copy header
-            ios_write(s->s, (char*)v, tsz);
+            ios_write(s->s, (char*)v, headersize);
+            size_t alignment_amt = JL_SMALL_BYTE_ALIGNMENT;
+            if (tot >= ARRAY_CACHE_ALIGN_THRESHOLD)
+                alignment_amt = JL_CACHE_BYTE_ALIGNMENT;
             // make some header modifications in-place
             jl_array_t *newa = (jl_array_t*)&s->s->buf[reloc_offset];
-            size_t alen = jl_array_len(ar);
-            size_t tot = alen * ar->elsize;
             if (newa->flags.ndims == 1)
                 newa->maxsize = alen;
             newa->offset = 0;
@@ -803,8 +812,7 @@ static void jl_write_values(jl_serializer_state *s)
 
             // write data
             if (!ar->flags.ptrarray && !ar->flags.hasptr) {
-                uintptr_t data = LLT_ALIGN(ios_pos(s->const_data), 16);
-                // realign stream to max(data-align(array), sizeof(void*))
+                uintptr_t data = LLT_ALIGN(ios_pos(s->const_data), alignment_amt);
                 write_padding(s->const_data, data - ios_pos(s->const_data));
                 // write data and relocations
                 newa->data = NULL; // relocation offset
@@ -819,22 +827,27 @@ static void jl_write_values(jl_serializer_state *s)
                         write_pointer(s->const_data);
                 }
                 else {
-                    int isbitsunion = jl_array_isbitsunion(ar);
-                    if (ar->elsize == 1 && !isbitsunion)
-                        tot += 1;
-                    ios_write(s->const_data, (char*)jl_array_data(ar), tot);
-                    if (isbitsunion)
+                    if (isbitsunion) {
+                        ios_write(s->const_data, (char*)jl_array_data(ar), datasize);
                         ios_write(s->const_data, jl_array_typetagdata(ar), alen);
+                    }
+                    else {
+                        ios_write(s->const_data, (char*)jl_array_data(ar), tot);
+                    }
                 }
             }
             else {
-                newa->data = (void*)tsz; // relocation offset
+                size_t data = LLT_ALIGN(ios_pos(s->s), alignment_amt);
+                size_t padding_amt = data - ios_pos(s->s);
+                write_padding(s->s, padding_amt);
+                headersize += padding_amt;
+                newa->data = (void*)headersize; // relocation offset
                 arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_array_t, data))); // relocation location
                 arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item)); // relocation target
                 if (ar->flags.hasptr) {
                     // copy all of the data first
                     const char *data = (const char*)jl_array_data(ar);
-                    ios_write(s->s, data, tot);
+                    ios_write(s->s, data, datasize);
                     // the rewrite all of the embedded pointers to null+relocation
                     uint16_t elsz = ar->elsize;
                     size_t j, np = ((jl_datatype_t*)et)->layout->npointers;
@@ -844,12 +857,12 @@ static void jl_write_values(jl_serializer_state *s)
                             size_t offset = i * elsz + jl_ptr_offset(((jl_datatype_t*)et), j) * sizeof(jl_value_t*);
                             jl_value_t *fld = *(jl_value_t**)&data[offset];
                             if (fld != NULL) {
-                                arraylist_push(&s->relocs_list, (void*)(uintptr_t)(reloc_offset + tsz + offset)); // relocation location
+                                arraylist_push(&s->relocs_list, (void*)(uintptr_t)(reloc_offset + headersize + offset)); // relocation location
                                 arraylist_push(&s->relocs_list, (void*)backref_id(s, fld)); // relocation target
-                                memset(&s->s->buf[reloc_offset + tsz + offset], 0, sizeof(fld)); // relocation offset (none)
+                                memset(&s->s->buf[reloc_offset + headersize + offset], 0, sizeof(fld)); // relocation offset (none)
                             }
                             else {
-                                assert(*(jl_value_t**)&s->s->buf[reloc_offset + tsz + offset] == NULL);
+                                assert(*(jl_value_t**)&s->s->buf[reloc_offset + headersize + offset] == NULL);
                             }
                         }
                     }

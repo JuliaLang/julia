@@ -2837,7 +2837,7 @@ end
     @test "a\
 b" == "ab"
     @test "a\
-    b" == "a    b"
+    b" == "ab"
     @test raw"a\
 b" == "a\\\nb"
     @test "a$c\
@@ -2851,10 +2851,10 @@ b" == "acb"
           b""" == "ab"
     @test """
           a\
-            b""" == "a  b"
+            b""" == "ab"
     @test """
             a\
-          b""" == "  ab"
+          b""" == "ab"
     @test raw"""
           a\
           b""" == "a\\\nb"
@@ -2894,7 +2894,7 @@ b" == "acb"
     @test `a\
 b` == `ab`
     @test `a\
-    b` == `a    b`
+    b` == `ab`
     @test `a$c\
 b` == `acb`
     @test `"a\
@@ -2910,7 +2910,7 @@ b'` == `$("a\\\nb")`
           b``` == `ab`
     @test ```
           a\
-            b``` == `a  b`
+            b``` == `ab`
     @test ```
             a\
           b``` == `  ab`
@@ -2930,3 +2930,22 @@ end
 
 # issue #41253
 @test (function (::Dict{}); end)(Dict()) === nothing
+
+@testset "issue #41330" begin
+    @test Meta.parse("\"a\\\r\nb\"") == "ab"
+    @test Meta.parse("\"a\\\rb\"") == "ab"
+    @test eval(Meta.parse("`a\\\r\nb`")) == `ab`
+    @test eval(Meta.parse("`a\\\rb`")) == `ab`
+end
+
+@testset "slurping into function def" begin
+    x, f()... = [1, 2, 3]
+    @test x == 1
+    @test f() == [2, 3]
+    # test that call to `Base.rest` is outside the definition of `f`
+    @test f() === f()
+
+    x, f()... = 1, 2, 3
+    @test x == 1
+    @test f() == (2, 3)
+end

@@ -1057,12 +1057,12 @@ is_builtin(s::Signature) =
     isa(s.f, Builtin) ||
     s.ft ⊑ Builtin
 
-function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, info::InvokeCallInfo,
+function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, (; match, result)::InvokeCallInfo,
         state::InliningState, todo::Vector{Pair{Int, Any}})
     stmt = ir.stmts[idx][:inst]
     calltype = ir.stmts[idx][:type]
 
-    if !info.match.fully_covers
+    if !match.fully_covers
         # TODO: We could union split out the signature check and continue on
         return nothing
     end
@@ -1072,7 +1072,17 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, info::InvokeCallIn
     atypes = atypes[4:end]
     pushfirst!(atypes, atype0)
 
-    result = analyze_method!(info.match, atypes, state, calltype)
+    if isa(result, InferenceResult)
+        item = InliningTodo(result, atypes, calltype)
+        validate_sparams(item.mi.sparam_vals) || return nothing
+        if argtypes_to_type(atypes) <: item.mi.def.sig
+            state.mi_cache !== nothing && (item = resolve_todo(item, state))
+            handle_single_case!(ir, stmt, idx, item, true, todo)
+            return nothing
+        end
+    end
+
+    result = analyze_method!(match, atypes, state, calltype)
     handle_single_case!(ir, stmt, idx, result, true, todo)
     return nothing
 end
@@ -1418,7 +1428,7 @@ function late_inline_special_case!(ir::IRCode, sig::Signature, idx::Int, stmt::E
     elseif params.inlining && length(atypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
-        if isa(typ, Const)
+        if isa(typ, Const) && _builtin_nothrow(<:, Any[atypes[3], atypes[2]], typ)
             ir[SSAValue(idx)] = quoted(typ.val)
             return true
         end

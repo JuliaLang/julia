@@ -55,11 +55,10 @@ function setindex(x::Tuple, v, i::Integer)
     _setindex(v, i, x...)
 end
 
-function _setindex(v, i::Integer, first, tail...)
+function _setindex(v, i::Integer, args...)
     @_inline_meta
-    return (ifelse(i == 1, v, first), _setindex(v, i - 1, tail...)...)
+    return ntuple(j -> ifelse(j == i, v, args[j]), length(args))
 end
-_setindex(v, i::Integer) = ()
 
 
 ## iterating ##
