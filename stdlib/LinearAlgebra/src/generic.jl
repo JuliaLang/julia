@@ -451,11 +451,13 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 function generic_normMinusInf(x)
     (v, s) = iterate(x)::Tuple
     minabs = norm(v)
+    ismissing(minabs) && return missing
     while true
         y = iterate(x, s)
         y === nothing && break
         (v, s) = y
         vnorm = norm(v)
+        ismissing(vnorm) && return missing
         minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
     end
     return float(minabs)
@@ -464,11 +466,13 @@ end
 function generic_normInf(x)
     (v, s) = iterate(x)::Tuple
     maxabs = norm(v)
+    ismissing(maxabs) && return missing
     while true
         y = iterate(x, s)
         y === nothing && break
         (v, s) = y
         vnorm = norm(v)
+        ismissing(vnorm) && return missing
         maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
     end
     return float(maxabs)
@@ -477,14 +481,17 @@ end
 function generic_norm1(x)
     (v, s) = iterate(x)::Tuple
     av = float(norm(v))
+    ismissing(av) && return missing
     T = typeof(av)
     sum::promote_type(Float64, T) = av
     while true
         y = iterate(x, s)
         y === nothing && break
         (v, s) = y
+        ismissing(v) && return missing
         sum += norm(v)
     end
+    ismissing(sum) && return missing
     return convert(T, sum)
 end
 
@@ -495,7 +502,7 @@ norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_norm2(x)
     maxabs = normInf(x)
-    (maxabs == 0 || isinf(maxabs)) && return maxabs
+    (ismissing(maxabs) || maxabs == 0 || isinf(maxabs)) && return maxabs
     (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
     if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
@@ -506,6 +513,7 @@ function generic_norm2(x)
             (v, s) = y
             sum += norm_sqr(v)
         end
+        ismissing(sum) && return missing
         return convert(T, sqrt(sum))
     else
         sum = abs2(norm(v)/maxabs)
@@ -515,6 +523,7 @@ function generic_norm2(x)
             (v, s) = y
             sum += (norm(v)/maxabs)^2
         end
+        ismissing(sum) && return missing
         return convert(T, maxabs*sqrt(sum))
     end
 end
@@ -525,7 +534,7 @@ function generic_normp(x, p)
     (v, s) = iterate(x)::Tuple
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
-        (maxabs == 0 || isinf(maxabs)) && return maxabs
+        (ismissing(maxabs) || maxabs == 0 || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
     else
         T = typeof(float(norm(v)))
@@ -537,15 +546,18 @@ function generic_normp(x, p)
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
+            ismissing(v) && return missing
             sum += norm(v)^spp
         end
         return convert(T, sum^inv(spp))
     else # rescaling
         sum = (norm(v)/maxabs)^spp
+        ismissing(sum) && return missing
         while true
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
+            ismissing(v) && return missing
             sum += (norm(v)/maxabs)^spp
         end
         return convert(T, maxabs*sum^inv(spp))
