@@ -671,8 +671,8 @@ end
         x = fill(convert(elty, 1), 0)
         T = Tridiagonal(x, x, x)
         Tsym = SymTridiagonal(x, x)
-        @test dot(x, T, x)   ≈ 0.0
-        @test dot(x, Tsym, x)   ≈ 0.0
+        @test dot(x, T, x) == 0.0
+        @test dot(x, Tsym, x) == 0.0
     end
 end
 
