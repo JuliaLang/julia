@@ -130,7 +130,7 @@ julia> exp(1 + 2im)
 -1.1312043837568135 + 2.4717266720048188im
 
 julia> sinh(1 + 2im)
--0.4890562590412937 + 1.4031192506220405im
+-0.4890562590412937 + 1.4031192506220407im
 ```
 
 Note that mathematical functions typically return real values when applied to real numbers and
