@@ -47,6 +47,35 @@ end
 show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
 show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
 
+show(io::IO, ::MIME"text/plain", x::Fix1) = show(io, x)
+show(io::IO, ::MIME"text/plain", x::Fix2) = show(io, x)
+
+function show(io::IO, x::Fix1)
+    show_fix(io, x)
+end
+
+function show(io::IO, x::Fix2)
+    show_fix(io, x)
+end
+
+function show_fix(io::IO, x)
+    print(io, "Base.", nameof(typeof(x)), "(")
+    show(io, x.f)
+    print(io, ", ")
+    show(io, x.x)
+    print(io, ")")
+end
+
+for fn in [:isequal, :(==), :(!=), :(>=), :(<=), :<, :in, :∉, :∋, :∌, :endswith, :startswith, :contains]
+    name = string(fn)
+    @eval function show(io::IO, ::MIME"text/plain", x::Fix2{typeof($fn)})
+        print(io, $name, "(")
+        show(io, x.x)
+        print(io, ")")
+    end
+end
+
+
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     isempty(iter) && get(io, :compact, false) && return show(io, iter)
     summary(io, iter)
