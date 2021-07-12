@@ -83,7 +83,7 @@ end
 end
 
 @testset "arithmetic operators" begin
-    arithmetic_operators = [+, -, *, /, ^, Base.div, Base.mod, Base.fld, Base.rem]
+    arithmetic_operators = [+, -, *, /, ^, Base.div, Base.mod, Base.fld, Base.rem, Base.mod1]
 
     # All unary operators return missing when evaluating missing
     for f in [!, ~, +, -, *, &, |, xor, nand, nor]
