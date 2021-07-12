@@ -30,19 +30,29 @@ struct Spec{T} # T => %type => Val{'type'}
     hash::Bool
     width::Int
     precision::Int
+    dynamic_width::Bool
+    dynamic_precision::Bool
 end
 
 # recreate the format specifier string from a typed Spec
 Base.string(f::Spec{T}; modifier::String="") where {T} =
-    string("%", f.leftalign ? "-" : "", f.plus ? "+" : "", f.space ? " " : "",
-        f.zero ? "0" : "", f.hash ? "#" : "", f.width > 0 ? f.width : "",
-        f.precision == 0 ? ".0" : f.precision > 0 ? ".$(f.precision)" : "", modifier, char(T))
+    string("%",
+           f.leftalign ? "-" : "",
+           f.plus ? "+" : "",
+           f.space ? " " : "",
+           f.zero ? "0" : "",
+           f.hash ? "#" : "",
+           f.dynamic_width ? "*" : (f.width > 0 ? f.width : ""),
+           f.dynamic_precision ? ".*" : (f.precision == 0 ? ".0" : (f.precision > 0 ? ".$(f.precision)" : "")),
+           modifier,
+           char(T))
+
 Base.show(io::IO, f::Spec) = print(io, string(f))
 
 floatfmt(s::Spec{T}) where {T} =
-    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.width, 0)
+    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.width, 0, s.dynamic_width, s.dynamic_precision)
 ptrfmt(s::Spec{T}, x) where {T} =
-    Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.width, sizeof(x) == 8 ? 16 : 8)
+    Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.width, sizeof(x) == 8 ? 16 : 8, s.dynamic_width, s.dynamic_precision)
 
 """
     Printf.Format(format_str)
@@ -71,6 +81,7 @@ struct Format{S, T}
       # and so on, then at the end, str[substringranges[end]]
     substringranges::Vector{UnitRange{Int}}
     formats::T # Tuple of Specs
+    numarguments::Int  # required for dynamic format specifiers
 end
 
 # what number base should be used for a given format specifier?
@@ -83,6 +94,8 @@ function Format(f::AbstractString)
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
+    numarguments = 0
+
     b = 0x00
     while pos <= len
         b = bytes[pos]
@@ -129,26 +142,43 @@ function Format(f::AbstractString)
         end
         # parse width
         width = 0
-        while b - UInt8('0') < 0x0a
-            width = 10 * width + (b - UInt8('0'))
+        dynamic_width = false
+        if b == UInt8('*')
+            dynamic_width = true
+            numarguments += 1
             b = bytes[pos]
             pos += 1
-            pos > len && break
+        else
+            while b - UInt8('0') < 0x0a
+            width = 10 * width + (b - UInt8('0'))
+                b = bytes[pos]
+                pos += 1
+                pos > len && break
+            end
         end
         # parse precision
         precision = 0
         parsedprecdigits = false
+        dynamic_precision = false
         if b == UInt8('.')
             pos > len && throw(ArgumentError("incomplete format string: '$f'"))
             parsedprecdigits = true
             b = bytes[pos]
             pos += 1
             if pos <= len
-                while b - UInt8('0') < 0x0a
-                    precision = 10precision + (b - UInt8('0'))
+                if b == UInt8('*')
+                    dynamic_precision = true
+                    numarguments += 1
                     b = bytes[pos]
                     pos += 1
-                    pos > len && break
+                else
+                    precision = 0
+                    while b - UInt8('0') < 0x0a
+                        precision = 10precision + (b - UInt8('0'))
+                        b = bytes[pos]
+                        pos += 1
+                        pos > len && break
+                    end
                 end
             end
         end
@@ -170,6 +200,8 @@ function Format(f::AbstractString)
         !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("invalid format string: '$f', invalid type specifier: '$(Char(b))'"))
         type = Val{Char(b)}
         if type <: Ints && precision > 0
+            # note - we should also set zero to false if dynamic precison > 0
+            # this is taken care of in fmt() for Ints
             zero = false
         elseif (type <: Strings || type <: Chars) && !parsedprecdigits
             precision = -1
@@ -178,7 +210,8 @@ function Format(f::AbstractString)
         elseif type <: Floats && !parsedprecdigits
             precision = 6
         end
-        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision))
+        numarguments += 1
+        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision, dynamic_width, dynamic_precision))
         start = pos
         while pos <= len
             b = bytes[pos]
@@ -196,7 +229,7 @@ function Format(f::AbstractString)
         end
         push!(strs, start:pos - 1 - (b == UInt8('%')))
     end
-    return Format(bytes, strs, Tuple(fmts))
+    return Format(bytes, strs, Tuple(fmts), numarguments)
 end
 
 macro format_str(str)
@@ -216,6 +249,46 @@ const HEX = b"0123456789ABCDEF"
         (u >>= 8) == 0 && break
     end
     return pos
+end
+
+
+@inline function rmdynamic(spec::Spec{T}, args, argp) where {T}
+    zero, width, precision = spec.zero, spec.width, spec.precision
+    if spec.dynamic_width
+        width = args[argp]
+        argp += 1
+    end
+    if spec.dynamic_precision
+        precision = args[argp]
+        if zero && T <: Ints && precision > 0
+            zero = false
+        end
+        argp += 1
+    end
+    (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
+end
+
+
+@inline function rmdynamic(spec::Spec{T}, args, argp) where {T}
+    zero, width, precision = spec.zero, spec.width, spec.precision
+    if spec.dynamic_width
+        width = args[argp]
+        argp += 1
+    end
+    if spec.dynamic_precision
+        precision = args[argp]
+        if zero && T <: Ints && precision > 0
+            zero = false
+        end
+        argp += 1
+    end
+    (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
+end
+
+
+@inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
+    spec, argp = rmdynamic(spec, args, argp)
+    (fmt(buf, pos, args[argp], spec), argp+1)
 end
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
@@ -724,9 +797,10 @@ const UNROLL_UPTO = 16
     # for each format, write out arg and next substring
     # unroll up to 16 formats
     N = length(f.formats)
+    argp = 1
     Base.@nexprs 16 i -> begin
         if N >= i
-            pos = fmt(buf, pos, args[i], f.formats[i])
+            pos, argp = fmt(buf, pos, args, argp, f.formats[i])
             for j in f.substringranges[i + 1]
                 b = f.str[j]
                 if !escapechar
@@ -741,7 +815,7 @@ const UNROLL_UPTO = 16
     end
     if N > 16
         for i = 17:length(f.formats)
-            pos = fmt(buf, pos, args[i], f.formats[i])
+            pos, argp = fmt(buf, pos, args, argp, f.formats[i])
             for j in f.substringranges[i + 1]
                 b = f.str[j]
                 if !escapechar
@@ -757,11 +831,20 @@ const UNROLL_UPTO = 16
     return pos
 end
 
+
+@inline function plength(f::Spec{T}, args, argp) where {T}
+    f, argp = rmdynamic(f, args, argp)
+    (plength(f, args[argp]), argp+1)
+end
+
+
+
 function plength(f::Spec{T}, x) where {T <: Chars}
     c = Char(first(x))
     w = textwidth(c)
     return max(f.width, w) + (ncodeunits(c) - w)
 end
+
 plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
 
 function plength(f::Spec{T}, x) where {T <: Strings}
@@ -786,14 +869,17 @@ plength(::Spec{PositionCounter}, x) = 0
     len = sum(length, substringranges)
     N = length(formats)
     # unroll up to 16 formats
+    argp = 1
     Base.@nexprs 16 i -> begin
         if N >= i
-            len += plength(formats[i], args[i])
+            l, argp = plength(formats[i], args, argp)
+            len += l
         end
     end
     if N > 16
         for i = 17:length(formats)
-            len += plength(formats[i], args[i])
+            l, argp = plength(formats[i], args, argp)
+            len += l
         end
     end
     return len
@@ -813,7 +899,7 @@ for more details on C `printf` support.
 function format end
 
 function format(io::IO, f::Format, args...) # => Nothing
-    length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
+    f.numarguments == length(args) || argmismatch(f.numarguments, length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
     write(io, resize!(buf, pos - 1))
@@ -821,7 +907,7 @@ function format(io::IO, f::Format, args...) # => Nothing
 end
 
 function format(f::Format, args...) # => String
-    length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
+    f.numarguments == length(args) || argmismatch(f.numarguments, length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
     return String(resize!(buf, pos - 1))
@@ -855,8 +941,12 @@ Padded with zeros to length 6 000123
 
 julia> @printf "Use shorter of decimal or scientific %g %g" 1.23 12300000.0
 Use shorter of decimal or scientific 1.23 1.23e+07
-```
 
+julia> @printf "Use dynamic width and precision  %*.*f" 10 2 0.12345
+Use dynamic width and precision        0.12
+
+
+```
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
 See also [`@sprintf`](@ref).
 
@@ -873,6 +963,12 @@ Inf Inf NaN NaN
 
 julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
 0 0.0 -0.007812
+
+!!! compat "Julia 1.7"
+    Starting in Julia 1.7, `%s` (string) and `%c` (character) widths are computed
+    using [`textwidth`](@ref), which e.g. ignores zero-width characters
+    (such as combining characters for diacritical marks) and treats certain
+    "wide" characters (e.g. emoji) as width `2`.
 ```
 
 !!! compat "Julia 1.7"
