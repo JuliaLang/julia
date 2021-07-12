@@ -92,7 +92,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
     return n;
 }
 
-bool use_sret(jl_datatype_t *dt) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
@@ -101,7 +101,7 @@ bool use_sret(jl_datatype_t *dt) override
     return false;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
@@ -112,7 +112,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
     return false;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
 {
     // Arguments are either scalar or passed by value
     size_t size = jl_datatype_size(dt);
@@ -142,14 +142,15 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     // the bitsize of the integer gives the desired alignment
     if (size > 8) {
         if (jl_datatype_align(dt) <= 8) {
+            Type  *T_int64 = Type::getInt64Ty(ctx);
             return ArrayType::get(T_int64, (size + 7) / 8);
         }
         else {
-            Type *T_int128 = Type::getIntNTy(jl_LLVMContext, 128);
+            Type *T_int128 = Type::getIntNTy(ctx, 128);
             return ArrayType::get(T_int128, (size + 15) / 16);
         }
     }
-    return Type::getIntNTy(jl_LLVMContext, size * 8);
+    return Type::getIntNTy(ctx, size * 8);
 }
 
 };
