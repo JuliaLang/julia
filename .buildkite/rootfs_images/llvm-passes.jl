@@ -26,4 +26,4 @@ packages = [
 tarball_path = debootstrap("llvm-passes"; packages)
 
 # Upload it
-upload_rootfs_image(tarball_path)
+upload_rootfs_image(tarball_path; tag_name = "v1")
