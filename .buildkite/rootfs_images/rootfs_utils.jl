@@ -82,9 +82,10 @@ function debootstrap(name::String; release::String="buster", variant::String="mi
     return tarball_path
 end
 
-function upload_rootfs_image(tarball_path::String; github_repo::String="JuliaCI/rootfs-images")
+function upload_rootfs_image(tarball_path::String;
+                             github_repo::String="JuliaCI/rootfs-images",
+                             tag_name::String="v1")
     # Upload it to `github_repo`
-    tag_name = "v1"
     tarball_url = "https://github.com/$(github_repo)/releases/download/$(tag_name)/$(basename(tarball_path))"
     @info("Uploading to $(github_repo)@$(tag_name)", tarball_url)
     run(`$(ghr_jll.ghr()) -u $(dirname(github_repo)) -r $(basename(github_repo)) -replace $(tag_name) $(tarball_path)`)
