@@ -292,6 +292,7 @@ function verify_tapir_tasks(ir::IRCode)
         end
         return true
     end
+    return
 end
 
 function verify_linetable(linetable::Vector{LineInfoNode}, print::Bool=true)
