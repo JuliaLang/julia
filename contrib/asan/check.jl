@@ -3,7 +3,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 #
 # Usage:
-#     contrib/check-asan.jl <julia>
+#     contrib/asan/check.jl <julia>
 #
 # Check that <julia> is built with ASAN.
 #
