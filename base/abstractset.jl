@@ -399,15 +399,24 @@ end
 
 ## set disjoint comparison
 """
-    isdisjoint(v1, v2) -> Bool
+    isdisjoint(a, b) -> Bool
 
-Return whether the collections `v1` and `v2` are disjoint, i.e. whether
-their intersection is empty.
+Determine whether the collections `a` and `b` are disjoint.
+Equivalent to `isempty(a ∩ b)` but more efficient when possible.
 
-See also: [`issetequal`](@ref), [`intersect`](@ref).
+See also: [`intersect`](@ref), [`isempty`](@ref), [`issetequal`](@ref).
 
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
+
+# Examples
+```jldoctest
+julia> isdisjoint([1, 2], [2, 3, 4])
+false
+
+julia> isdisjoint([3, 1], [2, 4])
+true
+```
 """
 function isdisjoint(l, r)
     function _isdisjoint(l, r)
