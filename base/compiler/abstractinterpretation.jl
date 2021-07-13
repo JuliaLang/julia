@@ -110,6 +110,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     any_const_result = false
     const_results = Union{InferenceResult,Nothing}[]
     multiple_matches = napplicable > 1
+    refine_targets = nothing # keeps refinement information on slot types obtained from call signature
+    if fargs !== nothing
+        refine_targets = Union{Nothing,Tuple{SlotNumber,Any}}[]
+        for x in fargs
+            push!(refine_targets, isa(x, SlotNumber) ? (x, Bottom) : nothing)
+        end
+    end
 
     if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
         val = pure_eval_call(f, argtypes)
@@ -199,6 +206,15 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 conditionals[2][i] = tmerge(conditionals[2][i], elsetype)
             end
         end
+        if refine_targets !== nothing
+            for i in 1:length(refine_targets)
+                target = refine_targets[i]
+                if target !== nothing
+                    slot, t = target
+                    refine_targets[i] = (slot, tmerge(fieldtype(sig, i), t))
+                end
+            end
+        end
         if bail_out_call(interp, rettype, sv)
             break
         end
@@ -209,6 +225,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     # constant propagation happened since other consumers may be interested in this
     if any_const_result && seen == napplicable
         info = ConstCallInfo(info, const_results)
+    end
+
+    # refinement information from call signatures is valid only when obtained from all the
+    # matching signatures and we should throw away it if we bailed out early
+    if seen ≠ napplicable
+        refine_targets = nothing
     end
 
     if rettype isa LimitedAccuracy
@@ -265,6 +287,18 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
     @assert !(rettype isa InterConditional) "invalid lattice element returned from inter-procedural context"
 
+    # if refinement information on slot types is available, apply it now
+    anyrefined = false
+    if rettype !== Bottom && refine_targets !== nothing
+        for target in refine_targets
+            if target !== nothing
+                slot, t = target
+                if t !== Bottom
+                    anyrefined |= add_state_update!(slot, t, sv)
+                end
+            end
+        end
+    end
     if call_result_unused(sv) && !(rettype === Bottom)
         add_remark!(interp, sv, "Call result type was widened because the return value is unused")
         # We're mainly only here because the optimizer might want this code,
@@ -275,7 +309,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # and avoid keeping track of a more complex result type.
         rettype = Any
     end
-    add_call_backedges!(interp, rettype, edges, fullmatch, mts, atype, sv)
+    add_call_backedges!(interp, anyrefined, rettype, edges, fullmatch, mts, atype, sv)
     if !isempty(sv.pclimitations) # remove self, if present
         delete!(sv.pclimitations, sv)
         for caller in sv.callers_in_cycle
@@ -287,13 +321,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
 end
 
 function add_call_backedges!(interp::AbstractInterpreter,
-                             @nospecialize(rettype),
+                             anyrefined::Bool, @nospecialize(rettype),
                              edges::Vector{MethodInstance},
                              fullmatch::Vector{Bool}, mts::Vector{Core.MethodTable}, @nospecialize(atype),
                              sv::InferenceState)
-    if rettype === Any
-        # for `NativeInterpreter`, we don't add backedges when a new method couldn't refine
-        # (widen) this type
+    if !anyrefined && rettype === Any
+        # for `NativeInterpreter`, we don't add backedges when we've not used refinement
+        # information from call signature and a new method couldn't refine (widen) this type
         return
     end
     for edge in edges
@@ -1029,6 +1063,11 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, fargs::U
         if 1 <= idx <= length(cti)
             rt = unwrapva(cti[idx])
         end
+    elseif f === typeassert
+        # perform very limited back-propagation of invariants after this type asertion
+        if rt !== Bottom && isa(fargs, Vector{Any}) && (x2 = fargs[2]; isa(x2, SlotNumber))
+            add_state_update!(x2, rt, sv)
+        end
     elseif (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
@@ -1408,7 +1447,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
     elseif isa(e, SlotNumber) || isa(e, Argument)
-        return (vtypes[slot_id(e)]::VarState).typ
+        return get_varstate(vtypes, slot_id(e)).typ
     elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name)
     end
@@ -1717,6 +1756,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             stmt = frame.src.code[pc]
             changes = states[pc]::VarTable
             t = nothing
+            empty!(frame.state_updates)
 
             hd = isa(stmt, Expr) ? stmt.head : nothing
 
@@ -1731,11 +1771,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 if condt === Bottom
                     empty!(frame.pclimitations)
                     break
-                end
-                if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
-                    # if this non-`Conditional` object is a slot, we form and propagate
-                    # the conditional constraint on it
-                    condt = Conditional(condx, Const(true), Const(false))
                 end
                 condval = maybe_extract_const_bool(condt)
                 l = stmt.dest::Int
@@ -1757,6 +1792,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if isa(condt, Conditional)
                         changes_else = conditional_changes(changes_else, condt.elsetype, condt.var)
                         changes      = conditional_changes(changes,      condt.vtype,    condt.var)
+                    end
+                    if isa(condx, SlotNumber)
+                        tfalse = isa(condt, Conditional) ? Conditional(condt.var, Bottom, condt.elsetype) : Const(false)
+                        ttrue  = isa(condt, Conditional) ? Conditional(condt.var, condt.vtype, Bottom)    : Const(true)
+                        changes_else = add_state_change!(changes_else, condx, tfalse, true)
+                        changes      = add_state_change!(changes,      condx, ttrue,  true)
                     end
                     newstate_else = stupdate!(states[l], changes_else)
                     if newstate_else !== nothing
@@ -1837,12 +1878,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     frame.src.ssavaluetypes[pc] = t
                     lhs = stmt.args[1]
                     if isa(lhs, SlotNumber)
-                        changes = StateUpdate(lhs, VarState(t, false), changes, false)
+                        changes = StateUpdate([(lhs, VarState(t, false))], changes, false)
                     end
                 elseif hd === :method
                     fname = stmt.args[1]
                     if isa(fname, SlotNumber)
-                        changes = StateUpdate(fname, VarState(Any, false), changes, false)
+                        changes = StateUpdate([(fname, VarState(Any, false))], changes, false)
                     end
                 elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect
                     # these do not generate code
@@ -1880,6 +1921,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
             pc´ > n && break # can't proceed with the fast-path fall-through
             frame.handler_at[pc´] = frame.cur_hand
+            changes = collect_state_changes!(changes, frame)
             newstate = stupdate!(states[pc´], changes)
             if isa(stmt, GotoNode) && frame.pc´´ < pc´
                 # if we are processing a goto node anyways,
@@ -1905,21 +1947,61 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     nothing
 end
 
+function add_state_update!(slot::SlotNumber, @nospecialize(new), frame::InferenceState)
+    state = frame.stmt_types[frame.currpc]::VarTable
+    old = get_varstate(state, slot).typ
+    if !(old ⊑ new) # new ⋤ old
+        push!(frame.state_updates, (slot, new))
+        return true
+    end
+    return false
+end
+
+function collect_state_changes!(changes::StateUpdate, frame::InferenceState, conditional::Bool = changes.conditional)
+    slots = BitSet(slot_id(var) for (var, _) in changes.updates)
+    while !isempty(frame.state_updates)
+        var, typ = pop!(frame.state_updates)
+        slot_id(var) in slots && continue # effects of the statement (like assignment) should have the precedence
+        changes = add_state_change!(changes, var, typ, conditional)
+    end
+    return changes
+end
+
+function collect_state_changes!(changes::VarTable, frame::InferenceState, conditional::Bool = false)
+    while !isempty(frame.state_updates)
+        var, typ = pop!(frame.state_updates)
+        changes = add_state_change!(changes, var, typ, conditional)
+    end
+    return changes
+end
+
+function add_state_change!(changes::StateUpdate, var::SlotNumber, @nospecialize(typ), conditional::Bool)
+    @assert changes.conditional === conditional
+    vtype = VarState(typ, get_varstate(changes.state, var).undef)
+    push!(changes.updates, (var, vtype))
+    return changes
+end
+
+function add_state_change!(changes::VarTable, var::SlotNumber, @nospecialize(typ), conditional::Bool)
+    vtype = VarState(typ, get_varstate(changes, var).undef)
+    return StateUpdate([(var, vtype)], changes, conditional)
+end
+
 function conditional_changes(changes::VarTable, @nospecialize(typ), var::SlotNumber)
-    oldtyp = (changes[slot_id(var)]::VarState).typ
+    oldtyp = get_varstate(changes, var).typ
     # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
     # since we probably formed these types with `typesubstract`, the comparison is likely simple
     if ignorelimited(typ) ⊑ ignorelimited(oldtyp)
         # typ is better unlimited, but we may still need to compute the tmeet with the limit "causes" since we ignored those in the comparison
         oldtyp isa LimitedAccuracy && (typ = tmerge(typ, LimitedAccuracy(Bottom, oldtyp.causes)))
-        return StateUpdate(var, VarState(typ, false), changes, true)
+        return StateUpdate([(var, VarState(typ, false))], changes, true)
     end
     return changes
 end
 
 function bool_rt_to_conditional(@nospecialize(rt), slottypes::Vector{Any}, state::VarTable, slot_id::Int)
     old = slottypes[slot_id]
-    new = widenconditional((state[slot_id]::VarState).typ) # avoid nested conditional
+    new = widenconditional(get_varstate(state, slot_id).typ)
     if new ⊑ old && !(old ⊑ new)
         if isa(rt, Const)
             val = rt.val

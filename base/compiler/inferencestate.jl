@@ -21,6 +21,7 @@ mutable struct InferenceState
     stmt_types::Vector{Union{Nothing, Vector{Any}}} # ::Vector{Union{Nothing, VarTable}}
     stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
+    state_updates::Vector{Tuple{SlotNumber,Any}} # additional state update obtained at currpc
     # return type
     bestguess #::Type
     # current active instruction pointers
@@ -108,7 +109,7 @@ mutable struct InferenceState
             sp, slottypes, inmodule, 0,
             IdSet{InferenceState}(), IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
-            nargs, s_types, s_edges, stmt_info,
+            nargs, s_types, s_edges, stmt_info, Tuple{SlotNumber,Any}[],
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, throw_blocks,

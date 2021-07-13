@@ -1833,7 +1833,8 @@ end
     end == Any[Tuple{Int,Int}]
 end
 
-@testset "conditional constraint propagation from non-`Conditional` object" begin
+@testset "state update on branching" begin
+    # refine condition type into constant boolean value on branching
     @test Base.return_types((Bool,)) do b
         if b
             return !b ? nothing : 1 # ::Int
@@ -1842,6 +1843,7 @@ end
         end
     end == Any[Int]
 
+    # even when the original type isn't boolean type
     @test Base.return_types((Any,)) do b
         if b
             return b # ::Bool
@@ -1849,6 +1851,16 @@ end
             return nothing
         end
     end == Any[Union{Bool,Nothing}]
+
+    # even when the original type is `Conditional`
+    @test Base.return_types((Any,)) do a
+        b = isa(a, Int)
+        if b
+            return !b ? nothing : a # ::Int
+        else
+            return 0
+        end
+    end == Any[Int]
 end
 
 function f25579(g)
@@ -3268,6 +3280,131 @@ end
         Some(0x2)
     end
 end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
+
+@testset "constraint back-propagation from typeassert" begin
+    @test Base.return_types((Any,)) do a
+        typeassert(a, Int)
+        return a
+    end == Any[Int]
+
+    @test Base.return_types((Any,Bool)) do a, b
+        if b
+            typeassert(a, Int64)
+        else
+            typeassert(a, Int32)
+        end
+        return a
+    end == Any[Union{Int32,Int64}]
+end
+
+@testset "constraint back-propagation from call signature" begin
+    # basic case
+    @test (@eval Module() begin
+        f(::Int) = return
+        Base.return_types((Any,)) do a
+            f(a)
+            return a
+        end
+    end) == Any[Int]
+
+    # union-split case
+    @test (@eval Module() begin
+        f(::Int32) = return
+        f(::Int64) = return
+        Base.return_types((Any,)) do a
+            f(a)
+            return a
+        end
+    end) == Any[Union{Int32,Int64}]
+
+    # multiple state updates
+    @test (@eval Module() begin
+        f(::Int) = return
+        g(::Nothing) = return
+        Base.return_types((Any,Any)) do a, b
+            f(a); g(b)
+            return a, b
+        end
+    end) == Any[Tuple{Int,Nothing}]
+
+    # refinement should happen only when it's worthwhile
+    @test (@eval Module() begin
+        f(::Any) = return
+        Base.return_types((Integer,)) do a
+            f(a)
+            return a
+        end
+    end) == Any[Integer]
+
+    # state update on lhs slot (assignment effect should have the precedence)
+    @test (@eval Module() begin
+        f(::Int) = return
+        Base.return_types((Any,)) do a
+            a = f(a)
+            return a
+        end
+    end) == Any[Nothing]
+
+    # make sure to throw away an intermediate refinement information when we bail out early
+    @test (@eval Module() begin
+        f(::Val{0}) = return 0
+        f(::Val{1}) = return undefvar # ::Any
+        f(::Val{2}) = return 2
+        Base.return_types((Any,)) do a
+            f(a)
+            return a
+        end
+    end) == Any[Any] # shouldn't be `Any[Union{Val{0},Val{2}}]` or something
+
+    # if we see all the matching methods, we don't need to throw away refinement information
+    # even if it's caught by `bail_out_call` check
+    if length(methods(+, (Integer, Integer))) > Core.Compiler.InferenceParams().MAX_METHODS
+        @test (@eval Module() begin
+            addn(a::Integer, b::Integer) = a + b # too many maching methods, and return type should be annotated as `Any` (and thus caught by `bail_out_call`)
+            Base.return_types((Any,Any)) do a, b
+                addn(a, b)
+                return a, b # ::Tuple{Integer,Integer}
+            end
+        end) == Any[Tuple{Integer,Integer}]
+    end
+
+    # make sure to add backedges when we use call signature constraint
+    let
+        m = Module()
+        @eval m outer(a) = (_inner!(a); return a)
+
+        @test (@eval m begin
+            _inner!(::Int) = globalvar # ::Any
+            Base.return_types((Any,)) do a
+                return outer(a) # ::Int
+            end
+        end) == Any[Int]
+
+        # new definition of `_inner!` should invalidate `outer`
+        # (even if the previous return type is annotated as `Any`)
+        @test (@eval m begin
+            _inner!(::Nothing) = globalvar # ::Any
+            Base.return_types((Any,)) do a
+                # since inference will bail out at the first matched `_inner!` and so call signature constraint won't be available
+                return outer(a) # ::Union{Int,Nothing} ideally, but ::Any
+            end
+        end) ≠ Any[Int]
+    end
+
+    # https://github.com/JuliaLang/julia/issues/37866
+    @test (@eval Module() begin
+        function find_first_above_5(v::Vector{Union{Nothing,Float64}})
+            for x in v
+                if x > 5.0
+                    return x # x > 5.0 is MethodError for Nothing so can assume ::Float64
+                end
+            end
+            return 0.0
+        end
+
+        Base.return_types(find_first_above_5, (Vector{Union{Nothing,Float64}},))
+    end) == Any[Float64]
+end
 
 # https://github.com/JuliaLang/julia/issues/40336
 @testset "make sure a call with signatures with recursively nested Types terminates" begin
