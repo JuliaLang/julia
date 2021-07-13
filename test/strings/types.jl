@@ -288,6 +288,20 @@ end
     end
 end
 
+# issue 41365 - breaking change
+@testset "unicode U-sequences" begin
+    @test "\U10ABCDEF" == '\U10ABCD' * "EF"
+    @test "\U010ABCDEF" == '\U10ABC' * "DEF"
+    @test "\U0010ABCDEF" == '\U10ABCD' * "EF"
+    @test "\U01F300A" == '\U01F300' * "A"
+    @test_throws Base.Meta.ParseError("invalid escape sequence") Meta.parse("\"\\U1F300A\"")
+    @test "\U10ABCXYZ" == '\U10ABC' * "XYZ"
+    @test "\U010ABCXYZ" == '\U10ABC' * "XYZ"
+    @test "\U0010ABCXYZ" == '\U10ABC' * "XYZ"
+    @test "\U01F300X" == '\U01F300' * "X"
+    @test "\U1F300X" == '\U01F300' * "X"
+end
+
 @testset "reverseind of empty strings" begin
     for s in ("",
               SubString("", 1, 0),

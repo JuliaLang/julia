@@ -500,9 +500,10 @@ static value_t read_string(fl_context_t *fl_ctx)
             }
             else if ((c=='x' && (ndig=2)) ||
                      (c=='u' && (ndig=4)) ||
-                     (c=='U' && (ndig=8))) {
+                     (c=='U' && (ndig=6))) {
                 c = ios_getc(readF(fl_ctx));
                 while (hex_digit(c) && j<ndig && (c!=IOS_EOF)) {
+                    if ( ndig == 6 && j == 1 && c == '0' && *eseq == '0' ) ndig = 8;
                     eseq[j++] = c;
                     c = ios_getc(readF(fl_ctx));
                 }

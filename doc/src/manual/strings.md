@@ -93,7 +93,7 @@ As of this writing, the valid Unicode code points are `U+0000` through `U+D7FF` 
 interpretable by applications, but all of these values are considered to be valid Unicode characters.
 
 You can input any Unicode character in single quotes using `\u` followed by up to four hexadecimal
-digits or `\U` followed by up to eight hexadecimal digits (the longest valid value only requires
+digits or `\U` or `\U00` followed by up to six hexadecimal digits (the longest valid value only requires
 six):
 
 ```jldoctest
@@ -108,6 +108,12 @@ julia> '\u2200'
 
 julia> '\U10ffff'
 '\U10ffff': Unicode U+10FFFF (category Cn: Other, not assigned)
+
+julia> '\U0010FFFF'
+'\U10ffff': Unicode U+10FFFF (category Cn: Other, not assigned)
+
+julia> '\U010FFFF'
+ERROR: syntax: character literal contains multiple characters
 ```
 
 Julia uses your system's locale and language settings to determine which characters can be printed
@@ -269,6 +275,9 @@ as well as all the standard C escape sequences. These can likewise be used to wr
 julia> s = "\u2200 x \u2203 y"
 "∀ x ∃ y"
 ```
+
+If the `\u` or `\U` escape sequences are shorter than the maximum size, a certain ambiguity
+is possible if a hexadecimal digit follows immediately.
 
 Whether these Unicode characters are displayed as escapes or shown as special characters depends
 on your terminal's locale settings and its support for Unicode. String literals are encoded using
