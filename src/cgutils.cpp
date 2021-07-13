@@ -1549,10 +1549,27 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         bool needlock, bool issetfield, bool isreplacefield, bool maybe_null_if_boxed)
 {
     assert(!needlock || parent != nullptr);
-    jl_cgval_t oldval = rhs;
     Type *elty = isboxed ? T_prjlvalue : julia_type_to_llvm(ctx, jltype);
-    if (type_is_ghost(elty))
-        return oldval;
+    if (type_is_ghost(elty)) {
+        if (type_is_ghost(elty)) {
+            if (isStrongerThanMonotonic(Order))
+                ctx.builder.CreateFence(Order);
+        }
+        if (issetfield) {
+            return rhs;
+        }
+        else if (isreplacefield) {
+            Value *Success = emit_f_is(ctx, cmp, ghostValue(jltype));
+            Success = ctx.builder.CreateZExt(Success, T_int8);
+            jl_cgval_t argv[2] = {ghostValue(jltype), mark_julia_type(ctx, Success, false, jl_bool_type)};
+            // TODO: do better here
+            Value *instr = emit_jlcall(ctx, jltuple_func, V_rnull, argv, 2, JLCALL_F_CC);
+            return mark_julia_type(ctx, instr, true, jl_any_type);
+        }
+        else {
+            return ghostValue(jltype);
+        }
+    }
     Value *intcast = nullptr;
     if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
         const DataLayout &DL = jl_data_layout;
@@ -1590,6 +1607,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     BasicBlock *DoneBB = issetfield || (!isreplacefield && !isboxed) ? nullptr : BasicBlock::Create(jl_LLVMContext, "done_xchg", ctx.f);
     if (needlock)
         emit_lockstate_value(ctx, parent, true);
+    jl_cgval_t oldval = rhs;
     if (issetfield || Order == AtomicOrdering::NotAtomic) {
         if (!issetfield) {
             instr = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment));
