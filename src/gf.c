@@ -1597,6 +1597,8 @@ static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **is
     *isect = jl_type_intersection_env_s(t1, t2, NULL, &is_subty);
     if (*isect == jl_bottom_type)
         return 0;
+    // TODO: This extra call to intersection sometimes hits bad cases, e.g. issue #40048.
+    /*
     if (is_subty)
         return 1;
     // TODO: sometimes type intersection returns types with free variables
@@ -1613,6 +1615,7 @@ static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **is
     if (jl_types_egal(*isect2, *isect)) {
         *isect2 = NULL;
     }
+    */
     return 1;
 }
 
