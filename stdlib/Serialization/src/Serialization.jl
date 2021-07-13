@@ -749,14 +749,22 @@ end
     serialize(stream::IO, value)
 
 Write an arbitrary value to a stream in an opaque format, such that it can be read back by
-[`deserialize`](@ref). The read-back value will be as identical as possible to the original.
-In general, this process will not work if the reading and writing are done by different
-versions of Julia, or an instance of Julia with a different system image. `Ptr` values are
-serialized as all-zero bit patterns (`NULL`).
+[`deserialize`](@ref). The read-back value will be as identical as possible to the original,
+but note that `Ptr` values are serialized as all-zero bit patterns (`NULL`).
 
 An 8-byte identifying header is written to the stream first. To avoid writing the header,
 construct a `Serializer` and use it as the first argument to `serialize` instead.
 See also [`Serialization.writeheader`](@ref).
+
+The data format can change in minor (1.x) Julia releases, but files written by prior 1.x
+versions will remain readable. The main exception to this is when the definition of a
+type in an external package changes. If that occurs, it may be necessary to specify
+an explicit compatible version of the affected package in your environment.
+Another compatibility issue is caused by anonymous functions: because their names are
+automatically generated, code changes can put existing files out of sync.
+Serializing anonymous functions should be avoided in files intended for long-term storage.
+In some cases, the word size (32- or 64-bit) of the reading and writing machines must also
+match.
 """
 function serialize(s::IO, x)
     ss = Serializer(s)
@@ -781,8 +789,8 @@ serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w
 
 Read a value written by [`serialize`](@ref). `deserialize` assumes the binary data read from
 `stream` is correct and has been serialized by a compatible implementation of [`serialize`](@ref).
-It has been designed with simplicity and performance as a goal and does not validate
-the data read. Malformed data can result in process termination. The caller has to ensure
+`deserialize` is designed for simplicity and performance, and so does not validate
+the data read. Malformed data can result in process termination. The caller must ensure
 the integrity and correctness of data read from `stream`.
 """
 deserialize(s::IO) = deserialize(Serializer(s))
