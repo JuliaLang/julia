@@ -4,6 +4,8 @@ Julia v1.8 Release Notes
 
 New language features
 ---------------------
+* An underscore `_` as a function argument, e.g. `f(_, y)`, is now shorthand
+  for the "curried" anonymous function `x -> f(x, y)` ([#24990]).
 
 * `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
 * `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
