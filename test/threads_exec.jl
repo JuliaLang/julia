@@ -850,7 +850,7 @@ fib34666(x) =
         wait(child)
     end
     wait(parent)
-    @test parent.sticky == true
+    @test parent.sticky == false
 end
 
 function jitter_channel(f, k, delay, ntasks, schedule)
@@ -912,3 +912,37 @@ end
         @test reproducible_rand(r, 10) == val
     end
 end
+
+# [ADD TESTS ABOVE THIS COMMENT]
+#
+# The following tests must be done at the end, since they need to monkey-patch runtime.
+const MAX_STICKY_COUNT = 3
+@assert MAX_STICKY_COUNT <= typemax(fieldtype(Task, :sticky_count))
+Base.is_sticky_count_saturated(t::Task) = t.sticky_count == MAX_STICKY_COUNT
+
+@testset "Saturated sticky_count" begin
+    @testset for nchild in MAX_STICKY_COUNT-1:MAX_STICKY_COUNT+1
+        local is_sticky_pre, is_sticky_post, sticky_count_pre, sticky_count_post
+        @sync Threads.@spawn begin
+            is_sticky_pre = current_task().sticky
+            sticky_count_pre = current_task().sticky_count
+            @sync for _ in 1:nchild
+                @async nothing
+            end
+            is_sticky_post = current_task().sticky
+            sticky_count_post = current_task().sticky_count
+        end
+        @test !is_sticky_pre
+        @test sticky_count_pre == 0
+        if nchild < MAX_STICKY_COUNT
+            @test !is_sticky_post
+            @test sticky_count_post == 0
+        else
+            @test is_sticky_post
+            @test sticky_count_post == MAX_STICKY_COUNT
+        end
+    end
+end
+
+# Please do not add tests at the end of this file.  Pleaes add tests above the above
+# comment [ADD TESTS ABOVE THIS COMMENT].

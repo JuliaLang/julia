@@ -2094,6 +2094,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                          jl_any_type, jl_emptysvec, 32);
     jl_int64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int64"), core,
                                          jl_any_type, jl_emptysvec, 64);
+    jl_uint16_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt16"), core,
+                                          jl_any_type, jl_emptysvec, 16);
     jl_uint32_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt32"), core,
                                           jl_any_type, jl_emptysvec, 32);
     jl_uint64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt64"), core,
@@ -2545,8 +2547,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "rngState1",
                                         "rngState2",
                                         "rngState3",
+                                        "sticky_count",
                                         "_state",
-                                        "sticky",
                                         "_isexception"),
                         jl_svec(14,
                                 jl_any_type,
@@ -2560,8 +2562,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint64_type,
                                 jl_uint64_type,
                                 jl_uint64_type,
+                                jl_uint16_type,
                                 jl_uint8_type,
-                                jl_bool_type,
                                 jl_bool_type),
                         jl_emptysvec,
                         0, 1, 6);

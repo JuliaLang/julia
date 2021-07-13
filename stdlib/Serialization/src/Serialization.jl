@@ -456,6 +456,9 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     nothing
 end
 
+serialize(s::AbstractSerializer, f::Base.StickyCountDecrementer) =
+    invoke(serialize, Tuple{typeof(s),Any}, s, Base.unset_parent(f))
+
 function serialize(s::AbstractSerializer, t::Task)
     serialize_cycle(s, t) && return
     if istaskstarted(t) && !istaskdone(t)

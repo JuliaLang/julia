@@ -1833,8 +1833,8 @@ typedef struct _jl_task_t {
     uint64_t rngState1;
     uint64_t rngState2;
     uint64_t rngState3;
+    uint16_t sticky; // 0 means this Task can be migrated to a new thread
     uint8_t _state;
-    uint8_t sticky; // record whether this Task can be migrated to a new thread
     uint8_t _isexception; // set if `result` is an exception to throw or that we exited with
 
 // hidden state:
