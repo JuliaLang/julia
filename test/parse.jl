@@ -248,6 +248,19 @@ end
 @test tryparse(Float32, "1.23") === 1.23f0
 @test tryparse(Float16, "1.23") === Float16(1.23)
 
+@testset "issue #37162" begin
+    @test tryparse(Float64, "BBB") === nothing
+    @test tryparse(Float64, "BBB", missing) === missing
+
+    @test tryparse(Int, "2 0", 5) === 5
+    @test tryparse(Bool, "falss", true) === true
+    @test tryparse(Float64, "1.2.", 8.) === 8.
+    @test tryparse(Float32, "1.2.", 8.f0) === 8.f0
+    @test tryparse(Float16, "1.2.", Float16(1.2)) === Float16(1.2)
+    @test tryparse(Complex{Int}, "1+2ii", 12im) === 12im
+    @test tryparse(BigInt, "100000000000000000m", 4) === 4
+end
+
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
     for sign in ('-','+'), Im in ("i","j","im"), s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")

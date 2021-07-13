@@ -262,18 +262,18 @@ Signed(x::BigInt) = x
 
 hastypemax(::Type{BigInt}) = false
 
-function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
+function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool, default)
     # don't make a copy in the common case where we are parsing a whole String
     bstr = startpos == firstindex(s) && endpos == lastindex(s) ? String(s) : String(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,firstindex(bstr),lastindex(bstr))
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-        return nothing
+        return default
     end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(bstr))"))
-        return nothing
+        return default
     end
     z = BigInt()
     if Base.containsnul(bstr)
@@ -283,7 +283,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     end
     if err != 0
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
-        return nothing
+        return default
     end
     flipsign!(z, sgn)
 end
