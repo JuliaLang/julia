@@ -639,10 +639,7 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 
 ## integer to string functions ##
 
-function bin(x::Unsigned, pad::Int, neg::Bool)
-    m = 8 * sizeof(x) - leading_zeros(x)
-    n = neg + max(pad, m)
-    a = StringVector(n)
+@inline function bin_impl_(a, x::Unsigned, n::Int, neg::Bool)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
     #     @inbounds a[n - i] = 0x30 + (((x >> i) % UInt8)::UInt8 & 0x1)
     # end
@@ -663,13 +660,32 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; @inbounds a[1]=0x2d; end
-    String(a)
+
+    nothing
 end
 
-function oct(x::Unsigned, pad::Int, neg::Bool)
-    m = div(8 * sizeof(x) - leading_zeros(x) + 2, 3)
+function bin(x::Unsigned, pad::Int, neg::Bool)
+    m = 8 * sizeof(x) - Base.leading_zeros(x)
     n = neg + max(pad, m)
-    a = StringVector(n)
+
+
+    with_scratch(n) do a
+        bin_impl_(a, x, n, neg)
+        String(a)
+    end
+end
+
+function bin_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
+    m = 8 * sizeof(x) - Base.leading_zeros(x)
+    n = neg + max(pad, m)
+
+    with_scratch(n) do scratch
+        bin_impl_(scratch, x, n, neg)
+        write(io, scratch)
+    end
+end
+
+@inline function oct_impl_(a, x::Unsigned, n::Int, neg::Bool)
     i = n
     while i > neg
         @inbounds a[i] = 0x30 + ((x % UInt8)::UInt8 & 0x7)
@@ -677,15 +693,34 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; @inbounds a[1]=0x2d; end
-    String(a)
+
+    nothing
+end
+
+function oct(x::Unsigned, pad::Int, neg::Bool)
+    m = div(8 * sizeof(x) - Base.leading_zeros(x) + 2, 3)
+    n = neg + max(pad, m)
+
+    with_scratch(n) do a
+        oct_impl_(a, x, n, neg)
+        String(a)
+    end
+end
+
+function oct_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
+    m = div(8 * sizeof(x) - leading_zeros(x) + 2, 3)
+    n = neg + max(pad, m)
+
+    with_scratch(n) do scratch
+        oct_impl_(scratch, x, n, neg)
+        write(io, scratch)
+    end
 end
 
 # 2-digit decimal characters ("00":"99")
 const _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
 
-function dec(x::Unsigned, pad::Int, neg::Bool)
-    n = neg + ndigits(x, pad=pad)
-    a = StringVector(n)
+@inline function dec_impl_(a, x::Unsigned, n::Int, neg::Bool)
     i = n
     @inbounds while i >= 2
         d, r = divrem(x, 0x64)
@@ -699,13 +734,29 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
         @inbounds a[i] = 0x30 + (rem(x, 0xa) % UInt8)::UInt8
     end
     if neg; @inbounds a[1]=0x2d; end
-    String(a)
+
+    nothing
 end
 
-function hex(x::Unsigned, pad::Int, neg::Bool)
-    m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
-    n = neg + max(pad, m)
-    a = StringVector(n)
+function dec(x::Unsigned, pad::Int, neg::Bool)
+    n = neg + ndigits(x, pad=pad)
+
+    with_scratch(n) do scratch
+        dec_impl_(scratch, x, n, neg)
+        String(scratch)
+    end
+end
+
+function dec_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
+    n = neg + ndigits(x, pad=pad)
+
+    with_scratch(n) do scratch
+        dec_impl_(scratch, x, n, neg)
+        write(io, scratch)
+    end
+end
+
+@inline function hex_impl_(a, x::Unsigned, n::Int, neg::Bool)
     i = n
     while i >= 2
         b = (x % UInt8)::UInt8
@@ -720,19 +771,35 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         @inbounds a[i] = d + ifelse(d > 0x9, 0x57, 0x30)
     end
     if neg; @inbounds a[1]=0x2d; end
-    String(a)
+
+    nothing
+end
+
+function hex(x::Unsigned, pad::Int, neg::Bool)
+    m = 2 * sizeof(x) - (Base.leading_zeros(x) >> 2)
+    n = neg + max(pad, m)
+
+    with_scratch(n) do a
+        hex_impl_(a, x, n, neg)
+        String(a)
+    end
+end
+
+function hex_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
+    m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
+    n = neg + max(pad, m)
+
+    with_scratch(n) do scratch
+        hex_impl_(scratch, x, n, neg)
+        write(io, scratch)
+    end
 end
 
 const base36digits = UInt8['0':'9';'a':'z']
 const base62digits = UInt8['0':'9';'A':'Z';'a':'z']
 
-function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
-    (x >= 0) | (base < 0) || throw(DomainError(x, "For negative `x`, `base` must be negative."))
-    2 <= abs(base) <= 62 || throw(DomainError(base, "base must satisfy 2 ≤ abs(base) ≤ 62"))
-    b = (base % Int)::Int
+@inline function _base_impl_(a, b::Integer, x::Integer, n::Int, neg::Bool)
     digits = abs(b) <= 36 ? base36digits : base62digits
-    n = neg + ndigits(x, base=b, pad=pad)
-    a = StringVector(n)
     i = n
     @inbounds while i > neg
         if b > 0
@@ -745,7 +812,32 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; @inbounds a[1]=0x2d; end
-    String(a)
+
+    nothing
+end
+
+function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
+    (x >= 0) | (base < 0) || throw(DomainError(x, "For negative `x`, `base` must be negative."))
+    2 <= abs(base) <= 62 || throw(DomainError(base, "base must satisfy 2 ≤ abs(base) ≤ 62"))
+    b = (base % Int)::Int
+    n = neg + ndigits(x, base=b, pad=pad)
+
+    with_scratch(n) do a
+        _base_impl_(a, b, x, n, neg)
+        String(a)
+    end
+end
+
+function _base_io(io::IO, base::Integer, x::Integer, pad::Int, neg::Bool)
+    (x >= 0) | (base < 0) || throw(DomainError(x, "For negative `x`, `base` must be negative."))
+    2 <= abs(base) <= 62 || throw(DomainError(base, "base must satisfy 2 ≤ abs(base) ≤ 62"))
+    b = (base % Int)::Int
+    n = neg + ndigits(x, base=b, pad=pad)
+
+    with_scratch(n) do scratch
+        _base_impl_(scratch, b, x, n, neg)
+        write(io, scratch)
+    end
 end
 
 split_sign(n::Integer) = unsigned(abs(n)), n < 0
@@ -785,6 +877,39 @@ function string(n::Integer; base::Integer = 10, pad::Integer = 1)
     else
         _base(base, base > 0 ? unsigned(abs(n)) : convert(Signed, n), pad, (base>0) & (n<0))
     end
+end
+
+function print_int(io::IO, n::Integer; base::Integer = 10, pad::Integer = 1)
+    pad = (min(max(pad, typemin(Int)), typemax(Int)) % Int)::Int
+    if base == 2
+        (n_positive, neg) = split_sign(n)
+        bin_io(io, n_positive, pad, neg)
+    elseif base == 8
+        (n_positive, neg) = split_sign(n)
+        oct_io(io, n_positive, pad, neg)
+    elseif base == 10
+        (n_positive, neg) = split_sign(n)
+        dec_io(io, n_positive, pad, neg)
+    elseif base == 16
+        (n_positive, neg) = split_sign(n)
+        hex_io(io, n_positive, pad, neg)
+    else
+        _base_io(io, base, base > 0 ? unsigned(abs(n)) : convert(Signed, n), pad, (base>0) & (n<0))
+    end
+
+    return nothing
+end
+
+function print_int(io::IO, prefix::Tuple, n::Integer; base::Integer = 10, pad::Integer = 1)
+    lock(io)
+    try
+        print(io, prefix...)
+        print_int(io, n; base = base, pad = pad)
+    finally
+        unlock(io)
+    end
+
+    return nothing
 end
 
 string(b::Bool) = b ? "true" : "false"
