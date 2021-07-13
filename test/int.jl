@@ -423,3 +423,58 @@ end
     @test typemax(Int128) == Int128(170141183460469231731687303715884105727)
     @test typemax(UInt128) == UInt128(0xffffffffffffffffffffffffffffffff)
 end
+
+@testset "mod(x, interval)" begin
+    @test mod(2pi, (-pi, pi)) === 0.0
+
+    @test mod(1.0, (0.0, 1.0)) === mod(1.0, 1.0)
+    @test mod(0.0, (0.0, 1.0)) === mod(0.0, 1.0)
+
+    @inferred mod(0.0, (0.0, 1.0))
+    @inferred mod1(0.0, (0.0, 1.0))
+
+    @test_throws ArgumentError mod(0.0, (0.0, 1.0), closed=:nonsense)
+    @test_throws ArgumentError mod1(0.0, (0.0, 1.0), closed=:nonsense)
+    @test_throws ArgumentError mod(0.0, (0.0, -1.0))
+    @test_throws ArgumentError mod1(0.0, (0.0, -1.0))
+    @test_throws ArgumentError mod(0.0, (0.0, NaN))
+
+    for _ in 1:100
+        x = 10*randn()
+        y = 10*rand()
+        I = (0, y)
+        @test mod(x, y) === mod(x, I)
+        @test mod(y, y) === mod(y, I)
+        @test mod(0, y) === mod(0, I)
+
+        @test mod1(x, y) === mod1(x, I)
+        @test mod1(y, y) === mod1(y, I)
+        @test mod1(0, y) === mod1(0, I)
+
+        @test mod1(0, y) === mod(0, I, closed=:right)
+        @test mod1(x, y) === mod(x, I, closed=:right)
+        @test mod1(y, y) === mod(y, I, closed=:right)
+
+        @test mod(0, y) === mod(0, I, closed=:left)
+        @test mod(x, y) === mod(x, I, closed=:left)
+        @test mod(y, y) === mod(y, I, closed=:left)
+    end
+
+    for T in [Float32, Float64, Int32, Int64, UInt8]
+        @test @inferred(mod(T(0), (T(0), T(1)))               ) === mod(T(0), T(1))
+        @test @inferred(mod(T(0), (T(0), T(1)), closed=:left )) === mod(T(0), T(1))
+        @test @inferred(mod(T(0), (T(0), T(1)), closed=:right)) === mod1(T(0), T(1))
+    end
+
+    for _ in 1:100
+        lo, hi = sort!(randn(2))
+        Δ = hi - lo
+        x = lo + rand() * Δ
+        @assert lo < x < hi
+        @test mod(x, (lo, hi)) == x
+        @test mod1(x, (lo, hi)) == x
+        x2 = x + rand(-10000:10000)*Δ
+        @test mod(x2, (lo, hi)) ≈ x
+        @test mod1(x2, (lo, hi)) ≈ x
+    end
+end
