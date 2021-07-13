@@ -136,9 +136,26 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
         end
         return stmt
     end
+    if isa(stmt, Union{DetachNode, ReattachNode, SyncNode})
+        x = fixemup!(cond, rename, ir, ci, idx, stmt.syncregion)
+        if x === undef_token
+            # `syncregion` can become undef at this point if the sub-CFG
+            # containing detaches etc. is already determined to be unreachable.
+            # Instead of removing the statement, we use goto nodes for
+            # preserving the CFG (i.e., serial projection).
+            isa(stmt, DetachNode) && return GotoIfNot(true, stmt.label)
+            isa(stmt, ReattachNode) && return GotoNode(stmt.label)
+            isa(stmt, SyncNode) && return nothing  # fallthrough
+        else
+            isa(stmt, DetachNode) && return DetachNode(x, stmt.label)
+            isa(stmt, ReattachNode) && return ReattachNode(x, stmt.label)
+            isa(stmt, SyncNode) && return SyncNode(x)
+        end
+        @assert false # unreachable
+    end
     if isexpr(stmt, :isdefined)
         val = stmt.args[1]
-        if isa(val, Union{SlotNumber, TypedSlot})
+        if isa(val, Union{SlotNumber, TypedSlot}) && cond(val)
             slot = slot_id(val)
             if (ci.slotflags[slot] & SLOT_USEDUNDEF) == 0
                 return true
@@ -179,8 +196,9 @@ function fixup_uses!(ir::IRCode, ci::CodeInfo, code::Vector{Any}, uses::Vector{I
     end
 end
 
-function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Any})
-    return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
+function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Any}, task_outputs::BitSet)
+    not_output(val) = !(val isa Union{SlotNumber, TypedSlot} && slot_id(val) in task_outputs)
+    return fixemup!(not_output, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
 function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}, flags::Vector{UInt8})
@@ -199,7 +217,8 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     # If the last instruction is not a terminator, add one. This can
     # happen for implicit return on dead branches.
     term = code[end]
-    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
+    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode) &&
+       !isa(term, DetachNode) && !isa(term, ReattachNode) && !isa(term, SyncNode)
         push!(code, ReturnNode())
         push!(ci.ssavaluetypes, Union{})
         push!(ci.codelocs, 0)
@@ -227,10 +246,11 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::
     end
     isa(x, GlobalRef) && return abstract_eval_global(x.mod, x.name)
     isa(x, SSAValue) && return ci.ssavaluetypes[x.id]
+    isa(x, Union{SlotNumber,TypedSlot}) && return slottypes[slot_id(x)]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return DelayedTyp(x)
     isa(x, QuoteNode) && return Const(x.value)
-    isa(x, Union{Symbol, PiNode, PhiNode, SlotNumber, TypedSlot}) && error("unexpected val type")
+    isa(x, Union{Symbol, PiNode, PhiNode}) && error("unexpected val type")
     return Const(x)
 end
 
@@ -389,12 +409,13 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         cs = domtree.nodes[node].children
         terminator = ir.stmts[last(ir.cfg.blocks[node].stmts)][:inst]
         iscondbr = isa(terminator, GotoIfNot)
+        isspawnbr = isa(terminator, ReattachNode)
         let old_node = node + 1
             if length(cs) >= 1
                 # Adding the nodes in reverse sorted order attempts to retain
                 # the original source order of the nodes as much as possible.
                 # This is not required for correctness, but is easier on the humans
-                if old_node in cs
+                if !isspawnbr && old_node in cs
                     # Schedule the fall through node first,
                     # so we can retain the fall through
                     append!(stack, reverse(sort(filter(x -> (x != old_node), cs))))
@@ -410,7 +431,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                     node = pop!(stack)
                 end
             end
-            if node != old_node && !isa(terminator, Union{GotoNode, ReturnNode})
+            if node != old_node && !isa(terminator, Union{GotoNode, ReturnNode, DetachNode, ReattachNode, SyncNode})
                 if isa(terminator, GotoIfNot)
                     # Need to break the critical edge
                     ncritbreaks += 1
@@ -480,6 +501,11 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
             end
             result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
+        elseif isa(terminator, DetachNode)
+            result[inst_range[end]][:inst] = DetachNode(terminator.syncregion,
+                                                        bb_rename[terminator.label])
+        elseif isa(terminator, ReattachNode)
+            result[inst_range[end]][:inst] = ReattachNode(terminator.syncregion, bb_rename[terminator.label])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, Expr)
                 if terminator.head == :enter
@@ -598,6 +624,12 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         end
     end
 
+    # [Tapir] Do not transform task output slots yet:
+    task_outputs = task_output_slots(ci, code) # set of slot IDs to keep in IRCode
+    for id in task_outputs
+        empty!(defuse[id].uses)
+    end
+
     exc_handlers = IdDict{Int, Tuple{Int, Int}}()
     # Record the correct exception handler for all cricitcal sections
     for (enter_block, exc) in catch_entry_blocks
@@ -696,7 +728,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 from_bb = edge == 0 ? 0 : block_for_inst(cfg, Int(edge))
                 from_bb == pred || continue
                 isassigned(stmt.values, edgeidx) || break
-                stmt.values[edgeidx] = rename_uses!(ir, ci, Int(edge), stmt.values[edgeidx], incoming_vals)
+                stmt.values[edgeidx] = rename_uses!(ir, ci, Int(edge), stmt.values[edgeidx], incoming_vals, task_outputs)
                 break
             end
         end
@@ -758,7 +790,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                 incoming_vals[slot_id(stmt.slot)] = undef_token
                 code[idx] = nothing
             else
-                stmt = rename_uses!(ir, ci, idx, stmt, incoming_vals)
+                stmt = rename_uses!(ir, ci, idx, stmt, incoming_vals, task_outputs)
                 if stmt === nothing && isa(code[idx], Union{ReturnNode, GotoIfNot}) && idx == last(cfg.blocks[item].stmts)
                     # preserve the CFG
                     stmt = ReturnNode()
@@ -771,7 +803,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
                     typ = typ_for_val(val, ci, ir.sptypes, idx, slottypes)
                     # Having undef_token appear on the RHS is possible if we're on a dead branch.
                     # Do something reasonable here, by marking the LHS as undef as well.
-                    if val !== undef_token
+                    if id in task_outputs
+                        # Keep task outputs as slots
+                        ci.ssavaluetypes[idx] = typ  # see: make_ssa!
+                    elseif val !== undef_token
                         incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ)::Int)
                     else
                         code[idx] = nothing
@@ -798,10 +833,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             push!(worklist, (succ, item, copy(incoming_vals)))
         end
     end
+    code1 = copy(code)
     # Delete any instruction in unreachable blocks (except for terminators)
     for bb in setdiff(BitSet(1:length(cfg.blocks)), visited)
         for idx in cfg.blocks[bb].stmts
-            if isa(code[idx], Union{GotoNode, GotoIfNot, ReturnNode})
+            if isterminator(code[idx])
                 code[idx] = ReturnNode()
             else
                 code[idx] = nothing
@@ -819,6 +855,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         # Convert GotoNode/GotoIfNot/PhiNode to BB addressing
         if isa(stmt, GotoNode)
             new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
+        elseif isa(stmt, DetachNode)
+            new_code[idx] = DetachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
+        elseif isa(stmt, ReattachNode)
+            new_code[idx] = ReattachNode(stmt.syncregion, block_for_inst(cfg, stmt.label))
         elseif isa(stmt, GotoIfNot)
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1
@@ -833,6 +873,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)
             new_code[idx] = stmt
+            if isexpr(stmt, :(=)) && stmt.args[1] isa SlotNumber && slot_id(stmt.args[1]) in task_outputs
+                result_types[idx] = ci.ssavaluetypes[idx]
+            end
         else
             ssavalmap[idx] = SSAValue(idx)
             result_types[idx] = ci.ssavaluetypes[idx]

@@ -752,7 +752,6 @@ function getfield_elim_pass!(ir::IRCode)
         compact[idx] = val === nothing ? nothing : val.x
     end
 
-
     non_dce_finish!(compact)
     # Copy the use count, `simple_dce!` may modify it and for our predicate
     # below we need it consistent with the state of the IR here (after tracking
@@ -766,6 +765,9 @@ function getfield_elim_pass!(ir::IRCode)
     # `IncrementalCompact` because removing dead blocks can invalidate the
     # domtree.
     @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
+
+    # Returns false iff promoting the fields to
+    is_parallel_promotable = parallel_getfield_elim_checker(ir)
 
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
@@ -834,6 +836,7 @@ function getfield_elim_pass!(ir::IRCode)
                 phiblocks = Int[]
                 if !isempty(ldu.live_in_bbs)
                     phiblocks = idf(ir.cfg, ldu, domtree)
+                    is_parallel_promotable(phiblocks) || continue
                 end
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks
@@ -1205,12 +1208,12 @@ function cfg_simplify!(ir::IRCode)
         # Compute (renamed) successors and predecessors given (renamed) block
         function compute_succs(i)
             orig_bb = follow_merged_succ(result_bbs[i])
-            return map(i -> bb_rename_succ[i], bbs[orig_bb].succs)
+            return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
         end
         function compute_preds(i)
             orig_bb = result_bbs[i]
             preds = bbs[orig_bb].preds
-            return map(pred -> bb_rename_pred[pred], preds)
+            return Int[bb_rename_pred[pred] for pred in preds]
         end
 
         BasicBlock[

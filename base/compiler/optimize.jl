@@ -70,6 +70,8 @@ mutable struct OptimizationState
         nssavalues = src.ssavaluetypes
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
+        else
+            nssavalues = length(src.ssavaluetypes)
         end
         nslots = length(src.slotflags)
         slottypes = src.slottypes
@@ -183,7 +185,8 @@ end
 # if there is no usage within the function), but don't affect the purity
 # of the function as a whole.
 function stmt_affects_purity(@nospecialize(stmt), ir)
-    if isa(stmt, GotoNode) || isa(stmt, ReturnNode)
+    if isa(stmt, GotoNode) || isa(stmt, ReturnNode) ||
+        isa(stmt, DetachNode) || isa(stmt, ReattachNode) || isa(stmt, SyncNode)
         return false
     end
     if isa(stmt, GotoIfNot)
@@ -302,6 +305,20 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     ir = slot2reg(ir, ci, nargs, sv)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
+    tapir = has_tapir(ir)
+    if tapir
+        # This must be run just after `slot2ref`:
+        @timeit "Early tapir pass" ir, racy = early_tapir_pass!(ir)
+        if racy
+            # type_lift_pass! is required as a fixup of slot2reg
+            @timeit "post-racy: type lift" ir = type_lift_pass!(ir)
+            @timeit "post-racy: compact" ir = compact!(ir)
+            if JLOptions().debug_level == 2
+                @timeit "post-racy: verify" (verify_ir(ir); verify_linetable(ir.linetable))
+            end
+            return ir
+        end
+    end
     @timeit "compact 1" ir = compact!(ir)
     @timeit "Inlining" ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     #@timeit "verify 2" verify_ir(ir)
@@ -314,6 +331,7 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     #@Base.show ("after_adce", ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
     @timeit "compact 3" ir = compact!(ir)
+    tapir && @timeit "Late tapir pass" ir = late_tapir_pass!(ir)
     #@Base.show ir
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
@@ -331,6 +349,13 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    function requires_reattach(idx)
+        for i in idx+1:length(code)
+            code[i] isa ReattachNode && return true
+            isterminator(code[i]) && break
+        end
+        return false
+    end
     while idx <= length(code)
         codeloc = ci.codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
@@ -347,7 +372,11 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
             prevloc = codeloc
         end
         if code[idx] isa Expr && ssavaluetypes[idx] === Union{}
-            if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
+            if !(
+                idx < length(code) &&
+                isa(code[idx+1], ReturnNode) &&
+                !isdefined((code[idx+1]::ReturnNode), :val)
+            ) && !requires_reattach(idx)
                 # insert unreachable in the same basic block after the current instruction (splitting it)
                 insert!(code, idx + 1, ReturnNode())
                 insert!(ci.codelocs, idx + 1, ci.codelocs[idx])
@@ -628,6 +657,39 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             if isdefined(el, :val) && isa(el.val, SSAValue)
                 body[i] = ReturnNode(SSAValue(el.val.id + ssachangemap[el.val.id]))
             end
+        elseif isa(el, DetachNode)
+            if labelchangemap[el.label] == typemin(Int)
+                body[i] = nothing
+            else
+                label = el.label + labelchangemap[el.label]
+                syncregion = el.syncregion
+                if isa(syncregion, SSAValue)
+                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+                    body[i] = DetachNode(syncregion, label)
+                else
+                    body[i] = DetachNode(syncregion, label)
+                end
+            end
+        elseif isa(el, ReattachNode)
+            if labelchangemap[el.label] == typemin(Int)
+                body[i] = nothing
+                # TODO: Make this always valid by using fallthrough in ReattachNode
+            else
+                label = el.label + labelchangemap[el.label]
+                syncregion = el.syncregion
+                if isa(syncregion, SSAValue)
+                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+                    body[i] = ReattachNode(syncregion, label)
+                else
+                    body[i] = ReattachNode(syncregion, label)
+                end
+            end
+        elseif isa(el, SyncNode)
+            syncregion = el.syncregion
+            if isa(syncregion, SSAValue)
+                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+            end
+            body[i] = SyncNode(syncregion)
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])
         elseif isa(el, PhiNode)

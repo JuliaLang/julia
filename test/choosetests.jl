@@ -6,6 +6,7 @@ const STDLIB_DIR = Sys.STDLIB
 const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
 
 const TESTNAMES = [
+        "tapir",  # TODO: move to the last
         "subarray", "core", "compiler", "worlds", "atomics",
         "keywordargs", "numbers", "subtype",
         "char", "strings", "triplequote", "unicode", "intrinsics",

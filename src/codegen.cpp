@@ -7560,6 +7560,28 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
 
+// Function `code_info_has_tapir(jl_code_info_t *src)` checks if `src` contains
+// Tapir nodes such as detach. This functions is written in C to avoid recursing
+// into `lower_tapir` while compiling itself.
+static int code_info_has_tapir(jl_code_info_t *src) {
+    for (size_t i = 0; i < jl_array_len(src->code); ++i) {
+        jl_value_t *stmt = jl_array_ptr_ref(src->code, i);
+        if (jl_is_detachnode(stmt)) {
+            return 1;
+        } else if (jl_is_reattachnode(stmt)) {
+            return 1;
+        } else if (jl_is_syncnode(stmt)) {
+            return 1;
+        } else if (jl_is_expr(stmt)) {
+            jl_expr_t *expr = (jl_expr_t*)stmt;
+            if (expr->head == syncregion_sym) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 JL_GCC_IGNORE_START("-Wclobbered")
 jl_compile_result_t jl_emit_code(
         jl_method_instance_t *li,
@@ -7568,6 +7590,43 @@ jl_compile_result_t jl_emit_code(
         jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN);
+    jl_value_t *src_root = NULL;
+    JL_GC_PUSH1(&src_root);
+    // ASK: Is there a better place/way to call `lower_tapir`?
+    if (jl_lower_tapir_func && jl_typeinf_world && code_info_has_tapir(src)) {
+        // Lower task prallel IR (detach etc.) to the calls to the parallel task
+        // runtime. This is done after optimized Julia IR is cached, so that
+        // parallel IR can be optimzied across Julia functions (when inlined).
+        // Since `jl_emit_codeinst` can cache `CodeInfo`, this transformation
+        // cannot happen before it.
+        jl_code_info_t *src0 = src;
+        jl_task_t *ct = jl_current_task;
+        jl_value_t **fargs;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_typeinf_world;
+        JL_GC_PUSHARGS(fargs, 3);
+        fargs[0] = jl_lower_tapir_func;
+        fargs[1] = (jl_value_t *)li;
+        fargs[2] = (jl_value_t *)src;
+        JL_TRY {
+            src = (jl_code_info_t *)jl_apply(fargs, 3);
+            // `emit_function` only roots `src->code.  However, since
+            // `lower_tapir` typically returns a full copy of `src`, and other
+            // members like `src->codelocs` are accessed, we need to root this
+            // `src` while it is used.
+            src_root = (jl_value_t *)src;
+        }
+        JL_CATCH {
+            jl_printf((JL_STREAM *)STDERR_FILENO,
+                      "Internal error: encountered unexpected error in runtime:\n");
+            jl_static_show((JL_STREAM *)STDERR_FILENO, jl_current_exception());
+            jl_printf((JL_STREAM *)STDERR_FILENO, "\n");
+            jlbacktrace(); // written to STDERR_FILENO
+            src = src0;
+        }
+        JL_GC_POP();
+        ct->world_age = last_age;
+    }
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     std::unique_ptr<Module> m;
@@ -7599,6 +7658,7 @@ jl_compile_result_t jl_emit_code(
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
     }
+    JL_GC_POP();
 
     return std::make_tuple(std::move(m), decls);
 }

@@ -360,6 +360,7 @@
     XX(jl_new_datatype) \
     XX(jl_new_foreign_type) \
     XX(jl_new_method_instance_uninit) \
+    XX(jl_make_opaque_closure_method) \
     XX(jl_new_method_table) \
     XX(jl_new_method_uninit) \
     XX(jl_new_module) \
@@ -432,6 +433,7 @@
     XX(jl_set_errno) \
     XX(jl_set_global) \
     XX(jl_set_istopmod) \
+    XX(jl_set_lower_tapir_func) \
     XX(jl_set_module_compile) \
     XX(jl_set_module_infer) \
     XX(jl_set_module_nospecialize) \

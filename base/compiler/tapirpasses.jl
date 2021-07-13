@@ -1,0 +1,1856 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+"""
+Tapir for Julia IR.
+
+This file implements the compiler passes for the parallel instructions in
+Julia IR that are designed based on Tapir (Schardl et al., 2019). By lowering
+parallel code at the end of Julia's optimization phase, the Julia compiler can
+analyze and optimize the code containing the parallel tasks.
+
+# Overview
+
+* `lower_tapir!`: Lowers Tapir constructs to the calls to the parallel task runtime.
+  This pass is called outside the usual `run_passes` to allow IPO across functions
+  containing Tapir constructs.
+
+* `lower_tapir_output!` called from `run_passes` via `early_tapir_pass!`.
+
+# References
+
+* Schardl, Tao B., William S. Moses, and Charles E. Leiserson.
+  "Tapir: Embedding Recursive Fork-Join Parallelism into LLVM's Intermediate
+  Representation." ACM Transactions on Parallel Computing 6, no. 4 (December
+  17, 2019): 19:1–19:33. https://doi.org/10.1145/3365655.
+
+* OpenCilk project: https://cilk.mit.edu/
+  (https://github.com/OpenCilk/opencilk-project)
+"""
+
+"""
+    ChildTask
+
+ChildTask represents *detached sub-CFG* (p.13, Schardl et al., 2019) composed
+of a subset of basic blocks `.blocks` that are represented as the indices of
+corresponding `ir.cfg.blocks`. The related instructions (`.detach` and
+`.reattaches`) are represented as indices to corresponding `ir.stmts`.
+
+Some properties (see p.13 of Schardl et al. (2019) for the full explanation
+of the properties of Tapir itself):
+
+* There is a detach edge from a basic block (outside of the child task)
+  terminated by `.detach` to the entry block of the child task `.blocks[1]`.
+* Every path starting from `.block[1]` reaches a block `.block[i]` that is
+  terminated by some `.reattaches[j]`.
+* The basic blocks of the child tasks returned from `child_tasks(ir)` are`
+  sorted.
+"""
+struct ChildTask
+    """The node that detaches this task."""
+    detach::Int
+    """The reattach nodes that terminates the last blocks of this task."""
+    reattaches::Vector{Int}
+    """A list of basic block indices that defines this task."""
+    blocks::Vector{Int}
+    """A list of child tasks. `nothing` means `[]` (optimization)."""
+    subtasks::Union{Nothing,Vector{ChildTask}}
+end
+ChildTask(detach::Int) = ChildTask(detach, Int[], Int[], nothing)
+
+ChildTask(task::ChildTask, subtasks::Vector{ChildTask}) =
+    ChildTask(task.detach, task.reattaches, task.blocks, subtasks)
+
+"""
+    foreach_task_depth_first(f, tasks::Vector{ChildTask})
+
+Iterate `tasks` recursively in the depth-first order.
+"""
+function foreach_task_depth_first(f, tasks)
+    stack = [collect(ChildTask, tasks)]
+    while true
+        tasks = stack[end]
+        if isempty(tasks)
+            pop!(stack)
+            if isempty(stack)
+                return true
+            else
+                t = pop!(stack[end])
+                f(t) || return false
+            end
+            continue
+        end
+        t = tasks[end]
+        if t.subtasks === nothing
+            pop!(tasks)
+            f(t) || return false
+        else
+            push!(stack, copy(t.subtasks))
+        end
+    end
+end
+
+"""
+    foreach_task(f, tasks)
+
+Iterate `tasks` recursively in an unspecified order.
+"""
+function foreach_task(f, tasks)
+    worklist = collect(ChildTask, tasks)
+    acc = true
+    while !isempty(worklist)
+        local task::ChildTask
+        task = pop!(worklist)
+        c = f(task)
+        acc &= c
+        if c && task.subtasks !== nothing
+            append!(worklist, task.subtasks)
+        end
+    end
+    return acc
+end
+
+"""
+    task_by_detach(tasks::Vector{ChildTask}, detach::Int) -> nothing or task::ChildTask
+"""
+function task_by_detach(tasks, detach::Int)
+    found = RefValue{Union{Nothing,ChildTask}}(nothing)
+    foreach_task(tasks) do task
+        if task.detach == detach
+            found.x = task
+            return false
+        end
+        return true
+    end
+    return found.x
+end
+
+function is_stmt_in_task(task::ChildTask, ir::IRCode, position::Int)
+    for ibb in task.blocks
+        if position in ir.cfg.blocks[ibb].stmts
+            return true
+        end
+    end
+    return false
+end
+
+"""
+    child_tasks(ir::IRCode) -> tasks::Vector{ChildTask}
+
+Discover immediate child tasks.
+"""
+function child_tasks(ir::IRCode)
+    tasks = ChildTask[]
+    isempty(ir.cfg.blocks) && return tasks
+    visited = falses(length(ir.cfg.blocks))
+    foreach_descendant(1, ir.cfg, visited) do ibb, bb
+        term = ir.stmts[bb.stmts[end]][:inst]
+        if term isa DetachNode
+            @assert ibb + 1 in bb.succs
+            @assert term.label in bb.succs
+            @assert length(bb.succs) == 2
+            push!(tasks, detached_sub_cfg!(ibb, ir, visited))
+        end
+        return true
+    end
+    return tasks
+end
+
+"""
+    detached_sub_cfg!(detacher::Int, ir::IRCode, visited) -> task::ChildTask
+
+Find a sub CFG detached by the detach node `ir.stmts[ir.cfg.blocks[detacher].stmts[end]]`.
+It mutates `visited` but not other arguments.
+"""
+function detached_sub_cfg!(detacher::Int, ir::IRCode, visited)
+    detach = ir.cfg.blocks[detacher].stmts[end]
+    @assert ir.stmts.inst[detach] isa DetachNode
+    task = ChildTask(detach)
+    subtasks = nothing
+    foreach_descendant(detacher + 1, ir.cfg, visited) do ibb, bb
+        push!(task.blocks, ibb)
+        term = ir.stmts[bb.stmts[end]][:inst]
+        if term isa DetachNode
+            t = detached_sub_cfg!(ibb, ir, visited)
+            if subtasks === nothing
+                subtasks = ChildTask[]
+            end
+            push!(subtasks::Vector{ChildTask}, t)
+            return true  # continue on reattach edge
+        elseif term isa ReattachNode
+            @assert bb.succs == [term.label] "bb.succs == [term.label]"
+            continuation = ir.cfg.blocks[term.label]
+            for k in continuation.preds
+                i = ir.cfg.blocks[k].stmts[end]
+                if i == detach
+                    push!(task.reattaches, bb.stmts[end])
+                    return false
+                end
+            end
+            error("unbalanced detach-reattach")
+            # TODO: handle missing reattach?
+            # This can happen when reattach nodes are replaced with unreachable.
+            # Currently, handling this case has not been required so far as we
+            # detect such tasks in `always_throws` and serial-project before the
+            # CFG is altered.
+        end
+        return true
+    end
+    if subtasks isa Vector{ChildTask}
+        for t in subtasks
+            append!(task.blocks, t.blocks)
+        end
+        task = ChildTask(task, subtasks)
+    end
+    sort!(task.blocks)
+    @assert task.blocks[1] == detacher + 1  # entry block
+    return task
+end
+
+"""
+    append_uses_and_args!(uses::Vector{<:Integer}, args::Vector{<:Integer}, stmt)
+
+Examine the instruction `stmt` and append the uses of `SSAValue` into `uses` and
+`Argument` to `args` if given.
+"""
+function append_uses_and_args!(uses, args, @nospecialize(stmt))
+    map_id(identity, stmt) do v
+        if v isa SSAValue
+            push!(uses, v.id)
+        elseif v isa Argument
+            args === nothing && return v
+            push!(args, v.n)
+        end
+        v
+    end
+    return
+end
+
+append_uses!(uses, @nospecialize(stmt)) = append_uses_and_args!(uses, nothing, stmt)
+
+"""
+    map_id(on_value, on_label, stmt::T) -> stmt′::T
+    map_id(on_value, on_phi_label, on_goto_label, stmt::T) -> stmt′::T
+
+Map over the locations containing IDs in `stmt`; i.e., run the function
+`on_value` on `SSAValue` or `Arguments` in `stmt` and the function `on_label`
+on basic block label in `stmt`. Return a new instruction `stmt′` with
+corresponding "fields" updated by these functions.
+
+# Arguments
+* `stmt`: an IR statement (e.g., an `Expr(:call, ...)`)
+* `on_value`: a function that accepts an `SSAValue`, `Argument`, `SlotNumber`,
+  or `TypedSlot`.
+* `on_label`: a function that accepts a basic block label (e.g., `goto.label`
+  of a `goto::GotoNode` statement)
+"""
+map_id(on_value, on_label, @nospecialize(stmt)) = map_id(on_value, on_label, on_label, stmt)
+
+function map_id(on_value, on_phi_label, on_goto_label, @nospecialize(stmt))
+    recurse(@nospecialize x) = map_id(on_value, on_phi_label, on_goto_label, x)
+    if stmt isa Union{SSAValue,Argument,SlotNumber,TypedSlot}
+        on_value(stmt)
+    elseif stmt isa GotoNode
+        GotoNode(on_goto_label(stmt.label))
+    elseif stmt isa GotoIfNot
+        GotoIfNot(recurse(stmt.cond), on_goto_label(stmt.dest))
+    elseif stmt isa ReturnNode
+        if isdefined(stmt, :val)
+            ReturnNode(recurse(stmt.val))
+        else
+            stmt
+        end
+    elseif stmt isa PiNode
+        PiNode(recurse(stmt.val), stmt.typ)
+    elseif stmt isa Union{PhiNode,PhiCNode}
+        newvalues = similar(stmt.values)
+        for i in eachindex(stmt.values)
+            if isassigned(stmt.values, i)
+                newvalues[i] = recurse(stmt.values[i])
+            end
+        end
+        if stmt isa PhiNode
+            PhiNode(Int32[on_phi_label(x) for x in stmt.edges], newvalues)
+        else
+            PhiCNode(newvalues)
+        end
+    elseif stmt isa UpsilonNode
+        if isdefined(stmt, :val)
+            UpsilonNode(recurse(stmt.val))
+        else
+            stmt
+        end
+    elseif stmt isa DetachNode
+        DetachNode(recurse(stmt.syncregion), on_goto_label(stmt.label))
+    elseif stmt isa ReattachNode
+        ReattachNode(recurse(stmt.syncregion), on_goto_label(stmt.label))
+    elseif stmt isa SyncNode
+        SyncNode(recurse(stmt.syncregion))
+    elseif stmt isa Expr
+        if is_meta_expr_head(stmt.head)
+            stmt
+        elseif stmt.head === :(=) && stmt.args[2] isa Expr
+            Expr(stmt.head, stmt.args[1], recurse(stmt.args[2]))
+        elseif stmt.head === :enter
+            label = get(stmt.args, 1, nothing)
+            if label isa Integer
+                Expr(stmt.head, on_goto_label(stmt.args[1]))
+            else
+                stmt  # malformed?
+            end
+        else
+            Expr(stmt.head, Any[recurse(a) for a in stmt.args]...)
+        end
+    else
+        stmt
+    end
+end
+
+function foreach_id(on_value::F, on_label::G, @nospecialize(stmt)) where {F, G}
+    function f(x)
+        on_value(x)
+        x
+    end
+    function g(x)
+        on_label(x)
+        x
+    end
+    # TODO: non-reconstructing version (i.e., don't use `map_id`)
+    map_id(f, g, stmt)
+    return
+end
+
+"""
+    foreach_descendant(f, ibb::Int, cfg::CFG, [visited::AbstractVector{Bool}]) -> exhausted::Bool
+
+Evaluate a function `f` on the basic block `ibb` and all of its descendants,
+until either `f` returns `false` on all the paths or all the basic blocks are
+visited. The function `f` takes two arguments; the index `ibb` of the basic
+block and the corresponding basic block `cfg.blocks[ibb]`. Return `false`
+iff `f` returns `false` at least once.
+"""
+function foreach_descendant(
+    f::F,
+    ibb::Int,
+    cfg::CFG,
+    visited = falses(length(cfg.blocks)),
+) where {F}
+    worklist = [ibb]
+    acc = true
+    while !isempty(worklist)
+        ibb = pop!(worklist)
+        visited[ibb] && continue
+        visited[ibb] = true
+        bb = cfg.blocks[ibb]
+        c = f(ibb, bb)
+        acc &= c
+        c && append!(worklist, bb.succs)
+    end
+    return acc
+end
+
+function foreach_ancestor(
+    f::F,
+    ibb::Int,
+    cfg::CFG,
+    visited = falses(length(cfg.blocks)),
+) where {F}
+    worklist = [ibb]
+    acc = true
+    while !isempty(worklist)
+        ibb = pop!(worklist)
+        visited[ibb] && continue
+        visited[ibb] = true
+        bb = cfg.blocks[ibb]
+        c = f(ibb, bb)
+        acc &= c
+        c && append!(worklist, bb.preds)
+    end
+    return acc
+end
+
+"""
+    foreach_def(f, v::SSAValue, ir::IRCode) -> exhausted::Bool
+
+Evaluate `f` on the statement `stmt::Instruction` corresponding to `v` and also
+all of its arguments recursively ("upwards") as long as `f` returns `true`.
+Note that `f` may receive non-`Instruction` argument (e.g., `Argument`).  Return
+`false` iff `f` returns `false` at least once.
+"""
+function foreach_def(
+    f::F,
+    v::SSAValue,
+    ir::IRCode,
+    visited = falses(length(ir.stmts)),
+) where {F}
+    worklist = [v.id]
+    acc = RefValue(true)
+    while !isempty(worklist)
+        i = pop!(worklist)
+        visited[i] && continue
+        visited[i] = true
+        stmt = ir.stmts[i]
+        inst = stmt[:inst]
+        c = f(stmt)
+        acc.x &= c
+        foreach_id(identity, inst) do v
+            if v isa SSAValue
+                c && push!(worklist, v.id)
+            else
+                acc.x &= f(v)
+            end
+        end
+    end
+    return acc.x
+end
+
+function any_assigned(f, xs::Array)
+    for i in 1:length(xs)
+        if isassigned(xs, i)
+            f(xs[i]) && return true
+        end
+    end
+    return false
+end
+
+function foreach_assigned_pair(f, xs::Array)
+    for i in 1:length(xs)
+        if isassigned(xs, i)
+            f(i, xs[i])
+        end
+    end
+end
+
+function stmt_at(ir::IRCode, pos::Int)
+    pos <= length(ir.stmts) && return ir.stmts[pos]
+    return ir.new_nodes.stmts[pos-length(ir.stmts)]
+end
+
+function insert_pos(ir::IRCode, pos::Int)
+    pos <= length(ir.stmts) && return pos
+    return ir.new_nodes.info[pos-length(ir.stmts)].pos
+end
+
+has_tapir(src::CodeInfo) = has_tapir(src.code)
+has_tapir(ir::IRCode) = has_tapir(ir.stmts.inst) || has_tapir(ir.new_nodes.stmts.inst)
+has_tapir(code::Vector{Any}) =
+    any(code) do inst
+        return inst isa Union{DetachNode,ReattachNode,SyncNode} ||
+               isexpr(inst, :syncregion) ||
+               isexpr(inst, :task_output)
+    end
+
+function havecommon(x::AbstractSet, y::AbstractSet)
+    (b, c) = length(x) > length(y) ? (x, y) : (y, x)
+    return any(in(b), c)
+end
+
+function transitive_closure_on(rel, xs)
+    T = eltype(xs)
+    graph = IdDict{T,IdSet{T}}()
+    cache = IdDict{Tuple{T,T},Bool}()
+    for x in xs, y in xs
+        cache[(x, y)] = r = rel(x, y)
+        if r
+            push!(get!(IdSet{T}, graph, x), y)
+        end
+    end
+    closure(x, y) = get!(cache, (x, y)) do
+        any(z -> closure(z, y), graph[x])
+    end
+    return closure
+end
+
+function foldunion(types)
+    T = Union{}
+    for x in types
+        T = Union{T, widenconst(x)}
+    end
+    return T
+end
+
+struct _InaccessibleValue end
+
+function remove_stmt!(stmt::Instruction)
+    stmt[:inst] = _InaccessibleValue()
+    stmt[:type] = Any
+end
+
+"""
+    resolve_linear_chain(ir, v::Union{PiNode,SSAValue}) -> v′::Union{PiNode,SSAValue}
+
+Resolve simple chain of statements that are SSAValue or PiNode.
+"""
+function resolve_linear_chain end
+function resolve_linear_chain(ir::IRCode, v::PiNode)
+    n = v.val
+    if n isa SSAValue
+        return resolve_linear_chain(ir, n)
+    else
+        return v
+    end
+end
+function resolve_linear_chain(ir::IRCode, v::SSAValue)
+    v0 = v
+    while true
+        n = ir[v]
+        if n isa PiNode
+            n = n.val
+        end
+        if n isa SSAValue
+            v = n
+        else
+            break
+        end
+        v === v0 && error("cycle detected")
+    end
+    return v
+end
+
+# Ref: abstract_eval_special_value
+function resolve_special_value(@nospecialize(v))
+    if v isa GlobalRef
+        isdefined(v.mod, v.name) || return nothing, false
+        v = getfield(v.mod, v.name)
+    elseif v isa QuoteNode
+        return v.value, true
+    end
+    return v, true
+end
+
+resolve_ssavalue(ir::IRCode, v::SSAValue) = resolve_ssavalue(ir.stmts.inst, v)
+function resolve_ssavalue(code::Vector{Any}, v::SSAValue)
+    v0 = v
+    while v isa SSAValue
+        v = code[v.id]
+        v === v0 && error("cycle detected")
+    end
+    return v
+end
+
+function resolve_callee(code::Vector{Any}, @nospecialize(inst))::Tuple{Any,Bool}
+    isexpr(inst, :call) || return nothing, false
+    isempty(inst.args) && return nothing, false
+    f, = inst.args
+    if f isa SSAValue
+        f = resolve_ssavalue(code, f)
+    end
+    return resolve_special_value(f)
+end
+
+function find_method_instance_from_sig(
+    interp::AbstractInterpreter,
+    @nospecialize(sig::Type);
+    sparams::SimpleVector = svec(),
+    preexisting::Bool = false,
+    compilesig::Bool = false,
+)
+    result = findsup(sig, method_table(interp))
+    result === nothing && return nothing
+    method, = result
+    return specialize_method(method, sig, sparams, preexisting, compilesig)
+end
+# TODO: backedge?
+
+function is_in_loop(cfg::CFG, subcfg, needle::Int)
+    subcfg = BitSet(subcfg)
+    ref = RefValue(false)
+    foreach_descendant(cfg, needle) do ibb
+        ibb in subcfg || return false
+        if ibb < needle
+            ref.x = true
+            return false
+        else
+            return true
+        end
+    end
+    return ref.x
+end
+
+has_loop(ir::IRCode, blocklabels) =
+    any(blocklabels) do ibb
+        bb = ir.cfg.blocks[ibb]
+        any(<(ibb), bb.succs)
+    end
+
+function always_throws(ir::IRCode, task::ChildTask)
+    visited = falses(length(ir.cfg.blocks))
+    detacher = block_for_inst(ir, task.detach)
+    for i in task.reattaches
+        # If all non-terminator instructions just before all reattach nodes have
+        # `Union{}`, this task always throw.  Handle the case where there is
+        # only one terminator instruction in a BB using `foreach_ancestor`:
+        throws = RefValue(true)
+        foreach_ancestor(block_for_inst(ir, i), ir.cfg, visited) do ibb, bb
+            detacher == ibb && return false  # stop; outside the task
+            stmt = ir.stmts[bb.stmts[end]]
+            if isterminator(stmt[:inst])
+                if length(bb.stmts) < 2
+                    return true  # continue checking successor
+                end
+                stmt = ir.stmts[bb.stmts[end-1]]
+            end
+            if stmt[:type] !== Union{}
+                throws.x = false
+            end
+            return false
+        end
+        throws.x || return false
+    end
+    return true
+end
+
+function try_resolve(@nospecialize(x))
+    if x isa GlobalRef
+        if isdefined(x.mod, x.name)
+            return getfield(x.mod, x.name), true
+        end
+    end
+    return nothing, false
+end
+
+function is_trivial_for_spawn(@nospecialize(inst))
+    if isterminator(inst)
+        return true
+    elseif inst isa Union{PhiNode,PhiCNode,UpsilonNode,PiNode,Nothing}
+        return true
+    elseif inst isa Expr
+        if is_meta_expr_head(inst.head)
+            return true
+        elseif inst.head === :call
+            f, = try_resolve(inst.args[1])
+            if f isa Builtin
+                return !(f === Core.Intrinsics.invoke || f === Core.Intrinsics.llvmcall)
+            end
+        elseif (
+            inst.head === :new ||
+            inst.head === :enter ||
+            inst.head === :leave ||
+            inst.head === :the_exception ||
+            inst.head === :pop_exception
+        )
+            return true
+        end
+    end
+    return false
+end
+
+is_trivial_for_spawn(ir::IRCode, bb::BasicBlock) = is_trivial_for_spawn(ir, bb.stmts)
+function is_trivial_for_spawn(ir::IRCode, stmts::StmtRange)
+    for istmt in stmts
+        is_trivial_for_spawn(ir.stmts.inst[istmt]) || return false
+    end
+    return true
+end
+
+function is_trivial_for_spawn(ir::IRCode, task::ChildTask)
+    has_loop(ir, task.blocks) && return false
+    always_throws(ir, task) && return true
+
+    for ibb in task.blocks
+        is_trivial_for_spawn(ir, ir.cfg.blocks[ibb]) || return false
+    end
+    return true
+end
+
+""" Remove syncregion and tyr to remove the corresponding call to the taskgroup factory """
+function remove_syncregion!(ir::IRCode, position::Integer)
+    stmt = ir.stmts[position]
+    ex = stmt[:inst]::Expr
+    @assert ex.head === :syncregion
+
+    # Remove `Expr(:syncregion, ...)` itself
+    stmt[:inst] = nothing
+
+    # Remove call to `Tapir.taskgroup()`
+    tg = ex.args[1]
+    if tg isa SSAValue
+        ir[tg] = nothing
+    end
+end
+
+function remove_syncregions!(ir::IRCode, stmts = 1:length(ir.stmts))
+    for i in stmts
+        stmt = ir.stmts[i]
+        if isexpr(stmt[:inst], :syncregion)
+            remove_syncregion!(ir, i)
+        end
+    end
+end
+
+function remove_tapir_terminator!(stmt::Instruction)
+    term = stmt[:inst]
+    if term isa DetachNode
+        stmt[:inst] = GotoIfNot(true, term.label)
+    elseif term isa ReattachNode
+        stmt[:inst] = GotoNode(term.label)
+    elseif term isa SyncNode
+        stmt[:inst] = nothing
+    end
+    return term
+end
+
+"""
+    remove_tapir!(ir::IRCode) -> ir
+
+Remove Tapir instructions from `src` (if any). This transformation is always valid
+due to the (assumed) serial projection property of the source program.
+"""
+remove_tapir!(ir::IRCode) = remove_tapir_in_blocks!(ir, 1:length(ir.cfg.blocks))
+
+function remove_tapir_in_blocks!(ir::IRCode, blocklabels)
+    for ibb in blocklabels
+        bb = ir.cfg.blocks[ibb]
+        remove_tapir_terminator!(ir.stmts[last(bb.stmts)])
+        remove_syncregions!(ir, bb.stmts)
+    end
+    return ir
+end
+
+function remove_tapir!(ir::IRCode, task::ChildTask)
+    remove_tapir_in_blocks!(ir, task.blocks)
+    remove_tapir_terminator!(ir.stmts[task.detach])::DetachNode
+    return ir
+end
+
+"""
+    parallel_getfield_elim_checker(ir) -> phiblocks -> is_promotable::Bool
+
+Return a function that checks if inserting phi nodes for a given list of BB is compatible
+with Tapir.
+
+See also `check_tapir_race!`
+"""
+function parallel_getfield_elim_checker(ir::IRCode)
+
+    # Lazily analyze child tasks:
+    cache = RefValue{Union{Nothing,Vector{ChildTask}}}(nothing)
+    function get_child_tasks()
+        tasks = cache[]
+        tasks === nothing || return tasks
+        tasks = cache[] = child_tasks(ir)
+        return tasks
+    end
+
+    function is_parallel_promotable(phiblocks)
+        @assert eltype(phiblocks) === BBNumber
+        result = RefValue(true)
+        foreach_task_depth_first(get_child_tasks()) do task
+            det = ir.stmts.inst[task.detach]::DetachNode
+            continuation = det.label
+            if continuation in phiblocks
+                result.x = false
+                return false  # break
+            else
+                return true  # keep going
+            end
+        end
+        return result.x
+    end
+
+    return is_parallel_promotable
+end
+
+"""
+    early_tapir_pass!(ir::IRCode) -> (ir′::IRCode, racy::Bool)
+
+Mainly operates on task output variables.
+"""
+function early_tapir_pass!(ir::IRCode)
+    has_tapir(ir) || return ir, false
+    @timeit "Lower task output" ir = lower_tapir_output!(ir)
+    @timeit "Check task output" ir, racy = check_tapir_race!(ir)
+    racy && return ir, racy
+    @timeit "Normalize syncregion" ir = normalize_syncregions!(ir)
+    return ir, racy
+end
+
+"""
+    resolve_syncregion(ir::IRCode, inst) -> ssa::SSAValue or nothing
+
+Return an `SSAValue` `ssa` such that `ir[ssa]` is a syncregion expression if
+found. Return `nothing` otherwise.
+"""
+function resolve_syncregion(ir::IRCode, inst)
+    @nospecialize inst
+    inst0 = inst
+    while true
+        if inst isa PhiCNode
+            @assert length(inst.values) == 1
+            ups = ir[inst.values[1]::SSAValue]::UpsilonNode
+            inst = ups.val::SSAValue
+        elseif inst isa SSAValue
+            sr = ir[inst]
+            isexpr(sr, :syncregion) && return inst
+            inst = sr
+        else
+            return nothing
+        end
+        if inst === inst0
+            error("cycle detected")
+        end
+    end
+end
+
+"""
+    normalize_syncregions!(ir::IRCode) -> ir′
+"""
+function normalize_syncregions!(ir::IRCode)
+    if !isempty(ir.new_nodes.stmts.inst)
+        ir = compact!(ir)
+    end
+
+    for bb in ir.cfg.blocks
+        stmt = ir.stmts[bb.stmts[end]]
+        inst = stmt[:inst]
+        if inst isa SyncNode
+            inst = ir[inst.syncregion::SSAValue]
+            isexpr(inst, :syncregion) && continue
+            ssa = resolve_syncregion(ir, inst)
+            # TODO: validate that syncregion dominates sync
+            stmt[:inst] = SyncNode(ssa)
+        elseif inst isa Union{DetachNode, ReattachNode}
+            # Inside a closure, syncregion may not be an SSAValue
+            inst.syncregion isa SSAValue && continue
+            ssa = insert_node!(ir, bb.stmts[end], NewInstruction(inst.syncregion, Any))
+            if inst isa DetachNode
+                stmt[:inst] = DetachNode(ssa, inst.label)
+            else
+                inst::ReattachNode
+                stmt[:inst] = ReattachNode(ssa, inst.label)
+            end
+        end
+    end
+
+    return ir
+end
+
+foreach_task_output_decl(f::F, ir::IRCode) where {F} =
+    foreach_task_output_decl(f, ir.stmts.inst)
+function foreach_task_output_decl(f, code::Vector{Any})
+    for (i, inst) in pairs(code)
+        isexpr(inst, :task_output) || continue
+        f(i, inst.args[1])
+    end
+end
+
+"""
+    task_output_slots(ci::CodeInfo, code::Vector{Any}) -> slotids::BitSet
+
+Return a set of slot IDs that should be kept in the `IRCode` genrated by
+slot2reg.  These slots are processed later in `lower_tapir_output!`.
+"""
+function task_output_slots(::CodeInfo, code::Vector{Any})
+    outputs = BitSet()
+    foreach_task_output_decl(code) do _, out
+        if out isa Union{SlotNumber,TypedSlot}
+            push!(outputs, slot_id(out))
+        end
+    end
+    return outputs
+end
+
+"""
+    lower_tapir_output!(ir::IRCode) -> ir′
+
+Lower task output slots.
+"""
+function lower_tapir_output!(ir::IRCode)
+    Tapir = tapir_module()
+    Tapir isa Module || return ir
+
+    # TODO: make it work without compaction?
+    if !isempty(ir.new_nodes.stmts.inst)
+        ir = compact!(ir)
+    end
+
+    # Collect task output slots
+    outputinfo = IdDict{Int,Tuple{Symbol,LineNumberNode}}()  # slot id -> (name, line)
+    foreach_task_output_decl(ir) do i, out
+        if out isa Union{SlotNumber,TypedSlot}
+            stmt = ir.stmts[i]
+            _, qnode, lineno = stmt[:inst].args
+            name = (qnode::QuoteNode).value::Symbol
+            lineno::LineNumberNode
+            outputinfo[slot_id(out)] = (name, lineno)
+            remove_stmt!(stmt)
+        end
+    end
+
+    isempty(outputinfo) && return ir
+
+    # Determine the type of each slot
+    slottypes = IdDict{Int,Type}()      # slot id -> type
+    stores = IdDict{Int,Vector{Int}}()  # slot id -> statement positions
+    loaded_slots = BitSet()
+    loaded_positions = BitSet()
+    for i in 1:length(ir.stmts)
+        stmt = ir.stmts[i]
+        inst = stmt[:inst]
+
+        if (
+            isexpr(inst, :(=)) &&
+            begin
+                lhs, rhs = inst.args
+                lhs isa Union{SlotNumber,TypedSlot}
+            end &&
+            haskey(outputinfo, slot_id(lhs))
+        )
+            t0 = get(slottypes, slot_id(lhs), Union{})
+            t1 = widenconst(stmt[:type])
+            slottypes[slot_id(lhs)] = Union{t0,t1}
+            push!(get!(() -> Int[], stores, slot_id(lhs)), i)
+            inst = rhs
+        end
+
+        foreach_id(identity, inst) do out
+            if out isa Union{SlotNumber,TypedSlot}
+                if haskey(outputinfo, slot_id(out))
+                    push!(loaded_positions, i)
+                    push!(loaded_slots, slot_id(out))
+                end
+            end
+        end
+    end
+
+    unused = setdiff!(BitSet(keys(stores)), loaded_slots)
+    for oid in unused
+        for i in stores[oid]
+            stmt = ir.stmts[i]
+            _, rhs = stmt[:inst].args
+            stmt[:inst] = rhs
+        end
+    end
+    isempty(loaded_slots) && return ir
+
+    # Insert Refs
+    outputrefs = IdDict{Int,SSAValue}()
+    for oid in keys(outputinfo)
+        T = get(slottypes, oid, Union{})
+        R = Tapir.UndefableRef{T}
+        alloc_pos = 1   # [^alloca-position]
+        ref = insert_node!(ir, alloc_pos, NewInstruction(Expr(:new, R), R))
+        outputrefs[oid] = ref
+        setset = NewInstruction(
+            Expr(:call, setfield!, ref, QuoteNode(:set), QuoteNode(false)),
+            Any,
+        )
+        insert_node!(ir, alloc_pos, setset)
+    end
+
+    # Insert loads
+    function try_insert_load_at(
+        i::Int,
+        out::Union{SlotNumber,TypedSlot},
+        attach_after::Bool = false,
+    )
+        ref = get(outputrefs, slot_id(out), nothing)
+        ref === nothing && return nothing
+        isset_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:set))
+        isset = insert_node!(ir, i, NewInstruction(isset_ex, Bool), attach_after)
+        name, = outputinfo[slot_id(out)]
+        undefcheck = Expr(:throw_undef_if_not, name, isset)
+        insert_node!(ir, i, NewInstruction(undefcheck, Any), attach_after)
+        value_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:x))
+        T = get(slottypes, slot_id(out), Union{})
+        return insert_node!(ir, i, NewInstruction(value_ex, T), attach_after)
+    end
+    for i in loaded_positions
+        stmt = ir.stmts[i]
+        inst = stmt[:inst]
+        if inst isa PhiNode
+            foreach_assigned_pair(inst.values) do k, out
+                if out isa Union{SlotNumber,TypedSlot}
+                    iterm = ir.cfg.blocks[inst.edges[k]].stmts[end]
+                    term = ir.stmts[iterm]
+                    ssa = try_insert_load_at(
+                        iterm,
+                        out,
+                        !isterminator(term)  # insert after any non-terminator
+                    )
+                    if ssa !== nothing
+                        inst.values[k] = ssa
+                    end
+                end
+            end
+        elseif isexpr(inst, :isdefined)
+            out = inst.args[1]::Union{SlotNumber,TypedSlot}
+            ref = outputrefs[slot_id(out)]
+            isset_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:set))
+            isset = insert_node!(ir, i, NewInstruction(isset_ex, Bool))
+            stmt[:inst] = isset
+        else
+            stmt[:inst] = map_id(identity, inst) do out
+                if out isa Union{SlotNumber,TypedSlot}
+                    ssa = try_insert_load_at(i, out)
+                    ssa === nothing || return ssa
+                end
+                return out
+            end
+        end
+    end
+
+    # Insert stores (that are loaded somewhere)
+    for oid in setdiff!(BitSet(keys(stores)), unused)
+        ref = outputrefs[oid]
+        for i in stores[oid]
+            stmt = ir.stmts[i]
+            _, rhs = stmt[:inst].args
+            stmt[:inst] = rhs
+
+            value = SSAValue(i)
+            ex = Expr(:call, GlobalRef(Core, :setfield!), ref, QuoteNode(:x), value)
+            insert_node!(ir, i, NewInstruction(ex, Any), true)
+            ex = Expr(:call, GlobalRef(Core, :setfield!), ref, QuoteNode(:set), true)
+            insert_node!(ir, i, NewInstruction(ex, Any), true)
+        end
+    end
+
+    return ir
+end
+# [^alloca-position]: TODO: The placement of the allocations of task output is not
+# optimal.  Ideally, we should use the inner-most `Expr(:syncregion)` that
+# dominates all loads.
+
+"""
+    check_tapir_race!(ir::IRCode) -> (ir′::IRCode, racy::Bool)
+
+Inject error-throwing code when a racy phi node is found.
+
+# Examples
+```
+julia> function f()
+           a = 0
+           Tapir.@sync begin
+               Tapir.@spawn a += 1
+               a += 2
+           end
+           a
+       end;
+
+julia> f()
+ERROR: Tapir: racy load of a value that may be read concurrently: 1
+```
+
+# Design notes
+
+In Julia, we disallow variables (slots) as task output for the sake of clarity.
+Thanks to this design decision, we can conclude that any `slot2reg` promotion
+that crosses task boundaries (manifested as phi nodes with continue edges) is a
+result from an attempt to update variables in a parent task (that are read in
+the continuation).
+
+In principle, this detection can be done inside `slot2reg`, just like how we use
+`parallel_getfield_elim_checker` (which is similar to Tapir/LLVM's
+`TaskInfo::isAllocaParallelPromotable`) for disabling invalid promotion in the
+SROA pass (`getfield_elim_pass!`). However, since slot is not a valid
+representation in `IRCode`, we cannot refuse to promote a given slot.  Thus, the
+best thing we can do is to insert helpful errors in the generated code; which is
+a nonlocal transformation.  Since `slot2reg` is a delicate chain of processing
+on half-constructed `IRCode`, it is more convenient and concise to do this after
+`slot2reg`.  Furthermore, since the promotion checking works by "attempting" to
+do `slot2reg` (i.e., requires IDF) anyway, actually doing `slot2reg` first is
+equivalent.  Additionally, separating this out as a pass makes it easy to
+short-circuit `run_passes`.
+"""
+function check_tapir_race!(ir::IRCode)
+    Tapir = tapir_module()
+    Tapir isa Module || return ir, false
+
+    if !isempty(ir.new_nodes.stmts.inst)
+        ir = compact!(ir)
+    end
+
+    local tasks, throw_if_uses
+    racy = false
+    for (ibb, bb) in pairs(ir.cfg.blocks)
+        det = ir.stmts.inst[bb.stmts[end]]
+        det isa DetachNode || continue
+        continuation = ir.cfg.blocks[det.label]
+        for iphi in continuation.stmts
+            phi = ir.stmts.inst[iphi]
+            phi isa PhiNode || continue
+            # Racy Phi node found
+            if !racy
+                tasks = child_tasks(ir)
+                throw_if_uses = BitSet()
+            end
+            racy = true
+            # Insert a throw after "store" (def in child task):
+            task = task_by_detach(tasks, bb.stmts[end])::ChildTask
+            for (i, e) in pairs(phi.edges)
+                e == ibb && continue  # skip the continue edge
+                isassigned(phi.values, i) || continue  # impossible?
+                v = phi.values[i]
+                v isa SSAValue || continue  # constant? let's handle this on "load" side
+                foreach_def(v, ir) do stmt
+                    if stmt isa Instruction
+                        is_stmt_in_task(task, ir, stmt.idx) || return false # break
+                        stmt[:inst] isa Union{PhiNode,PiNode} && return true  # keep going
+
+                        # This instruction is in the task and is not a branch.
+                        # Insert the racy store error:
+                        th = Expr(:call, Tapir.racy_store, SSAValue(stmt.idx))
+                        pos = insert_pos(ir, stmt.idx)
+                        attach_after = pos == stmt.idx
+                        insert_node!(ir, pos, NewInstruction(th, Any), attach_after)
+                        # Not using `Union{}` so that we can preserve CFG.
+                    end
+                    return false # break
+                end
+            end
+            # Insert a throw before "load" (use in continuation):
+            push!(throw_if_uses, iphi)
+        end
+    end
+    racy || return  ir, false
+
+    for i in 1:length(ir.stmts)
+        inst = ir.stmts.inst[i]
+        if inst isa PhiNode
+            foreach_assigned_pair(inst.values) do k, v
+                if v isa SSAValue && v.id in throw_if_uses
+                    bb = ir.cfg.blocks[inst.edges[k]]
+                    iterm = bb.stmts[end]
+                    attach_after = !isterminator(ir.stmts.inst[iterm])
+                    th = Expr(:call, Tapir.racy_load, v)
+                    insert_node!(ir, iterm, NewInstruction(th, Any), attach_after)
+                    # Not using `Union{}` so that we can preserve CFG.
+                end
+            end
+        else
+            foreach_id(identity, inst) do v
+                if v isa SSAValue && v.id in throw_if_uses
+                    th = Expr(:call, Tapir.racy_load, v)
+                    insert_node!(ir, i, NewInstruction(th, Any))
+                    # Not using `Union{}` so that we can preserve CFG.
+                end
+            end
+        end
+    end
+
+    warn = Expr(:call, Tapir.warn_race)
+    insert_node!(ir, 1, NewInstruction(warn, Any))
+
+    ir = remove_tapir!(ir)
+    ir = compact!(ir)
+
+    if JLOptions().debug_level == 2
+        @timeit "verify (race)" (verify_ir(ir); verify_linetable(ir.linetable))
+    end
+
+    return ir, true
+end
+# TODO: Do this at the level of abstract interpretation?
+#
+# The above check cannot detect a race in
+#
+#     function f()
+#         local a
+#         Tapir.@sync begin
+#             Tapir.@spawn a = 1
+#             a = 2
+#         end
+#         a
+#     end
+#
+# ... since abstract interpretation removes `a = 1`. Also, producing a good
+# error message in `IRCode` is very hard since variable names are not preserved
+# any more.
+
+"""
+    late_tapir_pass!(ir::IRCode) -> ir′
+
+Late but not final.
+"""
+function late_tapir_pass!(ir::IRCode)
+    tasks = nothing
+    @timeit "Detect misplaced detach" (ir, tasks) = disallow_detach_after_sync!(ir, tasks)
+    @timeit "Remove trivial Tapir" (ir, tasks) = remove_trivial_tapir!(ir, tasks)
+    return ir
+end
+
+"""
+    disallow_detach_after_sync!(ir::IRCode, tasks) -> ir′
+
+Detect detach after sync and insert runtime errors.
+"""
+function disallow_detach_after_sync!(ir::IRCode, tasks)
+    # This pass only looks into `ir.stmts` at the moment:
+    @assert isempty(ir.new_nodes.stmts.inst)
+
+    Tapir = tapir_module()
+    Tapir isa Module || return remove_tapir!(ir)
+
+    if tasks === nothing
+        tasks = child_tasks(ir)
+    end
+
+    changed = RefValue(false)
+    foreach_task(tasks) do task
+        det = ir.stmts.inst[task.detach]::DetachNode
+        sr = resolve_syncregion(ir, det.syncregion::SSAValue)
+        sr isa SSAValue || return true
+
+        should_remove = RefValue(false)
+        detacher = block_for_inst(ir, task.detach)
+        foreach_ancestor(detacher, ir.cfg) do ibb, bb
+            should_remove.x && return false  # short-circuit
+
+            inst = ir.stmts.inst[bb.stmts[end]]
+            if inst isa SyncNode
+                if resolve_syncregion(ir, inst.syncregion) === sr
+                    should_remove.x = true
+                end
+            end
+
+            if sr.id in bb.stmts
+                # This block contains the corresponding syncregion. Stop ascending.
+                return false
+            end
+            return true
+        end
+
+        if should_remove.x
+            changed.x = true
+            ex = Expr(:call, GlobalRef(Tapir, :detach_after_sync_error))
+            insert_node!(ir, task.detach, NewInstruction(ex, Any))
+            remove_tapir!(ir, task)
+        end
+        return true
+    end
+
+    if changed.x
+        ir = compact!(ir)
+        return ir, nothing
+    else
+        return ir, tasks
+    end
+end
+
+"""
+    remove_trivial_tapir!(ir::IRCode, tasks) -> ir′
+
+Remove trivial spawns and syncregions.
+
+* Remove trivial spawns (serial projection).
+* Remove empty syncregions.
+
+This is a single monolithic function at the moment for sharing the computed
+mapping `syncregion_to_syncs` between the above semantically distinct passes.
+"""
+function remove_trivial_tapir!(ir::IRCode, tasks)
+    # This pass only looks into `ir.stmts` at the moment:
+    @assert isempty(ir.new_nodes.stmts.inst)
+
+    if tasks === nothing
+        tasks = child_tasks(ir)
+    end
+    # [^empty-tasks]: we can't bail out here even if `isempty(tasks)` since `ir`
+    # may also have some empty syncregions (which are processed below).
+
+    # Scan syncregion and SyncNode
+    syncregions = BitSet()
+    syncregion_to_syncs = Vector{Vector{Int}}(undef, length(ir.stmts))
+    for bb in ir.cfg.blocks
+        isync = last(bb.stmts)
+        sync = ir.stmts.inst[isync]
+        sync isa SyncNode || continue
+        sr = (sync.syncregion::SSAValue).id
+        push!(syncregions, sr)
+        if isassigned(syncregion_to_syncs, sr)
+            ids = syncregion_to_syncs[sr]
+        else
+            ids = syncregion_to_syncs[sr] = Int[]
+        end
+        push!(ids, isync)
+    end
+
+    # Remove trivial spawns:
+    foreach_task_depth_first(tasks) do task
+        det = ir.stmts.inst[task.detach]::DetachNode
+        sr = det.syncregion::SSAValue
+
+        if is_trivial_for_spawn(ir, task)
+            remove_tapir!(ir, task)
+        elseif isassigned(syncregion_to_syncs, sr.id) # has a SyncNode
+            # Check if the continuation is trivial. This is done only when the
+            # task is not spawned from a closure (that captures the syncregion
+            # token). If so, it's not possible to see the entire continuation.
+            is_trivial = RefValue(true)
+            syncs = syncregion_to_syncs[sr.id]
+            foreach_descendant(det.label, ir.cfg) do _ibb, bb
+                is_trivial.x || return false
+                if det.label in bb.succs  # loop
+                    is_trivial.x = false
+                    return false
+                end
+                if !is_trivial_for_spawn(ir, bb)
+                    is_trivial.x = false
+                    return false
+                end
+                return !(bb.stmts[end] in syncs)
+            end
+            if is_trivial.x
+                remove_tapir!(ir, task)
+            end
+        end
+
+        return true  # continue
+    end
+
+    isempty(syncregions) && return ir, tasks
+
+    # Find used syncregions:
+    # Note: Scanning all statements (not just detach and reattach) since the
+    # syncregion token may be captured by closures.
+    used = BitSet()
+    for i in 1:length(ir.stmts)
+        inst = ir.stmts.inst[i]
+        inst isa SyncNode && continue
+        foreach_id(identity, inst) do v
+            if v isa SSAValue
+                if v.id in syncregions
+                    push!(used, v.id)
+                end
+            end
+        end
+    end
+
+    # Remove empty syncregions:
+    for sr in syncregions
+        sr in used && continue
+        remove_syncregion!(ir, sr)
+        for isync in syncregion_to_syncs[sr]
+            ir.stmts.inst[isync] = nothing
+        end
+    end
+
+    return ir, tasks
+end
+
+"""
+    outline_child_task(task::ChildTask, ir::IRCode)
+"""
+function outline_child_task(task::ChildTask, ir::IRCode)
+    uses = BitSet()
+    defs = BitSet()
+    args = BitSet()
+    for ibb in task.blocks
+        bb = ir.cfg.blocks[ibb]
+        for i in bb.stmts
+            inst = ir.stmts[i][:inst]
+            push!(defs, i)
+            inst isa ReattachNode && continue
+            append_uses_and_args!(uses, args, inst)
+        end
+    end
+    capture = setdiff(uses, defs)
+    locals = setdiff(defs, capture)
+
+    nargs = length(args)
+    ncaps = length(capture)
+
+    ssachangemap = zeros(Int, length(ir.stmts))
+    for (i, iold) in enumerate(capture)
+        inew = nargs + i
+        ssachangemap[iold] = inew
+    end
+    offset = nargs + ncaps
+    for (i, iold) in enumerate(defs)
+        inew = offset + i
+        ssachangemap[iold] = inew
+    end
+    @assert offset == nargs + ncaps
+    labelchangemap = zeros(Int, length(ir.cfg.blocks))
+    for (inew, iold) in enumerate(task.blocks)
+        labelchangemap[iold] = inew
+    end
+    argchangemap = zeros(Int, length(ir.argtypes))
+    for (inew, iold) in enumerate(args)
+        argchangemap[iold] = inew
+    end
+
+    on_label(i) = labelchangemap[i]
+    on_value(v::SSAValue) = SSAValue(ssachangemap[v.id])
+    on_value(v::Argument) = SSAValue(argchangemap[v.n])
+
+    # Create a new instruction for the new outlined task:
+    stmts = InstructionStream()
+    resize!(stmts, nargs + ncaps + length(locals))
+    # If we add new statement at the end of BB, we need to use the new statement
+    # instead. `bbendmap` (initially an identity) tracks these shifts:
+    bbendmap = collect(1:length(stmts))
+    for (inew, iold) in enumerate(args)
+        stmts.inst[inew] = Expr(:call, getfield, Argument(1), inew)
+        stmts.type[inew] = ir.argtypes[iold]
+        # ASK: Is this valid to declare the type of the captured variables? Is
+        #      it better to insert type assertions?
+    end
+    for (i, iold) in enumerate(capture)
+        inew = nargs + i
+        stmts[inew] = ir.stmts[iold]
+        stmts.inst[inew] = Expr(:call, getfield, Argument(1), inew)
+        # ASK: ditto
+    end
+    # Actual computation executed in the child task:
+    for iold in defs
+        inew = ssachangemap[iold]
+        stmts[inew] = ir.stmts[iold]
+        stmts.inst[inew] = map_id(on_value, on_label, stmts.inst[inew])
+    end
+
+    # Turn reattach nodes into return nodes (otherwise, they introduce edges to
+    # invalid blocks and also the IR does not contain returns).
+    for i in task.reattaches
+        inew = ssachangemap[i]
+        @assert stmts.inst[inew] isa ReattachNode
+        stmts.inst[inew] = ReturnNode(nothing)
+    end
+
+    blocks = map(enumerate(task.blocks)) do (i, ibb)
+        isentry = i == 1
+        bb = ir.cfg.blocks[ibb]
+        start = ssachangemap[bb.stmts[begin]]
+        stop = bbendmap[ssachangemap[bb.stmts[end]]]
+        preds = Int[labelchangemap[i] for i in bb.preds]
+        succs = Int[labelchangemap[i] for i in bb.succs]
+        if isentry
+            empty!(preds)
+            start = 1
+        else
+            @assert !(0 in preds)
+        end
+        # Remove edges to the BBs outside this `task`:
+        # TODO: verify that these are due to reattach as expected?
+        filter!(>(0), succs)
+
+        @assert all(>(0), preds)
+        @assert all(>(0), succs)
+
+        BasicBlock(StmtRange(start, stop), preds, succs)
+    end
+    cfg = CFG(
+        blocks,
+        Int[ssachangemap[ir.cfg.index[task.blocks[i]]] for i in 1:length(task.blocks)-1],
+    )
+    # Due to `sort!(task.blocks)` in `child_tasks`, we should get sorted `cfg.index` here:
+    @assert issorted(cfg.index)
+    meta = Any[]  # TODO: copy something from `ir.meta`?
+    linetable = copy(ir.linetable)  # TODO: strip off?
+    argtypes = Any[Any]  # ASK: what's the appropriate "self" type for the opaque closure?
+    sptypes = ir.sptypes  # TODO: strip off unused sptypes?
+    taskir = IRCode(stmts, cfg, linetable, argtypes, meta, sptypes)
+
+    # Variables to be passed onto the child task:
+    captured_variables = Any[]
+    for i in args
+        push!(captured_variables, Argument(i))
+    end
+    for i in capture
+        push!(captured_variables, SSAValue(i))
+    end
+
+    return (taskir, captured_variables), (ssachangemap, labelchangemap)
+end
+
+"""
+    outline_child_task!(task::ChildTask, ir::IRCode) -> (taskir, arguments)
+
+Extract `task` in `ir` as a new `taskir::IRCode`. Mutate `tasksir.subtasks` to
+respect the changes in SSA positions and BB labels.  The second argument `ir` is
+not mutated.
+
+The sub-CFG in `ir` corresponding to `task` must not have uncommitted new nodes
+in `ir.new_nodes`.
+"""
+function outline_child_task!(task::ChildTask, ir::IRCode)
+    result, (ssachangemap, labelchangemap) = outline_child_task(task, ir)
+    renumber_subtasks!(task, ssachangemap, labelchangemap)
+    return result
+end
+# TODO: Calling this at each recurse of `lower_tapir_tasks!` is not great
+# (quadratic in depth). Maybe keep the stack of changemaps and renumber lazily?
+
+function renumber_subtasks!(task::ChildTask, ssachangemap, labelchangemap)
+    subtasks = task.subtasks
+    subtasks === nothing && return task
+    for (i, t) in pairs(subtasks)
+        renumber_subtasks!(t, ssachangemap, labelchangemap)
+        for (j, k) in pairs(t.blocks)
+            t.blocks[j] = labelchangemap[k]
+        end
+        for (j, k) in pairs(t.reattaches)
+            t.reattaches[j] = ssachangemap[k]
+        end
+        subtasks[i] = ChildTask(ssachangemap[t.detach], t.reattaches, t.blocks, t.subtasks)
+    end
+    return task
+end
+
+"""
+    tapir_module() -> Main.Base.Experimental.Tapir or nothing
+"""
+function tapir_module()
+    isdefined(Main, :Base) || return nothing
+    Base = Main.Base::Module
+    isdefined(Base, :Experimental) || return nothing
+    Experimental = Base.Experimental::Module
+    isdefined(Experimental, :Tapir) || return nothing
+    return Experimental.Tapir::Module
+end
+
+function lower_tapir!(ir::IRCode, interp::AbstractInterpreter)
+    Tapir = tapir_module()
+    Tapir isa Module || return remove_tapir!(ir)
+
+    tasks = child_tasks(ir)  # [^empty-tasks]
+
+    ir, tasks = optimize_taskgroups!(ir, tasks, interp)
+
+    # Replace `Expr(:syncregion, %tg)` with `%tg`.
+    for i in 1:length(ir.stmts)
+        stmt = ir.stmts[i]
+        if isexpr(stmt[:inst], :syncregion)
+            stmt[:inst] = stmt[:inst].args[1]
+        end
+    end
+
+    # Replace `sync within %tg` with `Tapir.sync!(%tg)`.
+    for bb in ir.cfg.blocks
+        isync = last(bb.stmts)
+        sync = ir.stmts[isync][:inst]
+        sync isa SyncNode || continue
+        tg = sync.syncregion::SSAValue
+        TaskGroup = widenconst(ir.stmts[tg.id][:type])::Type
+        mi = find_method_instance_from_sig(
+            interp,
+            Tuple{typeof(Tapir.sync!),TaskGroup};
+            compilesig = true,
+        )
+        if mi === nothing
+            ir.stmts.inst[isync] = Expr(:call, GlobalRef(Tapir, :sync!), tg)
+        else
+            ir.stmts.inst[isync] = Expr(:invoke, mi, GlobalRef(Tapir, :sync!), tg)
+        end
+        ir.stmts.type[isync] = Any
+    end
+
+    return lower_tapir_tasks!(ir, tasks, interp)
+end
+
+function optimize_taskgroups!(
+    ir::IRCode,
+    tasks::Vector{ChildTask},
+    interp::AbstractInterpreter,
+)
+    Tapir = tapir_module()::Module
+
+    # TODO: another possible optimization is to use tree of taskgroups to avoid
+    # using the locked taskgroup (i.e., channel) entirely.
+
+    # Find syncregions that do not have to allocate TaskGroup
+    syncregions = BitSet()
+    isinlinable = trues(length(ir.stmts))
+    tasks_by_syncregion = IdDict{Int,Vector{ChildTask}}()
+    foreach_task(tasks) do task
+        det = ir.stmts.inst[task.detach]::DetachNode
+        sr = det.syncregion::SSAValue
+        push!(get!(() -> ChildTask[], tasks_by_syncregion, sr.id), task)
+        isinlinable[sr.id] || return true
+
+        srstmt = stmt_at(ir, sr.id)
+        if !isexpr(srstmt[:inst], :syncregion)
+            isinlinable[sr.id] = false
+            return true
+        elseif !isconcretetype(widenconst(srstmt[:type]))
+            isinlinable[sr.id] = false
+            return true
+        end
+
+        push!(syncregions, sr.id)
+
+        detacher = block_for_inst(ir, task.detach)
+        visited = falses(length(ir.cfg.blocks))
+        foreach_descendant(detacher + 1, ir.cfg, visited) do ibb, bb
+            if ibb == detacher
+                # Detach is in a loop inside the syncregion.
+                isinlinable[sr.id] = false
+                return false
+            end
+            iterm = bb.stmts[end]
+            term = ir.stmts.inst[iterm]
+            if term isa SyncNode
+                if term.syncregion === sr
+                    return false
+                end
+            elseif term isa DetachNode
+                subtask = task_by_detach(tasks, iterm)
+                for ibb in subtask.blocks
+                    visited[ibb] = true
+                    local iterm = bb.stmts[end]
+                    local term = ir.stmts.inst[iterm]
+                    if term isa DetachNode
+                        if term.syncregion === sr
+                            # The syncregion is used from multiple tasks.
+                            isinlinable[sr.id] = false
+                            return false
+                        end
+                    end
+                end
+            end
+            return true
+        end
+    end
+
+    syncnodes_by_syncregion = IdDict{Int,Vector{Int}}()
+    for bb in ir.cfg.blocks
+        isync = bb.stmts[end]
+        sync = ir.stmts.inst[isync]
+        sync isa SyncNode || continue
+        sr = sync.syncregion::SSAValue
+        isinlinable[sr.id] || continue
+        push!(get!(() -> Int[], syncnodes_by_syncregion, sr.id), isync)
+    end
+    isempty(syncnodes_by_syncregion) && return ir, tasks
+
+    # Insert runtime calls
+    MaybeTask = Tapir.MaybeTask
+    for i in syncregions
+        isinlinable[i] || continue
+        TaskGroup = widenconst(ir.stmts[i][:type])
+        remove_syncregion!(ir, i)
+        taskgroup = Vector{PhiCNode}[PhiCNode[] for _ in syncnodes_by_syncregion[i]]
+        for task in tasks_by_syncregion[i]
+            detstmt = ir.stmts[task.detach]
+            det = detstmt[:inst]::DetachNode
+
+            # Place a dummy instruction for marking that this detach should be
+            # handled with Tapir.spawn and not Tapir.spawn!.
+            placeholder = Expr(:spawn_placeholder, TaskGroup)
+            dest = insert_node!(ir, task.detach, NewInstruction(placeholder, Task))
+            detstmt[:inst] = DetachNode(dest, det.label)
+
+            for phics in taskgroup
+                t0 = insert_node!(ir, i, NewInstruction(UpsilonNode(nothing), Nothing))
+                t1 = insert_node!(ir, task.detach, NewInstruction(UpsilonNode(dest), Task))
+                push!(phics, PhiCNode(Any[t0, t1]))
+            end
+        end
+        # Insert `Tapir.synctasks(...)`
+        for (isync, phics) in zip(syncnodes_by_syncregion[i], taskgroup)
+            syncargs = map(phics) do phic
+                load = insert_node!(ir, isync, NewInstruction(phic, Union{Nothing,Task}))
+                insert_node!(
+                    ir,
+                    isync,
+                    NewInstruction(Expr(:new, MaybeTask, load), MaybeTask),
+                )
+            end
+            mi = find_method_instance_from_sig(
+                interp,
+                Tuple{typeof(Tapir.synctasks),[MaybeTask for _ in syncargs]...};
+                compilesig = true,
+            )
+            if mi === nothing
+                ir.stmts.inst[isync] =
+                    Expr(:call, GlobalRef(Tapir, :synctasks), syncargs...)
+            else
+                ir.stmts.inst[isync] =
+                    Expr(:invoke, mi, GlobalRef(Tapir, :synctasks), syncargs...)
+            end
+            ir.stmts.type[isync] = Any
+        end
+    end
+
+    # Require `compact!` here since `outline_child_task!` expects no pending new
+    # nodes.
+    ir = compact!(ir)
+
+    # TODO: Store BB labels in ChildTask so that we don't have to re-compute it here
+    return ir, child_tasks(ir)
+end
+
+"""
+    lower_tapir_task!(ir::IRCode, tasks::Vector{ChildTask}, interp) -> ir′
+
+Process detaches and reattaches recursively. It expects that syncregion and
+SyncNode are transformed to runtime function calls.
+"""
+function lower_tapir_tasks!(ir::IRCode, tasks::Vector{ChildTask}, interp::AbstractInterpreter)
+    Tapir = tapir_module()::Module
+
+    # Lower each detach of child task to the call to `Tapir.spawn!`.  It also
+    # removes the detach edge to child.  That is to say, we transform
+    #
+    #     #detacher
+    #         ...
+    #         detach within %tg, #child, #continuation
+    #     #child
+    #         $child_code
+    #         reattach within %tg, #continuation
+    #     #continuation
+    #     ...
+    #
+    # to
+    #
+    #     #detacher
+    #         ...
+    #         %oc = new_opaque_closure(%outlined_child_code, capture...)
+    #         Tapir.spawn!(%tg, %oc)
+    #         goto #continuation
+    #     #continuation
+    #     ...
+    #
+    # and then remove the detach edge from #detacher to #child. Use
+    # `Tapir.spawn` instead if `%tg` points to `:spawn_placeholder`.
+    for task in tasks
+        taskir, arguments = outline_child_task!(task, ir)
+        if task.subtasks !== nothing
+            taskir = lower_tapir_tasks!(taskir, task.subtasks, interp)
+        end
+        meth = opaque_closure_method_from_ssair(taskir)
+        oc_inst = NewInstruction(
+            Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any, meth, arguments...),
+            Any,
+        )
+
+        det = ir.stmts.inst[task.detach]::DetachNode
+        tg = det.syncregion::SSAValue
+        if isexpr(ir[tg], :spawn_placeholder)
+            TaskGroup = ir[tg].args[1]::Type
+            oc = insert_node!(ir, tg.id, oc_inst)
+            mi = find_method_instance_from_sig(
+                interp,
+                Tuple{typeof(Tapir.spawn),Type{TaskGroup},Any};
+                compilesig = true,
+            )
+            if mi === nothing
+                spawn_ex = Expr(:call, GlobalRef(Tapir, :spawn), TaskGroup, oc)
+            else
+                spawn_ex = Expr(:invoke, mi, GlobalRef(Tapir, :spawn), TaskGroup, oc)
+            end
+            ir[tg] = spawn_ex
+        else
+            TaskGroup = widenconst(ir.stmts[tg.id][:type])
+            oc = insert_node!(ir, task.detach, oc_inst)
+            mi = find_method_instance_from_sig(
+                interp,
+                Tuple{typeof(Tapir.spawn!),TaskGroup,Any};
+                compilesig = true,
+            )
+            if mi === nothing
+                spawn_ex = Expr(:call, GlobalRef(Tapir, :spawn!), tg, oc)
+            else
+                spawn_ex = Expr(:invoke, mi, GlobalRef(Tapir, :spawn!), tg, oc)
+            end
+            insert_node!(ir, task.detach, NewInstruction(spawn_ex, Any))
+        end
+        ir.stmts.inst[task.detach] = GotoNode(det.label)
+        detacher = block_for_inst(ir.cfg, task.detach)
+        cfg_delete_edge!(ir.cfg, detacher, detacher + 1)
+    end
+
+    ir = remove_tapir!(ir)
+
+    # Finalize the changes in the IR (clears the node inserted to `ir.new_nodes`):
+    ir = compact!(ir, true)
+    # Remove the dead code in the detached sub-CFG (child tasks):
+    ir = cfg_simplify!(ir)
+    if JLOptions().debug_level == 2
+        verify_ir(ir)
+        verify_linetable(ir.linetable)
+    end
+    return ir
+end
+
+function code_info_from_ssair(ir::IRCode)
+    if JLOptions().debug_level == 2
+        verify_ir(ir)
+        verify_linetable(ir.linetable)
+    end
+    nargs = length(ir.argtypes)
+    ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+    # ci.slotnames = [Symbol(:arg, i - 1) for i in 1:nargs]  # how do I concatenate strings in Julia?
+    ci.slotnames = [gensym(:arg) for _ in 1:nargs]
+    ci.slotnames[1] = Symbol("#self#")
+    ci.slotflags = fill(0x00, nargs)
+    replace_code_newstyle!(ci, ir, nargs - 1)
+    return ci
+end
+
+# ASK: Are `jl_new_code_info_uninit` and `jl_make_opaque_closure_method`
+#      allowed during optimization?
+"""
+    opaque_closure_method_from_ssair(ir::IRCode) -> closure::Method
+
+Create an opaque `closure` from an SSA `ir`.
+"""
+function opaque_closure_method_from_ssair(ir::IRCode)
+    # TODO: more accurate module/functionloc detection
+    if isempty(ir.linetable)
+        mod = Main
+        functionloc = LineNumberNode(0)
+    else
+        lin, = ir.linetable
+        mod = lin.module
+        functionloc = LineNumberNode(lin.line, lin.file)
+    end
+    ci = code_info_from_ssair(ir)
+    nargs = length(ir.argtypes)
+    name = :_tapir_outlined_function
+    return ccall(
+        :jl_make_opaque_closure_method,
+        Ref{Method},
+        (Any,Any,Any,Any,Any),
+        mod, name, nargs - 1, functionloc, ci,
+    )
+end
+
+function _lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
+    # Making a copy here, as `convert_to_ircode` mutates `ci`:
+    ci = copy(ci)
+
+    # Ref: _typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    params = OptimizationParams(interp)
+    opt = OptimizationState(linfo, copy(ci), params, interp)
+    nargs = Int(opt.nargs) - 1 # Ref: optimize(interp, opt, params, result)
+
+    # Ref: run_passes
+    preserve_coverage = coverage_enabled(opt.mod)
+    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, opt)
+    ir = slot2reg(ir, ci, nargs, opt)
+    if JLOptions().debug_level == 2
+        @timeit "verify pre-tapir" (verify_ir(ir); verify_linetable(ir.linetable))
+    end
+    @timeit "tapir" ir = lower_tapir!(ir, interp)
+    return ir, params, opt
+end
+
+function lower_tapir(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
+    has_tapir(ci) || return ci
+    ir, params, opt = _lower_tapir(interp, linfo, ci)
+    if JLOptions().debug_level == 2
+        @timeit "verify tapir" (verify_ir(ir); verify_linetable(ir.linetable))
+    end
+
+    finish(interp, opt, params, ir, Any) # Ref: optimize(interp, opt, params, result)
+    src = ir_to_codeinf!(opt)
+
+    return src
+end
+
+"""
+    lower_tapir(linfo::MethodInstance, ci::CodeInfo) -> ci′::CodeInfo
+
+This is called from `jl_emit_code` (`codegen.cpp`); i.e., just before compilation to
+to LLVM.
+"""
+lower_tapir(linfo::MethodInstance, ci::CodeInfo) =
+    lower_tapir(NativeInterpreter(linfo.def.primary_world), linfo, ci)
+# ASK: Should we use the world age from `jl_codegen_params_t`?
+
+# Useful for debugging:
+lower_tapir_to_ircode(linfo::MethodInstance, ci::CodeInfo) =
+    lower_tapir_to_ircode(NativeInterpreter(linfo.def.primary_world), linfo, ci)
+lower_tapir_to_ircode(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo) =
+    first(_lower_tapir(interp, linfo, ci))

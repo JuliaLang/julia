@@ -109,6 +109,45 @@ function verify_ir(ir::IRCode, print::Bool=true)
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
                 error("")
             end
+        elseif isa(terminator, DetachNode)
+            if !(block.succs == [idx + 1, terminator.label] || block.succs == [terminator.label, idx + 1])
+                @verify_error " Block $idx successors ($(block.succs)), does not match DetachNode; expected detach edge to block $(idx + 1) and continue edge to block $(terminator.label)"
+                error("")
+            end
+            continuation = ir.cfg.blocks[terminator.label]
+            for child in continuation.preds  # BBs in the child task
+                child == idx && continue
+                local t = ir.stmts[ir.cfg.blocks[child].stmts[end]][:inst]
+                if !(t isa ReattachNode)
+                    continue
+                end
+                if !dominates(domtree, idx, child)
+                    @verify_error "Detach block $idx does not dominate reattach block $child"
+                    error("")
+                end
+            end
+            for idx in continuation.stmts
+                # Note: This assumes that `early_tapir_pass!` (`check_tapir_race!`) was
+                # already run.
+                if ir.stmts[idx][:inst] isa PhiNode
+                    @verify_error "Continuation block $continuation has a PhiNode"
+                    error("")
+                end
+            end
+        elseif isa(terminator, ReattachNode)
+            if block.succs != [terminator.label]
+                @verify_error " Block $idx successors ($(block.succs)), does not match ReattachNode; expected reattach edge to block $(terminator.label)"
+                error("")
+            end
+            continuation = ir.cfg.blocks[terminator.label]
+            ndetaches = 0
+            for p in continuation.preds
+                ndetaches += ir.stmts[ir.cfg.blocks[p].stmts[end]][:inst] isa DetachNode
+            end
+            if ndetaches != 1
+                @verify_error "Continuation block $(terminator.label) has $ndetaches continue edgees (expected only one such edge)"
+                error("")
+            end
         elseif isexpr(terminator, :enter)
             @label enter_check
             if length(block.succs) != 2 || (block.succs != Int[terminator.args[1], idx+1] && block.succs != Int[idx+1, terminator.args[1]])
@@ -188,6 +227,12 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     error("")
                 end
             end
+        elseif (isa(stmt, SyncNode) && resolve_syncregion(ir, stmt.syncregion) === nothing)
+            @verify_error "SyncNode $idx does not have a valid syncregion."
+            error("")
+            # Note: We can't do the same check for DetachNode and ReattachNode
+            # since they may be inside a closure that captures the syncregion
+            # token.
         else
             if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
                 if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
@@ -218,6 +263,36 @@ function verify_ir(ir::IRCode, print::Bool=true)
             end
         end
     end
+
+    verify_tapir_tasks(ir)
+end
+
+function verify_tapir_tasks(ir::IRCode)
+    # Note: `child_tasks` throws if detach-reattach is not nested
+    foreach_task(child_tasks(ir)) do task
+        outside = Int[]
+        for ibb in task.blocks
+            bb = ir.cfg.blocks[ibb]
+            for s in bb.succs
+                if s ∉ task.blocks
+                    push!(outside, s)
+                end
+            end
+        end
+        # Note: Due to the way `child_tasks` is written, `length(outside) == 1`
+        # implies that the every cycle containing a detach edge also contain the
+        # corresponding reattach edges.
+        if length(outside) == 0
+            # It may be possible to allow this for tasks that always throw.
+            @verify_error "Task detached by instruction $(task.detach) has no continaution block"
+            error("")
+        elseif length(outside) > 1
+            @verify_error "Task detached by instruction $(task.detach) has multiple continuation blocks: $(outside)"
+            error("")
+        end
+        return true
+    end
+    return
 end
 
 function verify_linetable(linetable::Vector{LineInfoNode}, print::Bool=true)

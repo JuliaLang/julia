@@ -257,6 +257,9 @@ end
 # OpaqueClosure
 include("opaque_closure.jl")
 
+# Tapir frontend and runtime
+include("tapir.jl")
+
 """
     Experimental.@overlay mt [function def]
 

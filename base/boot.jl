@@ -155,6 +155,20 @@
 #    name::Symbol
 #end
 
+#struct DetachNode
+#    syncregion
+#    label::Int
+#end
+
+#struct ReattachNode
+#    syncregion
+#    label::Int
+#end
+
+#struct SyncNode
+#    syncregion
+#end
+
 #mutable struct Task
 #    parent::Task
 #    storage::Any
@@ -419,6 +433,11 @@ eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
 eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
 eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
 eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
+eval(Core, :(LineInfoNode(@nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
+             $(Expr(:new, :LineInfoNode, :method, :file, :line, :inlined_at))))
+eval(Core, :(SyncNode(token) = $(Expr(:new, :SyncNode, :token))))
+eval(Core, :(DetachNode(token, bb::Int) = $(Expr(:new, :DetachNode, :token, :bb))))
+eval(Core, :(ReattachNode(token, bb::Int) = $(Expr(:new, :ReattachNode, :token, :bb))))
 eval(Core, :(LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
              $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
 eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
@@ -502,11 +521,13 @@ module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    DetachNode, ReattachNode, SyncNode,
     Const, PartialStruct
 
 import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    DetachNode, ReattachNode, SyncNode,
     Const, PartialStruct
 
 end
