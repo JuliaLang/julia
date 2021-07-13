@@ -233,6 +233,57 @@ macro assert(ex, msgs...)
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
+function prepare_error(ex, msgs...)
+    msg = isempty(msgs) ? ex : msgs[1]
+    if isa(msg, AbstractString)
+        msg = msg # pass-through
+    elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
+        # message is an expression needing evaluating
+        msg = :(Main.Base.string($(esc(msg))))
+    elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
+        msg = Main.Base.string(msg)
+    else
+        # string() might not be defined during bootstrap
+        msg = quote
+            msg = $(Expr(:quote,msg))
+            isdefined(Main, :Base) ? Main.Base.string(msg) :
+                (Core.println(msg); "Error during bootstrap. See stdout.")
+        end
+    end
+    return msg
+end
+
+struct AuditError <: Exception
+    msg::AbstractString
+end
+AuditError() = AuditError("")
+
+"""
+    @audit cond [text]
+
+Throw an [`AuditError`](@ref) if `cond` is `false`.
+Message `text` is optionally displayed upon audit failure.
+
+# Examples
+```jldoctest
+julia> @audit iseven(3) "3 is an odd number!"
+ERROR: AuditError: 3 is an odd number!
+
+julia> @audit isodd(3) "What even are numbers?"
+```
+"""
+macro audit(ex, msgs...)
+    msg = prepare_error(ex, msgs...)
+    fn = gensym("audit")
+
+    @eval @noinline function $(fn)()
+        throw(AuditError($msg))
+    end
+
+    return :($(esc(ex)) ? $(nothing) : $(fn)())
+end
+
+
 struct ExponentialBackOff
     n::Int
     first_delay::Float64
