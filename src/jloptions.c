@@ -129,7 +129,8 @@ static const char opts[]  =
         " (default level is 1 if unspecified or 2 if used without a level)\n"
 #endif
     " --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
-    " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
+    " --check-bounds={yes|no|auto}\n"
+    "                           Emit bounds checks always, never, or respect @inbounds declarations\n"
 #ifdef USE_POLLY
     " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
@@ -544,8 +545,10 @@ restart_switch:
                 jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_ON;
             else if (!strcmp(optarg,"no"))
                 jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_OFF;
+            else if (!strcmp(optarg,"auto"))
+                jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_DEFAULT;
             else
-                jl_errorf("julia: invalid argument to --check-bounds={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --check-bounds={yes|no|auto} (%s)", optarg);
             break;
         case opt_output_bc:
             jl_options.outputbc = optarg;

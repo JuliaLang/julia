@@ -379,6 +379,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
         @test parse(Int, readchomp(`$exename_default_checkbounds -E "Int(Base.JLOptions().check_bounds)"`)) ==
             JL_OPTIONS_CHECK_BOUNDS_DEFAULT
         @test parse(Int, readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
+            --check-bounds=auto`)) == JL_OPTIONS_CHECK_BOUNDS_DEFAULT
+        @test parse(Int, readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
             --check-bounds=yes`)) == JL_OPTIONS_CHECK_BOUNDS_ON
         @test parse(Int, readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
             --check-bounds=no`)) == JL_OPTIONS_CHECK_BOUNDS_OFF

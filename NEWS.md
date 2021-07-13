@@ -30,6 +30,7 @@ New language features
   for example `a, b... = [1, 2, 3]`. This syntax is implemented using `Base.rest`,
   which can be overloaded to customize its behavior for different collection types
   ([#37410]).
+* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 
 Language changes
 ----------------
