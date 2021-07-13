@@ -4401,7 +4401,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
     if (head == meta_sym || head == inbounds_sym || head == coverageeffect_sym
-            || head == aliasscope_sym || head == popaliasscope_sym) {
+            || head == aliasscope_sym || head == popaliasscope_sym || head == inline_sym || head == noinline_sym) {
         // some expression types are metadata and can be ignored
         // in statement position
         return;
@@ -4836,7 +4836,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     }
     else if (head == leave_sym || head == coverageeffect_sym
             || head == pop_exception_sym || head == enter_sym || head == inbounds_sym
-            || head == aliasscope_sym || head == popaliasscope_sym) {
+            || head == aliasscope_sym || head == popaliasscope_sym || head == inline_sym || head == noinline_sym) {
         jl_errorf("Expr(:%s) in value position", jl_symbol_name(head));
     }
     else if (head == boundscheck_sym) {

@@ -59,7 +59,8 @@ end
 
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
+is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta ||
+    head === :loopinfo || head === :inline || head === :noinline)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -187,7 +188,7 @@ function specialize_method(method::Method, @nospecialize(atypes), sparams::Simpl
     if preexisting
         # check cached specializations
         # for an existing result stored there
-        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
+        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)::Union{Nothing,MethodInstance}
     end
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end

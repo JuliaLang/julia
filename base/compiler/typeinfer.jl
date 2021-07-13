@@ -343,7 +343,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
             nslots = length(ci.slotflags)
             resize!(ci.slottypes, nslots)
             resize!(ci.slotnames, nslots)
-            return ccall(:jl_compress_ir, Any, (Any, Any), def, ci)
+            return ccall(:jl_compress_ir, Vector{UInt8}, (Any, Any), def, ci)
         else
             return ci
         end

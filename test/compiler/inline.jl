@@ -498,6 +498,119 @@ end
     end
 end
 
+@testset "callsite @inline/@noinline annotations" begin
+    m = Module()
+    @eval m begin
+        # this global variable prevents inference to fold everything as constant, and/or the optimizer to inline the call accessing to this
+        g = 0
+
+        @noinline noinlined_explicit(x) = x
+        force_inline_explicit(x)        = @inline noinlined_explicit(x)
+        force_inline_block_explicit(x)  = @inline noinlined_explicit(x) + noinlined_explicit(x)
+        noinlined_implicit(x)          = g
+        force_inline_implicit(x)       = @inline noinlined_implicit(x)
+        force_inline_block_implicit(x) = @inline noinlined_implicit(x) + noinlined_implicit(x)
+
+        @inline inlined_explicit(x)      = x
+        force_noinline_explicit(x)       = @noinline inlined_explicit(x)
+        force_noinline_block_explicit(x) = @noinline inlined_explicit(x) + inlined_explicit(x)
+        inlined_implicit(x)              = x
+        force_noinline_implicit(x)       = @noinline inlined_implicit(x)
+        force_noinline_block_implicit(x) = @noinline inlined_implicit(x) + inlined_implicit(x)
+
+        # test callsite annotations for constant-prop'ed calls
+
+        @noinline Base.@aggressive_constprop noinlined_constprop_explicit(a) = a+g
+        force_inline_constprop_explicit()                                    = @inline noinlined_constprop_explicit(0)
+        Base.@aggressive_constprop noinlined_constprop_implicit(a) = a+g
+        force_inline_constprop_implicit()                          = @inline noinlined_constprop_implicit(0)
+
+        @inline Base.@aggressive_constprop inlined_constprop_explicit(a) = a+g
+        force_noinline_constprop_explicit()                              = @noinline inlined_constprop_explicit(0)
+        @inline Base.@aggressive_constprop inlined_constprop_implicit(a) = a+g
+        force_noinline_constprop_implicit()                              = @noinline inlined_constprop_implicit(0)
+
+        @noinline notinlined(a) = a
+        function nested(a0, b0)
+            @noinline begin
+                a = @inline notinlined(a0) # this call should be inlined
+                b = notinlined(b0) # this call should NOT be inlined
+                return a, b
+            end
+        end
+
+        # test inlining of un-cached callsites
+
+        import Core.Compiler: isType
+
+        limited(a) = @noinline(isType(a)) ? @inline(limited(a.parameters[1])) : rand(a)
+
+        function multilimited(a)
+            if @noinline(isType(a))
+                return @inline(multilimited(a.parameters[1]))
+            else
+                return rand(Bool) ? rand(a) : @inline(multilimited(a))
+            end
+        end
+    end
+
+    let ci = code_typed1(m.force_inline_explicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_explicit), ci.code)
+    end
+    let ci = code_typed1(m.force_inline_block_explicit, (Int,))
+        @test all(ci.code) do x
+            !isinvoke(x, :noinlined_explicit) &&
+            !isinvoke(x, :(+))
+        end
+    end
+    let ci = code_typed1(m.force_inline_implicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_implicit), ci.code)
+    end
+    let ci = code_typed1(m.force_inline_block_implicit, (Int,))
+        @test all(x->!isinvoke(x, :noinlined_explicit), ci.code)
+    end
+
+    let ci = code_typed1(m.force_noinline_explicit, (Int,))
+        @test any(x->isinvoke(x, :inlined_explicit), ci.code)
+    end
+    let ci = code_typed1(m.force_noinline_block_explicit, (Int,))
+        @test count(x->isinvoke(x, :inlined_explicit), ci.code) == 2
+    end
+    let ci = code_typed1(m.force_noinline_implicit, (Int,))
+        @test any(x->isinvoke(x, :inlined_implicit), ci.code)
+    end
+    let ci = code_typed1(m.force_noinline_block_implicit, (Int,))
+        @test count(x->isinvoke(x, :inlined_implicit), ci.code) == 2
+    end
+
+    let ci = code_typed1(m.force_inline_constprop_explicit)
+        @test all(x->!isinvoke(x, :noinlined_constprop_explicit), ci.code)
+    end
+    let ci = code_typed1(m.force_inline_constprop_implicit)
+        @test all(x->!isinvoke(x, :noinlined_constprop_implicit), ci.code)
+    end
+
+    let ci = code_typed1(m.force_noinline_constprop_explicit)
+        @test any(x->isinvoke(x, :inlined_constprop_explicit), ci.code)
+    end
+    let ci = code_typed1(m.force_noinline_constprop_implicit)
+        @test any(x->isinvoke(x, :inlined_constprop_implicit), ci.code)
+    end
+
+    let ci = code_typed1(m.nested, (Int,Int))
+        @test count(x->isinvoke(x, :notinlined), ci.code) == 1
+    end
+
+    let ci = code_typed1(m.limited, (Any,))
+        @test count(x->isinvoke(x, :isType), ci.code) == 2
+    end
+    # check that inlining for recursive callsites doesn't depend on inference local cache
+    let ci1 = code_typed1(m.multilimited, (Any,))
+        ci2 = code_typed1(m.multilimited, (Any,))
+        @test ci1.code == ci2.code
+    end
+end
+
 # Issue #41299 - inlining deletes error check in :>
 g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 @test_throws TypeError g41299(>:, 1, 2)

@@ -84,7 +84,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             e->head == quote_sym || e->head == inert_sym ||
             e->head == meta_sym || e->head == inbounds_sym ||
             e->head == boundscheck_sym || e->head == loopinfo_sym ||
-            e->head == aliasscope_sym || e->head == popaliasscope_sym) {
+            e->head == aliasscope_sym || e->head == popaliasscope_sym ||
+            e->head == inline_sym || e->head == noinline_sym) {
             // ignore these
         }
         else {
