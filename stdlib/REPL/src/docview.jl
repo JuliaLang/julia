@@ -79,7 +79,7 @@ function insert_hlines(io::IO, docs)
         push!(v, doc)
         n == length(docs.content) || push!(v, Markdown.HorizontalRule())
     end
-    return Markdown.MD(v)
+    return Markdown.MD(v) |> REPL.TerminalMenus.pager
 end
 
 function formatdoc(d::DocStr)
