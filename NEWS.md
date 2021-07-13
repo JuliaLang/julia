@@ -21,6 +21,7 @@ New language features
   lines of code ([#40753]).
 * A backslash before a newline in command literals now always removes the newline, similar to standard string
   literals, whereas the result was not well-defined before ([#40753]).
+* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 
 Language changes
 ----------------
