@@ -606,8 +606,7 @@ end
         @test log(x) == log(42)
         @test isinf(log(BigFloat(0)))
         @test_throws DomainError log(BigFloat(-1))
-        # issue #41450
-        @test_skip log2(x) == log2(42)
+        @test log2(x) == log2(42)
         @test isinf(log2(BigFloat(0)))
         @test_throws DomainError log2(BigFloat(-1))
         @test log10(x) == log10(42)
