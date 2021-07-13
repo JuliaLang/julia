@@ -23,7 +23,8 @@ mutable struct Serializer{I<:IO} <: AbstractSerializer
     pending_refs::Vector{Int}
     known_object_data::Dict{UInt64,Any}
     version::Int
-    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}(), ser_version)
+    copyfns::Bool
+    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}(), ser_version, false)
 end
 
 Serializer(io::IO) = Serializer{typeof(io)}(io)
@@ -529,26 +530,26 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
 end
 
 # decide whether to send all data for a type (instead of just its name)
-function should_send_whole_type(s, t::DataType)
+function should_send_whole_type(s::AbstractSerializer, t::DataType)
     tn = t.name
     if isdefined(tn, :mt)
         # TODO improve somehow
-        # send whole type for anonymous functions in Main
+        # send whole type for anonymous functions in Main, or when requested
         name = tn.mt.name
         mod = tn.module
-        isanonfunction = mod === Main && # only Main
-            t.super === Function && # only Functions
+        isanonfunction = t.super === Function && # only Functions
             unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
             (!isdefined(mod, name) || t != typeof(getfield(mod, name))) # XXX: 95% accurate test for this being an inner function
             # TODO: more accurate test? (tn.name !== "#" name)
+        copyfns = s isa Serializer && s.copyfns
         #TODO: iskw = startswith(tn.name, "#kw#") && ???
         #TODO: iskw && return send-as-kwftype
-        return mod === __deserialized_types__ || isanonfunction
+        return mod === __deserialized_types__ || (isanonfunction && (copyfns || mod === Main))
     end
     return false
 end
 
-function serialize_type_data(s, @nospecialize(t::DataType))
+function serialize_type_data(s::AbstractSerializer, @nospecialize(t::DataType))
     whole = should_send_whole_type(s, t)
     iswrapper = (t === unwrap_unionall(t.name.wrapper))
     if whole && iswrapper
@@ -758,8 +759,9 @@ An 8-byte identifying header is written to the stream first. To avoid writing th
 construct a `Serializer` and use it as the first argument to `serialize` instead.
 See also [`Serialization.writeheader`](@ref).
 """
-function serialize(s::IO, x)
+function serialize(s::IO, x; copy_functions::Bool = false)
     ss = Serializer(s)
+    ss.copyfns = copy_functions
     writeheader(ss)
     serialize(ss, x)
 end
@@ -772,7 +774,7 @@ Open a file and serialize the given value to it.
 !!! compat "Julia 1.1"
     This method is available as of Julia 1.1.
 """
-serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w")
+serialize(filename::AbstractString, x; kwargs...) = open(io->serialize(io, x; kwargs...), filename, "w")
 
 ## deserializing values ##
 
