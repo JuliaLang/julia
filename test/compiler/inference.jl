@@ -3395,3 +3395,9 @@ end
         x.x
     end) == Any[Int]
 end
+
+# https://github.com/JuliaLang/julia/issues/41450
+@test (@eval Module() begin
+    foo(x=1.0) = muladd(1 + eps(x), 1 - eps(x), -1)
+    foo() == foo(1.0)
+end)

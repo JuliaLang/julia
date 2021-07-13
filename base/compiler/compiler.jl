@@ -111,6 +111,9 @@ using .Sort
 something(x::Nothing, y...) = something(y...)
 something(x::Any, y...) = x
 
+const ARCH = ccall(:jl_get_ARCH, Any, ())
+include("build_h.jl")
+
 ############
 # compiler #
 ############
@@ -142,4 +145,3 @@ Core.eval(Core, :(_parse = Compiler.fl_parse))
 
 end # baremodule Compiler
 ))
-

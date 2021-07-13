@@ -1514,6 +1514,24 @@ function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecializ
     return _builtin_nothrow(f, argtypes, rt)
 end
 
+# NOTE sync the definitions below with those defined in floatfuncs.jl
+fma_libm(x::Float32, y::Float32, z::Float32) =
+    ccall(("fmaf", libm_name), Float32, (Float32,Float32,Float32), x, y, z)
+fma_libm(x::Float64, y::Float64, z::Float64) =
+    ccall(("fma", libm_name), Float64, (Float64,Float64,Float64), x, y, z)
+fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
+fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
+if ARCH !== :i686 &&
+   fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
+   fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) == 1.8626451500983188e-9 &&
+   add_float(0.1, 0.2) == 0.30000000000000004
+    fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)
+    fma(x::Float64, y::Float64, z::Float64) = fma_llvm(x,y,z)
+else
+    fma(x::Float32, y::Float32, z::Float32) = fma_libm(x,y,z)
+    fma(x::Float64, y::Float64, z::Float64) = fma_libm(x,y,z)
+end
+
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Array{Any,1},
                            sv::Union{InferenceState,Nothing})
     if f === tuple
@@ -1522,6 +1540,15 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(a::Const -> a.val, argtypes)
+            # https://github.com/JuliaLang/julia/issues/41450
+            # enforce no rounding for better accuracy
+            if f === muladd_float && length(argvals) == 3
+                if _all(@nospecialize(a) -> isa(a, Float32), argvals)
+                    return Const(fma(argvals[1]::Float32, argvals[2]::Float32, argvals[3]::Float32))
+                elseif _all(@nospecialize(a) -> isa(a, Float64), argvals)
+                    return Const(fma(argvals[1]::Float64, argvals[2]::Float64, argvals[3]::Float64))
+                end
+            end
             try
                 return Const(f(argvals...))
             catch
