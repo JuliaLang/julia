@@ -42,7 +42,8 @@ end
 
 # Using `Some{Union{...}}` for "concretely typed Union". This avoids dynamic
 # dispatch (hopefully) without code bloat.
-const MaybeTask = Some{Union{Task,Nothing}}
+const ConcreteMaybe{T} = Some{Union{T,Nothing}}
+const MaybeTask = ConcreteMaybe{Task}
 
 function synctasks(tasks::MaybeTask...)
     c_ex = nothing
@@ -62,6 +63,13 @@ function synctasks(tasks::MaybeTask...)
     if c_ex !== nothing
         throw(c_ex)
     end
+end
+
+function synctasks(args::ConcreteMaybe{Any}...)
+    args = Iterators.map(something, args)
+    args = Iterators.filter(!isnothing, args)
+    tasks = Iterators.map(t -> ConcreteMaybe{typeof(t)}(t), args)
+    synctasks(tasks...)
 end
 
 mutable struct UndefableRef{T}

@@ -1613,11 +1613,36 @@ function optimize_taskgroups!(
     end
     isempty(syncnodes_by_syncregion) && return ir, tasks
 
+    cache = IdDict{Type,Type}()
+    function sync_return_type(@nospecialize(TaskGroup::Type))
+        return get!(cache, TaskGroup) do
+            ccall(:jl_typeinf_begin, Cvoid, ())
+            mi = find_method_instance_from_sig(
+                interp,
+                Tuple{typeof(Tapir.spawn),Type{TaskGroup},Any};
+                compilesig = true,
+            )
+            result = InferenceResult(mi)
+            frame = InferenceState(result, true, interp)
+            if frame !== nothing
+                typeinf(interp, frame)
+            end
+            ccall(:jl_typeinf_end, Cvoid, ())
+            return widenconst(ignorelimited(result.result))
+        end
+    end
+
     # Insert runtime calls
-    MaybeTask = Tapir.MaybeTask
+    ConcreteMaybe = Tapir.ConcreteMaybe
     for i in syncregions
         isinlinable[i] || continue
         TaskGroup = widenconst(ir.stmts[i][:type])
+        TaskType = sync_return_type(TaskGroup)
+        if isconcretetype(TaskType)
+            MaybeTask = ConcreteMaybe{TaskType}
+        else
+            MaybeTask = ConcreteMaybe{Any}
+        end
         remove_syncregion!(ir, i)
         taskgroup = Vector{PhiCNode}[PhiCNode[] for _ in syncnodes_by_syncregion[i]]
         for task in tasks_by_syncregion[i]
@@ -1627,7 +1652,7 @@ function optimize_taskgroups!(
             # Place a dummy instruction for marking that this detach should be
             # handled with Tapir.spawn and not Tapir.spawn!.
             placeholder = Expr(:spawn_placeholder, TaskGroup)
-            dest = insert_node!(ir, task.detach, NewInstruction(placeholder, Task))
+            dest = insert_node!(ir, task.detach, NewInstruction(placeholder, TaskType))
             detstmt[:inst] = DetachNode(dest, det.label)
 
             for phics in taskgroup
@@ -1639,7 +1664,7 @@ function optimize_taskgroups!(
         # Insert `Tapir.synctasks(...)`
         for (isync, phics) in zip(syncnodes_by_syncregion[i], taskgroup)
             syncargs = map(phics) do phic
-                load = insert_node!(ir, isync, NewInstruction(phic, Union{Nothing,Task}))
+                load = insert_node!(ir, isync, NewInstruction(phic, Union{Nothing,TaskType}))
                 insert_node!(
                     ir,
                     isync,
