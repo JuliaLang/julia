@@ -341,7 +341,8 @@ fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 # If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
 # instead of the properly-rounded 0.30000000000000004; check after calling fma
 # NOTE this system level check is also used in compiler/tfuncs.jl, make sure to sync them
-if Sys.ARCH !== :i686 &&
+
+if !(Sys.ARCH === :i686 || Sys.iswindows()) &&
    fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
    fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) == 1.8626451500983188e-9 &&
    0.1 + 0.2 == 0.30000000000000004

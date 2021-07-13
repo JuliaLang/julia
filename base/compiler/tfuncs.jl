@@ -1521,7 +1521,7 @@ fma_libm(x::Float64, y::Float64, z::Float64) =
     ccall(("fma", libm_name), Float64, (Float64,Float64,Float64), x, y, z)
 fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
 fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
-if ARCH !== :i686 &&
+if !(ARCH === :i686 || KERNEL === :Windows || KERNEL === :NT) &&
    fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
    fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) == 1.8626451500983188e-9 &&
    add_float(0.1, 0.2) == 0.30000000000000004
