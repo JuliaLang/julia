@@ -1487,14 +1487,14 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
     return 1;
 }
 
-// If a field can reference the same type as a field, then the inlining
+// If a field can reference its enclosing type, then the inlining
 // recursive depth is not statically bounded for some layouts, so we cannot
 // inline it. The only way fields can reference this type (due to
 // syntax-enforced restrictions) is via being passed as a type parameter. Thus
 // we can conservatively check this by examining only the parameters of the
 // dependent types.
 // affects_layout is a hack introduced by #35275 to workaround a problem
-// introduced by #34223: it checks whether we will need to potentially need to
+// introduced by #34223: it checks whether we will potentially need to
 // compute the layout of the object before we have fully computed the types of
 // the fields during recursion over the allocation of the parameters for the
 // field types (of the concrete subtypes)
@@ -1556,9 +1556,7 @@ JL_CALLABLE(jl_f__typebody)
             // If a supertype can reference the same type, then we may not be
             // able to compute the layout of the object before needing to
             // publish it, so we must assume it cannot be inlined, if that
-            // check passes, then we also still need to check the object
-            // itselpasses, then we also still need to check the parameters of
-            // the fields too.
+            // check passes, then we also still need to check the fields too.
             if (!dt->name->mutabl && !references_name((jl_value_t*)dt->super, dt->name, 1)) {
                 int mayinlinealloc = 1;
                 size_t i, nf = jl_svec_len(ft);
