@@ -98,6 +98,7 @@ end
     @test @inferred(TaskOutputs.update_distinct(false)) == 6
     @test @inferred(TaskOutputs.local_update_after_store(3)) == sum(1:3)
     @test @inferred(TaskOutputs.conditional_output(true)) == 2
+    @test @inferred(TaskOutputs.independent_increments()) == 333
     @test @inferred(tmap(x -> x + 0.5, 1:10)) == 1.5:1:10.5
 
     @test_throws UndefVarError(:a) TaskOutputs.conditional_output(false)

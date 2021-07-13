@@ -271,6 +271,17 @@ function conditional_output(x)
     return a + b
 end
 
+function independent_increments()
+    a = 0
+    b = 0
+    Tapir.@output a b
+    Tapir.@sync begin
+        Tapir.@spawn a += produce(111)
+        b += produce(222)
+    end
+    return a + b
+end
+
 end # module TaskOutputs
 
 module Racy
