@@ -388,25 +388,24 @@ seed!(seed::Union{Nothing,Integer,Vector{UInt32},Vector{UInt64},NTuple{4,UInt64}
     seed!(GLOBAL_RNG, seed)
 
 rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
-rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
-for T in (:(SamplerTrivial{UInt52Raw{UInt64}}),
-          :(SamplerTrivial{UInt2x52Raw{UInt128}}),
-          :(SamplerTrivial{UInt104Raw{UInt128}}),
-          :(SamplerTrivial{CloseOpen01_64}),
-          :(SamplerTrivial{CloseOpen12_64}),
-          :(SamplerUnion(Int64, UInt64, Int128, UInt128)),
-          :(SamplerUnion(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)),
+
+for T in (:(SamplerBoolBitInteger),
+          :(SamplerTrivial{UInt52Raw{UInt64}}),
+          :(SamplerTrivial{UInt52{UInt64}}),
+          :(SamplerTrivial{UInt104{UInt128}}),
+          :(SamplerTrivial{CloseOpen01{Float16}}),
+          :(SamplerTrivial{CloseOpen01{Float32}}),
+          :(SamplerTrivial{CloseOpen01{Float64}}),
          )
     @eval rand(::_GLOBAL_RNG, x::$T) = rand(default_rng(), x)
 end
-
 rand!(::_GLOBAL_RNG, A::AbstractArray{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
 rand!(::_GLOBAL_RNG, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
 for T in (Float16, Float32)
     @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen12{$T}}) = rand!(default_rng(), A, I)
     @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen01{$T}}) = rand!(default_rng(), A, I)
 end
-for T in BitInteger_types
+for T in (BitInteger_types..., Bool)
     @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerType{$T}) = rand!(default_rng(), A, I)
 end
 
