@@ -42,6 +42,7 @@ struct SparseMatStyle <: Broadcast.AbstractArrayStyle{2} end
 Broadcast.BroadcastStyle(::Type{<:SparseVector}) = SparseVecStyle()
 Broadcast.BroadcastStyle(::Type{<:AbstractSparseMatrixCSC}) = SparseMatStyle()
 const SPVM = Union{SparseVecStyle,SparseMatStyle}
+struct ELTYPE end
 
 # SparseVecStyle handles 0-1 dimensions, SparseMatStyle 0-2 dimensions.
 # SparseVecStyle promotes to SparseMatStyle for 2 dimensions.
@@ -162,10 +163,13 @@ function _noshapecheck_map!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, Bs::Var
                         _map_notzeropres!(f, fofzeros, C, A, Bs...)
 end
 function _noshapecheck_map(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
+    _noshapecheck_map(ELTYPE, f, A, Bs...)
+end
+function _noshapecheck_map(ElType, f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
     maxnnzC = Int(fpreszeros ? min(widelength(A), _sumnnzs(A, Bs...)) : widelength(A))
-    entrytypeC = Base.Broadcast.combine_eltypes(f, (A, Bs...))
+    entrytypeC = _combine_eltypes(ElType, f, (A, Bs...))
     indextypeC = _promote_indtype(A, Bs...)
     C = _allocres(size(A), indextypeC, entrytypeC, maxnnzC)
     return fpreszeros ? _map_zeropres!(f, C, A, Bs...) :
@@ -190,10 +194,13 @@ copy(bc::SpBroadcasted1) = _noshapecheck_map(bc.f, bc.args[1])
 end
 
 function _diffshape_broadcast(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
+    _diffshape_broadcast(ELTYPE, f, A, Bs...)
+end
+function _diffshape_broadcast(ElType, f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) where {Tf,N}
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
     indextypeC = _promote_indtype(A, Bs...)
-    entrytypeC = Base.Broadcast.combine_eltypes(f, (A, Bs...))
+    entrytypeC = _combine_eltypes(ElType, f, (A, Bs...))
     shapeC = to_shape(Base.Broadcast.combine_axes(A, Bs...))
     maxnnzC = fpreszeros ? _checked_maxnnzbcres(shapeC, A, Bs...) : _densennz(shapeC)
     C = _allocres(shapeC, indextypeC, entrytypeC, maxnnzC)
@@ -816,7 +823,7 @@ _finishempty!(C::SparseVector) = C
 _finishempty!(C::AbstractSparseMatrixCSC) = (fill!(getcolptr(C), 1); C)
 
 # special case - vector outer product
-_copy(f::typeof(*), x::SparseVectorUnion, y::AdjOrTransSparseVectorUnion) = _outer(x, y)
+_copy(ELTYPE, f::typeof(*), x::SparseVectorUnion, y::AdjOrTransSparseVectorUnion) = _outer(x, y)
 @inline _outer(x::SparseVectorUnion, y::Adjoint) = return _outer(conj, x, parent(y))
 @inline _outer(x::SparseVectorUnion, y::Transpose) = return _outer(identity, x, parent(y))
 function _outer(trans::Tf, x, y) where Tf
@@ -1009,21 +1016,25 @@ end
 # broadcast entry points for combinations of sparse arrays and other (scalar) types
 @inline function copy(bc::Broadcasted{<:SPVM})
     bcf = flatten(bc)
-    return _copy(bcf.f, bcf.args...)
+    ElType = _combine_eltypes(ELTYPE, bc.f, bc.args)
+    return _copy(ElType, bcf.f, bcf.args...)
 end
 
-_copy(f, args::SparseVector...) = _shapecheckbc(f, args...)
-_copy(f, args::AbstractSparseMatrixCSC...) = _shapecheckbc(f, args...)
-_copy(f, args::SparseVecOrMat...) = _diffshape_broadcast(f, args...)
+_combine_eltypes(::Type{ELTYPE}, f, args) = Base.Broadcast.combine_eltypes(f, args)
+_combine_eltypes(T::Type, f, args) = T
+
+_copy(ElType, f, args::SparseVector...) = _shapecheckbc(ElType, f, args...)
+_copy(ElType, f, args::AbstractSparseMatrixCSC...) = _shapecheckbc(ElType, f, args...)
+_copy(ElType, f, args::SparseVecOrMat...) = _diffshape_broadcast(ElType, f, args...)
 # Otherwise, we incorporate scalars into the function and re-dispatch
-function _copy(f, args...)
+function _copy(ElType, f, args...)
     parevalf, passedargstup = capturescalars(f, args)
-    return _copy(parevalf, passedargstup...)
+    return _copy(ElType, parevalf, passedargstup...)
 end
-_copy(f) = throw(MethodError(_copy, (f,)))  # avoid method ambiguity
+_copy(ElType, f) = throw(MethodError(_copy, (ElType, f,)))  # avoid method ambiguity
 
-function _shapecheckbc(f, args...)
-    _aresameshape(args...) ? _noshapecheck_map(f, args...) : _diffshape_broadcast(f, args...)
+function _shapecheckbc(ElType, f, args...)
+    _aresameshape(args...) ? _noshapecheck_map(ElType, f, args...) : _diffshape_broadcast(ElType, f, args...)
 end
 
 
@@ -1127,9 +1138,9 @@ broadcast(f::Tf, A::AbstractSparseMatrixCSC, ::Type{T}) where {Tf,T} = broadcast
 function copy(bc::Broadcasted{PromoteToSparse})
     bcf = flatten(bc)
     if can_skip_sparsification(bcf.f, bcf.args...)
-        return _copy(bcf.f, bcf.args...)
+        return _copy(ELTYPE, bcf.f, bcf.args...)
     elseif is_supported_sparse_broadcast(bcf.args...)
-        return _copy(bcf.f, map(_sparsifystructured, bcf.args)...)
+        return _copy(ELTYPE, bcf.f, map(_sparsifystructured, bcf.args)...)
     else
         return copy(convert(Broadcasted{Broadcast.DefaultArrayStyle{length(axes(bc))}}, bc))
     end
