@@ -7219,8 +7219,17 @@ end
 struct B33954
     x::Q33954{B33954}
 end
-@test_broken isbitstype(Tuple{B33954})
-@test_broken isbitstype(B33954)
+@test isbitstype(Tuple{B33954})
+@test isbitstype(B33954)
+
+struct A41503{d}
+    e::d
+end
+struct B41503{j,k} <: AbstractArray{A41503{B41503{Any,k}},Any}
+    l::k
+end
+@test !isbitstype(B41503{Any,Any})
+@test_broken isbitstype(B41503{Any,Int})
 
 struct B40050 <: Ref{Tuple{B40050}}
 end
