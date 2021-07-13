@@ -1795,3 +1795,44 @@ function normalize(a::AbstractArray, p::Real = 2)
         return T[]
     end
 end
+
+"""
+    cross(A, B)
+    ×(A,B)
+
+Compute the cross product of two matrices.
+
+# Examples
+```jldoctest
+julia> A = [1 2;3 4;5 6]
+3×2 Matrix{Int64}:
+ 1  2
+ 3  4
+ 5  6
+
+julia> B = [1 3;2 4;3 6]
+3×2 Matrix{Int64}:
+ 1  3
+ 2  4
+ 3  6
+
+julia> cross(A, B)
+3×2 Matrix{Int64}:
+ -1   0
+  2   6
+ -1  -4
+```
+"""
+function cross(A::AbstractMatrix, B::AbstractMatrix)
+    if !(size(A)[1] == size(B)[1] == 3)
+        throw(DimensionMismatch("cross product is only defined for matrices with column length of 3"))
+    elseif  !(size(A)[2] == size(B)[2])
+        throw(DimensionMismatch("A and B must have same dimensions"))
+    end
+    cols = size(A)[2]
+    C = zeros(eltype(A), 3, cols)
+    for i in 1:cols
+        C[:,i] = cross(A[:,i], B[:,i])
+    end
+    C
+end
