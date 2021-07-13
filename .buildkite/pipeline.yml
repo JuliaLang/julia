@@ -17,5 +17,7 @@ steps:
       buildkite-agent pipeline upload .buildkite/whitespace.yml
       buildkite-agent pipeline upload .buildkite/llvm_passes.yml
       buildkite-agent pipeline upload .buildkite/embedding.yml
+      buildkite-agent pipeline upload .buildkite/doctest.yml
+      buildkite-agent pipeline upload .buildkite/linux64.yml
     agents:
       queue: julia
