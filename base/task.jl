@@ -646,7 +646,7 @@ function (f::StickyCountDecrementer)()
             # correctness. Checking saturation should be done for all tasks
             # includding those started with `parent_task.sticky_count < typemax
             # -1` since there may be sticky tasks started realying on that the
-            # coutner is saturated.
+            # counter is saturated.
             parent_task.sticky_count -= 1
         end
     end
