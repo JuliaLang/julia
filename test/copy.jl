@@ -238,3 +238,15 @@ end
 @testset "deepcopy_internal arrays" begin
     @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
 end
+
+@testset "copyto_unaliased!" begin
+    s = [1:140 141:280]
+    r = ones(Int, 17, 17)
+    @test copyto!(copy(r), s) == reshape([1:280;ones(9)], 17, 17)
+    @test copyto!(copy(r), s) == copyto!(copy(r), view(s, axes(s)...)) ==
+          copyto!(copy(r)', s) == copyto!(copy(r)', view(s, axes(s)...))
+    s = reshape(1:289, 17, 17)
+    r = ones(Int, 17, 17)
+    @test copyto!(copy(r), s) == copyto!(copy(r), view(s, axes(s)...)) ==
+        copyto!(copy(r)', s) == copyto!(copy(r)', view(s, axes(s)...)) == s
+end

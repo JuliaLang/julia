@@ -1006,42 +1006,18 @@ end
 
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     isempty(src) && return dest
-    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    idf, isf = first(destinds), first(srcinds)
-    Δi = idf - isf
-    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
-        throw(BoundsError(dest, srcinds))
-    if deststyle isa IndexLinear
-        if srcstyle isa IndexLinear
-            # Single-index implementation
-            @inbounds for i in srcinds
-                dest[i + Δi] = src[i]
-            end
-        else
-            # Dual-index implementation
-            i = idf - 1
-            @inbounds for a in src
-                dest[i+=1] = a
-            end
-        end
-    else
-        iterdest, itersrc = eachindex(dest), eachindex(src)
-        if iterdest == itersrc
-            # Shared-iterator implementation
-            for I in iterdest
-                @inbounds dest[I] = src[I]
-            end
-        else
-            # Dual-iterator implementation
-            ret = iterate(iterdest)
-            @inbounds for a in src
-                idx, state = ret
-                dest[idx] = a
-                ret = iterate(iterdest, state)
-            end
-        end
-    end
+    length(dest) < length(src) && throw(BoundsError(dest, LinearIndices(src)))
+    _unaliased_copyto!(deststyle, dest, srcstyle, src)
     return dest
+end
+
+# IndexCartesian and CartesianIndices has not been defined, only implement Linear to Linear here.
+function _unaliased_copyto!(::IndexLinear, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
+    @_inline_meta
+    Δi = firstindex(dest) - firstindex(src)
+    for i in eachindex(src)
+        @inbounds dest[i + Δi] = src[i]
+    end
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
