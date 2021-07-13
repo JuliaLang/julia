@@ -44,6 +44,9 @@ function IdOffsetRange{T}(r::IdOffsetRange) where T<:Integer
 end
 IdOffsetRange(r::IdOffsetRange) = r
 
+AbstractUnitRange{T}(r::IdOffsetRange{T}) where {T} = r
+AbstractUnitRange{T}(r::IdOffsetRange) where {T} = IdOffsetRange{T}(r)
+
 # TODO: uncomment these when Julia is ready
 # # Conversion preserves both the values and the indexes, throwing an InexactError if this
 # # is not possible.
