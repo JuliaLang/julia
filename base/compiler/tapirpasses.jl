@@ -517,6 +517,14 @@ function resolve_special_value(@nospecialize(v))
     return v, true
 end
 
+function typeof_stmt_arg(ir::IRCode, @nospecialize(arg))
+    if arg isa SSAValue
+        return ir.stmts[arg.id][:type]
+    else
+        return Const(resolve_special_value(arg)[1])
+    end
+end
+
 resolve_ssavalue(ir::IRCode, v::SSAValue) = resolve_ssavalue(ir.stmts.inst, v)
 function resolve_ssavalue(code::Vector{Any}, v::SSAValue)
     v0 = v
@@ -1511,7 +1519,9 @@ function lower_tapir!(ir::IRCode, interp::AbstractInterpreter)
     for i in 1:length(ir.stmts)
         stmt = ir.stmts[i]
         if isexpr(stmt[:inst], :syncregion)
-            stmt[:inst] = stmt[:inst].args[1]
+            value = stmt[:inst].args[1]
+            stmt[:inst] = value
+            stmt[:type] = typeof_stmt_arg(ir, value)
         end
     end
 
@@ -1559,10 +1569,11 @@ function optimize_taskgroups!(
         isinlinable[sr.id] || return true
 
         srstmt = stmt_at(ir, sr.id)
-        if !isexpr(srstmt[:inst], :syncregion)
+        srinst = srstmt[:inst]
+        if !isexpr(srinst, :syncregion)
             isinlinable[sr.id] = false
             return true
-        elseif !isconcretetype(widenconst(srstmt[:type]))
+        elseif !isconcretetype(widenconst(typeof_stmt_arg(ir, srinst.args[1])))
             isinlinable[sr.id] = false
             return true
         end
@@ -1636,7 +1647,8 @@ function optimize_taskgroups!(
     ConcreteMaybe = Tapir.ConcreteMaybe
     for i in syncregions
         isinlinable[i] || continue
-        TaskGroup = widenconst(ir.stmts[i][:type])
+        tg, = ir.stmts[i][:inst].args
+        TaskGroup = widenconst(typeof_stmt_arg(ir, tg))
         TaskType = sync_return_type(TaskGroup)
         if isconcretetype(TaskType)
             MaybeTask = ConcreteMaybe{TaskType}
@@ -1656,8 +1668,10 @@ function optimize_taskgroups!(
             detstmt[:inst] = DetachNode(dest, det.label)
 
             for phics in taskgroup
-                t0 = insert_node!(ir, i, NewInstruction(UpsilonNode(nothing), Nothing))
-                t1 = insert_node!(ir, task.detach, NewInstruction(UpsilonNode(dest), Task))
+                i0 = NewInstruction(UpsilonNode(nothing), Nothing)
+                i1 = NewInstruction(UpsilonNode(dest), TaskType)
+                t0 = insert_node!(ir, i, i0)
+                t1 = insert_node!(ir, task.detach, i1)
                 push!(phics, PhiCNode(Any[t0, t1]))
             end
         end

@@ -173,12 +173,18 @@ end
 ##### Julia-Tapir Frontend
 #####
 
-macro syncregion()
+macro syncregion(tg = nothing)
+    if tg === nothing
+        tg = :(taskgroup())
+    else
+        tg = esc(tg)
+    end
     Expr(
         :block,
         __source__,
-        :(tg = Tapir.taskgroup()),
-        Expr(:syncregion, :tg),  # acts as the identity function
+        :(tg = $tg),
+        # `Expr(:syncregion, tg)` evaluates to `tg` which acts as a token:
+        Expr(:syncregion, :tg),
     )
 end
 
@@ -482,6 +488,11 @@ end
 ```
 """
 macro sync(block)
+    block = ensure_linenumbernode(__source__, block)
+    esc(:($Tapir.@sync $Tapir.taskgroup() $block))
+end
+
+macro sync(taskgroup, block)
     var = esc(tokenname)
     block = macroexpand(__module__, block)  # for nested @sync
     block = Expr(:block, __source__, block)
@@ -497,14 +508,16 @@ macro sync(block)
             if $(Expr(:isdefined, esc(slot)))
                 $(esc(v)) = $(esc(slot))
             else
-                # We don't see `v` set in spawn since `v` would be declared to
-                # be local by the `@spawn` macro [^no_racy_phi].
+                # It is safe to ignore this branch since the variable `v` set in
+                # spawn is not observable when `$v` is used. This is because the
+                # variable `v` would be declared to be local by the `@spawn`
+                # macro [^no_racy_phi].
             end
         end
     end
     quote
         $header
-        let $var = @syncregion()
+        let $var = @syncregion($(esc(taskgroup)))
             local ans
             try
                 ans = $(esc(block))
