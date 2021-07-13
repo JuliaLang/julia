@@ -14,8 +14,11 @@
 steps:
   - label: ":buildkite: Launch unsigned pipelines"
     commands: |
+      # We launch whitespace first, because we want that pipeline to finish as quickly as possible.
+      # The remaining unsigned pipelines are launched in alphabetical order.
       buildkite-agent pipeline upload .buildkite/whitespace.yml
-      buildkite-agent pipeline upload .buildkite/llvm_passes.yml
       buildkite-agent pipeline upload .buildkite/embedding.yml
+      buildkite-agent pipeline upload .buildkite/llvm_passes.yml
+      buildkite-agent pipeline upload .buildkite/sanitizers.yml
     agents:
       queue: julia
