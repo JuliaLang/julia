@@ -68,9 +68,8 @@ function datatype_min_ninitialized(t::DataType)
             return length(names)
         end
         t = argument_datatype(types)
-        if !(t isa DataType && t.name === Tuple.name)
-            return 0
-        end
+        t isa DataType || return 0
+        t.name === Tuple.name || return 0
     end
     if t.name === Tuple.name
         n = length(t.parameters)
