@@ -1325,9 +1325,18 @@ end
 
 @testset "issue #39896, modified getindex " begin
     for arr = ([1:10;], reshape([1.0:16.0;],4,4), reshape(['a':'h';],2,2,2))
-        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3),
+            Base.IdentityUnitRange(Base.OneTo(4)))
             @test arr[inds] == arr[collect(inds)]
             @test arr[inds] isa AbstractVector{eltype(arr)}
+        end
+    end
+    # Test that ranges and arrays behave identically for indices with 1-based axes
+    for r in (1:10, 1:1:10, Base.OneTo(10),
+        Base.IdentityUnitRange(Base.OneTo(10)), Base.IdentityUnitRange(1:10))
+        for inds = (2:5, Base.OneTo(5), BigInt(3):BigInt(5), UInt(4):UInt(3),
+            Base.IdentityUnitRange(Base.OneTo(4)))
+            @test r[inds] == r[collect(inds)] == collect(r)[inds] == collect(r)[collect(inds)]
         end
     end
     for arr = ([1], reshape([1.0],1,1), reshape(['a'],1,1,1))
@@ -1342,6 +1351,7 @@ end
     end
 end
 
+using Base: typed_hvncat
 @testset "hvncat" begin
     a = fill(1, (2,3,2,4,5))
     b = fill(2, (1,1,2,4,5))
@@ -1389,7 +1399,68 @@ end
         @test [v v;;; fill(v, 1, 2)] == fill(v, 1, 2, 2)
     end
 
-    @test_throws BoundsError hvncat(((1, 2), (3,)), false, zeros(Int, 0, 0, 0), 7, 8)
+    # 0-dimension behaviors
+    # exactly one argument, placed in an array
+    # if already an array, copy, with type conversion as necessary
+    @test_throws ArgumentError hvncat(0)
+    @test hvncat(0, 1) == fill(1)
+    @test hvncat(0, [1]) == [1]
+    @test_throws ArgumentError hvncat(0, 1, 1)
+    @test_throws ArgumentError typed_hvncat(Float64, 0)
+    @test typed_hvncat(Float64, 0, 1) == fill(1.0)
+    @test typed_hvncat(Float64, 0, [1]) == Float64[1.0]
+    @test_throws ArgumentError typed_hvncat(Float64, 0, 1, 1)
+    @test_throws ArgumentError hvncat((), true) == []
+    @test hvncat((), true, 1) == fill(1)
+    @test hvncat((), true, [1]) == [1]
+    @test_throws ArgumentError hvncat((), true, 1, 1)
+    @test_throws ArgumentError typed_hvncat(Float64, (), true) == Float64[]
+    @test typed_hvncat(Float64, (), true, 1) == fill(1.0)
+    @test typed_hvncat(Float64, (), true, [1]) == [1.0]
+    @test_throws ArgumentError typed_hvncat(Float64, (), true, 1, 1)
+
+    # 1-dimension behaviors
+    # int form
+    @test hvncat(1) == []
+    @test hvncat(1, 1) == [1]
+    @test hvncat(1, [1]) == [1]
+    @test hvncat(1, [1 2; 3 4]) == [1 2; 3 4]
+    @test hvncat(1, 1, 1) == [1 ; 1]
+    @test typed_hvncat(Float64, 1) == Float64[]
+    @test typed_hvncat(Float64, 1, 1) == Float64[1.0]
+    @test typed_hvncat(Float64, 1, [1]) == Float64[1.0]
+    @test typed_hvncat(Float64, 1, 1, 1) == Float64[1.0 ; 1.0]
+    # dims form
+    @test_throws ArgumentError hvncat((1,), true)
+    @test hvncat((2,), true, 1, 1) == [1; 1]
+    @test hvncat((2,), true, [1], [1]) == [1; 1]
+    @test_throws ArgumentError hvncat((2,), true, 1)
+    @test typed_hvncat(Float64, (2,), true, 1, 1) == Float64[1.0; 1.0]
+    @test typed_hvncat(Float64, (2,), true, [1], [1]) == Float64[1.0; 1.0]
+    @test_throws ArgumentError typed_hvncat(Float64, (2,), true, 1)
+    # row_first has no effect with just one dimension of the dims form
+    @test hvncat((2,), false, 1, 1) == [1; 1]
+    @test typed_hvncat(Float64, (2,), false, 1, 1) == Float64[1.0; 1.0]
+    # shape form
+    @test hvncat(((2,),), true, 1, 1) == [1 1]
+    @test hvncat(((2,),), true, [1], [1]) == [1 1]
+    @test_throws ArgumentError hvncat(((2,),), true, 1)
+    @test hvncat(((2,),), false, 1, 1) == [1; 1]
+    @test hvncat(((2,),), false, [1], [1]) == [1; 1]
+    @test typed_hvncat(Float64, ((2,),), true, 1, 1) == Float64[1.0 1.0]
+    @test typed_hvncat(Float64, ((2,),), true, [1], [1]) == Float64[1.0 1.0]
+    @test_throws ArgumentError typed_hvncat(Float64, ((2,),), true, 1)
+    @test typed_hvncat(Float64, ((2,),), false, 1, 1) == Float64[1.0; 1.0]
+    @test typed_hvncat(Float64, ((2,),), false, [1], [1]) == Float64[1.0; 1.0]
+
+    # zero-value behaviors for int form above dimension zero
+    # e.g. [;;], [;;;], though that isn't valid syntax
+    @test [] == hvncat(1) isa Array{Any, 1}
+    @test Array{Any, 2}(undef, 0, 0) == hvncat(2) isa Array{Any, 2}
+    @test Array{Any, 3}(undef, 0, 0, 0) == hvncat(3) isa Array{Any, 3}
+    @test Int[] == typed_hvncat(Int, 1) isa Array{Int, 1}
+    @test Array{Int, 2}(undef, 0, 0) == typed_hvncat(Int, 2) isa Array{Int, 2}
+    @test Array{Int, 3}(undef, 0, 0, 0) == typed_hvncat(Int, 3) isa Array{Int, 3}
 end
 
 @testset "keepat!" begin

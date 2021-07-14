@@ -666,4 +666,14 @@ using .Main.ImmutableArrays
     @test convert(AbstractMatrix{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
 end
 
+@testset "dot(x,A,y) for A::Tridiagonal or SymTridiagonal" begin
+    for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
+        x = fill(convert(elty, 1), 0)
+        T = Tridiagonal(x, x, x)
+        Tsym = SymTridiagonal(x, x)
+        @test dot(x, T, x) == 0.0
+        @test dot(x, Tsym, x) == 0.0
+    end
+end
+
 end # module TestTridiagonal

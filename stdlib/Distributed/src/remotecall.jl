@@ -607,7 +607,15 @@ function take_ref(rid, caller, args...)
         lock(rv.synctake)
     end
 
-    v=take!(rv, args...)
+    v = try
+        take!(rv, args...)
+    catch e
+        # avoid unmatched unlock when exception occurs
+        # github issue #33972
+        synctake && unlock(rv.synctake)
+        rethrow(e)
+    end
+
     isa(v, RemoteException) && (myid() == caller) && throw(v)
 
     if synctake

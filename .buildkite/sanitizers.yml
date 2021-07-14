@@ -8,8 +8,8 @@ agents:
   os: "linux"
 
 steps:
-  - label: "embedding"
-    key: "embedding"
+  - label: "asan"
+    key: asan
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
@@ -19,19 +19,16 @@ steps:
           uid: 1000
           gid: 1000
           workspaces:
-            # Include `/cache/repos` so that our `git` version introspection works.
             - "/cache/repos:/cache/repos"
+      # `contrib/check-asan.jl` needs a `julia` binary:
+      - JuliaCI/julia#v1:
+          version: 1.6
     commands: |
-      prefix="/tmp/prefix"
-      echo "+++ Build julia, deploy to $${prefix}"
-      make -j$${JULIA_NUM_CORES} JULIA_PRECOMPILE=0 prefix=$${prefix} install
-
-      embedding_output="/tmp/embedding-test"
-      echo "+++ Run embedding tests, deploy to $${embedding_output}"
-      mkdir -p "$${embedding_output}"
-      make -j$${JULIA_NUM_CORES} -C test/embedding JULIA="$${prefix}/bin/julia" BIN="$${embedding_output}"
-
-    timeout_in_minutes: 60
+      echo "--- Build julia-debug with ASAN"
+      contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_NUM_CORES} debug
+      echo "--- Test that ASAN is enabled"
+      contrib/asan/check.jl ./tmp/test-asan/asan/usr/bin/julia-debug
+    timeout_in_minutes: 120
     notify:
       - github_commit_status:
-          context: "embedding"
+          context: "asan"
