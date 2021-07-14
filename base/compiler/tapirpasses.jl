@@ -1631,6 +1631,7 @@ function optimize_taskgroups!(
 
     cache = IdDict{Type,Type}()
     function sync_return_type(@nospecialize(TaskGroup::Type))
+        @assert isconcretetype(TaskGroup)  # due to isinlineable check above
         return get!(cache, TaskGroup) do
             ccall(:jl_typeinf_begin, Cvoid, ())
             mi = find_method_instance_from_sig(
@@ -1638,13 +1639,21 @@ function optimize_taskgroups!(
                 Tuple{typeof(Tapir.spawn),Type{TaskGroup},Any};
                 compilesig = true,
             )
-            result = InferenceResult(mi)
-            frame = InferenceState(result, true, interp)
-            if frame !== nothing
-                typeinf(interp, frame)
+            if mi === nothing
+                # TODO: world age issue?
+                print(stderr, "WARNING: cannot find a method for `Tapir.spawn` on ")
+                println(stderr, "`Type{", TaskGroup, "}`")
+                T = Any
+            else
+                result = InferenceResult(mi)
+                frame = InferenceState(result, true, interp)
+                if frame !== nothing
+                    typeinf(interp, frame)
+                end
+                T = widenconst(ignorelimited(result.result))
             end
             ccall(:jl_typeinf_end, Cvoid, ())
-            return widenconst(ignorelimited(result.result))
+            return T
         end
     end
 
