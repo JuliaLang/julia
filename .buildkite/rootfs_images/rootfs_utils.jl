@@ -6,8 +6,39 @@ using Scratch, Pkg, Pkg.Artifacts, ghr_jll, SHA, Dates
 # Utility functions
 getuid() = ccall(:getuid, Cint, ())
 getgid() = ccall(:getgid, Cint, ())
+chroot(rootfs, cmds...; uid=getuid(), gid=getgid()) = run(`sudo chroot --userspec=$(uid):$(gid) $(rootfs) $(cmds)`)
 
-function cleanup_dev_perms_resolv(rootfs)
+# Sometimes rootfs images have absolute symlinks within them; this
+# is very bad for us as it breaks our ability to look at a rootfs
+# without `chroot`'ing into it; so we fix up all the links to be
+# relative here.
+function force_relative(link, rootfs)
+    target = readlink(link)
+    if !isabspath(target)
+        return
+    end
+    target = joinpath(rootfs, target[2:end])
+    rm(link; force=true)
+    symlink(relpath(target, dirname(link)), link)
+end
+function force_relative(rootfs)
+    for (root, dirs, files) in walkdir(rootfs)
+        for f in files
+            f = joinpath(root, f)
+            if islink(f)
+                force_relative(f, rootfs)
+            end
+        end
+        for d in dirs
+            d = joinpath(root, d)
+            if islink(d)
+                force_relative(d, rootfs)
+            end
+        end
+    end
+end
+
+function cleanup_rootfs(rootfs; rootfs_info=nothing)
     # Remove special `dev` files
     @info("Cleaning up `/dev`")
     for f in readdir(joinpath(rootfs, "dev"); join=true)
@@ -20,7 +51,7 @@ function cleanup_dev_perms_resolv(rootfs)
     # take ownership of the entire rootfs
     @info("Chown'ing rootfs")
     run(`sudo chown $(getuid()):$(getgid()) -R "$(rootfs)"`)
-    
+
     # Write out a reasonable default resolv.conf
     open(joinpath(rootfs, "etc", "resolv.conf"), write=true) do io
         write(io, """
@@ -28,6 +59,17 @@ function cleanup_dev_perms_resolv(rootfs)
         nameserver 8.8.8.8
         """)
     end
+
+    # If we've been given a `rootfs_info` parameter, write it out as /etc/rootfs-info
+    if rootfs_info !== nothing
+        open(io -> write(io, rootfs_info),
+             joinpath(rootfs, "etc", "rootfs-info"),
+             write=true,
+        )
+    end
+    
+    @info("Forcing all symlinks to be relative")
+    force_relative(rootfs)
 end
 
 function create_rootfs(f::Function, name::String; force::Bool=false)
@@ -45,7 +87,7 @@ function create_rootfs(f::Function, name::String; force::Bool=false)
     return tarball_path
 end
 
-function debootstrap(name::String; release::String="buster", variant::String="minbase",
+function debootstrap(f::Function, name::String; release::String="buster", variant::String="minbase",
                      packages::Vector{String}=String[], force::Bool=false)
     if Sys.which("debootstrap") === nothing
         error("Must install `debootstrap`!")
@@ -56,19 +98,18 @@ function debootstrap(name::String; release::String="buster", variant::String="mi
         @info("Running debootstrap", release, variant, packages)
         run(`sudo debootstrap --variant=$(variant) --include=$(packages_string) $(release) "$(rootfs)"`)
 
-        # Remove special `dev` files, take ownership and write out some standard files
-        cleanup_dev_perms_resolv(rootfs)
+        # Call user callback, if requested
+        f(rootfs)
 
-        # Write out rootfs-info to contain a minimally-identifying string
-        open(joinpath(rootfs, "etc", "rootfs-info"), write=true) do io
-            write(io, """
-            rootfs_type=debootstrap
-            release=$(release)
-            variant=$(variant)
-            packages=$(packages_string)
-            build_date=$(Dates.now())
-            """)
-        end
+        # Remove special `dev` files, take ownership, force symlinks to be relative, etc...
+        rootfs_info="""
+                    rootfs_type=debootstrap
+                    release=$(release)
+                    variant=$(variant)
+                    packages=$(packages_string)
+                    build_date=$(Dates.now())
+                    """
+        cleanup_rootfs(rootfs; rootfs_info)
 
         # Remove `_apt` user so that `apt` doesn't try to `setgroups()`
         @info("Removing `_apt` user")
@@ -86,9 +127,13 @@ function debootstrap(name::String; release::String="buster", variant::String="mi
         open(joinpath(rootfs, "etc", "locale.gen"), "a") do io
             println(io, "en_US.UTF-8 UTF-8")
         end
-        run(`sudo chroot --userspec=$(getuid()):$(getgid()) $(rootfs) locale-gen`)
+        chroot(rootfs, "locale-gen")
     end
 end
+# If no user callback is provided, default to doing nothing
+debootstrap(name::String; kwargs...) = debootstrap(p -> nothing, name; kwargs...)
+
+
 
 # Helper structure for installing alpine packages that may or may not be part of an older Alpine release
 struct AlpinePackage
@@ -104,7 +149,7 @@ function repository_arg(repo)
     return "--repository=http://dl-cdn.alpinelinux.org/alpine/$(repo)/main"
 end
 
-function alpine_bootstrap(name::String; release::VersionNumber=v"3.13.5", variant="minirootfs",
+function alpine_bootstrap(f::Function, name::String; release::VersionNumber=v"3.13.5", variant="minirootfs",
                           packages::Vector{AlpinePackage}=AlpinePackage[], force::Bool=false)
     return create_rootfs(name; force) do rootfs
         rootfs_url = "https://github.com/alpinelinux/docker-alpine/raw/v$(release.major).$(release.minor)/x86_64/alpine-$(variant)-$(release)-x86_64.tar.gz"
@@ -112,19 +157,18 @@ function alpine_bootstrap(name::String; release::VersionNumber=v"3.13.5", varian
         rm(rootfs)
         Pkg.Artifacts.download_verify_unpack(rootfs_url, nothing, rootfs; verbose=true)
 
-        # Remove special `dev` files, take ownership and write out some standard files
-        cleanup_dev_perms_resolv(rootfs)
+        # Call user callback, if requested
+        f(rootfs)
 
-        # Write out rootfs-info to contain a minimally-identifying string
-        open(joinpath(rootfs, "etc", "rootfs-info"), write=true) do io
-            write(io, """
-            rootfs_type=alpine
-            release=$(release)
-            variant=$(variant)
-            packages=$(join([pkg.name for pkg in packages], ","))
-            build_date=$(Dates.now())
-            """)
-        end
+        # Remove special `dev` files, take ownership, force symlinks to be relative, etc...
+        rootfs_info = """
+                    rootfs_type=alpine
+                    release=$(release)
+                    variant=$(variant)
+                    packages=$(join([pkg.name for pkg in packages], ","))
+                    build_date=$(Dates.now())
+                    """
+        cleanup_rootfs(rootfs; rootfs_info)
 
         # Generate one `apk` invocation per repository
         repos = unique([pkg.repo for pkg in packages])
@@ -136,10 +180,12 @@ function alpine_bootstrap(name::String; release::VersionNumber=v"3.13.5", varian
             for pkg in filter(pkg -> pkg.repo == repo, packages)
                 push!(apk_args, pkg.name)
             end
-            run(`sudo chroot --userspec=$(getuid()):$(getgid()) $(rootfs) $(apk_args...)`)
+            chroot(rootfs, apk_args...)
         end
     end
 end
+# If no user callback is provided, default to doing nothing
+alpine_bootstrap(name::String; kwargs...) = alpine_bootstrap(p -> nothing, name; kwargs...)
 
 function upload_rootfs_image(tarball_path::String;
                              github_repo::String="JuliaCI/rootfs-images",
