@@ -812,7 +812,7 @@ enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char sto
 {
     if (order == not_atomic_sym)
         return jl_memory_order_notatomic;
-    if (order == unordered_sym && (loading || storing))
+    if (order == unordered_sym && (loading ^ storing))
         return jl_memory_order_unordered;
     if (order == monotonic_sym && (loading || storing))
         return jl_memory_order_monotonic;
