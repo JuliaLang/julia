@@ -1580,11 +1580,25 @@ function optimize_taskgroups!(
 
         push!(syncregions, sr.id)
 
+        # Check if this syncregion is used in subtasks.
+        for ibb in task.blocks
+            local bb = ir.cfg.blocks[ibb]
+            local iterm = bb.stmts[end]
+            local term = ir.stmts.inst[iterm]
+            if term isa DetachNode
+                if term.syncregion === sr
+                    isinlinable[sr.id] = false
+                    return true
+                end
+            end
+        end
+
+        # Check if detach is used in a loop inside the syncregion.
         detacher = block_for_inst(ir, task.detach)
+        continuation = det.label
         visited = falses(length(ir.cfg.blocks))
-        foreach_descendant(detacher + 1, ir.cfg, visited) do ibb, bb
+        foreach_descendant(continuation, ir.cfg, visited) do ibb, bb
             if ibb == detacher
-                # Detach is in a loop inside the syncregion.
                 isinlinable[sr.id] = false
                 return false
             end
@@ -1595,19 +1609,10 @@ function optimize_taskgroups!(
                     return false
                 end
             elseif term isa DetachNode
-                subtask = task_by_detach(tasks, iterm)
-                for ibb in subtask.blocks
-                    visited[ibb] = true
-                    local iterm = bb.stmts[end]
-                    local term = ir.stmts.inst[iterm]
-                    if term isa DetachNode
-                        if term.syncregion === sr
-                            # The syncregion is used from multiple tasks.
-                            isinlinable[sr.id] = false
-                            return false
-                        end
-                    end
-                end
+                # Don't iterate inside sibling tasks (Note: we can' "cut" the
+                # whole sub-CFG corresponding to the child task since it only
+                # has a single entry):
+                visited[ibb + 1] = true
             end
             return true
         end

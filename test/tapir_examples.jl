@@ -602,3 +602,30 @@ function spawn_in_loop()
 end
 
 end # module NonOptimizableTasks
+
+module TaskGroupOptimizations
+using Base.Experimental: Tapir
+
+@noinline produce(x) = Base.inferencebarrier(x)::typeof(x)
+
+function two_root_spawns()
+    Tapir.@sync begin
+        Tapir.@spawn produce(111)
+        Tapir.@spawn produce(222)
+        produce(333)
+    end
+end
+
+function nested_syncs()
+    Tapir.@sync begin
+        Tapir.@spawn produce(111)
+        Tapir.@spawn produce(222)
+        Tapir.@sync begin
+            Tapir.@spawn produce(333)
+            produce(444)
+        end
+        produce(4555)
+    end
+end
+
+end # module TaskGroupOptimizations

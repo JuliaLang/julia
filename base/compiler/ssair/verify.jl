@@ -114,6 +114,11 @@ function verify_ir(ir::IRCode, print::Bool=true)
                 @verify_error " Block $idx successors ($(block.succs)), does not match DetachNode; expected detach edge to block $(idx + 1) and continue edge to block $(terminator.label)"
                 error("")
             end
+            detached = ir.cfg.blocks[idx + 1]
+            if length(detached.preds) != 1
+                @verify_error " Block $(idx+1) detached from block $(idx) has multiple predecessors ($(block.preds)))"
+                error("")
+            end
             continuation = ir.cfg.blocks[terminator.label]
             for child in continuation.preds  # BBs in the child task
                 child == idx && continue

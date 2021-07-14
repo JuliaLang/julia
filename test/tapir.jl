@@ -2,6 +2,7 @@
 
 module TestTapir
 include("tapir_examples.jl")
+include("tapir_tools.jl")
 
 using InteractiveUtils
 using Test
@@ -206,6 +207,40 @@ end
         :spawn_in_loop => first(@code_typed NonOptimizableTasks.spawn_in_loop()),
     ]
         @test Core.Compiler.has_tapir(ci::Core.Compiler.CodeInfo)
+    end
+end
+
+@testset "TaskGroupOptimizations" begin
+    @testset "$label" for (label, ir, isoptimizable) in [
+        (:two_root_spawns, (@ircode_tapir TaskGroupOptimizations.two_root_spawns()), true),
+        (:nested_syncs, (@ircode_tapir TaskGroupOptimizations.nested_syncs()), true),
+        (:nested_spawns, (@ircode_tapir NestedSpawns.f()), false),
+    ]
+        spawn!_exprs = []
+        spawn_exprs = []
+        for i in 1:length(ir.stmts)
+            ex = ir.stmts.inst[i]
+            if Meta.isexpr(ex, :invoke)
+                f = ex.args[2]
+            elseif Meta.isexpr(ex, :call)
+                f = ex.args[1]
+            else
+                continue
+            end
+            f, _ = Core.Compiler.resolve_special_value(f)
+            if f === Tapir.spawn!
+                push!(spawn!_exprs, i => ex)
+            elseif f === Tapir.spawn
+                push!(spawn_exprs, i => ex)
+            end
+        end
+        if isoptimizable
+            @test spawn!_exprs == []
+            @test !isempty(spawn_exprs)
+        else
+            @test !isempty(spawn!_exprs)
+            @test spawn_exprs == []
+        end
     end
 end
 
