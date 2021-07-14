@@ -1063,6 +1063,6 @@ end
            return y
        end
        arr = rand(1000)
-       @allocated test(y)
-       @test (@allocated test(y)) == 0
+       @allocated test(arr)
+       @test (@allocated test(arr)) == 0
 end
