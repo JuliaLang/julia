@@ -7,35 +7,57 @@ using Scratch, Pkg, Pkg.Artifacts, ghr_jll, SHA, Dates
 getuid() = ccall(:getuid, Cint, ())
 getgid() = ccall(:getgid, Cint, ())
 
-function debootstrap(name::String; release::String="buster", variant::String="minbase",
-                     packages::Vector{String}=String[], force::Bool=false)
-    if Sys.which("debootstrap") === nothing
-        error("Must install `debootstrap`!")
+function cleanup_dev_perms_resolv(rootfs)
+    # Remove special `dev` files
+    @info("Cleaning up `/dev`")
+    for f in readdir(joinpath(rootfs, "dev"); join=true)
+        # Keep the symlinks around (such as `/dev/fd`), as they're useful
+        if !islink(f)
+            run(`sudo rm -rf "$(f)"`)
+        end
     end
 
+    # take ownership of the entire rootfs
+    @info("Chown'ing rootfs")
+    run(`sudo chown $(getuid()):$(getgid()) -R "$(rootfs)"`)
+    
+    # Write out a reasonable default resolv.conf
+    open(joinpath(rootfs, "etc", "resolv.conf"), write=true) do io
+        write(io, """
+        nameserver 1.1.1.1
+        nameserver 8.8.8.8
+        """)
+    end
+end
+
+function create_rootfs(f::Function, name::String; force::Bool=false)
     tarball_path = joinpath(@get_scratch!("rootfs-images"), "$(name).tar.gz")
     if !force && isfile(tarball_path)
         @error("Refusing to overwrite tarball without `force` set", tarball_path)
         error()
     end
 
-    artifact_hash = create_artifact() do rootfs
+    artifact_hash = create_artifact(f)
+
+    # Archive it into a `.tar.gz` file
+    @info("Archiving", tarball_path, artifact_hash)
+    archive_artifact(artifact_hash, tarball_path)
+    return tarball_path
+end
+
+function debootstrap(name::String; release::String="buster", variant::String="minbase",
+                     packages::Vector{String}=String[], force::Bool=false)
+    if Sys.which("debootstrap") === nothing
+        error("Must install `debootstrap`!")
+    end
+
+    return create_rootfs(name; force) do rootfs
         packages_string = join(push!(packages, "locales"), ",")
         @info("Running debootstrap", release, variant, packages)
         run(`sudo debootstrap --variant=$(variant) --include=$(packages_string) $(release) "$(rootfs)"`)
 
-        # Remove special `dev` files
-        @info("Cleaning up `/dev`")
-        for f in readdir(joinpath(rootfs, "dev"); join=true)
-            # Keep the symlinks around (such as `/dev/fd`), as they're useful
-            if !islink(f)
-                run(`sudo rm -rf "$(f)"`)
-            end
-        end
-
-        # take ownership of the entire rootfs
-        @info("Chown'ing rootfs")
-        run(`sudo chown $(getuid()):$(getgid()) -R "$(rootfs)"`)
+        # Remove special `dev` files, take ownership and write out some standard files
+        cleanup_dev_perms_resolv(rootfs)
 
         # Write out rootfs-info to contain a minimally-identifying string
         open(joinpath(rootfs, "etc", "rootfs-info"), write=true) do io
@@ -45,14 +67,6 @@ function debootstrap(name::String; release::String="buster", variant::String="mi
             variant=$(variant)
             packages=$(packages_string)
             build_date=$(Dates.now())
-            """)
-        end
-
-        # Write out a reasonable default resolv.conf
-        open(joinpath(rootfs, "etc", "resolv.conf"), write=true) do io
-            write(io, """
-            nameserver 1.1.1.1
-            nameserver 8.8.8.8
             """)
         end
 
@@ -74,12 +88,57 @@ function debootstrap(name::String; release::String="buster", variant::String="mi
         end
         run(`sudo chroot --userspec=$(getuid()):$(getgid()) $(rootfs) locale-gen`)
     end
+end
 
-    # Archive it into a `.tar.gz` file
-    @info("Archiving", tarball_path, artifact_hash)
-    archive_artifact(artifact_hash, tarball_path)
+# Helper structure for installing alpine packages that may or may not be part of an older Alpine release
+struct AlpinePackage
+    name::String
+    repo::Union{Nothing,String}
 
-    return tarball_path
+    AlpinePackage(name, repo=nothing) = new(name, repo)
+end
+function repository_arg(repo)
+    if startswith(repo, "https://")
+        return "--repository=$(repo)"
+    end
+    return "--repository=http://dl-cdn.alpinelinux.org/alpine/$(repo)/main"
+end
+
+function alpine_bootstrap(name::String; release::VersionNumber=v"3.13.5", variant="minirootfs",
+                          packages::Vector{AlpinePackage}=AlpinePackage[], force::Bool=false)
+    return create_rootfs(name; force) do rootfs
+        rootfs_url = "https://github.com/alpinelinux/docker-alpine/raw/v$(release.major).$(release.minor)/x86_64/alpine-$(variant)-$(release)-x86_64.tar.gz"
+        @info("Downloading Alpine rootfs", url=rootfs_url)
+        rm(rootfs)
+        Pkg.Artifacts.download_verify_unpack(rootfs_url, nothing, rootfs; verbose=true)
+
+        # Remove special `dev` files, take ownership and write out some standard files
+        cleanup_dev_perms_resolv(rootfs)
+
+        # Write out rootfs-info to contain a minimally-identifying string
+        open(joinpath(rootfs, "etc", "rootfs-info"), write=true) do io
+            write(io, """
+            rootfs_type=alpine
+            release=$(release)
+            variant=$(variant)
+            packages=$(join([pkg.name for pkg in packages], ","))
+            build_date=$(Dates.now())
+            """)
+        end
+
+        # Generate one `apk` invocation per repository
+        repos = unique([pkg.repo for pkg in packages])
+        for repo in repos
+            apk_args = ["/sbin/apk", "add", "--no-chown"]
+            if repo !== nothing
+                push!(apk_args, repository_arg(repo))
+            end
+            for pkg in filter(pkg -> pkg.repo == repo, packages)
+                push!(apk_args, pkg.name)
+            end
+            run(`sudo chroot --userspec=$(getuid()):$(getgid()) $(rootfs) $(apk_args...)`)
+        end
+    end
 end
 
 function upload_rootfs_image(tarball_path::String;
