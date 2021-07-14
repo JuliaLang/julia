@@ -1102,8 +1102,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         # passes look at all code, dead or not. This check should be
         # unnecessary when DCE can remove those dead loops entirely, so this is
         # just to be safe.
-        before_def = isassigned(values, 1) && isa(values[1], OldSSAValue) &&
-            idx < values[1].id
+        before_def = isassigned(values, 1) && (v = values[1]; isa(v, OldSSAValue)) && idx < v.id
         if length(edges) == 1 && isassigned(values, 1) && !before_def &&
                 length(compact.cfg_transforms_enabled ?
                     compact.result_bbs[compact.bb_rename_succ[active_bb]].preds :
