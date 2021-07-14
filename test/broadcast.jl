@@ -1056,3 +1056,13 @@ end
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) == 4:2:6
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) isa AbstractRange
 end
+
+@testset "Memory allocation inconsistency in broadcasting #41565" begin
+       function test(y)
+           y .= 0 .- y ./ (y.^2) # extra allocation
+           return y
+       end
+       arr = rand(1000)
+       @allocated test(y)
+       @test (@allocated test(y)) == 0
+end
