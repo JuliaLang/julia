@@ -84,7 +84,7 @@ end
 
 function upload_rootfs_image(tarball_path::String;
                              github_repo::String="JuliaCI/rootfs-images",
-                             tag_name::String="v1")
+                             tag_name::String)
     # Upload it to `github_repo`
     tarball_url = "https://github.com/$(github_repo)/releases/download/$(tag_name)/$(basename(tarball_path))"
     @info("Uploading to $(github_repo)@$(tag_name)", tarball_url)
