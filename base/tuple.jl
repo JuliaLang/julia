@@ -323,7 +323,7 @@ function _totuple_err(@nospecialize T)
     throw(ArgumentError("too few elements for tuple type $T"))
 end
 
-function _totuple(T, itr, s...)
+function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     @_inline_meta
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
