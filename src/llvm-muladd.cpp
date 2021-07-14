@@ -9,6 +9,7 @@
 
 #include <llvm/IR/Value.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -34,15 +35,6 @@ using namespace llvm;
  * when `%v0` has no other use
  */
 
-struct CombineMulAdd : public FunctionPass {
-    static char ID;
-    CombineMulAdd() : FunctionPass(ID)
-    {}
-
-private:
-    bool runOnFunction(Function &F) override;
-};
-
 // Return true if this function shouldn't be called again on the other operand
 // This will always return false on LLVM 5.0+
 static bool checkCombine(Module *m, Instruction *addOp, Value *maybeMul, Value *addend,
@@ -60,7 +52,7 @@ static bool checkCombine(Module *m, Instruction *addOp, Value *maybeMul, Value *
     return false;
 }
 
-bool CombineMulAdd::runOnFunction(Function &F)
+static bool combineMulAdd(Function &F)
 {
     Module *m = F.getParent();
     for (auto &BB: F) {
@@ -90,14 +82,36 @@ bool CombineMulAdd::runOnFunction(Function &F)
     return true;
 }
 
-char CombineMulAdd::ID = 0;
-static RegisterPass<CombineMulAdd> X("CombineMulAdd", "Combine mul and add to muladd",
+struct CombineMulAdd : PassInfoMixin<CombineMulAdd> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+};
+
+PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM)
+{
+    combineMulAdd(F);
+    return PreservedAnalyses::all();
+}
+
+
+struct CombineMulAddLegacy : public FunctionPass {
+    static char ID;
+    CombineMulAddLegacy() : FunctionPass(ID)
+    {}
+
+private:
+    bool runOnFunction(Function &F) override {
+        return combineMulAdd(F);
+    }
+};
+
+char CombineMulAddLegacy::ID = 0;
+static RegisterPass<CombineMulAddLegacy> X("CombineMulAdd", "Combine mul and add to muladd",
                                      false /* Only looks at CFG */,
                                      false /* Analysis Pass */);
 
 Pass *createCombineMulAddPass()
 {
-    return new CombineMulAdd();
+    return new CombineMulAddLegacy();
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddCombineMulAddPass(LLVMPassManagerRef PM)
