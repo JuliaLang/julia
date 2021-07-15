@@ -52,6 +52,16 @@ function cleanup_rootfs(rootfs; rootfs_info=nothing)
     @info("Chown'ing rootfs")
     run(`sudo chown $(getuid()):$(getgid()) -R "$(rootfs)"`)
 
+    # Add `juliaci` user and group
+    @info("Adding 'juliaci' user and group as 1000:1000")
+    open(joinpath(rootfs, "etc", "passwd"), append=true) do io
+        println(io, "juliaci:x:1000:1000:juliaci:/home/juliaci:/bin/sh")
+    end
+    open(joinpath(rootfs, "etc", "group"), append=true) do io
+        println(io, "juliaci:x:1000:juliaci")
+    end
+    mkpath(joinpath(rootfs, "home", "juliaci"))
+
     # Write out a reasonable default resolv.conf
     open(joinpath(rootfs, "etc", "resolv.conf"), write=true) do io
         write(io, """
