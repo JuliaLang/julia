@@ -48,8 +48,6 @@ end
     @test (REPL.matchinds("a ", "a file.txt"); true)
 end
 
-@testset "Unicode doc lookup" begin
-    # https://github.com/JuliaLang/julia/issues/41589
-    # assuming ASCII is bad, m'kay?
+@testset "Unicode doc lookup (#41589)" begin
     @test REPL.lookup_doc(:(÷=)) isa Markdown.MD
 end
