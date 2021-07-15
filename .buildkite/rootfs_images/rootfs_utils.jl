@@ -84,10 +84,37 @@ end
 
 function upload_rootfs_image(tarball_path::String;
                              github_repo::String="JuliaCI/rootfs-images",
-                             tag_name::String)
+                             tag_name::String,
+                             force_overwrite::Bool)
     # Upload it to `github_repo`
     tarball_url = "https://github.com/$(github_repo)/releases/download/$(tag_name)/$(basename(tarball_path))"
     @info("Uploading to $(github_repo)@$(tag_name)", tarball_url)
-    run(`$(ghr_jll.ghr()) -u $(dirname(github_repo)) -r $(basename(github_repo)) -replace $(tag_name) $(tarball_path)`)
+    replace_flag = force_overwrite ? "-replace" : ""
+    run(`$(ghr_jll.ghr()) -u $(dirname(github_repo)) -r $(basename(github_repo)) $(replace_flag) $(tag_name) $(tarball_path)`)
     return tarball_url
+end
+
+# process command-line arguments
+
+function get_arguments(args::AbstractVector, script_file::AbstractString)
+    usage = "Usage: $(basename(script_file)) <tag_name> [--force-overwrite]"
+    length(args) < 1 && throw(ArgumentError(usage))
+    length(args) > 2 && throw(ArgumentError(usage))
+    tag_name        = get_tag_name(args; usage)
+    force_overwrite = get_force_overwrite(args; usage)
+    return (; tag_name, force_overwrite)
+end
+
+function get_tag_name(args::AbstractVector; usage::AbstractString)
+    tag_name = convert(String, strip(args[1]))::String
+    isempty(tag_name)          && throw(ArgumentError(usage))
+    startswith(tag_name, "--") && throw(ArgumentError(usage))
+    return tag_name
+end
+
+function get_force_overwrite(args::AbstractVector; usage::AbstractString)
+    force_overwrite_string = strip(get(args, 2, ""))
+    force_overwrite_string == ""                  && return false
+    force_overwrite_string == "--force-overwrite" && return true
+    throw(ArgumentError(usage))
 end

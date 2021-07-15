@@ -4,12 +4,9 @@
 ## Eventually, this image will probably be replaced with the actual builder image,
 ## as that will have the necessary toolchains as well, but that image is not built yet.
 
-if length(ARGS) != 1
-    throw(ArgumentError("Usage: llvm-passes.jl [tag_name]"))
-end
-const tag_name = convert(String, strip(ARGS[1]))::String
-
 include("rootfs_utils.jl")
+
+const tag_name, force_overwrite = get_arguments(ARGS, @__FILE__)
 
 # Build debian-based image with the following extra packages:
 packages = [
@@ -31,4 +28,4 @@ packages = [
 tarball_path = debootstrap("llvm-passes"; packages)
 
 # Upload it
-upload_rootfs_image(tarball_path; tag_name)
+upload_rootfs_image(tarball_path; tag_name, force_overwrite)
