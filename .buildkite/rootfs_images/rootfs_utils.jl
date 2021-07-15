@@ -77,7 +77,7 @@ function cleanup_rootfs(rootfs; rootfs_info=nothing)
              write=true,
         )
     end
-    
+
     @info("Forcing all symlinks to be relative")
     force_relative(rootfs)
 end
