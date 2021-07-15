@@ -788,8 +788,7 @@ end
 Convert a string to `String` type and check that it contains only ASCII data, otherwise
 throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 
-If you instead want to *silently discard* non-ASCII data, you can use `filter(isascii, s)`,
-via the [`isascii`](@ref) and [`filter`](@ref) functions.
+See also the [`isascii`](@ref) predicate to filter or replace non-ASCII characters.
 
 # Examples
 ```jldoctest
@@ -797,9 +796,6 @@ julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
 Stacktrace:
 [...]
-
-julia> filter(isascii, "abcdeγfgh") # discard non-ASCII chars
-"abcdefgh"
 
 julia> ascii("abcdefgh")
 "abcdefgh"
