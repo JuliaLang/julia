@@ -47,3 +47,9 @@ end
     # shouldn't throw when there is a space in a middle of query
     @test (REPL.matchinds("a ", "a file.txt"); true)
 end
+
+@testset "Unicode doc lookup" begin
+    # https://github.com/JuliaLang/julia/issues/41589
+    # assuming ASCII is bad, m'kay?
+    @test REPL.lookup_doc(:(÷=)) isa Markdown.MD
+end
