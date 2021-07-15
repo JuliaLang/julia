@@ -2168,7 +2168,7 @@ function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     hvncat_fill!(A, false, xs)
     return A
 end
-                                                                                                                    
+
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
     # conditions: the elements must all have 1-length dimensions above N
@@ -2402,7 +2402,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     currentdims = zeros(Int, nd)
     blockcounts = zeros(Int, nd)
     shapepos = ones(Int, nd)
-                                                                                                                    
+
     elementcount = 0
     for i ∈ eachindex(as)
         elementcount += cat_length(as[i])
