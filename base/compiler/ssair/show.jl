@@ -744,7 +744,7 @@ function stmts_used(io::IO, code::IRCode, warn_unset_entry=true)
     return used
 end
 
-function stmts_used(_::IO, code::CodeInfo)
+function stmts_used(::IO, code::CodeInfo)
     stmts = code.code
     used = BitSet()
     for stmt in stmts
