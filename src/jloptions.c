@@ -188,7 +188,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_inline,
            opt_polly,
            opt_trace_compile,
-           opt_math_mode,
            opt_worker,
            opt_bind_to,
            opt_handle_signals,
@@ -253,7 +252,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
-        { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
         { "worker",          optional_argument, 0, opt_worker },
@@ -647,16 +645,6 @@ restart_switch:
             jl_options.trace_compile = strdup(optarg);
             if (!jl_options.trace_compile)
                 jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
-            break;
-        case opt_math_mode:
-            if (!strcmp(optarg,"ieee"))
-                jl_options.fast_math = JL_OPTIONS_FAST_MATH_OFF;
-            else if (!strcmp(optarg,"fast"))
-                jl_options.fast_math = JL_OPTIONS_FAST_MATH_ON;
-            else if (!strcmp(optarg,"user"))
-                jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
-            else
-                jl_errorf("julia: invalid argument to --math-mode (%s)", optarg);
             break;
         case opt_worker:
             jl_options.worker = 1;
