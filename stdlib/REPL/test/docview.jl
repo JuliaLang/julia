@@ -27,3 +27,7 @@ end
     # https://github.com/JuliaLang/julia/issues/37757
     @test REPL.insert_hlines(IOBuffer(), nothing) === nothing
 end
+
+@testset "Unicode doc lookup (#41589)" begin
+    @test REPL.lookup_doc(:(÷=)) isa Markdown.MD
+end
