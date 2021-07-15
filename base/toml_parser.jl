@@ -104,7 +104,7 @@ function Parser(str::String; filepath=nothing)
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
-            isdefined(Base, :loaded_modules) ? get(Base.loaded_modules, DATES_PKGID, nothing) : nothing,
+            isdefined(Base, :loaded_modules) ? Base.maybe_root_module(DATES_PKGID) : nothing,
         )
     startup(l)
     return l
