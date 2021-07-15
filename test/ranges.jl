@@ -652,8 +652,8 @@ end
     @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
     is_unsigned = T <: Unsigned
     is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
-    @test broadcast(-, T(1):3) == -T(1):-1:-T(3) broken=is_unsigned
-    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1) broken=is_unsigned
+    @test broadcast(-, T(1):3) == -T(1):-T(1):-T(3)
+    @test broadcast(-, 2, T(1):3) == T(1):-T(1):-T(1)
 end
 @testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
     @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
