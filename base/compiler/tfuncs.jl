@@ -1449,7 +1449,10 @@ function array_builtin_common_nothrow(argtypes::Array{Any,1}, first_idx_idx::Int
     array_type_undefable(atype) && return false
     # If we have @inbounds (first argument is false), we're allowed to assume
     # we don't throw bounds errors.
-    (isa(argtypes[1], Const) && !argtypes[1].val) && return true
+    boundcheck = argtypes[1]
+    if isa(boundcheck, Const)
+        !(boundcheck.val::Bool) && return true
+    end
     # Else we can't really say anything here
     # TODO: In the future we may be able to track the shapes of arrays though
     # inference.

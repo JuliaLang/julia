@@ -8,8 +8,8 @@ agents:
   os: "linux"
 
 steps:
-  - label: "Check whitespace"
-    key: whitespace
+  - label: "whitespace"
+    key: "whitespace"
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
