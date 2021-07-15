@@ -1,7 +1,13 @@
 #!/usr/bin/env julia
 
+## This rootfs includes everything that must be installed to build Julia
+## within an alpine-based environment with GCC 9.
+
 include("rootfs_utils.jl")
 
+const tag_name, force_overwrite = get_arguments(ARGS, @__FILE__)
+
+# Build alpine-based image with the following extra packages:
 packages = [
     AlpinePackage("bash"),
     AlpinePackage("cmake"),
@@ -20,5 +26,5 @@ packages = [
 ]
 tarball_path = alpine_bootstrap("package_musl64"; packages)
 
-# Upload the alpine rootfs
-upload_rootfs_image(tarball_path; tag_name = "v1")
+# Upload it
+upload_rootfs_image(tarball_path; tag_name, force_overwrite)
