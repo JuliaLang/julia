@@ -792,7 +792,7 @@ string(b::Bool) = b ? "true" : "false"
 """
     bitstring(n)
 
-A string giving the literal bit representation of a number.
+A string giving the literal bit representation of a primitive type.
 
 See also [`count_ones`](@ref), [`count_zeros`](@ref), [`digits`](@ref).
 
@@ -811,7 +811,7 @@ function bitstring(x::T) where {T}
     str = Base.StringVector(sz)
     i = sz
     @inbounds while i >= 4
-        b = UInt32(Base.trunc_int(UInt8, x))
+        b = UInt32(x isa UInt8 ? x : Base.trunc_int(UInt8, x))
         d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
         str[i-3] = (d >> 0x00) % UInt8
         str[i-2] = (d >> 0x08) % UInt8
