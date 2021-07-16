@@ -126,22 +126,20 @@ function flush_gc_msgs(w::Worker)
     if !isdefined(w, :w_stream)
         return
     end
-    w.gcflag = false
-    new_array = Any[]
-    msgs = w.add_msgs
-    w.add_msgs = new_array
-    if !isempty(msgs)
-        remote_do(add_clients, w, msgs)
-    end
+    lock(w.msg_lock) do
+        w.gcflag || return # early exit if someone else got to this
+        w.gcflag = false
+        msgs = w.add_msgs
+        w.add_msgs = Any[]
+        if !isempty(msgs)
+            remote_do(add_clients, w, msgs)
+        end
 
-    # del_msgs gets populated by finalizers, so be very careful here about ordering of allocations
-    # XXX: threading requires this to be atomic
-    new_array = Any[]
-    msgs = w.del_msgs
-    w.del_msgs = new_array
-    if !isempty(msgs)
-        #print("sending delete of $msgs\n")
-        remote_do(del_clients, w, msgs)
+        msgs = w.del_msgs
+        w.del_msgs = Any[]
+        if !isempty(msgs)
+            remote_do(del_clients, w, msgs)
+        end
     end
 end
 
