@@ -808,16 +808,16 @@ julia> bitstring(2.2)
 function bitstring(x::T) where {T}
     isprimitivetype(T) || throw(ArgumentError("$T not a primitive type"))
     sz = sizeof(T) * 8
-    str = Base.StringVector(sz)
+    str = StringVector(sz)
     i = sz
     @inbounds while i >= 4
-        b = UInt32(x isa UInt8 ? x : Base.trunc_int(UInt8, x))
+        b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
         d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
         str[i-3] = (d >> 0x00) % UInt8
         str[i-2] = (d >> 0x08) % UInt8
         str[i-1] = (d >> 0x10) % UInt8
         str[i]   = (d >> 0x18) % UInt8
-        x = Base.lshr_int(x, 4)
+        x = lshr_int(x, 4)
         i -= 4
     end
     return String(str)
