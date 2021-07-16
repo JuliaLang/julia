@@ -15,6 +15,8 @@ avoid Julia-specific details.
 For example, `show` displays strings with quotes, and `print` displays strings
 without quotes.
 
+[`println`](@ref) prints automatically appending a newline at the end.
+
 [`string`](@ref) returns the output of `print` as a string.
 
 # Examples
@@ -54,8 +56,8 @@ end
 """
     println([io::IO], xs...)
 
-Print (using [`print`](@ref)) `xs` followed by a newline.
-If `io` is not supplied, prints to [`stdout`](@ref).
+Print (using [`print`](@ref)) to `io` (or to the default output stream [`stdout`](@ref)
+if `io` is not given) `xs` followed by a newline.
 
 # Examples
 ```jldoctest
