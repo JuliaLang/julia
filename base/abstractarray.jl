@@ -2156,6 +2156,113 @@ _typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_only_one(
 _typed_hvncat_0d_only_one() =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
+_typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
+
+function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
+    N < 0 &&
+        throw(ArgumentError("concatenation dimension must be nonnegative"))
+    return Array{T, N}(undef, ntuple(x -> 0, Val(N)))
+end
+
+function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
+    N < 0 &&
+        throw(ArgumentError("concatenation dimension must be nonnegative"))
+    A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
+    hvncat_fill!(A, false, xs)
+    return A
+end
+
+function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
+    # optimization for arrays that can be concatenated by copying them linearly into the destination
+    # conditions: the elements must all have 1-length dimensions above N
+    length(as) > 0 ||
+        throw(ArgumentError("must have at least one element"))
+    N < 0 &&
+        throw(ArgumentError("concatenation dimension must be nonnegative"))
+    for a ∈ as
+        ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
+            return _typed_hvncat(T, (ntuple(x -> 1, Val(N - 1))..., length(as), 1), false, as...)
+            # the extra 1 is to avoid an infinite cycle
+    end
+
+    nd = N
+
+    Ndim = 0
+    for i ∈ eachindex(as)
+        Ndim += cat_size(as[i], N)
+        nd = max(nd, cat_ndims(as[i]))
+        for d ∈ 1:N - 1
+            cat_size(as[1], d) == cat_size(as[i], d) || throw(ArgumentError("mismatched size along axis $d in element $i"))
+        end
+    end
+
+    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
+    k = 1
+    for a ∈ as
+        for i ∈ eachindex(a)
+            A[k] = a[i]
+            k += 1
+        end
+    end
+    return A
+end
+
+function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
+    length(as) > 0 ||
+        throw(ArgumentError("must have at least one element"))
+    N < 0 &&
+        throw(ArgumentError("concatenation dimension must be nonnegative"))
+    nd = N
+    Ndim = 0
+    for i ∈ eachindex(as)
+        Ndim += cat_size(as[i], N)
+        nd = max(nd, cat_ndims(as[i]))
+        for d ∈ 1:N-1
+            cat_size(as[i], d) == 1 ||
+                throw(ArgumentError("all dimensions of element $i other than $N must be of length 1"))
+        end
+    end
+
+    A = Array{T, nd}(undef, ntuple(x -> 1, Val(N - 1))..., Ndim, ntuple(x -> 1, nd - N)...)
+
+    k = 1
+    for a ∈ as
+        if a isa AbstractArray
+            lena = length(a)
+            copyto!(A, k, a, 1, lena)
+            k += lena
+        else
+            A[k] = a
+            k += 1
+        end
+    end
+    return A
+end
+
+# 0-dimensional cases for balanced and unbalanced hvncat method
+
+_typed_hvncat(T::Type, ::Tuple{}, ::Bool, x...) = _typed_hvncat(T, Val(0), x...)
+_typed_hvncat(T::Type, ::Tuple{}, ::Bool, x::Number...) = _typed_hvncat(T, Val(0), x...)
+
+
+# balanced dimensions hvncat methods
+
+_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
+_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
+
+function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T, row_first}
+    lengthas = length(as)
+    ds > 0 ||
+        throw(ArgumentError("`dimsshape` argument must consist of positive integers"))
+    lengthas == ds ||
+        throw(ArgumentError("number of elements does not match `dimshape` argument; expected $ds, got $lengthas"))
+    if row_first
+        return _typed_hvncat(T, Val(2), as...)
+    else
+        return _typed_hvncat(T, Val(1), as...)
+    end
+end
+
 function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {T, N}
     all(>(0), dims) ||
         throw(ArgumentError("`dims` argument must contain positive integers"))
@@ -2194,118 +2301,13 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     end
 end
 
-_typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
-
-function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
-    N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
-    return Array{T, N}(undef, ntuple(x -> 0, Val(N)))
+function _typed_hvncat(T::Type, dims::NTuple{N, Int}, row_first::Bool, as...) where {N}
+    # function barrier after calculating the max is necessary for high performance
+    nd = max(maximum(cat_ndims(a) for a ∈ as), N)
+    return _typed_hvncat_dims(T, (dims..., ntuple(x -> 1, nd - N)...), row_first, as)
 end
 
-function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
-    N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
-    A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
-    hvncat_fill!(A, false, xs)
-    return A
-end
-
-function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
-    # optimization for arrays that can be concatenated by copying them linearly into the destination
-    # conditions: the elements must all have 1-length dimensions above N
-    length(as) > 0 ||
-        throw(ArgumentError("must have at least one element"))
-    N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
-    for a ∈ as
-        ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
-            return _typed_hvncat(T, (ntuple(x -> 1, N - 1)..., length(as), 1), false, as...)
-            # the extra 1 is to avoid an infinite cycle
-    end
-
-    nd = max(N, ndims(as[1]))
-
-    Ndim = 0
-    for i ∈ eachindex(as)
-        a = as[i]
-        Ndim += size(a, N)
-        nd = max(nd, ndims(a))
-        for d ∈ 1:N-1
-            size(a, d) == size(as[1], d) ||
-                throw(ArgumentError("all dimensions of element $i other than $N must be of length 1"))
-        end
-    end
-
-    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
-    k = 1
-    for a ∈ as
-        for i ∈ eachindex(a)
-            A[k] = a[i]
-            k += 1
-        end
-    end
-    return A
-end
-
-function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
-    length(as) > 0 ||
-        throw(ArgumentError("must have at least one element"))
-    N < 0 &&
-        throw(ArgumentError("concatenation dimension must be nonnegative"))
-    nd = N
-    Ndim = 0
-    for i ∈ eachindex(as)
-        a = as[i]
-        Ndim += cat_size(a, N)
-        nd = max(nd, cat_ndims(a))
-        for d ∈ 1:N-1
-            cat_size(a, d) == 1 ||
-                throw(ArgumentError("all dimensions of element $i other than $N must be of length 1"))
-        end
-    end
-
-    A = Array{T, nd}(undef, ntuple(x -> 1, N - 1)..., Ndim, ntuple(x -> 1, nd - N)...)
-
-    k = 1
-    for a ∈ as
-        if a isa AbstractArray
-            lena = length(a)
-            copyto!(A, k, a, 1, lena)
-            k += lena
-        else
-            A[k] = a
-            k += 1
-        end
-    end
-    return A
-end
-
-
-# 0-dimensional cases for balanced and unbalanced hvncat method
-
-_typed_hvncat(T::Type, ::Tuple{}, ::Bool, x...) = _typed_hvncat(T, Val(0), x...)
-_typed_hvncat(T::Type, ::Tuple{}, ::Bool, x::Number...) = _typed_hvncat(T, Val(0), x...)
-
-
-# balanced dimensions hvncat methods
-
-_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
-_typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
-
-function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T, row_first}
-    lengthas = length(as)
-    ds > 0 ||
-        throw(ArgumentError("`dimsshape` argument must consist of positive integers"))
-    lengthas == ds ||
-        throw(ArgumentError("number of elements does not match `dimshape` argument; expected $ds, got $lengthas"))
-    if row_first
-        return _typed_hvncat(T, Val(2), as...)
-    else
-        return _typed_hvncat(T, Val(1), as...)
-    end
-end
-
-function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as...) where {T, N}
+function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as::Tuple) where {T, N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     all(>(0), dims) ||
@@ -2314,16 +2316,14 @@ function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as...) 
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
-    # discover dimensions
-    nd = max(N, cat_ndims(as[1]))
-    outdims = zeros(Int, nd)
+    outdims = zeros(Int, N)
 
     # discover number of rows or columns
     for i ∈ 1:dims[d1]
         outdims[d1] += cat_size(as[i], d1)
     end
 
-    currentdims = zeros(Int, nd)
+    currentdims = zeros(Int, N)
     blockcount = 0
     elementcount = 0
     for i ∈ eachindex(as)
@@ -2331,11 +2331,11 @@ function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as...) 
         currentdims[d1] += cat_size(as[i], d1)
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
-            for d ∈ (d2, 3:nd...)
+            for d ∈ (d2, 3:N...)
                 currentdims[d] += cat_size(as[i], d)
                 if outdims[d] == 0 # unfixed dimension
                     blockcount += 1
-                    if blockcount == (d > length(dims) ? 1 : dims[d]) # last expected member of dimension
+                    if blockcount == dims[d]
                         outdims[d] = currentdims[d]
                         currentdims[d] = 0
                         blockcount = 0
@@ -2378,7 +2378,13 @@ function _typed_hvncat(T::Type, shape::Tuple{Tuple}, row_first::Bool, xs...)
     return _typed_hvncat_1d(T, shape[1][1], Val(row_first), xs...)
 end
 
-function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {T, N}
+function _typed_hvncat(T::Type, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {N}
+    # function barrier after calculating the max is necessary for high performance
+    nd = max(maximum(cat_ndims(a) for a ∈ as), N)
+    return _typed_hvncat_shape(T, (shape..., ntuple(x -> shape[end], nd - N)...), row_first, as)
+end
+
+function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::Tuple) where {T, N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     all(>(0), tuple((shape...)...)) ||
@@ -2386,6 +2392,7 @@ function _typed_hvncat(::Type{T}, shape::NTuple{N, Tuple}, row_first::Bool, as..
 
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
+
     shapev = collect(shape) # saves allocations later
     all(!isempty, shapev) ||
         throw(ArgumentError("each level of `shape` argument must have at least one value"))
