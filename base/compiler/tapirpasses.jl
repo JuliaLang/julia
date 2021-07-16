@@ -669,7 +669,7 @@ function is_trivial_for_spawn(ir::IRCode, task::ChildTask)
     return true
 end
 
-""" Remove syncregion and tyr to remove the corresponding call to the taskgroup factory """
+""" Remove syncregion and try to remove the corresponding call to the taskgroup factory """
 function remove_syncregion!(ir::IRCode, position::Integer)
     stmt = ir.stmts[position]
     ex = stmt[:inst]::Expr
