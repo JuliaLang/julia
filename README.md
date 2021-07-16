@@ -5,17 +5,31 @@
 </a>
 </div>
 
-Code coverage:
-[![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
-[![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
-
 Documentation:
-[![version 1][docs-img]](https://docs.julialang.org)
+[![Documentation][docs-img]][docs-url]
 
-[appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
-[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
-[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
-[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
+[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg "Documentation (version 1)"
+[docs-url]: https://docs.julialang.org
+
+Continuous integration:
+[![Continuous integration (release-1.7)][buildkite-release-1.7-img]][buildkite-release-1.7-url]
+
+<!--
+To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
+You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
+-->
+[buildkite-release-1.7-img]: https://badge.buildkite.com/9c7938be8fdb44c25adfccd67ca79cb6afdd021b9c473bd1c8.svg?branch=release-1.7 "Continuous integration (release-1.7)"
+[buildkite-release-1.7-url]: https://buildkite.com/julialang/julia-release-1-dot-7
+
+Code coverage:
+[![Code coverage (Coveralls)][coveralls-img]][coveralls-url]
+[![Code coverage (Codecov)][codecov-img]][codecov-url]
+
+[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls "Code coverage (Coveralls)"
+[coveralls-url]: https://coveralls.io/r/JuliaLang/julia?branch=master
+
+[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov "Code coverage (Codecov)"
+[codecov-url]: https://codecov.io/github/JuliaLang/julia?branch=master
 
 ## The Julia Language
 
