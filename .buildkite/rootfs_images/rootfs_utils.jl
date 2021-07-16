@@ -89,8 +89,11 @@ function upload_rootfs_image(tarball_path::String;
     # Upload it to `github_repo`
     tarball_url = "https://github.com/$(github_repo)/releases/download/$(tag_name)/$(basename(tarball_path))"
     @info("Uploading to $(github_repo)@$(tag_name)", tarball_url)
-    replace_flag = force_overwrite ? "-replace" : ""
-    run(`$(ghr_jll.ghr()) -u $(dirname(github_repo)) -r $(basename(github_repo)) $(replace_flag) $(tag_name) $(tarball_path)`)
+    cmd = ghr_jll.ghr()
+    append!(cmd.exec, ["-u", dirname(github_repo), "-r", basename(github_repo)])
+    force_overwrite && push!(cmd.exec, "-replace")
+    append!(cmd.exec, [tag_name, tarball_path])
+    run(cmd)
     return tarball_url
 end
 
