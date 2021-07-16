@@ -1010,13 +1010,9 @@ function lower_tapir_output!(ir::IRCode)
         T = get(slottypes, oid, Union{})
         R = Tapir.UndefableRef{T}
         alloc_pos = 1   # [^alloca-position]
-        ref = insert_node!(ir, alloc_pos, NewInstruction(Expr(:new, R), R))
+        ref = insert_node!(ir, alloc_pos, NewInstruction(Expr(:new, R, false), R))
+        stmt_at(ir, ref.id)[:flag] = IR_FLAG_EFFECT_FREE
         outputrefs[oid] = ref
-        setset = NewInstruction(
-            Expr(:call, setfield!, ref, QuoteNode(:set), QuoteNode(false)),
-            Any,
-        )
-        insert_node!(ir, alloc_pos, setset)
     end
 
     # Insert loads
@@ -1029,12 +1025,15 @@ function lower_tapir_output!(ir::IRCode)
         ref === nothing && return nothing
         isset_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:set))
         isset = insert_node!(ir, i, NewInstruction(isset_ex, Bool), attach_after)
+        stmt_at(ir, isset.id)[:flag] = IR_FLAG_EFFECT_FREE
         name, = outputinfo[slot_id(out)]
         undefcheck = Expr(:throw_undef_if_not, name, isset)
         insert_node!(ir, i, NewInstruction(undefcheck, Any), attach_after)
         value_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:x))
         T = get(slottypes, slot_id(out), Union{})
-        return insert_node!(ir, i, NewInstruction(value_ex, T), attach_after)
+        value = insert_node!(ir, i, NewInstruction(value_ex, T), attach_after)
+        stmt_at(ir, value.id)[:flag] = IR_FLAG_EFFECT_FREE
+        return value
     end
     for i in loaded_positions
         stmt = ir.stmts[i]
@@ -1059,6 +1058,7 @@ function lower_tapir_output!(ir::IRCode)
             ref = outputrefs[slot_id(out)]
             isset_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:set))
             isset = insert_node!(ir, i, NewInstruction(isset_ex, Bool))
+            stmt_at(ir, isset.id)[:flag] = IR_FLAG_EFFECT_FREE
             stmt[:inst] = isset
         else
             stmt[:inst] = map_id(identity, inst) do out
