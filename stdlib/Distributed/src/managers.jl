@@ -160,7 +160,7 @@ function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy:
     # Wait for all launches to complete.
     @sync for (i, (machine, cnt)) in enumerate(manager.machines)
         let machine=machine, cnt=cnt
-             @async try
+            @async try
                 launch_on_machine(manager, $machine, $cnt, params, launched, launch_ntfy)
             catch e
                 print(stderr, "exception launching on machine $(machine) : $(e)\n")
