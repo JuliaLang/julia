@@ -207,6 +207,8 @@ end
         :loop_in_continuation =>
             first(@code_typed NonOptimizableTasks.loop_in_continuation(1)),
         :spawn_in_loop => first(@code_typed NonOptimizableTasks.spawn_in_loop()),
+        :dontoptimize_dontoptimize =>
+            first(@code_typed NonOptimizableTasks.dontoptimize_dontoptimize()),
     ]
         @test Core.Compiler.has_tapir(ci::Core.Compiler.CodeInfo)
     end

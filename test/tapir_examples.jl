@@ -609,6 +609,14 @@ function spawn_in_loop()
     end
 end
 
+function dontoptimize_dontoptimize()
+    Tapir.@sync begin
+        Tapir.@spawn Tapir.dontoptimize()
+        Tapir.dontoptimize()
+    end
+    return
+end
+
 end # module NonOptimizableTasks
 
 module TaskGroupOptimizations

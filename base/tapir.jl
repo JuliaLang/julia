@@ -587,6 +587,9 @@ end
 ##### Utils
 #####
 
+# Currently the optimizer gives up when it sees a llvmcall
+@inline dontoptimize() = Base.llvmcall("ret void", Cvoid, Tuple{})
+
 function print_remarks()
     remarks = Core.Compiler.tapir_get_remarks!()
     print_remarks(stdout, remarks)
