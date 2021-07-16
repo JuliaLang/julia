@@ -2261,6 +2261,8 @@ function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T,
 end
 
 function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {T, N}
+    all(>(0), dims) ||
+        throw(ArgumentError("`dims` argument must contain positive integers"))
     A = Array{T, N}(undef, dims...)
     lengtha = length(A)  # Necessary to store result because throw blocks are being deoptimized right now, which leads to excessive allocations
     lengthx = length(xs) # Cuts from 3 allocations to 1.
