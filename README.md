@@ -5,18 +5,31 @@
 </a>
 </div>
 
-Code coverage:
-[![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
-[![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
-
 Documentation:
-[![version 1][docs-img]](https://docs.julialang.org)
+[![Documentation][docs-img]][docs-url]
 
-[travis-img]: https://img.shields.io/travis/JuliaLang/julia/master.svg?label=Linux+/+macOS
-[appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
-[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
-[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
-[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
+[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg "Documentation (version 1)"
+[docs-url]: https://docs.julialang.org
+
+Continuous integration:
+[![Continuous integration (release-1.6)][buildkite-release-1.6-img]][buildkite-release-1.6-url]
+
+<!--
+To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
+You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
+-->
+[buildkite-release-1.6-img]: https://badge.buildkite.com/d1c043d03112bfcd7704f233a4f71d16e6fd46bdd042b4e8e4.svg?branch=release-1.6 "Continuous integration (release-1.6)"
+[buildkite-release-1.6-url]: https://buildkite.com/julialang/julia-release-1-dot-6
+
+Code coverage:
+[![Code coverage (Coveralls)][coveralls-img]][coveralls-url]
+[![Code coverage (Codecov)][codecov-img]][codecov-url]
+
+[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls "Code coverage (Coveralls)"
+[coveralls-url]: https://coveralls.io/r/JuliaLang/julia?branch=master
+
+[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov "Code coverage (Codecov)"
+[codecov-url]: https://codecov.io/github/JuliaLang/julia?branch=master
 
 ## The Julia Language
 
