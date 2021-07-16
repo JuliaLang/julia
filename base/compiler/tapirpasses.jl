@@ -27,6 +27,48 @@ analyze and optimize the code containing the parallel tasks.
   (https://github.com/OpenCilk/opencilk-project)
 """
 
+# Ideally, we can use `add_remark` inside optimization passes. But we don't have
+# access to `interp` inside optimizations ATM. Hence some global state...
+const _TAPIR_REMARK = RefValue(false)
+const _TAPIR_REMARK_LOG = []
+
+"""
+    tapir_remark(msg...)
+
+Insert remark message `msg`. This function acts like `println(msg...)` inside
+`Tapir.with_remarks` context.
+"""
+function tapir_remark(msg...)
+    @nospecialize
+    _TAPIR_REMARK.x || return
+    push!(_TAPIR_REMARK_LOG, msg)
+    return
+end
+
+function set_tapir_remark(enable::Bool)
+    old = _TAPIR_REMARK.x
+    _TAPIR_REMARK.x = enable
+    return old
+end
+
+function tapir_get_remarks!()
+    log = copy(_TAPIR_REMARK_LOG)
+    empty!(_TAPIR_REMARK_LOG)
+    return log
+end
+
+struct TapirRemarkInstruction
+    idx::Int
+    inst::Any
+end
+
+function tapir_remark_begin(sv::OptimizationState)
+    @nospecialize
+    _TAPIR_REMARK.x || return
+    push!(_TAPIR_REMARK_LOG, sv.linfo)
+    return
+end
+
 """
     ChildTask
 
@@ -63,7 +105,10 @@ ChildTask(task::ChildTask, subtasks::Vector{ChildTask}) =
 """
     foreach_task_depth_first(f, tasks::Vector{ChildTask})
 
-Iterate `tasks` recursively in the depth-first order.
+Iterate `tasks` recursively in the depth-first and reversed order.
+
+Note: `remove_trivial_tapir!` relies on that this is reversed order within the
+same level of tasks.
 """
 function foreach_task_depth_first(f, tasks)
     stack = [collect(ChildTask, tasks)]
@@ -581,6 +626,7 @@ has_loop(ir::IRCode, blocklabels) =
     end
 
 function always_throws(ir::IRCode, task::ChildTask)
+    seenthrow = RefValue(false)
     visited = falses(length(ir.cfg.blocks))
     detacher = block_for_inst(ir, task.detach)
     for i in task.reattaches
@@ -597,14 +643,16 @@ function always_throws(ir::IRCode, task::ChildTask)
                 end
                 stmt = ir.stmts[bb.stmts[end-1]]
             end
-            if stmt[:type] !== Union{}
+            if stmt[:type] === Union{}
+                seenthrow.x = true
+            else
                 throws.x = false
             end
             return false
         end
         throws.x || return false
     end
-    return true
+    return seenthrow.x
 end
 
 function try_resolve(@nospecialize(x))
@@ -654,14 +702,31 @@ function is_trivial_for_spawn(ir::IRCode, stmts::StmtRange)
         stmt = ir.stmts[istmt]
         stmt[:type] === Bottom && continue
         stmt_effect_free(stmt[:inst], stmt[:inst], ir, ir.sptypes) && continue
-        _is_trivial_for_spawn(stmt[:inst]) || return false
+        if !_is_trivial_for_spawn(stmt[:inst])
+            tapir_remark(
+                "non-trivial for spawn: ",
+                TapirRemarkInstruction(istmt, stmt[:inst]),
+            )
+            return false
+        end
     end
     return true
 end
 
 function is_trivial_for_spawn(ir::IRCode, task::ChildTask)
-    has_loop(ir, task.blocks) && return false
-    always_throws(ir, task) && return true
+    detacher = block_for_inst(ir, task.detach)
+    if has_loop(ir, task.blocks)
+        tapir_remark(
+            "non-trivial spawn: task detached from block ",
+            detacher,
+            " contains a loop",
+        )
+        return false
+    end
+    if always_throws(ir, task)
+        tapir_remark("task detached from block ", detacher, " always throws")
+        return true
+    end
 
     for ibb in task.blocks
         is_trivial_for_spawn(ir, ir.cfg.blocks[ibb]) || return false
@@ -1083,6 +1148,7 @@ function check_tapir_race!(ir::IRCode)
         det = ir.stmts.inst[bb.stmts[end]]
         det isa DetachNode || continue
         continuation = ir.cfg.blocks[det.label]
+        racy_block = false
         for iphi in continuation.stmts
             phi = ir.stmts.inst[iphi]
             phi isa PhiNode || continue
@@ -1092,6 +1158,7 @@ function check_tapir_race!(ir::IRCode)
                 throw_if_uses = BitSet()
             end
             racy = true
+            racy_block = true
             # Insert a throw after "store" (def in child task):
             task = task_by_detach(tasks, bb.stmts[end])::ChildTask
             for (i, e) in pairs(phi.edges)
@@ -1117,6 +1184,9 @@ function check_tapir_race!(ir::IRCode)
             end
             # Insert a throw before "load" (use in continuation):
             push!(throw_if_uses, iphi)
+        end
+        if racy_block
+            tapir_remark("Racy Phi node found in continuation block ", det.label)
         end
     end
     racy || return  ir, false
@@ -1283,12 +1353,16 @@ function remove_trivial_tapir!(ir::IRCode, tasks)
     end
 
     # Remove trivial spawns:
+    removed_tasks = RefValue(0)
     foreach_task_depth_first(tasks) do task
+        ibb_det = block_for_inst(ir, task.detach)
         det = ir.stmts.inst[task.detach]::DetachNode
         sr = det.syncregion::SSAValue
 
         if is_trivial_for_spawn(ir, task)
             remove_tapir!(ir, task)
+            removed_tasks.x += 1
+            tapir_remark("removed a trivial spawn detached at block ", ibb_det)
         elseif isassigned(syncregion_to_syncs, sr.id) # has a SyncNode
             # Check if the continuation is trivial. This is done only when the
             # task is not spawned from a closure (that captures the syncregion
@@ -1297,8 +1371,16 @@ function remove_trivial_tapir!(ir::IRCode, tasks)
             syncs = syncregion_to_syncs[sr.id]
             foreach_descendant(det.label, ir.cfg) do ibb, bb
                 is_trivial.x || return false
-                if det.label in bb.succs  # loop
+                term = ir.stmts[bb.stmts[end]]
+                if term[:inst] isa DetachNode
+                    # This also detects a loop
                     is_trivial.x = false
+                    tapir_remark(
+                        "non-trivial spawn: detach found in block ",
+                        ibb,
+                        " which is a part of continuation of detach at block ",
+                        ibb_det,
+                    )
                     return false
                 end
                 if !is_trivial_for_spawn(ir, bb)
@@ -1306,6 +1388,12 @@ function remove_trivial_tapir!(ir::IRCode, tasks)
                     return false
                 end
                 if any(<(ibb), bb.succs)
+                    tapir_remark(
+                        "non-trivial spawn: continuation of detach at block ",
+                        ibb_det,
+                        " contains a loop at block ",
+                        ibb,
+                    )
                     is_trivial.x = false
                     return false
                 end
@@ -1313,6 +1401,12 @@ function remove_trivial_tapir!(ir::IRCode, tasks)
             end
             if is_trivial.x
                 remove_tapir!(ir, task)
+                removed_tasks.x += 1
+                tapir_remark(
+                    "removed a spawn (detached at block ",
+                    ibb_det,
+                    ") with trivial continuation",
+                )
             end
         end
 
@@ -1344,6 +1438,18 @@ function remove_trivial_tapir!(ir::IRCode, tasks)
         for isync in syncregion_to_syncs[sr]
             ir.stmts.inst[isync] = nothing
         end
+    end
+
+    nremoved = length(syncregions) - length(used)
+    if nremoved > 0
+        tapir_remark(
+            "removed ",
+            length(used) == 0 ? "all " : "",
+            nremoved,
+            " syncregion(s) and ",
+            removed_tasks.x,
+            " task(s)",
+        )
     end
 
     return ir, tasks

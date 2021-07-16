@@ -583,6 +583,72 @@ macro output(exprs::Union{Symbol,Expr}...)
     esc(Expr(:block, __source__, locals, assignments..., outinfo...))
 end
 
+#####
+##### Utils
+#####
+
+function print_remarks()
+    remarks = Core.Compiler.tapir_get_remarks!()
+    print_remarks(stdout, remarks)
+end
+
+function print_remarks(io::IO, remarks)
+    # for print_stmt:
+    used = BitSet()
+    color = get(io, :color, false)::Bool
+
+    linfo::Union{Nothing, Core.MethodInstance} = nothing
+    for msg in remarks
+
+        if msg isa Core.MethodInstance
+            linfo = msg
+            continue
+        elseif linfo !== nothing
+            println(io)
+            printstyled(io, "[Tapir] Remarks on: ", ; color = :blue)
+            println(io, linfo.def)
+            linfo = nothing
+        end
+
+        for x in msg::Tuple
+            if x isa Core.Compiler.TapirRemarkInstruction
+                push!(used, x.idx)
+                maxlength_idx = length(string(x.idx))
+                Base.IRShow.print_stmt(io, x.idx, x.inst, used, maxlength_idx, color, true)
+                empty!(used)
+            else
+                print(io, x)
+            end
+        end
+        println(io)
+    end
+end
+
+"""
+    Tapir.with_remarks(f)
+
+Print remarks for the functions optimized while executing `f`.
+
+# Examples
+```julia
+Tapir.with_remarks() do
+    @code_typed f()
+end
+```
+
+Note: block indices for the IR returned from `@code_typed` may not match
+with the numbers printed by remarks.
+"""
+function with_remarks(@nospecialize(f))
+    old = Core.Compiler.set_tapir_remark(true)
+    try
+        return f()
+    finally
+        print_remarks()
+        Core.Compiler.set_tapir_remark(old)
+    end
+end
+
 # precompile
 const _NEVER = Ref(false)
 function __init__()

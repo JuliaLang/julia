@@ -190,6 +190,8 @@ end
         :trivial_detach => first(@code_typed OptimizableTasks.trivial_detach(0, 0)),
         :trivial_continuation =>
             first(@code_typed OptimizableTasks.trivial_continuation(0, 0)),
+        :trivial_spawn_in_continuation =>
+            first(@code_typed OptimizableTasks.trivial_spawn_in_continuation()),
         :always_throw => first(@code_typed OptimizableTasks.always_throw()),
         :set_distinct =>
             first(@code_typed TaskOutputs.set_distinct_optimizable(true)),

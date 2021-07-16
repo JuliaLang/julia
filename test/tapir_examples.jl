@@ -552,6 +552,14 @@ function trivial_continuation(x, y)
     return a + b
 end
 
+function trivial_spawn_in_continuation()
+    Tapir.@sync begin
+        Tapir.@spawn produce()
+        Tapir.@spawn :trivial
+        :trivial
+    end
+end
+
 function always_throw()
     Tapir.@sync begin
         Tapir.@spawn begin
