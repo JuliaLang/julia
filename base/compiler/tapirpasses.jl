@@ -616,7 +616,13 @@ function try_resolve(@nospecialize(x))
     return nothing, false
 end
 
-function is_trivial_for_spawn(@nospecialize(inst))
+"""
+    _is_trivial_for_spawn(inst) -> ans::Bool
+
+Check if statement `inst` is trivial for spawn. This only handles statements
+that are not covered by `stmt_effect_free`.
+"""
+function _is_trivial_for_spawn(@nospecialize(inst))
     if isterminator(inst)
         return true
     elseif inst isa Union{PhiNode,PhiCNode,UpsilonNode,PiNode,Nothing}
@@ -645,7 +651,10 @@ end
 is_trivial_for_spawn(ir::IRCode, bb::BasicBlock) = is_trivial_for_spawn(ir, bb.stmts)
 function is_trivial_for_spawn(ir::IRCode, stmts::StmtRange)
     for istmt in stmts
-        is_trivial_for_spawn(ir.stmts.inst[istmt]) || return false
+        stmt = ir.stmts[istmt]
+        stmt[:type] === Bottom && continue
+        stmt_effect_free(stmt[:inst], stmt[:inst], ir, ir.sptypes) && continue
+        _is_trivial_for_spawn(stmt[:inst]) || return false
     end
     return true
 end
@@ -1286,13 +1295,17 @@ function remove_trivial_tapir!(ir::IRCode, tasks)
             # token). If so, it's not possible to see the entire continuation.
             is_trivial = RefValue(true)
             syncs = syncregion_to_syncs[sr.id]
-            foreach_descendant(det.label, ir.cfg) do _ibb, bb
+            foreach_descendant(det.label, ir.cfg) do ibb, bb
                 is_trivial.x || return false
                 if det.label in bb.succs  # loop
                     is_trivial.x = false
                     return false
                 end
                 if !is_trivial_for_spawn(ir, bb)
+                    is_trivial.x = false
+                    return false
+                end
+                if any(<(ibb), bb.succs)
                     is_trivial.x = false
                     return false
                 end
