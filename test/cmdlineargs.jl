@@ -454,20 +454,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --polly takes yes/no as argument
     @test !success(`$exename --polly=false`)
 
-    # --fast-math
-    let JL_OPTIONS_FAST_MATH_DEFAULT = 0,
-        JL_OPTIONS_FAST_MATH_ON = 1,
-        JL_OPTIONS_FAST_MATH_OFF = 2
-        @test parse(Int,readchomp(`$exename -E
-            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
-        @test parse(Int,readchomp(`$exename --math-mode=user -E
-            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
-        @test parse(Int,readchomp(`$exename --math-mode=ieee -E
-            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
-        @test parse(Int,readchomp(`$exename --math-mode=fast -E
-            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_ON
-    end
-
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
     @test !success(`$exename --worker=true`)
