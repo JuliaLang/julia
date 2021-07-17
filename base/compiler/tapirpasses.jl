@@ -1750,7 +1750,7 @@ function optimize_taskgroups!(
 
     cache = IdDict{Type,Type}()
     function sync_return_type(@nospecialize(TaskGroup::Type))
-        @assert isconcretetype(TaskGroup)  # due to isinlineable check above
+        @assert isconcretetype(TaskGroup)  # due to isinlinable check above
         return get!(cache, TaskGroup) do
             ccall(:jl_typeinf_begin, Cvoid, ())
             mi = find_method_instance_from_sig(
