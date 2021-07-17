@@ -797,7 +797,6 @@ function _simplify_include_frames(trace)
                 first_ignored = nothing
             end
         end
-        i -= 1
     end
     if first_ignored !== nothing
         kept_frames[1:first_ignored] .= false
