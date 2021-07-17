@@ -4647,6 +4647,14 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 jl_is_datatype(jl_tparam0(ty)) &&
                 jl_is_concrete_type(jl_tparam0(ty))) {
             assert(nargs <= jl_datatype_nfields(jl_tparam0(ty)) + 1);
+            // TODO: refactor the position of this flag
+            const uint8_t IR_FLAG_NO_ESCAPE = 0x01 << 5;
+            jl_code_info_t *info = ctx.source;
+            uint8_t ssaflag = jl_array_len(info->ssaflags) > ssaval ? ((uint8_t*)jl_array_data(info->ssaflags))[ssaval] : 0;
+            // uint8_t ssaflag = ((uint8_t*)jl_array_data(info->ssaflags))[ssaval];
+            if ((ssaflag & IR_FLAG_NO_ESCAPE) != 0)
+                printf("locate no-escape flag set stmt !!!!!! %d %d\n", ssaflag & IR_FLAG_NO_ESCAPE, ssaval);
+            // TODO: figure out which path in emit_new_struct should we emit metadata on
             return emit_new_struct(ctx, jl_tparam0(ty), nargs - 1, &argv[1]);
         }
         Value *val = emit_jlcall(ctx, jlnew_func, nullptr, argv, nargs, JLCALL_F_CC);
