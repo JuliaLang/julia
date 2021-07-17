@@ -72,25 +72,10 @@ function synctasks(args::ConcreteMaybe{Any}...)
     synctasks(tasks...)
 end
 
-mutable struct UndefableRef{T}
-    set::Bool
+# Like RefValue, but using a special type for reflections in spawn! etc. that
+# can be useful for custom workgroups (e.g., Distributed-based)
+mutable struct OutputRef{T}
     x::T
-    UndefableRef{T}() where {T} = new{T}(false)
-end
-
-function Base.setindex!(ref::UndefableRef, x)
-    ref.x = x
-    ref.set = true
-    return ref
-end
-
-function Base.getindex(ref::UndefableRef)
-    ref.set || not_set_error(ref)
-    return ref.x
-end
-
-@noinline function not_set_error(::UndefableRef{T}) where {T}
-    error("variable of type `$T` is not set")
 end
 
 abstract type TapirRaceError <: Exception end

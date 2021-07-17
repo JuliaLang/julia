@@ -282,6 +282,24 @@ function independent_increments()
     return a + b
 end
 
+function aggregate()
+    Tapir.@output a b
+    Tapir.@sync begin
+        Tapir.@spawn a = produce((1, (2, (3, 4))))
+        b = produce((x = (y = (z = (5, 6, 7),),), w = 8))
+    end
+    return a[2][2][2] + b.x.y.z[1]
+end
+
+function identity2(x, y)
+    Tapir.@output a b
+    Tapir.@sync begin
+        Tapir.@spawn a = produce(x)
+        b = produce(y)
+    end
+    return (a, b)
+end
+
 end # module TaskOutputs
 
 module Racy

@@ -931,6 +931,157 @@ function task_output_slots(::CodeInfo, code::Vector{Any})
     return outputs
 end
 
+""" "Path" to nested field; .e.g, `[1, 2, 3]` means `x[1][2][3]`. """
+const TaskOutputFieldPath = Vector{Int}
+
+""" Pair of `SSAValue` to a ref and the path to the field. """
+const TaskOutputField = Tuple{SSAValue,TaskOutputFieldPath}
+
+struct TaskOutput
+    type::Type
+    name::Symbol
+    isset::SSAValue
+    fields::Vector{TaskOutputField}
+end
+
+"""
+    allocate_task_output!(ir::IRCode, t::Type, name::Symbol) -> output::TaskOutput
+
+Insert `Tapir.OutputRef`s for representing a task.
+
+Immutable aggregate types are decomposed into scalars to promote downstream optimizations.
+"""
+function allocate_task_output!(ir::IRCode, @nospecialize(t::Type), name::Symbol)
+    Tapir = tapir_module()::Module
+    function newref(t::Type, args...)
+        @nospecialize
+        args::Union{Tuple{}, Tuple{Any}}
+        alloc_pos = 1   # [^alloca-position]
+        R = Tapir.OutputRef{t}
+        ref = insert_node!(ir, alloc_pos, NewInstruction(Expr(:new, R, args...), R))
+        stmt_at(ir, ref.id)[:flag] = IR_FLAG_EFFECT_FREE
+        return ref
+    end
+
+    isset = newref(Bool, false)
+
+    fields = TaskOutputField[]
+    worklist = Tuple{Type,TaskOutputFieldPath}[(t, Int[])]
+    while !isempty(worklist)
+        local (t, path) = pop!(worklist)
+        if isconcretetype(t) && isstructtype(t) && !ismutabletype(t)
+            for i in 1:fieldcount(t)
+                ft = fieldtype(t, i)
+                push!(worklist, (ft, push!(copy(path), i)))
+            end
+        else
+            push!(fields, (newref(t), path))
+        end
+    end
+
+    reverse!(fields)
+    @assert issorted(fields, by = ((_, path),) -> path)
+
+    return TaskOutput(t, name, isset, fields)
+end
+# [^alloca-position]: TODO: The placement of the allocations of task output is not
+# optimal.  Ideally, we should use the inner-most `Expr(:syncregion)` that
+# dominates all loads.
+
+function insert_load!(
+    ir::IRCode,
+    output::TaskOutput,
+    position::Int;
+    attach_after::Bool = false,
+)
+    # Insert undef check
+    isset_ex = Expr(:call, GlobalRef(Core, :getfield), output.isset, QuoteNode(:x))
+    isset = insert_node!(ir, position, NewInstruction(isset_ex, Bool), attach_after)
+    stmt_at(ir, isset.id)[:flag] = IR_FLAG_EFFECT_FREE
+    undefcheck = Expr(:throw_undef_if_not, output.name, isset)
+    insert_node!(ir, position, NewInstruction(undefcheck, Any), attach_after)
+
+    # Load fields
+    fields = Vector{SSAValue}[SSAValue[], SSAValue[]]
+    currentpath = Int[]
+    function flush_substructs(depth::Integer)
+        # Construct nested immutables:
+        while length(fields) > depth + 1
+            subfields = pop!(fields)
+            S = foldl(fieldtype, currentpath[1:length(fields)-1]; init = output.type)
+            strct_ex = Expr(:new, S, subfields...)
+            strct = insert_node!(ir, position, NewInstruction(strct_ex, S), attach_after)
+            stmt_at(ir, strct.id)[:flag] = IR_FLAG_EFFECT_FREE
+            push!(fields[end], strct)
+        end
+    end
+    for (ref, path) in output.fields
+        T = foldl(fieldtype, path; init = output.type)
+        load_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:x))
+        load = insert_node!(ir, position, NewInstruction(load_ex, T), attach_after)
+        stmt_at(ir, load.id)[:flag] = IR_FLAG_EFFECT_FREE
+
+        if isempty(path)  # happens only when `length(output.fields) == 1`
+            subfields = pop!(fields)
+            @assert isempty(subfields)
+        elseif path[1:end-1] != currentpath
+            prefixlength = 0
+            for (i, j) in zip(path, currentpath)
+                if i == j
+                    prefixlength += 1
+                else
+                    break
+                end
+            end
+
+            flush_substructs(prefixlength + 1)
+            pop!(append!(empty!(currentpath), path))
+            append!(fields, (SSAValue[] for _ in 1:length(path)+1-length(fields)))
+        end
+
+        push!(fields[end], load)
+    end
+    flush_substructs(0)
+
+    return fields[1][1]
+end
+
+function insert_store!(ir::IRCode, output::TaskOutput, value::SSAValue)
+    position = insert_pos(ir, value.id)
+
+    subvalues = SSAValue[value]
+    currentpath = Int[]
+    for (ref, path) in output.fields
+        prefixlength = 0
+        for (i, j) in zip(path, currentpath)
+            if i == j
+                prefixlength += 1
+            else
+                break
+            end
+        end
+
+        isempty(path) || pop!(append!(empty!(currentpath), path))
+        resize!(subvalues, prefixlength+1)
+
+        element = subvalues[end]
+        for i in prefixlength+1:length(path)
+            T = foldl(fieldtype, path[1:i]; init = output.type)
+            ex = Expr(:call, GlobalRef(Core, :getfield), element, path[i])
+            element = insert_node!(ir, position, NewInstruction(ex, T), true)
+            stmt_at(ir, element.id)[:flag] = IR_FLAG_EFFECT_FREE
+            push!(subvalues, element)
+        end
+
+        store_ex = Expr(:call, GlobalRef(Core, :setfield!), ref, QuoteNode(:x), element)
+        insert_node!(ir, position, NewInstruction(store_ex, Any), true)
+    end
+
+    ex = Expr(:call, GlobalRef(Core, :setfield!), output.isset, QuoteNode(:x), true)
+    insert_node!(ir, position, NewInstruction(ex, Any), true)
+    return
+end
+
 """
     lower_tapir_output!(ir::IRCode) -> ir′
 
@@ -1005,36 +1156,14 @@ function lower_tapir_output!(ir::IRCode)
     isempty(loaded_slots) && return ir
 
     # Insert Refs
-    outputrefs = IdDict{Int,SSAValue}()
+    taskoutputs = IdDict{Int,TaskOutput}()
     for oid in keys(outputinfo)
         T = get(slottypes, oid, Union{})
-        R = Tapir.UndefableRef{T}
-        alloc_pos = 1   # [^alloca-position]
-        ref = insert_node!(ir, alloc_pos, NewInstruction(Expr(:new, R, false), R))
-        stmt_at(ir, ref.id)[:flag] = IR_FLAG_EFFECT_FREE
-        outputrefs[oid] = ref
+        name, = outputinfo[oid]
+        taskoutputs[oid] = allocate_task_output!(ir, T, name)
     end
 
     # Insert loads
-    function try_insert_load_at(
-        i::Int,
-        out::Union{SlotNumber,TypedSlot},
-        attach_after::Bool = false,
-    )
-        ref = get(outputrefs, slot_id(out), nothing)
-        ref === nothing && return nothing
-        isset_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:set))
-        isset = insert_node!(ir, i, NewInstruction(isset_ex, Bool), attach_after)
-        stmt_at(ir, isset.id)[:flag] = IR_FLAG_EFFECT_FREE
-        name, = outputinfo[slot_id(out)]
-        undefcheck = Expr(:throw_undef_if_not, name, isset)
-        insert_node!(ir, i, NewInstruction(undefcheck, Any), attach_after)
-        value_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:x))
-        T = get(slottypes, slot_id(out), Union{})
-        value = insert_node!(ir, i, NewInstruction(value_ex, T), attach_after)
-        stmt_at(ir, value.id)[:flag] = IR_FLAG_EFFECT_FREE
-        return value
-    end
     for i in loaded_positions
         stmt = ir.stmts[i]
         inst = stmt[:inst]
@@ -1043,28 +1172,27 @@ function lower_tapir_output!(ir::IRCode)
                 if out isa Union{SlotNumber,TypedSlot}
                     iterm = ir.cfg.blocks[inst.edges[k]].stmts[end]
                     term = ir.stmts[iterm]
-                    ssa = try_insert_load_at(
-                        iterm,
-                        out,
-                        !isterminator(term)  # insert after any non-terminator
-                    )
-                    if ssa !== nothing
-                        inst.values[k] = ssa
+                    output = get(taskoutputs, slot_id(out), nothing)
+                    if output !== nothing
+                        attach_after = !isterminator(term)
+                        inst.values[k] = insert_load!(ir, output, iterm; attach_after)
                     end
                 end
             end
         elseif isexpr(inst, :isdefined)
             out = inst.args[1]::Union{SlotNumber,TypedSlot}
-            ref = outputrefs[slot_id(out)]
-            isset_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:set))
+            ref = taskoutputs[slot_id(out)].isset
+            isset_ex = Expr(:call, GlobalRef(Core, :getfield), ref, QuoteNode(:x))
             isset = insert_node!(ir, i, NewInstruction(isset_ex, Bool))
             stmt_at(ir, isset.id)[:flag] = IR_FLAG_EFFECT_FREE
             stmt[:inst] = isset
         else
             stmt[:inst] = map_id(identity, inst) do out
                 if out isa Union{SlotNumber,TypedSlot}
-                    ssa = try_insert_load_at(i, out)
-                    ssa === nothing || return ssa
+                    output = get(taskoutputs, slot_id(out), nothing)
+                    if output !== nothing
+                        return insert_load!(ir, output, i)
+                    end
                 end
                 return out
             end
@@ -1073,25 +1201,17 @@ function lower_tapir_output!(ir::IRCode)
 
     # Insert stores (that are loaded somewhere)
     for oid in setdiff!(BitSet(keys(stores)), unused)
-        ref = outputrefs[oid]
+        output = taskoutputs[oid]
         for i in stores[oid]
             stmt = ir.stmts[i]
             _, rhs = stmt[:inst].args
             stmt[:inst] = rhs
-
-            value = SSAValue(i)
-            ex = Expr(:call, GlobalRef(Core, :setfield!), ref, QuoteNode(:x), value)
-            insert_node!(ir, i, NewInstruction(ex, Any), true)
-            ex = Expr(:call, GlobalRef(Core, :setfield!), ref, QuoteNode(:set), true)
-            insert_node!(ir, i, NewInstruction(ex, Any), true)
+            insert_store!(ir, output, SSAValue(i))
         end
     end
 
     return ir
 end
-# [^alloca-position]: TODO: The placement of the allocations of task output is not
-# optimal.  Ideally, we should use the inner-most `Expr(:syncregion)` that
-# dominates all loads.
 
 """
     check_tapir_race!(ir::IRCode) -> (ir′::IRCode, racy::Bool)

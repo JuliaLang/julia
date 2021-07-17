@@ -86,7 +86,7 @@ end
     @test let_in_spawn() == (1, 2)
 end
 
-@testset "`Tapir.Output`" begin
+@testset "Task outputs" begin
     @test @inferred(TaskOutputs.simple()) == 2
     @test TaskOutputs.simple_closure_set_by_one(true) == 111
     @test TaskOutputs.simple_closure_set_by_one(false) == 222
@@ -100,9 +100,21 @@ end
     @test @inferred(TaskOutputs.local_update_after_store(3)) == sum(1:3)
     @test @inferred(TaskOutputs.conditional_output(true)) == 2
     @test @inferred(TaskOutputs.independent_increments()) == 333
+    @test @inferred(TaskOutputs.aggregate()) == 9
     @test @inferred(tmap(x -> x + 0.5, 1:10)) == 1.5:1:10.5
 
     @test_throws UndefVarError(:a) TaskOutputs.conditional_output(false)
+end
+
+@testset "Aggregate task output" begin
+    @testset for (x, y) in [
+        (1, 2),
+        ((1, (2, (3, 4))), (x = (y = (z = (5, 6, 7),),), w = 8)),
+        ((1, 2, 3), (4, 5, 6)),
+        ((((1, 2), 3, (4, 5)), 6), (7, (8, (9,), 10), 11)),
+    ]
+        @test @inferred(TaskOutputs.identity2(x, y)) === (x, y)
+    end
 end
 
 @testset "Race detection" begin
