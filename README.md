@@ -5,7 +5,7 @@
 </a>
 </div>
 
-Documentation:
+Documentation
 [![version 1][docs-img]](https://docs.julialang.org)
 
 Code coverage:
