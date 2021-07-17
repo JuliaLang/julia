@@ -56,8 +56,8 @@ end
 """
     println([io::IO], xs...)
 
-Print (using [`print`](@ref)) to `io` (or to the default output stream [`stdout`](@ref)
-if `io` is not given) `xs` followed by a newline.
+Print (using [`print`](@ref)) `xs` to `io` followed by a newline.
+If `io` is not supplied, prints to the default output stream [`stdout`](@ref).
 
 # Examples
 ```jldoctest
