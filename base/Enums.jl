@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Enums
+module Enumss
 
 import Core.Intrinsics.bitcast
 export Enum, @enum
