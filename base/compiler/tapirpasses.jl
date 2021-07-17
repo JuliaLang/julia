@@ -1364,6 +1364,61 @@ end
 # error message in `IRCode` is very hard since variable names are not preserved
 # any more.
 
+function tapir_dead_store_elimination_pass!(ir::IRCode)
+    Tapir = tapir_module()
+    Tapir isa Module || return ir
+
+    if !isempty(ir.new_nodes.stmts.inst)
+        ir = compact!(ir)
+    end
+
+    (; OutputRef) = Tapir
+    function is_ref_allocation(ref::SSAValue)
+        local stmt = ir.stmts[ref.id]
+        return widenconst(stmt[:type]) <: OutputRef && isexpr(stmt[:inst], :new)
+    end
+
+    stores = IdDict{Int,Vector{Int}}()  # ref SSA position -> setter positions
+    loads = BitSet()
+    for i in 1:length(ir.stmts)
+        inst = ir.stmts.inst[i]
+
+        if (
+            isexpr(inst, :call) &&
+            length(inst.args) == 4 &&
+            begin
+                f, ref, field, _value = inst.args
+                field === QuoteNode(:x)
+            end &&
+            resolve_special_value(f)[1] === setfield! &&
+            ref isa SSAValue &&
+            is_ref_allocation(ref)
+        )
+            push!(get!(() -> Int[], stores, ref.id), i)
+        else
+            # Treat everything else as a load
+            foreach_id(identity, inst) do v
+                if v isa SSAValue
+                    if is_ref_allocation(v)
+                        push!(loads, v.id)
+                    end
+                end
+            end
+        end
+    end
+
+    # Remove task outputs that are not used:
+    unused = setdiff!(BitSet(keys(stores)), loads)
+    for i in unused
+        ir.stmts[i][:inst] = nothing
+        for j in stores[i]
+            ir.stmts[j][:inst] = nothing
+        end
+    end
+
+    return ir
+end
+
 """
     late_tapir_pass!(ir::IRCode) -> ir′
 
@@ -1386,7 +1441,7 @@ function disallow_detach_after_sync!(ir::IRCode, tasks)
     @assert isempty(ir.new_nodes.stmts.inst)
 
     Tapir = tapir_module()
-    Tapir isa Module || return remove_tapir!(ir)
+    Tapir isa Module || return (remove_tapir!(ir), tasks)
 
     if tasks === nothing
         tasks = child_tasks(ir)
