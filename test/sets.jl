@@ -138,6 +138,10 @@ end
     @test !in(200,s)
 end
 
+@testset "copy(::KeySet) (issue #41537)" begin
+    @test union(keys(Dict(1=>2, 3=>4))) == copy(keys(Dict(1=>2, 3=>4))) == Set([1,3])
+end
+
 @testset "copy!" begin
     for S = (Set, BitSet)
         s = S([1, 2])
