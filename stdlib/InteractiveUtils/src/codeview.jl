@@ -150,8 +150,14 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     end
     # get the MethodInstance for the method match
     world = typemax(UInt)
-    match = Base._which(signature_type(f, t), world)
-    linfo = Core.Compiler.specialize_method(match)
+    if f isa Core.OpaqueClosure
+        m = f.source
+        m isa Method || error("invalid Core.OpaqueClosure")
+        linfo = Core.Compiler.specialize_method(m, signature_type(f, t), Core.svec())
+    else
+        match = Base._which(signature_type(f, t), world)
+        linfo = Core.Compiler.specialize_method(match)
+    end
     # get the code for it
     if native
         str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo, binary)

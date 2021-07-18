@@ -388,6 +388,7 @@ A36261 = Float64[1.0, 2.0, 3.0]
 
 
 module ReflectionTest
+using Base.Experimental: @opaque
 using Test, Random, InteractiveUtils
 
 function test_ast_reflection(freflect, f, types)
@@ -418,6 +419,7 @@ function test_code_reflections(tester, freflect)
     test_code_reflection(freflect, Module, Tuple{}, tester) # Module() constructor (transforms to call)
     test_code_reflection(freflect, Array{Int64}, Tuple{Array{Int32}}, tester) # with incomplete types
     test_code_reflection(freflect, muladd, Tuple{Float64, Float64, Float64}, tester)
+    test_code_reflection(freflect, @opaque(() -> 1), Tuple{}, tester)
 end
 
 test_code_reflections(test_bin_reflection, code_llvm)
