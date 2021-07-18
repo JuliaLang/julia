@@ -1,5 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# # this is very clumsy but make it easier to know where we need to handle overdubbing
+# struct OverdubMethodInstance
+#     overdub::MethodInstance
+#     shadow::MethodInstance
+# end
+# const MethodInstance2 = Union{MethodInstance, OverdubMethodInstance}
+
+struct _PluginContext{plugins} end
+
+const PluginContext = Type{<:_PluginContext}
+
+abstract type AbstractCompilerPlugin end
+
 """
     AbstractInterpreter
 
@@ -29,8 +42,10 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     valid_worlds::WorldRange # if inference and optimization is finished
-    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing, va_override=false)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes, va_override)
+    function InferenceResult(linfo::MethodInstance;
+                             argtypes::Union{Nothing,Vector{Any}} = nothing,
+                             va_override::Bool = false)
+        argtypes, overridden_by_const = matching_cache_argtypes(linfo, argtypes, va_override)
         return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
     end
 end

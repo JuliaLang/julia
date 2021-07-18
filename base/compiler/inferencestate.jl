@@ -53,13 +53,17 @@ mutable struct InferenceState
     # NativeInterpreter. But other interpreters may use this to detect cycles
     interp::AbstractInterpreter
 
+    context::PluginContext
+    no_overdubbing_calls::Union{Nothing,BitSet}
+
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
-                            cached::Bool, interp::AbstractInterpreter)
+                            cached::Bool, interp::AbstractInterpreter;
+                            @nospecialize(context::PluginContext = NULL_CONTEXT))
         (; def) = linfo = result.linfo
-        code = src.code::Array{Any,1}
+        code = src.code::Vector{Any}
 
-        sp = sptypes_from_meth_instance(linfo::MethodInstance)
+        sp = sptypes_from_meth_instance(linfo)
 
         nssavalues = src.ssavaluetypes::Int
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
@@ -97,6 +101,33 @@ mutable struct InferenceState
 
         valid_worlds = WorldRange(src.min_world,
             src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
+
+        # form new context if we enter a plugin context
+        if !isempty(argtypes)
+            ft = widenconst(first(argtypes))
+            if isType(ft)
+                t = first(ft.parameters)
+                if t !== Bottom && t <: AbstractCompilerPlugin
+                    plugins = Any[t]
+                    newctx = true
+                    for plugin in get_plugins(context)
+                        if plugin === t
+                            newctx = false
+                            break
+                        end
+                        push!(plugins, plugin) # COMBAK the order of plugin
+                    end
+                    if newctx
+                        context = PluginContext(plugins)
+                        transform_plugin_entry!(src, context)
+                    else
+                        # TODO avoid overdubbing this nested context
+                    end
+                end
+            end
+        end
+        no_overdubbing_calls = is_shadow(linfo) ? BitSet() : nothing
+
         frame = new(
             InferenceParams(interp), result, linfo,
             sp, slottypes, mod, 0,
@@ -111,7 +142,10 @@ mutable struct InferenceState
             #=parent=#nothing,
             cached, false, false,
             CachedMethodTable(method_table(interp)),
-            interp)
+            interp, context, no_overdubbing_calls)
+
+        preinf_hook!(frame)
+
         result.result = frame
         cached && push!(get_inference_cache(interp), result)
         return frame
@@ -143,12 +177,15 @@ end
 
 method_table(interp::AbstractInterpreter, sv::InferenceState) = sv.method_table
 
-function InferenceState(result::InferenceResult, cached::Bool, interp::AbstractInterpreter)
+function InferenceState(result::InferenceResult, cached::Bool, interp::AbstractInterpreter;
+                        @nospecialize(context::PluginContext = NULL_CONTEXT))
     # prepare an InferenceState object for inferring lambda
-    src = retrieve_code_info(result.linfo)
+    linfo = result.linfo
+    # if `linfo` generated from SHADOW_METHOD, then we gonna overdub it
+    src = (is_shadow(linfo) ? retrieve_code_info_overdubbed : retrieve_code_info)(linfo)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
-    return InferenceState(result, src, cached, interp)
+    return InferenceState(result, src, cached, interp; context)
 end
 
 function sptypes_from_meth_instance(linfo::MethodInstance)

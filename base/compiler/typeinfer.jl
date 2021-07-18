@@ -450,6 +450,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
             end
         end
     end
+    fixup_no_overdubs!(me.no_overdubbing_calls, me.src)
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
         # we can throw everything else away now
@@ -468,23 +469,56 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         doopt = (me.cached || me.parent !== nothing)
         type_annotate!(me, doopt)
         if doopt && may_optimize(interp)
-            me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
+            me.result.src = OptimizationState(me, OptimizationParams(interp), interp; me.context)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
+    postinf_hook!(me)
     nothing
 end
 
 # record the backedges
+# TODO add backedges to code rewriters when overdubbed
 function store_backedges(frame::InferenceResult, edges::Vector{Any})
-    toplevel = !isa(frame.linfo.def, Method)
-    if !toplevel
-        store_backedges(frame.linfo, edges)
+    linfo = frame.linfo
+    if isa(linfo.def, Method)
+        if is_shadow(linfo)
+            push!(edges, OVERDUB_CACHE_TABLE[linfo]) # add backedge from the overdub
+            add_shadow_callback!(linfo)
+        end
+        store_backedges(linfo, edges)
     end
     nothing
+end
+
+function add_shadow_callback!(shadow::MethodInstance)
+    if !isdefined(shadow, :callbacks)
+        shadow.callbacks = Any[invalidate_overdub_cache!]
+    else
+        if !_any(@nospecialize(cb)->cb===invalidate_overdub_cache!, shadow.callbacks)
+            push!(shadow.callbacks, invalidate_overdub_cache!)
+        end
+    end
+    return nothing
+end
+
+function invalidate_overdub_cache!(shadow, max_world, depth=0)
+    shadow = shadow::MethodInstance
+    delete!(OVERDUB_CACHE_TABLE, shadow)
+
+    if isdefined(shadow, :backedges)
+        for mi in shadow.backedges
+            mi = mi::MethodInstance
+            if !haskey(OVERDUB_CACHE_TABLE, mi)
+                continue # otherwise fall into infinite loop
+            end
+            invalidate_overdub_cache!(mi, max_world, depth+1)
+        end
+    end
+    return nothing
 end
 
 function store_backedges(caller::MethodInstance, edges::Vector{Any})
@@ -770,8 +804,8 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
 end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
-function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, caller::InferenceState)
-    mi = specialize_method(method, atypes, sparams)::MethodInstance
+function typeinf_edge(interp::AbstractInterpreter, match::AnyMethodMatch, caller::InferenceState)
+    mi = specialize_method(match)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
         update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
@@ -791,7 +825,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             return rettype, mi
         end
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
+    if ccall(:jl_get_module_infer, Cint, (Any,), unwrap_overdub(match).method.module) == 0
         return Any, nothing
     end
     if !caller.cached && caller.parent === nothing
@@ -805,7 +839,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # completely new
         lock_mi_inference(interp, mi)
         result = InferenceResult(mi)
-        frame = InferenceState(result, #=cached=#true, interp) # always use the cache for edge targets
+        frame = InferenceState(result, #=cached=#true, interp; caller.context) # always use the cache for edge targets
         if frame === nothing
             # can't get the source for this, so we know nothing
             unlock_mi_inference(interp, mi)
@@ -829,6 +863,8 @@ end
 
 #### entry points for inferring a MethodInstance given a type signature ####
 
+# COMBAK (compiler-plugin) how to support top-level context ?
+
 # compute an inferred AST and return type
 function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atypes, sparams)::MethodInstance
@@ -838,7 +874,7 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     frame === nothing && return (nothing, Any)
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
-        result.src = src = OptimizationState(frame, opt_params, interp)
+        result.src = src = OptimizationState(frame, opt_params, interp; frame.context)
         optimize(interp, src, opt_params, ignorelimited(result.result))
         frame.src = finish!(interp, result)
     end

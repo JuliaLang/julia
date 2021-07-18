@@ -29,14 +29,14 @@ function is_improvable(@nospecialize(rtype))
 end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
-                                  fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, @nospecialize(atype),
+                                  fargs::Union{Nothing,Vector{Any}}, callsig::AnyCallSig,
                                   sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
     if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
         add_remark!(interp, sv, "Skipped call in throw block")
         return CallMeta(Any, false)
     end
 
-    matches = find_matching_methods(argtypes, atype, method_table(interp, sv), InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
+    matches = find_matching_methods(callsig, method_table(interp, sv), InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return CallMeta(Any, false)
@@ -53,7 +53,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     const_results = Union{InferenceResult,Nothing}[]
     multiple_matches = napplicable > 1
 
-    if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::MethodMatch)
+    argtypes = unwrap_shadow(callsig).argtypes
+
+    if f !== nothing && napplicable == 1 && is_method_pure(applicable[1]::AnyMethodMatch)
         val = pure_eval_call(f, argtypes)
         if val !== false
             # TODO: add some sort of edge(s)
@@ -62,9 +64,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     for i in 1:napplicable
-        match = applicable[i]::MethodMatch
-        method = match.method
-        sig = match.spec_types
+        match = applicable[i]::AnyMethodMatch
+        sig = unwrap_shadow(match).spec_types
         if bail_out_toplevel_call(interp, sig, sv)
             # only infer concrete call sites in top-level expressions
             add_remark!(interp, sv, "Refusing to infer non-concrete call site in top-level expression")
@@ -79,7 +80,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
-                result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
+                method = unwrap_shadow(match).method
+                unionsplitmatch = MethodMatch(sig_n, env, method, sig_n <: method.sig)
+                result = abstract_call_method(interp, unionsplitmatch, multiple_matches, sv)
                 rt, edge = result.rt, result.edge
                 if edge !== nothing
                     push!(edges, edge)
@@ -102,7 +105,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
             end
         else
-            result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
+            result = abstract_call_method(interp, match, multiple_matches, sv)
             this_rt, edge = result.rt, result.edge
             if edge !== nothing
                 push!(edges, edge)
@@ -220,7 +223,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # and avoid keeping track of a more complex result type.
         rettype = Any
     end
-    add_call_backedges!(interp, rettype, edges, matches, atype, sv)
+    add_call_backedges!(interp, rettype, edges, matches, callsig, sv)
     if !isempty(sv.pclimitations) # remove self, if present
         delete!(sv.pclimitations, sv)
         for caller in sv.callers_in_cycle
@@ -236,7 +239,7 @@ struct FailedMethodMatch
 end
 
 struct MethodMatches
-    applicable::Vector{Any}
+    applicable::Vector{AnyMethodMatch}
     info::MethodMatchInfo
     valid_worlds::WorldRange
     mt::Core.MethodTable
@@ -244,7 +247,7 @@ struct MethodMatches
 end
 
 struct UnionSplitMethodMatches
-    applicable::Vector{Any}
+    applicable::Vector{AnyMethodMatch}
     applicable_argtypes::Vector{Vector{Any}}
     info::UnionSplitInfo
     valid_worlds::WorldRange
@@ -252,13 +255,20 @@ struct UnionSplitMethodMatches
     fullmatches::Vector{Bool}
 end
 
-function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
+function find_matching_methods(callsig::AnyCallSig, method_table::MethodTableView,
                                union_split::Int, max_methods::Int)
-    # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
+    # when overdubbed, lookup methods using overdub signature
+    (; atype, argtypes) = unwrap_overdub(callsig)
+    # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` typ
     if 1 < unionsplitcost(argtypes) <= union_split
         split_argtypes = switchtupleunion(argtypes)
+        local shadow_split_argtypes::Vector{Any}
+        if isa(callsig, OverdubCallSig)
+            shadow_split_argtypes = switchtupleunion(callsig.shadow.argtypes)
+            @assert length(split_argtypes) == length(shadow_split_argtypes)
+        end
         infos = MethodMatchInfo[]
-        applicable = Any[]
+        applicable = AnyMethodMatch[]
         applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
         valid_worlds = WorldRange()
         mts = Core.MethodTable[]
@@ -273,17 +283,34 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             if matches === missing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
             end
-            push!(infos, MethodMatchInfo(matches))
-            for m in matches
-                push!(applicable, m)
-                push!(applicable_argtypes, arg_n)
+            if isa(callsig, OverdubCallSig)
+                ctx = callsig.shadow.atype.parameters[1]
+                shadow_matches = Any[]
+                for (; spec_types, fully_covers) in matches
+                    shadow_spec_types = rewrap_unionall(Tuple{ctx, unwrap_unionall(spec_types).parameters...}, spec_types)
+                    push!(shadow_matches, MethodMatch(shadow_spec_types, svec(), SHADOW_METHOD, fully_covers))
+                end
+                shadow_matches = MethodLookupResult(shadow_matches,
+                                                    matches.valid_worlds,
+                                                    matches.ambig)
+                for (shadow, overdub) in zip(shadow_matches, matches)
+                    push!(applicable, OverdubMethodMatch(shadow, overdub))
+                    push!(applicable_argtypes, shadow_split_argtypes[i]::Vector{Any})
+                end
+                push!(infos, MethodMatchInfo(shadow_matches))
+            else
+                for match in matches
+                    push!(applicable, match::MethodMatch)
+                    push!(applicable_argtypes, arg_n)
+                end
+                push!(infos, MethodMatchInfo(matches))
             end
             valid_worlds = intersect(valid_worlds, matches.valid_worlds)
             thisfullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
             found = false
-            for (i, mt′) in enumerate(mts)
+            for (j, mt′) in enumerate(mts)
                 if mt′ === mt
-                    fullmatches[i] &= thisfullmatch
+                    fullmatches[j] &= thisfullmatch
                     found = true
                     break
                 end
@@ -311,9 +338,28 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             # (assume this will always be true, so we don't compute / update valid age in this case)
             return FailedMethodMatch("Too many methods matched")
         end
+        if isa(callsig, OverdubCallSig)
+            ctx = callsig.shadow.atype.parameters[1]
+            shadow_matches = Any[]
+            for (; spec_types, fully_covers) in matches
+                shadow_spec_types = rewrap_unionall(Tuple{ctx, unwrap_unionall(spec_types).parameters...}, spec_types)
+                push!(shadow_matches, MethodMatch(shadow_spec_types, svec(), SHADOW_METHOD, fully_covers))
+            end
+            shadow_matches = MethodLookupResult(shadow_matches,
+                                                matches.valid_worlds,
+                                                matches.ambig)
+            applicable = AnyMethodMatch[]
+            for (shadow, overdub) in zip(shadow_matches.matches, matches.matches)
+                push!(applicable, OverdubMethodMatch(shadow, overdub))
+            end
+            info = MethodMatchInfo(shadow_matches)
+        else
+            applicable = collect(AnyMethodMatch, matches.matches)
+            info = MethodMatchInfo(matches)
+        end
         fullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
-        return MethodMatches(matches.matches,
-                             MethodMatchInfo(matches),
+        return MethodMatches(applicable,
+                             info,
                              matches.valid_worlds,
                              mt,
                              fullmatch)
@@ -321,8 +367,8 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
 end
 
 function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype), edges::Vector{MethodInstance},
-                             matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
-                             sv::InferenceState)
+                             matches::Union{MethodMatches,UnionSplitMethodMatches},
+                             callsig::AnyCallSig, sv::InferenceState)
     # for `NativeInterpreter`, we don't add backedges when a new method couldn't refine (widen) this type
     rettype === Any && return
     for edge in edges
@@ -330,6 +376,7 @@ function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype)
     end
     # also need an edge to the method table in case something gets
     # added that did not intersect with any existing method
+    atype = unwrap_overdub(callsig).atype
     if isa(matches, MethodMatches)
         matches.fullmatch || add_mt_backedge!(matches.mt, atype, sv)
     else
@@ -342,7 +389,11 @@ end
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
 const RECURSION_MSG = "Bounded recursion detected. Call was widened to force convergence."
 
-function abstract_call_method(interp::AbstractInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
+function abstract_call_method(interp::AbstractInterpreter, match::AnyMethodMatch, hardlimit::Bool, sv::InferenceState)
+    # we apply recursion rule for overdubbed method when in overdub context
+    (; spec_types, method, sparams) = unwrap_overdub(match)
+    sig = spec_types
+
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
         add_remark!(interp, sv, "Refusing to infer into `depwarn`")
         return MethodCallResult(Any, false, false, nothing)
@@ -362,10 +413,12 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
     sv_method2 isa Method || (sv_method2 = nothing) # Union{Method, Nothing}
 
+    linfo = maybe_get_overdubbed(sv)
+
     function matches_sv(parent::InferenceState)
         parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
         parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-        return parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+        return maybe_get_overdubbed(parent).def === linfo.def && sv_method2 === parent_method2
     end
 
     function edge_matches_sv(frame::InferenceState)
@@ -395,7 +448,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
             # If the method defines a recursion relation, give it a chance
             # to tell us that this recursion is actually ok.
             if isdefined(method, :recursion_relation)
-                if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, frame.linfo.specTypes])
+                if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, maybe_get_overdubbed(frame).specTypes])
                     return false
                 end
             end
@@ -404,8 +457,9 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     end
 
     for infstate in InfStackUnwind(sv)
-        if method === infstate.linfo.def
-            if infstate.linfo.specTypes == sig
+        inflinfo = maybe_get_overdubbed(infstate)
+        if method === inflinfo.def
+            if inflinfo.specTypes == sig
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
                 if call_result_unused(sv)
@@ -428,16 +482,18 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         end
     end
 
+    newmatch = false
+
     if topmost !== nothing
         sigtuple = unwrap_unionall(sig)::DataType
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
         ls = length(sigtuple.parameters)
 
-        if method === sv.linfo.def
+        if method === linfo.def
             # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
-            comparison = sv.linfo.specTypes
+            comparison = linfo.specTypes
             l_comparison = length(unwrap_unionall(comparison).parameters)::Int
             spec_len = max(spec_len, l_comparison)
         else
@@ -451,7 +507,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         end
 
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
+        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
@@ -472,6 +528,8 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
             sig = newsig
             sparams = svec()
             edgelimited = true
+
+            newmatch |= true
         end
     end
 
@@ -493,15 +551,28 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         #     while !(newsig in seen)
         #         push!(seen, newsig)
         #         lsig = length((unwrap_unionall(sig)::DataType).parameters)
-        #         newsig = limit_type_size(newsig, sig, sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, lsig)
+        #         newsig = limit_type_size(newsig, sig, linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, lsig)
         #         recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), newsig, method.sig)::SimpleVector
         #         newsig = recomputed[2]
         #     end
         #     sig = ?
         sparams = recomputed[2]::SimpleVector
+        newmatch |= true
     end
 
-    rt, edge = typeinf_edge(interp, method, sig, sparams, sv)
+    # wrap into new call signature
+    if newmatch
+        if isa(match, OverdubMethodMatch)
+            shadow_sig = Tuple{match.shadow.spec_types.parameters[1], sig.parameters...}
+            shadow = MethodMatch(shadow_sig, svec(), SHADOW_METHOD, match.shadow.fully_covers)
+            overdub = MethodMatch(sig, sparams, method, match.overdub.fully_covers)
+            match = OverdubMethodMatch(sig, sparams, method)
+        else
+            match = MethodMatch(sig, sparams, method, match.fully_covers)
+        end
+    end
+
+    rt, edge = typeinf_edge(interp, match, sv)
     if edge === nothing
         edgecycle = edgelimited = true
     end
@@ -523,7 +594,7 @@ struct MethodCallResult
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter, result::MethodCallResult,
-                                              @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
+                                              @nospecialize(f), argtypes::Vector{Any}, match::AnyMethodMatch,
                                               sv::InferenceState, va_override::Bool)
     mi = maybe_get_const_prop_profitable(interp, result, f, argtypes, match, sv)
     mi === nothing && return nothing
@@ -538,15 +609,15 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
                     # if the type complexity limiting didn't decide to limit the call signature (`result.edgelimited = false`)
                     # we can relax the cycle detection by comparing `MethodInstance`s and allow inference to
                     # propagate different constant elements if the recursion is finite over the lattice
-                    return (result.edgelimited ? match.method === infstate.linfo.def : mi === infstate.linfo) &&
+                    return (result.edgelimited ? unwrap_shadow(match).method === infstate.linfo.def : mi === infstate.linfo) &&
                             any(infstate.result.overridden_by_const)
                 end
                 add_remark!(interp, sv, "[constprop] Edge cycle encountered")
                 return nothing
             end
         end
-        inf_result = InferenceResult(mi, argtypes, va_override)
-        frame = InferenceState(inf_result, #=cache=#false, interp)
+        inf_result = InferenceResult(mi; argtypes, va_override)
+        frame = InferenceState(inf_result, #=cache=#false, interp; sv.context)
         frame === nothing && return nothing # this is probably a bad generated function (unsound), but just ignore it
         frame.parent = sv
         push!(inf_cache, inf_result)
@@ -562,13 +633,18 @@ end
 # if there's a possibility we could get a better result (hopefully without doing too much work)
 # returns `MethodInstance` with constant arguments, returns nothing otherwise
 function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::MethodCallResult,
-                                         @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
+                                         @nospecialize(f), argtypes::Vector{Any}, match::AnyMethodMatch,
                                          sv::InferenceState)
     if !InferenceParams(interp).ipo_constant_propagation
         add_remark!(interp, sv, "[constprop] Disabled by parameter")
         return nothing
     end
-    method = match.method
+    if isa(match, OverdubMethodMatch)
+        method = unwrap_overdub(match).method
+        argtypes = argtypes[2:end]
+    else
+        method = match.method
+    end
     force = force_const_prop(interp, f, method)
     force || const_prop_entry_heuristic(interp, result, sv) || return nothing
     nargs::Int = method.nargs
@@ -891,6 +967,11 @@ end
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState,
                         max_methods::Int = InferenceParams(interp).MAX_METHODS)
+    if is_overdubbing_call(argtypes) # TODO (compiler-plugin) handle me
+        # XXX we should eliminate context here as well
+        no_overdub!(sv)
+        popfirst!(argtypes)
+    end
     itft = argtype_by_index(argtypes, 2)
     aft = argtype_by_index(argtypes, 3)
     (itft === Bottom || aft === Bottom) && return CallMeta(Bottom, false)
@@ -996,6 +1077,7 @@ function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVecto
     return method.pure
 end
 is_method_pure(match::MethodMatch) = is_method_pure(match.method, match.spec_types, match.sparams)
+is_method_pure(match::OverdubMethodMatch) = false # TODO enable pure evaluation for overdubbed execution
 
 function pure_eval_call(@nospecialize(f), argtypes::Vector{Any})
     for i = 2:length(argtypes)
@@ -1175,6 +1257,11 @@ function abstract_call_unionall(argtypes::Vector{Any})
 end
 
 function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    isoverdub = is_overdubbing_call(argtypes)
+    if isoverdub
+        argtypes = copy(argtypes)
+        ctx = popfirst!(argtypes)
+    end
     ft′ = argtype_by_index(argtypes, 2)
     ft = widenconst(ft′)
     ft === Bottom && return CallMeta(Bottom, false)
@@ -1195,9 +1282,16 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     method, valid_worlds = result
     update_valid_age!(sv, valid_worlds)
     (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
-    (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
-    edge !== nothing && add_backedge!(edge::MethodInstance, sv)
-    match = MethodMatch(ti, env, method, argtype <: method.sig)
+    if isoverdub
+        overdub = MethodMatch(ti, env, method, argtype <: method.sig)
+        shadow_sig = Tuple{widenconst(ctx), overdub.spec_types.parameters...}
+        shadow = MethodMatch(shadow_sig, svec(), SHADOW_METHOD, overdub.fully_covers)
+        match = OverdubMethodMatch(shadow, overdub)
+    else
+        match = MethodMatch(ti, env, method, argtype <: method.sig)
+    end
+    (; rt, edge) = result = abstract_call_method(interp, match, false, sv)
+    edge !== nothing && add_backedge!(edge, sv)
     # try constant propagation with manual inlinings of some of the heuristics
     # since some checks within `abstract_call_method_with_const_args` seem a bit costly
     const_prop_entry_heuristic(interp, result, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
@@ -1209,23 +1303,29 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     #     t, a = ti.parameters[i], argtypes′[i]
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
+    isoverdub && pushfirst!(argtypes′, ctx)
     const_result = abstract_call_method_with_const_args(interp, result, argtype_to_function(ft′), argtypes′, match, sv, false)
     if const_result !== nothing
         const_rt, const_result = const_result
         if const_rt !== rt && const_rt ⊑ rt
-            return CallMeta(collect_limitations!(const_rt, sv), InvokeCallInfo(match, const_result))
+            return CallMeta(collect_limitations!(const_rt, sv), InvokeCallInfo(unwrap_shadow(match), const_result))
         end
     end
-    return CallMeta(collect_limitations!(rt, sv), InvokeCallInfo(match, nothing))
+    return CallMeta(collect_limitations!(rt, sv), InvokeCallInfo(unwrap_shadow(match), nothing))
 end
 
 # call where the function is known exactly
+# XXX we really don't expect functions handled here are overloaded, and they should all be intrinsics
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any},
         sv::InferenceState,
         max_methods::Int = InferenceParams(interp).MAX_METHODS)
-
-    la = length(argtypes)
+    # if we infer any of functions listed here, we ignore plugin context and we will get
+    # rid of it in the pass `fixup_no_overdubs!` later by marking this call with `no_overdub!`
+    isoverdub = is_overdubbing_call(argtypes)
+    fargs′ = isoverdub ? (fargs === nothing ? fargs : fargs[2:end]) : fargs
+    argtypes′ = isoverdub ? argtypes[2:end] : argtypes
+    la = length(argtypes′)
 
     if isa(f, Builtin)
         if f === _apply_iterate
@@ -1233,45 +1333,54 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === invoke
             return abstract_invoke(interp, argtypes, sv)
         end
-        return CallMeta(abstract_call_builtin(interp, f, fargs, argtypes, sv, max_methods), false)
+        no_overdub!(sv)
+        return CallMeta(abstract_call_builtin(interp, f, fargs′, argtypes′, sv, max_methods), false)
+    # COMBAK (compiler-plugin) do we want to allow a compiler plugin to modify these functions ?
     elseif f === Core.kwfunc
+        no_overdub!(sv)
         if la == 2
-            ft = widenconst(argtypes[2])
+            ft = widenconst(argtypes′[2])
             if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
                 return CallMeta(Const(ft.name.mt.kwsorter), MethodResultPure())
             end
         end
         return CallMeta(Any, false)
     elseif f === TypeVar
+        no_overdub!(sv)
         # Manually look through the definition of TypeVar to
         # make sure to be able to get `PartialTypeVar`s out.
         (la < 2 || la > 4) && return CallMeta(Union{}, false)
-        n = argtypes[2]
+        n = argtypes′[2]
         ub_var = Const(Any)
         lb_var = Const(Union{})
         if la == 4
-            ub_var = argtypes[4]
-            lb_var = argtypes[3]
+            ub_var = argtypes′[4]
+            lb_var = argtypes′[3]
         elseif la == 3
-            ub_var = argtypes[3]
+            ub_var = argtypes′[3]
         end
         return CallMeta(typevar_tfunc(n, lb_var, ub_var), false)
     elseif f === UnionAll
-        return CallMeta(abstract_call_unionall(argtypes), false)
-    elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes[2]))
+        no_overdub!(sv)
+        return CallMeta(abstract_call_unionall(argtypes′), false)
+    elseif f === Tuple && la == 2 && !isconcretetype(widenconst(argtypes′[2]))
+        no_overdub!(sv)
         return CallMeta(Tuple, false)
     elseif is_return_type(f)
+        no_overdub!(sv)
         return return_type_tfunc(interp, argtypes, sv)
     elseif la == 2 && istopfunction(f, :!)
+        no_overdub!(sv)
         # handle Conditional propagation through !Bool
-        aty = argtypes[2]
+        aty = argtypes′[2]
         if isa(aty, Conditional)
-            call = abstract_call_gf_by_type(interp, f, fargs, Any[Const(f), Bool], Tuple{typeof(f), Bool}, sv) # make sure we've inferred `!(::Bool)`
+            call = abstract_call_gf_by_type(interp, f, fargs′, CallSig(Any[Const(f), Bool], Tuple{typeof(f), Bool}), sv) # make sure we've inferred `!(::Bool)`
             return CallMeta(Conditional(aty.var, aty.elsetype, aty.vtype), call.info)
         end
     elseif la == 3 && istopfunction(f, :!==)
+        no_overdub!(sv)
         # mark !== as exactly a negated call to ===
-        rty = abstract_call_known(interp, (===), fargs, argtypes, sv).rt
+        rty = abstract_call_known(interp, (===), fargs′, argtypes′, sv).rt
         if isa(rty, Conditional)
             return CallMeta(Conditional(rty.var, rty.elsetype, rty.vtype), false) # swap if-else
         elseif isa(rty, Const)
@@ -1279,49 +1388,53 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         return CallMeta(rty, false)
     elseif la == 3 && istopfunction(f, :(>:))
+        no_overdub!(sv)
         # mark issupertype as a exact alias for issubtype
         # swap T1 and T2 arguments and call <:
-        if fargs !== nothing && length(fargs) == 3
-            fargs = Any[<:, fargs[3], fargs[2]]
+        if fargs !== nothing && length(fargs′) == 3
+            fargs = Any[<:, fargs′[3], fargs′[2]]
         else
             fargs = nothing
         end
-        argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
+        argtypes = Any[typeof(<:), argtypes′[3], argtypes′[2]]
         return CallMeta(abstract_call_known(interp, <:, fargs, argtypes, sv).rt, false)
     elseif la == 2 &&
-           (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
+           (a2 = argtypes′[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            istopfunction(f, :length)
+        no_overdub!(sv)
         # mark length(::SimpleVector) as @pure
         return CallMeta(Const(length(svecval)), MethodResultPure())
     elseif la == 3 &&
-           (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
-           (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
+           (a2 = argtypes′[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
+           (a3 = argtypes′[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
            istopfunction(f, :getindex)
+        no_overdub!(sv)
         # mark getindex(::SimpleVector, i::Int) as @pure
         if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
             return CallMeta(Const(getindex(svecval, idx)), MethodResultPure())
         end
     elseif la == 2 && istopfunction(f, :typename)
-        return CallMeta(typename_static(argtypes[2]), MethodResultPure())
+        no_overdub!(sv)
+        return CallMeta(typename_static(argtypes′[2]), MethodResultPure())
     elseif max_methods > 1 && istopfunction(f, :copyto!)
         max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)
-        val = pure_eval_call(f, argtypes)
+        no_overdub!(sv)
+        val = pure_eval_call(f, argtypes′)
         return CallMeta(val === false ? Type : val, MethodResultPure())
     end
-    atype = argtypes_to_type(argtypes)
-    return abstract_call_gf_by_type(interp, f, fargs, argtypes, atype, sv, max_methods)
+    return abstract_call_gf_by_type(interp, f, fargs, argtypes_to_callsig(argtypes, isoverdub), sv, max_methods)
 end
 
 function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::PartialOpaque, argtypes::Vector{Any}, sv::InferenceState)
     pushfirst!(argtypes, closure.env)
     sig = argtypes_to_type(argtypes)
-    (; rt, edge) = result = abstract_call_method(interp, closure.source, sig, Core.svec(), false, sv)
-    edge !== nothing && add_backedge!(edge, sv)
     tt = closure.typ
     sigT = (unwrap_unionall(tt)::DataType).parameters[1]
-    match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
-    info = OpaqueClosureCallInfo(match)
+    match = MethodMatch(sig, Core.svec(), closure.source::Method, sig <: rewrap_unionall(sigT, tt))
+    (; rt, edge) = result = abstract_call_method(interp, match, false, sv)
+    edge !== nothing && add_backedge!(edge, sv)
+    info = OpaqueClosureCallInfo(unwrap_shadow(match))
     if !result.edgecycle
         const_result = abstract_call_method_with_const_args(interp, result, closure, argtypes,
             match, sv, closure.isva)
@@ -1349,12 +1462,14 @@ end
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any},
                        sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
-    #print("call ", e.args[1], argtypes, "\n\n")
-    ft = argtypes[1]
+    isoverdub = is_overdubbing_call(argtypes)
+    ft = argtypes[isoverdub ? 2 : 1]
     f = argtype_to_function(ft)
     if isa(ft, PartialOpaque)
+        isoverdub && throw("TODO: handle me")
         return abstract_call_opaque_closure(interp, ft, argtypes[2:end], sv)
     elseif (uft = unwrap_unionall(ft); isa(uft, DataType) && uft.name === typename(Core.OpaqueClosure))
+        isoverdub && throw("TODO: handle me")
         return CallMeta(rewrap_unionall((uft::DataType).parameters[2], ft), false)
     elseif f === nothing
         # non-constant function, but the number of arguments is known
@@ -1363,7 +1478,7 @@ function abstract_call(interp::AbstractInterpreter, fargs::Union{Nothing,Vector{
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end
-        return abstract_call_gf_by_type(interp, nothing, fargs, argtypes, argtypes_to_type(argtypes), sv, max_methods)
+        return abstract_call_gf_by_type(interp, nothing, fargs, argtypes_to_callsig(argtypes, isoverdub), sv, max_methods)
     end
     return abstract_call_known(interp, f, fargs, argtypes, sv, max_methods)
 end
@@ -1377,6 +1492,18 @@ function argtype_to_function(@nospecialize(ft))
         return ft.instance
     else
         return nothing
+    end
+end
+
+function argtypes_to_callsig(argtypes::Vector{Any}, isoverdub::Bool)
+    if isoverdub
+        shadow = CallSig(argtypes, argtypes_to_type(argtypes))
+        overdub = let argtypes = argtypes[2:end]
+            CallSig(argtypes, argtypes_to_type(argtypes))
+        end
+        return OverdubCallSig(shadow, overdub)
+    else
+        return CallSig(argtypes, argtypes_to_type(argtypes))
     end
 end
 
@@ -1566,6 +1693,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             if argtypes === nothing
                 t = Bottom
             else
+                is_overdubbing_call(argtypes) && throw("TODO: handle me")
                 t = _opaque_closure_tfunc(argtypes[1], argtypes[2], argtypes[3],
                     argtypes[4], argtypes[5], argtypes[6:end], sv.linfo)
                 if isa(t, PartialOpaque)
