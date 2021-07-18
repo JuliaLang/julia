@@ -6,6 +6,8 @@
 
 include("rootfs_utils.jl")
 
+const tag_name, force_overwrite = get_arguments(ARGS, @__FILE__)
+
 # Build debian-based image with the following extra packages:
 packages = [
     "bash",
@@ -26,4 +28,4 @@ packages = [
 tarball_path = debootstrap("llvm-passes"; packages)
 
 # Upload it
-upload_rootfs_image(tarball_path; tag_name = "v1")
+upload_rootfs_image(tarball_path; tag_name, force_overwrite)

@@ -78,15 +78,8 @@ mutable struct OptimizationState
         end
         stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
-        toplevel = !isa(linfo.def, Method)
-        if !toplevel
-            meth = linfo.def
-            inmodule = meth.module
-            nargs = meth.nargs
-        else
-            inmodule = linfo.def::Module
-            nargs = 0
-        end
+        def = linfo.def
+        mod, nargs = isa(def, Method) ? (def.module, def.nargs) : (def, 0)
         # Allow using the global MI cache, but don't track edges.
         # This method is mostly used for unit testing the optimizer
         inlining = InliningState(params,
@@ -94,7 +87,7 @@ mutable struct OptimizationState
             WorldView(code_cache(interp), get_world_counter()),
             inlining_policy(interp))
         return new(linfo,
-                   src, nothing, stmt_info, inmodule, nargs,
+                   src, nothing, stmt_info, mod, nargs,
                    sptypes_from_meth_instance(linfo), slottypes, false,
                    inlining)
         end
@@ -174,7 +167,7 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
         end
     end
     if !inlineable
-        inlineable = inline_worthy(me.ir, params, union_penalties, cost_threshold + bonus)
+        inlineable = inline_worthy(me.ir::IRCode, params, union_penalties, cost_threshold + bonus)
     end
     return inlineable
 end
@@ -198,7 +191,7 @@ end
 
 # Convert IRCode back to CodeInfo and compute inlining cost and sideeffects
 function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir::IRCode, @nospecialize(result))
-    def = opt.linfo.def
+    (; def) = linfo = opt.linfo
     nargs = Int(opt.nargs) - 1
 
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
@@ -252,7 +245,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
     # determine and cache inlineability
     union_penalties = false
     if !force_noinline
-        sig = unwrap_unionall(opt.linfo.specTypes)
+        sig = unwrap_unionall(linfo.specTypes)
         if isa(sig, DataType) && sig.name === Tuple.name
             for P in sig.parameters
                 P = unwrap_unionall(P)
@@ -271,7 +264,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
     if force_noinline
         opt.src.inlineable = false
     elseif isa(def, Method)
-        if opt.src.inlineable && isdispatchtuple(opt.linfo.specTypes)
+        if opt.src.inlineable && isdispatchtuple(linfo.specTypes)
             # obey @inline declaration if a dispatch barrier would not help
         else
             bonus = 0
@@ -400,7 +393,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     cfg = compute_basic_blocks(code)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, flags)
-    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
+    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable::Union{Vector{LineInfoNode},Vector{Any}}), sv.slottypes, meta, sv.sptypes)
     return ir
 end
 
@@ -631,8 +624,11 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
             body[i] = GotoIfNot(cond, el.dest + labelchangemap[el.dest])
         elseif isa(el, ReturnNode)
-            if isdefined(el, :val) && isa(el.val, SSAValue)
-                body[i] = ReturnNode(SSAValue(el.val.id + ssachangemap[el.val.id]))
+            if isdefined(el, :val)
+                val = el.val
+                if isa(val, SSAValue)
+                    body[i] = ReturnNode(SSAValue(val.id + ssachangemap[val.id]))
+                end
             end
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])

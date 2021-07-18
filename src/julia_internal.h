@@ -1128,6 +1128,10 @@ extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 JL_DLLEXPORT const char *jl_intrinsic_name(int f) JL_NOTSAFEPOINT;
 unsigned jl_intrinsic_nargs(int f) JL_NOTSAFEPOINT;
 
+STATIC_INLINE int is_valid_intrinsic_elptr(jl_value_t *ety)
+{
+    return ety == (jl_value_t*)jl_any_type || (jl_is_concrete_type(ety) && !jl_is_layout_opaque(((jl_datatype_t*)ety)->layout));
+}
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);
 JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *align, jl_value_t *i);
