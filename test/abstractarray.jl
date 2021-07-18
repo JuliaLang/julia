@@ -1565,3 +1565,8 @@ end
     @test_throws ArgumentError keepat!(a, [2, 1])
     @test isempty(keepat!(a, []))
 end
+
+@testset "reshape methods for AbstractVectors" begin
+    r = Base.IdentityUnitRange(3:4)
+    @test reshape(r, :) === reshape(r, (:,)) === r
+end
