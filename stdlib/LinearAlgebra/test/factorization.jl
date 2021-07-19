@@ -6,7 +6,7 @@ using Test, LinearAlgebra
 @testset "equality for factorizations - $f" for f in Any[
     bunchkaufman,
     cholesky,
-    x -> cholesky(x, Val(true)),
+    x -> cholesky(x, RowMaximum()),
     eigen,
     hessenberg,
     lq,
