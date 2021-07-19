@@ -63,15 +63,30 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 end
 
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    link = joinpath(dir, "afilelink.txt")
+    link = joinpath(dir, "afilesymlink.txt")
     symlink(file, link)
     @test stat(file) == stat(link)
 
     # relative link
-    rellink = joinpath(subdir, "rel_afilelink.txt")
+    rellink = joinpath(subdir, "rel_afilesymlink.txt")
     relfile = joinpath("..", "afile.txt")
     symlink(relfile, rellink)
     @test stat(rellink) == stat(file)
+end
+
+@testset "hardlink" begin
+    link = joinpath(dir, "afilehardlink.txt")
+    hardlink(file, link)
+    @test stat(file) == stat(link)
+
+    # when the destination exists
+    @test_throws Base.IOError hardlink(file, link)
+
+    rm(link)
+
+    # the source file does not exist
+    missing_file = joinpath(dir, "for-sure-missing-file.txt")
+    @test_throws Base.IOError hardlink(missing_file, link)
 end
 
 using Random

@@ -8,6 +8,7 @@ export
     chown,
     cp,
     cptree,
+    hardlink,
     mkdir,
     mkpath,
     mktemp,
@@ -996,6 +997,24 @@ if Sys.iswindows()
     const UV_FS_SYMLINK_DIR      = 0x0001
     const UV_FS_SYMLINK_JUNCTION = 0x0002
     const UV__EPERM              = -4048
+end
+
+"""
+    hardlink(src::AbstractString, dst::AbstractString)
+
+Creates a hard link to an existing source file `src` with the name
+`dst`. The destination, `dst`, must not exist.
+
+!!! compat "Julia 1.6"
+    This method was added in Julia 1.6.
+"""
+function hardlink(src::AbstractString, dst::AbstractString)
+    err = ccall(:jl_fs_hardlink, Int32, (Cstring, Cstring), src, dst)
+    if err < 0
+        msg = "hardlink($(repr(src)), $(repr(dst)))"
+        uv_error(msg, err)
+    end
+    return nothing
 end
 
 """
