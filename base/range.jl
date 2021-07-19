@@ -681,7 +681,7 @@ function length(r::OrdinalRange{T}) where T
     # s != 0, by construction, but avoids the division error later
     start = first(r)
     if s == zero(s) || isempty(r)
-        return Integer(start - start + zero(s))
+        return Integer(div(start-start, oneunit(s)))
     end
     stop = last(r)
     if isless(s, zero(s))
