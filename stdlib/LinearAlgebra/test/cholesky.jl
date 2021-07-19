@@ -444,10 +444,10 @@ end
 end
 
 @testset "destructuring for Cholesky[Pivoted]" begin
-    for val in (true, false)
+    for val in (NoPivot(), RowMaximum())
         A = rand(8, 8)
         B = A'A
-        C = cholesky(B, Val(val), check=false)
+        C = cholesky(B, val, check=false)
         l, u = C
         @test l == C.L
         @test u == C.U
