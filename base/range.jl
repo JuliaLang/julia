@@ -1017,6 +1017,11 @@ function ==(r::OrdinalRange, s::OrdinalRange)
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
+==(r::AbstractUnitRange, s::AbstractUnitRange) =
+    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (last(r) == last(s)))
+
+==(r::OneTo, s::OneTo) = last(r) == last(s)
+
 ==(r::T, s::T) where {T<:Union{StepRangeLen,LinRange}} =
     (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s)))
 
