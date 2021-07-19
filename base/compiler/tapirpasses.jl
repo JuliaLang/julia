@@ -2122,6 +2122,7 @@ function code_info_from_ssair(ir::IRCode)
     ci.slotnames[1] = Symbol("#self#")
     ci.slotflags = fill(0x00, nargs)
     replace_code_newstyle!(ci, ir, nargs - 1)
+    ci.inferred = true
     return ci
 end
 
