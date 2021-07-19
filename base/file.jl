@@ -1005,8 +1005,8 @@ end
 Creates a hard link to an existing source file `src` with the name
 `dst`. The destination, `dst`, must not exist.
 
-!!! compat "Julia 1.6"
-    This method was added in Julia 1.6.
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
 """
 function hardlink(src::AbstractString, dst::AbstractString)
     err = ccall(:jl_fs_hardlink, Int32, (Cstring, Cstring), src, dst)

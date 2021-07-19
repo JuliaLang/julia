@@ -32,6 +32,7 @@ Build system changes
 New library functions
 ---------------------
 
+* `hardlink(src, dst)` can be used to create hard links. ([#41639])
 
 New library features
 --------------------
