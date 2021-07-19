@@ -1517,6 +1517,8 @@ end
     @test view(1:10, 1:5) === 1:5
     @test view(1:10, 1:2:5) === 1:2:5
     @test view(1:2:9, 1:5) === 1:2:9
+    @test view(1:10, :) === 1:10
+    @test view(1:2:9, :) === 1:2:9
 
     # Ensure we don't hit a fallback `view` if there's a better `getindex` implementation
     vmt = collect(methods(view, Tuple{AbstractRange, AbstractRange}))
