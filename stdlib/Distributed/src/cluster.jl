@@ -690,10 +690,10 @@ function create_worker(manager, wconfig)
         end
 
         for wl in wlist
-            if wl.state === W_CREATED
-                # wait for wl to join
-                lock(wl.c_state) do
-                   wait(wl.c_state)
+            lock(wl.c_state) do
+                if wl.state === W_CREATED
+                    # wait for wl to join
+                    wait(wl.c_state)
                 end
             end
             push!(join_list, wl)
