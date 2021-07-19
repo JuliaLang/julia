@@ -55,11 +55,10 @@ function setindex(x::Tuple, v, i::Integer)
     _setindex(v, i, x...)
 end
 
-function _setindex(v, i::Integer, first, tail...)
+function _setindex(v, i::Integer, args...)
     @_inline_meta
-    return (ifelse(i == 1, v, first), _setindex(v, i - 1, tail...)...)
+    return ntuple(j -> ifelse(j == i, v, args[j]), length(args))
 end
-_setindex(v, i::Integer) = ()
 
 
 ## iterating ##
@@ -323,11 +322,15 @@ function _totuple_err(@nospecialize T)
     throw(ArgumentError("too few elements for tuple type $T"))
 end
 
-function _totuple(T, itr, s...)
+function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     @_inline_meta
     y = iterate(itr, s...)
     y === nothing && _totuple_err(T)
-    return (convert(fieldtype(T, 1), y[1]), _totuple(tuple_type_tail(T), itr, y[2])...)
+    t1 = convert(fieldtype(T, 1), y[1])
+    # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
+    rT = tuple_type_tail(T)
+    ts = _totuple(rT, itr, y[2])::rT
+    return (t1, ts...)
 end
 
 # use iterative algorithm for long tuples

@@ -114,7 +114,8 @@ reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
 reshape(parent::AbstractVector, ::Colon) = parent
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer, Colon, Base.OneTo}}}) = reshape(parent, _reshape_uncolon(parent, dims))
+reshape(parent::AbstractVector, ::Tuple{Colon}) = parent
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,Base.OneTo}}}) = reshape(parent, _reshape_uncolon(parent, dims))
 @inline function _reshape_uncolon(A, dims)
     @noinline throw1(dims) = throw(DimensionMismatch(string("new dimensions $(dims) ",
         "may have at most one omitted dimension specified by `Colon()`")))

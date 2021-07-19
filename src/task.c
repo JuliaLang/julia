@@ -475,12 +475,8 @@ JL_DLLEXPORT void jl_switch(void)
     if (t == ct) {
         return;
     }
-    if (t->_state != JL_TASK_STATE_RUNNABLE || (t->started && t->stkbuf == NULL)) {
-        ct->_isexception = t->_isexception;
-        ct->result = t->result;
-        jl_gc_wb(ct, ct->result);
-        return;
-    }
+    if (t->started && t->stkbuf == NULL)
+        jl_error("attempt to switch to exited task");
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
     if (ptls->in_pure_callback)
@@ -649,14 +645,16 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     throw_internal(ct, NULL);
 }
 
-/* This is xoshiro256++ 1.0, used for tasklocal random number generation in julia.
+/* This is xoshiro256++ 1.0, used for tasklocal random number generation in Julia.
    This implementation is intended for embedders and internal use by the runtime, and is
-   based on the reference implementation on http://prng.di.unimi.it
+   based on the reference implementation at https://prng.di.unimi.it
 
-   Credits go to Sebastiano Vigna for coming up with this PRNG.
+   Credits go to David Blackman and Sebastiano Vigna for coming up with this PRNG.
+   They described xoshiro256++ in "Scrambled Linear Pseudorandom Number Generators",
+   ACM Trans. Math. Softw., 2021.
 
-   There is a pure julia implementation in stdlib that tends to be faster when used from
-   within julia, due to inlining and more agressive architecture-specific optimizations.
+   There is a pure Julia implementation in stdlib that tends to be faster when used from
+   within Julia, due to inlining and more agressive architecture-specific optimizations.
 */
 JL_DLLEXPORT uint64_t jl_tasklocal_genrandom(jl_task_t *task) JL_NOTSAFEPOINT
 {

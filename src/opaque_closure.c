@@ -76,7 +76,7 @@ JL_CALLABLE(jl_f_opaque_closure_call)
     jl_opaque_closure_t* oc = (jl_opaque_closure_t*)F;
     jl_value_t *argt = jl_tparam0(jl_typeof(oc));
     if (!jl_tupletype_length_compat(argt, nargs))
-        jl_error("Incorrect argument count for OpaqueClosure");
+        jl_method_error(F, args, nargs + 1, oc->world);
     argt = jl_unwrap_unionall(argt);
     assert(jl_is_datatype(argt));
     jl_svec_t *types = jl_get_fieldtypes((jl_datatype_t*)argt);

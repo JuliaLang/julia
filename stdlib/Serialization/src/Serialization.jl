@@ -434,6 +434,9 @@ function serialize(s::AbstractSerializer, meth::Method)
     else
         serialize(s, nothing)
     end
+    if isdefined(meth, :external_mt)
+        error("cannot serialize Method objects with external method tables")
+    end
     nothing
 end
 
@@ -507,9 +510,9 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, primary.parameters)
     serialize(s, primary.types)
     serialize(s, isdefined(primary, :instance))
-    serialize(s, t.abstract)
-    serialize(s, t.mutable)
-    serialize(s, primary.ninitialized)
+    serialize(s, t.flags & 0x1 == 0x1) # .abstract
+    serialize(s, t.flags & 0x2 == 0x2) # .mutable
+    serialize(s, Int32(length(primary.types) - t.n_uninitialized))
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -660,7 +663,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         serialize_type(s, t)
         write(s.io, x)
     else
-        if t.name.mutable
+        if ismutable(x)
             serialize_cycle(s, x) && return
             serialize_type(s, t, true)
         else
@@ -937,7 +940,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_dict(s, t)
     end
     t = desertag(b)::DataType
-    if t.name.mutable && length(t.types) > 0  # manual specialization of fieldcount
+    if ismutabletype(t) && length(t.types) > 0  # manual specialization of fieldcount
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -1423,7 +1426,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
     if nf == 0 && t.size > 0
         # bits type
         return read(s.io, t)
-    elseif t.name.mutable
+    elseif ismutabletype(t)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         deserialize_cycle(s, x)
         for i in 1:nf

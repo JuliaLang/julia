@@ -40,20 +40,20 @@ struct StatStruct
     mtime   :: Float64
     ctime   :: Float64
 end
-const StatFieldTypes = Union{UInt,Int,Int64,Float64}
 
-function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
-    for i = 2:nfields(x)
-        xi = getfield(x, i)::StatFieldTypes
-        xi === getfield(y, i) || return false
-    end
-    return true
+@eval function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
+  $(let ex = true
+        for fld in fieldnames(StatStruct)[2:end]
+            ex = :(getfield(x, $(QuoteNode(fld))) === getfield(y, $(QuoteNode(fld))) && $ex)
+        end
+        Expr(:return, ex)
+    end)
 end
-function Base.hash(obj::StatStruct, h::UInt)
-    for i = 2:nfields(obj)
-        h = hash(getfield(obj, i)::StatFieldTypes, h)
-    end
-    return h
+@eval function Base.hash(obj::StatStruct, h::UInt)
+  $(quote
+        $(Any[:(h = hash(getfield(obj, $(QuoteNode(fld))), h)) for fld in fieldnames(StatStruct)[2:end]]...)
+        return h
+    end)
 end
 
 StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -106,36 +106,37 @@ end
 function show_statstruct(io::IO, st::StatStruct, oneline::Bool)
     print(io, oneline ? "StatStruct(" : "StatStruct for ")
     show(io, st.desc)
-    oneline || print("\n  ")
+    oneline || print(io, "\n  ")
     print(io, " size: ", st.size, " bytes")
-    oneline || print("\n")
+    oneline || print(io, "\n")
     print(io, " device: ", st.device)
-    oneline || print("\n ")
+    oneline || print(io, "\n ")
     print(io, " inode: ", st.inode)
-    oneline || print("\n  ")
+    oneline || print(io, "\n  ")
     print(io, " mode: 0o", string(filemode(st), base = 8, pad = 6), " (", filemode_string(st), ")")
-    oneline || print("\n ")
+    oneline || print(io, "\n ")
     print(io, " nlink: ", st.nlink)
-    oneline || print("\n   ")
+    oneline || print(io, "\n   ")
     print(io, " uid: $(st.uid)")
     username = getusername(st.uid)
     username === nothing || print(io, " (", username, ")")
-    oneline || print("\n   ")
+    oneline || print(io, "\n   ")
     print(io, " gid: ", st.gid)
     groupname = getgroupname(st.gid)
     groupname === nothing || print(io, " (", groupname, ")")
-    oneline || print("\n  ")
+    oneline || print(io, "\n  ")
     print(io, " rdev: ", st.rdev)
-    oneline || print("\n ")
+    oneline || print(io, "\n ")
     print(io, " blksz: ", st.blksize)
-    oneline || print("\n")
+    oneline || print(io, "\n")
     print(io, " blocks: ", st.blocks)
     tnow = round(UInt, time())
-    oneline || print("\n ")
+    oneline || print(io, "\n ")
     print(io, " mtime: ", iso_datetime_with_relative(st.mtime, tnow))
-    oneline || print("\n ")
+    oneline || print(io, "\n ")
     print(io, " ctime: ", iso_datetime_with_relative(st.ctime, tnow))
-    print(io, oneline ? ")" : "\n")
+    oneline && print(io, ")")
+    return nothing
 end
 
 show(io::IO, st::StatStruct) = show_statstruct(io, st, true)

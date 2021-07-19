@@ -2005,7 +2005,7 @@ optimized to the appropriate hardware instruction, otherwise it'll use a loop.
 modifyfield!
 
 """
-    replacefield!(value, name::Symbol, cmp, expected, desired,
+    replacefield!(value, name::Symbol, expected, desired,
         [success_order::Symbol, [fail_order::Symbol=success_order]) =>
         (old, Bool)
 
@@ -2013,14 +2013,14 @@ These atomically perform the operations to get and conditionally set a field to
 a given value.
 
     y = getfield!(value, name, fail_order)
-    ok = cmp(y, expected)
+    ok = y === expected
     if ok
         setfield!(value, name, desired, success_order)
     end
     return y, ok
 
-If the operation is `===` on a supported type, we'll use the relevant processor
-instructions, otherwise it'll use a loop.
+If supported by the hardware, this may be optimized to the appropriate hardware
+instruction, otherwise it'll use a loop.
 """
 replacefield!
 
@@ -2413,8 +2413,8 @@ julia> 4.5/2
 """
     ArgumentError(msg)
 
-The parameters to a function call do not match a valid signature. Argument `msg` is a
-descriptive error string.
+The arguments passed to a function are invalid.
+`msg` is a descriptive error message.
 """
 ArgumentError
 

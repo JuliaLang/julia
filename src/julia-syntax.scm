@@ -221,10 +221,11 @@
 
 (define (method-expr-name m)
   (let ((name (cadr m)))
+     (let ((name (if (or (length= m 2) (not (pair? name)) (not (quoted? name))) name (cadr name))))
        (cond ((not (pair? name)) name)
              ((eq? (car name) 'outerref) (cadr name))
              ;((eq? (car name) 'globalref) (caddr name))
-             (else name))))
+             (else name)))))
 
 ;; extract static parameter names from a (method ...) expression
 (define (method-expr-static-parameters m)
@@ -251,6 +252,13 @@
             (or (atom? (cadr e)) (sym-ref? (cadr e)))
             (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
             (symbol? (cadr (caddr e))))))
+
+(define (overlay? e)
+  (and (pair? e) (eq? (car e) 'overlay)))
+
+(define (sym-ref-or-overlay? e)
+  (or (overlay? e)
+      (sym-ref? e)))
 
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
@@ -341,14 +349,15 @@
    (let* ((names (map car sparams))
           (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
           (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
-          (ename (if (nodot-sym-ref? name) name `(null))))
+          (ename (if (nodot-sym-ref? name) name
+                    (if (overlay? name) (cadr name) `(null)))))
      (if (has-dups unused_anames)
          (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
          (error "function static parameter names not unique"))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
          (error "function argument and static parameter names must be distinct"))
-     (if (or (and name (not (sym-ref? name))) (not (valid-name? name)))
+     (if (or (and name (not (sym-ref-or-overlay? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((loc (maybe-remove-functionloc! body))
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
@@ -433,9 +442,12 @@
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let* ((l (if (null? pargl) '() (last pargl)))
                         ;; handle vararg with default value
-                        (l (if (kwarg? l) (cadr l) l)))
-                   (if (or (vararg? l) (varargexpr? l))
+                        (l- (if (kwarg? l) (cadr l) l)))
+                   (if (or (vararg? l-) (varargexpr? l-))
                        (list l) '())))
+         ;; expression to forward varargs to another call
+         (splatted-vararg (if (null? vararg) '()
+                              (list `(... ,(arg-name (car vararg))))))
          ;; positional args with vararg
          (pargl-all pargl)
          ;; positional args without vararg
@@ -511,8 +523,7 @@
                                        ,@(if ordered-defaults keynames vals)
                                        ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
                                        ,@(map arg-name pargl)
-                                       ,@(if (null? vararg) '()
-                                             (list `(... ,(arg-name (car vararg)))))))))
+                                       ,@splatted-vararg))))
                (if ordered-defaults
                    (scopenest keynames vals ret)
                    ret))))
@@ -570,16 +581,13 @@
                 ,@(if (null? restkw)
                       `((if (call (top isempty) ,rkw)
                             (null)
-                            (call (top kwerr) ,kw ,@(map arg-name pargl)
-                                  ,@(if (null? vararg) '()
-                                        (list `(... ,(arg-name (car vararg))))))))
+                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg)))
                       '())
                 (return (call ,mangled  ;; finally, call the core function
                               ,@keynames
                               ,@(if (null? restkw) '() (list rkw))
                               ,@(map arg-name pargl)
-                              ,@(if (null? vararg) '()
-                                    (list `(... ,(arg-name (car vararg)))))))))))
+                              ,@splatted-vararg))))))
         ;; return primary function
         ,(if (not (symbol? name))
              '(null) name)))))
@@ -1143,13 +1151,14 @@
                   (argl-stmts (lower-destructuring-args argl))
                   (argl       (car argl-stmts))
                   (name       (check-dotop (car argl)))
+                  (argname    (if (overlay? name) (caddr name) name))
                   ;; fill in first (closure) argument
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| |#self#| ,(cadr n))
                                             n)))
-                  (farg    (if (decl? name)
-                               (adj-decl name)
-                               `(|::| |#self#| (call (core Typeof) ,name))))
+                  (farg    (if (decl? argname)
+                               (adj-decl argname)
+                               `(|::| |#self#| (call (core Typeof) ,argname))))
                   (body       (insert-after-meta body (cdr argl-stmts)))
                   (argl    (cdr argl))
                   (argl    (fix-arglist
@@ -1447,7 +1456,7 @@
                        (cons R elts)))
                 ((vararg? L)
                  (if (null? (cdr lhss))
-                     (let ((temp (make-ssavalue)))
+                     (let ((temp (if (eventually-call? (cadr L)) (gensy) (make-ssavalue))))
                        `(block ,@(reverse stmts)
                                (= ,temp (tuple ,@rhss))
                                ,@(reverse after)
@@ -2146,9 +2155,13 @@
                       ((eq? l x) #t)
                       (else (in-lhs? x (cdr lhss)))))))
         ;; in-lhs? also checks for invalid syntax, so always call it first
-        (let* ((xx  (if (or (and (not (in-lhs? x lhss)) (symbol? x))
-                            (ssavalue? x))
-                        x (make-ssavalue)))
+        (let* ((xx  (cond ((or (and (not (in-lhs? x lhss)) (symbol? x))
+                               (ssavalue? x))
+                            x)
+                          ((and (pair? lhss) (vararg? (last lhss))
+                                (eventually-call? (cadr (last lhss))))
+                           (gensy))
+                          (else (make-ssavalue))))
                (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                (n   (length lhss))
                ;; skip last assignment if it is an all-underscore vararg

@@ -222,7 +222,7 @@ function showerror(io::IO, ex::MethodError)
     arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
-    if length(meth) > 1
+    if isa(meth, MethodList) && length(meth) > 1
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     arg_types_param::SimpleVector = arg_types.parameters
@@ -242,7 +242,7 @@ function showerror(io::IO, ex::MethodError)
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
-    elseif isempty(methods(f)) && isa(f, DataType) && f.name.abstract
+    elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
         print(io, "objects of type ", ft, " are not callable")
@@ -898,4 +898,3 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     show_exception_stack(io, stack)
 end
 show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
-

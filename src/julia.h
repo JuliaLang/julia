@@ -318,6 +318,7 @@ typedef struct _jl_method_t {
     jl_array_t *speckeyset; // index lookup by hash into specializations
 
     jl_value_t *slot_syms; // compacted list of slot names (String)
+    jl_value_t *external_mt; // reference to the method table this method is part of, null if part of the internal table
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
@@ -437,13 +438,14 @@ typedef struct {
     jl_value_t *wrapper;
     jl_svec_t *cache;        // sorted array
     jl_svec_t *linearcache;  // unsorted array
-    intptr_t hash;
-    uint8_t abstract;
-    uint8_t mutabl;
-    uint8_t references_self;
-    uint8_t mayinlinealloc;
     struct _jl_methtable_t *mt;
     jl_array_t *partial;     // incomplete instantiations of this type
+    intptr_t hash;
+    int32_t n_uninitialized;
+    // type properties
+    uint8_t abstract:1;
+    uint8_t mutabl:1;
+    uint8_t mayinlinealloc:1;
 } jl_typename_t;
 
 typedef struct {
@@ -496,20 +498,18 @@ typedef struct _jl_datatype_t {
     struct _jl_datatype_t *super;
     jl_svec_t *parameters;
     jl_svec_t *types;
-    jl_svec_t *names;
     jl_value_t *instance;  // for singletons
     const jl_datatype_layout_t *layout;
     int32_t size; // TODO: move to _jl_datatype_layout_t
-    int32_t ninitialized;
-    uint32_t hash;
     // memoized properties
-    uint8_t hasfreetypevars; // majority part of isconcrete computation
-    uint8_t isconcretetype; // whether this type can have instances
-    uint8_t isdispatchtuple; // aka isleaftupletype
-    uint8_t isbitstype; // relevant query for C-api and type-parameters
-    uint8_t zeroinit; // if one or more fields requires zero-initialization
-    uint8_t has_concrete_subtype; // If clear, no value will have this datatype
-    uint8_t cached_by_hash; // stored in hash-based set cache (instead of linear cache)
+    uint32_t hash;
+    uint8_t hasfreetypevars:1; // majority part of isconcrete computation
+    uint8_t isconcretetype:1; // whether this type can have instances
+    uint8_t isdispatchtuple:1; // aka isleaftupletype
+    uint8_t isbitstype:1; // relevant query for C-api and type-parameters
+    uint8_t zeroinit:1; // if one or more fields requires zero-initialization
+    uint8_t has_concrete_subtype:1; // If clear, no value will have this datatype
+    uint8_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {
@@ -1035,14 +1035,7 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
 #define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
-    jl_svec_t *names = st->names;
-    if (!names)
-        names = st->name->names;
-    return names;
-}
-STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i) JL_NOTSAFEPOINT
-{
-    return (jl_sym_t*)jl_svecref(jl_field_names(st), i);
+    return st->name->names;
 }
 STATIC_INLINE jl_value_t *jl_field_type(jl_datatype_t *st JL_PROPAGATES_ROOT, size_t i)
 {
@@ -1327,7 +1320,18 @@ STATIC_INLINE int jl_is_array_zeroinit(jl_array_t *a) JL_NOTSAFEPOINT
 JL_DLLEXPORT int jl_egal(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_egal__bits(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
+
+STATIC_INLINE int jl_egal__unboxed_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    if (dt->name->mutabl) {
+        if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
+            return jl_egal__special(a, b, dt);
+        return 0;
+    }
+    return jl_egal__bits(a, b, dt);
+}
 
 STATIC_INLINE int jl_egal_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
@@ -1336,12 +1340,7 @@ STATIC_INLINE int jl_egal_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
     if (dt != (jl_datatype_t*)jl_typeof(b))
         return 0;
-    if (dt->name->mutabl) {
-        if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
-            return jl_egal__special(a, b, dt);
-        return 0;
-    }
-    return jl_egal__bits(a, b, dt);
+    return jl_egal__unboxed_(a, b, dt);
 }
 #define jl_egal(a, b) jl_egal_((a), (b))
 
@@ -1428,7 +1427,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
                                                  jl_value_t **bp, jl_value_t *bp_owner,
                                                  jl_binding_t *bnd);
-JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata, jl_code_info_t *f, jl_module_t *module);
+JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT;
@@ -1830,24 +1829,24 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *logstate;
     jl_function_t *start;
-    uint8_t _state;
-    uint8_t sticky; // record whether this Task can be migrated to a new thread
-    uint8_t _isexception; // set if `result` is an exception to throw or that we exited with
     uint64_t rngState0; // really rngState[4], but more convenient to split
     uint64_t rngState1;
     uint64_t rngState2;
     uint64_t rngState3;
+    uint8_t _state;
+    uint8_t sticky; // record whether this Task can be migrated to a new thread
+    uint8_t _isexception; // set if `result` is an exception to throw or that we exited with
 
 // hidden state:
+    // id of owning thread - does not need to be defined until the task runs
+    int16_t tid;
+    // multiqueue priority
+    int16_t prio;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
     // quick lookup for current ptls
     jl_tls_states_t *ptls; // == jl_all_tls_states[tid]
-    // id of owning thread - does not need to be defined until the task runs
-    int16_t tid;
-    // multiqueue priority
-    int16_t prio;
     // saved exception stack
     jl_excstack_t *excstack;
     // current exception handler

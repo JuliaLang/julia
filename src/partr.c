@@ -159,6 +159,7 @@ static inline jl_task_t *multiq_deletemin(void)
     int16_t prio1, prio2;
     jl_task_t *task;
  retry:
+    jl_gc_safepoint();
     for (i = 0; i < heap_p; ++i) {
         rn1 = cong(heap_p, cong_unbias, &ptls->rngseed);
         rn2 = cong(heap_p, cong_unbias, &ptls->rngseed);
@@ -397,7 +398,6 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
         jl_set_task_tid(task, self);
         return task;
     }
-    jl_gc_safepoint();
     return multiq_deletemin();
 }
 

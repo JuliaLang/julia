@@ -42,7 +42,7 @@ jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *pop_exception_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
-jl_sym_t *splatnew_sym;
+jl_sym_t *splatnew_sym; jl_sym_t *block_sym;
 jl_sym_t *new_opaque_closure_sym;
 jl_sym_t *opaque_closure_method_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
@@ -417,6 +417,7 @@ void jl_init_common_symbols(void)
     aliasscope_sym = jl_symbol("aliasscope");
     popaliasscope_sym = jl_symbol("popaliasscope");
     thismodule_sym = jl_symbol("thismodule");
+    block_sym = jl_symbol("block");
     atom_sym = jl_symbol("atom");
     statement_sym = jl_symbol("statement");
     all_sym = jl_symbol("all");
@@ -693,8 +694,6 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 
 static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv, int check_valid)
 {
-    if (jl_array_len(a) > 650000)
-        lerror(fl_ctx, symbol(fl_ctx, "error"), "expression too large");
     value_t temp;
     for(long i=jl_array_len(a)-1; i >= 0; i--) {
         *pv = fl_cons(fl_ctx, fl_ctx->NIL, *pv);
@@ -779,6 +778,8 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_vali
         jl_expr_t *ex = (jl_expr_t*)v;
         value_t args = fl_ctx->NIL;
         fl_gc_handle(fl_ctx, &args);
+        if (jl_expr_nargs(ex) > 520000 && ex->head != block_sym)
+            lerror(fl_ctx, symbol(fl_ctx, "error"), "expression too large");
         array_to_list(fl_ctx, ex->args, &args, check_valid);
         value_t hd = julia_to_scm_(fl_ctx, (jl_value_t*)ex->head, check_valid);
         if (ex->head == lambda_sym && jl_expr_nargs(ex)>0 && jl_is_array(jl_exprarg(ex,0))) {
@@ -933,6 +934,8 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
                 jl_array_ptr_ref(new_code, i)
             ));
         }
+        new_ci->code = new_code;
+        jl_gc_wb(new_ci, new_code);
         new_ci->slotnames = jl_array_copy(new_ci->slotnames);
         jl_gc_wb(new_ci, new_ci->slotnames);
         new_ci->slotflags = jl_array_copy(new_ci->slotflags);

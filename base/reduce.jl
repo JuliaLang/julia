@@ -771,11 +771,11 @@ minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 ## findmax, findmin, argmax & argmin
 
 """
-    findmax(f, domain) -> (f(x), x)
+    findmax(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
-value in the `domain` (inputs to `f`) such that `f(x)` is maximised. If there
-are multiple maximal points, then the first one will be returned.
+Returns a pair of a value in the codomain (outputs of `f`) and the index of
+the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
+If there are multiple maximal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
 
@@ -788,20 +788,20 @@ Values are compared with `isless`.
 
 ```jldoctest
 julia> findmax(identity, 5:9)
-(9, 9)
+(9, 5)
 
 julia> findmax(-, 1:10)
 (-1, 1)
 
-julia> findmax(first, [(1, :a), (2, :b), (2, :c)])
-(2, (2, :b))
+julia> findmax(first, [(1, :a), (3, :b), (3, :c)])
+(3, 2)
 
 julia> findmax(cos, 0:π/2:2π)
-(1.0, 0.0)
+(1.0, 1)
 ```
 """
-findmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)
-_rf_findmax((fm, m), (fx, x)) = isless(fm, fx) ? (fx, x) : (fm, m)
+findmax(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
+_rf_findmax((fm, im), (fx, ix)) = isless(fm, fx) ? (fx, ix) : (fm, im)
 
 """
     findmax(itr) -> (x, index)
@@ -826,14 +826,14 @@ julia> findmax([1, 7, 7, NaN])
 ```
 """
 findmax(itr) = _findmax(itr, :)
-_findmax(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmax, pairs(a) )
+_findmax(a, ::Colon) = findmax(identity, a)
 
 """
-    findmin(f, domain) -> (f(x), x)
+    findmin(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
-value in the `domain` (inputs to `f`) such that `f(x)` is minimised. If there
-are multiple minimal points, then the first one will be returned.
+Returns a pair of a value in the codomain (outputs of `f`) and the index of
+the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
+If there are multiple minimal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
 
@@ -846,21 +846,21 @@ are multiple minimal points, then the first one will be returned.
 
 ```jldoctest
 julia> findmin(identity, 5:9)
-(5, 5)
+(5, 1)
 
 julia> findmin(-, 1:10)
 (-10, 10)
 
-julia> findmin(first, [(1, :a), (1, :b), (2, :c)])
-(1, (1, :a))
+julia> findmin(first, [(2, :a), (2, :b), (3, :c)])
+(2, 1)
 
 julia> findmin(cos, 0:π/2:2π)
-(-1.0, 3.141592653589793)
+(-1.0, 3)
 ```
 
 """
-findmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)
-_rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
+findmin(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
+_rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
 
 """
     findmin(itr) -> (x, index)
@@ -885,7 +885,7 @@ julia> findmin([1, 7, 7, NaN])
 ```
 """
 findmin(itr) = _findmin(itr, :)
-_findmin(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmin, pairs(a) )
+_findmin(a, ::Colon) = findmin(identity, a)
 
 """
     argmax(f, domain)
@@ -900,6 +900,8 @@ Values are compared with `isless`.
 !!! compat "Julia 1.7"
     This method requires Julia 1.7 or later.
 
+See also [`argmin`](@ref), [`findmax`](@ref).
+
 # Examples
 ```jldoctest
 julia> argmax(abs, -10:5)
@@ -909,7 +911,7 @@ julia> argmax(cos, 0:π/2:2π)
 0.0
 ```
 """
-argmax(f, domain) = findmax(f, domain)[2]
+argmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)[2]
 
 """
     argmax(itr)
@@ -950,6 +952,8 @@ If there are multiple minimal values for `f(x)` then the first one will be found
 !!! compat "Julia 1.7"
     This method requires Julia 1.7 or later.
 
+See also [`argmax`](@ref), [`findmin`](@ref).
+
 # Examples
 ```jldoctest
 julia> argmin(sign, -10:5)
@@ -962,7 +966,7 @@ julia> argmin(acos, 0:0.1:1)
 1.0
 ```
 """
-argmin(f, domain) = findmin(f, domain)[2]
+argmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)[2]
 
 """
     argmin(itr)

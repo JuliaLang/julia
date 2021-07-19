@@ -2830,3 +2830,132 @@ end
     x[3], x[1:2]... = x
     @test x == [2, 3, 1]
 end
+
+@testset "escaping newlines inside strings" begin
+    c = "c"
+
+    @test "a\
+b" == "ab"
+    @test "a\
+    b" == "ab"
+    @test raw"a\
+b" == "a\\\nb"
+    @test "a$c\
+b" == "acb"
+    @test "\\
+" == "\\\n"
+
+
+    @test """
+          a\
+          b""" == "ab"
+    @test """
+          a\
+            b""" == "ab"
+    @test """
+            a\
+          b""" == "ab"
+    @test raw"""
+          a\
+          b""" == "a\\\nb"
+    @test """
+          a$c\
+          b""" == "acb"
+
+    @test """
+          \
+          """ == ""
+    @test """
+          \\
+          """ == "\\\n"
+    @test """
+          \\\
+          """ == "\\"
+    @test """
+          \\\\
+          """ == "\\\\\n"
+    @test """
+          \\\\\
+          """ == "\\\\"
+    @test """
+          \
+          \
+          """ == ""
+    @test """
+          \\
+          \
+          """ == "\\\n"
+    @test """
+          \\\
+          \
+          """ == "\\"
+
+
+    @test `a\
+b` == `ab`
+    @test `a\
+    b` == `ab`
+    @test `a$c\
+b` == `acb`
+    @test `"a\
+b"` == `ab`
+    @test `'a\
+b'` == `$("a\\\nb")`
+    @test `\\
+` == `'\'`
+
+
+    @test ```
+          a\
+          b``` == `ab`
+    @test ```
+          a\
+            b``` == `ab`
+    @test ```
+            a\
+          b``` == `  ab`
+    @test ```
+          a$c\
+          b``` == `acb`
+    @test ```
+          "a\
+          b"``` == `ab`
+    @test ```
+          'a\
+          b'``` == `$("a\\\nb")`
+    @test ```
+          \\
+          ``` == `'\'`
+end
+
+# issue #41253
+@test (function (::Dict{}); end)(Dict()) === nothing
+
+@testset "issue #41330" begin
+    @test Meta.parse("\"a\\\r\nb\"") == "ab"
+    @test Meta.parse("\"a\\\rb\"") == "ab"
+    @test eval(Meta.parse("`a\\\r\nb`")) == `ab`
+    @test eval(Meta.parse("`a\\\rb`")) == `ab`
+end
+
+@testset "slurping into function def" begin
+    x, f()... = [1, 2, 3]
+    @test x == 1
+    @test f() == [2, 3]
+    # test that call to `Base.rest` is outside the definition of `f`
+    @test f() === f()
+
+    x, f()... = 1, 2, 3
+    @test x == 1
+    @test f() == (2, 3)
+end
+
+@testset "long function bodies" begin
+    ex = Expr(:block)
+    ex.args = fill!(Vector{Any}(undef, 700000), 1)
+    f = eval(Expr(:function, :(), ex))
+    @test f() == 1
+    ex = Expr(:vcat)
+    ex.args = fill!(Vector{Any}(undef, 600000), 1)
+    @test_throws ErrorException("syntax: expression too large") eval(ex)
+end

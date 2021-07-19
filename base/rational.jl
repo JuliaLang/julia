@@ -18,21 +18,22 @@ unsafe_rational(num::T, den::T) where {T<:Integer} = unsafe_rational(T, num, den
 unsafe_rational(num::Integer, den::Integer) = unsafe_rational(promote(num, den)...)
 
 @noinline __throw_rational_argerror_typemin(T) = throw(ArgumentError("invalid rational: denominator can't be typemin($T)"))
-function checked_den(num::T, den::T) where T<:Integer
+function checked_den(::Type{T}, num::T, den::T) where T<:Integer
     if signbit(den)
         den = -den
-        signbit(den) && __throw_rational_argerror_typemin(T)
+        signbit(den) && __throw_rational_argerror_typemin(typeof(den))
         num = -num
     end
     return unsafe_rational(T, num, den)
 end
+checked_den(num::T, den::T) where T<:Integer = checked_den(T, num, den)
 checked_den(num::Integer, den::Integer) = checked_den(promote(num, den)...)
 
 @noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 function Rational{T}(num::Integer, den::Integer) where T<:Integer
     iszero(den) && iszero(num) && __throw_rational_argerror_zero(T)
     num, den = divgcd(num, den)
-    return checked_den(T(num), T(den))
+    return checked_den(T, T(num), T(den))
 end
 
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
@@ -279,7 +280,7 @@ function -(x::Rational{T}) where T<:Unsigned
 end
 
 function +(x::Rational, y::Rational)
-    xp, yp = promote(x, y)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
     if isinf(x) && x == y
         return xp
     end
@@ -288,7 +289,7 @@ function +(x::Rational, y::Rational)
 end
 
 function -(x::Rational, y::Rational)
-    xp, yp = promote(x, y)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
     if isinf(x) && x == -y
         return xp
     end

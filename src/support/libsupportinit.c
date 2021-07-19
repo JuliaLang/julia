@@ -3,6 +3,10 @@
 #include <locale.h>
 #include "libsupport.h"
 
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
+#include <sys/resource.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -21,7 +25,30 @@ void libsupport_init(void)
     if (!isInitialized) {
         ios_init_stdstreams();
         isInitialized = 1;
-
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
+        // Raise the open file descriptor limit.
+        {
+            struct rlimit rl;
+            if (getrlimit(RLIMIT_NOFILE, &rl) == 0 && rl.rlim_cur != rl.rlim_max) {
+                // Do a binary search for the limit.
+                rlim_t min = rl.rlim_cur;
+                rlim_t max = 1 << 20;
+                // But if there's a defined upper bound, don't search, just set it.
+                if (rl.rlim_max != RLIM_INFINITY) {
+                    min = rl.rlim_max;
+                    max = rl.rlim_max;
+                }
+                do {
+                    rl.rlim_cur = min + (max - min) / 2;
+                    if (setrlimit(RLIMIT_NOFILE, &rl)) {
+                        max = rl.rlim_cur;
+                    } else {
+                        min = rl.rlim_cur;
+                    }
+                } while (min + 1 < max);
+            }
+        }
+#endif
         // adopt the user's locale for most formatting
         setlocale(LC_ALL, "");
         // but use locale-independent numeric formats (for parsing)

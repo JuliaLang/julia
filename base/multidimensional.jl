@@ -828,7 +828,7 @@ uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{Any}}) = Slice(OneTo(1))
 uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{Any}}) = Slice(inds[1])
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
-getindex(x::Union{Number,Char}, ::CartesianIndex{0}) = x
+getindex(x::Union{Number,AbstractChar}, ::CartesianIndex{0}) = x
 getindex(t::Tuple,  i::CartesianIndex{1}) = getindex(t, i.I[1])
 
 # These are not defined on directly on getindex to avoid
@@ -849,7 +849,7 @@ function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, 
     # This is specifically not inlined to prevent excessive allocations in type unstable code
     shape = index_shape(I...)
     dest = similar(A, shape)
-    map(unsafe_length, axes(dest)) == map(unsafe_length, shape) || throw_checksize_error(dest, shape)
+    map(length, axes(dest)) == map(length, shape) || throw_checksize_error(dest, shape)
     _unsafe_getindex!(dest, A, I...) # usually a generated function, don't allow it to impact inference result
     return dest
 end
@@ -970,7 +970,7 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
 end
 function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
-    return T[@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
+    return [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
 end
 
 ### from abstractarray.jl

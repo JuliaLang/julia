@@ -84,15 +84,16 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         for io in stdio]
     handle = Libc.malloc(_sizeof_uv_process)
     disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
+    (; exec, flags, env, dir) = cmd
     err = ccall(:jl_spawn, Int32,
               (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                Ptr{Tuple{Cint, UInt}}, Int,
                UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
-        file, cmd.exec, loop, handle,
+        file, exec, loop, handle,
         iohandles, length(iohandles),
-        cmd.flags,
-        cmd.env === nothing ? C_NULL : cmd.env,
-        isempty(cmd.dir) ? C_NULL : cmd.dir,
+        flags,
+        env === nothing ? C_NULL : env,
+        isempty(dir) ? C_NULL : dir,
         @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
     if err != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
@@ -383,9 +384,10 @@ end
 """
     open(f::Function, command, args...; kwargs...)
 
-Similar to `open(command, args...; kwargs...)`, but calls `f(stream)` on the resulting process
-stream, then closes the input stream and waits for the process to complete.
-Returns the value returned by `f`.
+Similar to `open(command, args...; kwargs...)`, but calls `f(stream)` on the
+resulting process stream, then closes the input stream and waits for the process
+to complete. Return the value returned by `f` on success. Throw an error if the
+process failed, or if the process attempts to print anything to stdout.
 """
 function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
     P = open(cmds, args...; kwargs...)
@@ -393,9 +395,13 @@ function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
         f(P)
     catch
         kill(P)
+        close(P)
         rethrow()
-    finally
-        close(P.in)
+    end
+    close(P.in)
+    if !eof(P.out)
+        close(P.out)
+        throw(_UVError("open(do)", UV_EPIPE))
     end
     success(P) || pipeline_error(P)
     return ret
