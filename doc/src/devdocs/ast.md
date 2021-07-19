@@ -507,7 +507,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The calling convention for the call.
 
-      * `args[6:6 + length(args[3])]` : arguments
+      * `args[6:6+length(args[3])]` : arguments
 
         The values for all the arguments (with types of each given in args[3]).
 
