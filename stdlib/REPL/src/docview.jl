@@ -26,7 +26,6 @@ helpmode(line::AbstractString) = helpmode(stdout, line)
 const extended_help_on = Ref{Any}(nothing)
 
 function _helpmode_parse(line::AbstractString)
-    line = strip(line)
     # interpret anything starting with # or #= as asking for help on comments
     if startswith(line, "#")
         if startswith(line, "#=")
@@ -39,13 +38,13 @@ function _helpmode_parse(line::AbstractString)
     if Meta.isexpr(x, :error)
         # handle operators like +=
         asinfix = Meta.parse("x $line x", raise = false, depwarn = false)
-        if asinfix isa Expr && length(asinfix.args) == 2 && asinfix.args[1] == asinfix.args[2] == :x
+        if asinfix isa Expr && length(asinfix.args) == 2 && asinfix.args[1] === asinfix.args[2] === :x
             x = asinfix.head
         end
     end
-    if Meta.isexpr(x, :.) && length(x.args) == 1 && x.args[1] isa Symbol
+    if Meta.isexpr(x, :., 1) && x.args[1] isa Symbol
         # handle broadcast operators
-        x = Symbol(string(x.head) * string(x.args[1]))
+        x = Symbol(".", x.args[1]::Symbol)
     end
     assym = Symbol(line)
     if haskey(keywords, assym) || isexpr(x, :error) || isexpr(x, :invalid) || isexpr(x, :incomplete)
@@ -238,7 +237,7 @@ function lookup_doc(ex)
         str = string(ex)
         isdotted = startswith(str, ".")
         if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment && ex !== :(:=)
-            op = str[1:prevind(str, end, 1)]
+            op = str[1:end-1]
             eq = isdotted ? ".=" : "="
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
         elseif isdotted && ex !== :(..)
