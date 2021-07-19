@@ -136,7 +136,6 @@ static const char opts[]  =
 #ifdef USE_POLLY
     " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
-    " --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
 
     // instrumentation options
     " --code-coverage={none|user|all}, --code-coverage\n"
@@ -652,6 +651,8 @@ restart_switch:
             if (!strcmp(optarg,"ieee"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_OFF;
             else if (!strcmp(optarg,"fast"))
+                jl_options.fast_math = JL_OPTIONS_FAST_MATH_OFF;
+            else if (!strcmp(optarg,"broken"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_ON;
             else if (!strcmp(optarg,"user"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
