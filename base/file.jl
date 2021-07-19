@@ -1002,8 +1002,10 @@ end
 """
     hardlink(src::AbstractString, dst::AbstractString)
 
-Creates a hard link to an existing source file `src` with the name
-`dst`. The destination, `dst`, must not exist.
+Creates a hard link to an existing source file `src` with the name `dst`. The
+destination, `dst`, must not exist.
+
+See also: [`symlink`](@ref).
 
 !!! compat "Julia 1.8"
     This method was added in Julia 1.8.
@@ -1038,6 +1040,8 @@ denoted by `isabspath(target)` returning `false`) a symlink will be used, else
 a junction point will be used.  Best practice for creating symlinks on Windows
 is to create them only after the files/directories they reference are already
 created.
+
+See also: [`hardlink`](@ref).
 
 !!! note
     This function raises an error under operating systems that do not support
