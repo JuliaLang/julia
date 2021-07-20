@@ -1,5 +1,0 @@
-[deps]
-Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
-Scratch = "6c6a2e73-6563-6170-7368-637461726353"
-ghr_jll = "07c12ed4-43bc-5495-8a2a-d5838ef8d533"
