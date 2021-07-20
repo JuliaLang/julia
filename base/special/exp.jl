@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # magic rounding constant: 1.5*2^52 Adding, then subtracting it from a float rounds it to an Int.
 # This works because eps(MAGIC_ROUND_CONST(T)) == one(T), so adding it to a smaller number aligns the lsb to the 1s place.
 # Values for which this trick doesn't work are going to have outputs of 0 or Inf.

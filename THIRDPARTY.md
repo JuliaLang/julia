@@ -14,7 +14,7 @@ for exceptions.
 The following components included in Julia `Base` have their own separate licenses:
 
 - base/ryu/* [Boost] (see [ryu](https://github.com/ulfjack/ryu/blob/master/LICENSE-Boost))
-- base/special/{exp,rem_pio2,hyperbolic}.jl [Freely distributable with preserved copyright notice] (see [FDLIBM](https://www.netlib.org/fdlibm))
+- base/special/{rem_pio2,hyperbolic}.jl [Freely distributable with preserved copyright notice] (see [FDLIBM](https://www.netlib.org/fdlibm))
 
 The Julia language links to the following external libraries, which have their
 own licenses:
