@@ -648,7 +648,7 @@ function checked_length(r::OrdinalRange{T}) where T
         diff = checked_sub(stop, start)
     end
     a = Integer(div(diff, s))
-    return checked_add(a, one(a))
+    return checked_add(a, oneunit(a))
 end
 
 function checked_length(r::AbstractUnitRange{T}) where T
@@ -657,7 +657,7 @@ function checked_length(r::AbstractUnitRange{T}) where T
         return Integer(first(r) - first(r))
     end
     a = Integer(checked_add(checked_sub(last(r), first(r))))
-    return checked_add(a, one(a))
+    return checked_add(a, oneunit(a))
 end
 
 function length(r::OrdinalRange{T}) where T
@@ -675,7 +675,7 @@ function length(r::OrdinalRange{T}) where T
         diff = stop - start
     end
     a = Integer(div(diff, s))
-    return a + one(a)
+    return a + oneunit(a)
 end
 
 
@@ -710,7 +710,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
         else
             a = div(unsigned(diff), s) % typeof(diff)
         end
-        return Integer(a) + one(a)
+        return Integer(a) + oneunit(a)
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
@@ -729,7 +729,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
         else
             a = div(checked_sub(start, stop), -s)
         end
-        return checked_add(a, one(a))
+        return checked_add(a, oneunit(a))
     end
 end
 
