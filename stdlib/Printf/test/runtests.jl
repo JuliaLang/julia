@@ -94,6 +94,15 @@ end
     @test Printf.@sprintf("%g", 123456.7) == "123457"
     @test Printf.@sprintf("%g", 1234567.8) == "1.23457e+06"
 
+    # %g regression gh #41631
+    for (val, res) in ((Inf, "Inf"),
+                       (-Inf, "-Inf"),
+                       (NaN, "NaN"),
+                       (-NaN, "NaN"))
+        @test Printf.@sprintf("%g", val) == res
+        @test Printf.@sprintf("%G", val) == res
+    end
+
     # zeros
     @test Printf.@sprintf("%.15g", 0) == "0"
     @test Printf.@sprintf("%#.15g", 0) == "0.00000000000000"
