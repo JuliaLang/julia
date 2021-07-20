@@ -194,6 +194,10 @@ function TwicePrecision{T}(x) where {T}
     TwicePrecision{T}(xT, T(Δx))
 end
 
+function TwicePrecision{T}(x::TwicePrecision) where {T}
+    TwicePrecision{T}(x.hi, x.lo)
+end
+
 TwicePrecision{T}(i::Integer) where {T<:AbstractFloat} =
     TwicePrecision{T}(canonicalize2(splitprec(T, i)...)...)
 
@@ -207,7 +211,7 @@ end
 
 function TwicePrecision{T}(nd::Tuple{Any,Any}) where {T}
     n, d = nd
-    TwicePrecision{T}(n) / d
+    TwicePrecision{T}(TwicePrecision{T}(n) / d)
 end
 
 function TwicePrecision{T}(nd::Tuple{I,I}, nb::Integer) where {T,I}
@@ -366,10 +370,11 @@ StepRangeLen(ref::TwicePrecision{T}, step::TwicePrecision{T},
 function floatrange(::Type{T}, start_n::Integer, step_n::Integer, len::Integer, den::Integer) where T
     len = len + 0 # promote with Int
     if len < 2 || step_n == 0
-        return steprangelen_hp(T, (start_n, den), (step_n, den), 0, len, 1)
+        return steprangelen_hp(T, (start_n, den), (step_n, den), 0, len, oneunit(len))
     end
     # index of smallest-magnitude value
-    imin = clamp(round(typeof(len), -start_n/step_n+1), 1, len)
+    L = typeof(len)
+    imin = clamp(round(typeof(len), -start_n/step_n+1), oneunit(L), len)
     # Compute smallest-magnitude element to 2x precision
     ref_n = start_n+(imin-1)*step_n  # this shouldn't overflow, so don't check
     nb = nbitslen(T, len, imin)
@@ -389,7 +394,7 @@ function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::Abs
     end
     # Fallback (misses the opportunity to set offset different from 1,
     # but otherwise this is still high-precision)
-    steprangelen_hp(T, (a,divisor), (st,divisor), nbitslen(T, len, 1), len, 1)
+    steprangelen_hp(T, (a,divisor), (st,divisor), nbitslen(T, len, 1), len, oneunit(len))
 end
 
 function (:)(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
@@ -495,19 +500,20 @@ function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::Ordin
             return StepRangeLen{T}(last(r), step(r), oneunit(L), oneunit(L))
         end
     else
-        soffset = 1 + round(L, (r.offset - first(s))/sstep)
-        soffset = L(clamp(soffset, 1, len))
-        ioffset = L(first(s) + (soffset-1)*sstep)
+        soffset = round(L, (r.offset - first(s))/sstep + 1)
+        soffset = clamp(soffset, oneunit(L), len)
+        ioffset = L(first(s) + (soffset - oneunit(L)) * sstep)
         if sstep == 1 || len < 2
             newstep = rstep #* one(sstep)
         else
             newstep = rstep * sstep
             newstep = twiceprecision(newstep, nbitslen(T, len, soffset))
         end
+        soffset = max(oneunit(L), soffset)
         if ioffset == r.offset
-            return StepRangeLen{T}(r.ref, newstep, len, max(1, soffset))
+            return StepRangeLen{T}(r.ref, newstep, len, soffset)
         else
-            return StepRangeLen{T}(r.ref + (ioffset-r.offset)*rstep, newstep, len, max(1, soffset))
+            return StepRangeLen{T}(r.ref + (ioffset-r.offset)*rstep, newstep, len, soffset)
         end
     end
 end
@@ -576,7 +582,7 @@ function sum(r::StepRangeLen)
     np, nn = l - r.offset, r.offset - 1  # positive, negative
     # To prevent overflow in sum(1:n), multiply its factors by the step
     sp, sn = sumpair(np), sumpair(nn)
-    W = widen(Int)
+    W = widen(typeof(l))
     Δn = W(sp[1]) * W(sp[2]) - W(sn[1]) * W(sn[2])
     s = r.step * Δn
     # Add in contributions of ref
@@ -656,25 +662,27 @@ function _linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
         Δ, Δfac = stop/len - start/len, len
     end
     tmin = -(start/Δ)/Δfac            # t such that (1-t)*start + t*stop == 0
-    imin = round(typeof(len), tmin*(len-1)+1) # index approximately corresponding to t
+    L = typeof(len)
+    lenn1 = len - oneunit(L)
+    imin = round(L, tmin*lenn1 + 1) # index approximately corresponding to t
     if 1 < imin < len
         # The smallest-magnitude element is in the interior
-        t = (imin-1)/(len-1)
+        t = (imin - 1)/lenn1
         ref = T((1-t)*start + t*stop)
         step = imin-1 < len-imin ? (ref-start)/(imin-1) : (stop-ref)/(len-imin)
     elseif imin <= 1
-        imin = oneunit(typeof(len))
+        imin = oneunit(L)
         ref = start
-        step = (Δ/(len-1))*Δfac
+        step = (Δ/(lenn1))*Δfac
     else
         imin = len
         ref = stop
-        step = (Δ/(len-1))*Δfac
+        step = (Δ/(lenn1))*Δfac
     end
     if len == 2 && !isfinite(step)
         # For very large endpoints where step overflows, exploit the
         # split-representation to handle the overflow
-        return steprangelen_hp(T, start, (-start, stop), 0, 2, 1)
+        return steprangelen_hp(T, start, (-start, stop), 0, len, oneunit(L))
     end
     # 2x calculations to get high precision endpoint matching while also
     # preventing overflow in ref_hi+(i-offset)*step_hi
@@ -696,15 +704,18 @@ _linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where {T<:IEEE
 function _linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T<:IEEEFloat
     len = len + 0 # promote with Int
     len < 2 && return _linspace1(T, start_n/den, stop_n/den, len)
-    start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len, 1)
+    L = typeof(len)
+    start_n == stop_n && return steprangelen_hp(T, (start_n, den), (zero(start_n), den), 0, len, oneunit(L))
     tmin = -start_n/(Float64(stop_n) - Float64(start_n))
     imin = round(typeof(len), tmin*(len-1)+1)
-    imin = clamp(imin, 1, len)
-    # TODO: why Int128 (instead of `widen(len)`)?
-    ref_num = Int128(len-imin) * start_n + Int128(imin-1) * stop_n
-    ref_denom = Int128(len-1) * den
+    imin = clamp(imin, oneunit(L), len)
+    W = widen(L)
+    start_n = W(start_n)
+    stop_n = W(stop_n)
+    ref_num = W(len-imin) * start_n + W(imin-1) * stop_n
+    ref_denom = W(len-1) * den
     ref = (ref_num, ref_denom)
-    step_full = (Int128(stop_n) - Int128(start_n), ref_denom)
+    step_full = (stop_n - start_n, ref_denom)
     steprangelen_hp(T, ref, step_full, nbitslen(T, len, imin), len, imin)
 end
 

@@ -427,7 +427,7 @@ value `r[1]`, but alternatively you can supply it as the value of
 with `TwicePrecision` this can be used to implement ranges that are
 free of roundoff error.
 """
-struct StepRangeLen{T,R,S,L} <: AbstractRange{T}
+struct StepRangeLen{T,R,S,L<:Integer} <: AbstractRange{T}
     ref::R       # reference value (might be smallest-magnitude value in the range)
     step::S      # step value
     len::L       # length of the range
@@ -809,16 +809,18 @@ copy(r::AbstractRange) = r
 
 ## iteration
 
-function iterate(r::StepRangeLen, i::Integer=1)
+function iterate(r::StepRangeLen, i::Integer=zero(length(r)))
     @_inline_meta
+    i += oneunit(i)
     length(r) < i && return nothing
-    unsafe_getindex(r, i), i + 1
+    unsafe_getindex(r, i), i
 end
 
-function iterate(r::LinRange, i::Int=1)
+function iterate(r::LinRange, i::Int=0)
     @_inline_meta
+    i += 1
     length(r) < i && return nothing
-    unsafe_getindex(r, i), i + 1
+    unsafe_getindex(r, i), i
 end
 
 iterate(r::OrdinalRange) = isempty(r) ? nothing : (first(r), first(r))

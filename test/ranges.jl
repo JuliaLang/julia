@@ -2076,3 +2076,6 @@ end
     @test r[0:2] == r[0]:r[2]
     @test r[0:1:2] == r[0]:1:r[2]
 end
+
+@test length(range(1, 100, length=big(100)^100)) == big(100)^100
+@test length(0 * (1:big(100)^100)) == big(100)^100
