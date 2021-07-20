@@ -438,9 +438,10 @@ struct StepRangeLen{T,R,S,L<:Integer} <: AbstractRange{T}
             throw(ArgumentError("StepRangeLen{<:Integer} cannot have non-integer step"))
         end
         len = convert(L, len)
-        len >= 0 || throw(ArgumentError("length cannot be negative, got $len"))
+        len >= zero(len) || throw(ArgumentError("length cannot be negative, got $len"))
         offset = convert(L, offset)
-        1 <= offset <= max(1, len) || throw(ArgumentError("StepRangeLen: offset must be in [1,$len], got $offset"))
+        L1 = oneunit(typeof(len))
+        L1 <= offset <= max(L1, len) || throw(ArgumentError("StepRangeLen: offset must be in [1,$len], got $offset"))
         return new(ref, step, len, offset)
     end
 end
@@ -455,16 +456,16 @@ StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S
 ## range with computed step
 
 """
-    LinRange{T}
+    LinRange{T,L}
 
 A range with `len` linearly spaced elements between its `start` and `stop`.
 The size of the spacing is controlled by `len`, which must
-be an `Int`.
+be an `Integer`.
 
 # Examples
 ```jldoctest
 julia> LinRange(1.5, 5.5, 9)
-9-element LinRange{Float64}:
+9-element LinRange{Float64, Int64}:
  1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0,5.5
 ```
 
@@ -488,24 +489,33 @@ julia> collect(LinRange(-0.1, 0.3, 5))
   0.3
 ```
 """
-struct LinRange{T} <: AbstractRange{T}
+struct LinRange{T,L<:Integer} <: AbstractRange{T}
     start::T
     stop::T
-    len::Int
-    lendiv::Int
+    len::L
+    lendiv::L
 
-    function LinRange{T}(start,stop,len) where T
+    function LinRange{T,L}(start::T, stop::T, len::L) where {T,L<:Integer}
         len >= 0 || throw(ArgumentError("range($start, stop=$stop, length=$len): negative length"))
-        if len == 1
+        onelen = oneunit(typeof(len))
+        if len == onelen
             start == stop || throw(ArgumentError("range($start, stop=$stop, length=$len): endpoints differ"))
-            return new(start, stop, 1, 1)
+            return new(start, stop, len, len)
         end
-        lendiv = max(len-1, 1)
+        lendiv = max(len - onelen, onelen)
         if T <: Integer && !iszero(mod(stop-start, lendiv))
             throw(ArgumentError("LinRange{<:Integer} cannot have non-integer step"))
         end
-        new(start,stop,len,lendiv)
+        return new(start, stop, len, lendiv)
     end
+end
+
+function LinRange{T,L}(start, stop, len::Integer) where {T,L}
+    LinRange{T,L}(convert(T, start), convert(T, stop), convert(L, len))
+end
+
+function LinRange{T}(start, stop, len::Integer) where T
+    LinRange{T,promote_type(Int,typeof(len))}(start, stop, len)
 end
 
 function LinRange(start, stop, len::Integer)
@@ -809,16 +819,9 @@ copy(r::AbstractRange) = r
 
 ## iteration
 
-function iterate(r::StepRangeLen, i::Integer=zero(length(r)))
+function iterate(r::Union{StepRangeLen,LinRange}, i::Integer=zero(length(r)))
     @_inline_meta
     i += oneunit(i)
-    length(r) < i && return nothing
-    unsafe_getindex(r, i), i
-end
-
-function iterate(r::LinRange, i::Int=0)
-    @_inline_meta
-    i += 1
     length(r) < i && return nothing
     unsafe_getindex(r, i), i
 end
@@ -993,22 +996,24 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     @_inline_meta
     @boundscheck checkbounds(r, s)
 
+    len = length(s)
+    L = typeof(len)
     if S === Bool
-        if length(s) == 0
-            return LinRange(first(r), first(r), 0)
-        elseif length(s) == 1
+        if len == 0
+            return LinRange{T}(first(r), first(r), len)
+        elseif len == 1
             if first(s)
-                return LinRange(first(r), first(r), 1)
+                return LinRange{T}(first(r), first(r), len)
             else
-                return LinRange(first(r), first(r), 0)
+                return LinRange{T}(first(r), first(r), zero(L))
             end
         else # length(s) == 2
-            return LinRange(last(r), last(r), 1)
+            return LinRange{T}(last(r), last(r), oneunit(L))
         end
     else
         vfirst = unsafe_getindex(r, first(s))
         vlast  = unsafe_getindex(r, last(s))
-        return LinRange{T}(vfirst, vlast, length(s))
+        return LinRange{T}(vfirst, vlast, len)
     end
 end
 
@@ -1192,12 +1197,12 @@ el_same(::Type{T}, a::Type{<:AbstractArray{S,n}}, b::Type{<:AbstractArray{T,n}})
 el_same(::Type, a, b) = promote_typejoin(a, b)
 
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
-    el_same(promote_type(T1,T2), a, b)
+    el_same(promote_type(T1, T2), a, b)
 UnitRange{T}(r::UnitRange{T}) where {T<:Real} = r
 UnitRange{T}(r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
 
 promote_rule(a::Type{OneTo{T1}}, b::Type{OneTo{T2}}) where {T1,T2} =
-    el_same(promote_type(T1,T2), a, b)
+    el_same(promote_type(T1, T2), a, b)
 OneTo{T}(r::OneTo{T}) where {T<:Integer} = r
 OneTo{T}(r::OneTo) where {T<:Integer} = OneTo{T}(r.stop)
 
@@ -1215,11 +1220,11 @@ OrdinalRange{T1, T2}(r::AbstractUnitRange{T1}) where {T1, T2<:Integer} = r
 OrdinalRange{T1, T2}(r::UnitRange) where {T1, T2<:Integer} = UnitRange{T1}(r)
 OrdinalRange{T1, T2}(r::OneTo) where {T1, T2<:Integer} = OneTo{T1}(r)
 
-promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
-    el_same(promote_type(T1a,T2a),
-            # el_same only operates on array element type, so just promote second type parameter
-            StepRange{T1a, promote_type(T1b,T2b)},
-            StepRange{T2a, promote_type(T1b,T2b)})
+function promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b}
+    Tb = promote_type(T1b, T2b)
+    # el_same only operates on array element type, so just promote second type parameter
+    el_same(promote_type(T1a, T2a), StepRange{T1a,Tb}, StepRange{T2a,Tb})
+end
 StepRange{T1,T2}(r::StepRange{T1,T2}) where {T1,T2} = r
 
 promote_rule(a::Type{StepRange{T1a,T1b}}, ::Type{UR}) where {T1a,T1b,UR<:AbstractUnitRange} =
@@ -1230,10 +1235,10 @@ StepRange(r::AbstractUnitRange{T}) where {T} =
     StepRange{T,T}(first(r), step(r), last(r))
 (StepRange{T1,T2} where T1)(r::AbstractRange) where {T2} = StepRange{eltype(r),T2}(r)
 
-promote_rule(::Type{StepRangeLen{T1,R1,S1,L1}},::Type{StepRangeLen{T2,R2,S2,L2}}) where {T1,T2,R1,R2,S1,S2,L1,L2} =
-    el_same(promote_type(T1,T2),
-            StepRangeLen{T1,promote_type(R1,R2),promote_type(S1,S2),promote_type(L1,L2)},
-            StepRangeLen{T2,promote_type(R1,R2),promote_type(S1,S2),promote_type(L1,L2)})
+function promote_rule(::Type{StepRangeLen{T1,R1,S1,L1}},::Type{StepRangeLen{T2,R2,S2,L2}}) where {T1,T2,R1,R2,S1,S2,L1,L2}
+    R, S, L = promote_type(R1, R2), promote_type(S1, S2), promote_type(L1, L2)
+    el_same(promote_type(T1, T2), StepRangeLen{T1,R,S,L}, StepRangeLen{T2,R,S,L})
+end
 StepRangeLen{T,R,S,L}(r::StepRangeLen{T,R,S,L}) where {T,R,S,L} = r
 StepRangeLen{T,R,S,L}(r::StepRangeLen) where {T,R,S,L} =
     StepRangeLen{T,R,S,L}(convert(R, r.ref), convert(S, r.step), convert(L, r.len), convert(L, r.offset))
@@ -1248,17 +1253,20 @@ StepRangeLen{T}(r::AbstractRange) where {T} =
     StepRangeLen(T(first(r)), T(step(r)), length(r))
 StepRangeLen(r::AbstractRange) = StepRangeLen{eltype(r)}(r)
 
-promote_rule(a::Type{LinRange{T1}}, b::Type{LinRange{T2}}) where {T1,T2} =
-    el_same(promote_type(T1,T2), a, b)
-LinRange{T}(r::LinRange{T}) where {T} = r
-LinRange{T}(r::AbstractRange) where {T} = LinRange{T}(first(r), last(r), length(r))
+function promote_rule(a::Type{LinRange{T1,L1}}, b::Type{LinRange{T2,L2}}) where {T1,T2,L1,L2}
+    L = promote_type(L1, L2)
+    el_same(promote_type(T1, T2), LinRange{T1,L}, LinRange{T2,L})
+end
+LinRange{T,L}(r::LinRange{T,L}) where {T,L} = r
+LinRange{T,L}(r::AbstractRange) where {T,L} = LinRange{T,L}(first(r), last(r), length(r))
+LinRange{T}(r::AbstractRange) where {T} = LinRange{T,typeof(length(r))}(first(r), last(r), length(r))
 LinRange(r::AbstractRange{T}) where {T} = LinRange{T}(r)
 
-promote_rule(a::Type{LinRange{T}}, ::Type{OR}) where {T,OR<:OrdinalRange} =
-    promote_rule(a, LinRange{eltype(OR)})
+promote_rule(a::Type{LinRange{T,L}}, ::Type{OR}) where {T,L,OR<:OrdinalRange} =
+    promote_rule(a, LinRange{eltype(OR),L})
 
-promote_rule(::Type{LinRange{A}}, b::Type{StepRangeLen{T,R,S,L}}) where {A,T,R,S,L} =
-    promote_rule(StepRangeLen{A,A,A,Int}, b)
+promote_rule(::Type{LinRange{A,L}}, b::Type{StepRangeLen{T2,R2,S2,L2}}) where {A,L,T2,R2,S2,L2} =
+    promote_rule(StepRangeLen{A,A,A,L}, b)
 
 ## concatenation ##
 
@@ -1287,7 +1295,7 @@ function _reverse(r::StepRangeLen, ::Colon)
     offset = isempty(r) ? r.offset : length(r)-r.offset+1
     return typeof(r)(r.ref, -r.step, length(r), offset)
 end
-_reverse(r::LinRange{T}, ::Colon) where {T} = LinRange{T}(r.stop, r.start, length(r))
+_reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(r))
 
 ## sorting ##
 
