@@ -234,6 +234,23 @@ STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
     void *ptr;
     if (posix_memalign(&ptr, align, sz))
         return NULL;
+
+    // TODO(janrous):
+    // Debug: log timestamp, taskid and amount allocated (above certain threshold)
+
+    // Debug: print backtrace when arrays larger than 128Mb are allocated
+    if (sz > 128*1024*1024)
+    {
+        JL_TRY {
+            jl_error(""); // get a backtrace
+        }
+        JL_CATCH {
+            jl_printf((JL_STREAM*)STDERR_FILENO, "\n\n@@ WARNING: posix_memalign large allocation: %lld %p\n", (long long int)sz, ptr);
+            jlbacktrace(); // written to STDERR_FILENO
+            jl_printf((JL_STREAM*)STDERR_FILENO, "\n\n");
+        }
+    }
+
     return ptr;
 }
 STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
