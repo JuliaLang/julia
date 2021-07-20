@@ -7,23 +7,3 @@ Most images are based on Debian, making use of `debootstrap` to provide a quick 
 ## Testing out a rootfs image
 
 If you want to test a rootfs image locally, you can use the `test_roofs.jl` script, passing in the URL of the rootfs you want to test.  It will drop you into a shell within the build environment, where you can recreate build failures more reliably.
-
-## Building a rootfs image with Docker
-
-On your local machine:
-```
-$ git clone git@github.com:JuliaLang/julia.git
-$ docker run --privileged --rm -it -v $(pwd):/root/workspace julia:buster /bin/bash
-```
-
-Now, inside the Docker container:
-```
-# cd
-# apt-get update && apt-get -y install debootstrap sudo
-# cd /root/workspace/julia/.buildkite/rootfs_images/
-# rm -rf ~/.julia
-# julia -e 'using Pkg; Pkg.add(["Scratch", "ghr_jll"]); Pkg.update()'
-# julia -e 'using Pkg; Pkg.precompile()'
-# export GITHUB_TOKEN="my-github-token-goes-here"
-# julia llvm-passes.jl
-```
