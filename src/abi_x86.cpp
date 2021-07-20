@@ -57,7 +57,7 @@ inline bool is_complex128(jl_datatype_t *dt) const
     return is_complex_type(dt) && jl_tparam0(dt) == (jl_value_t*)jl_float64_type;
 }
 
-bool use_sret(jl_datatype_t *dt) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
 {
     size_t size = jl_datatype_size(dt);
     if (size == 0)
@@ -67,7 +67,7 @@ bool use_sret(jl_datatype_t *dt) override
     return true;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) override
 {
     size_t size = jl_datatype_size(dt);
     if (is_complex64(dt) || is_complex128(dt) || (jl_is_primitivetype(dt) && size <= 8))
@@ -76,7 +76,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
     return true;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
 {
     if (!isret)
         return NULL;

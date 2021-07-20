@@ -7,6 +7,7 @@ New language features
 
 * `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
 * `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
+* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 
 Language changes
 ----------------
@@ -38,6 +39,11 @@ New library features
 
 Standard library changes
 ------------------------
+
+* The `length` function on certain ranges of certain specific element types no longer checks for integer
+  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
+  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
+  constructing the range. ([#40382])
 
 #### Package Manager
 

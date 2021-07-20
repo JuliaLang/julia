@@ -933,12 +933,12 @@ static MDNode *best_tbaa(jl_value_t *jt) {
 // note that this includes jl_isbits, although codegen should work regardless
 static bool jl_is_concrete_immutable(jl_value_t* t)
 {
-    return jl_is_immutable_datatype(t) && ((jl_datatype_t*)t)->layout;
+    return jl_is_immutable_datatype(t) && ((jl_datatype_t*)t)->isconcretetype;
 }
 
 static bool jl_is_pointerfree(jl_value_t* t)
 {
-    if (!jl_is_immutable_datatype(t))
+    if (!jl_is_concrete_immutable(t))
         return 0;
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)t)->layout;
     return layout && layout->npointers == 0;
@@ -1157,7 +1157,7 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0);
 static Value *get_current_task(jl_codectx_t &ctx);
 static Value *get_current_ptls(jl_codectx_t &ctx);
 static Value *get_current_signal_page(jl_codectx_t &ctx);
-static void CreateTrap(IRBuilder<> &irbuilder);
+static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
                              jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *theF,
@@ -1456,7 +1456,7 @@ static Constant *undef_value_for_type(Type *T) {
     return undef;
 }
 
-static void CreateTrap(IRBuilder<> &irbuilder)
+static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block)
 {
     Function *f = irbuilder.GetInsertBlock()->getParent();
     Function *trap_func = Intrinsic::getDeclaration(
@@ -1464,8 +1464,13 @@ static void CreateTrap(IRBuilder<> &irbuilder)
             Intrinsic::trap);
     irbuilder.CreateCall(trap_func);
     irbuilder.CreateUnreachable();
-    BasicBlock *newBB = BasicBlock::Create(irbuilder.getContext(), "after_noret", f);
-    irbuilder.SetInsertPoint(newBB);
+    if (create_new_block) {
+        BasicBlock *newBB = BasicBlock::Create(irbuilder.getContext(), "after_noret", f);
+        irbuilder.SetInsertPoint(newBB);
+    }
+    else {
+        irbuilder.ClearInsertionPoint();
+    }
 }
 
 #if 0 // this code is likely useful, but currently unused
@@ -2878,7 +2883,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
     else if (f == jl_builtin_arrayset && nargs >= 4) {
         const jl_cgval_t &ary = argv[2];
-        const jl_cgval_t &val = argv[3];
+        jl_cgval_t val = argv[3];
         bool indices_ok = true;
         for (size_t i = 4; i <= nargs; i++) {
             if (argv[i].typ != (jl_value_t*)jl_long_type) {
@@ -2891,101 +2896,103 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             jl_value_t *ety = jl_tparam0(aty_dt);
             jl_value_t *ndp = jl_tparam1(aty_dt);
             if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nargs == 4)) {
-                if (jl_subtype(val.typ, ety)) { // TODO: probably should just convert this to a type-assert
-                    size_t elsz = 0, al = 0;
-                    int union_max = jl_islayout_inline(ety, &elsz, &al);
-                    bool isboxed = (union_max == 0);
-                    if (isboxed)
-                        ety = (jl_value_t*)jl_any_type;
-                    jl_value_t *ary_ex = jl_exprarg(ex, 2);
-                    ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
-                    jl_value_t *boundscheck = argv[1].constant;
-                    emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "arrayset");
-                    Value *idx = emit_array_nd_index(ctx, ary, ary_ex, nd, &argv[4], nargs - 3, boundscheck);
-                    if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
-                        // no-op
-                    }
-                    else {
-                        PHINode *data_owner = NULL; // owner object against which the write barrier must check
-                        if (isboxed || (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->layout->npointers > 0)) { // if elements are just bits, don't need a write barrier
-                            Value *aryv = boxed(ctx, ary);
-                            Value *flags = emit_arrayflags(ctx, ary);
-                            // the owner of the data is ary itself except if ary->how == 3
-                            flags = ctx.builder.CreateAnd(flags, 3);
-                            Value *is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(T_int16, 3));
-                            BasicBlock *curBB = ctx.builder.GetInsertBlock();
-                            BasicBlock *ownedBB = BasicBlock::Create(jl_LLVMContext, "array_owned", ctx.f);
-                            BasicBlock *mergeBB = BasicBlock::Create(jl_LLVMContext, "merge_own", ctx.f);
-                            ctx.builder.CreateCondBr(is_owned, ownedBB, mergeBB);
-                            ctx.builder.SetInsertPoint(ownedBB);
-                            // load owner pointer
-                            Instruction *own_ptr;
-                            if (jl_is_long(ndp)) {
-                                own_ptr = ctx.builder.CreateAlignedLoad(T_prjlvalue,
-                                        ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue,
-                                            emit_bitcast(ctx, decay_derived(ctx, aryv), T_pprjlvalue),
-                                            jl_array_data_owner_offset(nd) / sizeof(jl_value_t*)),
-                                        Align(sizeof(void*)));
-                                tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
-                            }
-                            else {
-                                own_ptr = ctx.builder.CreateCall(
-                                    prepare_call(jlarray_data_owner_func),
-                                    {aryv});
-                            }
-                            ctx.builder.CreateBr(mergeBB);
-                            ctx.builder.SetInsertPoint(mergeBB);
-                            data_owner = ctx.builder.CreatePHI(T_prjlvalue, 2);
-                            data_owner->addIncoming(aryv, curBB);
-                            data_owner->addIncoming(own_ptr, ownedBB);
-                        }
-                        if (!isboxed && jl_is_uniontype(ety)) {
-                            Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
-                            Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
-                            // compute tindex from val
-                            jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
-                            Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
-                            tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
-                            Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
-                            Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
-                            Value *offset = emit_arrayoffset(ctx, ary, nd);
-                            Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
-                            Value *selidx_m = emit_arraylen(ctx, ary);
-                            Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
-                            Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
-                            ptindex = emit_bitcast(ctx, ptindex, T_pint8);
-                            ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
-                            ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
-                            tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
-                            if (jl_is_datatype(val.typ) && jl_datatype_size(val.typ) == 0) {
-                                // no-op
-                            }
-                            else {
-                                // copy data
-                                Value *addr = ctx.builder.CreateInBoundsGEP(AT, data, idx);
-                                emit_unionmove(ctx, addr, tbaa_arraybuf, val, nullptr);
-                            }
+                if (!jl_subtype(val.typ, ety)) {
+                    emit_typecheck(ctx, val, ety, "arrayset");
+                    val = update_julia_type(ctx, val, ety);
+                }
+                size_t elsz = 0, al = 0;
+                int union_max = jl_islayout_inline(ety, &elsz, &al);
+                bool isboxed = (union_max == 0);
+                if (isboxed)
+                    ety = (jl_value_t*)jl_any_type;
+                jl_value_t *ary_ex = jl_exprarg(ex, 2);
+                ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
+                jl_value_t *boundscheck = argv[1].constant;
+                emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "arrayset");
+                Value *idx = emit_array_nd_index(ctx, ary, ary_ex, nd, &argv[4], nargs - 3, boundscheck);
+                if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
+                    // no-op
+                }
+                else {
+                    PHINode *data_owner = NULL; // owner object against which the write barrier must check
+                    if (isboxed || (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->layout->npointers > 0)) { // if elements are just bits, don't need a write barrier
+                        Value *aryv = boxed(ctx, ary);
+                        Value *flags = emit_arrayflags(ctx, ary);
+                        // the owner of the data is ary itself except if ary->how == 3
+                        flags = ctx.builder.CreateAnd(flags, 3);
+                        Value *is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(T_int16, 3));
+                        BasicBlock *curBB = ctx.builder.GetInsertBlock();
+                        BasicBlock *ownedBB = BasicBlock::Create(jl_LLVMContext, "array_owned", ctx.f);
+                        BasicBlock *mergeBB = BasicBlock::Create(jl_LLVMContext, "merge_own", ctx.f);
+                        ctx.builder.CreateCondBr(is_owned, ownedBB, mergeBB);
+                        ctx.builder.SetInsertPoint(ownedBB);
+                        // load owner pointer
+                        Instruction *own_ptr;
+                        if (jl_is_long(ndp)) {
+                            own_ptr = ctx.builder.CreateAlignedLoad(T_prjlvalue,
+                                    ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue,
+                                        emit_bitcast(ctx, decay_derived(ctx, aryv), T_pprjlvalue),
+                                        jl_array_data_owner_offset(nd) / sizeof(jl_value_t*)),
+                                    Align(sizeof(void*)));
+                            tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
                         }
                         else {
-                            typed_store(ctx,
-                                        emit_arrayptr(ctx, ary, ary_ex, isboxed),
-                                        idx, val, jl_cgval_t(), ety,
-                                        isboxed ? tbaa_ptrarraybuf : tbaa_arraybuf,
-                                        ctx.aliasscope,
-                                        data_owner,
-                                        isboxed,
-                                        isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                                        isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                                        0,
-                                        false,
-                                        true,
-                                        false,
-                                        false);
+                            own_ptr = ctx.builder.CreateCall(
+                                prepare_call(jlarray_data_owner_func),
+                                {aryv});
+                        }
+                        ctx.builder.CreateBr(mergeBB);
+                        ctx.builder.SetInsertPoint(mergeBB);
+                        data_owner = ctx.builder.CreatePHI(T_prjlvalue, 2);
+                        data_owner->addIncoming(aryv, curBB);
+                        data_owner->addIncoming(own_ptr, ownedBB);
+                    }
+                    if (!isboxed && jl_is_uniontype(ety)) {
+                        Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
+                        Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
+                        // compute tindex from val
+                        jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
+                        Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
+                        tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
+                        Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
+                        Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                        Value *offset = emit_arrayoffset(ctx, ary, nd);
+                        Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
+                        Value *selidx_m = emit_arraylen(ctx, ary);
+                        Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
+                        Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                        ptindex = emit_bitcast(ctx, ptindex, T_pint8);
+                        ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
+                        ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
+                        tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
+                        if (jl_is_datatype(val.typ) && jl_datatype_size(val.typ) == 0) {
+                            // no-op
+                        }
+                        else {
+                            // copy data
+                            Value *addr = ctx.builder.CreateInBoundsGEP(AT, data, idx);
+                            emit_unionmove(ctx, addr, tbaa_arraybuf, val, nullptr);
                         }
                     }
-                    *ret = ary;
-                    return true;
+                    else {
+                        typed_store(ctx,
+                                    emit_arrayptr(ctx, ary, ary_ex, isboxed),
+                                    idx, val, jl_cgval_t(), ety,
+                                    isboxed ? tbaa_ptrarraybuf : tbaa_arraybuf,
+                                    ctx.aliasscope,
+                                    data_owner,
+                                    isboxed,
+                                    isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                                    isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                                    0,
+                                    false,
+                                    true,
+                                    false,
+                                    false);
+                    }
                 }
+                *ret = ary;
+                return true;
             }
         }
     }
@@ -3033,9 +3040,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 return true;
             }
 
-            if (jl_is_datatype(utt) && utt->layout) {
+            if (jl_is_datatype(utt) && jl_struct_try_layout(utt)) {
                 ssize_t idx = jl_field_index(utt, name, 0);
-                if (idx != -1) {
+                if (idx != -1 && !jl_has_free_typevars(jl_field_type(utt, idx))) {
                     *ret = emit_getfield_knownidx(ctx, obj, idx, utt, order);
                     return true;
                 }
@@ -3063,14 +3070,16 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
 
             if (jl_is_datatype(utt)) {
-                if (jl_is_structtype(utt) && utt->layout) {
+                if (jl_struct_try_layout(utt)) {
                     size_t nfields = jl_datatype_nfields(utt);
                     // integer index
                     size_t idx;
                     if (fld.constant && (idx = jl_unbox_long(fld.constant) - 1) < nfields) {
-                        // known index
-                        *ret = emit_getfield_knownidx(ctx, obj, idx, utt, order);
-                        return true;
+                        if (!jl_has_free_typevars(jl_field_type(utt, idx))) {
+                            // known index
+                            *ret = emit_getfield_knownidx(ctx, obj, idx, utt, order);
+                            return true;
+                        }
                     }
                     else {
                         // unknown index
@@ -3115,8 +3124,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
             }
         }
-        // TODO: attempt better codegen for approximate types, if the types
-        // and offsets of some fields are independent of parameters.
         // TODO: generic getfield func with more efficient calling convention
         return false;
     }
@@ -3129,13 +3136,13 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         const jl_cgval_t undefval;
         const jl_cgval_t &obj = argv[1];
         const jl_cgval_t &fld = argv[2];
-        const jl_cgval_t &val = argv[isreplacefield ? 4 : 3];
+        jl_cgval_t val = argv[isreplacefield ? 4 : 3];
         const jl_cgval_t &cmp = isreplacefield ? argv[3] : undefval;
         enum jl_memory_order order = jl_memory_order_notatomic;
+        const std::string fname = issetfield ? "setfield!" : isreplacefield ? "replacefield!" : "swapfield!";
         if (nargs >= (isreplacefield ? 5 : 4)) {
             const jl_cgval_t &ord = argv[isreplacefield ? 5 : 4];
-            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type,
-                    issetfield ? "setfield!" : isreplacefield ? "replacefield!" : "swapfield!");
+            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
             if (!ord.constant)
                 return false;
             order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetfield, true);
@@ -3143,7 +3150,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         enum jl_memory_order fail_order = order;
         if (isreplacefield && nargs == 6) {
             const jl_cgval_t &ord = argv[6];
-            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, "replacefield!");
+            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
             if (!ord.constant)
                 return false;
             fail_order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
@@ -3155,7 +3162,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
 
         jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
-        if (jl_is_structtype(uty) && uty->layout) {
+        if (jl_is_datatype(uty) && jl_struct_try_layout(uty)) {
             ssize_t idx = -1;
             if (fld.constant && fld.typ == (jl_value_t*)jl_symbol_type) {
                 idx = jl_field_index(uty, (jl_sym_t*)fld.constant, 0);
@@ -3167,7 +3174,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
             if (idx != -1) {
                 jl_value_t *ft = jl_svecref(uty->types, idx);
-                if (!jl_has_free_typevars(ft) && jl_subtype(val.typ, ft)) {
+                if (!jl_has_free_typevars(ft)) {
+                    if (!jl_subtype(val.typ, ft)) {
+                        emit_typecheck(ctx, val, ft, fname);
+                        val = update_julia_type(ctx, val, ft);
+                    }
                     // TODO: attempt better codegen for approximate types
                     bool isboxed = jl_field_isptr(uty, idx);
                     bool isatomic = jl_field_isatomic(uty, idx);
@@ -4697,10 +4708,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             std::unique_ptr<Module> closure_m;
             jl_llvm_functions_t closure_decls;
 
-            jl_method_instance_t *li;
-            jl_value_t *closure_t;
-            jl_tupletype_t *env_t;
-            jl_svec_t *sig_args;
+            jl_method_instance_t *li = NULL;
+            jl_value_t *closure_t = NULL;
+            jl_tupletype_t *env_t = NULL;
+            jl_svec_t *sig_args = NULL;
             JL_GC_PUSH5(&li, &closure_src, &closure_t, &env_t, &sig_args);
 
             li = jl_new_method_instance_uninit();
@@ -6901,8 +6912,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         if (seq_next >= 0 && (unsigned)seq_next < stmtslen) {
             workstack.push_back(seq_next);
         }
-        else if (!ctx.builder.GetInsertBlock()->getTerminator()) {
-            ctx.builder.CreateUnreachable();
+        else if (ctx.builder.GetInsertBlock() && !ctx.builder.GetInsertBlock()->getTerminator()) {
+            CreateTrap(ctx.builder, false);
         }
         while (!workstack.empty()) {
             int item = workstack.back();
@@ -6912,7 +6923,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 cursor = item;
                 return;
             }
-            if (seq_next != -1 && !ctx.builder.GetInsertBlock()->getTerminator()) {
+            if (seq_next != -1 && ctx.builder.GetInsertBlock() && !ctx.builder.GetInsertBlock()->getTerminator()) {
                 come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
                 ctx.builder.CreateBr(nextbb->second);
             }
@@ -7050,7 +7061,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         if (jl_is_returnnode(stmt)) {
             jl_value_t *retexpr = jl_returnnode_value(stmt);
             if (retexpr == NULL) {
-                ctx.builder.CreateUnreachable();
+                CreateTrap(ctx.builder, false);
                 find_next_stmt(-1);
                 continue;
             }
@@ -7059,7 +7070,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             jl_cgval_t retvalinfo = emit_expr(ctx, retexpr);
             retvalinfo = convert_julia_type(ctx, retvalinfo, jlrettype);
             if (retvalinfo.typ == jl_bottom_type) {
-                ctx.builder.CreateUnreachable();
+                CreateTrap(ctx.builder, false);
                 find_next_stmt(-1);
                 continue;
             }

@@ -61,11 +61,13 @@ function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
 end
 
 function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
-    if isexpr(ir[SSAValue(def)], :new)
-        return ir[SSAValue(def)].args[1+fidx]
+    ex = ir[SSAValue(def)]
+    if isexpr(ex, :new)
+        return ex.args[1+fidx]
     else
+        @assert isa(ex, Expr)
         # The use is whatever the setfield was
-        return ir[SSAValue(def)].args[4]
+        return ex.args[4]
     end
 end
 
@@ -170,11 +172,10 @@ Starting at `val` walk use-def chains to get all the leaves feeding into
 this val (pruning those leaves rules out by path conditions).
 """
 function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), visited_phinodes::Vector{Any}=Any[])
-    if !isa(defssa, AnySSAValue) || !isa(compact[defssa], PhiNode)
-        return Any[defssa]
-    end
-    # Step 2: Figure out what the struct is defined as
+    isa(defssa, AnySSAValue) || return Any[defssa]
     def = compact[defssa]
+    isa(def, PhiNode) || return Any[defssa]
+    # Step 2: Figure out what the struct is defined as
     ## Track definitions through PiNode/PhiNode
     found_def = false
     ## Track which PhiNodes, SSAValue intermediaries
@@ -461,7 +462,7 @@ end
 
 struct LiftedPhi
     ssa::AnySSAValue
-    node::Any
+    node::PhiNode
     need_argupdate::Bool
 end
 
@@ -482,7 +483,7 @@ function perform_lifting!(compact::IncrementalCompact,
     for item in visited_phinodes
         if (item, cache_key) in keys(lifting_cache)
             ssa = lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)]
-            push!(lifted_phis, LiftedPhi(ssa, compact[ssa], false))
+            push!(lifted_phis, LiftedPhi(ssa, compact[ssa]::PhiNode, false))
             continue
         end
         n = PhiNode()
@@ -493,7 +494,7 @@ function perform_lifting!(compact::IncrementalCompact,
 
     # Fix up arguments
     for (old_node_ssa, lf) in zip(visited_phinodes, lifted_phis)
-        old_node = compact[old_node_ssa]
+        old_node = compact[old_node_ssa]::PhiNode
         new_node = lf.node
         lf.need_argupdate || continue
         for i = 1:length(old_node.edges)
@@ -853,7 +854,7 @@ function getfield_elim_pass!(ir::IRCode)
                 end
                 for b in phiblocks
                     for p in ir.cfg.blocks[b].preds
-                        n = ir[phinodes[b]]
+                        n = ir[phinodes[b]]::PhiNode
                         push!(n.edges, p)
                         push!(n.values, compute_value_for_block(ir, domtree,
                             allblocks, du, phinodes, fidx, p))
@@ -870,7 +871,7 @@ function getfield_elim_pass!(ir::IRCode)
         push!(intermediaries, idx)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
-            useexpr = ir[SSAValue(use)]
+            useexpr = ir[SSAValue(use)]::Expr
             nccallargs = length(useexpr.args[3]::SimpleVector)
             old_preserves = let intermediaries = intermediaries
                 filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
@@ -1021,6 +1022,7 @@ function type_lift_pass!(ir::IRCode)
                             insert_node!(ir, item, NewInstruction(PhiNode(edges, values), Bool))
                         end
                     else
+                        def = def::PhiCNode
                         values = Vector{Any}(undef, length(def.values))
                         new_phi = if length(values) == 0
                             false
@@ -1040,7 +1042,7 @@ function type_lift_pass!(ir::IRCode)
                         elseif !isa(def.values[i], SSAValue)
                             val = true
                         else
-                            up_id = id = def.values[i].id
+                            up_id = id = (def.values[i]::SSAValue).id
                             @label restart
                             if !isa(ir.stmts[id][:type], MaybeUndef)
                                 val = true
@@ -1052,7 +1054,7 @@ function type_lift_pass!(ir::IRCode)
                                     elseif !isa(node.val, SSAValue)
                                         val = true
                                     else
-                                        id = node.val.id
+                                        id = (node.val::SSAValue).id
                                         @goto restart
                                     end
                                 else
