@@ -670,7 +670,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     buf = IOBuffer()
     stream = logger.stream
     if !isopen(stream)
-        stream = level < Warn ? stdout : stderr
+        stream = stderr
     end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
