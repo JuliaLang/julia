@@ -1293,7 +1293,7 @@ function check_tapir_race!(ir::IRCode)
 
                         # This instruction is in the task and is not a branch.
                         # Insert the racy store error:
-                        th = Expr(:call, Tapir.racy_store, SSAValue(stmt.idx))
+                        th = Expr(:call, GlobalRef(Tapir, :racy_store), SSAValue(stmt.idx))
                         pos = insert_pos(ir, stmt.idx)
                         attach_after = pos == stmt.idx
                         insert_node!(ir, pos, NewInstruction(th, Any), attach_after)
@@ -1319,7 +1319,7 @@ function check_tapir_race!(ir::IRCode)
                     bb = ir.cfg.blocks[inst.edges[k]]
                     iterm = bb.stmts[end]
                     attach_after = !isterminator(ir.stmts.inst[iterm])
-                    th = Expr(:call, Tapir.racy_load, v)
+                    th = Expr(:call, GlobalRef(Tapir, :racy_load), v)
                     insert_node!(ir, iterm, NewInstruction(th, Any), attach_after)
                     # Not using `Union{}` so that we can preserve CFG.
                 end
@@ -1327,7 +1327,7 @@ function check_tapir_race!(ir::IRCode)
         else
             foreach_id(identity, inst) do v
                 if v isa SSAValue && v.id in throw_if_uses
-                    th = Expr(:call, Tapir.racy_load, v)
+                    th = Expr(:call, GlobalRef(Tapir, :racy_load), v)
                     insert_node!(ir, i, NewInstruction(th, Any))
                     # Not using `Union{}` so that we can preserve CFG.
                 end
@@ -1335,7 +1335,7 @@ function check_tapir_race!(ir::IRCode)
         end
     end
 
-    warn = Expr(:call, Tapir.warn_race)
+    warn = Expr(:call, GlobalRef(Tapir, :warn_race))
     insert_node!(ir, 1, NewInstruction(warn, Any))
 
     ir = remove_tapir!(ir)
@@ -1683,7 +1683,7 @@ function outline_child_task(task::ChildTask, ir::IRCode)
     # instead. `bbendmap` (initially an identity) tracks these shifts:
     bbendmap = collect(1:length(stmts))
     for (inew, iold) in enumerate(args)
-        stmts.inst[inew] = Expr(:call, getfield, Argument(1), inew)
+        stmts.inst[inew] = Expr(:call, GlobalRef(Core, :getfield), Argument(1), inew)
         stmts.type[inew] = ir.argtypes[iold]
         # ASK: Is this valid to declare the type of the captured variables? Is
         #      it better to insert type assertions?
@@ -1691,7 +1691,7 @@ function outline_child_task(task::ChildTask, ir::IRCode)
     for (i, iold) in enumerate(capture)
         inew = nargs + i
         stmts[inew] = ir.stmts[iold]
-        stmts.inst[inew] = Expr(:call, getfield, Argument(1), inew)
+        stmts.inst[inew] = Expr(:call, GlobalRef(Core, :getfield), Argument(1), inew)
         # ASK: ditto
     end
     # Actual computation executed in the child task:
