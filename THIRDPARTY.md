@@ -10,7 +10,6 @@ for exceptions.
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](https://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
 - [Python](https://docs.python.org/3/license.html) (for strtod implementation on Windows) [PSF]
-- [Google Benchmark](https://github.com/google/benchmark) (for cyclecount implementation) [Apache 2.0]
 
 The following components included in Julia `Base` have their own separate licenses:
 
