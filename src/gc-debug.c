@@ -657,7 +657,8 @@ void objprofile_reset(void)
     }
 }
 
-static void objprofile_print(htable_t nums, htable_t sizes)
+static void objprofile_print(
+        JL_STREAM *out, char *str_timestamp, char *kind, htable_t nums, htable_t sizes)
 {
     for(int i=0; i < nums.size; i+=2) {
         if (nums.table[i+1] != HT_NOTFOUND) {
@@ -665,25 +666,8 @@ static void objprofile_print(htable_t nums, htable_t sizes)
             int num = (intptr_t)nums.table[i + 1] - 1;
             size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
             static const int ptr_hex_width = 2 * sizeof(void*);
-            if (sz > 2e9) {
-                jl_safe_printf(" %6d : %*.1f GB of (%*p) ",
-                               num, 6, ((double)sz) / 1024 / 1024 / 1024,
-                               ptr_hex_width, ty);
-            }
-            else if (sz > 2e6) {
-                jl_safe_printf(" %6d : %*.1f MB of (%*p) ",
-                               num, 6, ((double)sz) / 1024 / 1024,
-                               ptr_hex_width, ty);
-            }
-            else if (sz > 2e3) {
-                jl_safe_printf(" %6d : %*.1f kB of (%*p) ",
-                               num, 6, ((double)sz) / 1024,
-                               ptr_hex_width, ty);
-            }
-            else {
-                jl_safe_printf(" %6d : %*d  B of (%*p) ",
-                          num, 6, (int)sz, ptr_hex_width, ty);
-            }
+            // timestamp,kind,num,size,{ptr_hex_with,ty},$objtype
+            jl_printf(out, "OBJPROFILE,%s,%s,%d,%ld,%*p,", str_timestamp, kind, num, sz, ptr_hex_width, ty);
             if (ty == (void*)jl_buff_tag)
                 jl_safe_printf("#<buffer>");
             else if (ty == jl_malloc_tag)
@@ -691,20 +675,36 @@ static void objprofile_print(htable_t nums, htable_t sizes)
             else if (ty == jl_singleton_tag)
                 jl_safe_printf("#<singletons>");
             else
-                jl_static_show(JL_STDERR, (jl_value_t*)ty);
-            jl_safe_printf("\n");
+                jl_static_show(out, (jl_value_t*)ty);
+            jl_printf(out, "\n");
         }
     }
 }
 
-void objprofile_printall(void)
+void objprofile_printall_to_file(JL_STREAM* out)
 {
-    jl_safe_printf("Transient mark :\n");
-    objprofile_print(obj_counts[0], obj_sizes[0]);
-    jl_safe_printf("Perm mark :\n");
-    objprofile_print(obj_counts[1], obj_sizes[1]);
-    jl_safe_printf("Remset :\n");
-    objprofile_print(obj_counts[2], obj_sizes[2]);
+    time_t t = time(NULL);
+    struct tm curr_timestamp;
+    localtime_r(&t, &curr_timestamp);
+    char timestamp_str[40];
+    strftime(timestamp_str, sizeof timestamp_str, "%F %T", &curr_timestamp);
+    objprofile_print(out, timestamp_str, "transient", obj_counts[0], obj_sizes[0]);
+    objprofile_print(out, timestamp_str, "perm", obj_counts[1], obj_sizes[1]);
+    objprofile_print(out, timestamp_str, "remset", obj_counts[2], obj_sizes[2]);
+}
+
+//_STREAM *objprofile_output = JL_STDERR;
+void objprofile_printall(void) {
+    // We need to construct uv_stream_t for an arbitrary file
+    // TODO(jan.rous): allow for directing the output to destination of interest,
+    // now let's just open /tmp/julia.objprofile.csv
+    /*
+    if (objprofile_output == NULL) {
+        objprofile_output = (JL_STREAM *)open("/tmp/julia.objprofile.csv", O_CREAT | O_CLOEXEC | O_APPEND, O_WRONLY);
+                
+    }
+    */
+    objprofile_printall_to_file(JL_STDERR);
 }
 #endif
 

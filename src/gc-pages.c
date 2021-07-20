@@ -48,6 +48,7 @@ static char *jl_gc_try_alloc_pages(int pg_cnt) JL_NOTSAFEPOINT
                             MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mem == MAP_FAILED)
         return NULL;
+    jl_printf((JL_STREAM*)STDERR_FILENO, "@@ %lld %p-%p (Julia heap mmap)\n", (long long int)pages_sz, (void*)mem, ((void*)(mem+pages_sz)));
 #endif
     if (GC_PAGE_SZ > jl_page_size)
         // round data pointer up to the nearest gc_page_data-aligned
