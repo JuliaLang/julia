@@ -29,6 +29,6 @@ steps:
       echo "--- Test that ASAN is enabled"
       contrib/asan/check.jl ./tmp/test-asan/asan/usr/bin/julia-debug
     timeout_in_minutes: 120
-    notify:
-      - github_commit_status:
-          context: "asan"
+    # notify:
+    #   - github_commit_status:
+    #       context: "asan"
