@@ -14,8 +14,8 @@ steps:
       - JuliaCI/julia#v1:
           version: 1.6
       - staticfloat/sandbox#v1:
-          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v1/llvm-passes.tar.gz
-          rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v2.0/llvm_passes.tar.gz
+          rootfs_treehash: "0b5a80c1d0ab110a57fbdb7f4bc042a5ede310f3"
           uid: 1000
           gid: 1000
           workspaces:
@@ -29,6 +29,6 @@ steps:
       echo "--- Test that ASAN is enabled"
       contrib/asan/check.jl ./tmp/test-asan/asan/usr/bin/julia-debug
     timeout_in_minutes: 120
-    notify:
-      - github_commit_status:
-          context: "asan"
+    # notify:
+    #   - github_commit_status:
+    #       context: "asan"
