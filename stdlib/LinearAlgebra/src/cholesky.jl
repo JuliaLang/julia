@@ -400,7 +400,6 @@ function cholesky(A::Union{StridedMatrix{Float16},RealHermSymComplexHerm{Float16
     return Cholesky{Float16}(X)
 end
 @deprecate cholesky(A, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check)
-@deprecate cholesky(A, ::Val{true}; check::Bool = true) cholesky(A, RowMaximum(); check)
 
 ## With pivoting
 """
@@ -461,7 +460,7 @@ true
 cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
     ::RowMaximum; tol = 0.0, check::Bool = true) =
     cholesky!(cholcopy(A), RowMaximum(); tol = tol, check = check)
-
+@deprecate cholesky(A, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, RowMaximum(); tol, check)
 ## Number
 function cholesky(x::Number, uplo::Symbol=:U)
     C, info = _chol!(x, uplo)
