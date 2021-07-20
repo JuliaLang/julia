@@ -652,8 +652,10 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         return emit_runtime_pointerset(ctx, argv);
     if (align.constant == NULL || !jl_is_long(align.constant))
         return emit_runtime_pointerset(ctx, argv);
-    if (!is_valid_intrinsic_elptr(ety))
+    if (!is_valid_intrinsic_elptr(ety)) {
         emit_error(ctx, "pointerset: invalid pointer type");
+        return jl_cgval_t();
+    }
     emit_typecheck(ctx, x, ety, "pointerset");
 
     Value *idx = emit_unbox(ctx, T_size, i, (jl_value_t*)jl_long_type);
