@@ -1354,8 +1354,8 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             open(tmppath, "a+") do f
                 write(f, _crc32c(seekstart(f)))
             end
-            # inherit permission from the source file
-            chmod(tmppath, filemode(path) & 0o777)
+            # inherit permission from the source file (and make them writable)
+            chmod(tmppath, filemode(path) & 0o777 | 0o200)
 
             # Read preferences hash back from .ji file (we can't precompute because
             # we don't actually know what the list of compile-time preferences are without compiling)
