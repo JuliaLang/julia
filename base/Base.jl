@@ -488,7 +488,7 @@ function __init__()
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end
-    append!(empty!(LOAD_TIMING), zeros(Int, Threads.nthreads()))
+    append!(empty!(TIMING_IMPORTS), zeros(Int, Threads.nthreads()))
     nothing
 end
 

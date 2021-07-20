@@ -235,10 +235,10 @@ end
 macro time_imports(ex)
     quote
         try
-            Base.LOAD_TIMING[Threads.threadid()] += 1
+            Base.TIMING_IMPORTS[Threads.threadid()] += 1
             $(esc(ex))
         finally
-            Base.LOAD_TIMING[Threads.threadid()] -= 1
+            Base.TIMING_IMPORTS[Threads.threadid()] -= 1
         end
     end
 end
