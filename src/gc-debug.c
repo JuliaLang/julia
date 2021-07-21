@@ -52,6 +52,7 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
     return (jl_taggedvalue_t*)tag;
 }
 
+
 // mark verification
 #ifdef GC_VERIFY
 jl_value_t *lostval = NULL;
@@ -626,8 +627,23 @@ void gc_debug_print_status(void)
 #ifdef OBJPROFILE
 static htable_t obj_counts[3];
 static htable_t obj_sizes[3];
+static bool grab_objprofile = true;
+
+/* JL_DLLEXPORT return obj_counts, obj_sizes in some julia array or somesuch */
+
+void objprofile_enable()
+{
+    grab_objprofile = true;
+}
+
+void objprofile_disable()
+{
+    grab_objprofile = false;
+}
+
 void objprofile_count(void *ty, int old, int sz)
 {
+    if (!objprofile_enabled) return;
     if (gc_verifying) return;
     if ((intptr_t)ty <= 0x10) {
         ty = (void*)jl_buff_tag;

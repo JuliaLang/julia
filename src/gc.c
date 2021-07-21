@@ -3101,7 +3101,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     gc_stats_all_pool();
     gc_stats_big_obj();
-    objprofile_printall();
+    // objprofile_printall();
     objprofile_reset();
     gc_num.total_allocd += gc_num.since_sweep;
     if (!prev_sweep_full)
