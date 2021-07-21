@@ -132,11 +132,11 @@ search: begin disable_sigint reenable_sigint
   2×2 Array{Int64,2}:
    1  2
    3  4
-  
+
   julia> A[begin, :]
   2-element Array{Int64,1}:
    1
    2
-  ```
+```
 
 If you already know Julia a bit, you might want to peek ahead at [Performance Tips](@ref man-performance-tips) and [Workflow Tips](@ref man-workflow-tips).
