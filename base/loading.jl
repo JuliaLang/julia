@@ -822,7 +822,7 @@ function _require_from_serialized(path::String)
 end
 
 # use an Int counter so that nested @time_imports calls all remain open
-const TIMING_IMPORTS = Int[] # initialized in __init__
+const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 
 # returns `true` if require found a precompile cache for this sourcepath, but couldn't load it
 # returns `false` if the module isn't known to be precompilable
@@ -859,7 +859,7 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String, depth::
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
-            if TIMING_IMPORTS[Threads.threadid()] > 0
+            if TIMING_IMPORTS[] > 0
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 tree_prefix = depth == 0 ? "" : "$("  "^(depth-1))┌ "
                 print("$(lpad(elapsed, 9)) ms  ")
