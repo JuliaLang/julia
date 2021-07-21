@@ -10,11 +10,17 @@ analyze and optimize the code containing the parallel tasks.
 
 # Overview
 
+Called via `run_passes`:
+
+* `early_tapir_pass!`: Mainly handles output lowering and race detection.
+* `tapir_dead_store_elimination_pass!`: Simple DSE on task outputs.
+* `late_tapir_pass!`: Puny-task elimination and cleanups.
+
+Called via `jl_emit_code`:
+
 * `lower_tapir!`: Lowers Tapir constructs to the calls to the parallel task runtime.
   This pass is called outside the usual `run_passes` to allow IPO across functions
   containing Tapir constructs.
-
-* `lower_tapir_output!` called from `run_passes` via `early_tapir_pass!`.
 
 # References
 
@@ -448,15 +454,6 @@ function foreach_def(
     return acc.x
 end
 
-function any_assigned(f, xs::Array)
-    for i in 1:length(xs)
-        if isassigned(xs, i)
-            f(xs[i]) && return true
-        end
-    end
-    return false
-end
-
 function foreach_assigned_pair(f, xs::Array)
     for i in 1:length(xs)
         if isassigned(xs, i)
@@ -484,71 +481,11 @@ has_tapir(code::Vector{Any}) =
                isexpr(inst, :task_output)
     end
 
-function havecommon(x::AbstractSet, y::AbstractSet)
-    (b, c) = length(x) > length(y) ? (x, y) : (y, x)
-    return any(in(b), c)
-end
-
-function transitive_closure_on(rel, xs)
-    T = eltype(xs)
-    graph = IdDict{T,IdSet{T}}()
-    cache = IdDict{Tuple{T,T},Bool}()
-    for x in xs, y in xs
-        cache[(x, y)] = r = rel(x, y)
-        if r
-            push!(get!(IdSet{T}, graph, x), y)
-        end
-    end
-    closure(x, y) = get!(cache, (x, y)) do
-        any(z -> closure(z, y), graph[x])
-    end
-    return closure
-end
-
-function foldunion(types)
-    T = Union{}
-    for x in types
-        T = Union{T, widenconst(x)}
-    end
-    return T
-end
-
 struct _InaccessibleValue end
 
 function remove_stmt!(stmt::Instruction)
     stmt[:inst] = _InaccessibleValue()
     stmt[:type] = Any
-end
-
-"""
-    resolve_linear_chain(ir, v::Union{PiNode,SSAValue}) -> v′::Union{PiNode,SSAValue}
-
-Resolve simple chain of statements that are SSAValue or PiNode.
-"""
-function resolve_linear_chain end
-function resolve_linear_chain(ir::IRCode, v::PiNode)
-    n = v.val
-    if n isa SSAValue
-        return resolve_linear_chain(ir, n)
-    else
-        return v
-    end
-end
-function resolve_linear_chain(ir::IRCode, v::SSAValue)
-    v0 = v
-    while true
-        n = ir[v]
-        if n isa PiNode
-            n = n.val
-        end
-        if n isa SSAValue
-            v = n
-        else
-            break
-        end
-        v === v0 && error("cycle detected")
-    end
-    return v
 end
 
 # Ref: abstract_eval_special_value
@@ -570,26 +507,6 @@ function typeof_stmt_arg(ir::IRCode, @nospecialize(arg))
     end
 end
 
-resolve_ssavalue(ir::IRCode, v::SSAValue) = resolve_ssavalue(ir.stmts.inst, v)
-function resolve_ssavalue(code::Vector{Any}, v::SSAValue)
-    v0 = v
-    while v isa SSAValue
-        v = code[v.id]
-        v === v0 && error("cycle detected")
-    end
-    return v
-end
-
-function resolve_callee(code::Vector{Any}, @nospecialize(inst))::Tuple{Any,Bool}
-    isexpr(inst, :call) || return nothing, false
-    isempty(inst.args) && return nothing, false
-    f, = inst.args
-    if f isa SSAValue
-        f = resolve_ssavalue(code, f)
-    end
-    return resolve_special_value(f)
-end
-
 function find_method_instance_from_sig(
     interp::AbstractInterpreter,
     @nospecialize(sig::Type);
@@ -603,21 +520,6 @@ function find_method_instance_from_sig(
     return specialize_method(method, sig, sparams, preexisting, compilesig)
 end
 # TODO: backedge?
-
-function is_in_loop(cfg::CFG, subcfg, needle::Int)
-    subcfg = BitSet(subcfg)
-    ref = RefValue(false)
-    foreach_descendant(cfg, needle) do ibb
-        ibb in subcfg || return false
-        if ibb < needle
-            ref.x = true
-            return false
-        else
-            return true
-        end
-    end
-    return ref.x
-end
 
 has_loop(ir::IRCode, blocklabels) =
     any(blocklabels) do ibb
@@ -1111,7 +1013,7 @@ function lower_tapir_output!(ir::IRCode)
 
     isempty(outputinfo) && return ir
 
-    # Determine the type of each slot
+    # Analyze the slots. Determine slot types and store/load locations.
     slottypes = IdDict{Int,Type}()      # slot id -> type
     stores = IdDict{Int,Vector{Int}}()  # slot id -> statement positions
     loaded_slots = BitSet()
@@ -1235,11 +1137,11 @@ ERROR: Tapir: racy load of a value that may be read concurrently: 1
 
 # Design notes
 
-In Julia, we disallow variables (slots) as task output for the sake of clarity.
-Thanks to this design decision, we can conclude that any `slot2reg` promotion
-that crosses task boundaries (manifested as phi nodes with continue edges) is a
-result from an attempt to update variables in a parent task (that are read in
-the continuation).
+In Julia, we disallow arbitrary variables (slots) as task output for the sake of
+clarity.  Due to to this design decision, we can conclude that any `slot2reg`
+promotion that crosses task boundaries (manifested as phi nodes with continue
+edges) is a result from an attempt to update variables in a parent task (that
+are read in the continuation).
 
 In principle, this detection can be done inside `slot2reg`, just like how we use
 `parallel_getfield_elim_checker` (which is similar to Tapir/LLVM's
@@ -1435,6 +1337,9 @@ end
     disallow_detach_after_sync!(ir::IRCode, tasks) -> ir′
 
 Detect detach after sync and insert runtime errors.
+
+This can happen when a taskgroup is captured by a closure and then get inlined
+(at a wrong position).
 """
 function disallow_detach_after_sync!(ir::IRCode, tasks)
     # This pass only looks into `ir.stmts` at the moment:
@@ -1842,6 +1747,14 @@ function lower_tapir!(ir::IRCode, interp::AbstractInterpreter)
     return lower_tapir_tasks!(ir, tasks, interp)
 end
 
+"""
+    optimize_taskgroups!(ir::IRCode, tasks, interp::AbstractInterpreter) -> (ir′, tasks′)
+
+If we know a static bound on the number of tasks spawned, we don't need to
+allocate the taskgroup. Instead of using `Tapir.spawn!(taskgroup, f)` and
+`Tapir.sync!(tg)`, we lower the tasks to `Tapir.spawn(TaskGroup::Type, f)` and
+`Tapir.synctasks(tasks...)`.
+"""
 function optimize_taskgroups!(
     ir::IRCode,
     tasks::Vector{ChildTask},
@@ -1904,8 +1817,8 @@ function optimize_taskgroups!(
                 end
             elseif term isa DetachNode
                 # Don't iterate inside sibling tasks (Note: we can' "cut" the
-                # whole sub-CFG corresponding to the child task since it only
-                # has a single entry):
+                # whole sub-CFG corresponding to the child task by marking the
+                # entry BB visited since it only has a single entry):
                 visited[ibb + 1] = true
             end
             return true
@@ -2117,7 +2030,6 @@ function code_info_from_ssair(ir::IRCode)
     end
     nargs = length(ir.argtypes)
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-    # ci.slotnames = [Symbol(:arg, i - 1) for i in 1:nargs]  # how do I concatenate strings in Julia?
     ci.slotnames = [gensym(:arg) for _ in 1:nargs]
     ci.slotnames[1] = Symbol("#self#")
     ci.slotflags = fill(0x00, nargs)

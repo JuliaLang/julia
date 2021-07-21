@@ -4,9 +4,6 @@
     Tapir
 
 Optional parallelism API.
-
-This module provides two public API `Tapir.@sync` and `Tapir.@spawn` for
-denoting tasks that _may or may not_ run in parallel.
 """
 module Tapir
 
@@ -14,6 +11,7 @@ module Tapir
 ##### Julia-Tapir Runtime
 #####
 
+# TODO: Use unprotected tree to avoid locks in spawn and sync
 const TaskGroup = Channel{Any}
 
 @noinline taskgroup() = Channel{Any}(Inf)::TaskGroup
@@ -33,8 +31,6 @@ function spawn(::Type{TaskGroup}, @nospecialize(f))
     return t
 end
 
-# Can we make it more efficient using the may-happen parallelism property
-# (i.e., the lack of concurrent synchronizations)?
 function sync!(tasks::TaskGroup)
     Base.sync_end(tasks)
     close(tasks)
@@ -88,6 +84,8 @@ struct RacyLoadError <: TapirRaceError
     value::Any
 end
 
+# Note: Using special error types (rather than formatting message in `racy_*`
+# functions) so that users can catch it and investigate the value in the REPL.
 @noinline racy_store(@nospecialize(v)) = throw(RacyStoreError(v))
 @noinline racy_load(@nospecialize(v)) = throw(RacyLoadError(v))
 
@@ -135,11 +133,15 @@ end
     end
 
     @warn(
-        raw"""
+        """
         Tapir: Detected racy updates of variable(s). Use the output variable syntax
-            $output = value
-        to explicitly denote the output variables or use
+
+            Tapir.@output variable
+
+        to explicitly mark the `variable` as an task output or use
+
             local variable
+
         inside `Tapir.@spawn` to declare that `variable` is used only locally in a task.
 
         See more information in `Tapir.@spawn` documentation.
@@ -178,10 +180,10 @@ end
 
 If the syntax `\$x` is used in lhs/lvalue _or_ rhs/rvalue, replace it with a
 local variable `x_shadow` that acts as a local copy of `\$x`. If `\$x` appears
-as in lhs, also insert the "store" `\$x = x_shadow` (so that it can be
-translated into set-many-load-once PhiC/Upsilon nodes).  If `\$x` appears in
-`ex`, the variable `x` is declared to be local in `ex` to avoid introducing the
-phi nodes in the continuation [^no_racy_phi].
+in the lhs, also insert the "store" `\$x = x_shadow` (so that it will be handled
+by `Tapir.@sync`).  If `\$x` appears in `ex`, the variable `x` is declared to be
+local in `ex` to avoid introducing the phi nodes in the continuation
+[^no_racy_phi].
 
 That is to say, it transforms
 
@@ -417,6 +419,26 @@ tasks are synchronized upon exiting this block.
 
 # Extended help
 
+!!! note
+    For experimentation, two candidate syntaxes are implemented to handle task
+    outputs.
+
+## Task output syntax `Tapir.@output`
+
+`Tapir.@output` can be placed before `Tapir.@sync` to declare the task output
+variables.
+
+```julia
+Tapir.@output x y
+Tapir.@sync begin
+    Tapir.@spawn x = f()
+    y = g()
+end
+use(x, y)
+```
+
+See `Tapir.@output` documentation for more information.
+
 ## Task output syntax `\$output`
 
 Inside `Tapir.@sync` and `Tapir.@spawn`, the syntax `\$output` can be used for
@@ -534,6 +556,15 @@ end
 
 """
     Tapir.@spawn expression
+
+Mark that `expression` can be run in parallel with the surrounding code.
+
+Note that parallelism is optional. The function using `Tapir.@spawn` must work
+correctly after elidiging `Tapir.@spawn` (i.e., executing `expression`
+serially). For example, tasks spawned by `Tapir.@spawn`  cannot communicate each
+other using `Channel`.
+
+See also: `Tapir.@sync`, `Tapir.@output`
 """
 macro spawn(expr)
     expr = ensure_linenumbernode(__source__, expr)
@@ -547,6 +578,15 @@ Mark variables named `v₍`, `v₂`, ..., and `vₙ` as task outputs. This is
 equivalent to `local v₍, v₂, …, vₙ` in terms of the scoping rule. However, they
 must not be written or read in the code regions that may potentially be run in
 parallel.
+
+Task output variables can also be initialized using `=` as in
+`Tapir.@output a = 1 b = 2`. It can also be used for pre-defined variables:
+
+```julia
+a = f()
+Tapir.@output a
+Tapir.@sync begin ... end
+````
 """
 macro output(exprs::Union{Symbol,Expr}...)
     variables = Symbol[]
@@ -572,8 +612,16 @@ end
 ##### Utils
 #####
 
-# Currently the optimizer gives up when it sees a llvmcall
+"""
+    Tapir.dontoptimize()
+
+Ask the compiler to not optimize out the current task.  Note that it must be
+called both inside and outside `Tapir.@spawn` as a spawn can be eliminated when
+the continuation is trivial even when the work inside `Tapir.@spawn` is
+non-trivial.
+"""
 @inline dontoptimize() = Base.llvmcall("ret void", Cvoid, Tuple{})
+# Currently the optimizer gives up when it sees a llvmcall
 
 function print_remarks()
     remarks = Core.Compiler.tapir_get_remarks!()
