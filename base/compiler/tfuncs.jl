@@ -1017,6 +1017,8 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
     if isa(u, Union)
         ta0 = _fieldtype_tfunc(rewrap(u.a, s), exact, name)
         tb0 = _fieldtype_tfunc(rewrap(u.b, s), exact, name)
+        ta0 ⊑ tb0 && return tb0
+        tb0 ⊑ ta0 && return ta0
         ta, exacta, _, istypea = instanceof_tfunc(ta0)
         tb, exactb, _, istypeb = instanceof_tfunc(tb0)
         if exact && exacta && exactb
