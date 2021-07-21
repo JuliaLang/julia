@@ -366,7 +366,7 @@ UDP can use special multicast addresses to allow simultaneous communication betw
 
 ### Receiving IP Multicast Packets
 
-Here is a basic example that can interoperate with the sample protocol described in [java.net.MulticastSocket](https://docs.oracle.com/en/java/javase/15/docs/api/java.base/java/net/MulticastSocket.html).
+To transmit data over UDP multicast, simply `recv` on the socket, and the first packet received will be returned. Note that it may not be the first packet that you sent however!
 
 ```
 using Sockets
