@@ -596,6 +596,15 @@ true
 julia> isascii("αβγ")
 false
 ```
+For example, `isascii` can be used as a predicate function for [`filter`](@ref) or [`replace`](@ref)
+to remove or replace non-ASCII characters, respectively:
+```jldoctest
+julia> filter(isascii, "abcdeγfgh") # discard non-ASCII chars
+"abcdefgh"
+
+julia> replace("abcdeγfgh", !isascii=>' ') # replace non-ASCII chars with spaces
+"abcde fgh"
+```
 """
 isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(s::AbstractString) = all(isascii, s)

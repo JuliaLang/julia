@@ -792,7 +792,7 @@ string(b::Bool) = b ? "true" : "false"
 """
     bitstring(n)
 
-A string giving the literal bit representation of a number.
+A string giving the literal bit representation of a primitive type.
 
 See also [`count_ones`](@ref), [`count_zeros`](@ref), [`digits`](@ref).
 
@@ -805,13 +805,23 @@ julia> bitstring(2.2)
 "0100000000000001100110011001100110011001100110011001100110011010"
 ```
 """
-function bitstring end
-
-bitstring(x::Union{Bool,Int8,UInt8})           = string(reinterpret(UInt8,x), pad = 8, base = 2)
-bitstring(x::Union{Int16,UInt16,Float16})      = string(reinterpret(UInt16,x), pad = 16, base = 2)
-bitstring(x::Union{Char,Int32,UInt32,Float32}) = string(reinterpret(UInt32,x), pad = 32, base = 2)
-bitstring(x::Union{Int64,UInt64,Float64})      = string(reinterpret(UInt64,x), pad = 64, base = 2)
-bitstring(x::Union{Int128,UInt128})            = string(reinterpret(UInt128,x), pad = 128, base = 2)
+function bitstring(x::T) where {T}
+    isprimitivetype(T) || throw(ArgumentError("$T not a primitive type"))
+    sz = sizeof(T) * 8
+    str = StringVector(sz)
+    i = sz
+    @inbounds while i >= 4
+        b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
+        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+        str[i-3] = (d >> 0x00) % UInt8
+        str[i-2] = (d >> 0x08) % UInt8
+        str[i-1] = (d >> 0x10) % UInt8
+        str[i]   = (d >> 0x18) % UInt8
+        x = lshr_int(x, 4)
+        i -= 4
+    end
+    return String(str)
+end
 
 """
     digits([T<:Integer], n::Integer; base::T = 10, pad::Integer = 1)

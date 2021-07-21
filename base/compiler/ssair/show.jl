@@ -726,7 +726,7 @@ function statementidx_lineinfo_printer(f, code::CodeInfo)
 end
 statementidx_lineinfo_printer(code) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
 
-function stmts_used(code::IRCode, warn_unset_entry=true)
+function stmts_used(io::IO, code::IRCode, warn_unset_entry=true)
     stmts = code.stmts
     used = BitSet()
     for stmt in stmts
@@ -744,7 +744,7 @@ function stmts_used(code::IRCode, warn_unset_entry=true)
     return used
 end
 
-function stmts_used(code::CodeInfo)
+function stmts_used(::IO, code::CodeInfo)
     stmts = code.code
     used = BitSet()
     for stmt in stmts
@@ -763,7 +763,7 @@ default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code
 function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=default_config(code);
                  pop_new_node! = code isa IRCode ? ircode_new_nodes_iter(code) : Returns(nothing))
     stmts = code isa IRCode ? code.stmts : code.code
-    used = stmts_used(code)
+    used = stmts_used(io, code)
     cfg = code isa IRCode ? code.cfg : compute_basic_blocks(stmts)
     bb_idx = 1
 

@@ -465,9 +465,9 @@ julia> LinRange(1.5, 5.5, 9)
 
 Compared to using [`range`](@ref), directly constructing a `LinRange` should
 have less overhead but won't try to correct for floating point errors:
-```julia
+```jldoctest
 julia> collect(range(-0.1, 0.3, length=5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.1
   0.0
   0.1
@@ -475,7 +475,7 @@ julia> collect(range(-0.1, 0.3, length=5))
   0.3
 
 julia> collect(LinRange(-0.1, 0.3, 5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  -0.1
  -1.3877787807814457e-17
   0.09999999999999999
@@ -665,7 +665,7 @@ function length(r::OrdinalRange{T}) where T
     # s != 0, by construction, but avoids the division error later
     start = first(r)
     if s == zero(s) || isempty(r)
-        return Integer(start - start + zero(s))
+        return Integer(div(start-start, oneunit(s)))
     end
     stop = last(r)
     if isless(s, zero(s))
@@ -900,7 +900,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         range(first(s) ? first(r) : last(r), length = Int(last(s)))
     else
         f = first(r)
-        st = oftype(f, f + first(s)-1)
+        st = oftype(f, f + first(s)-firstindex(r))
         return range(st, length=length(s))
     end
 end
@@ -918,7 +918,7 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     if T === Bool
         range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length = Int(last(s)))
     else
-        st = oftype(first(r), first(r) + s.start-1)
+        st = oftype(first(r), first(r) + s.start-firstindex(r))
         return range(st, step=step(s), length=length(s))
     end
 end
@@ -1016,6 +1016,11 @@ function ==(r::OrdinalRange, s::OrdinalRange)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
+
+==(r::AbstractUnitRange, s::AbstractUnitRange) =
+    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (last(r) == last(s)))
+
+==(r::OneTo, s::OneTo) = last(r) == last(s)
 
 ==(r::T, s::T) where {T<:Union{StepRangeLen,LinRange}} =
     (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s)))

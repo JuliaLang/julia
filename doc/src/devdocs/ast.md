@@ -507,11 +507,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The calling convention for the call.
 
-      * `args[6:length(args[3])]` : arguments
+      * `args[6:6+length(args[3])]` : arguments
 
         The values for all the arguments (with types of each given in args[3]).
 
-      * `args[(length(args[3]) + 1):end]` : gc-roots
+      * `args[6+(length(args[3])+1):end]` : gc-roots
 
         The additional objects that may need to be gc-rooted for the duration of the call.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.

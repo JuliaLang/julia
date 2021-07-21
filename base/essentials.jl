@@ -447,7 +447,9 @@ reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
     sizeof(obj)
 
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
-Size, in bytes, of object `obj` if it is not `DataType`.
+Or the size, in bytes, of object `obj` if it is not a `DataType`.
+
+See also [`summarysize`](@ref).
 
 # Examples
 ```jldoctest
@@ -460,7 +462,7 @@ julia> sizeof(ComplexF64)
 julia> sizeof(1.0)
 8
 
-julia> sizeof([1.0:10.0;])
+julia> sizeof(collect(1.0:10.0))
 80
 ```
 

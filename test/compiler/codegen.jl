@@ -593,3 +593,39 @@ f41438(y) = y[].x
 @test B41438.body.layout === C_NULL
 @test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
 @test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL
+
+# issue #41157
+f41157(a, b) = a[1] = b[1]
+@test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
+
+# issue #41096
+struct Modulate41096{M<:Union{Function, Val{true}, Val{false}}, id}
+    modulate::M
+    Modulate41096(id::Symbol, modulate::Function) = new{typeof(modulate), id}(modulate)
+    Modulate41096(id::Symbol, modulate::Bool=true) = new{Val{modulate}, id}(modulate|>Val)
+end
+@inline ismodulatable41096(modulate::Modulate41096) = ismodulatable41096(typeof(modulate))
+@inline ismodulatable41096(::Type{<:Modulate41096{Val{B}}}) where B = B
+@inline ismodulatable41096(::Type{<:Modulate41096{<:Function}}) = true
+
+mutable struct Term41096{I, M<:Modulate41096}
+    modulate::M
+    Term41096{I}(modulate::Modulate41096) where I = new{I, typeof(modulate)}(modulate)
+end
+@inline ismodulatable41096(term::Term41096) = ismodulatable41096(typeof(term))
+@inline ismodulatable41096(::Type{<:Term41096{I, M} where I}) where M = ismodulatable41096(M)
+
+function newexpand41096(gen, name::Symbol)
+    flag = ismodulatable41096(getfield(gen, name))
+    if flag
+        return true
+    else
+        return false
+    end
+end
+
+t41096 = Term41096{:t}(Modulate41096(:t, false))
+μ41096 = Term41096{:μ}(Modulate41096(:μ, false))
+U41096 = Term41096{:U}(Modulate41096(:U, false))
+
+@test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
