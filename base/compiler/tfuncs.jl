@@ -1025,7 +1025,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
         if istypea && istypeb
             return Type{<:Union{ta, tb}}
         end
-        return tmerge(ta0, tb0)
+        return Any
     end
     u isa DataType || return Any
     if isabstracttype(u)
