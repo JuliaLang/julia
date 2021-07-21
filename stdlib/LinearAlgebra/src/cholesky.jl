@@ -298,7 +298,7 @@ function cholesky!(A::StridedMatrix, ::NoPivot = NoPivot(); check::Bool = true)
         return cholesky!(Hermitian(A), NoPivot(); check = check)
     end
 end
-@deprecate cholesky!(A, ::Val{false}; check::Bool = true) cholesky!(A, NoPivot(); check)
+@deprecate cholesky!(A, ::Val{false}; check::Bool = true) cholesky!(A, NoPivot(); check) false
 
 ## With pivoting
 ### BLAS/LAPACK element types
@@ -399,7 +399,7 @@ function cholesky(A::Union{StridedMatrix{Float16},RealHermSymComplexHerm{Float16
     X = cholesky!(cholcopy(A); check = check)
     return Cholesky{Float16}(X)
 end
-@deprecate cholesky(A, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check)
+@deprecate cholesky(A, ::Val{false}; check::Bool = true) cholesky(A, NoPivot(); check) false
 
 ## With pivoting
 """
@@ -460,7 +460,7 @@ true
 cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
     ::RowMaximum; tol = 0.0, check::Bool = true) =
     cholesky!(cholcopy(A), RowMaximum(); tol = tol, check = check)
-@deprecate cholesky(A, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, RowMaximum(); tol, check)
+@deprecate cholesky(A, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, RowMaximum(); tol, check) false
 ## Number
 function cholesky(x::Number, uplo::Symbol=:U)
     C, info = _chol!(x, uplo)
