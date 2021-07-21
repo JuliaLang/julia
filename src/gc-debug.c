@@ -679,7 +679,7 @@ static void objprofile_print(
             size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
             static const int ptr_hex_width = 2 * sizeof(void*);
             // timestamp,kind,num,size,{ptr_hex_with,ty},$objtype
-            jl_printf(out, "OBJPROFILE,%s,%s,%d,%ld,%*p,", str_timestamp, kind, num, sz, ptr_hex_width, ty);
+            jl_printf(out, "OBJPROFILE;%s;%s;%d;%ld;%*p;", str_timestamp, kind, num, sz, ptr_hex_width, ty);
             if (ty == (void*)jl_buff_tag)
                 jl_safe_printf("#<buffer>");
             else if (ty == jl_malloc_tag)
