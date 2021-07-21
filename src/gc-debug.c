@@ -628,12 +628,18 @@ void gc_debug_print_status(void)
 static htable_t obj_counts[3];
 static htable_t obj_sizes[3];
 static int grab_objprofile = 0;
+JL_STREAM* objprofile_output = NULL;
 
 /* JL_DLLEXPORT return obj_counts, obj_sizes in some julia array or somesuch */
 JL_DLLEXPORT void jl_grab_objprofile(void)
 {
     grab_objprofile = 1;
     jl_gc_collect(JL_GC_FULL);
+}
+
+JL_DLLEXPORT void jl_set_objprofile_output_file(void* stream)
+{
+    objprofile_output = (JL_STREAM*)stream;
 }
 
 void objprofile_count(void *ty, int old, int sz)
@@ -708,16 +714,11 @@ void objprofile_printall_to_file(JL_STREAM* out)
 //_STREAM *objprofile_output = JL_STDERR;
 void objprofile_printall(void) {
     if (!grab_objprofile) return; 
-    // We need to construct uv_stream_t for an arbitrary file
-    // TODO(jan.rous): allow for directing the output to destination of interest,
-    // now let's just open /tmp/julia.objprofile.csv
-    /*
-    if (objprofile_output == NULL) {
-        objprofile_output = (JL_STREAM *)open("/tmp/julia.objprofile.csv", O_CREAT | O_CLOEXEC | O_APPEND, O_WRONLY);
-                
+    JL_STREAM* out = JL_STDERR;
+    if (objprofile_output != NULL) {
+        out = objprofile_output;
     }
-    */
-    objprofile_printall_to_file(JL_STDERR);
+    objprofile_printall_to_file(out);
 }
 #endif
 
