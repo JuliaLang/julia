@@ -45,6 +45,9 @@ Standard library changes
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
   constructing the range. ([#40382])
 
+#### InteractiveUtils
+* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
+
 #### Package Manager
 
 #### LinearAlgebra
