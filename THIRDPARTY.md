@@ -10,6 +10,7 @@ for exceptions.
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](https://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
 - [Python](https://docs.python.org/3/license.html) (for strtod implementation on Windows) [PSF]
+- [FEMTOLISP](https://github.com/JeffBezanson/femtolisp) [BSD-3]
 
 The following components included in Julia `Base` have their own separate licenses:
 
@@ -19,7 +20,6 @@ The following components included in Julia `Base` have their own separate licens
 The Julia language links to the following external libraries, which have their
 own licenses:
 
-- [FEMTOLISP](https://github.com/JeffBezanson/femtolisp) [BSD-3]
 - [LIBUNWIND](https://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master) [MIT]
 - [LIBUV](https://github.com/joyent/libuv/blob/master/LICENSE) [MIT]
 - [LLVM](https://releases.llvm.org/6.0.0/LICENSE.TXT) [BSD-3, effectively]
