@@ -1015,8 +1015,19 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
     exact = exact && !has_free_typevars(s)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        return tmerge(_fieldtype_tfunc(rewrap(u.a, s), exact, name),
-                      _fieldtype_tfunc(rewrap(u.b, s), exact, name))
+        ta0 = _fieldtype_tfunc(rewrap(u.a, s), exact, name)
+        tb0 = _fieldtype_tfunc(rewrap(u.b, s), exact, name)
+        ta0 ⊑ tb0 && return tb0
+        tb0 ⊑ ta0 && return ta0
+        ta, exacta, _, istypea = instanceof_tfunc(ta0)
+        tb, exactb, _, istypeb = instanceof_tfunc(tb0)
+        if exact && exacta && exactb
+            return Const(Union{ta, tb})
+        end
+        if istypea && istypeb
+            return Type{<:Union{ta, tb}}
+        end
+        return Any
     end
     u isa DataType || return Any
     if isabstracttype(u)

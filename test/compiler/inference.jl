@@ -3395,3 +3395,14 @@ end
         x.x
     end) == Any[Int]
 end
+
+@testset "fieldtype for unions" begin # e.g. issue #40177
+    f40177(::Type{T}) where {T} = fieldtype(T, 1)
+    for T in [
+        Union{Tuple{Val}, Tuple{Tuple}},
+        Union{Base.RefValue{T}, Type{Int32}} where T<:Real,
+        Union{Tuple{Vararg{Symbol}}, Tuple{Float64, Vararg{Float32}}},
+    ]
+        @test @inferred(f40177(T)) == fieldtype(T, 1)
+    end
+end
