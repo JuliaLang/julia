@@ -694,7 +694,7 @@ static void objprofile_print(
             size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
             static const int ptr_hex_width = 2 * sizeof(void*);
             // timestamp,kind,num,size,{ptr_hex_with,ty},$objtype
-            jl_printf(out, "OBJPROFILE;%s;%s;%s;%d;%ld;", objprofile_name, str_timestamp, kind, num, sz);
+            jl_safe_printf( "OBJPROFILE;%s;%s;%s;%d;%ld;", objprofile_name, str_timestamp, kind, num, sz);
             if (ty == (void*)jl_buff_tag)
                 jl_safe_printf("#<buffer>");
             else if (ty == jl_malloc_tag)
@@ -702,8 +702,8 @@ static void objprofile_print(
             else if (ty == jl_singleton_tag)
                 jl_safe_printf("#<singletons>");
             else
-                jl_static_show(out, (jl_value_t*)ty);
-            jl_printf(out, "\n");
+                jl_static_show(JL_STDERR, (jl_value_t*)ty);
+            jl_safe_printf("\n");
         }
     }
 }
