@@ -603,7 +603,7 @@ function is_trivial_for_spawn(ir::IRCode, stmts::StmtRange)
     for istmt in stmts
         stmt = ir.stmts[istmt]
         stmt[:type] === Bottom && continue
-        stmt_effect_free(stmt[:inst], stmt[:inst], ir, ir.sptypes) && continue
+        stmt_effect_free(stmt[:inst], stmt[:type], ir, ir.sptypes) && continue
         if !_is_trivial_for_spawn(stmt[:inst])
             tapir_remark(
                 "non-trivial for spawn: ",
