@@ -39,6 +39,7 @@ Julia's `stdlib` uses the following external libraries, which have their own lic
 - [LAPACK](https://netlib.org/lapack/LICENSE.txt) [BSD-3]
 - [PCRE](https://www.pcre.org/licence.txt) [BSD-3]
 - [SUITESPARSE](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/LICENSE.txt) [mix of LGPL2+ and GPL2+; see individual module licenses]
+- [LIBBLASTRAMPOLINE](https://github.com/staticfloat/libblastrampoline/blob/main/LICENSE) [MIT]
 
 Julia's build process uses the following external tools:
 
