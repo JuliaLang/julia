@@ -115,7 +115,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 static void jl_prep_sanitizers(void)
 {
 #if !defined(_OS_WINDOWS_)
-#if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
     struct rlimit rl;
 
     // When using the sanitizers, increase stack size because they bloat

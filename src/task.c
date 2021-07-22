@@ -41,7 +41,7 @@
 extern "C" {
 #endif
 
-#if defined(JL_ASAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_)
 static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {
     __sanitizer_start_switch_fiber(NULL, bottom, size);
 }
@@ -53,7 +53,7 @@ static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size)
 static inline void sanitizer_finish_switch_fiber(void) {}
 #endif
 
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
 static inline void tsan_destroy_ctx(jl_ptls_t ptls, void *state) {
     if (state != &ptls->root_task->state) {
         __tsan_destroy_fiber(ctx->state);
@@ -321,7 +321,7 @@ JL_DLLEXPORT jl_task_t *jl_get_next_task(void) JL_NOTSAFEPOINT
     return ct;
 }
 
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
 const char tsan_state_corruption[] = "TSAN state corrupted. Exiting HARD!\n";
 #endif
 
@@ -334,7 +334,7 @@ static void ctx_switch(jl_task_t *lastt)
     // none of these locks should be held across a task switch
     assert(ptls->locks.len == 0);
 
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
     if (lastt->ctx.tsan_state != __tsan_get_current_fiber()) {
         // Something went really wrong - don't even assume that we can
         // use assert/abort which involve lots of signal handling that
@@ -400,7 +400,7 @@ static void ctx_switch(jl_task_t *lastt)
 #endif
     jl_set_pgcstack(&t->gcstack);
 
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
     tsan_switch_to_ctx(&t->tsan_state);
     if (killed)
         tsan_destroy_ctx(ptls, &lastt->tsan_state);
@@ -765,7 +765,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
             memcpy(&t->ctx, &ct->ptls->base_ctx, sizeof(t->ctx));
     }
 #endif
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
     t->tsan_state = __tsan_create_fiber(0);
 #endif
     return t;
@@ -1147,7 +1147,7 @@ static void jl_start_fiber_set(jl_ucontext_t *t)
 #endif
 
 #if defined(JL_HAVE_SIGALTSTACK)
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
 #error TSAN support not currently implemented for this tasking model
 #endif
 
@@ -1237,7 +1237,7 @@ static void jl_set_fiber(jl_ucontext_t *t)
 #endif
 
 #if defined(JL_HAVE_ASYNCIFY)
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
 #error TSAN support not currently implemented for this tasking model
 #endif
 
@@ -1313,7 +1313,7 @@ void jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     jl_set_pgcstack(&ct->gcstack);
     assert(jl_current_task == ct);
 
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
     ct->tsan_state = __tsan_get_current_fiber();
 #endif
 

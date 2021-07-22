@@ -130,7 +130,7 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
 #ifdef RTLD_NOLOAD
                   | JL_RTLD(flags, NOLOAD)
 #endif
-#if defined(RTLD_DEEPBIND) && !(defined(JL_ASAN_ENABLED) || defined(JL_TSAN_ENABLED) || defined(JL_MSAN_ENABLED))
+#if defined(RTLD_DEEPBIND) && !(defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_))
                   | JL_RTLD(flags, DEEPBIND)
 #endif
 #ifdef RTLD_FIRST

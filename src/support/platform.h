@@ -50,6 +50,25 @@
 #define _COMPILER_GCC_
 #endif
 
+#if defined(__has_feature) // Clang flavor
+#if __has_feature(address_sanitizer)
+#define _COMPILER_ASAN_ENABLED_
+#endif
+#if __has_feature(memory_sanitizer)
+#define _COMPILER_MSAN_ENABLED_
+#endif
+#if __has_feature(thread_sanitizer)
+#if __clang_major__ < 11
+#error Thread sanitizer runtime libraries in clang < 11 leak memory and cannot be used
+#endif
+#define _COMPILER_TSAN_ENABLED_
+#endif
+#else // GCC flavor
+#if defined(__SANITIZE_ADDRESS__)
+#define _COMPILER_ASAN_ENABLED_
+#endif
+#endif // __has_feature
+
 /*******************************************************************************
 *                               OS                                             *
 *******************************************************************************/

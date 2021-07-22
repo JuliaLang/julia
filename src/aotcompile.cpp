@@ -664,13 +664,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
-#if defined(JL_ASAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
-#if defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_MSAN_ENABLED_)
         PM->add(createMemorySanitizerPass(true));
 #endif
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
         PM->add(createThreadSanitizerLegacyPassPass());
 #endif
         return;
@@ -813,13 +813,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
-#if defined(JL_ASAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_)
     PM->add(createAddressSanitizerFunctionPass());
 #endif
-#if defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_MSAN_ENABLED_)
     PM->add(createMemorySanitizerPass(true));
 #endif
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
     PM->add(createThreadSanitizerLegacyPassPass());
 #endif
 }

@@ -502,7 +502,7 @@ JL_DLLEXPORT int jl_set_fenv_rounding(int i)
 }
 
 
-#ifdef JL_ASAN_ENABLED
+#ifdef _COMPILER_ASAN_ENABLED_
 JL_DLLEXPORT const char* __asan_default_options()
 {
     return "allow_user_segv_handler=1:detect_leaks=0";
