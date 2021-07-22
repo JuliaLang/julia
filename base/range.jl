@@ -647,8 +647,8 @@ function checked_length(r::OrdinalRange{T}) where T
     else
         diff = checked_sub(stop, start)
     end
-    a = Integer(div(diff, s))
-    return checked_add(a, oneunit(a))
+    a = div(diff, s)
+    return Integer(checked_add(a, oneunit(a)))
 end
 
 function checked_length(r::AbstractUnitRange{T}) where T
@@ -656,8 +656,8 @@ function checked_length(r::AbstractUnitRange{T}) where T
     if isempty(r)
         return Integer(first(r) - first(r))
     end
-    a = Integer(checked_add(checked_sub(last(r), first(r))))
-    return checked_add(a, oneunit(a))
+    a = checked_sub(last(r), first(r))
+    return Integer(checked_add(a, oneunit(a)))
 end
 
 function length(r::OrdinalRange{T}) where T
@@ -674,10 +674,9 @@ function length(r::OrdinalRange{T}) where T
     else
         diff = stop - start
     end
-    a = Integer(div(diff, s))
-    return a + oneunit(a)
+    a = div(diff, s)
+    return Integer(a + oneunit(a))
 end
-
 
 function length(r::AbstractUnitRange{T}) where T
     @_inline_meta
