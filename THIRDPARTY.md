@@ -33,7 +33,7 @@ Julia's `stdlib` uses the following external libraries, which have their own lic
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING) [GPL2+ with unlimited linking exception]
 - [CURL](https://curl.haxx.se/docs/copyright.html) [MIT/X derivative]
 - [LIBSSH2](https://github.com/libssh2/libssh2/blob/master/COPYING) [BSD-3]
-- [MBEDTLS](https://tls.mbed.org/how-to-get) [either GPLv2 or Apache 2.0]
+- [MBEDTLS](https://github.com/ARMmbed/mbedtls/blob/development/LICENSE) [Apache 2.0]
 - [MPFR](https://www.mpfr.org/mpfr-current/mpfr.html#Copying) [LGPL3+]
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE) [BSD-3]
 - [LAPACK](https://netlib.org/lapack/LICENSE.txt) [BSD-3]
