@@ -21,6 +21,3 @@ override JULIA_BUILD_MODE=debug
 
 # make ASAN consume less memory
 export ASAN_OPTIONS=detect_leaks=0:fast_unwind_on_malloc=0:allow_user_segv_handler=1:malloc_context_size=2
-
-# tell libblastrampoline to not use RTLD_DEEPBIND
-export LBT_USE_RTLD_DEEPBIND=0

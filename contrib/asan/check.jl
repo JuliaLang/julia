@@ -35,12 +35,7 @@ function main(args = ARGS)::Int
     timeout = Threads.Atomic{Bool}(false)
     isstarted = false
     mktemp() do tmppath, tmpio
-        cmd = addenv(
-            `$julia -e $code $tmppath`,
-            "ASAN_OPTIONS" =>
-                "detect_leaks=0:fast_unwind_on_malloc=0:allow_user_segv_handler=1:malloc_context_size=2",
-            "LBT_USE_RTLD_DEEPBIND" => "0",
-        )
+        cmd = `$julia -e $code $tmppath`
         # Note: Ideally, we set ASAN_SYMBOLIZER_PATH here. But there is no easy
         # way to find out the path from just a Julia binary.
 
