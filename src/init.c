@@ -734,12 +734,13 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    if (jl_options.image_file)
+    if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
-    else
+    } else {
         jl_init_types();
+        jl_init_codegen();
+    }
 
-    jl_init_codegen();
     jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
