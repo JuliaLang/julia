@@ -221,8 +221,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         vtype = elsetype = Any
         condval = maybe_extract_const_bool(rettype)
         for i in 1:length(fargs)
-            # find the first argument which supports refinment,
-            # and intersect all equvalent arguments with it
+            # find the first argument which supports refinement,
+            # and intersect all equivalent arguments with it
             arg = fargs[i]
             arg isa SlotNumber || continue # can't refine
             old = argtypes[i]
