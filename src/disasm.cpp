@@ -5,6 +5,8 @@
 //
 // Original copyright:
 //
+// University of Illinois/NCSA
+// Open Source License
 // Copyright (c) 2003-2016 University of Illinois at Urbana-Champaign.
 // All rights reserved.
 //

@@ -5,7 +5,7 @@ for exceptions.
 
 - [crc32c.c](https://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software) (CRC-32c checksum code by Mark Adler) [[ZLib](https://opensource.org/licenses/Zlib)].
 - [LDC](https://github.com/ldc-developers/ldc/blob/master/LICENSE) (for ccall/cfunction ABI definitions) [BSD-3]. The portion of code that Julia uses from LDC is [BSD-3] licensed.
-- [LLVM](https://releases.llvm.org/3.9.0/LICENSE.TXT) (for parts of src/disasm.cpp) [BSD-3]
+- [LLVM](https://releases.llvm.org/3.9.0/LICENSE.TXT) (for parts of src/disasm.cpp) [UIUC]
 - [MUSL](https://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for src/getopt.c and src/getopt.h) [MIT]
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](https://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
@@ -22,7 +22,7 @@ own licenses:
 
 - [LIBUNWIND](https://github.com/libunwind/libunwind/blob/master/LICENSE) [MIT]
 - [LIBUV](https://github.com/JuliaLang/libuv/blob/julia-uv2-1.39.0/LICENSE) [MIT]
-- [LLVM](https://releases.llvm.org/6.0.0/LICENSE.TXT) [BSD-3, effectively]
+- [LLVM](https://releases.llvm.org/6.0.0/LICENSE.TXT) [UIUC]
 - [UTF8PROC](https://github.com/JuliaStrings/utf8proc) [MIT]
 
 Julia's `stdlib` uses the following external libraries, which have their own licenses:
