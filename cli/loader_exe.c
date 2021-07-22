@@ -35,6 +35,12 @@ int main(int argc, char * argv[])
 {
 #endif
 
+#ifdef _COMPILER_ASAN_ENABLED_
+    // ASAN does not support RTLD_DEEPBIND
+    // https://github.com/google/sanitizers/issues/611
+    putenv("LBT_USE_RTLD_DEEPBIND=0");
+#endif
+
     // Convert Windows wchar_t values to UTF8
 #ifdef _OS_WINDOWS_
     for (int i = 0; i < argc; i++) {
