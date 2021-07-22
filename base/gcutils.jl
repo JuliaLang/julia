@@ -98,8 +98,10 @@ gc(full::Bool=true) =
     GC.grab_objprofile()
 Print a summary of objects on the heap to stderr.
 """
-grab_objprofile() =
-    ccall(:jl_grab_objprofile, Cvoid, ())
+function grab_objprofile(n::String)
+    ccall(:jl_grab_objprofile, Cvoid, (Cstring,), n)
+    GC.gc(full=true)
+end
 
 """
     GC.enable(on::Bool)

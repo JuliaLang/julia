@@ -629,12 +629,21 @@ static htable_t obj_counts[3];
 static htable_t obj_sizes[3];
 static int grab_objprofile = 0;
 JL_STREAM* objprofile_output = NULL;
+char objprofile_name[100];
 
 /* JL_DLLEXPORT return obj_counts, obj_sizes in some julia array or somesuch */
-JL_DLLEXPORT void jl_grab_objprofile(void)
+JL_DLLEXPORT void jl_grab_objprofile(char* name)
 {
+    if (name == NULL) {
+        objprofile_name[0] = 0;
+    } else {
+        memset(objprofile_name, '\0', sizeof(objprofile_name));
+        strncpy(objprofile_name, name, 80);
+    }
+    jl_safe_printf("jl_grab_objprofile triggered with name %s", name);
+
     grab_objprofile = 1;
-    jl_gc_collect(JL_GC_FULL);
+    // jl_gc_collect(JL_GC_FULL);
 }
 
 JL_DLLEXPORT void jl_set_objprofile_output_file(void* stream)
@@ -685,7 +694,7 @@ static void objprofile_print(
             size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
             static const int ptr_hex_width = 2 * sizeof(void*);
             // timestamp,kind,num,size,{ptr_hex_with,ty},$objtype
-            jl_printf(out, "OBJPROFILE;%s;%s;%d;%ld;%*p;", str_timestamp, kind, num, sz, ptr_hex_width, ty);
+            jl_printf(out, "OBJPROFILE;%s;%s;%s;%d;%ld;", objprofile_name, str_timestamp, kind, num, sz);
             if (ty == (void*)jl_buff_tag)
                 jl_safe_printf("#<buffer>");
             else if (ty == jl_malloc_tag)
