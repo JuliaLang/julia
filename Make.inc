@@ -1196,7 +1196,10 @@ BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(s
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
+# Note: we explicitly _do not_ define `CSL` here, since it requires some more
+# advanced techniques to decide whether it should be installed from a BB source
+# or not.  See `deps/csl.mk` for more detail.
+BB_PROJECTS := OPENBLAS LLVM SUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
