@@ -189,10 +189,11 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
     return true
 end
 
-# Convert IRCode back to CodeInfo and compute inlining cost and sideeffects
+# compute inlining cost and sideeffects
 function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir::IRCode, @nospecialize(result))
-    (; def) = linfo = opt.linfo
-    nargs = Int(opt.nargs) - 1
+    (; src, nargs, linfo) = opt
+    (; def, specTypes) = linfo
+    nargs = Int(nargs) - 1
 
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
@@ -214,7 +215,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
                 end
             end
             if proven_pure
-                for fl in opt.src.slotflags
+                for fl in src.slotflags
                     if (fl & SLOT_USEDUNDEF) != 0
                         proven_pure = false
                         break
@@ -223,7 +224,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             end
         end
         if proven_pure
-            opt.src.pure = true
+            src.pure = true
         end
 
         if proven_pure
@@ -236,7 +237,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             if !(isa(result, Const) && !is_inlineable_constant(result.val))
                 opt.const_api = true
             end
-            force_noinline || (opt.src.inlineable = true)
+            force_noinline || (src.inlineable = true)
         end
     end
 
@@ -245,7 +246,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
     # determine and cache inlineability
     union_penalties = false
     if !force_noinline
-        sig = unwrap_unionall(linfo.specTypes)
+        sig = unwrap_unionall(specTypes)
         if isa(sig, DataType) && sig.name === Tuple.name
             for P in sig.parameters
                 P = unwrap_unionall(P)
@@ -257,25 +258,25 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
         else
             force_noinline = true
         end
-        if !opt.src.inlineable && result === Union{}
+        if !src.inlineable && result === Union{}
             force_noinline = true
         end
     end
     if force_noinline
-        opt.src.inlineable = false
+        src.inlineable = false
     elseif isa(def, Method)
-        if opt.src.inlineable && isdispatchtuple(linfo.specTypes)
+        if src.inlineable && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
         else
             bonus = 0
             if result ⊑ Tuple && !isconcretetype(widenconst(result))
                 bonus = params.inline_tupleret_bonus
             end
-            if opt.src.inlineable
+            if src.inlineable
                 # For functions declared @inline, increase the cost threshold 20x
                 bonus += params.inline_cost_threshold*19
             end
-            opt.src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
+            src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
         end
     end
 
