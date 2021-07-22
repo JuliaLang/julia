@@ -715,7 +715,7 @@ function _mapreduce_prod(f, x, D::Diagonal, y)
     end
 end
 
-function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
+function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
     info = 0
     for (i, di) in enumerate(A.diag)
         if isreal(di) && real(di) > 0
@@ -729,9 +729,11 @@ function cholesky!(A::Diagonal, ::Val{false} = Val(false); check::Bool = true)
     end
     Cholesky(A, 'U', convert(BlasInt, info))
 end
+@deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 
-cholesky(A::Diagonal, ::Val{false} = Val(false); check::Bool = true) =
-    cholesky!(cholcopy(A), Val(false); check = check)
+cholesky(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true) =
+    cholesky!(cholcopy(A), NoPivot(); check = check)
+@deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
 
 function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
     Cfactors = getfield(C, :factors)
