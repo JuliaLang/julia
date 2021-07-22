@@ -35,73 +35,15 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         add_remark!(interp, sv, "Skipped call in throw block")
         return CallMeta(Any, false)
     end
-    valid_worlds = WorldRange()
-    # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-    splitunions = 1 < unionsplitcost(argtypes) <= InferenceParams(interp).MAX_UNION_SPLITTING
-    mts = Core.MethodTable[]
-    fullmatch = Bool[]
-    if splitunions
-        split_argtypes = switchtupleunion(argtypes)
-        applicable = Any[]
-        applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
-        infos = MethodMatchInfo[]
-        for arg_n in split_argtypes
-            sig_n = argtypes_to_type(arg_n)
-            mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
-            if mt === nothing
-                add_remark!(interp, sv, "Could not identify method table for call")
-                return CallMeta(Any, false)
-            end
-            mt = mt::Core.MethodTable
-            matches = findall(sig_n, method_table(interp); limit=max_methods)
-            if matches === missing
-                add_remark!(interp, sv, "For one of the union split cases, too many methods matched")
-                return CallMeta(Any, false)
-            end
-            push!(infos, MethodMatchInfo(matches))
-            for m in matches
-                push!(applicable, m)
-                push!(applicable_argtypes, arg_n)
-            end
-            valid_worlds = intersect(valid_worlds, matches.valid_worlds)
-            thisfullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
-            found = false
-            for (i, mt′) in enumerate(mts)
-                if mt′ === mt
-                    fullmatch[i] &= thisfullmatch
-                    found = true
-                    break
-                end
-            end
-            if !found
-                push!(mts, mt)
-                push!(fullmatch, thisfullmatch)
-            end
-        end
-        info = UnionSplitInfo(infos)
-    else
-        mt = ccall(:jl_method_table_for, Any, (Any,), atype)
-        if mt === nothing
-            add_remark!(interp, sv, "Could not identify method table for call")
-            return CallMeta(Any, false)
-        end
-        mt = mt::Core.MethodTable
-        matches = findall(atype, method_table(interp, sv); limit=max_methods)
-        if matches === missing
-            # this means too many methods matched
-            # (assume this will always be true, so we don't compute / update valid age in this case)
-            add_remark!(interp, sv, "Too many methods matched")
-            return CallMeta(Any, false)
-        end
-        push!(mts, mt)
-        push!(fullmatch, _any(match->(match::MethodMatch).fully_covers, matches))
-        info = MethodMatchInfo(matches)
-        applicable = matches.matches
-        valid_worlds = matches.valid_worlds
-        applicable_argtypes = nothing
+
+    matches = find_matching_methods(argtypes, atype, method_table(interp, sv), InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
+    if isa(matches, FailedMethodMatch)
+        add_remark!(interp, sv, matches.reason)
+        return CallMeta(Any, false)
     end
+
+    (; valid_worlds, applicable, info) = matches
     update_valid_age!(sv, valid_worlds)
-    applicable = applicable::Array{Any,1}
     napplicable = length(applicable)
     rettype = Bottom
     edges = MethodInstance[]
@@ -142,7 +84,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 if edge !== nothing
                     push!(edges, edge)
                 end
-                this_argtypes = applicable_argtypes === nothing ? argtypes : applicable_argtypes[i]
+                this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 const_rt, const_result = abstract_call_method_with_const_args(interp, result, f, this_argtypes, match, sv, false)
                 if const_rt !== rt && const_rt ⊑ rt
                     rt = const_rt
@@ -164,7 +106,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
-            this_argtypes = applicable_argtypes === nothing ? argtypes : applicable_argtypes[i]
+            this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
             const_this_rt, const_result = abstract_call_method_with_const_args(interp, result, f, this_argtypes, match, sv, false)
             if const_this_rt !== this_rt && const_this_rt ⊑ this_rt
                 this_rt = const_this_rt
@@ -272,7 +214,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # and avoid keeping track of a more complex result type.
         rettype = Any
     end
-    add_call_backedges!(interp, rettype, edges, fullmatch, mts, atype, sv)
+    add_call_backedges!(interp, rettype, edges, matches, atype, sv)
     if !isempty(sv.pclimitations) # remove self, if present
         delete!(sv.pclimitations, sv)
         for caller in sv.callers_in_cycle
@@ -283,24 +225,110 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     return CallMeta(rettype, info)
 end
 
-function add_call_backedges!(interp::AbstractInterpreter,
-                             @nospecialize(rettype),
-                             edges::Vector{MethodInstance},
-                             fullmatch::Vector{Bool}, mts::Vector{Core.MethodTable}, @nospecialize(atype),
-                             sv::InferenceState)
-    if rettype === Any
-        # for `NativeInterpreter`, we don't add backedges when a new method couldn't refine
-        # (widen) this type
-        return
+struct FailedMethodMatch
+    reason::String
+end
+
+struct MethodMatches
+    applicable::Vector{Any}
+    info::MethodMatchInfo
+    valid_worlds::WorldRange
+    mt::Core.MethodTable
+    fullmatch::Bool
+end
+
+struct UnionSplitMethodMatches
+    applicable::Vector{Any}
+    applicable_argtypes::Vector{Vector{Any}}
+    info::UnionSplitInfo
+    valid_worlds::WorldRange
+    mts::Vector{Core.MethodTable}
+    fullmatches::Vector{Bool}
+end
+
+function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
+                               union_split::Int, max_methods::Int)
+    # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
+    if 1 < unionsplitcost(argtypes) <= union_split
+        split_argtypes = switchtupleunion(argtypes)
+        infos = MethodMatchInfo[]
+        applicable = Any[]
+        applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
+        valid_worlds = WorldRange()
+        mts = Core.MethodTable[]
+        fullmatches = Bool[]
+        for i in 1:length(split_argtypes)
+            arg_n = split_argtypes[i]::Vector{Any}
+            sig_n = argtypes_to_type(arg_n)
+            mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
+            mt === nothing && return FailedMethodMatch("Could not identify method table for call")
+            mt = mt::Core.MethodTable
+            matches = findall(sig_n, method_table; limit = max_methods)
+            if matches === missing
+                return FailedMethodMatch("For one of the union split cases, too many methods matched")
+            end
+            push!(infos, MethodMatchInfo(matches))
+            for m in matches
+                push!(applicable, m)
+                push!(applicable_argtypes, arg_n)
+            end
+            valid_worlds = intersect(valid_worlds, matches.valid_worlds)
+            thisfullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
+            found = false
+            for (i, mt′) in enumerate(mts)
+                if mt′ === mt
+                    fullmatches[i] &= thisfullmatch
+                    found = true
+                    break
+                end
+            end
+            if !found
+                push!(mts, mt)
+                push!(fullmatches, thisfullmatch)
+            end
+        end
+        return UnionSplitMethodMatches(applicable,
+                                       applicable_argtypes,
+                                       UnionSplitInfo(infos),
+                                       valid_worlds,
+                                       mts,
+                                       fullmatches)
+    else
+        mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+        if mt === nothing
+            return FailedMethodMatch("Could not identify method table for call")
+        end
+        mt = mt::Core.MethodTable
+        matches = findall(atype, method_table; limit = max_methods)
+        if matches === missing
+            # this means too many methods matched
+            # (assume this will always be true, so we don't compute / update valid age in this case)
+            return FailedMethodMatch("Too many methods matched")
+        end
+        fullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
+        return MethodMatches(matches.matches,
+                             MethodMatchInfo(matches),
+                             matches.valid_worlds,
+                             mt,
+                             fullmatch)
     end
+end
+
+function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype), edges::Vector{MethodInstance},
+                             matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
+                             sv::InferenceState)
+    # for `NativeInterpreter`, we don't add backedges when a new method couldn't refine (widen) this type
+    rettype === Any && return
     for edge in edges
         add_backedge!(edge, sv)
     end
-    for (thisfullmatch, mt) in zip(fullmatch, mts)
-        if !thisfullmatch
-            # also need an edge to the method table in case something gets
-            # added that did not intersect with any existing method
-            add_mt_backedge!(mt, atype, sv)
+    # also need an edge to the method table in case something gets
+    # added that did not intersect with any existing method
+    if isa(matches, MethodMatches)
+        matches.fullmatch || add_mt_backedge!(matches.mt, atype, sv)
+    else
+        for (thisfullmatch, mt) in zip(matches.fullmatches, matches.mts)
+            thisfullmatch || add_mt_backedge!(mt, atype, sv)
         end
     end
 end
