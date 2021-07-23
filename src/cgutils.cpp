@@ -3893,8 +3893,9 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
 static void emit_gc_safepoint(jl_codectx_t &ctx)
 {
     ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
+    Value* signal_page = get_current_signal_page(ctx);
     emit_signal_fence(ctx);
-    ctx.builder.CreateLoad(getSizeTy(ctx.builder.getContext()), get_current_signal_page(ctx), true);
+    ctx.builder.CreateLoad(getSizeTy(ctx.builder.getContext()), signal_page, true);
     emit_signal_fence(ctx);
 }
 
