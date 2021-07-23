@@ -41,6 +41,9 @@ end
 const ConcreteMaybe{T} = Some{Union{T,Nothing}}
 const MaybeTask = ConcreteMaybe{Task}
 
+# disambiguation
+synctasks() = nothing
+
 function synctasks(tasks::MaybeTask...)
     c_ex = nothing
     for s in tasks
