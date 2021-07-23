@@ -1914,3 +1914,16 @@ end
 f18985(x::T, y...) where {T<:Union{Int32,Int64}} = (length(y), f18985(y[1], y[2:end]...)...)
 f18985(x::T) where {T<:Union{Int32,Int64}} = 100
 @test f18985(1, 2, 3) == (2, 1, 100)
+
+# issue #40048
+let A = Tuple{Ref{T}, Vararg{T}} where T,
+    B = Tuple{Ref{U}, Union{Ref{S}, Ref{U}, Int}, Union{Ref{S}, S}} where S where U,
+    C = Tuple{Ref{U}, Union{Ref{S}, Ref{U}, Ref{W}}, Union{Ref{S}, W, V}} where V<:AbstractArray where W where S where U
+    I = typeintersect(A, B)
+    @test I != Union{}
+    @test I <: A
+    @test I <: B
+    # avoid stack overflow
+    J = typeintersect(A, C)
+    @test_broken J != Union{}
+end
