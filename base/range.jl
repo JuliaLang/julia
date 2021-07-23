@@ -419,7 +419,7 @@ oneto(r) = OneTo(r)
     StepRangeLen{T,R,S}(  ref::R, step::S, len, [offset=1]) where {T,R,S}
     StepRangeLen{T,R,S,L}(ref::R, step::S, len, [offset=1]) where {T,R,S,L}
 
-A range `r` where `r[i]` produces values of type `T` (in the second
+A range `r` where `r[i]` produces values of type `T` (in the first
 form, `T` is deduced automatically), parameterized by a `ref`erence
 value, a `step`, and the `len`gth. By default `ref` is the starting
 value `r[1]`, but alternatively you can supply it as the value of
