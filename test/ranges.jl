@@ -652,8 +652,8 @@ end
     @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
     is_unsigned = T <: Unsigned
     is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
-    @test broadcast(-, T(1):3) == -T(1):-1:-T(3) broken=is_unsigned
-    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1) broken=is_unsigned
+    @test broadcast(-, T(1):3) == -T(1):-T(1):-T(3)
+    @test broadcast(-, 2, T(1):3) == T(1):-T(1):-T(1)
 end
 @testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
     @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
@@ -1108,10 +1108,11 @@ end
     # repr/show should display the range nicely
     # to test print_range in range.jl
     replrepr(x) = repr("text/plain", x; context=IOContext(stdout, :limit=>true, :displaysize=>(24, 80)))
+    nb = Sys.WORD_SIZE
     @test replrepr(1:4) == "1:4"
     @test repr("text/plain", 1:4) == "1:4"
     @test repr("text/plain", range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
+    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64, Int$nb}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
     @test repr(range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
     @test repr(LinRange{Float64}(1,5,7)) == "range(1.0, stop=5.0, length=7)"
     @test replrepr(0:100.) == "0.0:1.0:100.0"
@@ -1119,7 +1120,7 @@ end
     # only examines spacing of the left and right edges of the range, sufficient
     # to cover the designated screen size.
     @test replrepr(range(0, stop=100, length=10000)) == "0.0:0.010001000100010001:100.0"
-    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
+    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64, Int$nb}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
@@ -2045,3 +2046,7 @@ end
         @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
     end
 end
+
+@test length(range(1, 100, length=big(100)^100)) == big(100)^100
+@test length(range(big(1), big(100)^100, length=big(100)^100)) == big(100)^100
+@test length(0 * (1:big(100)^100)) == big(100)^100
