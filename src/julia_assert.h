@@ -21,7 +21,10 @@
 #  endif
 #else
 #  ifdef JL_NDEBUG
-#    undef JL_NDEBUG
+#    define NDEBUG
+#    include <assert.h>
+#    undef NDEBUG
+#  else
+#    include <assert.h>
 #  endif
-#  include <assert.h>
 #endif

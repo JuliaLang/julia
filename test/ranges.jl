@@ -1443,6 +1443,7 @@ using .Main.Furlongs
 @testset "dimensional correctness" begin
     @test length(Vector(Furlong(2):Furlong(10))) == 9
     @test length(range(Furlong(2), length=9)) == checked_length(range(Furlong(2), length=9)) == 9
+    @test @inferred(length(StepRange(Furlong(2), Furlong(1), Furlong(1)))) == 0
     @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
           Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
@@ -1516,6 +1517,8 @@ end
     @test view(1:10, 1:5) === 1:5
     @test view(1:10, 1:2:5) === 1:2:5
     @test view(1:2:9, 1:5) === 1:2:9
+    @test view(1:10, :) === 1:10
+    @test view(1:2:9, :) === 1:2:9
 
     # Ensure we don't hit a fallback `view` if there's a better `getindex` implementation
     vmt = collect(methods(view, Tuple{AbstractRange, AbstractRange}))
@@ -2044,4 +2047,32 @@ end
         @test rs === inds
         @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
     end
+end
+
+@testset "non 1-based ranges indexing" begin
+    struct ZeroBasedUnitRange{T,A<:AbstractUnitRange{T}} <: AbstractUnitRange{T}
+        a :: A
+        function ZeroBasedUnitRange(a::AbstractUnitRange{T}) where {T}
+            @assert !Base.has_offset_axes(a)
+            new{T, typeof(a)}(a)
+        end
+    end
+
+    Base.parent(A::ZeroBasedUnitRange) = A.a
+    Base.first(A::ZeroBasedUnitRange) = first(parent(A))
+    Base.length(A::ZeroBasedUnitRange) = length(parent(A))
+    Base.last(A::ZeroBasedUnitRange) = last(parent(A))
+    Base.size(A::ZeroBasedUnitRange) = size(parent(A))
+    Base.axes(A::ZeroBasedUnitRange) = map(x -> Base.IdentityUnitRange(0:x-1), size(parent(A)))
+    Base.getindex(A::ZeroBasedUnitRange, i::Int) = parent(A)[i + 1]
+    Base.getindex(A::ZeroBasedUnitRange, i::Integer) = parent(A)[i + 1]
+    Base.firstindex(A::ZeroBasedUnitRange) = 0
+    function Base.show(io::IO, A::ZeroBasedUnitRange)
+        show(io, parent(A))
+        print(io, " with indices $(axes(A,1))")
+    end
+
+    r = ZeroBasedUnitRange(5:8)
+    @test r[0:2] == r[0]:r[2]
+    @test r[0:1:2] == r[0]:1:r[2]
 end

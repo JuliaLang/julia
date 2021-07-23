@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# build (and start inferring) the inference frame for the linfo
+# build (and start inferring) the inference frame for the top-level MethodInstance
 function typeinf(interp::AbstractInterpreter, result::InferenceResult, cached::Bool)
     frame = InferenceState(result, cached, interp)
     frame === nothing && return false
@@ -386,17 +386,18 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     end
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
-    already_inferred = already_inferred_quick_test(interp, result.linfo)
-    if !already_inferred && haskey(WorldView(code_cache(interp), valid_worlds), result.linfo)
+    linfo = result.linfo
+    already_inferred = already_inferred_quick_test(interp, linfo)
+    if !already_inferred && haskey(WorldView(code_cache(interp), valid_worlds), linfo)
         already_inferred = true
     end
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, result.linfo, valid_worlds, result.src)
-        code_cache(interp)[result.linfo] = CodeInstance(result, inferred_result, valid_worlds)
+        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src)
+        code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
     end
-    unlock_mi_inference(interp, result.linfo)
+    unlock_mi_inference(interp, linfo)
     nothing
 end
 

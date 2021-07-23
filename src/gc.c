@@ -2564,6 +2564,8 @@ mark: {
             if (a->data == NULL || jl_array_len(a) == 0)
                 goto pop;
             if (flags.ptrarray) {
+                if (jl_tparam0(vt) == jl_symbol_type)
+                    goto pop;
                 size_t l = jl_array_len(a);
                 uintptr_t nptr = (l << 2) | (bits & GC_OLD);
                 objary_begin = (jl_value_t**)a->data;

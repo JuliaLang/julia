@@ -7236,6 +7236,12 @@ end
 @test string((B40050(),)) == "($B40050(),)"
 @test_broken isbitstype(Tuple{B40050})
 
+# issue #41654
+struct X41654 <: Ref{X41654}
+end
+@test isbitstype(X41654)
+@test ('a'=>X41654(),)[1][2] isa X41654
+
 # Issue #34206/34207
 function mre34206(a, n)
     va = view(a, :)

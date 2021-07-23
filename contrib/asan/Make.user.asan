@@ -1,10 +1,12 @@
-TOOLCHAIN=$(BUILDROOT)/../toolchain/usr/tools
+TOOLCHAIN=$(BUILDROOT)/../toolchain
+BINDIR=$(TOOLCHAIN)/usr/bin
+TOOLDIR=$(TOOLCHAIN)/usr/tools
 
 # use our new toolchain
 USECLANG=1
-override CC=$(TOOLCHAIN)/clang
-override CXX=$(TOOLCHAIN)/clang++
-export ASAN_SYMBOLIZER_PATH=$(TOOLCHAIN)/llvm-symbolizer
+override CC=$(BINDIR)/clang
+override CXX=$(TOOLDIR)/clang++
+export ASAN_SYMBOLIZER_PATH=$(TOOLDIR)/llvm-symbolizer
 
 USE_BINARYBUILDER_LLVM=1
 
