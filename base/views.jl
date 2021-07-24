@@ -42,7 +42,7 @@ function replace_ref_begin_end_!(ex, withex)
                 n = 1
                 J = lastindex(ex.args)
                 for j = 2:J
-                    exj, used = replace_ref_begin_end_!(ex.args[j], (:($firstindex($S)),:($lastindex($S,$n))))
+                    exj, used = replace_ref_begin_end_!(ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))))
                     used_S |= used
                     ex.args[j] = exj
                     if isa(exj,Expr) && exj.head === :...
