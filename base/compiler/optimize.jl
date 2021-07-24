@@ -179,7 +179,7 @@ end
 # of the function as a whole.
 function stmt_affects_purity(@nospecialize(stmt), ir)
     if isa(stmt, GotoNode) || isa(stmt, ReturnNode) ||
-        isa(stmt, DetachNode) || isa(stmt, ReattachNode) || isa(stmt, SyncNode)
+      isa(stmt, DetachNode) || isa(stmt, ReattachNode) || isa(stmt, SyncNode)
         return false
     end
     if isa(stmt, GotoIfNot)
@@ -686,7 +686,7 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
         elseif isa(el, SyncNode)
             syncregion = el.syncregion
             if isa(syncregion, SSAValue)
-                    syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
+                syncregion = SSAValue(syncregion.id + ssachangemap[syncregion.id])
             end
             body[i] = SyncNode(syncregion)
         elseif isa(el, SSAValue)
