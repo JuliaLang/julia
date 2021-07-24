@@ -4,6 +4,18 @@ using Test
 using Base.Meta
 using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode, ReturnNode, GotoIfNot
 
+# `cfg_simplify!` is not exercised in the usual compiler pipeline. So, it is
+# possible that the methods that are not defined in compiler's world age creep
+# into the definition. Let's be extra careful here by testing this function in
+# compiler's world age, to keep it usable in the compiler whenever we need it.
+function cfg_simplify!(ir)
+    return Base.invoke_in_world(
+        Core.Compiler.compiler_world_age(),
+        Core.Compiler.cfg_simplify!,
+        ir,
+    )
+end
+
 # Tests for domsort
 
 ## Test that domsort doesn't mangle single-argument phis (#29262)
@@ -198,7 +210,7 @@ let src = code_typed(gcd, Tuple{Int, Int})[1].first
     # Test that cfg_simplify doesn't mangle IR on code with loops
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    ir = Core.Compiler.cfg_simplify!(ir)
+    ir = cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
 end
 
@@ -221,7 +233,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    ir = Core.Compiler.cfg_simplify!(ir)
+    ir = cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     ir = Core.Compiler.compact!(ir)
     @test length(ir.cfg.blocks) == 1 && Core.Compiler.length(ir.stmts) == 1
@@ -249,7 +261,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    ir = Core.Compiler.cfg_simplify!(ir)
+    ir = cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 5
     ret_2 = ir.stmts.inst[ir.cfg.blocks[3].stmts[end]]
@@ -275,7 +287,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    ir = Core.Compiler.cfg_simplify!(ir)
+    ir = cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 1
 end

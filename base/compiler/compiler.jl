@@ -137,6 +137,9 @@ include("compiler/optimize.jl") # TODO: break this up further + extract utilitie
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
 
+const _COMPILER_WORLD_AGE = ccall(:jl_get_tls_world_age, UInt, ())
+compiler_world_age() = _COMPILER_WORLD_AGE
+
 include("compiler/parsing.jl")
 Core.eval(Core, :(_parse = Compiler.fl_parse))
 
