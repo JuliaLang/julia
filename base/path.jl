@@ -36,7 +36,7 @@ elseif Sys.iswindows()
 
     function splitdrive(path::String)
         m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)
-        String(m.captures[1]), String(m.captures[2])
+        String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else
     error("path primitives for this OS need to be defined")
@@ -208,7 +208,7 @@ function splitext(path::String)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m === nothing && return (path,"")
-    a*m.captures[1], String(m.captures[2])
+    (a*something(m.captures[1])), String(something(m.captures[2]))
 end
 
 # NOTE: deprecated in 1.4

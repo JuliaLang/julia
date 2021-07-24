@@ -2210,12 +2210,10 @@ code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
 ssachangemap = fill(0, length(code28279))
 labelchangemap = fill(0, length(code28279))
-worklist = Int[]
 let i
     for i in 1:length(code28279)
         stmt = code28279[i]
         if isa(stmt, GotoIfNot)
-            push!(worklist, i)
             ssachangemap[i] = 1
             if i < length(code28279)
                 labelchangemap[i + 1] = 1
@@ -3394,4 +3392,15 @@ end
     @test (@eval m Base.return_types((AbstractInterfaceExtended,)) do x
         x.x
     end) == Any[Int]
+end
+
+@testset "fieldtype for unions" begin # e.g. issue #40177
+    f40177(::Type{T}) where {T} = fieldtype(T, 1)
+    for T in [
+        Union{Tuple{Val}, Tuple{Tuple}},
+        Union{Base.RefValue{T}, Type{Int32}} where T<:Real,
+        Union{Tuple{Vararg{Symbol}}, Tuple{Float64, Vararg{Float32}}},
+    ]
+        @test @inferred(f40177(T)) == fieldtype(T, 1)
+    end
 end
