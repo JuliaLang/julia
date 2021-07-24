@@ -187,7 +187,7 @@ end
 """
     child_tasks(ir::IRCode) -> tasks::Vector{ChildTask}
 
-Discover immediate child tasks.
+Analyze `ir` and return a task tree.
 """
 function child_tasks(ir::IRCode)
     tasks = ChildTask[]
