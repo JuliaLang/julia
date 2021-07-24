@@ -1599,6 +1599,7 @@ function outline_child_task(task::ChildTask, ir::IRCode)
         stmts.inst[inew] = Expr(:call, GlobalRef(Core, :getfield), Argument(1), inew)
         # ASK: ditto
     end
+    selftype = Tuple{Any[widenconst(stmts.type[i]) for i in 1:nargs + ncaps]...}
     # Actual computation executed in the child task:
     for iold in defs
         inew = ssachangemap[iold]
@@ -1644,7 +1645,7 @@ function outline_child_task(task::ChildTask, ir::IRCode)
     @assert issorted(cfg.index)
     meta = Any[]  # TODO: copy something from `ir.meta`?
     linetable = copy(ir.linetable)  # TODO: strip off?
-    argtypes = Any[Any]  # ASK: what's the appropriate "self" type for the opaque closure?
+    argtypes = Any[selftype]
     sptypes = ir.sptypes  # TODO: strip off unused sptypes?
     taskir = IRCode(stmts, cfg, linetable, argtypes, meta, sptypes)
 
@@ -2030,6 +2031,7 @@ function code_info_from_ssair(ir::IRCode)
     end
     nargs = length(ir.argtypes)
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+    ci.slottypes = Any[widenconst(ir.argtypes[i]) for i in 1:nargs]
     ci.slotnames = [gensym(:arg) for _ in 1:nargs]
     ci.slotnames[1] = Symbol("#self#")
     ci.slotflags = fill(0x00, nargs)
