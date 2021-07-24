@@ -55,7 +55,7 @@ SRCS += codegen llvm-ptls
 RUNTIME_SRCS += jitlayers aotcompile debuginfo disasm llvm-simdloop llvm-muladd \
 	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
-	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-api llvm-remove-addrspaces \
+	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
@@ -358,9 +358,9 @@ endif
 clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 
 clang-sa-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS)  -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS)  -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
 clang-sa-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
 
 # Add C files as a target of `analyzegc`
 analyzegc: $(addprefix clang-sa-,$(RUNTIME_SRCS))

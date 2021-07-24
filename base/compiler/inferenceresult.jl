@@ -13,7 +13,7 @@ end
 # for the provided `linfo` and `given_argtypes`. The purpose of this function is
 # to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
-function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector, va_override)
+function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector, va_override::Bool)
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
     @assert length(given_argtypes) >= (nargs - 1)

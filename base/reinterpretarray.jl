@@ -141,7 +141,7 @@ StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int) = _stride(a, i)
 
 function stride(a::ReinterpretArray, i::Int)
-    a.parent isa StridedArray || ArgumentError("Parent must be strided.") |> throw
+    a.parent isa StridedArray || throw(ArgumentError("Parent must be strided."))
     return _stride(a, i)
 end
 
@@ -157,7 +157,7 @@ function _stride(a, i)
 end
 
 function strides(a::ReinterpretArray)
-    a.parent isa StridedArray || ArgumentError("Parent must be strided.") |> throw
+    a.parent isa StridedArray || throw(ArgumentError("Parent must be strided."))
     size_to_strides(1, size(a)...)
 end
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)

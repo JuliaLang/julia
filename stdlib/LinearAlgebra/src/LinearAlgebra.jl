@@ -15,8 +15,9 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
-using Base: IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+    @propagate_inbounds, @pure, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
+    splat
 using Base.Broadcast: Broadcasted, broadcasted
 import Libdl
 
@@ -575,8 +576,13 @@ function __init__()
     try
         libblas_path = find_library_path(Base.libblas_name)
         liblapack_path = find_library_path(Base.liblapack_name)
+        # We manually `dlopen()` these libraries here, so that we search with `libjulia-internal`'s
+        # `RPATH` and not `libblastrampoline's`.  Once it's been opened, when LBT tries to open it,
+        # it will find the library already loaded.
+        libblas_path = Libdl.dlpath(Libdl.dlopen(libblas_path))
         BLAS.lbt_forward(libblas_path; clear=true)
         if liblapack_path != libblas_path
+            liblapack_path = Libdl.dlpath(Libdl.dlopen(liblapack_path))
             BLAS.lbt_forward(liblapack_path)
         end
         BLAS.check()

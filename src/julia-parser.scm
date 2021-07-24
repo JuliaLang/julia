@@ -2188,8 +2188,13 @@
 (define (unescape-parsed-string-literal strs)
   (map-at even? unescape-string strs))
 
+(define (strip-escaped-newline s raw)
+  (if raw s (map (lambda (s)
+                   (if (string? s) (strip-escaped-newline- s) s))
+                 s)))
+
 ;; remove `\` followed by a newline
-(define (strip-escaped-newline s)
+(define (strip-escaped-newline- s)
   (let ((in  (open-input-string s))
         (out (open-output-string)))
     (define (loop preceding-backslash?)
@@ -2197,7 +2202,10 @@
             (cond ((eof-object? c))
                   (preceding-backslash?
                    (if (not (eqv? c #\newline))
-                       (begin (write-char #\\ out) (write-char c out)))
+                       (begin (write-char #\\ out) (write-char c out))
+                       ((define (loop-)
+                          (if (memv (peek-char in) '(#\space #\tab))
+                              (begin (take-char in) (loop-))))))
                    (loop #f))
                   ((eqv? c #\\) (loop #t))
                   (else (write-char c out) (loop #f)))))
@@ -2210,13 +2218,14 @@
                   (if (eqv? (peek-char (take-char p)) delim)
                       (map-first strip-leading-newline
                                  (dedent-triplequoted-string
-                                   (parse-string-literal- 2 (take-char p) s delim raw)))
+                                   (strip-escaped-newline
+                                     (parse-string-literal- 2 (take-char p) s delim raw)
+                                     raw)))
                       (list ""))
-                  (parse-string-literal- 0 p s delim raw))))
-    (if raw str (unescape-parsed-string-literal
-                  (map (lambda (s)
-                         (if (string? s) (strip-escaped-newline s) s))
-                       str)))))
+                  (strip-escaped-newline
+                    (parse-string-literal- 0 p s delim raw)
+                    raw))))
+    (if raw str (unescape-parsed-string-literal str))))
 
 (define (strip-leading-newline s)
   (let ((n (sizeof s)))
@@ -2365,8 +2374,11 @@
                     (loop (read-char p) b e 0))))
            (let ((nxch (not-eof-for delim (read-char p))))
              (write-char #\\ b)
-             (write-char nxch b)
-             (loop (read-char p) b e 0))))
+             (if (eqv? nxch #\return)
+                 (loop nxch b e 0)
+                 (begin
+                   (write-char nxch b)
+                   (loop (read-char p) b e 0))))))
 
       ((and (eqv? c #\$) (not raw))
        (let* ((ex (parse-interpolate s))

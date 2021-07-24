@@ -1,5 +1,3 @@
-ifeq ($(USE_BINARYBUILDER_CSL),0)
-
 # Interrogate the fortran compiler (which is always GCC based) on where it is keeping its libraries
 STD_LIB_PATH := $(shell LANG=C $(FC) -print-search-dirs | grep '^programs: =' | sed -e "s/^programs: =//")
 STD_LIB_PATH += :$(shell LANG=C $(FC) -print-search-dirs | grep '^libraries: =' | sed -e "s/^libraries: =//")
@@ -12,6 +10,44 @@ define pathsearch
 $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 endef
 
+# CSL bundles lots of system compiler libraries, and while it is quite bleeding-edge
+# as compared to what most distros ship, if someone tries to build an older branch,
+# the version of CSL that ships with that branch may become relatively old.  This is
+# not a problem for code that is built in BB, but when we build Julia with the system
+# compiler, that compiler uses the version of `libstdc++` that it is bundled with,
+# and we can get linker errors when trying to run that `julia` executable with the
+# `libstdc++` that comes from the (now old) BB-built CSL.
+#
+# To fix this, we take note when the system `libstdc++.so` is newer than whatever we
+# would get from CSL (by searching for a `GLIBCXX_3.4.X` symbol that does not exist
+# in our CSL, but would in a newer one), and default to `USE_BINARYBUILDER_CSL=0` in
+# this case.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.30|GLIBCXX_3\.5\.|GLIBCXX_4\.
+
+# First, check to see if BB is disabled on a global setting
+ifeq ($(USE_BINARYBUILDER),0)
+USE_BINARYBUILDER_CSL ?= 0
+else
+# If it's not, check to see if it's disabled by a USE_SYSTEM_xxx flag
+ifeq ($(USE_SYSTEM_CSL),1)
+USE_BINARYBUILDER_CSL ?= 0
+else
+# If it's not, see if we should disable it due to `libstdc++` being newer:
+LIBSTDCXX_PATH := $(eval $(call pathsearch,libstdc++,$(STD_LIB_PATH)))
+ifneq (,$(and $(LIBSTDCXX_PATH),$(shell objdump -p $(LIBSTDCXX_PATH) | grep $(CSL_NEXT_GLIBCXX_VERSION))))
+# Found `libstdc++`, grepped it for strings and found a `GLIBCXX` symbol
+# that is newer that whatever we have in CSL.  Default to not using BB.
+USE_BINARYBUILDER_CSL ?= 0
+else
+# Either we didn't find `libstdc++` (e.g. we're using `clang`), or we
+# found it and couldn't find the new symbol in it (it's older than what
+# BB provides, so let's use BB instead)
+USE_BINARYBUILDER_CSL ?= 1
+endif
+endif
+endif
+
+ifeq ($(USE_BINARYBUILDER_CSL),0)
 define copy_csl
 install-csl: | $$(build_shlibdir) $$(build_shlibdir)/$(1)
 $$(build_shlibdir)/$(1): | $$(build_shlibdir)

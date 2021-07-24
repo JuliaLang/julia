@@ -369,6 +369,14 @@ JL_DLLEXPORT int jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
     return ret;
 }
 
+JL_DLLEXPORT int jl_fs_hardlink(char *path, char *new_path)
+{
+    uv_fs_t req;
+    int ret = uv_fs_link(unused_uv_loop_arg, &req, path, new_path, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 JL_DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
 {
     uv_fs_t req;
@@ -966,12 +974,13 @@ JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     return uv_tty_set_mode(handle, mode_enum);
 }
 
-typedef int (*work_cb_t)(void *, void *);
+typedef int (*work_cb_t)(void *, void *, void *);
 typedef void (*notify_cb_t)(int);
 
 struct work_baton {
     uv_work_t req;
     work_cb_t work_func;
+    void      *ccall_fptr;
     void      *work_args;
     void      *work_retval;
     notify_cb_t notify_func;
@@ -985,7 +994,7 @@ struct work_baton {
 void jl_work_wrapper(uv_work_t *req)
 {
     struct work_baton *baton = (struct work_baton*) req->data;
-    baton->work_func(baton->work_args, baton->work_retval);
+    baton->work_func(baton->ccall_fptr, baton->work_args, baton->work_retval);
 }
 
 void jl_work_notifier(uv_work_t *req, int status)
@@ -995,12 +1004,13 @@ void jl_work_notifier(uv_work_t *req, int status)
     free(baton);
 }
 
-JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_retval,
+JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *ccall_fptr, void *work_args, void *work_retval,
                                notify_cb_t notify_func, int notify_idx)
 {
     struct work_baton *baton = (struct work_baton*)malloc_s(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
     baton->work_func = work_func;
+    baton->ccall_fptr = ccall_fptr;
     baton->work_args = work_args;
     baton->work_retval = work_retval;
     baton->notify_func = notify_func;
