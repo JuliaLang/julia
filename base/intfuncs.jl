@@ -58,6 +58,10 @@ end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
+# Unfortunately, we need to manually annotate this as `@pure` to work around #41694. Since
+# this is used in the Rational constructor, constant prop is something we do care about here.
+# This does call generic functions, so it might not be completely sound, but since `_gcd` is
+# restricted to BitIntegers, it is probably fine in practice.
 @pure function _gcd(a::T, b::T) where T<:BitInteger
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
