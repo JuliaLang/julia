@@ -47,11 +47,22 @@ function gcd(a::T, b::T) where T<:Integer
     checked_abs(a)
 end
 
-# binary GCD (aka Stein's) algorithm
-# about 1.7x (2.1x) faster for random Int64s (Int128s)
 function gcd(a::T, b::T) where T<:BitInteger
     a == 0 && return checked_abs(b)
     b == 0 && return checked_abs(a)
+    r = _gcd(a, b)
+    signbit(r) && __throw_gcd_overflow(a, b)
+    return r
+end
+@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
+
+# binary GCD (aka Stein's) algorithm
+# about 1.7x (2.1x) faster for random Int64s (Int128s)
+# Unfortunately, we need to manually annotate this as `@pure` to work around #41694. Since
+# this is used in the Rational constructor, constant prop is something we do care about here.
+# This does call generic functions, so it might not be completely sound, but since `_gcd` is
+# restricted to BitIntegers, it is probably fine in practice.
+@pure function _gcd(a::T, b::T) where T<:BitInteger
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
@@ -65,11 +76,8 @@ function gcd(a::T, b::T) where T<:BitInteger
         v >>= trailing_zeros(v)
     end
     r = u << k
-    # T(r) would throw InexactError; we want OverflowError instead
-    r > typemax(T) && __throw_gcd_overflow(a, b)
-    r % T
+    return r % T
 end
-@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
 
 """
     lcm(x, y...)
