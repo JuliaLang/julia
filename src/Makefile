@@ -113,6 +113,9 @@ endif
 ifeq ($(USE_LLVM_SHLIB),1)
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
+ifeq ($(shell $(LLVM_CONFIG_HOST) --assertion-mode),ON)
+CXX_DISABLE_ASSERTION :=
+endif
 endif
 
 CLANG_LDFLAGS := $(LLVM_LDFLAGS)
