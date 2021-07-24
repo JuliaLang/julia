@@ -1108,7 +1108,7 @@ end
 @testset "issue 10950" begin
     r = 1//2:3
     @test length(r) == 3
-    @test_throws MethodError checked_length(r) == 3 # this would work if checked_sub is defined on Rational
+    @test checked_length(r) == 3
     i = 1
     for x in r
         @test x == i//2
