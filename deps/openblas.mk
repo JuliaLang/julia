@@ -108,7 +108,17 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-exshift.patch-applied: $(BUILDDIR)/$(OP
 		patch -p1 -f < $(SRCDIR)/patches/openblas-exshift.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-exshift.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-filter-out-mavx-flag-on-zgemm-kernels.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-exshift.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-filter-out-mavx-flag-on-zgemm-kernels.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-Only-filter-out-mavx-on-Sandybridge.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-filter-out-mavx-flag-on-zgemm-kernels.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-Only-filter-out-mavx-on-Sandybridge.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-Only-filter-out-mavx-on-Sandybridge.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured

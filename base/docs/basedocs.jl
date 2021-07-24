@@ -2005,7 +2005,7 @@ optimized to the appropriate hardware instruction, otherwise it'll use a loop.
 modifyfield!
 
 """
-    replacefield!(value, name::Symbol, cmp, expected, desired,
+    replacefield!(value, name::Symbol, expected, desired,
         [success_order::Symbol, [fail_order::Symbol=success_order]) =>
         (old, Bool)
 
@@ -2013,14 +2013,14 @@ These atomically perform the operations to get and conditionally set a field to
 a given value.
 
     y = getfield!(value, name, fail_order)
-    ok = cmp(y, expected)
+    ok = y === expected
     if ok
         setfield!(value, name, desired, success_order)
     end
     return y, ok
 
-If the operation is `===` on a supported type, we'll use the relevant processor
-instructions, otherwise it'll use a loop.
+If supported by the hardware, this may be optimized to the appropriate hardware
+instruction, otherwise it'll use a loop.
 """
 replacefield!
 
@@ -2529,10 +2529,20 @@ UnionAll
 """
     ::
 
-With the `::`-operator type annotations are attached to expressions and variables in programs.
-See the manual section on [Type Declarations](@ref).
+The `::` operator either asserts that a value has the given type, or declares that
+a local variable or function return always has the given type.
 
-Outside of declarations `::` is used to assert that expressions and variables in programs have a given type.
+Given `expression::T`, `expression` is first evaluated. If the result is of type
+`T`, the value is simply returned. Otherwise, a [`TypeError`](@ref) is thrown.
+
+In local scope, the syntax `local x::T` or `x::T = expression` declares that local variable
+`x` always has type `T`. When a value is assigned to the variable, it will be
+converted to type `T` by calling [`convert`](@ref).
+
+In a method declaration, the syntax `function f(x)::T` causes any value returned by
+the method to be converted to type `T`.
+
+See the manual section on [Type Declarations](@ref).
 
 # Examples
 ```jldoctest
@@ -2541,6 +2551,13 @@ ERROR: TypeError: typeassert: expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
+
+julia> let
+           local x::Int
+           x = 2.0
+           x
+       end
+2
 ```
 """
 kw"::"

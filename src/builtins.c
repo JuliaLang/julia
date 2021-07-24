@@ -198,6 +198,12 @@ JL_DLLEXPORT int (jl_egal)(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value
     return jl_egal(a, b);
 }
 
+JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    // warning: a,b may NOT have been gc-rooted by the caller
+    return jl_egal__unboxed_(a, b, dt);
+}
+
 int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     if (dt == jl_simplevector_type)
@@ -806,7 +812,7 @@ enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char sto
 {
     if (order == not_atomic_sym)
         return jl_memory_order_notatomic;
-    if (order == unordered_sym && (loading || storing))
+    if (order == unordered_sym && (loading ^ storing))
         return jl_memory_order_unordered;
     if (order == monotonic_sym && (loading || storing))
         return jl_memory_order_monotonic;
@@ -961,7 +967,9 @@ JL_CALLABLE(jl_f_replacefield)
         JL_TYPECHK(replacefield!, symbol, args[5]);
         failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[5], 1, 0);
     }
-    // TODO: filter more invalid ordering combinations
+    if (failure_order > success_order)
+        jl_atomic_error("invalid atomic ordering");
+    // TODO: filter more invalid ordering combinations?
     jl_value_t *v = args[0];
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t idx = get_checked_fieldindex("replacefield!", st, v, args[1], 1);
@@ -972,8 +980,6 @@ JL_CALLABLE(jl_f_replacefield)
     if (isatomic == (failure_order == jl_memory_order_notatomic))
         jl_atomic_error(isatomic ? "replacefield!: atomic field cannot be accessed non-atomically"
                                  : "replacefield!: non-atomic field cannot be accessed atomically");
-    if (failure_order > success_order)
-        jl_atomic_error("invalid atomic ordering");
     v = replace_nth_field(st, v, idx, args[2], args[3], isatomic); // always seq_cst, if isatomic needed at all
     return v;
 }
@@ -1481,22 +1487,38 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
     return 1;
 }
 
+// If a field can reference its enclosing type, then the inlining
+// recursive depth is not statically bounded for some layouts, so we cannot
+// inline it. The only way fields can reference this type (due to
+// syntax-enforced restrictions) is via being passed as a type parameter. Thus
+// we can conservatively check this by examining only the parameters of the
+// dependent types.
+// affects_layout is a hack introduced by #35275 to workaround a problem
+// introduced by #34223: it checks whether we will potentially need to
+// compute the layout of the object before we have fully computed the types of
+// the fields during recursion over the allocation of the parameters for the
+// field types (of the concrete subtypes)
 static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(p))
         return references_name(((jl_uniontype_t*)p)->a, name, affects_layout) ||
                references_name(((jl_uniontype_t*)p)->b, name, affects_layout);
     if (jl_is_unionall(p))
-        return references_name((jl_value_t*)((jl_unionall_t*)p)->var, name, 0) ||
+        return references_name((jl_value_t*)((jl_unionall_t*)p)->var->lb, name, 0) ||
+               references_name((jl_value_t*)((jl_unionall_t*)p)->var->ub, name, 0) ||
                references_name(((jl_unionall_t*)p)->body, name, affects_layout);
     if (jl_is_typevar(p))
-        return references_name(((jl_tvar_t*)p)->ub, name, 0) ||
-               references_name(((jl_tvar_t*)p)->lb, name, 0);
+        return 0; // already checked by unionall, if applicable
     if (jl_is_datatype(p)) {
         jl_datatype_t *dp = (jl_datatype_t*)p;
         if (affects_layout && dp->name == name)
             return 1;
-        affects_layout = dp->types == NULL || jl_svec_len(dp->types) != 0;
+        // affects_layout checks whether we will need to attempt to layout this
+        // type (based on whether all copies of it have the same layout) in
+        // that case, we still need to check the recursive parameters for
+        // layout recursion happening also, but we know it won't itself cause
+        // problems for the layout computation
+        affects_layout = ((jl_datatype_t*)jl_unwrap_unionall(dp->name->wrapper))->layout == NULL;
         size_t i, l = jl_nparams(p);
         for (i = 0; i < l; i++) {
             if (references_name(jl_tparam(p, i), name, affects_layout))
@@ -1531,16 +1553,21 @@ JL_CALLABLE(jl_f__typebody)
         else {
             dt->types = (jl_svec_t*)ft;
             jl_gc_wb(dt, ft);
-            if (!dt->name->mutabl) {
-                dt->name->mayinlinealloc = 1;
-                size_t i, nf = jl_svec_len(ft);
+            // If a supertype can reference the same type, then we may not be
+            // able to compute the layout of the object before needing to
+            // publish it, so we must assume it cannot be inlined, if that
+            // check passes, then we also still need to check the fields too.
+            if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 1))) {
+                int mayinlinealloc = 1;
+                size_t i;
                 for (i = 0; i < nf; i++) {
                     jl_value_t *fld = jl_svecref(ft, i);
                     if (references_name(fld, dt->name, 1)) {
-                        dt->name->mayinlinealloc = 0;
+                        mayinlinealloc = 0;
                         break;
                     }
                 }
+                dt->name->mayinlinealloc = mayinlinealloc;
             }
         }
     }
@@ -1625,7 +1652,6 @@ static unsigned intrinsic_nargs[num_intrinsics];
 
 JL_CALLABLE(jl_f_intrinsic_call)
 {
-    JL_NARGSV(intrinsic_call, 1);
     JL_TYPECHK(intrinsic_call, intrinsic, F);
     enum intrinsic f = (enum intrinsic)*(uint32_t*)jl_data_ptr(F);
     if (f == cglobal && nargs == 1)

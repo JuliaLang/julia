@@ -2304,3 +2304,19 @@ end
     @test replstr([[1;;]]) == "1-element Vector{Matrix{$Int}}:\n [1;;]"
     @test replstr([[1;;;]]) == "1-element Vector{Array{$Int, 3}}:\n [1;;;]"
 end
+
+@testset "ncat and nrow" begin
+    @test_repr "[1;;]"
+    @test_repr "[1;;;]"
+    @test_repr "[1;; 2]"
+    @test_repr "[1;;; 2]"
+    @test_repr "[1;;; 2 3;;; 4]"
+    @test_repr "[1;;; 2;;;; 3;;; 4]"
+
+    @test_repr "T[1;;]"
+    @test_repr "T[1;;;]"
+    @test_repr "T[1;; 2]"
+    @test_repr "T[1;;; 2]"
+    @test_repr "T[1;;; 2 3;;; 4]"
+    @test_repr "T[1;;; 2;;;; 3;;; 4]"
+end

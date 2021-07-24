@@ -182,6 +182,17 @@ end
 
 @test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
 
+# issue #41347
+let t = @async 1
+    wait(t)
+    @test_throws ErrorException yield(t)
+end
+
+let t = @async error(42)
+    Base._wait(t)
+    @test_throws ErrorException("42") yieldto(t)
+end
+
 # test that @sync is lexical (PR #27164)
 
 const x27164 = Ref(0)
@@ -289,6 +300,11 @@ end
 # issue #33675
 let vec = vcat(missing, ones(100000))
     @test length(unique(summarysize(vec) for i = 1:20)) == 1
+end
+
+# issue #40773
+let s = Set(1:100)
+    @test summarysize([s]) > summarysize(s)
 end
 
 # issue #13021

@@ -1,0 +1,55 @@
+# These steps should only run on `sandbox.jl` machines, not `docker`-isolated ones
+# since we need nestable sandboxing.  The rootfs images being used here are built from
+# the `.buildkite/rootfs_images/llvm-passes.jl` file.
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+
+steps:
+  - label: "analyzegc"
+    key: "analyzegc"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v1/llvm-passes.tar.gz
+          rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
+    commands: |
+      echo "--- Install in-tree LLVM dependencies"
+      make -j$${JULIA_NUM_CORES} -C deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
+      echo "+++ run clangsa/analyzegc"
+      make -j$${JULIA_NUM_CORES} -C test/clangsa
+      make -j$${JULIA_NUM_CORES} -C src analyzegc
+    timeout_in_minutes: 60
+    notify:
+      - github_commit_status:
+          context: "analyzegc"
+
+  - label: "llvmpasses"
+    key: "llvmpasses"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v1/llvm-passes.tar.gz
+          rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            - "/cache/repos:/cache/repos"
+    commands: |
+      echo "--- make release"
+      make -j$${JULIA_NUM_CORES} release JULIA_PRECOMPILE=0
+      echo "--- make src/install-analysis-deps"
+      make -j$${JULIA_NUM_CORES} -C src install-analysis-deps
+      echo "+++ make test/llvmpasses"
+      make -j$${JULIA_NUM_CORES} -C test/llvmpasses
+    timeout_in_minutes: 60
+    notify:
+      - github_commit_status:
+          context: "llvmpasses"

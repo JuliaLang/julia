@@ -223,6 +223,11 @@ Float16
 julia> promote_type(Int8, UInt16)
 UInt16
 ```
+
+!!! warning "Don't overload this directly"
+    To overload promotion for your own types you should overload [`promote_rule`](@ref).
+    `promote_type` calls `promote_rule` internally to determine the type.
+    Overloading `promote_type` directly can cause ambiguity errors.
 """
 function promote_type end
 

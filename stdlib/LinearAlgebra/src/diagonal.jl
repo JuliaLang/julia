@@ -215,14 +215,14 @@ function (*)(D::Diagonal, V::AbstractVector)
 end
 
 (*)(A::AbstractTriangular, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A), D)
+    rmul!(copy_oftype(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 (*)(D::Diagonal, B::AbstractTriangular) =
-    lmul!(D, copyto!(similar(B, promote_op(*, eltype(B), eltype(D.diag))), B))
+    lmul!(D, copy_oftype(B, promote_op(*, eltype(B), eltype(D.diag))))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
-    rmul!(copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A), D)
+    rmul!(copy_similar(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 (*)(D::Diagonal, A::AbstractMatrix) =
-    lmul!(D, copyto!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A))
+    lmul!(D, copy_similar(A, promote_op(*, eltype(A), eltype(D.diag))))
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
@@ -289,7 +289,9 @@ function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
     rmul!(At, D)
 end
 
-*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) = (Q = adjQ.parent; rmul!(Array(D), adjoint(Q)))
+*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
+    rmul!(Array{promote_type(eltype(D), eltype(adjQ))}(D), adjQ)
+
 function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
     A = adjA.parent
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))

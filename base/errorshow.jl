@@ -222,7 +222,7 @@ function showerror(io::IO, ex::MethodError)
     arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
-    if length(meth) > 1
+    if isa(meth, MethodList) && length(meth) > 1
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     arg_types_param::SimpleVector = arg_types.parameters
@@ -773,10 +773,9 @@ end
 # For improved user experience, filter out frames for include() implementation
 # - see #33065. See also #35371 for extended discussion of internal frames.
 function _simplify_include_frames(trace)
-    i = length(trace)
-    kept_frames = trues(i)
+    kept_frames = trues(length(trace))
     first_ignored = nothing
-    while i >= 1
+    for i in length(trace):-1:1
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
         if first_ignored === nothing
@@ -798,10 +797,9 @@ function _simplify_include_frames(trace)
                 first_ignored = nothing
             end
         end
-        i -= 1
     end
     if first_ignored !== nothing
-        kept_frames[i:first_ignored] .= false
+        kept_frames[1:first_ignored] .= false
     end
     return trace[kept_frames]
 end
@@ -898,4 +896,3 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     show_exception_stack(io, stack)
 end
 show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
-

@@ -2564,6 +2564,8 @@ mark: {
             if (a->data == NULL || jl_array_len(a) == 0)
                 goto pop;
             if (flags.ptrarray) {
+                if (jl_tparam0(vt) == jl_symbol_type)
+                    goto pop;
                 size_t l = jl_array_len(a);
                 uintptr_t nptr = (l << 2) | (bits & GC_OLD);
                 objary_begin = (jl_value_t**)a->data;
@@ -3286,9 +3288,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_thread_heap_t *heap = &ptls->heap;
     jl_gc_pool_t *p = heap->norm_pools;
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
-        assert((jl_gc_sizeclasses[i] < 16 &&
-                jl_gc_sizeclasses[i] % sizeof(void*) == 0) ||
-               (jl_gc_sizeclasses[i] % 16 == 0));
         p[i].osize = jl_gc_sizeclasses[i];
         p[i].freelist = NULL;
         p[i].newpages = NULL;

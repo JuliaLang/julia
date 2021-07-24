@@ -247,22 +247,42 @@ function del_clients(pairs::Vector)
     end
 end
 
-const any_gc_flag = Condition()
+# The task below is coalescing the `flush_gc_msgs` call
+# across multiple producers, see `send_del_client`,
+# and `send_add_client`.
+# XXX: Is this worth the additional complexity?
+#      `flush_gc_msgs` has to iterate over all connected workers.
+const any_gc_flag = Threads.Condition()
 function start_gc_msgs_task()
-    errormonitor(@async while true
-        wait(any_gc_flag)
-        flush_gc_msgs()
-    end)
+    errormonitor(
+        Threads.@spawn begin
+            while true
+                lock(any_gc_flag) do
+                    wait(any_gc_flag)
+                    flush_gc_msgs() # handles throws internally
+                end
+            end
+        end
+    )
 end
 
+# Function can be called within a finalizer
 function send_del_client(rr)
     if rr.where == myid()
         del_client(rr)
     elseif id_in_procs(rr.where) # process only if a valid worker
         w = worker_from_id(rr.where)::Worker
-        push!(w.del_msgs, (remoteref_id(rr), myid()))
-        w.gcflag = true
-        notify(any_gc_flag)
+        msg = (remoteref_id(rr), myid())
+        # We cannot acquire locks from finalizers
+        Threads.@spawn begin
+            lock(w.msg_lock) do
+                push!(w.del_msgs, msg)
+                w.gcflag = true
+            end
+            lock(any_gc_flag) do
+                notify(any_gc_flag)
+            end
+        end
     end
 end
 
@@ -288,9 +308,13 @@ function send_add_client(rr::AbstractRemoteRef, i)
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        push!(w.add_msgs, (remoteref_id(rr), i))
-        w.gcflag = true
-        notify(any_gc_flag)
+        lock(w.msg_lock) do
+            push!(w.add_msgs, (remoteref_id(rr), i))
+            w.gcflag = true
+        end
+        lock(any_gc_flag) do
+            notify(any_gc_flag)
+        end
     end
 end
 
@@ -544,7 +568,7 @@ fetch_ref(rid, args...) = fetch(lookup_ref(rid).c, args...)
 Wait for and get a value from a [`RemoteChannel`](@ref). Exceptions raised are the
 same as for a [`Future`](@ref). Does not remove the item fetched.
 """
-fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
+fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)::eltype(r)
 
 isready(rv::RemoteValue, args...) = isready(rv.c, args...)
 
@@ -607,7 +631,15 @@ function take_ref(rid, caller, args...)
         lock(rv.synctake)
     end
 
-    v=take!(rv, args...)
+    v = try
+        take!(rv, args...)
+    catch e
+        # avoid unmatched unlock when exception occurs
+        # github issue #33972
+        synctake && unlock(rv.synctake)
+        rethrow(e)
+    end
+
     isa(v, RemoteException) && (myid() == caller) && throw(v)
 
     if synctake
@@ -623,7 +655,7 @@ end
 Fetch value(s) from a [`RemoteChannel`](@ref) `rr`,
 removing the value(s) in the process.
 """
-take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)
+take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)::eltype(rr)
 
 # close and isopen are not supported on Future
 

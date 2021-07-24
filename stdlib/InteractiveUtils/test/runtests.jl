@@ -586,3 +586,36 @@ let
     opt = false
     @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
 end
+
+@testset "@time_imports" begin
+    mktempdir() do dir
+        cd(dir) do
+            try
+                pushfirst!(LOAD_PATH, dir)
+                foo_file = joinpath(dir, "Foo3242.jl")
+                write(foo_file,
+                    """
+                    module Foo3242
+                    foo() = 1
+                    end
+                    """)
+
+                Base.compilecache(Base.PkgId("Foo3242"))
+
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stdout(f) do
+                    @eval @time_imports using Foo3242
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("ms  Foo3242\n", String(buf))
+
+            finally
+                filter!((≠)(dir), LOAD_PATH)
+            end
+        end
+    end
+end

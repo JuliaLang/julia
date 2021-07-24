@@ -323,7 +323,7 @@ function Base.showerror(io::IO, err::ParserError)
     # In this case we want the arrow to point one character
     pos = err.pos::Int
     err.type == ErrUnexpectedEofExpectedValue && (pos += 1)
-    str1, err1 = point_to_line(err.str, pos, pos, io)
+    str1, err1 = point_to_line(err.str::String, pos, pos, io)
     @static if VERSION <= v"1.6.0-DEV.121"
         # See https://github.com/JuliaLang/julia/issues/36015
         format_fixer = get(io, :color, false) == true ? "\e[0m" : ""

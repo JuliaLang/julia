@@ -78,15 +78,8 @@ mutable struct OptimizationState
         end
         stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
-        toplevel = !isa(linfo.def, Method)
-        if !toplevel
-            meth = linfo.def
-            inmodule = meth.module
-            nargs = meth.nargs
-        else
-            inmodule = linfo.def::Module
-            nargs = 0
-        end
+        def = linfo.def
+        mod, nargs = isa(def, Method) ? (def.module, def.nargs) : (def, 0)
         # Allow using the global MI cache, but don't track edges.
         # This method is mostly used for unit testing the optimizer
         inlining = InliningState(params,
@@ -94,7 +87,7 @@ mutable struct OptimizationState
             WorldView(code_cache(interp), get_world_counter()),
             inlining_policy(interp))
         return new(linfo,
-                   src, nothing, stmt_info, inmodule, nargs,
+                   src, nothing, stmt_info, mod, nargs,
                    sptypes_from_meth_instance(linfo), slottypes, false,
                    inlining)
         end
@@ -174,7 +167,7 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
         end
     end
     if !inlineable
-        inlineable = inline_worthy(me.ir, params, union_penalties, cost_threshold + bonus)
+        inlineable = inline_worthy(me.ir::IRCode, params, union_penalties, cost_threshold + bonus)
     end
     return inlineable
 end
@@ -196,10 +189,11 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
     return true
 end
 
-# Convert IRCode back to CodeInfo and compute inlining cost and sideeffects
+# compute inlining cost and sideeffects
 function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir::IRCode, @nospecialize(result))
-    def = opt.linfo.def
-    nargs = Int(opt.nargs) - 1
+    (; src, nargs, linfo) = opt
+    (; def, specTypes) = linfo
+    nargs = Int(nargs) - 1
 
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
@@ -221,7 +215,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
                 end
             end
             if proven_pure
-                for fl in opt.src.slotflags
+                for fl in src.slotflags
                     if (fl & SLOT_USEDUNDEF) != 0
                         proven_pure = false
                         break
@@ -230,7 +224,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             end
         end
         if proven_pure
-            opt.src.pure = true
+            src.pure = true
         end
 
         if proven_pure
@@ -243,7 +237,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             if !(isa(result, Const) && !is_inlineable_constant(result.val))
                 opt.const_api = true
             end
-            force_noinline || (opt.src.inlineable = true)
+            force_noinline || (src.inlineable = true)
         end
     end
 
@@ -252,7 +246,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
     # determine and cache inlineability
     union_penalties = false
     if !force_noinline
-        sig = unwrap_unionall(opt.linfo.specTypes)
+        sig = unwrap_unionall(specTypes)
         if isa(sig, DataType) && sig.name === Tuple.name
             for P in sig.parameters
                 P = unwrap_unionall(P)
@@ -264,25 +258,25 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
         else
             force_noinline = true
         end
-        if !opt.src.inlineable && result === Union{}
+        if !src.inlineable && result === Union{}
             force_noinline = true
         end
     end
     if force_noinline
-        opt.src.inlineable = false
+        src.inlineable = false
     elseif isa(def, Method)
-        if opt.src.inlineable && isdispatchtuple(opt.linfo.specTypes)
+        if src.inlineable && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
         else
             bonus = 0
             if result ⊑ Tuple && !isconcretetype(widenconst(result))
                 bonus = params.inline_tupleret_bonus
             end
-            if opt.src.inlineable
+            if src.inlineable
                 # For functions declared @inline, increase the cost threshold 20x
                 bonus += params.inline_cost_threshold*19
             end
-            opt.src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
+            src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
         end
     end
 
@@ -394,7 +388,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     cfg = compute_basic_blocks(code)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, flags)
-    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
+    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable::Union{Vector{LineInfoNode},Vector{Any}}), sv.slottypes, meta, sv.sptypes)
     return ir
 end
 
@@ -565,12 +559,14 @@ function inline_worthy(ir::IRCode,
     return true
 end
 
-function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::CodeInfo, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
+function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
     throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
-        thiscost = statement_or_branch_cost(stmt, line, src, sptypes, src.slottypes, unionpenalties, params, throw_blocks)
+        thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
+                                            src isa CodeInfo ? src.slottypes : src.argtypes,
+                                            unionpenalties, params, throw_blocks)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost
@@ -591,14 +587,23 @@ function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int})
     return renumber_ir_elements!(body, changemap, changemap)
 end
 
-function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, labelchangemap::Vector{Int})
-    for i = 2:length(labelchangemap)
-        labelchangemap[i] += labelchangemap[i - 1]
-    end
-    if ssachangemap !== labelchangemap
-        for i = 2:length(ssachangemap)
-            ssachangemap[i] += ssachangemap[i - 1]
+function cumsum_ssamap!(ssamap::Vector{Int})
+    rel_change = 0
+    for i = 1:length(ssamap)
+        rel_change += ssamap[i]
+        if ssamap[i] == -1
+            # Keep a marker that this statement was deleted
+            ssamap[i] = typemin(Int)
+        else
+            ssamap[i] = rel_change
         end
+    end
+end
+
+function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, labelchangemap::Vector{Int})
+    cumsum_ssamap!(labelchangemap)
+    if ssachangemap !== labelchangemap
+        cumsum_ssamap!(ssachangemap)
     end
     if labelchangemap[end] == 0 && ssachangemap[end] == 0
         return
@@ -614,11 +619,32 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
             body[i] = GotoIfNot(cond, el.dest + labelchangemap[el.dest])
         elseif isa(el, ReturnNode)
-            if isdefined(el, :val) && isa(el.val, SSAValue)
-                body[i] = ReturnNode(SSAValue(el.val.id + ssachangemap[el.val.id]))
+            if isdefined(el, :val)
+                val = el.val
+                if isa(val, SSAValue)
+                    body[i] = ReturnNode(SSAValue(val.id + ssachangemap[val.id]))
+                end
             end
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])
+        elseif isa(el, PhiNode)
+            i = 1
+            edges = el.edges
+            values = el.values
+            while i <= length(edges)
+                was_deleted = ssachangemap[edges[i]] == typemin(Int)
+                if was_deleted
+                    deleteat!(edges, i)
+                    deleteat!(values, i)
+                else
+                    edges[i] += ssachangemap[edges[i]]
+                    val = values[i]
+                    if isa(val, SSAValue)
+                        values[i] = SSAValue(val.id + ssachangemap[val.id])
+                    end
+                    i += 1
+                end
+            end
         elseif isa(el, Expr)
             if el.head === :(=) && el.args[2] isa Expr
                 el = el.args[2]::Expr

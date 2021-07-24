@@ -17,9 +17,9 @@ version = "0.8.5"
 
 [[deps.Documenter]]
 deps = ["Base64", "Dates", "DocStringExtensions", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
-git-tree-sha1 = "5acbebf1be22db43589bc5aa1bb5fcc378b17780"
+git-tree-sha1 = "621850838b3e74dd6dd047b5432d2e976877104e"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "0.27.0"
+version = "0.27.2"
 
 [[deps.IOCapture]]
 deps = ["Logging", "Random"]

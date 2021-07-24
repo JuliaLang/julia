@@ -162,8 +162,8 @@ Set the level of debug info generation to <n>
 Control whether inlining is permitted (overrides functions declared as @inline)
 
 .TP
---check-bounds={yes|no}
-Emit bounds checks always or never (ignoring declarations)
+--check-bounds={yes|no|auto}
+Emit bounds checks always, never, or respect @inbounds declarations
 
 .TP
 --math-mode={ieee|user}
