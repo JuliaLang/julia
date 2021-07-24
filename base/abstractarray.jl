@@ -1130,7 +1130,8 @@ function copymutable(a::AbstractArray)
 end
 copymutable(itr) = collect(itr)
 
-zero(x::AbstractArray{T}) where {T} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{T}) where {T<:DataType} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{T}) where {T} = map(zero,x) #In case T is a TypeUnion b/c elements of x are heterogeneous types
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
