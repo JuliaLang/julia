@@ -472,7 +472,7 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
     )
 
 mutable struct REPLCompletionProvider <: CompletionProvider
-    modifier::Symbol
+    shift::Bool
 end
 REPLCompletionProvider() = REPLCompletionProvider(:none)
 mutable struct ShellCompletionProvider <: CompletionProvider end

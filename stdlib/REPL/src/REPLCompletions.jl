@@ -504,16 +504,16 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
     end
 
     for name in names(callee_module; all=true)
-        if isdefined(callee_module, name)
+        if !isdeprecated(callee_module, name) && isdefined(callee_module, name)
             func = getfield(callee_module, name)
-            if isa(func, Base.Callable) && func !== Vararg
+            if !isa(func, Module)
                 complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
             elseif callee_module === Main::Module && isa(func, Module)
                 callee_module2 = func
                 for name in names(callee_module2)
                     if isdefined(callee_module2, name)
                         func = getfield(callee_module, name)
-                        if isa(func, Base.Callable) && func !== Vararg
+                        if isa(func, Base.Callable)
                             complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
                         end
                     end
