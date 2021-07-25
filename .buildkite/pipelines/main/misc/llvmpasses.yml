@@ -1,6 +1,3 @@
-# These steps should only run on `sandbox.jl` machines, not `docker`-isolated ones
-# since we need nestable sandboxing.  The rootfs images being used here are built from
-# the `.buildkite/rootfs_images/llvm-passes.jl` file.
 agents:
   queue: "julia"
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
@@ -36,8 +33,8 @@ steps:
       - JuliaCI/julia#v1:
           version: 1.6
       - staticfloat/sandbox#v1:
-          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.0/package_linux.x86_64.tar.gz
-          rootfs_treehash: "d5722d586b93eb307bb6340d275afdbf7578a756"
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
           uid: 1000
           gid: 1000
           workspaces:
