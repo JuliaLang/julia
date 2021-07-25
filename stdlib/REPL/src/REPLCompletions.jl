@@ -504,7 +504,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
     end
 
     for name in names(callee_module; all=true)
-        if !isdeprecated(callee_module, name) && isdefined(callee_module, name)
+        if !Base.isdeprecated(callee_module, name) && isdefined(callee_module, name)
             func = getfield(callee_module, name)
             if !isa(func, Module)
                 complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
@@ -513,7 +513,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
                 for name in names(callee_module2)
                     if isdefined(callee_module2, name)
                         func = getfield(callee_module, name)
-                        if isa(func, Base.Callable)
+                        if !isa(func, Module)
                             complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
                         end
                     end
@@ -552,7 +552,7 @@ function complete_methods_args(funargs::Vector{Any}, ex_org::Expr, context_modul
     return args_ex, kwargs_ex
 end
 
-function complete_methods!(out::Vector{Completion}, @nospecialize(func::Base.Callable), args_ex::Vector{Any}, kwargs_ex::Vector{Pair{Symbol,Any}}, moreargs::Bool=true)
+function complete_methods!(out::Vector{Completion}, @nospecialize(func), args_ex::Vector{Any}, kwargs_ex::Vector{Pair{Symbol,Any}}, moreargs::Bool=true)
     ml = methods(func)
     # Input types and number of arguments
     if isempty(kwargs_ex)
@@ -698,8 +698,8 @@ function completions(string::String, pos::Int, context_module::Module=Main)
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
 
-    # _(x, y)TAB lists methods you can call with these objects
-    # _(x, y TAB lists methods that take these objects as the first two arguments
+    # ?(x, y)TAB lists methods you can call with these objects
+    # ?(x, y TAB lists methods that take these objects as the first two arguments
     # MyModule._(x, y)TAB restricts the search to names in MyModule
     rexm = match(r"(\w+\.|)\?\((.*)$", partial)
     if rexm !== nothing

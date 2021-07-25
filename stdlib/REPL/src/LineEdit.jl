@@ -106,6 +106,11 @@ mutable struct PromptState <: ModeState
     refresh_wait::Union{Timer,Nothing}
 end
 
+struct Modifiers
+    shift::Bool
+end
+Modifiers() = Modifiers(false)
+
 options(s::PromptState) =
     if isdefined(s.p, :repl) && isdefined(s.p.repl, :options)
         # we can't test isa(s.p.repl, LineEditREPL) as LineEditREPL is defined
@@ -1907,9 +1912,9 @@ mode(s::PromptState) = s.p          # ::Prompt
 mode(s::SearchState) = @assert false
 mode(s::PrefixSearchState) = s.histprompt.parent_prompt   # ::Prompt
 
-setmodifier!(s::MIState, val::Symbol) = setmodifier!(mode(s), val)
-setmodifier!(p::Prompt, val::Symbol) = setmodifier!(p.complete, val)
-setmodifier!(c, val::Symbol) = nothing
+setmodifiers!(s::MIState, m::Modifiers) = setmodifiers!(mode(s), m)
+setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
+setmodifiers!(c) = nothing
 
 # Search Mode completions
 function complete_line(s::SearchState, repeats)
@@ -2179,7 +2184,7 @@ function edit_tab(s::MIState, jump_spaces::Bool=false, delete_trailing::Bool=jum
 end
 
 function shift_tab_completion(s::MIState)
-    setmodifier!(s, :shift)
+    setmodifiers!(s, Modifiers(true))
     return complete_line(s)
 end
 
