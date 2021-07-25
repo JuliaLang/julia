@@ -143,6 +143,8 @@ Standard library changes
 * `replace(::String)` now accepts multiple patterns, which will be applied left-to-right simultaneously,
   so only one pattern will be applied to any character, and the patterns will only be applied to the input
   text, not the replacements ([#40484]).
+* New `replace` methods to replace elements of a `Tuple`.
+
 
 #### Package Manager
 
