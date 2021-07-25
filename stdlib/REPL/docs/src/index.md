@@ -453,31 +453,54 @@ The completion of the methods uses type inference and can therefore see if the a
 even if the arguments are output from functions. The function needs to be type stable for the
 completion to be able to remove non-matching methods.
 
-If you wonder which methods can be used with particular argument types, use `?` as the function name:
+If you wonder which methods can be used with particular argument types, use `?` as the function name.
+This shows an example of looking for functions in InteractiveUtils that accept a single string:
 
 ```julia-repl
 julia> InteractiveUtils.?("somefile")[TAB]
-apropos(string) in REPL at REPL/src/docview.jl:727
-clipboard(x) in InteractiveUtils at InteractiveUtils/src/clipboard.jl:60
-code_llvm(f) in InteractiveUtils at InteractiveUtils/src/codeview.jl:178
-code_native(f) in InteractiveUtils at InteractiveUtils/src/codeview.jl:199
-edit(path::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:195
-edit(f) in InteractiveUtils at InteractiveUtils/src/editless.jl:223
+edit(path::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:197
+less(file::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:266
+```
+
+This listed methods in the `InteractiveUtils` module that can be called on a string.
+By default, this excludes methods where all arguments are typed as `Any`,
+but you can see those too by holding down SHIFT-TAB instead of TAB:
+
+```julia-repl
+julia> InteractiveUtils.?("somefile")[SHIFT-TAB]
+apropos(string) in REPL at REPL/src/docview.jl:796
+clipboard(x) in InteractiveUtils at InteractiveUtils/src/clipboard.jl:64
+code_llvm(f) in InteractiveUtils at InteractiveUtils/src/codeview.jl:221
+code_native(f) in InteractiveUtils at InteractiveUtils/src/codeview.jl:243
+edit(path::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:197
+edit(f) in InteractiveUtils at InteractiveUtils/src/editless.jl:225
 eval(x) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:3
 include(x) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:3
-less(file::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:256
-less(f) in InteractiveUtils at InteractiveUtils/src/editless.jl:264
-report_bug(kind) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:385
+less(file::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:266
+less(f) in InteractiveUtils at InteractiveUtils/src/editless.jl:274
+report_bug(kind) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:391
 separate_kwargs(args...; kwargs...) in InteractiveUtils at InteractiveUtils/src/macros.jl:7
 ```
 
-This listed all methods in the `InteractiveUtils` module that can be called on a string.
-If you use SHIFT-TAB instead of TAB, you exclude methods that have all arguments typed as `Any`:
+You can also use ` ?("somefile")[TAB]`  and look across all modules, but the method lists can be long.
+
+By omitting the closing parenthesis, you can include functions that might require additional arguments:
 
 ```julia-repl
-julia> InteractiveUtils.?("hi")[SHIFT-TAB]
-edit(path::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:195
-less(file::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:256
+julia> using Mmap
+
+help?> Mmap.?("file",[TAB]
+Mmap.Anonymous(name::String, readonly::Bool, create::Bool) in Mmap at Mmap/src/Mmap.jl:16
+mmap(file::AbstractString) in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}) where T<:Array in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}) where {T<:Array, N} in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}, offset::Integer; grow, shared) where {T<:Array, N} in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}, len::Integer) where T<:Array in Mmap at Mmap/src/Mmap.jl:251
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer; grow, shared) where T<:Array in Mmap at Mmap/src/Mmap.jl:251
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}) where {T<:BitArray, N} in Mmap at Mmap/src/Mmap.jl:316
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}, offset::Integer; grow, shared) where {T<:BitArray, N} in Mmap at Mmap/src/Mmap.jl:316
+mmap(file::AbstractString, ::Type{T}, len::Integer) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer; grow, shared) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
 ```
 
 ## Customizing Colors

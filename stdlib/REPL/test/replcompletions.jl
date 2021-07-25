@@ -524,7 +524,7 @@ end
 let s = "CompletionFoo.?([1,2,3], 2.0)"
     c, r, res = test_complete(s)
     @test !res
-    @test  any(str->occursin("test(x::AbstractArray{T, N} where N, y) where T<:Real", str), c)
+    @test  any(str->occursin("test(x::AbstractArray{T}, y) where T<:Real", str), c)
     @test  any(str->occursin("test(args...)", str), c)
     @test !any(str->occursin("test3(x::AbstractArray{Int", str), c)
     @test !any(str->occursin("test4", str), c)
