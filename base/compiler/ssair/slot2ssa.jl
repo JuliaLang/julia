@@ -47,7 +47,7 @@ function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     nslots = length(ci.slotflags)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
     # Set defs for arguments
-    for var in result[1:(1+nargs)]
+    for var in result[1:nargs]
         push!(var.defs, 0)
     end
     for idx in 1:length(code)
@@ -586,7 +586,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int,
+function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
                         slottypes::Vector{Any})
     code = ir.stmts.inst
     cfg = ir.cfg

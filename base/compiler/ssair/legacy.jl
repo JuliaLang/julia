@@ -40,7 +40,7 @@ end
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
     # All but the first `nargs` slots will now be unused
-    resize!(ci.slotflags, nargs + 1)
+    resize!(ci.slotflags, nargs)
     stmts = ir.stmts
     ci.code, ci.ssavaluetypes, ci.codelocs, ci.ssaflags, ci.linetable =
         stmts.inst, stmts.type, stmts.line, stmts.flag, ir.linetable
