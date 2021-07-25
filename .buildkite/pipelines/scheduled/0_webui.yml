@@ -14,5 +14,11 @@ steps:
           # Build secrets will not be available in these pipelines (or their children)
           # but some of our signed pipelines can wait upon the completion of these unsigned
           # pipelines.
-          unsigned_pipelines:
-            - .buildkite/experimental/pipeline.yml
+          # unsigned_pipelines:
+          #   - .buildkite/pipelines/scheduled/launch_unsigned_builders.yml
+
+          # Our signed pipelines must have a `signature` or `signature_file` parameter that
+          # verifies the treehash of the pipeline itself and the inputs listed in `inputs`
+          signed_pipelines:
+            - pipeline: .buildkite/pipelines/scheduled/coverage/coverage_linux64.yml
+              signature: "U2FsdGVkX1+lpFo/nKzx3c6xCZPKYTAuunXpOsZG4+s4+iU5LfEpMvtNvpKQjDugRoxQxCItMqB6vr4KZN3KtKhjkLbr8ExAyaPil/N/uFhrLlpwNem9dxHbPrU2l7qo"
