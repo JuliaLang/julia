@@ -57,6 +57,11 @@ Standard library changes
 
 #### REPL
 
+* ` ?(x, y` followed by tab returns all methods that can be called
+  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
+  `MyModule.?(x, y` limits the search to `MyModule`. Using SHIFT-TAB instead of TAB
+  removes methods that have no constaints on their argument types.
+
 #### SparseArrays
 
 #### Dates

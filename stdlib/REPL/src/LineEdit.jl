@@ -1907,6 +1907,10 @@ mode(s::PromptState) = s.p          # ::Prompt
 mode(s::SearchState) = @assert false
 mode(s::PrefixSearchState) = s.histprompt.parent_prompt   # ::Prompt
 
+setmodifier!(s::MIState, val::Symbol) = setmodifier!(mode(s), val)
+setmodifier!(p::Prompt, val::Symbol) = setmodifier!(p.complete, val)
+setmodifier!(c, val::Symbol) = nothing
+
 # Search Mode completions
 function complete_line(s::SearchState, repeats)
     completions, partial, should_complete = complete_line(s.histprompt.complete, s)
@@ -2174,6 +2178,11 @@ function edit_tab(s::MIState, jump_spaces::Bool=false, delete_trailing::Bool=jum
     return refresh_line(s)
 end
 
+function shift_tab_completion(s::MIState)
+    setmodifier!(s, :shift)
+    return complete_line(s)
+end
+
 # return true iff the content of the buffer is modified
 # return false when only the position changed
 function edit_insert_tab(buf::IOBuffer, jump_spaces::Bool=false, delete_trailing::Bool=jump_spaces)
@@ -2209,6 +2218,8 @@ const default_keymap =
 AnyDict(
     # Tab
     '\t' => (s::MIState,o...)->edit_tab(s, true),
+    # Shift-tab
+    "\e[Z" => (s::MIState,o...)->shift_tab_completion(s),
     # Enter
     '\r' => (s::MIState,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
