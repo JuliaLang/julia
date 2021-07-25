@@ -1287,6 +1287,14 @@ end
     @test [1:BigInt(5); 1] == [1:5; 1]
 end
 
+@testset "zero for heterogeneous eltypes" begin
+    struct Numlike{T<:Number} <: Number
+        val::T
+    end
+    x = [Numlike(1), Numlike(1im)]
+    @test zero(x) == [Numlike(0), Numlike(0im)]
+end
+
 @testset "Base.isstored" begin
     a = rand(3, 4, 5)
     @test Base.isstored(a, 1, 2, 3)
