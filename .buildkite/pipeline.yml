@@ -4,9 +4,9 @@
 #
 # Yes, this is creating another layer of indirection; the flow now looks like:
 #
-#   [webui] -> pipeline.yml -> llvm_passes.yml
+#   [webui] -> pipeline.yml -> misc/whitespace.yml
 #
-# when we could theoretically just have the `webui` launch `llvm_passes.yml`,
+# when we could theoretically just have the `webui` launch `misc/whitespace.yml`,
 # however this raises the bar for contributors to add new (unsigned) steps to
 # our CI configuration, so I'd rather live with an extra layer of indirection
 # and only need to touch the webui configuration when we need to alter
@@ -14,10 +14,15 @@
 steps:
   - label: ":buildkite: Launch unsigned pipelines"
     commands: |
-      # We launch whitespace first, because we want that pipeline to finish as quickly as possible.
-      # The remaining unsigned pipelines are launched in alphabetical order.
-      buildkite-agent pipeline upload .buildkite/whitespace.yml
-      buildkite-agent pipeline upload .buildkite/embedding.yml
-      buildkite-agent pipeline upload .buildkite/llvm_passes.yml
+      # First, we launch whitespace, because we want that pipeline to finish as quickly as possible.
+      buildkite-agent pipeline upload .buildkite/misc/whitespace.yml
+
+      # Next, we launch the miscellaneous pipelines in alphabetical order.
+      buildkite-agent pipeline upload .buildkite/misc/doctest.yml
+      buildkite-agent pipeline upload .buildkite/misc/embedding.yml
+      buildkite-agent pipeline upload .buildkite/misc/llvmpasses.yml
+
+      # Finally, we launch the platform pipelines in alphabetical order.
+      buildkite-agent pipeline upload .buildkite/platforms/linux64.yml
     agents:
       queue: julia
