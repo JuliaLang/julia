@@ -3,7 +3,7 @@ const SCRATCH_BUFFER_INLINE_LENGTH = 309 + 17
 struct ScratchBufferInline
     data::NTuple{SCRATCH_BUFFER_INLINE_LENGTH,UInt8}
 
-    ScratchBufferInline(::UndefInitializer) = new()
+    ScratchBufferInline() = new()
 end
 
 struct ScratchBuffer
@@ -13,7 +13,7 @@ end
 
 function with_scratch_buffer(f, n)
     if n <= SCRATCH_BUFFER_INLINE_LENGTH
-        buf = Ref(ScratchBufferInline(undef))
+        buf = Ref(ScratchBufferInline())
         GC.@preserve buf f(ScratchBuffer(pointer_from_objref(buf), unsafe_trunc(UInt64, n)))
     else
         tls = task_local_storage()
