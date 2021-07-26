@@ -1,0 +1,99 @@
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+steps:
+  - label: "analyze"
+    key: "analyze"
+    depends_on:
+      - "analyzegc"
+      # - "asan"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
+    timeout_in_minutes: 10
+    notify:
+      - github_commit_status:
+          context: "analyze"
+    commands: |
+      echo "All `analyze` jobs completed successfully."
+  - label: "docs"
+    key: "docs"
+    depends_on:
+      - "doctest"
+      # - "docdeploy"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
+    timeout_in_minutes: 10
+    notify:
+      - github_commit_status:
+          context: "docs"
+    commands: |
+      echo "All `docs` jobs completed successfully."
+  - label: "package"
+    key: "package"
+    depends_on:
+      - "package_linux32"
+      - "package_linux64"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
+    timeout_in_minutes: 10
+    notify:
+      - github_commit_status:
+          context: "package"
+    commands: |
+      echo "All `package` jobs completed successfully."
+  - label: "test"
+    key: "test"
+    depends_on:
+      - "embedding"
+      - "llvmpasses"
+      - "tester_linux32"
+      - "tester_linux64_st"
+      - "tester_linux64_mt"
+      - "tester_linux64_st_rr"
+      - "tester_linux64_mt_rr"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
+    timeout_in_minutes: 10
+    notify:
+      - github_commit_status:
+          context: "test"
+    commands: |
+      echo "All `test` jobs completed successfully."

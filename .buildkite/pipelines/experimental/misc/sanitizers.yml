@@ -3,10 +3,9 @@ agents:
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
   sandbox.jl: "true"
   os: "linux"
-
 steps:
   - label: "asan"
-    key: asan
+    key: "asan"
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
@@ -17,13 +16,10 @@ steps:
           gid: 1000
           workspaces:
             - "/cache/repos:/cache/repos"
-      # `contrib/check-asan.jl` needs a `julia` binary:
+      # `contrib/check-asan.jl` needs a `julia` binary inside the inner sandbox:
       - JuliaCI/julia#v1:
           version: 1.6
     timeout_in_minutes: 120
-    # notify:
-    #   - github_commit_status:
-    #       context: "asan"
     commands: |
       echo "--- Build julia-debug with ASAN"
-      contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_NUM_CORES} debug
+      contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_CPU_THREADS:?} debug
