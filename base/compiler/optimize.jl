@@ -80,7 +80,7 @@ mutable struct OptimizationState
         stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
         def = linfo.def
-        mod = isa(def, Method) ? def.module, def
+        mod = isa(def, Method) ? def.module : def
         # Allow using the global MI cache, but don't track edges.
         # This method is mostly used for unit testing the optimizer
         inlining = InliningState(params,
