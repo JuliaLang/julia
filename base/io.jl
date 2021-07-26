@@ -738,7 +738,8 @@ function read!(s::IO, a::Array{UInt8})
 end
 
 function read!(s::IO, a::AbstractArray{T}) where T
-    if isbitstype(T) && (a isa Array || a isa FastContiguousSubArray{T,<:Any,<:Array{T}})
+    if isbitstype(T) && sizeof(T) == aligned_sizeof(T) &&
+       (a isa Array || a isa FastContiguousSubArray{T,<:Any,<:Array{T}})
         GC.@preserve a unsafe_read(s, pointer(a), sizeof(a))
     else
         for i in eachindex(a)

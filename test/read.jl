@@ -621,3 +621,15 @@ end
     first(itr) # consume the iterator
     @test  isempty(itr) # now it is empty
 end
+
+@testset "read! with non-power-of-2 types" begin
+    primitive type Int24 <: Integer 24 end
+    Base.read(io::IO, ::Type{Int24}) = only(reinterpret(Int24, read(io, sizeof(Int24))))
+    bytes = [0xa4, 0x01, 0x0, 0x45, 0x0, 0x0]
+    io = IOBuffer()
+    write(io, bytes)
+    seekstart(io)
+    x = Vector{Int24}(undef, 2)
+    read!(io, x)
+    @test x == reinterpret(Int24, bytes)
+end
