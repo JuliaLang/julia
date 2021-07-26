@@ -390,13 +390,18 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
     jl_gc_safepoint();
     jl_value_t *args[2] = { trypoptask, q };
     jl_task_t *task = (jl_task_t*)jl_apply(args, 2);
+    int self_tid = jl_get_ptls_states()->tid;
     if (jl_typeis(task, jl_task_type)) {
-        int self = jl_get_ptls_states()->tid;
-        jl_set_task_tid(task, self);
+        jl_set_task_tid(task, self_tid);
         return task;
     }
     jl_gc_safepoint();
-    return multiq_deletemin();
+    if (self_tid == 0 && jl_n_threads != 1) {
+        return NULL;
+    } else {
+        // fprintf(stderr, "tid=%d: grabbing work from shared heaps\n", self_tid);
+        return multiq_deletemin();
+    }
 }
 
 static int may_sleep(jl_ptls_t ptls)
