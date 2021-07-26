@@ -4,7 +4,6 @@
 agents:
   queue: "julia"
   sandbox.jl: "true"
-
 steps:
   - label: ":unlock: Unlock secrets, launch pipelines"
     plugins:
@@ -16,9 +15,8 @@ steps:
           # pipelines.
           unsigned_pipelines:
             - .buildkite/pipelines/experimental/launch_unsigned_builders.yml
-
           # Our signed pipelines must have a `signature` or `signature_file` parameter that
           # verifies the treehash of the pipeline itself and the inputs listed in `inputs`
           # signed_pipelines:
           #   - pipeline: .buildkite/pipelines/experimental/misc/foo_bar_baz.yml
-          #     signature: "my_signature"
+          #     signature_file: .buildkite/pipelines/experimental/misc/foo_bar_baz.yml.signature
