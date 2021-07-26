@@ -48,7 +48,6 @@ mutable struct OptimizationState
     ir::Union{Nothing, IRCode}
     stmt_info::Vector{Any}
     mod::Module
-    nargs::Int
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
@@ -60,7 +59,7 @@ mutable struct OptimizationState
             WorldView(code_cache(interp), frame.world),
             inlining_policy(interp))
         return new(frame.linfo,
-                   frame.src, nothing, frame.stmt_info, frame.mod, frame.nargs,
+                   frame.src, nothing, frame.stmt_info, frame.mod,
                    frame.sptypes, frame.slottypes, false,
                    inlining)
     end
@@ -70,6 +69,8 @@ mutable struct OptimizationState
         nssavalues = src.ssavaluetypes
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
+        else
+            nssavalues = length(src.ssavaluetypes)
         end
         nslots = length(src.slotflags)
         slottypes = src.slottypes
@@ -79,7 +80,7 @@ mutable struct OptimizationState
         stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
         def = linfo.def
-        mod, nargs = isa(def, Method) ? (def.module, def.nargs) : (def, 0)
+        mod = isa(def, Method) ? def.module : def
         # Allow using the global MI cache, but don't track edges.
         # This method is mostly used for unit testing the optimizer
         inlining = InliningState(params,
@@ -87,10 +88,10 @@ mutable struct OptimizationState
             WorldView(code_cache(interp), get_world_counter()),
             inlining_policy(interp))
         return new(linfo,
-                   src, nothing, stmt_info, mod, nargs,
+                   src, nothing, stmt_info, mod,
                    sptypes_from_meth_instance(linfo), slottypes, false,
                    inlining)
-        end
+    end
 end
 
 function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
@@ -100,7 +101,8 @@ function OptimizationState(linfo::MethodInstance, params::OptimizationParams, in
 end
 
 function ir_to_codeinf!(opt::OptimizationState)
-    replace_code_newstyle!(opt.src, opt.ir::IRCode, opt.nargs - 1)
+    optdef = opt.linfo.def
+    replace_code_newstyle!(opt.src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
     opt.ir = nothing
     let src = opt.src::CodeInfo
         widen_all_consts!(src)
@@ -191,9 +193,8 @@ end
 
 # compute inlining cost and sideeffects
 function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir::IRCode, @nospecialize(result))
-    (; src, nargs, linfo) = opt
+    (; src, linfo) = opt
     (; def, specTypes) = linfo
-    nargs = Int(nargs) - 1
 
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
@@ -285,15 +286,14 @@ end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
-    nargs = Int(opt.nargs) - 1
-    @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
+    @timeit "optimizer" ir = run_passes(opt.src, opt)
     finish(interp, opt, params, ir, result)
 end
 
-function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
+function run_passes(ci::CodeInfo, sv::OptimizationState)
     preserve_coverage = coverage_enabled(sv.mod)
-    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, sv)
-    ir = slot2reg(ir, ci, nargs, sv)
+    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, sv)
+    ir = slot2reg(ir, ci, sv)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
@@ -315,7 +315,7 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     return ir
 end
 
-function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, nargs::Int, sv::OptimizationState)
+function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::OptimizationState)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
@@ -405,11 +405,13 @@ function normalize(@nospecialize(stmt), meta::Vector{Any})
     return stmt
 end
 
-function slot2reg(ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
+function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
+    svdef = sv.linfo.def
+    nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.slottypes) # consumes `ir`
+    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes) # consumes `ir`
     return ir
 end
 
