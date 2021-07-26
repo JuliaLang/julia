@@ -23,7 +23,8 @@ steps:
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/embedding.yml
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/llvmpasses.yml
 
-      # Finally, we launch the platform builders (`package_*`) and (`tester_*`) in alphabetical order.
-      buildkite-agent pipeline upload .buildkite/pipelines/main/platforms/linux64.yml
+      # Finally, we launch all of the platform builders.
+      bash .buildkite/pipelines/main/platforms/platforms.sh package_linux
+      bash .buildkite/pipelines/main/platforms/platforms.sh tester_linux
     agents:
       queue: julia
