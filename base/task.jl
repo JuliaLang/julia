@@ -592,7 +592,11 @@ function enq_work(t::Task)
         tid = 0
         if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
             # if multiq is full, give to a random thread (TODO fix)
-            tid = mod(time_ns() % Int, Threads.nthreads() -1) + 2
+            if Threads.nthreads() > 1
+                tid = mod(time_ns() % Int, Threads.nthreads() - 1) + 2
+            else
+                tid = 1
+            end
             ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
             push!(Workqueues[tid], t)
         end
