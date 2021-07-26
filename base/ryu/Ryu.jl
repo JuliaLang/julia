@@ -1,7 +1,7 @@
 module Ryu
 
 import .Base: significand_bits, significand_mask, exponent_bits, exponent_mask, exponent_bias, exponent_max, uinttype
-import .Base: with_scratch
+import .Base: with_scratch_buffer
 
 include("utils.jl")
 include("shortest.jl")
@@ -46,7 +46,7 @@ function writeshortest(x::T,
         decchar::UInt8=UInt8('.'),
         typed::Bool=false,
         compact::Bool=false) where {T <: Base.IEEEFloat}
-    with_scratch(neededdigits(T)) do buf
+    with_scratch_buffer(neededdigits(T)) do buf
         pos = writeshortest(buf, 1, x, plus, space, hash, precision, expchar, padexp, decchar, typed, compact)
         return String(@inbounds view(buf, 1:pos - 1))
     end
@@ -75,7 +75,7 @@ function writefixed(x::T,
     hash::Bool=false,
     decchar::UInt8=UInt8('.'),
     trimtrailingzeros::Bool=false) where {T <: Base.IEEEFloat}
-    with_scratch(precision + neededdigits(T)) do buf
+    with_scratch_buffer(precision + neededdigits(T)) do buf
         pos = writefixed(buf, 1, x, precision, plus, space, hash, decchar, trimtrailingzeros)
         return String(@inbounds view(buf, 1:pos - 1))
     end
@@ -106,7 +106,7 @@ function writeexp(x::T,
     expchar::UInt8=UInt8('e'),
     decchar::UInt8=UInt8('.'),
     trimtrailingzeros::Bool=false) where {T <: Base.IEEEFloat}
-    with_scratch(precision + neededdigits(T)) do buf
+    with_scratch_buffer(precision + neededdigits(T)) do buf
         pos = writeexp(buf, 1, x, precision, plus, space, hash, expchar, decchar, trimtrailingzeros)
         return String(@inbounds view(buf, 1:pos - 1))
     end
@@ -114,7 +114,7 @@ end
 
 function Base.show(io::IO, x::T, forceuntyped::Bool=false, fromprint::Bool=false) where {T <: Base.IEEEFloat}
     compact = get(io, :compact, false)::Bool
-    with_scratch(neededdigits(T)) do buf
+    with_scratch_buffer(neededdigits(T)) do buf
         typed = !forceuntyped && !compact && get(io, :typeinfo, Any) != typeof(x)
         pos = writeshortest(buf, 1, x, false, false, true, -1,
             (x isa Float32 && !fromprint) ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed, compact)
@@ -124,7 +124,7 @@ function Base.show(io::IO, x::T, forceuntyped::Bool=false, fromprint::Bool=false
 end
 
 function Base.string(x::T) where {T <: Base.IEEEFloat}
-    with_scratch(neededdigits(T)) do buf
+    with_scratch_buffer(neededdigits(T)) do buf
         pos = writeshortest(buf, 1, x, false, false, true, -1,
             UInt8('e'), false, UInt8('.'), false, false)
         return String(@inbounds view(buf, 1:pos - 1))

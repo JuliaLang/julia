@@ -669,7 +669,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
     n = neg + max(pad, m)
 
 
-    with_scratch(n) do a
+    with_scratch_buffer(n) do a
         bin_impl_(a, x, n, neg)
         String(a)
     end
@@ -679,7 +679,7 @@ function bin_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
     m = 8 * sizeof(x) - Base.leading_zeros(x)
     n = neg + max(pad, m)
 
-    with_scratch(n) do scratch
+    with_scratch_buffer(n) do scratch
         bin_impl_(scratch, x, n, neg)
         write(io, scratch)
     end
@@ -701,7 +701,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
     m = div(8 * sizeof(x) - Base.leading_zeros(x) + 2, 3)
     n = neg + max(pad, m)
 
-    with_scratch(n) do a
+    with_scratch_buffer(n) do a
         oct_impl_(a, x, n, neg)
         String(a)
     end
@@ -711,7 +711,7 @@ function oct_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
     m = div(8 * sizeof(x) - leading_zeros(x) + 2, 3)
     n = neg + max(pad, m)
 
-    with_scratch(n) do scratch
+    with_scratch_buffer(n) do scratch
         oct_impl_(scratch, x, n, neg)
         write(io, scratch)
     end
@@ -741,7 +741,7 @@ end
 function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
 
-    with_scratch(n) do scratch
+    with_scratch_buffer(n) do scratch
         dec_impl_(scratch, x, n, neg)
         String(scratch)
     end
@@ -750,7 +750,7 @@ end
 function dec_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
 
-    with_scratch(n) do scratch
+    with_scratch_buffer(n) do scratch
         dec_impl_(scratch, x, n, neg)
         write(io, scratch)
     end
@@ -779,7 +779,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     m = 2 * sizeof(x) - (Base.leading_zeros(x) >> 2)
     n = neg + max(pad, m)
 
-    with_scratch(n) do a
+    with_scratch_buffer(n) do a
         hex_impl_(a, x, n, neg)
         String(a)
     end
@@ -789,7 +789,7 @@ function hex_io(io::IO, x::Unsigned, pad::Int, neg::Bool)
     m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
     n = neg + max(pad, m)
 
-    with_scratch(n) do scratch
+    with_scratch_buffer(n) do scratch
         hex_impl_(scratch, x, n, neg)
         write(io, scratch)
     end
@@ -822,7 +822,7 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     b = (base % Int)::Int
     n = neg + ndigits(x, base=b, pad=pad)
 
-    with_scratch(n) do a
+    with_scratch_buffer(n) do a
         _base_impl_(a, b, x, n, neg)
         String(a)
     end
@@ -834,7 +834,7 @@ function _base_io(io::IO, base::Integer, x::Integer, pad::Int, neg::Bool)
     b = (base % Int)::Int
     n = neg + ndigits(x, base=b, pad=pad)
 
-    with_scratch(n) do scratch
+    with_scratch_buffer(n) do scratch
         _base_impl_(scratch, b, x, n, neg)
         write(io, scratch)
     end

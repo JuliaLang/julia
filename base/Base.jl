@@ -228,7 +228,7 @@ include("io.jl")
 include("iobuffer.jl")
 
 # strings & printing
-include("scratch.jl")
+include("scratch_buffer.jl")
 include("intfuncs.jl")
 include("strings/strings.jl")
 include("regex.jl")
