@@ -65,7 +65,7 @@ struct jl_stack_context_t {
 typedef struct jl_stack_context_t jl_ucontext_t;
 #endif
 #if defined(JL_HAVE_ASYNCIFY)
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
 #error TSAN not currently supported with asyncify
 #endif
 typedef struct {
