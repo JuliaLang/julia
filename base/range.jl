@@ -1029,6 +1029,7 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     else
         vfirst = unsafe_getindex(r, first(s))
         vlast  = unsafe_getindex(r, last(s))
+        ret = LinRange{T}(vfirst, vlast, len)
         return withindices(ret, axes(s))
     end
 end
