@@ -588,6 +588,7 @@ end
 primitive type UInt48 48 end
 UInt48(x::UInt64) = Core.Intrinsics.trunc_int(UInt48, x)
 UInt48(x::UInt32) = Core.Intrinsics.zext_int(UInt48, x)
+Base.read(io::IO, ::Type{UInt48}) = only(reinterpret(UInt48, read(io, sizeof(UInt48))))
 
 @testset "sizeof" begin
     @test sizeof(view(zeros(UInt8, 10), 1:4)) == 4
