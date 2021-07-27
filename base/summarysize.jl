@@ -134,12 +134,13 @@ function (ss::SummarySize)(obj::Array)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
         dsize = Core.sizeof(obj)
-        if isbitsunion(eltype(obj))
+        T = eltype(obj)
+        if isbitsunion(T)
             # add 1 union selector byte for each element
             dsize += length(obj)
         end
         size += dsize
-        if !isempty(obj) && !Base.allocatedinline(eltype(obj))
+        if !isempty(obj) && T !== Symbol && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end

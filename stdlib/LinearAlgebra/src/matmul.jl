@@ -1088,7 +1088,7 @@ end
 
 # Fast path for two arrays * one scalar is opt-in, via mat_vec_scalar and mat_mat_scalar.
 
-mat_vec_scalar(A, x, γ) = A * (x .* γ)  # fallback
+mat_vec_scalar(A, x, γ) = A * (x * γ)  # fallback
 mat_vec_scalar(A::StridedMaybeAdjOrTransMat, x::StridedVector, γ) = _mat_vec_scalar(A, x, γ)
 mat_vec_scalar(A::AdjOrTransAbsVec, x::StridedVector, γ) = (A * x) * γ
 
@@ -1098,7 +1098,7 @@ function _mat_vec_scalar(A, x, γ)
     mul!(C, A, x, γ, false)
 end
 
-mat_mat_scalar(A, B, γ) = (A*B) .* γ # fallback
+mat_mat_scalar(A, B, γ) = (A*B) * γ # fallback
 mat_mat_scalar(A::StridedMaybeAdjOrTransMat, B::StridedMaybeAdjOrTransMat, γ) =
     _mat_mat_scalar(A, B, γ)
 
@@ -1108,11 +1108,11 @@ function _mat_mat_scalar(A, B, γ)
     mul!(C, A, B, γ, false)
 end
 
-mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' .* (A * B)')' # preserving order, adjoint reverses
+mat_mat_scalar(A::AdjointAbsVec, B, γ) = (γ' * (A * B)')' # preserving order, adjoint reverses
 mat_mat_scalar(A::AdjointAbsVec{<:RealOrComplex}, B::StridedMaybeAdjOrTransMat{<:RealOrComplex}, γ::RealOrComplex) =
     mat_vec_scalar(B', A', γ')'
 
-mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ .* transpose(A * B))
+mat_mat_scalar(A::TransposeAbsVec, B, γ) = transpose(γ * transpose(A * B))
 mat_mat_scalar(A::TransposeAbsVec{<:RealOrComplex}, B::StridedMaybeAdjOrTransMat{<:RealOrComplex}, γ::RealOrComplex) =
     transpose(mat_vec_scalar(transpose(B), transpose(A), γ))
 

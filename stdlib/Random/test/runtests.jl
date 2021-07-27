@@ -909,14 +909,25 @@ end
     @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
 end
 
-@testset "rand! for BigInt/BigFloat" begin
+@testset "rand[!] for BigInt/BigFloat" begin
     rng = MersenneTwister()
-    s = Random.SamplerBigInt(1:big(9))
+    s = Random.SamplerBigInt(MersenneTwister, 1:big(9))
     x = rand(s)
     @test x isa BigInt
     y = rand!(rng, x, s)
     @test y === x
     @test x in 1:9
+
+    for t = BigInt[0, 10, big(2)^100]
+        s = Random.Sampler(rng, t:t) # s.nlimbs == 0
+        @test rand(rng, s) == t
+        @test x === rand!(rng, x, s) == t
+
+        s = Random.Sampler(rng, big(-1):t) # s.nlimbs != 0
+        @test rand(rng, s) ∈ -1:t
+        @test x === rand!(rng, x, s) ∈ -1:t
+
+    end
 
     s = Random.Sampler(MersenneTwister, Random.CloseOpen01(BigFloat))
     x = rand(s)

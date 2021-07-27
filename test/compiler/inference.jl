@@ -1524,7 +1524,6 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
-    @test opt.nargs == 3
 end
 
 # approximate static parameters due to unions
@@ -2210,12 +2209,10 @@ code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
 ssachangemap = fill(0, length(code28279))
 labelchangemap = fill(0, length(code28279))
-worklist = Int[]
 let i
     for i in 1:length(code28279)
         stmt = code28279[i]
         if isa(stmt, GotoIfNot)
-            push!(worklist, i)
             ssachangemap[i] = 1
             if i < length(code28279)
                 labelchangemap[i + 1] = 1
@@ -3341,10 +3338,10 @@ let
     sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
         Core.Compiler.NativeInterpreter())
     ir = Core.Compiler.convert_to_ircode(ci, Core.Compiler.copy_exprargs(ci.code),
-        false, 2, sv)
-    ir = Core.Compiler.slot2reg(ir, ci, 2, sv)
+        false, sv)
+    ir = Core.Compiler.slot2reg(ir, ci, sv)
     ir = Core.Compiler.compact!(ir)
-    Core.Compiler.replace_code_newstyle!(ci, ir, 3)
+    Core.Compiler.replace_code_newstyle!(ci, ir, 4)
     ci.ssavaluetypes = length(ci.code)
     @test any(x->isa(x, Core.PhiNode), ci.code)
     oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
@@ -3394,4 +3391,15 @@ end
     @test (@eval m Base.return_types((AbstractInterfaceExtended,)) do x
         x.x
     end) == Any[Int]
+end
+
+@testset "fieldtype for unions" begin # e.g. issue #40177
+    f40177(::Type{T}) where {T} = fieldtype(T, 1)
+    for T in [
+        Union{Tuple{Val}, Tuple{Tuple}},
+        Union{Base.RefValue{T}, Type{Int32}} where T<:Real,
+        Union{Tuple{Vararg{Symbol}}, Tuple{Float64, Vararg{Float32}}},
+    ]
+        @test @inferred(f40177(T)) == fieldtype(T, 1)
+    end
 end

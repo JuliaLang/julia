@@ -297,6 +297,7 @@ Base.reshape(A::OffsetArray, inds::Tuple{Union{Integer,Base.OneTo},Vararg{Union{
 Base.reshape(A::OffsetArray, inds::Dims) = reshape(parent(A), inds)
 Base.reshape(A::OffsetArray, ::Colon) = reshape(parent(A), Colon())
 Base.reshape(A::OffsetVector, ::Colon) = A
+Base.reshape(A::OffsetVector, ::Tuple{Colon}) = A
 Base.reshape(A::OffsetArray, inds::Union{Int,Colon}...) = reshape(parent(A), inds)
 Base.reshape(A::OffsetArray, inds::Tuple{Vararg{Union{Int,Colon}}}) = reshape(parent(A), inds)
 

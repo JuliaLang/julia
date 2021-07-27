@@ -2016,6 +2016,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_symbol_type->name->mt = jl_nonfunction_mt;
     jl_symbol_type->super = jl_any_type;
     jl_symbol_type->parameters = jl_emptysvec;
+    jl_symbol_type->name->n_uninitialized = 0;
     jl_symbol_type->name->names = jl_emptysvec;
     jl_symbol_type->types = jl_emptysvec;
     jl_symbol_type->size = 0;
@@ -2026,6 +2027,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_simplevector_type->name->mt = jl_nonfunction_mt;
     jl_simplevector_type->super = jl_any_type;
     jl_simplevector_type->parameters = jl_emptysvec;
+    jl_simplevector_type->name->n_uninitialized = 0;
     jl_simplevector_type->name->names = jl_emptysvec;
     jl_simplevector_type->types = jl_emptysvec;
     jl_precompute_memoized_dt(jl_simplevector_type, 1);

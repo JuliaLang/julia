@@ -369,6 +369,14 @@ JL_DLLEXPORT int jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
     return ret;
 }
 
+JL_DLLEXPORT int jl_fs_hardlink(char *path, char *new_path)
+{
+    uv_fs_t req;
+    int ret = uv_fs_link(unused_uv_loop_arg, &req, path, new_path, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 JL_DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
 {
     uv_fs_t req;

@@ -113,7 +113,7 @@ What is happening here is that the true value of the floating-point number writt
 as `0.1` is slightly larger than the numerical value 1/10 while `6.0` represents
 the number 6 precisely. Therefore the true value of `6.0 / 0.1` is slightly less
 than 60. When doing division, this is rounded to precisely `60.0`, but
-`fld(6.0, 0.1)` always takes the floor or the true value, so the result is `59.0`.
+`fld(6.0, 0.1)` always takes the floor of the true value, so the result is `59.0`.
 """
 fld(a, b) = div(a, b, RoundDown)
 

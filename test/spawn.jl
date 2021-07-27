@@ -812,6 +812,20 @@ if Sys.iswindows()
 end
 
 
+# test (t)csh escaping if tcsh is installed
+cshcmd = "/bin/tcsh"
+if isfile(cshcmd)
+    csh_echo(s) = chop(read(Cmd([cshcmd, "-c",
+                                 "echo " * Base.shell_escape_csh(s)]), String))
+    csh_test(s) = csh_echo(s) == s
+    @testset "shell_escape_csh" begin
+        for s in ["", "-a/b", "'", "'£\"", join(' ':'~') ^ 2,
+                  "\t", "\n", "'\n", "\"\n", "'\n\n\""]
+            @test csh_test(s)
+        end
+    end
+end
+
 @testset "shell escaping on Windows" begin
     # Note  argument A can be parsed both as A or "A".
     # We do not test that the parsing satisfies either of these conditions.

@@ -1,0 +1,31 @@
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+
+steps:
+  - label: "asan"
+    key: asan
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/llvm_passes.x86_64.tar.gz
+          rootfs_treehash: "9dd715500b117a16fcfa419ea0bca0c0ca902cee"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            - "/cache/repos:/cache/repos"
+      # `contrib/check-asan.jl` needs a `julia` binary:
+      - JuliaCI/julia#v1:
+          version: 1.6
+    commands: |
+      echo "--- Build julia-debug with ASAN"
+      contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_NUM_CORES} debug
+      echo "--- Test that ASAN is enabled"
+      contrib/asan/check.jl ./tmp/test-asan/asan/usr/bin/julia-debug
+    timeout_in_minutes: 120
+    # notify:                   # TODO: uncomment this line
+    #   - github_commit_status: # TODO: uncomment this line
+    #       context: "asan"     # TODO: uncomment this line

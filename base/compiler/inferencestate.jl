@@ -56,9 +56,8 @@ mutable struct InferenceState
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
                             cached::Bool, interp::AbstractInterpreter)
-        linfo = result.linfo
+        (; def) = linfo = result.linfo
         code = src.code::Array{Any,1}
-        toplevel = !isa(linfo.def, Method)
 
         sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
@@ -94,18 +93,13 @@ mutable struct InferenceState
         W = BitSet()
         push!(W, 1) #initial pc to visit
 
-        if !toplevel
-            meth = linfo.def
-            inmodule = meth.module
-        else
-            inmodule = linfo.def::Module
-        end
+        mod = isa(def, Method) ? def.module : def
 
         valid_worlds = WorldRange(src.min_world,
             src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         frame = new(
             InferenceParams(interp), result, linfo,
-            sp, slottypes, inmodule, 0,
+            sp, slottypes, mod, 0,
             IdSet{InferenceState}(), IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,

@@ -15,11 +15,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#ifdef JL_ASAN_ENABLED
+#ifdef _COMPILER_ASAN_ENABLED_
 void __sanitizer_start_switch_fiber(void**, const void*, size_t);
 void __sanitizer_finish_switch_fiber(void*, const void**, size_t*);
 #endif
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
 void *__tsan_create_fiber(unsigned flags);
 void *__tsan_get_current_fiber(void);
 void __tsan_destroy_fiber(void *fiber);
@@ -406,7 +406,7 @@ jl_value_t *jl_permbox64(jl_datatype_t *t, int64_t x);
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
 // this sizeof(__VA_ARGS__) trick can't be computed until C11, but that only matters to Clang in some situations
-#if !defined(__clang_analyzer__) && !(defined(JL_ASAN_ENABLED) || defined(JL_TSAN_ENABLED))
+#if !defined(__clang_analyzer__) && !(defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
 #ifdef __GNUC__
 #define jl_perm_symsvec(n, ...) \
     (jl_perm_symsvec)(__extension__({                                         \
@@ -1128,6 +1128,10 @@ extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 JL_DLLEXPORT const char *jl_intrinsic_name(int f) JL_NOTSAFEPOINT;
 unsigned jl_intrinsic_nargs(int f) JL_NOTSAFEPOINT;
 
+STATIC_INLINE int is_valid_intrinsic_elptr(jl_value_t *ety)
+{
+    return ety == (jl_value_t*)jl_any_type || (jl_is_concrete_type(ety) && !jl_is_layout_opaque(((jl_datatype_t*)ety)->layout));
+}
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);
 JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *align, jl_value_t *i);

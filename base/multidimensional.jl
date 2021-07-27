@@ -353,8 +353,32 @@ module IteratorsMD
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
+    # getindex for a 0D CartesianIndices is necessary for disambiguation
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{0,R}) where {R}
+        CartesianIndex()
+    end
     @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
         CartesianIndex(getindex.(iter.indices, I))
+    end
+
+    # CartesianIndices act as a multidimensional range, so cartesian indexing of CartesianIndices
+    # with compatible dimensions may be seen as indexing into the component ranges.
+    # This may use the special indexing behavior implemented for ranges to return another CartesianIndices
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R},
+        I::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon}, N}) where {N,R}
+        CartesianIndices(getindex.(iter.indices, I))
+    end
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N},
+        C::CartesianIndices{N}) where {N}
+        CartesianIndices(getindex.(iter.indices, C.indices))
+    end
+
+    # If dimensions permit, we may index into a CartesianIndices directly instead of constructing a SubArray wrapper
+    @propagate_inbounds function Base.view(c::CartesianIndices{N}, r::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon},N}) where {N}
+        getindex(c, r...)
+    end
+    @propagate_inbounds function Base.view(c::CartesianIndices{N}, C::CartesianIndices{N}) where {N}
+        getindex(c, C)
     end
 
     ndims(R::CartesianIndices) = ndims(typeof(R))
@@ -970,7 +994,7 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
 end
 function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
-    return T[@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
+    return [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
 end
 
 ### from abstractarray.jl

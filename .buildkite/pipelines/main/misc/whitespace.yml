@@ -1,6 +1,3 @@
-# These steps should only run on `sandbox.jl` machines, not `docker`-isolated ones
-# since we need nestable sandboxing.  The rootfs images being used here are built from
-# the `.buildkite/rootfs_images/llvm-passes.jl` file.
 agents:
   queue: "julia"
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
@@ -8,14 +5,14 @@ agents:
   os: "linux"
 
 steps:
-  - label: "Check whitespace"
-    key: whitespace
+  - label: "whitespace"
+    key: "whitespace"
     plugins:
       - JuliaCI/julia#v1:
           version: 1.6
       - staticfloat/sandbox#v1:
-          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v1/llvm-passes.tar.gz
-          rootfs_treehash: "f3ed53f159e8f13edfba8b20ebdb8ece73c1b8a8"
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
           workspaces:
             - "/cache/repos:/cache/repos"
     commands: |

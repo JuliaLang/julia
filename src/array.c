@@ -1119,7 +1119,7 @@ STATIC_INLINE void jl_array_del_at_beg(jl_array_t *a, size_t idx, size_t dec,
         // Move the rest of the data if the offset changed
         if (newoffs != offset) {
             memmove_safe(a->flags.hasptr, newdata + nb1, olddata + nb1 + nbdec, nbtotal - nb1);
-            if (isbitsunion) memmove(newtypetagdata + idx, typetagdata + idx + dec, n - idx);
+            if (isbitsunion) memmove(newtypetagdata + idx, typetagdata + idx + dec, a->nrows - idx);
         }
         a->data = newdata;
     }

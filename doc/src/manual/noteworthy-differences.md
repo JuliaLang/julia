@@ -163,6 +163,9 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, a range like `a:b` is not shorthand for a vector like in R, but is a specialized `AbstractRange`
     object that is used for iteration. To convert a range into a vector, use
     [`collect(a:b)`](@ref).
+  * The `:` operator has a different precedence in R and Julia. In particular, in Julia arithmetic operators
+    have higher precedence than the `:` operator, whereas the reverse is true in R. For example, `1:n-1` in
+    Julia is equivalent to `1:(n-1)` in R.
   * Julia's [`max`](@ref) and [`min`](@ref) are the equivalent of `pmax` and `pmin` respectively
     in R, but both arguments need to have the same dimensions.  While [`maximum`](@ref) and [`minimum`](@ref)
     replace `max` and `min` in R, there are important differences.

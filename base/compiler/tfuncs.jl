@@ -1015,8 +1015,19 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
     exact = exact && !has_free_typevars(s)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        return tmerge(_fieldtype_tfunc(rewrap(u.a, s), exact, name),
-                      _fieldtype_tfunc(rewrap(u.b, s), exact, name))
+        ta0 = _fieldtype_tfunc(rewrap(u.a, s), exact, name)
+        tb0 = _fieldtype_tfunc(rewrap(u.b, s), exact, name)
+        ta0 ⊑ tb0 && return tb0
+        tb0 ⊑ ta0 && return ta0
+        ta, exacta, _, istypea = instanceof_tfunc(ta0)
+        tb, exactb, _, istypeb = instanceof_tfunc(tb0)
+        if exact && exacta && exactb
+            return Const(Union{ta, tb})
+        end
+        if istypea && istypeb
+            return Type{<:Union{ta, tb}}
+        end
+        return Any
     end
     u isa DataType || return Any
     if isabstracttype(u)
@@ -1449,7 +1460,10 @@ function array_builtin_common_nothrow(argtypes::Array{Any,1}, first_idx_idx::Int
     array_type_undefable(atype) && return false
     # If we have @inbounds (first argument is false), we're allowed to assume
     # we don't throw bounds errors.
-    (isa(argtypes[1], Const) && !argtypes[1].val) && return true
+    boundcheck = argtypes[1]
+    if isa(boundcheck, Const)
+        !(boundcheck.val::Bool) && return true
+    end
     # Else we can't really say anything here
     # TODO: In the future we may be able to track the shapes of arrays though
     # inference.

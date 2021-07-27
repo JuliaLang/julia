@@ -895,6 +895,7 @@ export
     filemode,
     filesize,
     gperm,
+    hardlink,
     isblockdev,
     ischardev,
     isdir,

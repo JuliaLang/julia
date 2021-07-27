@@ -184,7 +184,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test getfield(r, :y) === x
 
     @test_throws ConcurrencyViolationError("invalid atomic ordering") swapfield!(r, :y, y, :u)
-    @test_throws ConcurrencyViolationError("swapfield!: non-atomic field cannot be written atomically") swapfield!(r, :y, y, :unordered)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") swapfield!(r, :y, y, :unordered)
     @test_throws ConcurrencyViolationError("swapfield!: non-atomic field cannot be written atomically") swapfield!(r, :y, y, :monotonic)
     @test_throws ConcurrencyViolationError("swapfield!: non-atomic field cannot be written atomically") swapfield!(r, :y, y, :acquire)
     @test_throws ConcurrencyViolationError("swapfield!: non-atomic field cannot be written atomically") swapfield!(r, :y, y, :release)
@@ -193,7 +193,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test swapfield!(r, :y, y, :not_atomic) === x
 
     @test_throws ConcurrencyViolationError("invalid atomic ordering") modifyfield!(r, :y, swap, y, :u)
-    @test_throws ConcurrencyViolationError("modifyfield!: non-atomic field cannot be written atomically") modifyfield!(r, :y, swap, y, :unordered)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") modifyfield!(r, :y, swap, y, :unordered)
     @test_throws ConcurrencyViolationError("modifyfield!: non-atomic field cannot be written atomically") modifyfield!(r, :y, swap, y, :monotonic)
     @test_throws ConcurrencyViolationError("modifyfield!: non-atomic field cannot be written atomically") modifyfield!(r, :y, swap, y, :acquire)
     @test_throws ConcurrencyViolationError("modifyfield!: non-atomic field cannot be written atomically") modifyfield!(r, :y, swap, y, :release)
@@ -202,7 +202,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test modifyfield!(r, :y, swap, x, :not_atomic) === (y, x)
 
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :y, y, y, :u, :not_atomic)
-    @test_throws ConcurrencyViolationError("replacefield!: non-atomic field cannot be written atomically") replacefield!(r, :y, y, y, :unordered, :not_atomic)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :y, y, y, :unordered, :not_atomic)
     @test_throws ConcurrencyViolationError("replacefield!: non-atomic field cannot be written atomically") replacefield!(r, :y, y, y, :monotonic, :not_atomic)
     @test_throws ConcurrencyViolationError("replacefield!: non-atomic field cannot be written atomically") replacefield!(r, :y, y, y, :acquire, :not_atomic)
     @test_throws ConcurrencyViolationError("replacefield!: non-atomic field cannot be written atomically") replacefield!(r, :y, y, y, :release, :not_atomic)
@@ -223,8 +223,8 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test_throws ConcurrencyViolationError("invalid atomic ordering") swapfield!(r, :x, x, :u)
     @test_throws ConcurrencyViolationError("swapfield!: atomic field cannot be written non-atomically") swapfield!(r, :x, x, :not_atomic)
     @test_throws ConcurrencyViolationError("swapfield!: atomic field cannot be written non-atomically") swapfield!(r, :x, x)
-    @test swapfield!(r, :x, x, :unordered) === y
-    @test swapfield!(r, :x, x, :monotonic) === x
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") swapfield!(r, :x, x, :unordered) === y
+    @test swapfield!(r, :x, x, :monotonic) === y
     @test swapfield!(r, :x, x, :acquire) === x
     @test swapfield!(r, :x, x, :release) === x
     @test swapfield!(r, :x, x, :acquire_release) === x
@@ -233,7 +233,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test_throws ConcurrencyViolationError("invalid atomic ordering") modifyfield!(r, :x, swap, x, :u)
     @test_throws ConcurrencyViolationError("modifyfield!: atomic field cannot be written non-atomically") modifyfield!(r, :x, swap, x, :not_atomic)
     @test_throws ConcurrencyViolationError("modifyfield!: atomic field cannot be written non-atomically") modifyfield!(r, :x, swap, x)
-    @test modifyfield!(r, :x, swap, x, :unordered) === (x, x)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") modifyfield!(r, :x, swap, x, :unordered)
     @test modifyfield!(r, :x, swap, x, :monotonic) === (x, x)
     @test modifyfield!(r, :x, swap, x, :acquire) === (x, x)
     @test modifyfield!(r, :x, swap, x, :release) === (x, x)
@@ -243,7 +243,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :x, x, x, :u, :not_atomic)
     @test_throws ConcurrencyViolationError("replacefield!: atomic field cannot be written non-atomically") replacefield!(r, :x, x, x)
     @test_throws ConcurrencyViolationError("replacefield!: atomic field cannot be written non-atomically") replacefield!(r, :x, y, x, :not_atomic, :not_atomic)
-    @test_throws ConcurrencyViolationError("replacefield!: atomic field cannot be accessed non-atomically") replacefield!(r, :x, x, x, :unordered, :not_atomic)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :x, x, x, :unordered, :not_atomic)
     @test_throws ConcurrencyViolationError("replacefield!: atomic field cannot be accessed non-atomically") replacefield!(r, :x, x, x, :monotonic, :not_atomic)
     @test_throws ConcurrencyViolationError("replacefield!: atomic field cannot be accessed non-atomically") replacefield!(r, :x, x, x, :acquire, :not_atomic)
     @test_throws ConcurrencyViolationError("replacefield!: atomic field cannot be accessed non-atomically") replacefield!(r, :x, x, x, :release, :not_atomic)
@@ -288,21 +288,21 @@ end
 Base.convert(T::Type{<:UndefComplex}, S) = T()
 @noinline function _test_field_undef(r)
     r = r[]
-    T = fieldtype(typeof(r), :x)
-    x = convert(T, 12345_10)
+    TT = fieldtype(typeof(r), :x)
+    x = convert(TT, 12345_10)
     @test_throws UndefRefError getfield(r, :x)
     @test_throws UndefRefError getfield(r, :x, :sequentially_consistent)
     @test_throws UndefRefError modifyfield!(r, :x, add, 1, :sequentially_consistent)
-    @test_throws (T === Any ? UndefRefError : TypeError) replacefield!(r, :x, 1, 1.0, :sequentially_consistent)
+    @test_throws (TT === Any ? UndefRefError : TypeError) replacefield!(r, :x, 1, 1.0, :sequentially_consistent)
     @test_throws UndefRefError replacefield!(r, :x, 1, x, :sequentially_consistent)
     @test_throws UndefRefError getfield(r, :x, :sequentially_consistent)
     @test_throws UndefRefError swapfield!(r, :x, x, :sequentially_consistent)
     @test getfield(r, :x, :sequentially_consistent) === x === getfield(r, :x)
     nothing
 end
-@noinline function test_field_undef(T)
-    _test_field_undef(Ref(T()))
-    _test_field_undef(Ref{Any}(T()))
+@noinline function test_field_undef(TT)
+    _test_field_undef(Ref(TT()))
+    _test_field_undef(Ref{Any}(TT()))
     nothing
 end
 test_field_undef(ARefxy{BigInt})
