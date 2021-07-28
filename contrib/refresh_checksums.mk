@@ -8,6 +8,11 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
 
+# force a sane / stable configuration
+export LC_ALL=C
+export LANG=C
+.SUFFIXES:
+
 # Default target that will have everything else added to it as a dependency
 all: checksum pack-checksum
 
