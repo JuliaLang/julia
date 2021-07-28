@@ -217,6 +217,9 @@ julia> foo()
 
 ```
 
+Use a comma separator to enable debug for multiple
+modules: `JULIA_DEBUG=loading,Main`.
+
 ## Examples
 
 ### Example: Writing log events to a file
