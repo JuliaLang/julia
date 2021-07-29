@@ -19,6 +19,20 @@ steps:
             # Include `/cache/repos` so that our `git` version introspection works.
             - "/cache/repos:/cache/repos"
     commands: |
+      echo "--- If this is a PR build, make sure that we are up-to-date with the base (target) branch"
+      git config --global user.name "Julia CI"
+      git config --global user.email "noreply@julialang.org"
+      if [[ "$$BUILDKITE_PULL_REQUEST" != "false" ]] ; then
+        git fetch origin
+        echo "The base (target) branch is: $$BUILDKITE_PULL_REQUEST_BASE_BRANCH"
+        git merge --no-edit origin/$$BUILDKITE_PULL_REQUEST_BASE_BRANCH
+      fi
+
+      echo "--- Print the full commit hash of the commit that we will actually test"
+      export ACTUAL_BUILDKITE_COMMIT=`git rev-parse HEAD`
+      echo "The original Buildkite commit is:    $$BUILDKITE_COMMIT"
+      echo "The commit we will actually test is: $$ACTUAL_BUILDKITE_COMMIT"
+
       echo "--- Build Julia from source"
       make -j 6
 
