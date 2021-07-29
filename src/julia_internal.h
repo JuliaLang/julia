@@ -1448,4 +1448,39 @@ uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 }
 #endif
 
+#ifdef USE_DTRACE
+#include "uprobes.h.gen"
+
+// uprobes.h.gen on systems with DTrace, is auto-generated to include
+// `JL_PROBE_{PROBE}` and `JL_PROBE_{PROBE}_ENABLED()` macros for every probe
+// defined in uprobes.d
+//
+// If the arguments to `JL_PROBE_{PROBE}` are expensive to compute, the call to
+// these functions must be guarded by a JL_PROBE_{PROBE}_ENABLED() check, to
+// minimize performance impact when probing is off. As an example:
+//
+//    if (JL_PROBE_GC_STOP_THE_WORLD_ENABLED())
+//        JL_PROBE_GC_STOP_THE_WORLD();
+
+#else
+// define a dummy version of the probe functions
+#define JL_PROBE_GC_BEGIN(collection) do ; while (0)
+#define JL_PROBE_GC_STOP_THE_WORLD() do ; while (0)
+#define JL_PROBE_GC_MARK_BEGIN() do ; while (0)
+#define JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes) do ; while (0)
+#define JL_PROBE_GC_SWEEP_BEGIN(full) do ; while (0)
+#define JL_PROBE_GC_SWEEP_END() do ; while (0)
+#define JL_PROBE_GC_END() do ; while (0)
+#define JL_PROBE_GC_FINALIZER() do ; while (0)
+
+#define JL_PROBE_GC_BEGIN_ENABLED() (0)
+#define JL_PROBE_GC_STOP_THE_WORLD_ENABLED() (0)
+#define JL_PROBE_GC_MARK_BEGIN_ENABLED() (0)
+#define JL_PROBE_GC_MARK_END_ENABLED() (0)
+#define JL_PROBE_GC_SWEEP_BEGIN_ENABLED() (0)
+#define JL_PROBE_GC_SWEEP_END_ENABLED()  (0)
+#define JL_PROBE_GC_END_ENABLED() (0)
+#define JL_PROBE_GC_FINALIZER_ENABLED() (0)
+#endif
+
 #endif
