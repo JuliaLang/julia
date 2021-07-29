@@ -59,6 +59,26 @@ let iobuf = IOBuffer()
     truncate(iobuf, 0)
 end
 
+@testset "Profile.print() groupby options" begin
+    for tasks in [typemin(UInt):typemax(UInt), UInt(0), UInt(0):UInt(1), [UInt(0), UInt(3)]]
+        for threads in [1:Threads.nthreads(), 1, 1:1, 1:2, [1,3]]
+            for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
+                @testset "tasks = $tasks threads = $threads groupby = $groupby" begin
+                    Profile.print(devnull; groupby, threads, tasks)
+                end
+            end
+        end
+    end
+end
+
+@testset "Profile.fetch() with and without meta" begin
+    data_without = Profile.fetch()
+    data_with = Profile.fetch(include_meta = true)
+    @test data_without[1] == data_with[1]
+    @test data_without[end] == data_with[end]
+    @test length(data_without) < length(data_with)
+end
+
 Profile.clear()
 @test isempty(Profile.fetch())
 

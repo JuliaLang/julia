@@ -360,6 +360,15 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     // Get backtrace data
                     bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
                             bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
+
+                    jl_ptls_t ptls = jl_all_tls_states[0]; // given only profiling hMainThread
+
+                    // store threadid but add 1 as 0 is preserved to indicate end of block
+                    bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+
+                    // store task id
+                    bt_data_prof[bt_size_cur++].uintptr = ptls->current_task;
+
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++].uintptr = 0;
                 }
