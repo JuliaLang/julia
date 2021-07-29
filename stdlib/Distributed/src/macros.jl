@@ -1,10 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-let nextidx = Threads.Atomic{Int}(0)
+let nextidx = 0
     global nextproc
     function nextproc()
-        idx = Threads.atomic_add!(nextidx, 1)
-        return workers()[(idx % nworkers()) + 1]
+        p = -1
+        if p == -1
+            p = workers()[(nextidx % nworkers()) + 1]
+            nextidx += 1
+        end
+        p
     end
 end
 
