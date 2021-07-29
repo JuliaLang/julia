@@ -873,7 +873,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
         changed = false
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
-            new_typ = recompute_type(node[:inst], ci, ir, ir.sptypes, slottypes)
+            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes)
             if !(node[:type] ⊑ new_typ) || !(new_typ ⊑ node[:type])
                 node[:type] = new_typ
                 changed = true
