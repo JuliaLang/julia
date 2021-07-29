@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Bezanson"
+  given-names: "Jeff"
+- family-names: "Edelman"
+  given-names: "Alan"
+- family-names: "Karpinski"
+  given-names: "Stefan"
+- family-names: "Shah"
+  given-names: "Viral B"
+title: "Julia: A fresh approach to numerical computing"
+version: 1.6.2
+doi: 10.1137/141000671
+date-released: 2017-02-07
+url: "https://github.com/JuliaLang/julia"
