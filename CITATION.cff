@@ -28,8 +28,7 @@ references:
       - family-names: "Karpinski"
         given-names: "Stefan"
       - family-names: "Shah"
-        name-particle: "B"
-        given-names: "Viral"
+        given-names: "Viral B."
     doi: "10.1137/141000671"
     journal: "SIAM Review"
     volume: 59
