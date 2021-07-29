@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
+message: "Cite this paper whenever you use Julia"
 authors:
 - family-names: "Bezanson"
   given-names: "Jeff"
