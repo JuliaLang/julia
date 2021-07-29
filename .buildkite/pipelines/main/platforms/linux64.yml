@@ -19,6 +19,10 @@ steps:
             # Include `/cache/repos` so that our `git` version introspection works.
             - "/cache/repos:/cache/repos"
     commands: |
+      echo "--- If this is PR build, make sure we are up-to-date with origin/master"
+      [[ "$$BUILDKITE_PULL_REQUEST" != "false" ]] && git fetch origin
+      [[ "$$BUILDKITE_PULL_REQUEST" != "false" ]] && git merge --no-edit origin/master
+
       echo "--- Print the short and long commit hashes"
       SHORT_COMMIT_LENGTH=10
       SHORT_COMMIT=`echo $$BUILDKITE_COMMIT | cut -c1-$$SHORT_COMMIT_LENGTH`
