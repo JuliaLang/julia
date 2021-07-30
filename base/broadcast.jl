@@ -908,7 +908,7 @@ materialize(x) = x
     return materialize!(dest, instantiate(Broadcasted(identity, (x,), axes(dest))))
 end
 
-@inline function materialize!(dest, bc::Broadcasted{Style}) where {Style}
+@inline function materialize!(dest, bc::Broadcasted)
     return materialize!(combine_styles(dest, bc), dest, bc)
 end
 @inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{Style}) where {Style}
