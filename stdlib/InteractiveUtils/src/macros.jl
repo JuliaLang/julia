@@ -235,10 +235,10 @@ end
 macro time_imports(ex)
     quote
         try
-            Base.TIMING_IMPORTS[] += 1
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
             $(esc(ex))
         finally
-            Base.TIMING_IMPORTS[] -= 1
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
         end
     end
 end
