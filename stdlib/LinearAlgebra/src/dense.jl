@@ -13,7 +13,7 @@ const NRM2_CUTOFF = 32
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
 
-function isone(A::StridedMatrix)
+function isone(A::AbstractMatrix)
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -23,7 +23,7 @@ function isone(A::StridedMatrix)
     end
 end
 
-@inline function _isone_triacheck(A::StridedMatrix, m::Int)
+@inline function _isone_triacheck(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in i:m
         if i == j
             isone(A[i,i]) || return false
@@ -35,7 +35,7 @@ end
 end
 
 # Inner loop over rows to be friendly to the CPU cache
-@inline function _isone_cachefriendly(A::StridedMatrix, m::Int)
+@inline function _isone_cachefriendly(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in 1:m
         if i == j
             isone(A[i,i]) || return false

@@ -3458,16 +3458,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 
 static void emit_signal_fence(jl_codectx_t &ctx)
 {
-#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
-    // LLVM generates very inefficient code (and might include function call)
-    // for signal fence. Fallback to the poor man signal fence with
-    // inline asm instead.
-    // https://llvm.org/bugs/show_bug.cgi?id=27545
-    ctx.builder.CreateCall(InlineAsm::get(FunctionType::get(T_void, false), "",
-                                      "~{memory}", true));
-#else
     ctx.builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
-#endif
 }
 
 static Value *emit_defer_signal(jl_codectx_t &ctx)

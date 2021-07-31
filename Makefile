@@ -573,3 +573,6 @@ endif
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
+
+print-locale:
+	@locale

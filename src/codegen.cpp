@@ -1776,7 +1776,7 @@ static void jl_init_function(Function *F)
 #ifdef JL_DISABLE_FPO
     F->addFnAttr("frame-pointer", "all");
 #endif
-#if !defined(JL_ASAN_ENABLED) && !defined(_OS_WINDOWS_)
+#if !defined(_COMPILER_ASAN_ENABLED_) && !defined(_OS_WINDOWS_)
     // ASAN won't like us accessing undefined memory causing spurious issues,
     // and Windows has platform-specific handling which causes it to mishandle
     // this annotation. Other platforms should just ignore this if they don't
@@ -6343,7 +6343,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     f->addFnAttr(Attribute::StackProtectStrong);
 #endif
 
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
     // TODO: enable this only when a argument like `-race` is passed to Julia
     //       add a macro for no_sanitize_thread
     f->addFnAttr(llvm::Attribute::SanitizeThread);

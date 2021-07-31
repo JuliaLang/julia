@@ -13,6 +13,16 @@ extern "C" {
 
 JULIA_DEFINE_FAST_TLS
 
+#ifdef _COMPILER_ASAN_ENABLED_
+JL_DLLEXPORT const char* __asan_default_options()
+{
+    return "allow_user_segv_handler=1:detect_leaks=0";
+    // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
+    //        or defining __lsan_default_options = exitcode=0 once publicly available
+    //        (here and in flisp/flmain.c)
+}
+#endif
+
 #ifdef _OS_WINDOWS_
 int mainCRTStartup(void)
 {
@@ -23,6 +33,12 @@ int mainCRTStartup(void)
 #else
 int main(int argc, char * argv[])
 {
+#endif
+
+#ifdef _COMPILER_ASAN_ENABLED_
+    // ASAN does not support RTLD_DEEPBIND
+    // https://github.com/google/sanitizers/issues/611
+    putenv("LBT_USE_RTLD_DEEPBIND=0");
 #endif
 
     // Convert Windows wchar_t values to UTF8
