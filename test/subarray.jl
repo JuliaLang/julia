@@ -559,44 +559,6 @@ end
     end
 end
 
-@testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin
-    # recreate minimal version of OffsetArrays.jl,
-    # see https://github.com/JuliaArrays/OffsetArrays.jl/blob/master/src/OffsetArrays.jl
-    struct OffsetArray{T,N,AA<:AbstractArray{T,N}} <: AbstractArray{T,N}
-        parent::AA
-        offsets::NTuple{N,Int}
-    end
-    Base.IndexStyle(::Type{<:OffsetArray{<:Any,<:Any,AA}}) where {AA} = IndexStyle(AA)
-    Base.parent(A::OffsetArray) = A.parent
-    Base.size(A::OffsetArray) = size(parent(A))
-    Base.axes(A::OffsetArray) = map((ax, o) -> ax .+ o, axes(parent(A)), A.offsets)
-    Base.getindex(A::OffsetArray, i::Int...)  = parent(A)[CartesianIndex(i .- A.offsets)]
-
-    x = OffsetArray([1 2; 3 4], (-11, 8))  # 2×2 OffsetArray{...} with indices -10:-9×9:10
-
-    # implementation correct?
-    @test collect(x) == [1 2; 3 4]
-    @test size(x) == (2, 2)
-    @test axes(x) == (-10:-9, 9:10)
-
-    # begin/end with offset indices
-    @test (@view x[begin, 9])[] == 1
-    @test (@view x[-10, end])[] == 2
-    @test (@view x[-9, begin])[] == 3
-    @test (@view x[end, 10])[] == 4
-    @test (@view x[begin, begin])[] == 1
-    @test (@view x[begin, end])[] == 2
-    @test (@view x[end, begin])[] == 3
-    @test (@view x[end, end])[] == 4
-
-    # nested usages of begin/end
-    y = OffsetArray([-10, -9], (5,))
-    @test (@view x[begin, -y[end]])[] == 1
-    @test (@view x[y[begin], end])[] == 2
-    @test (@view x[end, -y[end]])[] == 3
-    @test (@view x[y[end], end])[] == 4
-end
-
 @testset "issue #18034: an isbits, IndexLinear view of an immutable Array" begin
     struct ImmutableTestArray{T, N} <: Base.DenseArray{T, N}
     end
