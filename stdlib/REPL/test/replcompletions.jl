@@ -1115,6 +1115,16 @@ let s = "test_dict[\"ab"
     @test c == Any["\"abc\"", "\"abcd\""]
 end
 
+@testset "#41652" begin
+    primitive type NonStruct 8 end
+    Base.propertynames(::NonStruct) = (:a, :b, :c)
+    x = reinterpret(NonStruct, 0x00)
+    let s = "x."
+        c, r = test_complete(s)
+        @test "a" in c
+    end
+end
+
 # https://github.com/JuliaLang/julia/issues/27184
 let
     (test_complete("@noexist."); @test true)
