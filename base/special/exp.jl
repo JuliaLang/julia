@@ -262,7 +262,7 @@ end
 @inline function exp_impl_fast(x::Float32, base)
     T = Float32
     N_float = round(x*LogBINV(base, T))
-    N = unsafe_trunc(Int32, N_float)
+    N = max(Int32(128), unsafe_trunc(Int32, N_float))
     r = muladd(N_float, LogBU(base, T), x)
     r = muladd(N_float, LogBL(base, T), r)
     small_part = expb_kernel(base, r)
