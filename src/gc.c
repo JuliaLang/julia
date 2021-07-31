@@ -3004,6 +3004,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     uint64_t t0 = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
+    JL_PROBE_GC_MARK_BEGIN();
 
     // 1. fix GC bits of objects in the remset.
     for (int t_i = 0; t_i < jl_n_threads; t_i++)
@@ -3030,6 +3031,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_loop(ptls, sp);
     gc_mark_sp_init(gc_cache, &sp);
     gc_num.since_sweep += gc_num.allocd;
+    JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
     gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes);
     int64_t actual_allocd = gc_num.since_sweep;
@@ -3135,6 +3137,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         perm_scanned_bytes = 0;
     scanned_bytes = 0;
     // 5. start sweeping
+    JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
     sweep_weak_refs();
     sweep_stack_pools();
     gc_sweep_foreign_objs();
@@ -3144,6 +3147,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_sweep_pool(sweep_full);
     if (sweep_full)
         gc_sweep_perm_alloc();
+    JL_PROBE_GC_SWEEP_END();
     // sweeping is over
     // 6. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.
@@ -3201,6 +3205,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 {
+    JL_PROBE_GC_BEGIN(collection);
+
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (jl_gc_disable_counter) {
@@ -3230,6 +3236,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // TODO (concurrently queue objects)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
+    JL_PROBE_GC_STOP_THE_WORLD();
+
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
         gc_cblist_pre_gc, (collection));
 
@@ -3247,6 +3255,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // no-op for non-threading
     jl_safepoint_end_gc();
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
+    JL_PROBE_GC_END();
 
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check
@@ -3257,6 +3266,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         run_finalizers(ct);
         ptls->in_finalizer = was_in_finalizer;
     }
+    JL_PROBE_GC_FINALIZER();
+
     gc_invoke_callbacks(jl_gc_cb_post_gc_t,
         gc_cblist_post_gc, (collection));
 #ifdef _OS_WINDOWS_

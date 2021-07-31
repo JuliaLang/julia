@@ -45,6 +45,12 @@
     XX(jl_arrayunset) \
     XX(jl_astaggedvalue) \
     XX(jl_atexit_hook) \
+    XX(jl_atomic_bool_cmpswap_bits) \
+    XX(jl_atomic_cmpswap_bits) \
+    XX(jl_atomic_error) \
+    XX(jl_atomic_new_bits) \
+    XX(jl_atomic_store_bits) \
+    XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_binding_owner) \

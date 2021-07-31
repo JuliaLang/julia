@@ -73,25 +73,6 @@
 #  define JL_THREAD_LOCAL
 #endif
 
-#if defined(__has_feature) // Clang flavor
-#if __has_feature(address_sanitizer)
-#define JL_ASAN_ENABLED
-#endif
-#if __has_feature(memory_sanitizer)
-#define JL_MSAN_ENABLED
-#endif
-#if __has_feature(thread_sanitizer)
-#if __clang_major__ < 11
-#error Thread sanitizer runtime libraries in clang < 11 leak memory and cannot be used
-#endif
-#define JL_TSAN_ENABLED
-#endif
-#else // GCC flavor
-#if defined(__SANITIZE_ADDRESS__)
-#define JL_ASAN_ENABLED
-#endif
-#endif // __has_feature
-
 #define container_of(ptr, type, member) \
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
@@ -1860,7 +1841,7 @@ typedef struct _jl_task_t {
         struct jl_stack_context_t copy_stack_ctx;
 #endif
     };
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
     void *tsan_state;
 #endif
     void *stkbuf; // malloc'd memory (either copybuf or stack)

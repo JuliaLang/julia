@@ -247,42 +247,22 @@ function del_clients(pairs::Vector)
     end
 end
 
-# The task below is coalescing the `flush_gc_msgs` call
-# across multiple producers, see `send_del_client`,
-# and `send_add_client`.
-# XXX: Is this worth the additional complexity?
-#      `flush_gc_msgs` has to iterate over all connected workers.
-const any_gc_flag = Threads.Condition()
+const any_gc_flag = Condition()
 function start_gc_msgs_task()
-    errormonitor(
-        Threads.@spawn begin
-            while true
-                lock(any_gc_flag) do
-                    wait(any_gc_flag)
-                    flush_gc_msgs() # handles throws internally
-                end
-            end
-        end
-    )
+    errormonitor(@async while true
+        wait(any_gc_flag)
+        flush_gc_msgs()
+    end)
 end
 
-# Function can be called within a finalizer
 function send_del_client(rr)
     if rr.where == myid()
         del_client(rr)
     elseif id_in_procs(rr.where) # process only if a valid worker
         w = worker_from_id(rr.where)::Worker
-        msg = (remoteref_id(rr), myid())
-        # We cannot acquire locks from finalizers
-        Threads.@spawn begin
-            lock(w.msg_lock) do
-                push!(w.del_msgs, msg)
-                w.gcflag = true
-            end
-            lock(any_gc_flag) do
-                notify(any_gc_flag)
-            end
-        end
+        push!(w.del_msgs, (remoteref_id(rr), myid()))
+        w.gcflag = true
+        notify(any_gc_flag)
     end
 end
 
@@ -308,13 +288,9 @@ function send_add_client(rr::AbstractRemoteRef, i)
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
-        lock(w.msg_lock) do
-            push!(w.add_msgs, (remoteref_id(rr), i))
-            w.gcflag = true
-        end
-        lock(any_gc_flag) do
-            notify(any_gc_flag)
-        end
+        push!(w.add_msgs, (remoteref_id(rr), i))
+        w.gcflag = true
+        notify(any_gc_flag)
     end
 end
 
