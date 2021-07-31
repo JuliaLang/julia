@@ -1839,6 +1839,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     }
 
     s.s = &sysimg;
+    jl_init_codegen();
     jl_update_all_fptrs(&s); // fptr relocs and registration
     // reinit ccallables, which require codegen to be initialized
     s.s = f;
