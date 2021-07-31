@@ -8,8 +8,7 @@ authors:
 - family-names: "Karpinski"
   given-names: "Stefan"
 - family-names: "Shah"
-  name-particle: "B"
-  given-names: "Viral"
+  given-names: "Viral B."
 title: "Julia: A fresh approach to numerical computing"
 version: "v1"
 license: "MIT"
@@ -39,4 +38,4 @@ references:
     year: 2017
     url: "https://dx.doi.org/10.1137/141000671"
     publisher:
-      - name: "SIAM"  
+      - name: "SIAM"
