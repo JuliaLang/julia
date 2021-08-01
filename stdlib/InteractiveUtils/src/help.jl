@@ -8,8 +8,7 @@ struct Help
 end
 
 const help = Help()
-Base.show(io::IO, m::MIME"text/plain", ::Help) = show(io, m, Base.Docs.parsedoc(Base.Docs.keywords[:help]))
-Base.show(io::IO, ::Help) = show(io, Base.Docs.parsedoc(Base.Docs.keywords[:help]))
+Base.show(io::IO, m::MIME"text/plain", h::Help) = show(io, m, h())
+Base.show(io::IO, h::Help) = show(io, h())
 
-(::Help)() = Base.Docs.parsedoc(Base.Docs.keywords[:help])
-
+(::Help)() = @doc(help)
