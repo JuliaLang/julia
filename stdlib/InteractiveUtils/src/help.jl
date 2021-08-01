@@ -11,4 +11,4 @@ const help = Help()
 Base.show(io::IO, m::MIME"text/plain", h::Help) = show(io, m, h())
 Base.show(io::IO, h::Help) = show(io, h())
 
-(::Help)() = @doc(help)
+(::Help)() = Base.Docs.parsedoc(Base.Docs.keywords[:help])
