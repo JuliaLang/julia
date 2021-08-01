@@ -1116,9 +1116,11 @@ let s = "test_dict[\"ab"
 end
 
 @testset "#41652" begin
-    primitive type NonStruct 8 end
-    Base.propertynames(::NonStruct) = (:a, :b, :c)
-    x = reinterpret(NonStruct, 0x00)
+    @eval begin
+        primitive type NonStruct 8 end
+        Base.propertynames(::NonStruct) = (:a, :b, :c)
+        x = reinterpret(NonStruct, 0x00)
+    end
     let s = "x."
         c, r = test_complete(s)
         @test "a" in c
