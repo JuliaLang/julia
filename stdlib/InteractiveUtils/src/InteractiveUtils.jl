@@ -6,7 +6,7 @@ Base.Experimental.@optlevel 1
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard
+    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard, help
 
 import Base.Docs.apropos
 
@@ -19,6 +19,7 @@ include("editless.jl")
 include("codeview.jl")
 include("macros.jl")
 include("clipboard.jl")
+include("help.jl")
 
 """
     varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name)
