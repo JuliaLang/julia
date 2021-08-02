@@ -1115,16 +1115,13 @@ let s = "test_dict[\"ab"
     @test c == Any["\"abc\"", "\"abcd\""]
 end
 
+primitive type NonStruct 8 end
+Base.propertynames(::NonStruct) = (:a, :b, :c)
+x = reinterpret(NonStruct, 0x00)
 @testset "#41652" begin
-    @eval begin
-        primitive type NonStruct 8 end
-        Base.propertynames(::NonStruct) = (:a, :b, :c)
-        x = reinterpret(NonStruct, 0x00)
-    end
-    let s = "x."
-        c, r = test_complete(s)
-        @test "a" in c
-    end
+    s = "x."
+    c, r = test_complete(s)
+    @test "a" in c
 end
 
 # https://github.com/JuliaLang/julia/issues/27184
