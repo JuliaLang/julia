@@ -162,8 +162,8 @@ to create an expression object and [`Base.eval()`](@ref eval) to execute it.
 
 ## `Base.eval`
 
-[`Base.eval()`](@ref eval) was [mapped to `jl_f_top_eval`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c)
-by `jl_init_primitives()`.
+[`Base.eval()`](@ref eval) was [mapped to `jl_toplevel_eval_in`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
+in [`Boot.jl`](https://github.com/JuliaLang/julia/blob/master/base/boot.jl).
 
 [`jl_f_top_eval()`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c) calls [`jl_toplevel_eval_in(jl_main_module, ex)`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c),
 where `ex` is the parsed expression `println("Hello World!")`.
