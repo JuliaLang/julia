@@ -53,7 +53,7 @@ function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
     summary(io, iter.dict)
 end
 
-show(io::IO, iter::Union{KeySet,ValueIterator}) = show_vector(io, iter)
+show(io::IO, iter::ValueIterator) = show_vector(io, iter)
 
 length(v::Union{KeySet,ValueIterator}) = length(v.dict)
 isempty(v::Union{KeySet,ValueIterator}) = isempty(v.dict)
