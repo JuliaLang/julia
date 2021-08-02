@@ -1118,8 +1118,7 @@ end
 primitive type NonStruct 8 end
 Base.propertynames(::NonStruct) = (:a, :b, :c)
 x = reinterpret(NonStruct, 0x00)
-@testset "#41652" begin
-    s = "x."
+let s = "x."
     c, r = test_complete(s)
     @test "a" in c
 end
