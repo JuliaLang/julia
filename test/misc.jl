@@ -912,3 +912,6 @@ end
 @testset "issue #28188" begin
     @test `$(@__FILE__)` == let file = @__FILE__; `$file` end
 end
+
+# issue #41656
+@test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
