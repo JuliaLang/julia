@@ -828,9 +828,9 @@ end
 function UndefVarError_hint(io::IO, ex::UndefVarError)
     var = ex.var
     if var === :or
-        print("\nsuggestion: Use `||` for short-circuiting boolean OR.")
+        print(io, "\nsuggestion: Use `||` for short-circuiting boolean OR.")
     elseif var === :and
-        print("\nsuggestion: Use `&&` for short-circuiting boolean AND.")
+        print(io, "\nsuggestion: Use `&&` for short-circuiting boolean AND.")
     end
 end
 
