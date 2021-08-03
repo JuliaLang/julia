@@ -174,7 +174,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                   elseif opts.check_bounds == 2
                       "no" # off
                   else
-                      "" # "default"
+                      "" # default = "auto"
                   end
         isempty(check_bounds) || push!(addflags, "--check-bounds=$check_bounds")
     end

@@ -302,6 +302,11 @@ let vec = vcat(missing, ones(100000))
     @test length(unique(summarysize(vec) for i = 1:20)) == 1
 end
 
+# issue #40773
+let s = Set(1:100)
+    @test summarysize([s]) > summarysize(s)
+end
+
 # issue #13021
 let ex = try
     Main.x13021 = 0
@@ -995,3 +1000,5 @@ let script = :(let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
     @test !success(`$(Base.julia_cmd()) -e $script`)
 end
 
+# issue #41656
+@test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)

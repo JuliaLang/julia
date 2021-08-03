@@ -119,7 +119,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     msglines = [(indent=0, msg=l) for l in split(chomp(string(message)::String), '\n')]
     stream = logger.stream
     if !isopen(stream)
-        stream = level < Warn ? stdout : stderr
+        stream = stderr
     end
     dsize = displaysize(stream)::Tuple{Int,Int}
     nkwargs = length(kwargs)::Int

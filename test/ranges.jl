@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.Checked: checked_length
+
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
     @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
@@ -267,22 +269,28 @@ end
         end
     end
     @testset "length" begin
-        @test length(.1:.1:.3) == 3
-        @test length(1.1:1.1:3.3) == 3
-        @test length(1.1:1.3:3) == 2
-        @test length(1:1:1.8) == 1
-        @test length(1:.2:2) == 6
-        @test length(1.:.2:2.) == 6
-        @test length(2:-.2:1) == 6
-        @test length(2.:-.2:1.) == 6
-        @test length(2:.2:1) == 0
+        @test length(.1:.1:.3) == checked_length(.1:.1:.3) == 3
+        @test length(1.1:1.1:3.3) == checked_length(1.1:1.1:3.3) == 3
+        @test length(1.1:1.3:3) == checked_length(1.1:1.3:3) == 2
+        @test length(1:1:1.8) == checked_length(1:1:1.8) == 1
+        @test length(1:.2:2) == checked_length(1:.2:2) == 6
+        @test length(1.:.2:2.) == checked_length(1.:.2:2.) == 6
+        @test length(2:-.2:1) == checked_length(2:-.2:1) == 6
+        @test length(2.:-.2:1.) == checked_length(2.:-.2:1.) == 6
+        @test length(2:.2:1) == checked_length(2:.2:1) == 0
         @test length(2.:.2:1.) == 0
 
-        @test length(1:0) == 0
-        @test length(0.0:-0.5) == 0
-        @test length(1:2:0) == 0
-        @test length(Char(0):Char(0x001fffff)) == 2097152
-        @test length(typemax(UInt64)//one(UInt64):1:typemax(UInt64)//one(UInt64)) == 1
+        @test length(1:0) == checked_length(1:0) == 0
+        @test length(0.0:-0.5) == checked_length(0.0:-0.5) == 0
+        @test length(1:2:0) == checked_length(1:2:0) == 0
+        let r = Char(0):Char(0x001fffff)
+            @test length(r) == 2097152
+            @test_throws MethodError checked_length(r) == 2097152 # this would work if checked_sub is defined on Char
+        end
+        let r = typemax(UInt64)//one(UInt64):1:typemax(UInt64)//one(UInt64)
+            @test length(r) == 1
+            @test_throws MethodError checked_length(r) == 1 # this would work if checked_sub is defined on Rational
+        end
     end
     @testset "keys/values" begin
         keytype_is_correct(r) = keytype(r) == eltype(keys(r))
@@ -501,22 +509,54 @@ for a=AbstractRange[3:6, 0:2:10], b=AbstractRange[0:1, 2:-1:0]
 end
 
 # avoiding intermediate overflow (#5065)
-@test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
+@test length(1:4:typemax(Int)) == div(typemax(Int), 4) + 1
+@test checked_length(1:4:typemax(Int)) == div(typemax(Int), 4) + 1 # computed exactly in modulo arithmetic
 
 @testset "overflow in length" begin
-    Tset = Int === Int64 ? (Int,UInt,Int128,UInt128) :
-                           (Int,UInt,Int64,UInt64,Int128, UInt128)
+    Tset = Int === Int64 ? (Int, UInt, Int128, UInt128) :
+                           (Int, UInt, Int64, UInt64, Int128, UInt128)
     for T in Tset
-        @test_throws OverflowError length(zero(T):typemax(T))
-        @test_throws OverflowError length(typemin(T):typemax(T))
-        @test_throws OverflowError length(zero(T):one(T):typemax(T))
-        @test_throws OverflowError length(typemin(T):one(T):typemax(T))
+        @test length(zero(T):typemax(T)) == typemin(T)
+        @test length(typemin(T):typemax(T)) == T(0)
+        @test length(zero(T):one(T):typemax(T)) == typemin(T)
+        @test length(typemin(T):one(T):typemax(T)) == T(0)
+        @test_throws OverflowError checked_length(zero(T):typemax(T))
+        @test_throws OverflowError checked_length(typemin(T):typemax(T))
+        @test_throws OverflowError checked_length(zero(T):one(T):typemax(T))
+        @test_throws OverflowError checked_length(typemin(T):one(T):typemax(T))
+        @test length(one(T):typemax(T)) == checked_length(one(T):typemax(T)) == typemax(T)
         if T <: Signed
-            @test_throws OverflowError length(-one(T):typemax(T)-one(T))
-            @test_throws OverflowError length(-one(T):one(T):typemax(T)-one(T))
+            @test length(-one(T):typemax(T)-one(T)) == typemin(T)
+            @test length(-one(T):one(T):typemax(T)-one(T)) == typemin(T)
+            @test length(-one(T):typemax(T)) == typemin(T) + T(1)
+            @test length(zero(T):typemin(T):typemin(T)) == 2
+            @test length(one(T):typemin(T):typemin(T)) == 2
+            @test length(typemax(T):typemin(T):typemin(T)) == 2
+            @test length(-one(T):typemin(T):typemin(T)) == 1
+            @test length(zero(T):typemin(T):zero(T)) == 1
+            @test length(zero(T):typemin(T):one(T)) == 0
+            @test_throws OverflowError checked_length(-one(T):typemax(T)-one(T))
+            @test_throws OverflowError checked_length(-one(T):one(T):typemax(T)-one(T))
+            @test_throws InexactError checked_length(zero(T):typemin(T):typemin(T)) == 2 # this can be improved
+            @test_throws InexactError checked_length(one(T):typemin(T):typemin(T)) == 2 # this can  be improved
+            @test_throws InexactError checked_length(typemax(T):typemin(T):typemin(T)) == 2 # this can  be improved
         end
     end
 end
+
+# A number type with the overflow behavior of `UInt8`. Conversion to `Integer` returns an
+# `Int32`, i.e., a type with different `typemin`/`typemax`. See  #41479
+struct OverflowingReal <: Real
+    val::UInt8
+end
+OverflowingReal(x::OverflowingReal) = x
+Base.:<=(x::OverflowingReal, y::OverflowingReal) = x.val <= y.val
+Base.:+(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val + y.val)
+Base.:-(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val - y.val)
+Base.round(x::OverflowingReal, ::RoundingMode) = x
+Base.Integer(x::OverflowingReal) = Int32(x.val)
+@test length(OverflowingReal(1):OverflowingReal(0)) == 0
+
 @testset "loops involving typemin/typemax" begin
     n = 0
     s = 0
@@ -625,8 +665,8 @@ end
     @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
     is_unsigned = T <: Unsigned
     is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
-    @test broadcast(-, T(1):3) == -T(1):-1:-T(3) broken=is_unsigned
-    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1) broken=is_unsigned
+    @test broadcast(-, T(1):3) == -T(1):-T(1):-T(3)
+    @test broadcast(-, 2, T(1):3) == T(1):-T(1):-T(1)
 end
 @testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
     @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
@@ -871,32 +911,45 @@ end
 end
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
-#@test 1.0:(.3-.1)/.1 == 1.0:2.0
+@test_broken 1.0:(.3-.1)/.1 == 1.0:2.0 # (this is just shy of 2.0)
 
 @testset "length with typemin/typemax" begin
-    let r = typemin(Int64):2:typemax(Int64), s = typemax(Int64):-2:typemin(Int64)
+    let r = typemin(Int64):2:typemax(Int64)
         @test first(r) == typemin(Int64)
-        @test last(r) == (typemax(Int64)-1)
-        @test_throws OverflowError length(r)
-
-        @test first(s) == typemax(Int64)
-        @test last(s) == (typemin(Int64)+1)
-        @test_throws OverflowError length(s)
+        @test last(r) == typemax(Int64) - 1
+        @test length(r) == typemin(Int64)
+        @test_throws OverflowError checked_length(r)
+    end
+    let r = typemax(Int64):-2:typemin(Int64)
+        @test first(r) == typemax(Int64)
+        @test last(r) == typemin(Int64) + 1
+        @test length(r) == typemin(Int64)
+        @test_throws OverflowError checked_length(r)
     end
 
-    @test length(typemin(Int64):3:typemax(Int64)) == 6148914691236517206
-    @test length(typemax(Int64):-3:typemin(Int64)) == 6148914691236517206
+    let r = typemin(Int64):3:typemax(Int64)
+        @test length(r) == checked_length(r) == 6148914691236517206
+    end
+    let r = typemax(Int64):-3:typemin(Int64)
+        @test length(r) == checked_length(r) == 6148914691236517206
+    end
 
     for s in 3:100
-        @test length(typemin(Int):s:typemax(Int)) == length(big(typemin(Int)):big(s):big(typemax(Int)))
-        @test length(typemax(Int):-s:typemin(Int)) == length(big(typemax(Int)):big(-s):big(typemin(Int)))
+        r = typemin(Int):s:typemax(Int)
+        br = big(typemin(Int)):big(s):big(typemax(Int))
+        @test length(r) == checked_length(r) == length(br)
+
+        r = typemax(Int):-s:typemin(Int)
+        br = big(typemax(Int)):big(-s):big(typemin(Int))
+        @test length(r) == checked_length(r) == length(br)
     end
 
-    @test length(UInt(1):UInt(1):UInt(0)) == 0
-    @test length(typemax(UInt):UInt(1):(typemax(UInt)-1)) == 0
-    @test length(typemax(UInt):UInt(2):(typemax(UInt)-1)) == 0
-    @test length((typemin(Int)+3):5:(typemin(Int)+1)) == 0
+    @test length(UInt(1):UInt(1):UInt(0)) == checked_length(UInt(1):UInt(1):UInt(0)) == 0
+    @test length(typemax(UInt):UInt(1):(typemax(UInt)-1)) == checked_length(typemax(UInt):UInt(1):(typemax(UInt)-1)) == 0
+    @test length(typemax(UInt):UInt(2):(typemax(UInt)-1)) == checked_length(typemax(UInt):UInt(2):(typemax(UInt)-1)) == 0
+    @test length((typemin(Int)+3):5:(typemin(Int)+1)) == checked_length((typemin(Int)+3):5:(typemin(Int)+1)) == 0
 end
+
 # issue #6364
 @test length((1:64)*(pi/5)) == 64
 
@@ -966,7 +1019,8 @@ end
                 (Int8,UInt8,Int16,UInt16,Int32,UInt32) :
                 (Int8,UInt8,Int16,UInt16))
     for T in smallint
-        @test length(typemin(T):typemax(T)) == 2^(8*sizeof(T))
+        s = typemin(T):typemax(T)
+        @test length(s) == checked_length(s) == 2^(8*sizeof(T))
     end
 end
 
@@ -974,7 +1028,7 @@ end
 @test (0:1//2:2)[1:2:3] == 0:1//1:1
 
 # issue #12278
-@test length(1:UInt(0)) == 0
+@test length(1:UInt(0)) == checked_length(1:UInt(0)) == 0
 
 @testset "zip" begin
     i = 0
@@ -1047,17 +1101,14 @@ end
     @test reverse(LinRange{Int}(0,3,4)) === LinRange{Int}(3,0,4)
     @test reverse(LinRange{Float64}(0.,3.,4)) === LinRange{Float64}(3.,0.,4)
 end
-@testset "Issue #11245" begin
-    io = IOBuffer()
-    show(io, range(1, stop=2, length=3))
-    str = String(take!(io))
-#    @test str == "range(1.0, stop=2.0, length=3)"
-    @test str == "1.0:0.5:2.0"
-end
+
+# issue #11245
+@test repr(range(1, stop=2, length=3)) == "1.0:0.5:2.0"
 
 @testset "issue 10950" begin
     r = 1//2:3
     @test length(r) == 3
+    @test checked_length(r) == 3
     i = 1
     for x in r
         @test x == i//2
@@ -1070,10 +1121,11 @@ end
     # repr/show should display the range nicely
     # to test print_range in range.jl
     replrepr(x) = repr("text/plain", x; context=IOContext(stdout, :limit=>true, :displaysize=>(24, 80)))
+    nb = Sys.WORD_SIZE
     @test replrepr(1:4) == "1:4"
     @test repr("text/plain", 1:4) == "1:4"
     @test repr("text/plain", range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
+    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64, Int$nb}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
     @test repr(range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
     @test repr(LinRange{Float64}(1,5,7)) == "range(1.0, stop=5.0, length=7)"
     @test replrepr(0:100.) == "0.0:1.0:100.0"
@@ -1081,7 +1133,7 @@ end
     # only examines spacing of the left and right edges of the range, sufficient
     # to cover the designated screen size.
     @test replrepr(range(0, stop=100, length=10000)) == "0.0:0.010001000100010001:100.0"
-    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
+    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64, Int$nb}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
@@ -1268,19 +1320,22 @@ end
     end
 
     r = 1f8-10:1f8
-    @test_broken argmin(f) == argmin(collect(r))
-    @test_broken argmax(f) == argmax(collect(r))
+    rv = collect(r)
+    @test argmin(r) == argmin(rv) == 1
+    @test r[argmax(r)] == r[argmax(rv)] == 1f8
+    @test argmax(r) == lastindex(r)
+    @test argmax(rv) != lastindex(r)
 end
 
 @testset "OneTo" begin
     let r = Base.OneTo(-5)
         @test isempty(r)
-        @test length(r) == 0
+        @test length(r) == checked_length(r) == 0
         @test size(r) == (0,)
     end
     let r = Base.OneTo(3)
         @test !isempty(r)
-        @test length(r) == 3
+        @test length(r) == checked_length(r) == 3
         @test size(r) == (3,)
         @test step(r) == 1
         @test first(r) == 1
@@ -1377,7 +1432,7 @@ end
 
 @testset "issue #20520" begin
     r = range(1.3173739f0, stop=1.3173739f0, length=3)
-    @test length(r) == 3
+    @test length(r) == checked_length(r) == 3
     @test first(r) === 1.3173739f0
     @test last(r)  === 1.3173739f0
     @test r[2]     === 1.3173739f0
@@ -1401,7 +1456,8 @@ using .Main.Furlongs
 
 @testset "dimensional correctness" begin
     @test length(Vector(Furlong(2):Furlong(10))) == 9
-    @test length(range(Furlong(2), length=9)) == 9
+    @test length(range(Furlong(2), length=9)) == checked_length(range(Furlong(2), length=9)) == 9
+    @test @inferred(length(StepRange(Furlong(2), Furlong(1), Furlong(1)))) == 0
     @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
           Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
@@ -1496,15 +1552,18 @@ module NonStandardIntegerRangeTest
 
 using Test
 
+using Base.Checked: checked_length
+import Base.Checked: checked_add, checked_sub
+
 struct Position <: Integer
     val::Int
 end
-Position(x::Position) = x # to resolve ambiguity with boot.jl:728
+Position(x::Position) = x # to resolve ambiguity with boot.jl:770
 
 struct Displacement <: Integer
     val::Int
 end
-Displacement(x::Displacement) = x # to resolve ambiguity with boot.jl:728
+Displacement(x::Displacement) = x # to resolve ambiguity with boot.jl:770
 
 Base.:-(x::Displacement) = Displacement(-x.val)
 Base.:-(x::Position, y::Position) = Displacement(x.val - y.val)
@@ -1521,14 +1580,67 @@ Base.Unsigned(x::Displacement) = Unsigned(x.val)
 Base.rem(x::Displacement, y::Displacement) = Displacement(rem(x.val, y.val))
 Base.div(x::Displacement, y::Displacement) = Displacement(div(x.val, y.val))
 
-# required for collect (summing lengths); alternatively, should unsafe_length return Int by default?
+# required for collect (summing lengths); alternatively, should length return Int by default?
 Base.promote_rule(::Type{Displacement}, ::Type{Int}) = Int
 Base.convert(::Type{Int}, x::Displacement) = x.val
 
+# Unsigned complement, for testing checked_length
+struct UPosition <: Unsigned
+    val::UInt
+end
+UPosition(x::UPosition) = x # to resolve ambiguity with boot.jl:770
+
+struct UDisplacement <: Unsigned
+    val::UInt
+end
+UDisplacement(x::UDisplacement) = x # to resolve ambiguity with boot.jl:770
+
+Base.show(io::IO, x::Union{Position, UPosition, Displacement, UDisplacement}) =
+    # should use show if we were to do this properly (instead of just a test-helper)
+    print(io, typeof(x).name.name, "(", x.val, ")")
+
+Base.:-(x::UPosition, y::UPosition) = UDisplacement(x.val - y.val)
+Base.:-(x::UPosition, y::UDisplacement) = UPosition(x.val - y.val)
+Base.:+(x::UPosition, y::UDisplacement) = UPosition(x.val + y.val)
+Base.:+(x::UDisplacement, y::Displacement) = UDisplacement(x.val + y.val)
+Base.:+(x::UDisplacement, y::UDisplacement) = UDisplacement(x.val + y.val)
+checked_sub(x::UPosition, y::UPosition) = UDisplacement(checked_sub(x.val, y.val))
+checked_sub(x::UPosition, y::UDisplacement) = UPosition(checked_sub(x.val, y.val))
+checked_sub(x::UDisplacement, y::UDisplacement) = UDisplacement(checked_sub(x.val, y.val))
+checked_add(x::UPosition, y::UDisplacement) = UPosition(checked_add(x.val, y.val))
+checked_add(x::UDisplacement, y::UDisplacement) = UDisplacement(checked_add(x.val, y.val))
+Base.:+(x::UPosition, y::Displacement) = UPosition(x.val + y.val)
+Base.:(<=)(x::UPosition, y::UPosition) = x.val <= y.val
+Base.:(<)(x::UPosition, y::UPosition) = x.val < y.val
+Base.:(<)(x::UDisplacement, y::UDisplacement) = x.val < y.val
+
+# for StepRange computation:
+Base.rem(x::UDisplacement, y::Displacement) = UDisplacement(rem(x.val, y.val))
+Base.div(x::UDisplacement, y::Displacement) = UDisplacement(div(x.val, y.val))
+Base.rem(x::UDisplacement, y::UDisplacement) = UDisplacement(rem(x.val, y.val))
+Base.div(x::UDisplacement, y::UDisplacement) = UDisplacement(div(x.val, y.val))
+
+#Base.promote_rule(::Type{UDisplacement}, ::Type{Int}) = Int
+#Base.convert(::Type{Int}, x::UDisplacement) = Int(x.val)
+
 @testset "Ranges with nonstandard Integers" begin
     for (start, stop) in [(2, 4), (3, 3), (3, -2)]
-        @test collect(Position(start) : Position(stop)) == Position.(start : stop)
+        r = Position(start) : Position(stop)
+        @test length(r) === Displacement(stop >= start ? stop - start + 1 : 0)
+        start >= 0 && stop >= 0 && @test UDisplacement(length(r).val) ===
+              checked_length(UPosition(start) : UPosition(stop)) ===
+              checked_length(UPosition(start) : Displacement(1) : UPosition(stop)) ===
+              checked_length(UPosition(start) : UDisplacement(1) : UPosition(stop))
+        @test collect(r) == Position.(start : stop)
     end
+
+    @test length(UPosition(3):Displacement(7):UPosition(100)) === checked_length(UPosition(3):Displacement(7):UPosition(100)) === UDisplacement(14)
+    @test length(UPosition(100):Displacement(7):UPosition(3)) === checked_length(UPosition(100):Displacement(7):UPosition(3)) === UDisplacement(0)
+    @test length(UPosition(100):Displacement(-7):UPosition(3)) === checked_length(UPosition(100):Displacement(-7):UPosition(3)) === UDisplacement(14)
+    @test length(UPosition(3):Displacement(-7):UPosition(100)) === checked_length(UPosition(3):Displacement(-7):UPosition(100)) === UDisplacement(0)
+    @test_throws OverflowError checked_length(zero(UPosition):UPosition(typemax(UInt)))
+    @test_throws OverflowError checked_length(zero(UPosition):Displacement(1):UPosition(typemax(UInt)))
+    @test_throws OverflowError checked_length(UPosition(typemax(UInt)):Displacement(-1):zero(UPosition))
 
     for start in [3, 0, -2]
         @test collect(Base.OneTo(Position(start))) == Position.(Base.OneTo(start))
@@ -1550,7 +1662,7 @@ end
 end # module NonStandardIntegerRangeTest
 
 @testset "Issue #26619" begin
-    @test length(UInt(100) : -1 : 1) === UInt(100)
+    @test length(UInt(100) : -1 : 1) == checked_length(UInt(100) : -1 : 1) === UInt(100)
     @test collect(UInt(5) : -1 : 3) == [UInt(5), UInt(4), UInt(3)]
 
     let r = UInt(5) : -2 : 2
@@ -1948,3 +2060,7 @@ end
         @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
     end
 end
+
+@test length(range(1, 100, length=big(100)^100)) == big(100)^100
+@test length(range(big(1), big(100)^100, length=big(100)^100)) == big(100)^100
+@test length(0 * (1:big(100)^100)) == big(100)^100

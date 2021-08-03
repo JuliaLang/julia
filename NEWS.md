@@ -21,6 +21,7 @@ New language features
   lines of code ([#40753]).
 * A backslash before a newline in command literals now always removes the newline, similar to standard string
   literals, whereas the result was not well-defined before ([#40753]).
+* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 
 Language changes
 ----------------
@@ -143,6 +144,10 @@ Standard library changes
 * `replace(::String)` now accepts multiple patterns, which will be applied left-to-right simultaneously,
   so only one pattern will be applied to any character, and the patterns will only be applied to the input
   text, not the replacements ([#40484]).
+* The `length` function on certain ranges of certain specific element types no longer checks for integer
+  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
+  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
+  constructing the range. ([#40382])
 
 #### Package Manager
 

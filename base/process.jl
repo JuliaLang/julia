@@ -84,15 +84,16 @@ const SpawnIOs = Vector{Any} # convenience name for readability
         for io in stdio]
     handle = Libc.malloc(_sizeof_uv_process)
     disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
+    (; exec, flags, env, dir) = cmd
     err = ccall(:jl_spawn, Int32,
               (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                Ptr{Tuple{Cint, UInt}}, Int,
                UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
-        file, cmd.exec, loop, handle,
+        file, exec, loop, handle,
         iohandles, length(iohandles),
-        cmd.flags,
-        cmd.env === nothing ? C_NULL : cmd.env,
-        isempty(cmd.dir) ? C_NULL : cmd.dir,
+        flags,
+        env === nothing ? C_NULL : env,
+        isempty(dir) ? C_NULL : dir,
         @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
     if err != 0
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually

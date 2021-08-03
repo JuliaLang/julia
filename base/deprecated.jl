@@ -246,6 +246,9 @@ const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
 const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,Vararg{T,N}}
 
+@deprecate unsafe_indices(A) axes(A) false
+@deprecate unsafe_length(r) length(r) false
+
 # END 1.6 deprecations
 
 # BEGIN 1.7 deprecations

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if isempty(Base.ARGS) || Base.ARGS[1] !== "0"
+if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 Sys.__init_build()
 # Prevent this from being put into the Main namespace
 @eval Module() begin
