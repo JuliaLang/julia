@@ -417,6 +417,9 @@ end
         @test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
         @test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
 
+        @test intersect(1:typemax(Int), [1, 3]) == [1, 3]
+        @test intersect([1, 3], 1:typemax(Int)) == [1, 3]
+
         @testset "Support StepRange with a non-numeric step" begin
             start = Date(1914, 7, 28)
             stop = Date(1918, 11, 11)
@@ -425,6 +428,21 @@ end
             @test intersect(start:Day(1):stop, start:Day(5):stop) == start:Day(5):stop
             @test intersect(start-Day(10):Day(1):stop-Day(10), start:Day(5):stop) ==
                 start:Day(5):stop-Day(10)-mod(stop-start, Day(5))
+        end
+
+        @testset "Two AbstractRanges" begin
+            struct DummyRange{T} <: AbstractRange{T}
+                r
+            end
+            Base.iterate(dr::DummyRange) = iterate(dr.r)
+            Base.iterate(dr::DummyRange, state) = iterate(dr.r, state)
+            Base.length(dr::DummyRange) = length(dr.r)
+            Base.in(x::Int, dr::DummyRange) = in(x, dr.r)
+            Base.unique(dr::DummyRange) = unique(dr.r)
+            r1 = DummyRange{Int}([1, 2, 3, 3, 4, 5])
+            r2 = DummyRange{Int}([3, 3, 4, 5, 6])
+            @test intersect(r1, r2) == [3, 4, 5]
+            @test intersect(r2, r1) == [3, 4, 5]
         end
     end
     @testset "issubset" begin
