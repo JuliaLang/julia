@@ -409,12 +409,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
         return task;
     }
     jl_gc_safepoint();
-    if (self_tid == 0 && jl_n_threads != 1) {
-        return NULL;
-    } else {
-        // fprintf(stderr, "tid=%d: grabbing work from shared heaps\n", self_tid);
-        return multiq_deletemin();
-    }
+    return thread_accepts_new_tasks[self_tid] ? multiq_deletemin() : NULL;
 }
 
 static int may_sleep(jl_ptls_t ptls)
