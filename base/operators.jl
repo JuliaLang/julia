@@ -54,6 +54,7 @@ end
 
 """
     ==(x, y)
+    ⩵(x, y)
 
 Generic equality operator. Falls back to [`===`](@ref).
 Should be implemented for all types with a notion of equality, based on the abstract value
@@ -84,6 +85,7 @@ If some type defines `==`, [`isequal`](@ref), and [`isless`](@ref) then it shoul
 also implement [`<`](@ref) to ensure consistency of comparisons.
 """
 ==
+const ⩵ = ==
 
 """
     isequal(x, y)
@@ -258,7 +260,7 @@ end
 
 """
     !=(x, y)
-    ≠(x,y)
+    ≠(x, y)
 
 Not-equals comparison operator. Always gives the opposite answer as [`==`](@ref).
 
@@ -279,8 +281,9 @@ false
 const ≠ = !=
 
 """
-    ===(x,y) -> Bool
-    ≡(x,y) -> Bool
+    ===(x, y) -> Bool
+    ≡(x, y) -> Bool
+    ⩶(x, y) -> Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
 them. First the types of `x` and `y` are compared. If those are identical, mutable objects
@@ -304,10 +307,13 @@ true
 """
 ===
 const ≡ = ===
+const ⩶ = ===
 
 """
     !==(x, y)
-    ≢(x,y)
+    !⩵(x, y)
+    !⩶(x, y)
+    ≢(x, y)
 
 Always gives the opposite answer as [`===`](@ref).
 
@@ -323,6 +329,8 @@ false
 ```
 """
 !==(@nospecialize(x), @nospecialize(y)) = !(x === y)
+!⩵(@nospecialize(x), @nospecialize(y)) = !(x === y)
+!⩶(@nospecialize(x), @nospecialize(y)) = !(x === y)
 const ≢ = !==
 
 """
@@ -379,7 +387,8 @@ true
 
 """
     <=(x, y)
-    ≤(x,y)
+    ≤(x, y)
+    ⩽(x, y)
 
 Less-than-or-equals comparison operator. Falls back to `(x < y) | (x == y)`.
 
@@ -400,10 +409,12 @@ false
 """
 <=(x, y) = (x < y) | (x == y)
 const ≤ = <=
+const ⩽ = <=
 
 """
     >=(x, y)
-    ≥(x,y)
+    ≥(x y)
+    ⩾(x, y)
 
 Greater-than-or-equals comparison operator. Falls back to `y <= x`.
 
@@ -424,6 +435,7 @@ true
 """
 >=(x, y) = (y <= x)
 const ≥ = >=
+const ⩾ = >=
 
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
@@ -595,6 +607,8 @@ identity(x) = x
 (|)(x::Integer) = x
 xor(x::Integer) = x
 
+const − = -
+const × = *
 const ⊻ = xor
 const ⊼ = nand
 const ⊽ = nor
