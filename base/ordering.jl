@@ -6,7 +6,7 @@ module Order
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 import .Base:
-    AbstractVector, @propagate_inbounds, isless, identity, getindex,
+    AbstractVector, @propagate_inbounds, isless, identity, getindex, return_types
     +, -, !, &, <, |
 
 ## notions of element ordering ##
@@ -163,8 +163,7 @@ end
 if ccall(:jl_ver_major, Int32, ()) < 2
     ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
     ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
-    # TODO: here, we really want the return type of o.by, without calling it
-    ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
+    ordtype(o::By,              vs::AbstractArray) = Union{return_types(o.by, Tuple{eltype(vs)})...}
     ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 end
 
