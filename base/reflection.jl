@@ -194,6 +194,19 @@ fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 Return a boolean indicating whether `T` has `name` as one of its own fields.
 
+# Examples
+```jldoctest
+julia> struct Foo
+            bar::Int
+       end
+
+julia> hasfield(Foo, :bar)
+true    
+    
+julia> hasfield(Foo, :x)
+false        
+```
+    
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 """
