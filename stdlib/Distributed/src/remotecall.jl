@@ -84,12 +84,17 @@ end
 
 function finalize_ref(r::AbstractRemoteRef)
     if r.where > 0 # Handle the case of the finalizer having been called manually
-        if islocked(client_refs)
+        if trylock(client_refs)
+            try
+                delete!(client_refs.ht, r) # HACK: prevent TOCTTOU pattern
+            finally
+                unlock(client_refs)
+            end
+        else
             # delay finalizer for later, when it's not already locked
             finalizer(finalize_ref, r)
             return nothing
         end
-        delete!(client_refs, r)
         if isa(r, RemoteChannel)
             send_del_client(r)
         else
