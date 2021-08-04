@@ -157,6 +157,51 @@ function check()
     end
 end
 
+"""
+    with_num_threads(f, num_threads::Integer)
+
+Run function `f()` with BLAS threads `num_threads` and then
+restore to previous threads setting.
+
+!!! compat "Julia 1.8"
+    `with_num_threads` requires at least Julia 1.8.
+
+# Example
+
+The result differs on different machines.
+
+```julia
+julia> BLAS.get_num_threads()
+8
+
+julia> with_num_threads(4) do
+    BLAS.get_num_threads()
+    # or doing some basic BLAS computation
+end
+4
+
+julia> BLAS.get_num_threads()
+8
+```
+
+!!! warning
+    This function is not thread safe. If there are multiple
+    threads calling BLAS routines, then the threads they are
+    using will also be changed until this function finishes.
+"""
+function with_num_threads(f, num_threads::Integer)
+    prev_num_threads = BLAS.get_num_threads()
+    BLAS.set_num_threads(num_threads)
+    local retval
+    try
+        retval = f()
+    catch err
+        rethrow(err)
+    finally
+        BLAS.set_num_threads(prev_num_threads)
+    end
+    return retval
+end
 
 # Level 1
 ## copy

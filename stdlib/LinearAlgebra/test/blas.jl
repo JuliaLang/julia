@@ -641,6 +641,30 @@ end
     @test BLAS.get_num_threads() === default
 end
 
+@testset "with_num_threads" begin
+    prev_num_threads = BLAS.get_num_threads()
+    context_num_threads = BLAS.with_num_threads(1) do
+        BLAS.get_num_threads()
+    end
+    @test context_num_threads == 1
+    @test prev_num_threads == BLAS.get_num_threads()
+
+    @testset "thread unsafe" begin
+        prev_num_threads = BLAS.get_num_threads()
+        # thread unsafe
+        @async BLAS.with_num_threads(1) do
+            sleep(0.5)
+        end
+        sleep(0.1)
+
+        context_num_threads = BLAS.get_num_threads()
+        @test context_num_threads == 1
+
+        sleep(0.5) # wait for the task to finish
+        @test prev_num_threads == BLAS.get_num_threads()
+    end
+end
+
 # https://github.com/JuliaLang/julia/pull/39845
 @test LinearAlgebra.BLAS.libblas == "libblastrampoline"
 @test LinearAlgebra.BLAS.liblapack == "libblastrampoline"

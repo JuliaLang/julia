@@ -578,6 +578,7 @@ LinearAlgebra.BLAS.trsv!
 LinearAlgebra.BLAS.trsv
 LinearAlgebra.BLAS.set_num_threads
 LinearAlgebra.BLAS.get_num_threads
+LinearAlgebra.BLAS.with_num_threads
 ```
 
 ## LAPACK functions
