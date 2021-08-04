@@ -29,11 +29,17 @@ steps:
       echo "The full commit is $$BUILDKITE_COMMIT"
       echo "The Julia directory name will be $$JULIA_DIRECTORY_NAME"
       echo "The artifact filename will be $$ARTIFACT_FILENAME"
+      
+      echo "--- Some debugging"
+      .buildkite/utilities/foo.sh
 
       echo "--- Build Julia from source"
       make -j 6
       make release
       make install
+      
+      echo "--- More debugging"
+      ./julia .buildkite/utilities/foo2.jl
 
       echo "--- Print Julia version info"
       ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
