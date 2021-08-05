@@ -2278,7 +2278,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     if row_first
         nr, nc = size(A, 1), size(A, 2)
         nrc = nr * nc
-        na = _prod_simple(size(A)[3:end])
+        na = prod(size(A)[3:end])
         k = 1
         for d ∈ 1:na
             dd = nrc * (d - 1)
