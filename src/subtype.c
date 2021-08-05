@@ -68,15 +68,14 @@ typedef struct jl_varbinding_t {
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
-    // in covariant position, we need to try constraining a variable in different ways:
-    // 0 - unconstrained
-    // 1 - less than
-    // 2 - greater than
-    // 3 - inexpressible - occurs when the var has non-trivial overlap with another type,
-    //                     and we would need to return `intersect(var,other)`. in this case
-    //                     we choose to over-estimate the intersection by returning the var.
+    // constraintkind: in covariant position, we try three different ways to compute var ∩ type:
+    // let ub = var.ub ∩ type
+    // 0 - var.ub <: type ? var : ub
+    // 1 - var.ub = ub; return var
+    // 2 - either (var.ub = ub; return var), or return ub
     int8_t constraintkind;
     int8_t intvalued;      // must be integer-valued; i.e. occurs as N in Vararg{_,N}
+    int8_t limited;
     int16_t depth0;         // # of invariant constructors nested around the UnionAll type for this var
     // when this variable's integer value is compared to that of another,
     // it equals `other + offset`. used by vararg length parameters.
@@ -759,7 +758,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     u = unalias_unionall(u, e);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0,
                            R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
@@ -2318,67 +2317,31 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         JL_GC_POP();
         return ub;
     }
-    else if (bb->constraintkind == 0) {
-        if (!jl_is_typevar(bb->ub) && !jl_is_typevar(a)) {
-            if (try_subtype_in_env(bb->ub, a, e, 0, d))
-                return (jl_value_t*)b;
-        }
-        return R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
-    }
-    else if (bb->concrete || bb->constraintkind == 1) {
-        jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
-        if (ub == jl_bottom_type)
-            return jl_bottom_type;
-        JL_GC_PUSH1(&ub);
-        if (!R && !subtype_bounds_in_env(bb->lb, a, e, 0, d)) {
-            // this fixes issue #30122. TODO: better fix for R flag.
-            JL_GC_POP();
-            return jl_bottom_type;
-        }
-        JL_GC_POP();
-        set_bound(&bb->ub, ub, b, e);
-        return (jl_value_t*)b;
-    }
-    else if (bb->constraintkind == 2) {
-        // TODO: removing this case fixes many test_brokens in test/subtype.jl
-        // but breaks other tests.
-        if (!subtype_bounds_in_env(a, bb->ub, e, 1, d)) {
-            // mark var as unsatisfiable by making it circular
-            bb->lb = (jl_value_t*)b;
-            return jl_bottom_type;
-        }
-        jl_value_t *lb = simple_join(bb->lb, a);
-        set_bound(&bb->lb, lb, b, e);
-        return a;
-    }
-    assert(bb->constraintkind == 3);
     jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
     if (ub == jl_bottom_type)
         return jl_bottom_type;
-    if (jl_is_typevar(a))
-        return (jl_value_t*)b;
-    if (ub == a) {
-        if (bb->lb == jl_bottom_type) {
-            set_bound(&bb->ub, a, b, e);
+    if (bb->constraintkind == 0) {
+        JL_GC_PUSH1(&ub);
+        if (!jl_is_typevar(a) && try_subtype_in_env(bb->ub, a, e, 0, d)) {
+            JL_GC_POP();
             return (jl_value_t*)b;
         }
+        JL_GC_POP();
         return ub;
     }
-    else if (bb->ub == bb->lb) {
-        return ub;
+    else if (bb->constraintkind == 1) {
+        set_bound(&bb->ub, ub, b, e);
+        return (jl_value_t*)b;
     }
-    root = NULL;
-    JL_GC_PUSH2(&root, &ub);
-    save_env(e, &root, &se);
-    jl_value_t *ii = R ? intersect_aside(a, bb->lb, e, 1, d) : intersect_aside(bb->lb, a, e, 0, d);
-    if (ii == jl_bottom_type) {
-        restore_env(e, root, &se);
-        ii = (jl_value_t*)b;
+    assert(bb->constraintkind == 2);
+    if (!jl_is_typevar(a)) {
+        if (ub == a && bb->lb != jl_bottom_type)
+            return ub;
+        else if (jl_egal(bb->ub, bb->lb))
+            return ub;
         set_bound(&bb->ub, ub, b, e);
     }
-    free_env(&se);
-    JL_GC_POP();
-    return ii;
+    return (jl_value_t*)b;
 }
 
 // test whether `var` occurs inside constructors. `want_inv` tests only inside
@@ -2422,7 +2385,7 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
 }
 
 // Caller might not have rooted `res`
-static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbinding_t *vb, jl_stenv_t *e)
+static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbinding_t *vb, jl_unionall_t *u, jl_stenv_t *e)
 {
     jl_value_t *varval = NULL;
     jl_tvar_t *newvar = vb->var;
@@ -2435,7 +2398,10 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         // given x<:T<:x, substitute x for T
         varval = vb->ub;
     }
-    else if (!vb->occurs_inv && is_leaf_bound(vb->ub)) {
+    // TODO: `vb.occurs_cov == 1` here allows substituting Tuple{<:X} => Tuple{X},
+    // which is valid but changes some ambiguity errors so we don't need to do it yet.
+    else if ((/*vb->occurs_cov == 1 || */is_leaf_bound(vb->ub)) &&
+             !var_occurs_invariant(u->body, u->var, 0)) {
         // replace T<:x with x in covariant position when possible
         varval = vb->ub;
     }
@@ -2453,9 +2419,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
     }
 
-    // prefer generating a fresh typevar, to avoid repeated renaming if the result
-    // is compared to one of the intersected types later.
-    if (!varval)
+    // TODO: this can prevent us from matching typevar identities later
+    if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
         newvar = jl_new_typevar(vb->var->name, vb->lb, vb->ub);
 
     // remove/replace/rewrap free occurrences of this var in the environment
@@ -2573,8 +2538,10 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     int envsize = 0;
     while (btemp != NULL) {
         envsize++;
-        if (envsize > 150)
+        if (envsize > 120) {
+            vb->limited = 1;
             return t;
+        }
         if (btemp->var == u->var || btemp->lb == (jl_value_t*)u->var ||
             btemp->ub == (jl_value_t*)u->var) {
             u = rename_unionall(u);
@@ -2624,7 +2591,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     }
     if (res != jl_bottom_type)
         // res is rooted by callee
-        res = finish_unionall(res, vb, e);
+        res = finish_unionall(res, vb, u, e);
     JL_GC_POP();
     return res;
 }
@@ -2633,16 +2600,21 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res=NULL, *res2=NULL, *save=NULL, *save2=NULL;
     jl_savedenv_t se, se2;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0,
                            R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH6(&res, &save2, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
-    if (res != jl_bottom_type) {
+    if (vb.limited) {
+        // if the environment got too big, avoid tree recursion and propagate the flag
+        if (e->vars)
+            e->vars->limited = 1;
+    }
+    else if (res != jl_bottom_type) {
         if (vb.concrete || vb.occurs_inv>1 || u->var->lb != jl_bottom_type || (vb.occurs_inv && vb.occurs_cov)) {
             restore_env(e, NULL, &se);
             vb.occurs_cov = vb.occurs_inv = 0;
-            vb.constraintkind = 3;
+            vb.constraintkind = vb.concrete ? 1 : 2;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
         else if (vb.occurs_cov) {
@@ -2652,17 +2624,10 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.lb = u->var->lb; vb.ub = u->var->ub;
             vb.constraintkind = 1;
             res2 = intersect_unionall_(t, u, e, R, param, &vb);
-            if (res2 == jl_bottom_type) {
-                restore_env(e, save, &se);
-                vb.occurs_cov = vb.occurs_inv = 0;
-                vb.lb = u->var->lb; vb.ub = u->var->ub;
-                vb.constraintkind = 2;
-                res2 = intersect_unionall_(t, u, e, R, param, &vb);
-                if (res2 == jl_bottom_type)
-                    restore_env(e, save2, &se2);
-            }
             if (res2 != jl_bottom_type)
                 res = res2;
+            else
+                restore_env(e, save2, &se2);
             free_env(&se2);
         }
     }
@@ -3049,14 +3014,13 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 jl_value_t *ub=NULL, *lb=NULL;
                 JL_GC_PUSH2(&lb, &ub);
                 ub = intersect_aside(xub, yub, e, 0, xx ? xx->depth0 : 0);
-                if (xlb == y)
+                if (reachable_var(xlb, (jl_tvar_t*)y, e))
                     lb = ylb;
                 else
                     lb = simple_join(xlb, ylb);
                 if (yy) {
-                    if (!subtype_by_bounds(lb, y, e))
-                        yy->lb = lb;
-                    if (!subtype_by_bounds(y, ub, e))
+                    yy->lb = lb;
+                    if (!reachable_var(ub, (jl_tvar_t*)y, e))
                         yy->ub = ub;
                     assert(yy->ub != y);
                     assert(yy->lb != y);
