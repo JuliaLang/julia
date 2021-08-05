@@ -587,7 +587,7 @@ function test_old()
     @test !(Type{Tuple{Nothing}} <: Tuple{Type{Nothing}})
 end
 
-const menagerie =
+const easy_menagerie =
     Any[Bottom, Any, Int, Int8, Integer, Real,
         Array{Int,1}, AbstractArray{Int,1},
         Tuple{Int,Vararg{Integer}}, Tuple{Integer,Vararg{Int}}, Tuple{},
@@ -607,12 +607,14 @@ const menagerie =
         Array{(@UnionAll T<:Int T), 1},
         (@UnionAll T<:Real @UnionAll S<:AbstractArray{T,1} Tuple{T,S}),
         Union{Int,Ref{Union{Int,Int8}}},
-        (@UnionAll T Union{Tuple{T,Array{T,1}}, Tuple{T,Array{Int,1}}}),
         ]
 
-let new = Any[]
-    # add variants of each type
-    for T in menagerie
+const hard_menagerie =
+    Any[(@UnionAll T Union{Tuple{T,Array{T,1}}, Tuple{T,Array{Int,1}}})]
+
+function add_variants!(types)
+    new = Any[]
+    for T in types
         push!(new, Ref{T})
         push!(new, Tuple{T})
         push!(new, Tuple{T,T})
@@ -620,8 +622,13 @@ let new = Any[]
         push!(new, @UnionAll S<:T S)
         push!(new, @UnionAll S<:T Ref{S})
     end
-    append!(menagerie, new)
+    append!(types, new)
 end
+
+add_variants!(easy_menagerie)
+add_variants!(hard_menagerie)
+
+const menagerie = [easy_menagerie; hard_menagerie]
 
 function test_properties()
     x→y = !x || y
@@ -1025,10 +1032,7 @@ function test_intersection()
                    Bottom)
     @testintersect(Tuple{Type{Z},Z} where Z,
                    Tuple{Type{Ref{T}} where T, Ref{Float64}},
-                   !Bottom)
-    @test_broken typeintersect(Tuple{Type{Z},Z} where Z,
-                               Tuple{Type{Ref{T}} where T, Ref{Float64}}) ==
-        Tuple{Type{Ref{Float64}},Ref{Float64}}
+                   Tuple{Type{Ref{Float64}}, Ref{Float64}})
 
     # issue #32607
     @testintersect(Type{<:Tuple{Integer,Integer}},
@@ -1057,14 +1061,15 @@ function test_intersection()
 end
 
 function test_intersection_properties()
-    approx = Tuple{Vector{Vector{T}} where T, Vector{Vector{T}} where T}
-    for T in menagerie
-        for S in menagerie
+    for i in eachindex(menagerie)
+        T = menagerie[i]
+        for j in eachindex(menagerie)
+            S = menagerie[j]
             I = _type_intersect(T,S)
             I2 = _type_intersect(S,T)
             @test isequal_type(I, I2)
-            if I == approx
-                # TODO: some of these cases give a conservative answer
+            if i > length(easy_menagerie) || j > length(easy_menagerie)
+                # TODO: these cases give a conservative answer
                 @test issub(I, T) || issub(I, S)
             else
                 @test issub(I, T) && issub(I, S)
@@ -1926,4 +1931,10 @@ let A = Tuple{Ref{T}, Vararg{T}} where T,
     # avoid stack overflow
     J = typeintersect(A, C)
     @test_broken J != Union{}
+end
+
+let A = Tuple{Dict{I,T}, I, T} where T where I,
+    B = Tuple{AbstractDict{I,T}, T, I} where T where I
+    # TODO: we should probably have I == T here
+    @test typeintersect(A, B) == Tuple{Dict{I,T}, I, T} where {I, T}
 end
