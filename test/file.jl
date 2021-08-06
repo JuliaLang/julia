@@ -63,15 +63,30 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 end
 
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    link = joinpath(dir, "afilelink.txt")
+    link = joinpath(dir, "afilesymlink.txt")
     symlink(file, link)
     @test stat(file) == stat(link)
 
     # relative link
-    rellink = joinpath(subdir, "rel_afilelink.txt")
+    rellink = joinpath(subdir, "rel_afilesymlink.txt")
     relfile = joinpath("..", "afile.txt")
     symlink(relfile, rellink)
     @test stat(rellink) == stat(file)
+end
+
+@testset "hardlink" begin
+    link = joinpath(dir, "afilehardlink.txt")
+    hardlink(file, link)
+    @test stat(file) == stat(link)
+
+    # when the destination exists
+    @test_throws Base.IOError hardlink(file, link)
+
+    rm(link)
+
+    # the source file does not exist
+    missing_file = joinpath(dir, "for-sure-missing-file.txt")
+    @test_throws Base.IOError hardlink(missing_file, link)
 end
 
 using Random
@@ -491,6 +506,29 @@ rm(c_tmpdir, recursive=true)
 @test_throws Base._UVError("unlink($(repr(c_tmpdir)))", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
+# Some operations can return multiple different error codes depending on the system environment.
+function throws_matching_exception(f::Function, acceptable_exceptions::AbstractVector)
+    try
+        f()
+        @error "No exception was thrown."
+        return false
+    catch ex
+        if ex in acceptable_exceptions
+            return true
+        else
+            @error "The thrown exception is not in the list of acceptable exceptions" acceptable_exceptions exception=(ex, catch_backtrace())
+            return false
+        end
+    end
+end
+function throws_matching_uv_error(f::Function, pfx::AbstractString, codes::AbstractVector{<:Integer})
+    acceptable_exceptions = multiple_uv_errors(pfx, codes)
+    return throws_matching_exception(f, acceptable_exceptions)
+end
+function multiple_uv_errors(pfx::AbstractString, codes::AbstractVector{<:Integer})
+    return [Base._UVError(pfx, code) for code in codes]
+end
+
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
@@ -503,8 +541,12 @@ if !Sys.iswindows()
         @test stat(file).gid == 0
         @test stat(file).uid == 0
     else
-        @test_throws Base._UVError("chown($(repr(file)), -2, -1)", Base.UV_EPERM) chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base._UVError("chown($(repr(file)), -1, -2)", Base.UV_EPERM) chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test throws_matching_uv_error("chown($(repr(file)), -2, -1)", [Base.UV_EPERM, Base.UV_EINVAL]) do
+            chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        end
+        @test throws_matching_uv_error("chown($(repr(file)), -1, -2)", [Base.UV_EPERM, Base.UV_EINVAL]) do
+            chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        end
     end
 else
     # test that chown doesn't cause any errors for Windows
@@ -702,7 +744,7 @@ let
     @test a_stat.size == b_stat.size
     @test a_stat.size == c_stat.size
 
-    @test parse(Int, match(r"mode=(.*),", sprint(show, a_stat)).captures[1]) == a_stat.mode
+    @test parse(Int, split(sprint(show, a_stat),"mode: ")[2][1:8]) == a_stat.mode
 
     close(af)
     rm(afile)
@@ -1451,6 +1493,31 @@ let n = tempname()
     rm(n)
 end
 
+# PR #39906
+if !Sys.iswindows()
+    @testset "rm empty directories without read permissions" begin
+        mktempdir() do d
+            mkdir(joinpath(d, "nonempty"))
+            touch(joinpath(d, "nonempty", "a"))
+            mkdir(joinpath(d, "empty_outer"))
+            mkdir(joinpath(d, "empty_outer", "empty_inner"))
+
+            chmod(joinpath(d, "nonempty"), 0o333)
+            chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
+
+            # Test that an empty directory, even when we can't read its contents, is deletable
+            rm(joinpath(d, "empty_outer"); recursive=true, force=true)
+            @test !isdir(joinpath(d, "empty_outer"))
+
+            # But a non-empty directory is not
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            chmod(joinpath(d, "nonempty"), 0o777)
+            rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test !isdir(joinpath(d, "nonempty"))
+        end
+    end
+end
+
 @test_throws ArgumentError mkpath("fakepath", mode = -1)
 
 @testset "mktempdir 'prefix' argument" begin
@@ -1579,4 +1646,49 @@ if Sys.iswindows()
     tmp = mkdir(tempname("C:\\"))
     @test rm(tmp) === nothing
 end
+end
+
+@testset "StatStruct show's extended details" begin
+    f, io = mktemp()
+    s = stat(f)
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(")
+    @test endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for ")
+    @test rstrip(stat_show_str_multi) == stat_show_str_multi # no trailing \n
+    @test occursin(repr(f), stat_show_str)
+    @test occursin(repr(f), stat_show_str_multi)
+    if Sys.iswindows()
+        @test occursin("mode: 0o100666 (-rw-rw-rw-)", stat_show_str)
+        @test occursin("mode: 0o100666 (-rw-rw-rw-)\n", stat_show_str_multi)
+    else
+        @test occursin("mode: 0o100600 (-rw-------)", stat_show_str)
+        @test occursin("mode: 0o100600 (-rw-------)\n", stat_show_str_multi)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
+    d = mktempdir()
+    s = stat(d)
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(")
+    @test endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for ")
+    @test rstrip(stat_show_str_multi) == stat_show_str_multi # no trailing \n
+    @test occursin(repr(d), stat_show_str)
+    @test occursin(repr(d), stat_show_str_multi)
+    if Sys.iswindows()
+        @test occursin("mode: 0o040666 (drw-rw-rw-)", stat_show_str)
+        @test occursin("mode: 0o040666 (drw-rw-rw-)\n", stat_show_str_multi)
+    else
+        @test occursin("mode: 0o040700 (drwx------)", stat_show_str)
+        @test occursin("mode: 0o040700 (drwx------)\n", stat_show_str_multi)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
 end

@@ -172,6 +172,10 @@ allocations, and the total number of bytes its execution caused to be allocated,
 returning the value of the expression. Any time spent garbage collecting (gc) or
 compiling is shown as a percentage.
 
+In some cases the system will look inside the `@time` expression and compile some of the
+called code before execution of the top-level expression begins. When that happens, some
+compilation time will not be counted. To include this time you can run `@time @eval ...`.
+
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
@@ -201,11 +205,11 @@ macro time(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
-        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+        elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
         time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
         val
@@ -247,11 +251,11 @@ macro timev(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
-        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+        elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
         timev_print(elapsedtime, diff, compile_elapsedtime)
         val
@@ -263,6 +267,10 @@ end
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 number of seconds it took to execute as a floating-point number.
+
+In some cases the system will look inside the `@elapsed` expression and compile some of the
+called code before execution of the top-level expression begins. When that happens, some
+compilation time will not be counted. To include this time you can run `@elapsed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@allocated`](@ref).
@@ -322,6 +330,10 @@ end
 A macro to execute an expression, and return the value of the expression, elapsed time,
 total bytes allocated, garbage collection time, and an object with various memory allocation
 counters.
+
+In some cases the system will look inside the `@timed` expression and compile some of the
+called code before execution of the top-level expression begins. When that happens, some
+compilation time will not be counted. To include this time you can run `@timed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).

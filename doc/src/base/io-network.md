@@ -13,6 +13,7 @@ Base.take!(::Base.GenericIOBuffer)
 Base.fdio
 Base.flush
 Base.close
+Base.shutdown
 Base.write
 Base.read
 Base.read!
@@ -36,6 +37,7 @@ Base.iswritable
 Base.isreadable
 Base.isopen
 Base.fd
+Base.redirect_stdio
 Base.redirect_stdout
 Base.redirect_stdout(::Function, ::Any)
 Base.redirect_stderr

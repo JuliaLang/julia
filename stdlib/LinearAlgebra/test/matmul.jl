@@ -205,6 +205,27 @@ end
     @test *(Asub, adjoint(Asub)) == *(Aref, adjoint(Aref))
 end
 
+@testset "matrix x matrix with negative stride" begin
+    M = reshape(map(Float64,1:77),7,11)
+    N = reshape(map(Float64,1:63),9,7)
+    U = view(M,7:-1:1,11:-2:1)
+    V = view(N,7:-1:2,7:-1:1)
+    @test U*V ≈ Matrix(U) * Matrix(V)
+end
+
+@testset "dot product of subarrays of vectors (floats, negative stride, issue #37767)" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = Vector{T}(3:2:7)
+        b = Vector{T}(1:10)
+        v = view(b,7:-2:3)
+        @test dot(a,Vector(v)) ≈ 67.0
+        @test dot(a,v) ≈ 67.0
+        @test dot(v,a) ≈ 67.0
+        @test dot(Vector(v),Vector(v)) ≈ 83.0
+        @test dot(v,v) ≈ 83.0
+    end
+end
+
 @testset "Complex matrix x real MatOrVec etc (issue #29224)" for T1 in (Float32,Float64)
     for T2 in (Float32,Float64)
         for arg1_real in (true,false)
@@ -720,6 +741,16 @@ end
     @test D ≈ C
 end
 
+@testset "size zero types in matrix mult (see issue 39362)" begin
+    A = [missing missing; missing missing]
+    v = [missing, missing]
+    @test (A * v == v) === missing
+    M = fill(1.0, 2, 2)
+    a = fill(missing, 2, 1)
+    @test (a' * M * a == fill(missing,1,1)) === missing
+end
+
+
 @testset "multiplication of empty matrices without calling zero" begin
     r, c = rand(0:9, 2)
     A = collect(Number, rand(r, c))
@@ -733,6 +764,105 @@ end
     @test Matrix{Any}(undef, 0, 2) * Matrix{Any}(undef, 2, 3) == Matrix{Any}(undef, 0, 3)
     @test_throws MethodError Matrix{Any}(undef, 2, 0) * Matrix{Any}(undef, 0, 3)
     @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
+end
+
+@testset "3-arg *, order by type" begin
+    x = [1, 2im]
+    y = [im, 20, 30+40im]
+    z = [-1, 200+im, -3]
+    A = [1 2 3im; 4 5 6+im]
+    B = [-10 -20; -30 -40]
+    a = 3 + im * round(Int, 10^6*(pi-3))
+    b = 123
+
+    @test x'*A*y == (x'*A)*y == x'*(A*y)
+    @test y'*A'*x == (y'*A')*x == y'*(A'*x)
+    @test y'*transpose(A)*x == (y'*transpose(A))*x == y'*(transpose(A)*x)
+
+    @test B*A*y == (B*A)*y == B*(A*y)
+
+    @test a*A*y == (a*A)*y == a*(A*y)
+    @test A*y*a == (A*y)*a == A*(y*a)
+
+    @test a*B*A == (a*B)*A == a*(B*A)
+    @test B*A*a == (B*A)*a == B*(A*a)
+
+    @test a*y'*z == (a*y')*z == a*(y'*z)
+    @test y'*z*a == (y'*z)*a == y'*(z*a)
+
+    @test a*y*z' == (a*y)*z' == a*(y*z')
+    @test y*z'*a == (y*z')*a == y*(z'*a)
+
+    @test a*x'*A == (a*x')*A == a*(x'*A)
+    @test x'*A*a == (x'*A)*a == x'*(A*a)
+    @test a*x'*A isa Adjoint{<:Any, <:Vector}
+
+    @test a*transpose(x)*A == (a*transpose(x))*A == a*(transpose(x)*A)
+    @test transpose(x)*A*a == (transpose(x)*A)*a == transpose(x)*(A*a)
+    @test a*transpose(x)*A isa Transpose{<:Any, <:Vector}
+
+    @test x'*B*A == (x'*B)*A == x'*(B*A)
+    @test x'*B*A isa Adjoint{<:Any, <:Vector}
+
+    @test y*x'*A == (y*x')*A == y*(x'*A)
+    y31 = reshape(y,3,1)
+    @test y31*x'*A == (y31*x')*A == y31*(x'*A)
+
+    vm = [rand(1:9,2,2) for _ in 1:3]
+    Mm = [rand(1:9,2,2) for _ in 1:3, _ in 1:3]
+
+    @test vm' * Mm * vm == (vm' * Mm) * vm == vm' * (Mm * vm)
+    @test Mm * Mm' * vm == (Mm * Mm') * vm == Mm * (Mm' * vm)
+    @test vm' * Mm * Mm == (vm' * Mm) * Mm == vm' * (Mm * Mm)
+    @test Mm * Mm' * Mm == (Mm * Mm') * Mm == Mm * (Mm' * Mm)
+end
+
+@testset "3-arg *, order by size" begin
+    M44 = randn(4,4)
+    M24 = randn(2,4)
+    M42 = randn(4,2)
+    @test M44*M44*M44 ≈ (M44*M44)*M44 ≈ M44*(M44*M44)
+    @test M42*M24*M44 ≈ (M42*M24)*M44 ≈ M42*(M24*M44)
+    @test M44*M42*M24 ≈ (M44*M42)*M24 ≈ M44*(M42*M24)
+end
+
+@testset "4-arg *, by type" begin
+    y = [im, 20, 30+40im]
+    z = [-1, 200+im, -3]
+    a = 3 + im * round(Int, 10^6*(pi-3))
+    b = 123
+    M = rand(vcat(1:9, im.*[1,2,3]), 3,3)
+    N = rand(vcat(1:9, im.*[1,2,3]), 3,3)
+
+    @test a * b * M * y == (a*b) * (M*y)
+    @test a * b * M * N == (a*b) * (M*N)
+    @test a * M * N * y == (a*M) * (N*y)
+    @test a * y' * M * z == (a*y') * (M*z)
+    @test a * y' * M * N == (a*y') * (M*N)
+
+    @test M * y * a * b == (M*y) * (a*b)
+    @test M * N * a * b == (M*N) * (a*b)
+    @test M * N * y * a == (a*M) * (N*y)
+    @test y' * M * z * a == (a*y') * (M*z)
+    @test y' * M * N * a == (a*y') * (M*N)
+
+    @test M * N * conj(M) * y == (M*N) * (conj(M)*y)
+    @test y' * M * N * conj(M) == (y'*M) * (N*conj(M))
+    @test y' * M * N * z == (y'*M) * (N*z)
+end
+
+@testset "4-arg *, by size" begin
+    for shift in 1:5
+        s1,s2,s3,s4,s5 = circshift(3:7, shift)
+        a=randn(s1,s2); b=randn(s2,s3); c=randn(s3,s4); d=randn(s4,s5)
+
+        # _quad_matmul
+        @test *(a,b,c,d) ≈ (a*b) * (c*d)
+
+        # _tri_matmul(A,B,B,δ)
+        @test *(11.1,b,c,d) ≈ (11.1*b) * (c*d)
+        @test *(a,b,c,99.9) ≈ (a*b) * (c*99.9)
+    end
 end
 
 end # module TestMatmul

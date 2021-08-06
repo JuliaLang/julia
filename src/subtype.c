@@ -510,7 +510,7 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return 1;
     if (y == (jl_value_t*)jl_any_type && jl_is_type(x))
         return 1;
-    if (jl_is_uniontype(x) && jl_is_uniontype(y) && jl_egal(x,y))
+    if (jl_is_uniontype(x) && jl_egal(x, y))
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
@@ -539,7 +539,7 @@ static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int par
         return 1;
     if (y == (jl_value_t*)jl_any_type && jl_is_type(x))
         return 1;
-    if (jl_is_uniontype(x) && jl_is_uniontype(y) && jl_egal(x,y))
+    if (jl_is_uniontype(x) && jl_egal(x, y))
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
@@ -646,7 +646,7 @@ static int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
     if (v == jl_bottom_type)
         return 1;
     if (jl_is_datatype(v)) {
-        if (((jl_datatype_t*)v)->abstract) {
+        if (((jl_datatype_t*)v)->name->abstract) {
             if (jl_is_type_type(v))
                 return 1;//!jl_has_free_typevars(jl_tparam0(v));
             return 0;
@@ -1276,7 +1276,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     }
     if (jl_is_type(y))
         return x == jl_bottom_type;
-    return x == y || jl_egal(x, y);
+    return jl_egal(x, y);
 }
 
 static int is_indefinite_length_tuple_type(jl_value_t *x)
@@ -2210,13 +2210,29 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
     return issub;
 }
 
+// See if var y is reachable from x via bounds; used to avoid cycles.
+static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e)
+{
+    if (in_union(x, (jl_value_t*)y))
+        return 1;
+    if (!jl_is_typevar(x))
+        return 0;
+    jl_varbinding_t *xv = lookup(e, (jl_tvar_t*)x);
+    if (xv == NULL)
+        return 0;
+    return reachable_var(xv->ub, y, e) || reachable_var(xv->lb, y, e);
+}
+
 static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int8_t R, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
         return R ? intersect_aside(a, b->ub, e, 1, 0) : intersect_aside(b->ub, a, e, 0, 0);
-    if (bb->lb == bb->ub && jl_is_typevar(bb->lb) && bb->lb != (jl_value_t*)b)
+    if (reachable_var(bb->lb, b, e) || reachable_var(bb->ub, b, e))
+        return a;
+    if (bb->lb == bb->ub && jl_is_typevar(bb->lb)) {
         return intersect(a, bb->lb, e, param);
+    }
     if (!jl_is_type(a) && !jl_is_typevar(a))
         return set_var_to_const(bb, a, NULL);
     int d = bb->depth0;
@@ -2404,7 +2420,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
     }
 
-    if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
+    // prefer generating a fresh typevar, to avoid repeated renaming if the result
+    // is compared to one of the intersected types later.
+    if (!varval)
         newvar = jl_new_typevar(vb->var->name, vb->lb, vb->ub);
 
     // remove/replace/rewrap free occurrences of this var in the environment
@@ -2519,7 +2537,11 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     // if the var for this unionall (based on identity) already appears somewhere
     // in the environment, rename to get a fresh var.
     // TODO: might need to look inside types in btemp->lb and btemp->ub
+    int envsize = 0;
     while (btemp != NULL) {
+        envsize++;
+        if (envsize > 150)
+            return t;
         if (btemp->var == u->var || btemp->lb == (jl_value_t*)u->var ||
             btemp->ub == (jl_value_t*)u->var) {
             u = rename_unionall(u);
@@ -2921,19 +2943,6 @@ static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     return compareto_var(x, (jl_tvar_t*)y, e, -1) || compareto_var(y, (jl_tvar_t*)x, e, 1);
 }
 
-// See if var y is reachable from x via bounds; used to avoid cycles.
-static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e)
-{
-    if (x == (jl_value_t*)y)
-        return 1;
-    if (!jl_is_typevar(x))
-        return 0;
-    jl_varbinding_t *xv = lookup(e, (jl_tvar_t*)x);
-    if (xv == NULL)
-        return 0;
-    return reachable_var(xv->ub, y, e) || reachable_var(xv->lb, y, e);
-}
-
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -3264,11 +3273,25 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 static jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
 {
     if (jl_is_unionall(a)) {
-        jl_value_t *ans = switch_union_tuple(((jl_unionall_t*)a)->body, b);
+        jl_unionall_t *ua = (jl_unionall_t*)a;
+        if (jl_is_unionall(b)) {
+            jl_unionall_t *ub = (jl_unionall_t*)b;
+            if (ub->var->lb == ua->var->lb && ub->var->ub == ua->var->ub) {
+                jl_value_t *ub2 = jl_instantiate_unionall(ub, (jl_value_t*)ua->var);
+                jl_value_t *ans = NULL;
+                JL_GC_PUSH2(&ub2, &ans);
+                ans = switch_union_tuple(ua->body, ub2);
+                if (ans != NULL)
+                    ans = jl_type_unionall(ua->var, ans);
+                JL_GC_POP();
+                return ans;
+            }
+        }
+        jl_value_t *ans = switch_union_tuple(ua->body, b);
         if (ans == NULL)
             return NULL;
         JL_GC_PUSH1(&ans);
-        ans = jl_type_unionall(((jl_unionall_t*)a)->var, ans);
+        ans = jl_type_unionall(ua->var, ans);
         JL_GC_POP();
         return ans;
     }

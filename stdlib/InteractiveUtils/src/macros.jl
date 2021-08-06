@@ -4,7 +4,7 @@
 
 import Base: typesof, insert!
 
-separate_kwargs(args...; kwargs...) = (args, kwargs.data)
+separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
 """
 Transform a dot expression into one where each argument has been replaced by a
@@ -187,7 +187,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
             if length(x.args) != 2
                 return Expr(:call, :error, "Invalid keyword argument: $x")
             end
-            push!(kws, Expr(:kw, x.args[1], x.args[2]))
+            push!(kws, Expr(:kw, esc(x.args[1]), esc(x.args[2])))
         else
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
@@ -232,6 +232,17 @@ macro code_lowered(ex0...)
     end
 end
 
+macro time_imports(ex)
+    quote
+        try
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+            $(esc(ex))
+        finally
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
+    end
+end
+
 """
     @functionloc
 
@@ -247,7 +258,9 @@ It calls out to the `functionloc` function.
 Applied to a function or macro call, it evaluates the arguments to the specified call, and
 returns the `Method` object for the method that would be called for those arguments. Applied
 to a variable, it returns the module in which the variable was bound. It calls out to the
-`which` function.
+[`which`](@ref) function.
+
+See also: [`@less`](@ref), [`@edit`](@ref).
 """
 :@which
 
@@ -256,6 +269,8 @@ to a variable, it returns the module in which the variable was bound. It calls o
 
 Evaluates the arguments to the function or macro call, determines their types, and calls the `less`
 function on the resulting expression.
+
+See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
 """
 :@less
 
@@ -264,6 +279,8 @@ function on the resulting expression.
 
 Evaluates the arguments to the function or macro call, determines their types, and calls the `edit`
 function on the resulting expression.
+
+See also: [`@less`](@ref), [`@which`](@ref).
 """
 :@edit
 
@@ -326,3 +343,36 @@ Set the optional keyword argument `debuginfo` by putting it before the function 
 `debuginfo` may be one of `:source` (default) or `:none`, to specify the verbosity of code comments.
 """
 :@code_native
+
+"""
+    @time_imports
+
+A macro to execute an expression and produce a report of any time spent importing packages and their
+dependencies.
+
+If a package's dependencies have already been imported either globally or by another dependency they will
+not appear under that package and the package will accurately report a faster load time than if it were to
+be loaded in isolation.
+
+```julia-repl
+julia> @time_imports using CSV
+      3.5 ms    ┌ IteratorInterfaceExtensions
+     27.4 ms  ┌ TableTraits
+    614.0 ms  ┌ SentinelArrays
+    138.6 ms  ┌ Parsers
+      2.7 ms  ┌ DataValueInterfaces
+      3.4 ms    ┌ DataAPI
+     59.0 ms  ┌ WeakRefStrings
+     35.4 ms  ┌ Tables
+     49.5 ms  ┌ PooledArrays
+    972.1 ms  CSV
+```
+
+!!! note
+    During the load process a package sequentially imports where necessary all of its dependencies, not just
+    its direct dependencies. That is also true for the dependencies themselves so nested importing will likely
+    occur, but not always. Therefore the nesting shown in this output report is not equivalent to the dependency
+    tree, but does indicate where import time has accumulated.
+
+"""
+:@time_imports

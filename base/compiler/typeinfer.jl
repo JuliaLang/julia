@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# build (and start inferring) the inference frame for the linfo
+# build (and start inferring) the inference frame for the top-level MethodInstance
 function typeinf(interp::AbstractInterpreter, result::InferenceResult, cached::Bool)
     frame = InferenceState(result, cached, interp)
     frame === nothing && return false
@@ -210,6 +210,18 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
 end
 
+function finish!(interp::AbstractInterpreter, caller::InferenceResult)
+    # If we didn't transform the src for caching, we may have to transform
+    # it anyway for users like typeinf_ext. Do that here.
+    opt = caller.src
+    if opt isa OptimizationState # implies `may_optimize(interp) === true`
+        if opt.ir !== nothing
+            caller.src = ir_to_codeinf!(opt)
+        end
+    end
+    return caller.src
+end
+
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
@@ -231,34 +243,30 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     # collect results for the new expanded frame
     results = Tuple{InferenceResult, Vector{Any}, Bool}[
             ( frames[i].result,
-              frames[i].stmt_edges[1],
+              frames[i].stmt_edges[1]::Vector{Any},
               frames[i].cached )
         for i in 1:length(frames) ]
     empty!(frames)
-    if may_optimize(interp)
-        for (caller, _, _) in results
-            opt = caller.src
-            if opt isa OptimizationState
-                result_type = caller.result
-                @assert !(result_type isa LimitedAccuracy)
-                optimize(interp, opt, OptimizationParams(interp), result_type)
-                finish(opt.src, interp)
-                # finish updating the result struct
-                validate_code_in_debug_mode(opt.linfo, opt.src, "optimized")
-                if opt.const_api
-                    if result_type isa Const
-                        caller.src = result_type
-                    else
-                        @assert isconstType(result_type)
-                        caller.src = Const(result_type.parameters[1])
-                    end
-                elseif opt.src.inferred
-                    caller.src = opt.src::CodeInfo # stash a copy of the code (for inlining)
+    for (caller, _, _) in results
+        opt = caller.src
+        if opt isa OptimizationState # implies `may_optimize(interp) === true`
+            result_type = caller.result
+            @assert !(result_type isa LimitedAccuracy)
+            optimize(interp, opt, OptimizationParams(interp), result_type)
+            if opt.const_api
+                # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
+                # we're doing it is so that code_llvm can return the code
+                # for the `return ...::Const` (which never runs anyway). We should do this
+                # as a post processing step instead.
+                ir_to_codeinf!(opt)
+                if result_type isa Const
+                    caller.src = result_type
                 else
-                    caller.src = nothing
+                    @assert isconstType(result_type)
+                    caller.src = Const(result_type.parameters[1])
                 end
-                caller.valid_worlds = opt.inlining.et.valid_worlds[]
             end
+            caller.valid_worlds = opt.inlining.et.valid_worlds[]
         end
     end
     for (caller, edges, cached) in results
@@ -271,6 +279,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         if cached
             cache_result!(interp, caller)
         end
+        finish!(interp, caller)
     end
     return true
 end
@@ -297,6 +306,9 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::An
             const_flags = 0x2
         elseif isa(result_type, PartialStruct)
             rettype_const = result_type.fields
+            const_flags = 0x2
+        elseif isa(result_type, InterConditional)
+            rettype_const = result_type
             const_flags = 0x2
         else
             rettype_const = nothing
@@ -329,7 +341,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     if cache_the_tree
         if may_compress(interp)
             nslots = length(ci.slotflags)
-            resize!(ci.slottypes, nslots)
+            resize!(ci.slottypes::Vector{Any}, nslots)
             resize!(ci.slotnames, nslots)
             return ccall(:jl_compress_ir, Any, (Any, Any), def, ci)
         else
@@ -346,7 +358,12 @@ function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodIn
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState
-        inferred_result = inferred_result.src
+        opt = inferred_result
+        if isa(opt.src, CodeInfo)
+            inferred_result = ir_to_codeinf!(opt)
+        else
+            inferred_result = opt.src
+        end
     end
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
@@ -369,17 +386,18 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     end
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
-    already_inferred = already_inferred_quick_test(interp, result.linfo)
-    if !already_inferred && haskey(WorldView(code_cache(interp), valid_worlds), result.linfo)
+    linfo = result.linfo
+    already_inferred = already_inferred_quick_test(interp, linfo)
+    if !already_inferred && haskey(WorldView(code_cache(interp), valid_worlds), linfo)
         already_inferred = true
     end
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, result.linfo, valid_worlds, result.src)
-        code_cache(interp)[result.linfo] = CodeInstance(result, inferred_result, valid_worlds)
+        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src)
+        code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
     end
-    unlock_mi_inference(interp, result.linfo)
+    unlock_mi_inference(interp, linfo)
     nothing
 end
 
@@ -411,8 +429,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
     s_edges = me.stmt_edges[1]
     if s_edges === nothing
-        s_edges = []
-        me.stmt_edges[1] = s_edges
+        s_edges = me.stmt_edges[1] = []
     end
     for edges in me.stmt_edges
         edges === nothing && continue
@@ -421,7 +438,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         empty!(edges)
     end
     if me.src.edges !== nothing
-        append!(s_edges, me.src.edges)
+        append!(s_edges, me.src.edges::Vector)
         me.src.edges = nothing
     end
     # inspect whether our inference had a limited result accuracy,
@@ -430,7 +447,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     limited_ret = me.bestguess isa LimitedAccuracy
     limited_src = false
     if !limited_ret
-        gt = me.src.ssavaluetypes
+        gt = me.src.ssavaluetypes::Vector{Any}
         for j = 1:length(gt)
             gt[j] = gtj = cycle_fix_limited(gt[j], me)
             if gtj isa LimitedAccuracy && me.parent !== nothing
@@ -456,7 +473,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # either because we are the outermost code, or we might use this later
         doopt = (me.cached || me.parent !== nothing)
         type_annotate!(me, doopt)
-        if doopt
+        if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
@@ -464,13 +481,6 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
-    nothing
-end
-
-function finish(src::CodeInfo, interp::AbstractInterpreter)
-    # convert all type information into the form consumed by the cache for inlining and code-generation
-    widen_all_consts!(src)
-    src.inferred = true
     nothing
 end
 
@@ -501,8 +511,9 @@ end
 
 # widen all Const elements in type annotations
 function widen_all_consts!(src::CodeInfo)
-    for i = 1:length(src.ssavaluetypes)
-        src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
+    ssavaluetypes = src.ssavaluetypes::Vector{Any}
+    for i = 1:length(ssavaluetypes)
+        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
     end
 
     for i = 1:length(src.code)
@@ -530,7 +541,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         subex = e.args[i]
         if isa(subex, Expr)
             annotate_slot_load!(subex, vtypes, sv, undefs)
-        elseif isa(subex, Slot)
+        elseif isa(subex, SlotNumber)
             e.args[i] = visit_slot_load!(subex, vtypes, sv, undefs)
         end
     end
@@ -539,13 +550,13 @@ end
 function annotate_slot_load(@nospecialize(e), vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     if isa(e, Expr)
         annotate_slot_load!(e, vtypes, sv, undefs)
-    elseif isa(e, Slot)
+    elseif isa(e, SlotNumber)
         return visit_slot_load!(e, vtypes, sv, undefs)
     end
     return e
 end
 
-function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
+function visit_slot_load!(sl::SlotNumber, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
     id = slot_id(sl)
     s = vtypes[id]
     vt = widenconditional(ignorelimited(s.typ))
@@ -567,6 +578,7 @@ function record_slot_assign!(sv::InferenceState)
     states = sv.stmt_types
     body = sv.src.code::Vector{Any}
     slottypes = sv.slottypes::Vector{Any}
+    ssavaluetypes = sv.src.ssavaluetypes::Vector{Any}
     for i = 1:length(body)
         expr = body[i]
         st_i = states[i]
@@ -574,8 +586,8 @@ function record_slot_assign!(sv::InferenceState)
         if isa(st_i, VarTable) && isa(expr, Expr) && expr.head === :(=)
             lhs = expr.args[1]
             rhs = expr.args[2]
-            if isa(lhs, Slot)
-                vt = widenconst(sv.src.ssavaluetypes[i])
+            if isa(lhs, SlotNumber)
+                vt = widenconst(ssavaluetypes[i])
                 if vt !== Bottom
                     id = slot_id(lhs)
                     otherTy = slottypes[id]
@@ -598,12 +610,11 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # (otherwise, we'll perhaps run the optimization passes later, outside of inference)
 
     # remove all unused ssa values
-    gt = sv.src.ssavaluetypes
-    for j = 1:length(gt)
-        if gt[j] === NOT_FOUND
-            gt[j] = Union{}
-        end
-        gt[j] = widenconditional(gt[j])
+    src = sv.src
+    ssavaluetypes = src.ssavaluetypes::Vector{Any}
+    for j = 1:length(ssavaluetypes)
+        t = ssavaluetypes[j]
+        ssavaluetypes[j] = t === NOT_FOUND ? Union{} : widenconditional(t)
     end
 
     # compute the required type for each slot
@@ -616,7 +627,6 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # annotate variables load types
     # remove dead code optimization
     # and compute which variables may be used undef
-    src = sv.src
     states = sv.stmt_types
     nargs = sv.nargs
     nslots = length(states[1]::VarTable)
@@ -650,7 +660,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
                 body[i] = ReturnNode(annotate_slot_load(expr.val, st_i, sv, undefs))
             elseif isa(expr, GotoIfNot)
                 body[i] = GotoIfNot(annotate_slot_load(expr.cond, st_i, sv, undefs), expr.dest)
-            elseif isa(expr, Slot)
+            elseif isa(expr, SlotNumber)
                 body[i] = visit_slot_load!(expr, st_i, sv, undefs)
             end
         else
@@ -659,13 +669,11 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
             elseif run_optimizer
                 deleteat!(body, i)
                 deleteat!(states, i)
-                deleteat!(src.ssavaluetypes, i)
+                deleteat!(ssavaluetypes, i)
                 deleteat!(src.codelocs, i)
                 deleteat!(sv.stmt_info, i)
                 nexpr -= 1
-                if oldidx < length(changemap)
-                    changemap[oldidx + 1] = -1
-                end
+                changemap[oldidx] = -1
                 continue
             else
                 body[i] = Const(expr) # annotate that this statement actually is dead
@@ -773,16 +781,20 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
         update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
+        rettype = code.rettype
         if isdefined(code, :rettype_const)
-            if isa(code.rettype_const, Vector{Any}) && !(Vector{Any} <: code.rettype)
-                return PartialStruct(code.rettype, code.rettype_const), mi
-            elseif code.rettype <: Core.OpaqueClosure && isa(code.rettype_const, PartialOpaque)
-                return code.rettype_const, mi
+            rettype_const = code.rettype_const
+            if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+                return PartialStruct(rettype, rettype_const), mi
+            elseif rettype <: Core.OpaqueClosure && isa(rettype_const, PartialOpaque)
+                return rettype_const, mi
+            elseif isa(rettype_const, InterConditional)
+                return rettype_const, mi
             else
-                return Const(code.rettype_const), mi
+                return Const(rettype_const), mi
             end
         else
-            return code.rettype, mi
+            return rettype, mi
         end
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
@@ -832,9 +844,9 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     frame === nothing && return (nothing, Any)
     if typeinf(interp, frame) && run_optimizer
         opt_params = OptimizationParams(interp)
-        opt = OptimizationState(frame, opt_params, interp)
-        optimize(interp, opt, opt_params, ignorelimited(result.result))
-        opt.src.inferred = true
+        result.src = src = OptimizationState(frame, opt_params, interp)
+        optimize(interp, src, opt_params, ignorelimited(result.result))
+        frame.src = finish!(interp, result)
     end
     ccall(:jl_typeinf_end, Cvoid, ())
     frame.inferred || return (nothing, Any)
@@ -964,7 +976,8 @@ function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospeciali
             rt = widenconst(rt)
         end
     else
-        for match in _methods(f, t, -1, get_world_counter(interp))
+        for match in _methods(f, t, -1, get_world_counter(interp))::Vector
+            match = match::Core.MethodMatch
             ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
             rt = tmerge(rt, ty)

@@ -187,11 +187,12 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError,
+    UndefKeywordError, ConcurrencyViolationError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
-    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval, ifelse,
+    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
+    nfields, throw, tuple, ===, isdefined, eval, ifelse,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     <:, typeof, isa, typeassert,
@@ -289,6 +290,9 @@ struct StackOverflowError  <: Exception end
 struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
+end
+struct ConcurrencyViolationError <: Exception
+    msg::AbstractString
 end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
@@ -425,10 +429,11 @@ eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecial
 eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))))
 eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
 eval(Core, :(PartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :isva, :parent, :source))))
+eval(Core, :(InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :vtype, :elsetype))))
 eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
     $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
 
-Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
+Module(name::Symbol=:anonymous, std_imports::Bool=true, using_core::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, using_core)
 
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
     return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
@@ -583,10 +588,11 @@ function (g::GeneratedFunctionStub)(@nospecialize args...)
                          Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
                          Expr(:return, body),
                          Expr(:meta, :pop_loc))))
-    if g.spnames === nothing
+    spnames = g.spnames
+    if spnames === nothing
         return lam
     else
-        return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+        return Expr(Symbol("with-static-parameters"), lam, spnames...)
     end
 end
 

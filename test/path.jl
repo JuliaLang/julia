@@ -9,6 +9,23 @@
         @test isabspath(S(homedir()))
         @test !isabspath(S("foo"))
     end
+    if Sys.iswindows()
+        @testset "issue #38491" begin
+            pwd_drive = uppercase(splitdrive(pwd())[1])
+            drive = (pwd_drive == "X:") ? "Y:" : "X:"
+            @test abspath("$(lowercase(drive))a\\b\\c") == "$(lowercase(drive))\\a\\b\\c"
+            @test abspath("$(uppercase(drive))a\\b\\c") == "$(uppercase(drive))\\a\\b\\c"
+            @test abspath("$(lowercase(drive))a") == "$(lowercase(drive))\\a"
+            @test abspath("$(uppercase(drive))a") == "$(uppercase(drive))\\a"
+            @test abspath(lowercase(drive)) == "$(lowercase(drive))\\"
+            @test abspath(uppercase(drive)) == "$(uppercase(drive))\\"
+
+            @test lowercase(abspath("$(pwd_drive)a\\b\\c")) == lowercase(joinpath(pwd(), "a\\b\\c"))
+            @test lowercase(abspath("$(pwd_drive)a")) == lowercase(joinpath(pwd(), "a"))
+            @test lowercase(abspath(lowercase(pwd_drive))) == lowercase("$(pwd())\\")
+            @test lowercase(abspath(uppercase(pwd_drive))) == lowercase("$(pwd())\\")
+        end
+    end
     @test basename(S("foo$(sep)bar")) == "bar"
     @test dirname(S("foo$(sep)bar")) == "foo"
 
@@ -42,6 +59,11 @@
         @test joinpath(S("foo"), S(homedir())) == homedir()
         @test joinpath(S(abspath("foo")), S(homedir())) == homedir()
 
+        for str in map(S, [sep, "a$(sep)b", "a$(sep)b$(sep)c", "a$(sep)b$(sep)c$(sep)d"])
+            @test str == joinpath(splitpath(str))
+            @test joinpath(splitpath(str)) == joinpath(splitpath(str)...)
+        end
+
         if Sys.iswindows()
             @test joinpath(S("foo"),S("bar:baz")) == "bar:baz"
             @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "D:bar"
@@ -57,6 +79,11 @@
             @test joinpath(S("\\\\server"), S("share"), S("a"), S("b")) == "\\\\server\\share\\a\\b"
             @test joinpath(S("\\\\server\\share"),S("a")) == "\\\\server\\share\\a"
             @test joinpath(S("\\\\server\\share\\"), S("a")) == "\\\\server\\share\\a"
+
+            for str in map(S, ["c:\\", "c:\\a", "c:\\a\\b", "c:\\a\\b\\c", "c:\\a\\b\\c\\d"])
+                @test str == joinpath(splitpath(str))
+                @test joinpath(splitpath(str)) == joinpath(splitpath(str)...)
+            end
 
         elseif Sys.isunix()
             @test joinpath(S("foo"),S("bar:baz")) == "foo$(sep)bar:baz"
@@ -273,6 +300,10 @@
             # Additional cases
             @test_throws ArgumentError relpath(S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"), "")
             @test_throws ArgumentError relpath(S(""), S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"))
+
+            # issue 40237
+            path = "..$(sep)a$(sep)b$(sep)c"
+            @test relpath(abspath(path)) == path
         end
         test_relpath()
     end

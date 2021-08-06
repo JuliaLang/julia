@@ -55,8 +55,8 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
-# Test for SIGPIPE being treated as normal termination (throws an error if broken)
-Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
+# Test for SIGPIPE being a failure condition
+@test_throws ProcessFailedException run(pipeline(yescmd, `head`, devnull))
 
 let p = run(pipeline(yescmd, devnull), wait=false)
     t = @async kill(p)
@@ -259,6 +259,74 @@ end
         @test get(stdout, :color, col) == !col
         redirect_stdout(OLD_STDOUT)
     end
+end
+
+@testset "redirect_stdio" begin
+
+    function hello_err_out()
+        println(stderr, "hello from stderr")
+        println(stdout, "hello from stdout")
+    end
+    @testset "same path for multiple streams" begin
+        @test_throws ArgumentError redirect_stdio(hello_err_out,
+                                            stdin="samepath.txt", stdout="samepath.txt")
+        @test_throws ArgumentError redirect_stdio(hello_err_out,
+                                            stdin="samepath.txt", stderr="samepath.txt")
+
+        @test_throws ArgumentError redirect_stdio(hello_err_out,
+                                            stdin=joinpath("tricky", "..", "samepath.txt"),
+                                            stderr="samepath.txt")
+        mktempdir() do dir
+            path = joinpath(dir, "stdouterr.txt")
+            redirect_stdio(hello_err_out, stdout=path, stderr=path)
+            @test read(path, String) == """
+            hello from stderr
+            hello from stdout
+            """
+        end
+    end
+
+    mktempdir() do dir
+        path_stdout = joinpath(dir, "stdout.txt")
+        path_stderr = joinpath(dir, "stderr.txt")
+        redirect_stdio(hello_err_out, stderr=devnull, stdout=path_stdout)
+        @test read(path_stdout, String) == "hello from stdout\n"
+
+        open(path_stderr, "w") do ioerr
+            redirect_stdio(hello_err_out, stderr=ioerr, stdout=devnull)
+        end
+        @test read(path_stderr, String) == "hello from stderr\n"
+    end
+
+    mktempdir() do dir
+        path_stderr = joinpath(dir, "stderr.txt")
+        path_stdin  = joinpath(dir, "stdin.txt")
+        path_stdout = joinpath(dir, "stdout.txt")
+
+        content_stderr = randstring()
+        content_stdout = randstring()
+
+        redirect_stdio(stdout=path_stdout, stderr=path_stderr) do
+            print(content_stdout)
+            print(stderr, content_stderr)
+        end
+
+        @test read(path_stderr, String) == content_stderr
+        @test read(path_stdout, String) == content_stdout
+    end
+
+    # stdin is unavailable on the workers. Run test on master.
+    ret = Core.eval(Main,
+            quote
+                remotecall_fetch(1) do
+                    mktempdir() do dir
+                        path = joinpath(dir, "stdin.txt")
+                        write(path, "hello from stdin\n")
+                        redirect_stdio(readline, stdin=path)
+                    end
+                end
+            end)
+    @test ret == "hello from stdin"
 end
 
 # issue #36136
@@ -582,8 +650,8 @@ end
 psep = if Sys.iswindows() ";" else ":" end
 withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
     julia_exe = joinpath(Sys.BINDIR, Base.julia_exename())
-    @test Sys.which("julia") == realpath(julia_exe)
-    @test Sys.which(julia_exe) == realpath(julia_exe)
+    @test Sys.which("julia") == abspath(julia_exe)
+    @test Sys.which(julia_exe) == abspath(julia_exe)
 end
 
 # Check that which behaves correctly when passed an empty string
@@ -598,8 +666,8 @@ mktempdir() do dir
         touch(foo_path)
         chmod(foo_path, 0o777)
         if !Sys.iswindows()
-            @test Sys.which("foo") == realpath(foo_path)
-            @test Sys.which(foo_path) == realpath(foo_path)
+            @test Sys.which("foo") == abspath(foo_path)
+            @test Sys.which(foo_path) == abspath(foo_path)
 
             chmod(foo_path, 0o666)
             @test Sys.which("foo") === nothing
@@ -636,20 +704,20 @@ mktempdir() do dir
         touch(foo2_path)
         chmod(foo1_path, 0o777)
         chmod(foo2_path, 0o777)
-        @test Sys.which("foo") == realpath(foo1_path)
+        @test Sys.which("foo") == abspath(foo1_path)
 
         # chmod() doesn't change which() on Windows, so don't bother to test that
         if !Sys.iswindows()
             chmod(foo1_path, 0o666)
-            @test Sys.which("foo") == realpath(foo2_path)
+            @test Sys.which("foo") == abspath(foo2_path)
             chmod(foo1_path, 0o777)
         end
 
         if Sys.iswindows()
             # On windows, check that pwd() takes precedence, except when we provide a path
             cd(joinpath(dir, "bin2")) do
-                @test Sys.which("foo") == realpath(foo2_path)
-                @test Sys.which(foo1_path) == realpath(foo1_path)
+                @test Sys.which("foo") == abspath(foo2_path)
+                @test Sys.which(foo1_path) == abspath(foo1_path)
             end
         end
 
@@ -662,7 +730,9 @@ mktempdir() do dir
         touch(bar_path)
         chmod(bar_path, 0o777)
         cd(dir) do
-            @test Sys.which(joinpath("bin1", "bar")) == realpath(bar_path)
+            p = Sys.which(joinpath("bin1", "bar"))
+            @test p == abspath("bin1", basename(bar_path))
+            @test Base.samefile(p, bar_path)
         end
     end
 end
@@ -695,7 +765,15 @@ let text = "input-test-text"
     @test read(proc, String) == string(length(text), '\n')
     @test success(proc)
     @test String(take!(b)) == text
+
+    out = Base.BufferStream()
+    proc = run(catcmd, IOBuffer(text), out, wait=false)
+    @test proc.out === out
+    @test read(out, String) == text
+    @test success(proc)
 end
+
+
 @test repr(Base.CmdRedirect(``, devnull, 0, false)) == "pipeline(``, stdin>Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
@@ -741,6 +819,20 @@ if Sys.iswindows()
     rm(busybox, force=true)
 end
 
+
+# test (t)csh escaping if tcsh is installed
+cshcmd = "/bin/tcsh"
+if isfile(cshcmd)
+    csh_echo(s) = chop(read(Cmd([cshcmd, "-c",
+                                 "echo " * Base.shell_escape_csh(s)]), String))
+    csh_test(s) = csh_echo(s) == s
+    @testset "shell_escape_csh" begin
+        for s in ["", "-a/b", "'", "'£\"", join(' ':'~') ^ 2,
+                  "\t", "\n", "'\n", "\"\n", "'\n\n\""]
+            @test csh_test(s)
+        end
+    end
+end
 
 @testset "shell escaping on Windows" begin
     # Note  argument A can be parsed both as A or "A".

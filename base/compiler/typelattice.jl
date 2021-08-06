@@ -4,7 +4,7 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct are defined in Core, to allow them to be used
+# N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
 # inside the global code cache.
 #
 # # The type of a value might be constant
@@ -18,9 +18,8 @@
 # end
 import Core: Const, PartialStruct
 
-
 # The type of this value might be Bool.
-# However, to enable a limited amount of back-propagagation,
+# However, to enable a limited amount of back-propagation,
 # we also keep some information about how this Bool value was created.
 # In particular, if you branch on this value, then may assume that in
 # the true branch, the type of `var` will be limited by `vtype` and in
@@ -34,7 +33,7 @@ import Core: Const, PartialStruct
 # end
 # ```
 struct Conditional
-    var::Slot
+    var::SlotNumber
     vtype
     elsetype
     function Conditional(
@@ -44,6 +43,18 @@ struct Conditional
         return new(var, vtype, nottype)
     end
 end
+
+# # Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
+# # This is separate from `Conditional` to catch logic errors: the lattice element name is InterConditional
+# # while processing a call, then Conditional everywhere else. Thus InterConditional does not appear in
+# # CompilerTypes—these type's usages are disjoint—though we define the lattice for InterConditional.
+# struct InterConditional
+#     slot::Int
+#     vtype
+#     elsetype
+# end
+import Core: InterConditional
+const AnyConditional = Union{Conditional,InterConditional}
 
 struct PartialTypeVar
     tv::TypeVar
@@ -73,13 +84,14 @@ end
 const VarTable = Array{Any,1}
 
 struct StateUpdate
-    var::Union{Slot,SSAValue}
+    var::SlotNumber
     vtype::VarState
     state::VarTable
+    conditional::Bool
 end
 
 # Represent that the type estimate has been approximated, due to "causes"
-# (only used in abstractinterpret, doesn't appear in optimize)
+# (only used in abstract interpretion, doesn't appear in optimization)
 # N.B. in the lattice, this is epsilon smaller than `typ` (except Union{})
 struct LimitedAccuracy
     typ
@@ -101,11 +113,10 @@ const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStr
 # lattice logic #
 #################
 
-function issubconditional(a::Conditional, b::Conditional)
-    avar = a.var
-    bvar = b.var
-    if (isa(avar, Slot) && isa(bvar, Slot) && slot_id(avar) === slot_id(bvar)) ||
-       (isa(avar, SSAValue) && isa(bvar, SSAValue) && avar === bvar)
+# `Conditional` and `InterConditional` are valid in opposite contexts
+# (i.e. local inference and inter-procedural call), as such they will never be compared
+function issubconditional(a::C, b::C) where {C<:AnyConditional}
+    if is_same_conditionals(a, b)
         if a.vtype ⊑ b.vtype
             if a.elsetype ⊑ b.elsetype
                 return true
@@ -115,8 +126,13 @@ function issubconditional(a::Conditional, b::Conditional)
     return false
 end
 
-maybe_extract_const_bool(c::Const) = isa(c.val, Bool) ? c.val : nothing
-function maybe_extract_const_bool(c::Conditional)
+is_same_conditionals(a::Conditional,      b::Conditional)      = slot_id(a.var) === slot_id(b.var)
+is_same_conditionals(a::InterConditional, b::InterConditional) = a.slot === b.slot
+
+is_lattice_bool(@nospecialize(typ)) = typ !== Bottom && typ ⊑ Bool
+
+maybe_extract_const_bool(c::Const) = (val = c.val; isa(val, Bool)) ? val : nothing
+function maybe_extract_const_bool(c::AnyConditional)
     (c.vtype === Bottom && !(c.elsetype === Bottom)) && return false
     (c.elsetype === Bottom && !(c.vtype === Bottom)) && return true
     nothing
@@ -145,14 +161,14 @@ function ⊑(@nospecialize(a), @nospecialize(b))
     b === Union{} && return false
     @assert !isa(a, TypeVar) "invalid lattice item"
     @assert !isa(b, TypeVar) "invalid lattice item"
-    if isa(a, Conditional)
-        if isa(b, Conditional)
+    if isa(a, AnyConditional)
+        if isa(b, AnyConditional)
             return issubconditional(a, b)
         elseif isa(b, Const) && isa(b.val, Bool)
             return maybe_extract_const_bool(a) === b.val
         end
         a = Bool
-    elseif isa(b, Conditional)
+    elseif isa(b, AnyConditional)
         return false
     end
     if isa(a, PartialStruct)
@@ -229,8 +245,18 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
         return true
     end
     isa(b, PartialStruct) && return false
-    a isa Const && return false
-    b isa Const && return false
+    if a isa Const
+        if issingletontype(b)
+            return a.val === b.instance
+        end
+        return false
+    end
+    if b isa Const
+        if issingletontype(a)
+            return a.instance === b.val
+        end
+        return false
+    end
     if isa(a, PartialOpaque)
         isa(b, PartialOpaque) || return false
         widenconst(a) == widenconst(b) || return false
@@ -241,7 +267,7 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     return a ⊑ b && b ⊑ a
 end
 
-widenconst(c::Conditional) = Bool
+widenconst(c::AnyConditional) = Bool
 function widenconst(c::Const)
     if isa(c.val, Type)
         if isvarargtype(c.val)
@@ -273,10 +299,10 @@ function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
 end
 
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
-@inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n, o)))
+@inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n::VarState, o::VarState)))
 
 widenconditional(@nospecialize typ) = typ
-function widenconditional(typ::Conditional)
+function widenconditional(typ::AnyConditional)
     if typ.vtype === Union{}
         return Const(false)
     elseif typ.elsetype === Union{}
@@ -287,24 +313,25 @@ function widenconditional(typ::Conditional)
 end
 widenconditional(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
+widenwrappedconditional(@nospecialize(typ))   = widenconditional(typ)
+widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
+
 ignorelimited(@nospecialize typ) = typ
 ignorelimited(typ::LimitedAccuracy) = typ.typ
 
 function stupdate!(state::Nothing, changes::StateUpdate)
     newst = copy(changes.state)
-    if isa(changes.var, Slot)
-        changeid = slot_id(changes.var::Slot)
-        newst[changeid] = changes.vtype
-        # remove any Conditional for this Slot from the vtable
+    changeid = slot_id(changes.var)
+    newst[changeid] = changes.vtype
+    # remove any Conditional for this slot from the vtable
+    # (unless this change is came from the conditional)
+    if !changes.conditional
         for i = 1:length(newst)
             newtype = newst[i]
             if isa(newtype, VarState)
                 newtypetyp = ignorelimited(newtype.typ)
                 if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                    newtypetyp = widenconditional(newtypetyp)
-                    if newtype.typ isa LimitedAccuracy
-                        newtypetyp = LimitedAccuracy(newtypetyp, newtype.typ.causes)
-                    end
+                    newtypetyp = widenwrappedconditional(newtype.typ)
                     newst[i] = VarState(newtypetyp, newtype.undef)
                 end
             end
@@ -314,11 +341,8 @@ function stupdate!(state::Nothing, changes::StateUpdate)
 end
 
 function stupdate!(state::VarTable, changes::StateUpdate)
-    if !isa(changes.var, Slot)
-        return stupdate!(state, changes.state)
-    end
     newstate = nothing
-    changeid = slot_id(changes.var::Slot)
+    changeid = slot_id(changes.var)
     for i = 1:length(state)
         if i == changeid
             newtype = changes.vtype
@@ -326,14 +350,12 @@ function stupdate!(state::VarTable, changes::StateUpdate)
             newtype = changes.state[i]
         end
         oldtype = state[i]
-        # remove any Conditional for this Slot from the vtable
-        if isa(newtype, VarState)
+        # remove any Conditional for this slot from the vtable
+        # (unless this change is came from the conditional)
+        if !changes.conditional && isa(newtype, VarState)
             newtypetyp = ignorelimited(newtype.typ)
             if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                newtypetyp = widenconditional(newtypetyp)
-                if newtype.typ isa LimitedAccuracy
-                    newtypetyp = LimitedAccuracy(newtypetyp, newtype.typ.causes)
-                end
+                newtypetyp = widenwrappedconditional(newtype.typ)
                 newtype = VarState(newtypetyp, newtype.undef)
             end
         end
@@ -363,21 +385,21 @@ stupdate!(state::Nothing, changes::VarTable) = copy(changes)
 stupdate!(state::Nothing, changes::Nothing) = nothing
 
 function stupdate1!(state::VarTable, change::StateUpdate)
-    if !isa(change.var, Slot)
-        return false
-    end
-    changeid = slot_id(change.var::Slot)
-    # remove any Conditional for this Slot from the catch block vtable
-    for i = 1:length(state)
-        oldtype = state[i]
-        if isa(oldtype, VarState)
-            oldtypetyp = ignorelimited(oldtype.typ)
-            if isa(oldtypetyp, Conditional) && slot_id(oldtypetyp.var) == changeid
-                oldtypetyp = widenconditional(oldtypetyp)
-                if oldtype.typ isa LimitedAccuracy
-                    oldtypetyp = LimitedAccuracy(oldtypetyp, oldtype.typ.causes)
+    changeid = slot_id(change.var)
+    # remove any Conditional for this slot from the catch block vtable
+    # (unless this change is came from the conditional)
+    if !change.conditional
+        for i = 1:length(state)
+            oldtype = state[i]
+            if isa(oldtype, VarState)
+                oldtypetyp = ignorelimited(oldtype.typ)
+                if isa(oldtypetyp, Conditional) && slot_id(oldtypetyp.var) == changeid
+                    oldtypetyp = widenconditional(oldtypetyp)
+                    if oldtype.typ isa LimitedAccuracy
+                        oldtypetyp = LimitedAccuracy(oldtypetyp, (oldtype.typ::LimitedAccuracy).causes)
+                    end
+                    state[i] = VarState(oldtypetyp, oldtype.undef)
                 end
-                state[i] = VarState(oldtypetyp, oldtype.undef)
             end
         end
     end

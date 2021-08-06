@@ -110,9 +110,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # ~ expansion in --project and JULIA_PROJECT
     if !Sys.iswindows()
-        expanded = abspath(expanduser("~/foo"))
-        @test occursin(expanded, readchomp(`$exename --project='~/foo' -E 'Base.active_project()'`))
-        @test occursin(expanded, readchomp(setenv(`$exename -E 'Base.active_project()'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir())))
+        let expanded = abspath(expanduser("~/foo/Project.toml"))
+            @test expanded == readchomp(`$exename --project='~/foo' -e 'println(Base.active_project())'`)
+            @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "~/foo", "HOME" => homedir()))
+        end
+    end
+
+    # handling of @projectname in --project and JULIA_PROJECT
+    let expanded = abspath(Base.load_path_expand("@foo"))
+        @test expanded == readchomp(`$exename --project='@foo' -e 'println(Base.active_project())'`)
+        @test expanded == readchomp(setenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
     # --quiet, --banner
@@ -206,6 +213,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # We want to test oversubscription, but on manycore machines, this can
     # actually exhaust limited PID spaces
     cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
+    if Sys.WORD_SIZE == 32
+        cpu_threads = min(cpu_threads, 50)
+    end
     @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
     withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
         @test read(`$exename -e $code`, String) == string(cpu_threads)
@@ -314,7 +324,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         rm(memfile)
         @test popfirst!(got) == "        0 g(x) = x + 123456"
         @test popfirst!(got) == "        - function f(x)"
-        @test popfirst!(got) == "       80     []"
+        if Sys.WORD_SIZE == 64
+            @test popfirst!(got) == "       48     []"
+        else
+            @test popfirst!(got) == "       32     []"
+        end
         if Sys.WORD_SIZE == 64
             # P64 pools with 64 bit tags
             @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
@@ -327,7 +341,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test popfirst!(got) == "        8     Base.invokelatest(g, 0)"
             @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         end
-        @test popfirst!(got) == "       80     []"
+        if Sys.WORD_SIZE == 64
+            @test popfirst!(got) == "       48     []"
+        else
+            @test popfirst!(got) == "       32     []"
+        end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
         @test isempty(got) || got
@@ -339,6 +357,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O`) == "3"
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" --optimize`) == "3"
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O0`) == "0"
+
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level_min"`) == "0"
+    @test readchomp(`$exename -E "Base.JLOptions().opt_level_min" --min-optlevel=2`) == "2"
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
@@ -375,6 +396,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         filter!(a -> !startswith(a, "--check-bounds="), exename_default_checkbounds.exec)
         @test parse(Int, readchomp(`$exename_default_checkbounds -E "Int(Base.JLOptions().check_bounds)"`)) ==
             JL_OPTIONS_CHECK_BOUNDS_DEFAULT
+        @test parse(Int, readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
+            --check-bounds=auto`)) == JL_OPTIONS_CHECK_BOUNDS_DEFAULT
         @test parse(Int, readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"
             --check-bounds=yes`)) == JL_OPTIONS_CHECK_BOUNDS_ON
         @test parse(Int, readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"

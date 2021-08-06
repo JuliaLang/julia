@@ -369,3 +369,17 @@ let f = PrintAll((S38936("<span>"), "data", S38936("</span")))
         stmt isa Expr && stmt.head === :call && stmt.args[1] === GlobalRef(Core, :tuple)
     end
 end
+
+exc39508 = ErrorException("expected")
+@noinline function test39508()
+    local err
+    try
+        err = exc39508::Exception
+        throw(err)
+        false
+    catch ex
+        @test ex === err
+    end
+    return err
+end
+@test test39508() === exc39508

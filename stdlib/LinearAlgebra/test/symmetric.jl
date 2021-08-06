@@ -11,13 +11,19 @@ Random.seed!(1010)
     @test ishermitian(σ)
 end
 
+@testset "Two-dimensional Euler formula for Hermitian" begin
+    @test cis(Hermitian([π 0; 0 π])) ≈ -I
+end
+
 @testset "Hermitian matrix exponential/log" begin
     A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
     @test exp(A2) ≈ exp(Hermitian(A2))
+    @test cis(A2) ≈ cis(Hermitian(A2))
     @test log(A2) ≈ log(Hermitian(A2))
     A3 = A1 * A1' # posdef
     @test exp(A3) ≈ exp(Hermitian(A3))
+    @test cis(A3) ≈ cis(Hermitian(A3))
     @test log(A3) ≈ log(Hermitian(A3))
 
     A1 = randn(4,4)
@@ -545,6 +551,26 @@ end
     end
 end
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    immutablemat = ImmutableArray([1 2 3; 4 5 6; 7 8 9])
+    for SymType in (Symmetric, Hermitian)
+        S = Float64
+        symmat = SymType(immutablemat)
+        @test convert(AbstractArray{S}, symmat).data isa ImmutableArray{S}
+        @test convert(AbstractMatrix{S}, symmat).data isa ImmutableArray{S}
+        @test AbstractArray{S}(symmat).data isa ImmutableArray{S}
+        @test AbstractMatrix{S}(symmat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, symmat) == symmat
+        @test convert(AbstractMatrix{S}, symmat) == symmat
+    end
+end
+
+
 @testset "#24572: eltype(A::HermOrSym) === eltype(parent(A))" begin
     A = rand(Float32, 3, 3)
     @test_throws TypeError Symmetric{Float64,Matrix{Float32}}(A, 'U')
@@ -685,45 +711,62 @@ end
 
 @testset "Multiplications symmetric/hermitian for $T and $S" for T in
         (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
-    let A = Transpose(Symmetric(rand(S, 3, 3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
-        @test A * Bv ≈ parent(A) * Bv
-        @test A * Bm ≈ parent(A) * Bm
-        @test Bm * A ≈ Bm * parent(A)
+    let A = transpose(Symmetric(rand(S, 3, 3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ Matrix(A) * Bv
+        @test A * Bm ≈ Matrix(A) * Bm
+        @test Bm * A ≈ Bm * Matrix(A)
     end
-    let A = Adjoint(Hermitian(rand(S, 3,3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
-        @test A * Bv ≈ parent(A) * Bv
-        @test A * Bm ≈ parent(A) * Bm
-        @test Bm * A ≈ Bm * parent(A)
+    let A = adjoint(Hermitian(rand(S, 3,3))), Bv = Vector(rand(T, 3)), Bm = Matrix(rand(T, 3,3))
+        @test A * Bv ≈ Matrix(A) * Bv
+        @test A * Bm ≈ Matrix(A) * Bm
+        @test Bm * A ≈ Bm * Matrix(A)
+    end
+    let Ahrs = transpose(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = transpose(Symmetric(rand(S, 3, 3))),
+        Ahcs = transpose(Hermitian(Symmetric(rand(S, 3, 3))))
+
+        @test Ahrs * Ahrs ≈ Ahrs * Matrix(Ahrs)
+        @test Ahrs * Acs ≈ Ahrs * Matrix(Acs)
+        @test Acs * Acs ≈ Matrix(Acs) * Matrix(Acs)
+        @test Acs * Ahrs ≈ Matrix(Acs) * Ahrs
+        @test Ahrs * Ahcs ≈ Matrix(Ahrs) * Ahcs
+        @test Ahcs * Ahrs ≈ Ahcs * Matrix(Ahrs)
+    end
+    let Ahrs = adjoint(Hermitian(Symmetric(rand(T, 3, 3)))),
+        Acs = adjoint(Symmetric(rand(S, 3, 3))),
+        Ahcs = adjoint(Hermitian(Symmetric(rand(S, 3, 3))))
+
+        @test Ahrs * Ahrs ≈ Ahrs * Matrix(Ahrs)
+        @test Ahcs * Ahcs ≈ Matrix(Ahcs) * Matrix(Ahcs)
+        @test Ahrs * Ahcs ≈ Ahrs * Matrix(Ahcs)
+        @test Acs * Ahcs ≈ Acs * Matrix(Ahcs)
+        @test Ahcs * Ahrs ≈ Matrix(Ahcs) * Ahrs
+        @test Ahcs * Acs ≈ Matrix(Ahcs) * Acs
     end
 end
 
-@testset "Dsiambiguation multiplication with transposed AbstractMatrix methods in linalg/matmul.jl for $T and $S" for T in
-        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
-    let Ahrs = Transpose(Hermitian(Symmetric(rand(T, 3, 3)))),
-        Acs = Transpose(Symmetric(rand(S, 3, 3))),
-        Ahcs = Transpose(Hermitian(Symmetric(rand(S, 3, 3))))
-
-        @test Ahrs * Ahrs ≈ Ahrs * parent(Ahrs)
-        @test Ahrs * Acs ≈ Ahrs * parent(Acs)
-        @test Acs * Acs ≈ parent(Acs) * parent(Acs)
-        @test Acs * Ahrs ≈ parent(Acs) * Ahrs
-        @test Ahrs * Ahcs ≈ parent(Ahrs) * Ahcs
-        @test Ahcs * Ahrs ≈ Ahcs * parent(Ahrs)
-    end
-end
-
-@testset "Dsiambiguation multiplication with adjointed AbstractMatrix methods in linalg/matmul.jl for $T and $S" for T in
-        (Float16, Float32, Float64, BigFloat), S in (ComplexF16, ComplexF32, ComplexF64)
-    let Ahrs = Adjoint(Hermitian(Symmetric(rand(T, 3, 3)))),
-        Acs = Adjoint(Symmetric(rand(S, 3, 3))),
-        Ahcs = Adjoint(Hermitian(Symmetric(rand(S, 3, 3))))
-
-        @test Ahrs * Ahrs ≈ Ahrs * parent(Ahrs)
-        @test Ahcs * Ahcs ≈ parent(Ahcs) * parent(Ahcs)
-        @test Ahrs * Ahcs ≈ Ahrs * parent(Ahcs)
-        @test Acs * Ahcs ≈ Acs * parent(Ahcs)
-        @test Ahcs * Ahrs ≈ parent(Ahcs) * Ahrs
-        @test Ahcs * Acs ≈ parent(Ahcs) * Acs
+@testset "Addition/subtraction with SymTridiagonal" begin
+    TR = SymTridiagonal(randn(Float64,5), randn(Float64,4))
+    TC = SymTridiagonal(randn(ComplexF64,5), randn(ComplexF64,4))
+    SR = Symmetric(randn(Float64,5,5))
+    SC = Symmetric(randn(ComplexF64,5,5))
+    HR = Hermitian(randn(Float64,5,5))
+    HC = Hermitian(randn(ComplexF64,5,5))
+    for op = (+,-)
+        for T = (TR, TC), S = (SR, SC)
+            @test op(T, S) == op(Array(T), S)
+            @test op(S, T) == op(S, Array(T))
+            @test op(T, S) isa Symmetric
+            @test op(S, T) isa Symmetric
+        end
+        for H = (HR, HC)
+            for T = (TR, TC)
+                @test op(T, H) == op(Array(T), H)
+                @test op(H, T) == op(H, Array(T))
+            end
+            @test op(TR, H) isa Hermitian
+            @test op(H, TR) isa Hermitian
+        end
     end
 end
 

@@ -1,1 +1,3 @@
-/.github/workflows/ @JuliaLang/github-actions
+CODEOWNERS @JuliaLang/github-actions 
+/.github/ @JuliaLang/github-actions 
+/.buildkite/ @JuliaLang/github-actions

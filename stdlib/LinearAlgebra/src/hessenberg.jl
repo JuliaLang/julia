@@ -60,6 +60,8 @@ parent(H::UpperHessenberg) = H.data
 similar(H::UpperHessenberg, ::Type{T}) where {T} = UpperHessenberg(similar(H.data, T))
 similar(H::UpperHessenberg, ::Type{T}, dims::Dims{N}) where {T,N} = similar(H.data, T, dims)
 
+AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg(AbstractMatrix{T}(H.data))
+
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
 real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
@@ -94,17 +96,96 @@ Base.copy(A::Transpose{<:Any,<:UpperHessenberg}) = tril!(transpose!(similar(A.pa
 rmul!(H::UpperHessenberg, x::Number) = (rmul!(H.data, x); H)
 lmul!(x::Number, H::UpperHessenberg) = (lmul!(x, H.data); H)
 
-# (future: we could also have specialized routines for UpperHessenberg * UpperTriangular)
-
 fillstored!(H::UpperHessenberg, x) = (fillband!(H.data, x, -1, size(H,2)-1); H)
 
 +(A::UpperHessenberg, B::UpperHessenberg) = UpperHessenberg(A.data+B.data)
 -(A::UpperHessenberg, B::UpperHessenberg) = UpperHessenberg(A.data-B.data)
-# (future: we could also have specialized routines for UpperHessenberg ± UpperTriangular)
 
-# shift Hessenberg by λI
-+(H::UpperHessenberg, J::UniformScaling) = UpperHessenberg(H.data + J)
--(J::UniformScaling, H::UpperHessenberg) = UpperHessenberg(J - H.data)
+for T = (:UniformScaling, :Diagonal, :Bidiagonal, :Tridiagonal, :SymTridiagonal,
+         :UpperTriangular, :UnitUpperTriangular)
+    for op = (:+, :-)
+        @eval begin
+            $op(H::UpperHessenberg, x::$T) = UpperHessenberg($op(H.data, x))
+            $op(x::$T, H::UpperHessenberg) = UpperHessenberg($op(x, H.data))
+        end
+    end
+end
+
+for T = (:Number, :UniformScaling, :Diagonal)
+    @eval begin
+        *(H::UpperHessenberg, x::$T) = UpperHessenberg(H.data * x)
+        *(x::$T, H::UpperHessenberg) = UpperHessenberg(x * H.data)
+        /(H::UpperHessenberg, x::$T) = UpperHessenberg(H.data / x)
+        \(x::$T, H::UpperHessenberg) = UpperHessenberg(x \ H.data)
+    end
+end
+
+function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
+    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    rmul!(HH, U)
+    UpperHessenberg(HH)
+end
+function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    lmul!(U, HH)
+    UpperHessenberg(HH)
+end
+
+function /(H::UpperHessenberg, U::UpperTriangular)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    rdiv!(HH, U)
+    UpperHessenberg(HH)
+end
+function /(H::UpperHessenberg, U::UnitUpperTriangular)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    rdiv!(HH, U)
+    UpperHessenberg(HH)
+end
+
+function \(U::UpperTriangular, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    ldiv!(U, HH)
+    UpperHessenberg(HH)
+end
+function \(U::UnitUpperTriangular, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
+    HH = similar(H.data, T, size(H))
+    copyto!(HH, H)
+    ldiv!(U, HH)
+    UpperHessenberg(HH)
+end
+
+function *(H::UpperHessenberg, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(H), eltype(B))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperHessenberg(zeros(TS, size(H)...)), H, B)
+    else
+        A_mul_B_td!(zeros(TS, size(H)...), H, B)
+    end
+end
+function *(B::Bidiagonal, H::UpperHessenberg)
+    TS = promote_op(matprod, eltype(B), eltype(H))
+    if B.uplo == 'U'
+        A_mul_B_td!(UpperHessenberg(zeros(TS, size(B)...)), B, H)
+    else
+        A_mul_B_td!(zeros(TS, size(B)...), B, H)
+    end
+end
+
+function /(H::UpperHessenberg, B::Bidiagonal)
+    A = Base.@invoke /(H::AbstractMatrix, B::Bidiagonal)
+    B.uplo == 'U' ? UpperHessenberg(A) : A
+end
 
 # Solving (H+µI)x = b: we can do this in O(m²) time and O(m) memory
 # (in-place in x) by the RQ algorithm from:
@@ -402,9 +483,9 @@ Q factor:
  0.0  -0.707107   0.707107
 H factor:
 3×3 UpperHessenberg{Float64, Matrix{Float64}}:
-  4.0      -11.3137       -1.41421
- -5.65685    5.0           2.0
-   ⋅        -8.88178e-16   1.0
+  4.0      -11.3137      -1.41421
+ -5.65685    5.0          2.0
+   ⋅        -1.0444e-15   1.0
 
 julia> F.Q * F.H * F.Q'
 3×3 Matrix{Float64}:
@@ -485,28 +566,30 @@ function AbstractMatrix(F::Hessenberg)
     end
 end
 
+# adjoint(Q::HessenbergQ{<:Real})
+
 lmul!(Q::BlasHessenbergQ{T,false}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-rmul!(X::StridedMatrix{T}, Q::BlasHessenbergQ{T,false}) where {T<:BlasFloat} =
+rmul!(X::StridedVecOrMat{T}, Q::BlasHessenbergQ{T,false}) where {T<:BlasFloat} =
     LAPACK.ormhr!('R', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
 lmul!(adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,false}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
-rmul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,false}}) where {T<:BlasFloat} =
+rmul!(X::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,false}}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
 
 lmul!(Q::BlasHessenbergQ{T,true}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormtr!('L', Q.uplo, 'N', Q.factors, Q.τ, X)
-rmul!(X::StridedMatrix{T}, Q::BlasHessenbergQ{T,true}) where {T<:BlasFloat} =
+rmul!(X::StridedVecOrMat{T}, Q::BlasHessenbergQ{T,true}) where {T<:BlasFloat} =
     LAPACK.ormtr!('R', Q.uplo, 'N', Q.factors, Q.τ, X)
 lmul!(adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormtr!('L', Q.uplo, ifelse(T<:Real, 'T', 'C'), Q.factors, Q.τ, X))
-rmul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}) where {T<:BlasFloat} =
+rmul!(X::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormtr!('R', Q.uplo, ifelse(T<:Real, 'T', 'C'), Q.factors, Q.τ, X))
 
 lmul!(Q::HessenbergQ{T}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T} = rmul!(X', Q')'
-rmul!(X::Adjoint{T,<:StridedMatrix{T}}, Q::HessenbergQ{T}) where {T} = lmul!(Q', X')'
+rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, Q::HessenbergQ{T}) where {T} = lmul!(Q', X')'
 lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T}  = rmul!(X', adjQ')'
-rmul!(X::Adjoint{T,<:StridedMatrix{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
+rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
 
 # multiply x by the entries of M in the upper-k triangle, which contains
 # the entries of the upper-Hessenberg matrix H for k=-1

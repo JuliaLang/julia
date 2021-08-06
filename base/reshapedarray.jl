@@ -113,6 +113,7 @@ reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
 reshape(parent::AbstractVector, ::Colon) = parent
+reshape(parent::AbstractVector, ::Tuple{Colon}) = parent
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
@@ -146,7 +147,7 @@ end
 # product of trailing dims into the last element
 rdims_trailing(l, inds...) = length(l) * rdims_trailing(inds...)
 rdims_trailing(l) = length(l)
-rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val(N)), inds)
+rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(Returns(OneTo(1)), Val(N)), inds)
 rdims(out::Tuple{}, inds::Tuple{}) = () # N == 0, M == 0
 rdims(out::Tuple{}, inds::Tuple{Any}) = ()
 rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = ()

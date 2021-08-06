@@ -186,7 +186,7 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 - **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
 - **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
-- **[libosxunwind]**         — fork of [libunwind], a library that determines the call-chain of a program.
+- **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
 
 [GNU make]:     https://www.gnu.org/software/make
 [patch]:        https://www.gnu.org/software/patch
@@ -209,13 +209,13 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
 [PCRE]:         https://www.pcre.org
 [LLVM]:         https://www.llvm.org
+[LLVM libunwind]: https://github.com/llvm/llvm-project/tree/main/libunwind
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
 [GMP]:          https://gmplib.org
 [MPFR]:         https://www.mpfr.org
 [libuv]:        https://github.com/JuliaLang/libuv
 [libgit2]:      https://libgit2.org/
 [utf8proc]:     https://julialang.org/utf8proc/
-[libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    https://www.nongnu.org/libunwind
 [libssh2]:      https://www.libssh2.org
 [mbedtls]:      https://tls.mbed.org/
@@ -249,21 +249,6 @@ Julia uses a custom fork of libuv. It is a small dependency, and can be safely b
 ### BLAS and LAPACK
 
 As a high-performance numerical language, Julia should be linked to a multi-threaded BLAS and LAPACK, such as OpenBLAS or ATLAS, which will provide much better performance than the reference `libblas` implementations which may be default on some systems.
-
-### Intel MKL
-
-**Note:** If you are building Julia for the sole purpose of incorporating Intel MKL, it may be beneficial to first try [MKL.jl](https://github.com/JuliaComputing/MKL.jl). This package will automatically download MKL and rebuild Julia's system image against it, sidestepping the need to set up a working build environment just to add MKL functionality. MKL.jl replaces OpenBLAS with MKL for dense linear algebra functions called directly from Julia, but SuiteSparse and other C/Fortran libraries will continue to use the BLAS they were linked against at build time. If you want SuiteSparse to use MKL, you will need to build from source.
-
-For a 64-bit architecture, the environment should be set up as follows:
-```sh
-# bash
-source /path/to/intel/bin/compilervars.sh intel64
-```
-Add the following to the `Make.user` file:
-
-    USE_INTEL_MKL = 1
-
-It is highly recommended to start with a fresh clone of the Julia repository.
 
 ## Source distributions of releases
 

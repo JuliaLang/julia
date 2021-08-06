@@ -237,7 +237,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return mapreduce_first(f, op, a1)
-    elseif ifirst + blksize > ilast
+    elseif ilast - ifirst < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
@@ -249,7 +249,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
         return v
     else
         # pairwise portion
-        imid = (ifirst + ilast) >> 1
+        imid = ifirst + (ilast - ifirst) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
         v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
         return op(v1, v2)
@@ -518,6 +518,8 @@ for non-empty collections.
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
 
+See also: [`reduce`](@ref), [`mapreduce`](@ref), [`count`](@ref), [`union`](@ref).
+
 # Examples
 ```jldoctest
 julia> sum(1:20)
@@ -529,7 +531,7 @@ julia> sum(1:20; init = 0.0)
 """
 sum(a; kw...) = sum(identity, a; kw...)
 sum(a::AbstractArray{Bool}; kw...) =
-    kw.data === NamedTuple() ? count(a) : reduce(add_sum, a; kw...)
+    isempty(kw) ? count(a) : reduce(add_sum, a; kw...)
 
 ## prod
 """
@@ -571,6 +573,8 @@ for non-empty collections.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
+
+See also: [`reduce`](@ref), [`cumprod`](@ref), [`any`](@ref).
 
 # Examples
 ```jldoctest
@@ -767,11 +771,11 @@ minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 ## findmax, findmin, argmax & argmin
 
 """
-    findmax(f, domain) -> (f(x), x)
+    findmax(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
-value in the `domain` (inputs to `f`) such that `f(x)` is maximised. If there
-are multiple maximal points, then the first one will be returned.
+Returns a pair of a value in the codomain (outputs of `f`) and the index of
+the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
+If there are multiple maximal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
 
@@ -784,20 +788,20 @@ Values are compared with `isless`.
 
 ```jldoctest
 julia> findmax(identity, 5:9)
-(9, 9)
+(9, 5)
 
 julia> findmax(-, 1:10)
 (-1, 1)
 
-julia> findmax(first, [(1, :a), (2, :b), (2, :c)])
-(2, (2, :b))
+julia> findmax(first, [(1, :a), (3, :b), (3, :c)])
+(3, 2)
 
 julia> findmax(cos, 0:π/2:2π)
-(1.0, 0.0)
+(1.0, 1)
 ```
 """
-findmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)
-_rf_findmax((fm, m), (fx, x)) = isless(fm, fx) ? (fx, x) : (fm, m)
+findmax(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
+_rf_findmax((fm, im), (fx, ix)) = isless(fm, fx) ? (fx, ix) : (fm, im)
 
 """
     findmax(itr) -> (x, index)
@@ -805,6 +809,8 @@ _rf_findmax((fm, m), (fx, x)) = isless(fm, fx) ? (fx, x) : (fm, m)
 Return the maximal element of the collection `itr` and its index or key.
 If there are multiple maximal elements, then the first one will be returned.
 Values are compared with `isless`.
+
+See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
 
 # Examples
 
@@ -820,14 +826,14 @@ julia> findmax([1, 7, 7, NaN])
 ```
 """
 findmax(itr) = _findmax(itr, :)
-_findmax(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmax, pairs(a) )
+_findmax(a, ::Colon) = findmax(identity, a)
 
 """
-    findmin(f, domain) -> (f(x), x)
+    findmin(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the corresponding
-value in the `domain` (inputs to `f`) such that `f(x)` is minimised. If there
-are multiple minimal points, then the first one will be returned.
+Returns a pair of a value in the codomain (outputs of `f`) and the index of
+the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
+If there are multiple minimal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
 
@@ -840,21 +846,21 @@ are multiple minimal points, then the first one will be returned.
 
 ```jldoctest
 julia> findmin(identity, 5:9)
-(5, 5)
+(5, 1)
 
 julia> findmin(-, 1:10)
 (-10, 10)
 
-julia> findmin(first, [(1, :a), (1, :b), (2, :c)])
-(1, (1, :a))
+julia> findmin(first, [(2, :a), (2, :b), (3, :c)])
+(2, 1)
 
 julia> findmin(cos, 0:π/2:2π)
-(-1.0, 3.141592653589793)
+(-1.0, 3)
 ```
 
 """
-findmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)
-_rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
+findmin(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
+_rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
 
 """
     findmin(itr) -> (x, index)
@@ -862,6 +868,8 @@ _rf_findmin((fm, m), (fx, x)) = isgreater(fm, fx) ? (fx, x) : (fm, m)
 Return the minimal element of the collection `itr` and its index or key.
 If there are multiple minimal elements, then the first one will be returned.
 `NaN` is treated as less than all other values except `missing`.
+
+See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
 
 # Examples
 
@@ -877,7 +885,7 @@ julia> findmin([1, 7, 7, NaN])
 ```
 """
 findmin(itr) = _findmin(itr, :)
-_findmin(a, ::Colon) = mapfoldl( ((k, v),) -> (v, k), _rf_findmin, pairs(a) )
+_findmin(a, ::Colon) = findmin(identity, a)
 
 """
     argmax(f, domain)
@@ -892,6 +900,8 @@ Values are compared with `isless`.
 !!! compat "Julia 1.7"
     This method requires Julia 1.7 or later.
 
+See also [`argmin`](@ref), [`findmax`](@ref).
+
 # Examples
 ```jldoctest
 julia> argmax(abs, -10:5)
@@ -901,7 +911,7 @@ julia> argmax(cos, 0:π/2:2π)
 0.0
 ```
 """
-argmax(f, domain) = findmax(f, domain)[2]
+argmax(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmax, domain)[2]
 
 """
     argmax(itr)
@@ -912,6 +922,8 @@ If there are multiple maximal elements, then the first one will be returned.
 The collection must not be empty.
 
 Values are compared with `isless`.
+
+See also: [`argmin`](@ref), [`findmax`](@ref).
 
 # Examples
 ```jldoctest
@@ -940,6 +952,8 @@ If there are multiple minimal values for `f(x)` then the first one will be found
 !!! compat "Julia 1.7"
     This method requires Julia 1.7 or later.
 
+See also [`argmax`](@ref), [`findmin`](@ref).
+
 # Examples
 ```jldoctest
 julia> argmin(sign, -10:5)
@@ -950,10 +964,9 @@ julia> argmin(x -> -x^3 + x^2 - 10, -5:5)
 
 julia> argmin(acos, 0:0.1:1)
 1.0
-
 ```
 """
-argmin(f, domain) = findmin(f, domain)[2]
+argmin(f, domain) = mapfoldl(x -> (f(x), x), _rf_findmin, domain)[2]
 
 """
     argmin(itr)
@@ -964,6 +977,8 @@ If there are multiple minimal elements, then the first one will be returned.
 The collection must not be empty.
 
 `NaN` is treated as less than all other values except `missing`.
+
+See also: [`argmax`](@ref), [`findmin`](@ref).
 
 # Examples
 ```jldoctest
@@ -991,6 +1006,8 @@ short-circuit on `false`, use [`all`](@ref).
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
+
+See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), , [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -1027,6 +1044,8 @@ short-circuit on `true`, use [`any`](@ref).
 If the input contains [`missing`](@ref) values, return `missing` if all non-missing
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
+
+See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), , [`&&`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest
@@ -1166,6 +1185,8 @@ to start counting from and therefore also determines the output type.
 
 !!! compat "Julia 1.6"
     `init` keyword was added in Julia 1.6.
+
+See also: [`any`](@ref), [`sum`](@ref).
 
 # Examples
 ```jldoctest

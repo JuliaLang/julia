@@ -236,6 +236,14 @@ function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; permute=permute, scale=scale, sortby=sortby)
 end
+function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
+    AA = copy_oftype(A, eigtype(T))
+    isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
+    A = eigen!(AA; permute, scale, sortby)
+    values = convert(AbstractVector{isreal(A.values) ? Float16 : Complex{Float16}}, A.values)
+    vectors = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectors)
+    return Eigen(values, vectors)
+end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
 """
@@ -612,6 +620,16 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
     show(io, mime, F.values)
     println(io, "\nvectors:")
     show(io, mime, F.vectors)
+end
+
+function Base.hash(F::Eigen, h::UInt)
+    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
+end
+function Base.:(==)(A::Eigen, B::Eigen)
+    return A.values == B.values && A.vectors == B.vectors
+end
+function Base.isequal(A::Eigen, B::Eigen)
+    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
 end
 
 # Conversion methods

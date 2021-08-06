@@ -44,7 +44,7 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
     if (was == tid)
         return 1;
     if (was == -1)
-        return jl_atomic_bool_compare_exchange(&task->tid, -1, tid);
+        return jl_atomic_cmpswap(&task->tid, &was, tid);
     return 0;
 }
 
@@ -126,7 +126,7 @@ static inline void sift_down(taskheap_t *heap, int32_t idx)
 
 static inline int multiq_insert(jl_task_t *task, int16_t priority)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_current_task->ptls;
     uint64_t rn;
 
     task->prio = priority;
@@ -153,12 +153,13 @@ static inline int multiq_insert(jl_task_t *task, int16_t priority)
 
 static inline jl_task_t *multiq_deletemin(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_current_task->ptls;
     uint64_t rn1 = 0, rn2;
     int32_t i;
     int16_t prio1, prio2;
     jl_task_t *task;
  retry:
+    jl_gc_safepoint();
     for (i = 0; i < heap_p; ++i) {
         rn1 = cong(heap_p, cong_unbias, &ptls->rngseed);
         rn2 = cong(heap_p, cong_unbias, &ptls->rngseed);
@@ -228,7 +229,8 @@ void jl_init_threadinginfra(void)
     /* initialize the synchronization trees pool and the multiqueue */
     multiq_init();
 
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_install_thread_signal_handler(ptls);
     uv_mutex_init(&ptls->sleep_lock);
     uv_cond_init(&ptls->wake_signal);
 }
@@ -242,12 +244,11 @@ void jl_threadfun(void *arg)
     jl_threadarg_t *targ = (jl_threadarg_t*)arg;
 
     // initialize this thread (set tid, create heap, set up root task)
-    jl_init_threadtls(targ->tid);
+    jl_ptls_t ptls = jl_init_threadtls(targ->tid);
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(0, &stack_lo, &stack_hi);
-    jl_init_root_task(stack_lo, stack_hi);
-
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_init_root_task(ptls, stack_lo, stack_hi);
+    jl_install_thread_signal_handler(ptls);
 
     // set up sleep mechanism for this thread
     uv_mutex_init(&ptls->sleep_lock);
@@ -329,7 +330,9 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 static void wake_thread(int16_t tid)
 {
     jl_ptls_t other = jl_all_tls_states[tid];
-    if (jl_atomic_bool_compare_exchange(&other->sleep_check_state, sleeping, not_sleeping)) {
+    uint8_t state = sleeping;
+    jl_atomic_cmpswap(&other->sleep_check_state, &state, not_sleeping);
+    if (state == sleeping) {
         uv_mutex_lock(&other->sleep_lock);
         uv_cond_signal(&other->wake_signal);
         uv_mutex_unlock(&other->sleep_lock);
@@ -347,7 +350,7 @@ static void wake_libuv(void)
 /* ensure thread tid is awake if necessary */
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_current_task->ptls;
     jl_thread_t uvlock = jl_atomic_load(&jl_uv_mutex.owner);
     int16_t self = ptls->tid;
     jl_thread_t system_self = jl_all_tls_states[self]->system_id;
@@ -391,11 +394,10 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
     jl_value_t *args[2] = { trypoptask, q };
     jl_task_t *task = (jl_task_t*)jl_apply(args, 2);
     if (jl_typeis(task, jl_task_type)) {
-        int self = jl_get_ptls_states()->tid;
+        int self = jl_current_task->tid;
         jl_set_task_tid(task, self);
         return task;
     }
-    jl_gc_safepoint();
     return multiq_deletemin();
 }
 
@@ -411,12 +413,11 @@ extern volatile unsigned _threadedregion;
 
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     uint64_t start_cycles = 0;
-    jl_task_t *task;
 
     while (1) {
-        task = get_next_task(trypoptask, q);
+        jl_task_t *task = get_next_task(trypoptask, q);
         if (task)
             return task;
 
@@ -428,6 +429,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
         }
 
         jl_cpu_pause();
+        jl_ptls_t ptls = ct->ptls;
         if (sleep_check_after_threshold(&start_cycles) || (!_threadedregion && ptls->tid == 0)) {
             jl_atomic_store(&ptls->sleep_check_state, sleeping); // acquire sleep-check lock
             if (!multiq_check_empty()) {
@@ -435,7 +437,9 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                     jl_atomic_store(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
                 continue;
             }
-            task = get_next_task(trypoptask, q);
+            task = get_next_task(trypoptask, q); // WARNING: this should not yield
+            if (ptls != ct->ptls)
+                continue;
             if (task) {
                 if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping)
                     jl_atomic_store(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us

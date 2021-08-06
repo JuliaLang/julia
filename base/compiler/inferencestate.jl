@@ -56,9 +56,8 @@ mutable struct InferenceState
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
                             cached::Bool, interp::AbstractInterpreter)
-        linfo = result.linfo
+        (; def) = linfo = result.linfo
         code = src.code::Array{Any,1}
-        toplevel = !isa(linfo.def, Method)
 
         sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
@@ -94,18 +93,13 @@ mutable struct InferenceState
         W = BitSet()
         push!(W, 1) #initial pc to visit
 
-        if !toplevel
-            meth = linfo.def
-            inmodule = meth.module
-        else
-            inmodule = linfo.def::Module
-        end
+        mod = isa(def, Method) ? def.module : def
 
         valid_worlds = WorldRange(src.min_world,
             src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         frame = new(
             InferenceParams(interp), result, linfo,
-            sp, slottypes, inmodule, 0,
+            sp, slottypes, mod, 0,
             IdSet{InferenceState}(), IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,
@@ -122,6 +116,29 @@ mutable struct InferenceState
         cached && push!(get_inference_cache(interp), result)
         return frame
     end
+end
+
+"""
+    Iterate through all callers of the given InferenceState in the abstract
+    interpretation stack (including the given InferenceState itself), vising
+    children before their parents (i.e. ascending the tree from the given
+    InferenceState). Note that cycles may be visited in any order.
+"""
+struct InfStackUnwind
+    inf::InferenceState
+end
+iterate(unw::InfStackUnwind) = (unw.inf, (unw.inf, 0))
+function iterate(unw::InfStackUnwind, (infstate, cyclei)::Tuple{InferenceState, Int})
+    # iterate through the cycle before walking to the parent
+    if cyclei < length(infstate.callers_in_cycle)
+        cyclei += 1
+        infstate = infstate.callers_in_cycle[cyclei]
+    else
+        cyclei = 0
+        infstate = infstate.parent
+    end
+    infstate === nothing && return nothing
+    (infstate::InferenceState, (infstate, cyclei))
 end
 
 method_table(interp::AbstractInterpreter, sv::InferenceState) = sv.method_table
@@ -162,7 +179,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
             while temp isa UnionAll
                 temp = temp.body
             end
-            sigtypes = temp.parameters
+            sigtypes = (temp::DataType).parameters
             for j = 1:length(sigtypes)
                 tj = sigtypes[j]
                 if isType(tj) && tj.parameters[1] === Pi

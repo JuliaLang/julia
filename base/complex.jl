@@ -7,6 +7,8 @@ Complex number type with real and imaginary part of type `T`.
 
 `ComplexF16`, `ComplexF32` and `ComplexF64` are aliases for
 `Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
+
+See also: [`Real`](@ref), [`complex`](@ref), [`real`](@ref).
 """
 struct Complex{T<:Real} <: Number
     re::T
@@ -20,10 +22,15 @@ Complex(x::Real) = Complex(x, zero(x))
 
 The imaginary unit.
 
+See also: [`imag`](@ref), [`angle`](@ref), [`complex`](@ref).
+
 # Examples
 ```jldoctest
 julia> im * im
 -1 + 0im
+
+julia> (2.0 + 3im)^2
+-5.0 + 12.0im
 ```
 """
 const im = Complex(false, true)
@@ -54,6 +61,8 @@ float(::Type{Complex{T}}) where {T} = Complex{float(T)}
 
 Return the real part of the complex number `z`.
 
+See also: [`imag`](@ref), [`reim`](@ref), [`complex`](@ref), [`isreal`](@ref), [`Real`](@ref).
+
 # Examples
 ```jldoctest
 julia> real(1 + 3im)
@@ -66,6 +75,8 @@ real(z::Complex) = z.re
     imag(z)
 
 Return the imaginary part of the complex number `z`.
+
+See also: [`conj`](@ref), [`reim`](@ref), [`adjoint`](@ref), [`angle`](@ref).
 
 # Examples
 ```jldoctest
@@ -253,6 +264,8 @@ end
     conj(z)
 
 Compute the complex conjugate of a complex number `z`.
+
+See also: [`angle`](@ref), [`adjoint`](@ref).
 
 # Examples
 ```jldoctest
@@ -533,6 +546,8 @@ end
 
 Return ``\\exp(iz)``.
 
+See also [`cispi`](@ref), [`angle`](@ref).
+
 # Examples
 ```jldoctest
 julia> cis(π) ≈ -1
@@ -573,6 +588,8 @@ end
     angle(z)
 
 Compute the phase angle in radians of a complex number `z`.
+
+See also: [`atan`](@ref), [`cis`](@ref).
 
 # Examples
 ```jldoctest

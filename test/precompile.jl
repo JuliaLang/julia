@@ -95,6 +95,7 @@ precompile_test_harness(false) do dir
               const t17809s = Any[
                     Tuple{
                         Type{Ptr{MyType{i}}},
+                        Ptr{Type{MyType{i}}},
                         Array{Ptr{MyType{MyType{:sym}()}}(0), 0},
                         Val{Complex{Int}(1, 2)},
                         Val{3},
@@ -340,6 +341,7 @@ precompile_test_harness(false) do dir
         @test all(i -> Foo.t17809s[i + 1] ===
             Tuple{
                 Type{Ptr{Foo.MyType{i}}},
+                Ptr{Type{Foo.MyType{i}}},
                 Array{Ptr{Foo.MyType{Foo.MyType{:sym}()}}(0), 0},
                 Val{Complex{Int}(1, 2)},
                 Val{3},
@@ -821,6 +823,10 @@ precompile_test_harness("Issue #25971") do load_path
     chmod(sourcefile, 0o600)
     cachefile = Base.compilecache(Base.PkgId("Foo25971"))
     @test filemode(sourcefile) == filemode(cachefile)
+    chmod(sourcefile, 0o444)
+    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    # Check writable
+    @test touch(cachefile) == cachefile
 end
 
 precompile_test_harness("Issue #38312") do load_path

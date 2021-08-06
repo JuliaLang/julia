@@ -42,7 +42,7 @@ The default version of LLVM is specified in `deps/Versions.make`. You can overri
 a file called `Make.user` in the top-level directory and adding a line to it such as:
 
 ```
-LLVM_VER = 6.0.1
+LLVM_VER = 12.0.1
 ```
 
 Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to build against the latest
@@ -84,12 +84,6 @@ llc -o sys.o opt.bc
 cc -shared -o sys.so sys.o
 ```
 This system image can then be loaded by `julia` as usual.
-
-Alternatively, you can
-use `--output-jit-bc jit.bc` to obtain a trace of all IR passed to the JIT.
-This is useful for code that cannot be run as part of the sysimg generation
-process (e.g. because it creates unserializable state). However, the resulting
-`jit.bc` does not include sysimage data, and can thus not be used as such.
 
 It is also possible to dump an LLVM IR module for just one Julia function,
 using:

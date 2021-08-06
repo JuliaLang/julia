@@ -159,6 +159,9 @@ similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T
 # The method below is moved to SparseArrays for now
 # similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
+copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
+    (copyto!(dest.dv, src.dv); copyto!(dest.ev, src.ev); dest)
+
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
@@ -168,7 +171,9 @@ transpose(S::SymTridiagonal) = S
 adjoint(S::SymTridiagonal{<:Real}) = S
 adjoint(S::SymTridiagonal) = Adjoint(S)
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
-Base.copy(S::Transpose{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(transpose.(x)), (S.parent.dv, S.parent.ev))...)
+
+ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(@view S.ev[begin:length(S.dv) - 1])
+issymmetric(S::SymTridiagonal) = true
 
 function diag(M::SymTridiagonal{<:Number}, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
@@ -206,8 +211,9 @@ end
 -(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv-B.dv, A.ev-B.ev)
 -(A::SymTridiagonal) = SymTridiagonal(-A.dv, -A.ev)
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
-*(B::Number, A::SymTridiagonal) = A*B
+*(B::Number, A::SymTridiagonal) = SymTridiagonal(B*A.dv, B*A.ev)
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
+\(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
 @inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
@@ -607,7 +613,10 @@ transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
 Base.copy(aS::Adjoint{<:Any,<:Tridiagonal}) = (S = aS.parent; Tridiagonal(map(x -> copy.(adjoint.(x)), (S.du, S.d, S.dl))...))
 Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(x -> copy.(transpose.(x)), (S.du, S.d, S.dl))...))
 
-\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ copy(B)
+ishermitian(S::Tridiagonal) = isreal(S.d) && S.du == adjoint.(S.dl)
+issymmetric(S::Tridiagonal) = S.du == S.dl
+
+\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ B
 
 function diag(M::Tridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
@@ -733,8 +742,9 @@ end
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du-B.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
-*(B::Number, A::Tridiagonal) = A*B
+*(B::Number, A::Tridiagonal) = Tridiagonal(B*A.dl, B*A.d, B*A.du)
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
+\(B::Number, A::Tridiagonal) = Tridiagonal(B\A.dl, B\A.d, B\A.du)
 
 ==(A::Tridiagonal, B::Tridiagonal) = (A.dl==B.dl) && (A.d==B.d) && (A.du==B.du)
 ==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)
@@ -745,7 +755,7 @@ det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
 Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function SymTridiagonal{T}(M::Tridiagonal) where T
-    if M.dl == M.du
+    if issymmetric(M)
         return SymTridiagonal{T}(convert(AbstractVector{T},M.d), convert(AbstractVector{T},M.dl))
     else
         throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))

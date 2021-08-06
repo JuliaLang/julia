@@ -2,10 +2,6 @@
 #define AppName "Julia"
 #endif
 
-#ifndef AppId
-#define AppId "{{054B4BC6-BD30-45C8-A623-8F5BA6EBD55D}"
-#endif
-
 #ifndef DirName
 #define DirName AppName + "-" + AppVersion
 #endif
@@ -14,6 +10,9 @@
 #define AppMainExeName "bin\julia.exe"
 #define CurrentYear GetDateTimeString('yyyy', '', '')
 
+#ifndef AppId
+#define AppId DirName
+#endif
 
 
 [LangOptions]
@@ -61,7 +60,7 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=Julia Language
 AppPublisherURL=https://julialang.org
-AppCopyright=Copyright 2009-{#CurrentYear}; Julia Langage
+AppCopyright=Copyright 2009-{#CurrentYear}; Julia Language
 VersionInfoDescription=Julia Installer
 PrivilegesRequiredOverridesAllowed=commandline
 WizardStyle=modern
@@ -104,7 +103,8 @@ Name: "addtopath"; Description: "Add {#AppName} to PATH"; GroupDescription: "{cm
 
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; Excludes: "{#AppMainExeName}"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs;
+Source: "{#SourceDir}\{#AppMainExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion sign;
 
 
 [Icons]

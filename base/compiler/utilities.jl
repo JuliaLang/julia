@@ -4,7 +4,7 @@
 # generic #
 ###########
 
-if !isdefined(@__MODULE__, Symbol("@timeit"))
+if !@isdefined(var"@timeit")
     # This is designed to allow inserting timers when loading a second copy
     # of inference for performing performance experiments.
     macro timeit(args...)
@@ -104,14 +104,6 @@ function invoke_api(li::CodeInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)
 end
 
-function has_opaque_closure(c::CodeInfo)
-    for i = 1:length(c.code)
-        stmt = c.code[i]
-        (isa(stmt, Expr) && stmt.head === :new_opaque_closure) && return true
-    end
-    return false
-end
-
 function get_staged(mi::MethodInstance)
     may_invoke_generator(mi) || return nothing
     try
@@ -142,6 +134,7 @@ function retrieve_code_info(linfo::MethodInstance)
         c.parent = linfo
         return c
     end
+    return nothing
 end
 
 # Get at the nonfunction_mt, which happens to be the mt of SimpleVector
@@ -228,7 +221,7 @@ const empty_slottypes = Any[]
 function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]]
+            return sptypes[x.args[1]::Int]
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
@@ -275,6 +268,8 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
             find_ssavalue_uses(e, uses, line)
+        elseif isa(e, PhiNode)
+            find_ssavalue_uses(e, uses, line)
         end
     end
     return uses
@@ -291,6 +286,14 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
             push!(uses[a.id], line)
         elseif isa(a, Expr)
             find_ssavalue_uses(a, uses, line)
+        end
+    end
+end
+
+function find_ssavalue_uses(e::PhiNode, uses::Vector{BitSet}, line::Int)
+    for val in e.values
+        if isa(val, SSAValue)
+            push!(uses[val.id], line)
         end
     end
 end

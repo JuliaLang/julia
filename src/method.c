@@ -18,8 +18,27 @@ extern "C" {
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
-jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
+
+static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
+{
+    if (jl_is_svec(rt))
+        jl_errorf("%s: missing return type", where);
+    JL_TYPECHKS(where, type, rt);
+    if (!jl_type_mappable_to_c(rt))
+        jl_errorf("%s: return type doesn't correspond to a C type", where);
+    JL_TYPECHKS(where, simplevector, at);
+    int i, l = jl_svec_len(at);
+    for (i = 0; i < l; i++) {
+        jl_value_t *ati = jl_svecref(at, i);
+        if (jl_is_vararg(ati))
+            jl_errorf("%s: Vararg not allowed for argument list", where);
+        JL_TYPECHKS(where, type, ati);
+        if (!jl_type_mappable_to_c(ati))
+            jl_errorf("%s: argument %d type doesn't correspond to a C type", where, i + 1);
+    }
+}
 
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
@@ -46,7 +65,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             intptr_t label = jl_gotoifnot_label(expr);
             JL_GC_PUSH1(&cond);
             expr = jl_new_struct_uninit(jl_gotoifnot_type);
-            set_nth_field(jl_gotoifnot_type, expr, 0, cond);
+            set_nth_field(jl_gotoifnot_type, expr, 0, cond, 0);
             jl_gotoifnot_label(expr) = label;
             JL_GC_POP();
         }
@@ -71,16 +90,17 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         else {
             size_t i = 0, nargs = jl_array_len(e->args);
             if (e->head == opaque_closure_method_sym) {
-                if (nargs != 3) {
+                if (nargs != 4) {
                     jl_error("opaque_closure_method: invalid syntax");
                 }
-                jl_value_t *nargs = jl_exprarg(e, 0);
-                jl_value_t *functionloc = jl_exprarg(e, 1);
-                jl_value_t *ci = jl_exprarg(e, 2);
+                jl_value_t *name = jl_exprarg(e, 0);
+                jl_value_t *nargs = jl_exprarg(e, 1);
+                jl_value_t *functionloc = jl_exprarg(e, 2);
+                jl_value_t *ci = jl_exprarg(e, 3);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
                 }
-                return (jl_value_t*)jl_make_opaque_closure_method(module, nargs, functionloc, (jl_code_info_t*)ci);
+                return (jl_value_t*)jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci);
             }
             if (e->head == cfunction_sym) {
                 JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
@@ -119,10 +139,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     }
                     jl_exprargset(e, 3, at);
                 }
-                if (jl_is_svec(rt))
-                    jl_error("cfunction: missing return type");
-                JL_TYPECHK(cfunction method definition, type, rt);
-                JL_TYPECHK(cfunction method definition, simplevector, at);
+                check_c_types("cfunction method definition", rt, at);
                 JL_TYPECHK(cfunction method definition, quotenode, jl_exprarg(e, 4));
                 JL_TYPECHK(cfunction method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
                 return expr;
@@ -155,10 +172,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     }
                     jl_exprargset(e, 2, at);
                 }
-                if (jl_is_svec(rt))
-                    jl_error("ccall: missing return type");
-                JL_TYPECHK(ccall method definition, type, rt);
-                JL_TYPECHK(ccall method definition, simplevector, at);
+                check_c_types("ccall method definition", rt, at);
                 JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
                 JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
                 JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
@@ -326,9 +340,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
 
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_method_instance_t *li =
-        (jl_method_instance_t*)jl_gc_alloc(ptls, sizeof(jl_method_instance_t),
+        (jl_method_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_instance_t),
                                            jl_method_instance_type);
     li->def.value = NULL;
     li->specTypes = NULL;
@@ -343,9 +357,9 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_code_info_t *src =
-        (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
+        (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     src->code = NULL;
     src->codelocs = NULL;
@@ -453,15 +467,15 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     jl_code_info_t *func = NULL;
     jl_value_t *ex = NULL;
     JL_GC_PUSH2(&ex, &func);
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     int last_lineno = jl_lineno;
-    int last_in = ptls->in_pure_callback;
-    size_t last_age = jl_get_ptls_states()->world_age;
+    int last_in = ct->ptls->in_pure_callback;
+    size_t last_age = ct->world_age;
 
     JL_TRY {
-        ptls->in_pure_callback = 1;
+        ct->ptls->in_pure_callback = 1;
         // and the right world
-        ptls->world_age = def->primary_world;
+        ct->world_age = def->primary_world;
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
@@ -478,7 +492,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym) {
-                    ptls->in_pure_callback = 0;
+                    ct->ptls->in_pure_callback = 0;
                     jl_toplevel_eval(def->module, (jl_value_t*)func);
                 }
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
@@ -491,17 +505,18 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == new_opaque_closure_sym) {
                 linfo->uninferred = jl_copy_ast((jl_value_t*)func);
+                jl_gc_wb(linfo, linfo->uninferred);
                 break;
             }
         }
 
-        ptls->in_pure_callback = last_in;
+        ct->ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
-        ptls->world_age = last_age;
+        ct->world_age = last_age;
         jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
     }
     JL_CATCH {
-        ptls->in_pure_callback = last_in;
+        ct->ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         jl_rethrow();
     }
@@ -511,9 +526,9 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_code_info_t *newsrc =
-        (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
+        (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     *newsrc = *src;
     return newsrc;
@@ -640,9 +655,9 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_method_t *m =
-        (jl_method_t*)jl_gc_alloc(ptls, sizeof(jl_method_t), jl_method_type);
+        (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type);
     m->specializations = jl_emptysvec;
     m->speckeyset = (jl_array_t*)jl_an_empty_vec_any;
     m->sig = NULL;
@@ -650,6 +665,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->roots = NULL;
     m->ccallable = NULL;
     m->module = module;
+    m->external_mt = NULL;
     m->source = NULL;
     m->unspecialized = NULL;
     m->generator = NULL;
@@ -660,6 +676,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->nospecialize = module->nospecialize;
     m->nkw = 0;
     m->invokes = NULL;
+    m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;
     m->primary_world = 1;
@@ -672,7 +689,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 
 // method definition ----------------------------------------------------------
 
-jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
 {
     jl_method_t *m = jl_new_method_uninit(module);
@@ -682,7 +699,12 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module,
     // Unused for opaque closures. va-ness is determined on construction
     m->isva = 0;
     m->is_for_opaque_closure = 1;
-    m->name = jl_symbol("opaque closure");
+    if (name == jl_nothing) {
+        m->name = jl_symbol("opaque closure");
+    } else {
+        assert(jl_is_symbol(name));
+        m->name = (jl_sym_t*)name;
+    }
     m->nargs = jl_unbox_long(nargs) + 1;
     assert(jl_is_linenode(functionloc));
     jl_value_t *file = jl_linenode_file(functionloc);
@@ -756,6 +778,11 @@ JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGA
     return first_methtable(argtypes, 0);
 }
 
+JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    return method->external_mt ? (jl_methtable_t*)method->external_mt : jl_method_table_for(method->sig);
+}
+
 // get the MethodTable implied by a single given type, or `nothing`
 JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
@@ -765,6 +792,7 @@ JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAG
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
 JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
+                                        jl_methtable_t *mt,
                                         jl_code_info_t *f,
                                         jl_module_t *module)
 {
@@ -793,7 +821,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         argtype = jl_new_struct(jl_unionall_type, tv, argtype);
     }
 
-    jl_methtable_t *mt = jl_method_table_for(argtype);
+    jl_methtable_t *external_mt = mt;
+    if (!mt)
+        mt = jl_method_table_for(argtype);
     if ((jl_value_t*)mt == jl_nothing)
         jl_error("Method dispatch is unimplemented currently for this method signature");
     if (mt->frozen)
@@ -822,6 +852,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         f = jl_new_code_info_from_ir((jl_expr_t*)f);
     }
     m = jl_new_method_uninit(module);
+    m->external_mt = (jl_value_t*)external_mt;
+    if (external_mt)
+        jl_gc_wb(m, external_mt);
     m->sig = argtype;
     m->name = name;
     m->isva = isva;

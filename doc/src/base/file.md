@@ -8,6 +8,7 @@ Base.Filesystem.readdir
 Base.Filesystem.walkdir
 Base.Filesystem.mkdir
 Base.Filesystem.mkpath
+Base.Filesystem.hardlink
 Base.Filesystem.symlink
 Base.Filesystem.readlink
 Base.Filesystem.chmod

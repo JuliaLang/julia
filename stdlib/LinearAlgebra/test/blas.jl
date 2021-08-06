@@ -514,6 +514,11 @@ end
         BLAS.axpby!(elty(2), x, elty(3), y)
         @test y == WrappedArray(elty[19, 50, 30, 56])
         @test BLAS.iamax(x) == 2
+
+        M = fill(elty(1.0), 3, 3)
+        BLAS.scal!(elty(2), view(M,:,2))
+        BLAS.scal!(elty(3), view(M,3,:))
+        @test M == elty[1. 2. 1.; 1. 2. 1.; 3. 6. 3.]
     # Level 2
         A = WrappedArray(elty[1 2; 3 4])
         x = WrappedArray(elty[1, 2])
@@ -598,23 +603,10 @@ end
     @test BLAS.get_num_threads() === 1
     BLAS.set_num_threads(default)
     @test BLAS.get_num_threads() === default
-
-    @test_logs (:warn,) match_mode=:any BLAS._set_num_threads(1, _blas=:unknown)
-    if BLAS.guess_vendor() !== :osxblas
-        # test osxblas which is not covered by CI
-        withenv("VECLIB_MAXIMUM_THREADS" => nothing) do
-            @test @test_logs(
-                (:warn,),
-                (:warn,),
-                match_mode=:any,
-                BLAS._get_num_threads(_blas=:osxblas),
-            ) === nothing
-            @test_logs BLAS._set_num_threads(1, _blas=:osxblas)
-            @test @test_logs(BLAS._get_num_threads(_blas=:osxblas)) === 1
-            @test_logs BLAS._set_num_threads(2, _blas=:osxblas)
-            @test @test_logs(BLAS._get_num_threads(_blas=:osxblas)) === 2
-        end
-    end
 end
+
+# https://github.com/JuliaLang/julia/pull/39845
+@test LinearAlgebra.BLAS.libblas == "libblastrampoline"
+@test LinearAlgebra.BLAS.liblapack == "libblastrampoline"
 
 end # module TestBLAS

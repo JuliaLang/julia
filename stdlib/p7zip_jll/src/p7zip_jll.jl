@@ -77,7 +77,7 @@ function init_p7zip_path()
             return
         end
     end
-    global p7zip_path = Sys.which(p7zip_exe)
+    global p7zip_path = something(Sys.which(p7zip_exe), p7zip_exe)
 end
 
 function __init__()

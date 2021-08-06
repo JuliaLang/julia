@@ -14,6 +14,8 @@ typemax(::Type{Bool}) = true
 Boolean not. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if `x` is `missing`.
 
+See also [`~`](@ref) for bitwise not.
+
 # Examples
 ```jldoctest
 julia> !true
@@ -69,6 +71,74 @@ julia> [true; true; false] .⊻ [true; false; false]
 ```
 """
 xor(x::Bool, y::Bool) = (x != y)
+
+"""
+    nand(x, y)
+    ⊼(x, y)
+
+Bitwise nand (not and) of `x` and `y`. Implements
+[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one of the arguments is `missing`.
+
+The infix operation `a ⊼ b` is a synonym for `nand(a,b)`, and
+`⊼` can be typed by tab-completing `\\nand` or `\\barwedge` in the Julia REPL.
+
+# Examples
+```jldoctest
+julia> nand(true, false)
+true
+
+julia> nand(true, true)
+false
+
+julia> nand(true, missing)
+missing
+
+julia> false ⊼ false
+true
+
+julia> [true; true; false] .⊼ [true; false; false]
+3-element BitVector:
+ 0
+ 1
+ 1
+```
+"""
+nand(x...) = ~(&)(x...)
+
+"""
+    nor(x, y)
+    ⊽(x, y)
+
+Bitwise nor (not or) of `x` and `y`. Implements
+[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one of the arguments is `missing`.
+
+The infix operation `a ⊽ b` is a synonym for `nor(a,b)`, and
+`⊽` can be typed by tab-completing `\\nor` or `\\veebar` in the Julia REPL.
+
+# Examples
+```jldoctest
+julia> nor(true, false)
+false
+
+julia> nor(true, true)
+false
+
+julia> nor(true, missing)
+false
+
+julia> false ⊽ false
+true
+
+julia> [true; true; false] .⊽ [true; false; false]
+3-element BitVector:
+ 0
+ 0
+ 1
+```
+"""
+nor(x...) = ~(|)(x...)
 
 >>(x::Bool, c::UInt) = Int(x) >> c
 <<(x::Bool, c::UInt) = Int(x) << c

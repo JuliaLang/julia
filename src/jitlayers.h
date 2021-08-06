@@ -100,7 +100,8 @@ jl_compile_result_t jl_emit_codeinst(
 
 enum CompilationPolicy {
     Default = 0,
-    Extern = 1
+    Extern = 1,
+    ImagingMode = 2
 };
 
 void jl_compile_workqueue(
@@ -143,11 +144,7 @@ typedef JITSymbol JL_SymbolInfo;
 using RTDyldObjHandleT = orc::VModuleKey;
 #endif
 
-#if JL_LLVM_VERSION >= 100000
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
-#else
-using CompilerResultT = std::unique_ptr<llvm::MemoryBuffer>;
-#endif
 
 class JuliaOJIT {
     struct CompilerT : public orc::IRCompileLayer::IRCompiler {

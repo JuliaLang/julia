@@ -125,7 +125,7 @@ Convert a `Ptr` to an object reference. Assumes the pointer refers to a valid he
 Julia object. If this is not the case, undefined behavior results, hence this function is
 considered "unsafe" and should be used with care.
 
-See also: [`pointer_from_objref`](@ref).
+See also [`pointer_from_objref`](@ref).
 """
 unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Cvoid},), x)
 
@@ -139,11 +139,11 @@ remains referenced for the whole time that the `Ptr` will be used.
 This function may not be called on immutable objects, since they do not have
 stable memory addresses.
 
-See also: [`unsafe_pointer_to_objref`](@ref).
+See also [`unsafe_pointer_to_objref`](@ref).
 """
 function pointer_from_objref(@nospecialize(x))
     @_inline_meta
-    typeof(x).mutable || error("pointer_from_objref cannot be used on immutable objects")
+    ismutable(x) || error("pointer_from_objref cannot be used on immutable objects")
     ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
 end
 

@@ -515,7 +515,7 @@ end
 @test length(Dates.Year(1):Dates.Year(1):Dates.Year(10)) == 10
 @test length(Dates.Year(10):Dates.Year(-1):Dates.Year(1)) == 10
 @test length(Dates.Year(10):Dates.Year(-2):Dates.Year(1)) == 5
-@test_throws OverflowError length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year))
+@test length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year)) == 0 # overflow
 @test_throws MethodError Dates.Date(0):Dates.DateTime(2000)
 @test_throws MethodError Dates.Date(0):Dates.Year(10)
 @test length(range(Dates.Date(2000), step=Dates.Day(1), length=366)) == 366

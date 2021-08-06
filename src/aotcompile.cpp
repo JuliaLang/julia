@@ -26,6 +26,7 @@
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
+#include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -47,9 +48,7 @@
 #include <llvm/MC/MCStreamer.h>
 #include <llvm/MC/MCAsmBackend.h>
 #include <llvm/MC/MCCodeEmitter.h>
-#if JL_LLVM_VERSION >= 100000
 #include <llvm/Support/CodeGen.h>
-#endif
 
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -61,12 +60,6 @@ using namespace llvm;
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
 }
-
-#if JL_LLVM_VERSION < 100000
-static const TargetMachine::CodeGenFileType CGFT_ObjectFile = TargetMachine::CGFT_ObjectFile;
-static const TargetMachine::CodeGenFileType CGFT_AssemblyFile = TargetMachine::CGFT_AssemblyFile;
-#endif
-
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -280,7 +273,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions. The `policy` flag switches between the default
-// mode `0` and the extern mode `1`.
+// mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
 void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _policy)
 {
@@ -298,6 +291,8 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
         compiler_start_time = jl_hrtime();
 
     CompilationPolicy policy = (CompilationPolicy) _policy;
+    if (policy == CompilationPolicy::ImagingMode)
+        imaging_mode = 1;
     std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
 
     // compile all methods for the current world and type-inference world
@@ -307,7 +302,7 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
         if (!params.world)
             continue;
         // Don't emit methods for the typeinf_world with extern policy
-        if (policy == CompilationPolicy::Extern && params.world == jl_typeinf_world)
+        if (policy != CompilationPolicy::Default && params.world == jl_typeinf_world)
             continue;
         size_t i, l;
         for (i = 0, l = jl_array_len(methods); i < l; i++) {
@@ -422,6 +417,8 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     data->M = std::move(clone);
     if (jl_measure_compile_time[tid])
         jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+    if (policy == CompilationPolicy::ImagingMode)
+        imaging_mode = 0;
     JL_UNLOCK(&codegen_lock); // Might GC
     return (void*)data;
 }
@@ -620,11 +617,20 @@ void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 }
 
 
+
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
                            bool lower_intrinsics, bool dump_native)
 {
+    // Note: LLVM 12 disabled the hoisting of common instruction
+    //       before loop vectorization (https://reviews.llvm.org/D84108).
+    //
+    // TODO: CommonInstruction hoisting/sinking enables AllocOpt
+    //       to merge allocations and sometimes eliminate them,
+    //       since AllocOpt does not handle PhiNodes.
+    //       Enable this instruction hoisting because of this and Union benchmarks.
+    auto simplifyCFGOptions = SimplifyCFGOptions().hoistCommonInsts(true);
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
     PM->add(createVerifierPass());
@@ -632,7 +638,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
     PM->add(createConstantMergePass());
     if (opt_level < 2) {
-        PM->add(createCFGSimplificationPass());
+        PM->add(createCFGSimplificationPass(simplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
             PM->add(createInstructionCombiningPass());
@@ -658,13 +664,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native)
             PM->add(createMultiVersioningPass());
-#if defined(JL_ASAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
-#if defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_MSAN_ENABLED_)
         PM->add(createMemorySanitizerPass(true));
 #endif
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
         PM->add(createThreadSanitizerLegacyPassPass());
 #endif
         return;
@@ -676,7 +682,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBasicAAWrapperPass());
     }
 
-    PM->add(createCFGSimplificationPass());
+    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
     PM->add(createDeadCodeEliminationPass());
     PM->add(createSROAPass());
 
@@ -690,12 +696,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass());
+    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
     PM->add(createJumpThreadingPass());
+    PM->add(createCorrelatedValuePropagationPass());
 
     PM->add(createReassociatePass());
 
@@ -747,6 +754,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // loops over Union-typed arrays to vectorize.
     PM->add(createInstructionCombiningPass());
     PM->add(createJumpThreadingPass());
+    PM->add(createCorrelatedValuePropagationPass());
     PM->add(createDeadStoreEliminationPass());
 
     // More dead allocation (store) deletion before loop optimization
@@ -755,12 +763,21 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass());
+    PM->add(createCFGSimplificationPass()); // See note above, don't hoist instructions before LV
     PM->add(createLoopDeletionPass());
     PM->add(createInstructionCombiningPass());
     PM->add(createLoopVectorizePass());
     PM->add(createLoopLoadEliminationPass());
-    PM->add(createCFGSimplificationPass());
+    // Cleanup after LV pass
+    PM->add(createInstructionCombiningPass());
+    PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
+        SimplifyCFGOptions()
+            .forwardSwitchCondToPhi(true)
+            .convertSwitchToLookupTable(true)
+            .needCanonicalLoops(false)
+            .hoistCommonInsts(true)
+            // .sinkCommonInsts(true) // FIXME: Causes assertion in llvm-late-lowering
+    ));
     PM->add(createSLPVectorizerPass());
     // might need this after LLVM 11:
     //PM->add(createVectorCombinePass());
@@ -796,13 +813,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
-#if defined(JL_ASAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_)
     PM->add(createAddressSanitizerFunctionPass());
 #endif
-#if defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_MSAN_ENABLED_)
     PM->add(createMemorySanitizerPass(true));
 #endif
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
     PM->add(createThreadSanitizerLegacyPassPass());
 #endif
 }
@@ -942,23 +959,14 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
     TargetPassConfig *PassConfig = TM->createPassConfig(PM);
     PassConfig->setDisableVerify(false);
     PM.add(PassConfig);
-#if JL_LLVM_VERSION >= 100000
     MachineModuleInfoWrapperPass *MMIWP =
         new MachineModuleInfoWrapperPass(TM);
     PM.add(MMIWP);
-#else
-    MachineModuleInfo *MMI = new MachineModuleInfo(TM);
-    PM.add(MMI);
-#endif
     if (PassConfig->addISelPasses())
         return NULL;
     PassConfig->addMachinePasses();
     PassConfig->setInitialized();
-#if JL_LLVM_VERSION >= 100000
     return &MMIWP->getMMI().getContext();
-#else
-    return &MMI->getContext();
-#endif
 }
 
 void jl_strip_llvm_debug(Module *m);
@@ -999,11 +1007,7 @@ jl_value_t *jl_dump_llvm_asm(void *F, const char* asm_variant, const char *debug
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
-#if JL_LLVM_VERSION >= 100000
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
-#else
-            auto FOut = llvm::make_unique<formatted_raw_ostream>(asmfile);
-#endif
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
                 *Context, std::move(FOut), true,
                 true, InstPrinter,

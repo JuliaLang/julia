@@ -264,8 +264,6 @@ int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt
     return success;
 }
 
-bool jl_type_mappable_to_c(jl_value_t *ty);
-
 // declare a C-callable entry point; called during code loading from the toplevel
 extern "C" JL_DLLEXPORT
 void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
@@ -292,7 +290,7 @@ void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
     size_t i, nargs = jl_nparams(sigt);
     for (i = 1; i < nargs; i++) {
         jl_value_t *ati = jl_tparam(sigt, i);
-        if (!jl_is_concrete_type(ati) || jl_is_kind(ati))
+        if (!jl_is_concrete_type(ati) || jl_is_kind(ati) || !jl_type_mappable_to_c(ati))
             jl_error("@ccallable: argument types must be concrete");
     }
 
@@ -409,14 +407,14 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
 // get a native disassembly for a compiled method
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
-        int raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo)
+        int raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)codeinst->invoke;
         if (getwrapper)
-            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo);
+            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
         uintptr_t specfptr = (uintptr_t)codeinst->specptr.fptr;
         if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
@@ -455,7 +453,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
             JL_UNLOCK(&codegen_lock);
         }
         if (specfptr != 0)
-            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo);
+            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
     }
 
     // whatever, that didn't work - use the assembler output instead
@@ -555,6 +553,11 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
         llvm_unreachable("Target does not support MC emission.");
 }
 
+static auto countBasicBlocks(const Function &F)
+{
+    return std::distance(F.begin(), F.end());
+}
+
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
     uint64_t start_time = 0;
@@ -569,17 +572,10 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
             if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
                 continue;
             }
-            // Count number of Basic Blocks
-            int bbs = 0;
-            for (auto &B : F.getBasicBlockList()) {
-                std::ignore = B;
-                ++bbs;
-            }
-
             // Each function is printed as a YAML object with several attributes
             jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
             jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
         }
 
         start_time = jl_hrtime();
@@ -588,11 +584,13 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
     JL_TIMING(LLVM_OPT);
 
     int optlevel;
+    int optlevel_min;
     if (jl_generating_output()) {
         optlevel = 0;
     }
     else {
         optlevel = jl_options.opt_level;
+        optlevel_min = jl_options.opt_level_min;
         for (auto &F : M.functions()) {
             if (!F.getBasicBlockList().empty()) {
                 Attribute attr = F.getFnAttribute("julia-optimization-level");
@@ -604,6 +602,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
                 }
             }
         }
+        optlevel = std::max(optlevel, optlevel_min);
     }
     if (optlevel == 0)
         jit.PM0.run(M);
@@ -640,17 +639,9 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
             if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
                 continue;
             }
-
-            // Count number of Basic Blocks
-            int bbs = 0;
-            for (auto &B : F.getBasicBlockList()) {
-                std::ignore = B;
-                ++bbs;
-            }
-
             jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
             jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-            jl_printf(dump_llvm_opt_stream, "        basicblocks: %u\n", bbs);
+            jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
         }
     }
 
@@ -954,8 +945,7 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
             //    continue;
             //}
             else {
-                assert(dG->isDeclaration() || (dG->getInitializer() == sG->getInitializer() &&
-                            dG->isConstant() && sG->isConstant()));
+                assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
                 dG->replaceAllUsesWith(sG);
                 dG->eraseFromParent();
             }

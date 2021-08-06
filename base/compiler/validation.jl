@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Expr head => argument count bounds
-const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange}(
+const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :call => 1:typemax(Int),
     :invoke => 2:typemax(Int),
     :static_parameter => 1:1,
@@ -51,7 +51,7 @@ const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of meth
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 
 struct InvalidCodeError <: Exception
-    kind::AbstractString
+    kind::String
     meta::Any
 end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
@@ -180,10 +180,11 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     !is_top_level && nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
     nslotnames < nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
     if c.inferred
-        nssavaluetypes = length(c.ssavaluetypes)
+        nssavaluetypes = length(c.ssavaluetypes::Vector{Any})
         nssavaluetypes < nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes)))
     else
-        c.ssavaluetypes != nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, c.ssavaluetypes)))
+        ssavaluetypes = c.ssavaluetypes::Int
+        ssavaluetypes != nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, ssavaluetypes)))
     end
     return errors
 end
@@ -205,7 +206,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInsta
     else
         m = mi.def::Method
         mnargs = m.nargs
-        n_sig_params = length(Core.Compiler.unwrap_unionall(m.sig).parameters)
+        n_sig_params = length((unwrap_unionall(m.sig)::DataType).parameters)
         if (m.isva ? (n_sig_params < (mnargs - 1)) : (n_sig_params != mnargs))
             push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (m.isva, n_sig_params, mnargs)))
         end

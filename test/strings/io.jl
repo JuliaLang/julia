@@ -187,6 +187,38 @@ join(myio, "", "", 1)
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"N"))
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"m"))
 end
+
+@testset "sprint with context" begin
+    function f(io::IO)
+        println(io, "compact => ", get(io, :compact, false))
+        println(io, "limit   => ", get(io, :limit,   false))
+    end
+
+    str = sprint(f)
+    @test str == """
+        compact => false
+        limit   => false
+        """
+
+    str = sprint(f, context = :compact => true)
+    @test str == """
+        compact => true
+        limit   => false
+        """
+
+    str = sprint(f, context = (:compact => true, :limit => true))
+    @test str == """
+        compact => true
+        limit   => true
+        """
+
+    str = sprint(f, context = IOContext(stdout, :compact => true, :limit => true))
+    @test str == """
+        compact => true
+        limit   => true
+        """
+end
+
 @testset "#11659" begin
     # The indentation code was not correctly counting tab stops
     @test Base.indentation("      \t") == (8, true)

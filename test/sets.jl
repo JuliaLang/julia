@@ -756,3 +756,24 @@ Base.IteratorSize(::Type{<:OpenInterval}) = Base.SizeUnknown()
     @test 3 ∈ i
     @test issubset(3, i)
 end
+
+@testset "IdSet" begin
+    a = [1]
+    b = [2]
+    c = [3]
+    d = [4]
+    A = Base.IdSet{Vector{Int}}([a, b, c, d])
+    @test !isempty(A)
+    B = copy(A)
+    @test A ⊆ B
+    @test B ⊆ A
+    A = filter!(x->isodd(x[1]), A)
+    @test A ⊆ B
+    @test !(B ⊆ A)
+    @test !isempty(A)
+    a_ = pop!(A, a)
+    @test a_ === a
+    @test !isempty(A)
+    A = empty!(A)
+    @test isempty(A)
+end

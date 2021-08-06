@@ -43,7 +43,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
         return *pp;
     }
     else {
-        if (!jl_is_datatype(ety))
+        if (!is_valid_intrinsic_elptr(ety))
             jl_error("pointerref: invalid pointer");
         size_t nb = LLT_ALIGN(jl_datatype_size(ety), jl_datatype_align(ety));
         char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
@@ -56,23 +56,177 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 {
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
-    JL_TYPECHK(pointerref, long, align);
+    JL_TYPECHK(pointerset, long, align);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     if (ety == (jl_value_t*)jl_any_type) {
         jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
         *pp = x;
     }
     else {
-        if (!jl_is_datatype(ety))
+        if (!is_valid_intrinsic_elptr(ety))
             jl_error("pointerset: invalid pointer");
+        if (jl_typeof(x) != ety)
+            jl_type_error("pointerset", ety, x);
         size_t elsz = jl_datatype_size(ety);
         size_t nb = LLT_ALIGN(elsz, jl_datatype_align(ety));
         char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
-        if (jl_typeof(x) != ety)
-            jl_type_error("pointerset", ety, x);
         memcpy(pp, x, elsz);
     }
     return p;
+}
+
+JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
+{
+    JL_TYPECHK(atomic_pointerref, pointer, p);
+    JL_TYPECHK(atomic_pointerref, symbol, order)
+    (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 0);
+    jl_value_t *ety = jl_tparam0(jl_typeof(p));
+    char *pp = (char*)jl_unbox_long(p);
+    if (ety == (jl_value_t*)jl_any_type) {
+        return jl_atomic_load((jl_value_t**)pp);
+    }
+    else {
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointerref: invalid pointer");
+        size_t nb = jl_datatype_size(ety);
+        if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
+            jl_error("atomic_pointerref: invalid pointer for atomic operation");
+        return jl_atomic_new_bits(ety, pp);
+    }
+}
+
+JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *order)
+{
+    JL_TYPECHK(atomic_pointerset, pointer, p);
+    JL_TYPECHK(atomic_pointerset, symbol, order);
+    (void)jl_get_atomic_order_checked((jl_sym_t*)order, 0, 1);
+    jl_value_t *ety = jl_tparam0(jl_typeof(p));
+    char *pp = (char*)jl_unbox_long(p);
+    if (ety == (jl_value_t*)jl_any_type) {
+        jl_atomic_store((jl_value_t**)pp, x);
+    }
+    else {
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointerset: invalid pointer");
+        if (jl_typeof(x) != ety)
+            jl_type_error("atomic_pointerset", ety, x);
+        size_t nb = jl_datatype_size(ety);
+        if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
+            jl_error("atomic_pointerset: invalid pointer for atomic operation");
+        jl_atomic_store_bits(pp, x, nb);
+    }
+    return p;
+}
+
+JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order)
+{
+    JL_TYPECHK(atomic_pointerswap, pointer, p);
+    JL_TYPECHK(atomic_pointerswap, symbol, order);
+    (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
+    jl_value_t *ety = jl_tparam0(jl_typeof(p));
+    jl_value_t *y;
+    char *pp = (char*)jl_unbox_long(p);
+    if (ety == (jl_value_t*)jl_any_type) {
+        y = jl_atomic_exchange((jl_value_t**)pp, x);
+    }
+    else {
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointerswap: invalid pointer");
+        if (jl_typeof(x) != ety)
+            jl_type_error("atomic_pointerswap", ety, x);
+        size_t nb = jl_datatype_size(ety);
+        if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
+            jl_error("atomic_pointerswap: invalid pointer for atomic operation");
+        y = jl_atomic_swap_bits(ety, pp, x, nb);
+    }
+    return y;
+}
+
+JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order_sym)
+{
+    // n.b. we use seq_cst always here, but need to verify the order sym
+    // against the weaker load-only that happens first
+    if (order_sym == (jl_value_t*)acquire_release_sym)
+        order_sym = (jl_value_t*)acquire_sym;
+    jl_value_t *expected = jl_atomic_pointerref(p, order_sym);
+    jl_value_t *ety = jl_tparam0(jl_typeof(p));
+    char *pp = (char*)jl_unbox_long(p);
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2);
+    args[0] = expected;
+    while (1) {
+        args[1] = x;
+        jl_value_t *y = jl_apply_generic(f, args, 2);
+        args[1] = y;
+        if (ety == (jl_value_t*)jl_any_type) {
+            if (jl_atomic_cmpswap((jl_value_t**)pp, &expected, y))
+                break;
+        }
+        else {
+            //if (!is_valid_intrinsic_elptr(ety)) // handled by jl_atomic_pointerref earlier
+            //    jl_error("atomic_pointermodify: invalid pointer");
+            if (jl_typeof(y) != ety)
+                jl_type_error("atomic_pointermodify", ety, y);
+            size_t nb = jl_datatype_size(ety);
+            if (jl_atomic_bool_cmpswap_bits(pp, expected, y, nb))
+                break;
+            expected = jl_atomic_new_bits(ety, pp);
+        }
+        args[0] = expected;
+        jl_gc_safepoint();
+    }
+    // args[0] == expected (old); args[1] == y (new)
+    args[0] = jl_f_tuple(NULL, args, 2);
+    JL_GC_POP();
+    return args[0];
+}
+
+JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *expected, jl_value_t *x, jl_value_t *success_order_sym, jl_value_t *failure_order_sym)
+{
+    JL_TYPECHK(atomic_pointerreplace, pointer, p);
+    JL_TYPECHK(atomic_pointerreplace, symbol, success_order_sym);
+    JL_TYPECHK(atomic_pointerreplace, symbol, failure_order_sym);
+    enum jl_memory_order success_order = jl_get_atomic_order_checked((jl_sym_t*)success_order_sym, 1, 1);
+    enum jl_memory_order failure_order = jl_get_atomic_order_checked((jl_sym_t*)failure_order_sym, 1, 0);
+    if (failure_order > success_order)
+        jl_atomic_error("atomic_pointerreplace: invalid atomic ordering");
+    // TODO: filter other invalid orderings
+    jl_value_t *ety = jl_tparam0(jl_typeof(p));
+    char *pp = (char*)jl_unbox_long(p);
+    if (ety == (jl_value_t*)jl_any_type) {
+        jl_value_t **result;
+        JL_GC_PUSHARGS(result, 2);
+        result[0] = expected;
+        int success;
+        while (1) {
+            success = jl_atomic_cmpswap((jl_value_t**)pp, &result[0], x);
+            if (success || !jl_egal(result[0], expected))
+                break;
+        }
+        result[1] = success ? jl_true : jl_false;
+        result[0] = jl_f_tuple(NULL, result, 2);
+        JL_GC_POP();
+        return result[0];
+    }
+    else {
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointerreplace: invalid pointer");
+        if (jl_typeof(x) != ety)
+            jl_type_error("atomic_pointerreplace", ety, x);
+        size_t nb = jl_datatype_size(ety);
+        if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
+            jl_error("atomic_pointerreplace: invalid pointer for atomic operation");
+        return jl_atomic_cmpswap_bits((jl_datatype_t*)ety, pp, expected, x, nb);
+    }
+}
+
+JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
+{
+    JL_TYPECHK(fence, symbol, order_sym);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 0, 0);
+    if (order > jl_memory_order_monotonic)
+        jl_fence();
+    return jl_nothing;
 }
 
 JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
@@ -414,7 +568,7 @@ static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsig
 
 static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     intrinsic_u1_t op = select_intrinsic_u1(osize2, (const intrinsic_u1_t*)voidlist);
     uint64_t cnt = op(osize * host_char_bit, pa);
     // TODO: the following assume little-endian
@@ -422,7 +576,7 @@ static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsign
     if (osize <= sizeof(cnt)) {
         return jl_new_bits(ty, &cnt);
     }
-    jl_value_t *newv = jl_gc_alloc(ptls, osize, ty);
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, osize, ty);
     // perform zext, if needed
     memset((char*)jl_data_ptr(newv) + sizeof(cnt), 0, osize - sizeof(cnt));
     memcpy(jl_data_ptr(newv), &cnt, sizeof(cnt));
@@ -478,13 +632,13 @@ typedef void (fintrinsic_op1)(unsigned, void*, void*);
 
 static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name, fintrinsic_op1 *halfop, fintrinsic_op1 *floatop, fintrinsic_op1 *doubleop)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     if (!jl_is_primitivetype(jl_typeof(a)))
         jl_errorf("%s: value is not a primitive type", name);
     if (!jl_is_primitivetype(ty))
         jl_errorf("%s: type is not a primitive type", name);
     unsigned sz2 = jl_datatype_size(ty);
-    jl_value_t *newv = jl_gc_alloc(ptls, sz2, ty);
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz2, ty);
     void *pa = jl_data_ptr(a), *pr = jl_data_ptr(newv);
     unsigned sz = jl_datatype_size(jl_typeof(a));
     switch (sz) {
@@ -644,9 +798,9 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     params[0] = ty;
     params[1] = (jl_value_t*)jl_bool_type;
     jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
-    JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALAWYS_LEAFTYPE)
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)tuptyp)->size, tuptyp);
+    JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, ((jl_datatype_t*)tuptyp)->size, tuptyp);
 
     intrinsic_checked_t op = select_intrinsic_checked(sz2, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
@@ -673,14 +827,14 @@ static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa
     bi_intrinsic_ctype(OP, name, 64, double) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
-    jl_ptls_t ptls = jl_get_ptls_states();\
+    jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty) \
         jl_error(#name ": types of a and b must match"); \
     if (!jl_is_primitivetype(ty)) \
         jl_error(#name ": values are not primitive types"); \
     int sz = jl_datatype_size(ty); \
-    jl_value_t *newv = jl_gc_alloc(ptls, sz, ty);          \
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pr = jl_data_ptr(newv); \
     switch (sz) { \
     /* choose the right size c-type operation */ \
@@ -736,14 +890,14 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     ter_intrinsic_ctype(OP, name, 64, double) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) \
 { \
-    jl_ptls_t ptls = jl_get_ptls_states();\
+    jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty || jl_typeof(c) != ty) \
         jl_error(#name ": types of a, b, and c must match"); \
     if (!jl_is_primitivetype(ty)) \
         jl_error(#name ": values are not primitive types"); \
-    int sz = jl_datatype_size(ty);                                      \
-    jl_value_t *newv = jl_gc_alloc(ptls, sz, ty);                       \
+    int sz = jl_datatype_size(ty); \
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pc = jl_data_ptr(c), *pr = jl_data_ptr(newv); \
     switch (sz) { \
     /* choose the right size c-type operation */ \
@@ -834,33 +988,11 @@ fpiseq_n(double, 64)
 #define fpiseq(a,b) \
     sizeof(a) == sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
 
-#define fpislt_n(c_type, nbits)                                         \
-    static inline int fpislt##nbits(c_type a, c_type b) JL_NOTSAFEPOINT \
-    {                                                                   \
-        bits##nbits ua, ub;                                             \
-        ua.f = a;                                                       \
-        ub.f = b;                                                       \
-        if (!isnan(a) && isnan(b))                                      \
-            return 1;                                                   \
-        if (isnan(a) || isnan(b))                                       \
-            return 0;                                                   \
-        if (ua.d >= 0 && ua.d < ub.d)                                   \
-            return 1;                                                   \
-        if (ua.d < 0 && ua.ud > ub.ud)                                  \
-            return 1;                                                   \
-        return 0;                                                       \
-    }
-fpislt_n(float, 32)
-fpislt_n(double, 64)
-#define fpislt(a, b) \
-    sizeof(a) == sizeof(float) ? fpislt32(a, b) : fpislt64(a, b)
-
 bool_fintrinsic(eq,eq_float)
 bool_fintrinsic(ne,ne_float)
 bool_fintrinsic(lt,lt_float)
 bool_fintrinsic(le,le_float)
 bool_fintrinsic(fpiseq,fpiseq)
-bool_fintrinsic(fpislt,fpislt)
 
 // bitwise operators
 #define and_op(a,b) a & b

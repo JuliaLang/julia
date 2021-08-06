@@ -157,7 +157,7 @@ This is why we don't use the `Cstring` type here: as the array is uninitialized,
 NUL bytes. Converting to a `Cstring` as part of the [`ccall`](@ref) checks for contained NUL bytes
 and could therefore throw a conversion error.
 
-Deferencing `pointer(hostname)` with `unsafe_string` is an unsafe operation as it requires access to
+Dereferencing `pointer(hostname)` with `unsafe_string` is an unsafe operation as it requires access to
 the memory allocated for `hostname` that may have been in the meanwhile garbage collected. The macro
 [`GC.@preserve`](@ref) prevents this from happening and therefore accessing an invalid memory location.
 
@@ -657,7 +657,7 @@ For translating a C argument list to Julia:
       * `Ref{Any}`
       * argument list must be a valid Julia object (or `C_NULL`)
       * cannot be used for an output parameter, unless the user is able to
-        manage to separate arrange for the object to be GC-preserved
+        separately arrange for the object to be GC-preserved
   * `T*`
 
       * `Ref{T}`, where `T` is the Julia type corresponding to `T`
@@ -928,7 +928,7 @@ macro dlsym(func, lib)
         let zlocal = $z[]
             if zlocal == C_NULL
                 zlocal = dlsym($(esc(lib))::Ptr{Cvoid}, $(esc(func)))::Ptr{Cvoid}
-                $z[] = $zlocal
+                $z[] = zlocal
             end
             zlocal
         end

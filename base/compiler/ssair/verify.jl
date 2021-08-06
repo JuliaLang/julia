@@ -36,7 +36,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             end
         end
     elseif isa(op, GlobalRef)
-        if !isdefined(op.mod, op.name)
+        if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
             @verify_error "Unbound GlobalRef not allowed in value position"
             error("")
         end
@@ -111,7 +111,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
             end
         elseif isexpr(terminator, :enter)
             @label enter_check
-            if length(block.succs) != 2 || (block.succs != [terminator.args[1], idx+1] && block.succs != [idx+1, terminator.args[1]])
+            if length(block.succs) != 2 || (block.succs != Int[terminator.args[1], idx+1] && block.succs != Int[idx+1, terminator.args[1]])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error("")
             end

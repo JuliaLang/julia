@@ -5,10 +5,10 @@
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 
-#define keyhash(k) jl_object_id(k)
+#define keyhash(k) jl_object_id_(jl_typeof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val);
+static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val);
 
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
 {
@@ -18,7 +18,7 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     jl_array_t *newa = jl_alloc_vec_any(newsz);
     // keep the original array in the original slot since we need `ol`
     // to be valid in the loop below.
-    JL_GC_PUSH1(&newa);
+    JL_GC_PUSH2(&newa, &a);
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
             jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
@@ -30,9 +30,9 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     return newa;
 }
 
-static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
+static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
 {
-    // pa points to a **rooted** gc frame slot
+    // pa points to a **un**rooted address
     uint_t hv;
     jl_array_t *a = *pa;
     size_t orig, index, iter, empty_slot;
@@ -109,7 +109,7 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
 }
 
 /* returns bp if key is in hash, otherwise NULL */
-jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
+inline jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
 {
     size_t sz = hash_size(a);
     if (sz == 0)
@@ -144,12 +144,9 @@ jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
 JL_DLLEXPORT
 jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int *p_inserted)
 {
-    JL_GC_PUSH1(&h);
-    // &h may be assigned to in jl_idtable_rehash so it need to be rooted
     int inserted = jl_table_assign_bp(&h, key, val);
     if (p_inserted)
         *p_inserted = inserted;
-    JL_GC_POP();
     return h;
 }
 

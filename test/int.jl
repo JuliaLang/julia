@@ -141,6 +141,10 @@ SItypes = Base.BitSigned_types
         R = sizeof(S) < sizeof(Int) ? Int : S
         @test promote(R(3), T(3)) === (sizeof(R) < sizeof(T) ? (T(3), T(3)) : (R(3), R(3)))
     end
+
+    for i in 1:length(UItypes)
+        @test promote(UItypes[i](3), SItypes[i](3)) === (UItypes[i](3), UItypes[i](3))
+    end
 end
 @testset "limiting conversions" begin
     for T in (Int8, Int16, Int32, Int64)

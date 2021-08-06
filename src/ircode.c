@@ -608,20 +608,20 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         return jl_decode_value_phic(s, tag);
     case TAG_GOTONODE: JL_FALLTHROUGH; case TAG_QUOTENODE:
         v = jl_new_struct_uninit(tag == TAG_GOTONODE ? jl_gotonode_type : jl_quotenode_type);
-        set_nth_field(tag == TAG_GOTONODE ? jl_gotonode_type : jl_quotenode_type, (void*)v, 0, jl_decode_value(s));
+        set_nth_field(tag == TAG_GOTONODE ? jl_gotonode_type : jl_quotenode_type, v, 0, jl_decode_value(s), 0);
         return v;
     case TAG_GOTOIFNOT:
         v = jl_new_struct_uninit(jl_gotoifnot_type);
-        set_nth_field(jl_gotoifnot_type, (void*)v, 0, jl_decode_value(s));
-        set_nth_field(jl_gotoifnot_type, (void*)v, 1, jl_decode_value(s));
+        set_nth_field(jl_gotoifnot_type, v, 0, jl_decode_value(s), 0);
+        set_nth_field(jl_gotoifnot_type, v, 1, jl_decode_value(s), 0);
         return v;
     case TAG_ARGUMENT:
         v = jl_new_struct_uninit(jl_argument_type);
-        set_nth_field(jl_argument_type, (void*)v, 0, jl_decode_value(s));
+        set_nth_field(jl_argument_type, v, 0, jl_decode_value(s), 0);
         return v;
     case TAG_RETURNNODE:
         v = jl_new_struct_uninit(jl_returnnode_type);
-        set_nth_field(jl_returnnode_type, (void*)v, 0, jl_decode_value(s));
+        set_nth_field(jl_returnnode_type, v, 0, jl_decode_value(s), 0);
         return v;
     case TAG_SHORTER_INT64:
         v = jl_box_int64((int16_t)read_uint16(s->s));
@@ -670,7 +670,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         v = jl_new_struct_uninit(jl_lineinfonode_type);
         for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++) {
             //size_t offs = jl_field_offset(jl_lineinfonode_type, i);
-            set_nth_field(jl_lineinfonode_type, (void*)v, i, jl_decode_value(s));
+            set_nth_field(jl_lineinfonode_type, v, i, jl_decode_value(s), 0);
         }
         return v;
     default:
@@ -699,7 +699,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     jl_ircode_state s = {
         &dest,
         m,
-        jl_get_ptls_states()
+        jl_current_task->ptls
     };
 
     uint8_t flags = (code->aggressive_constprop << 4)
@@ -783,7 +783,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     jl_ircode_state s = {
         &src,
         m,
-        jl_get_ptls_states()
+        jl_current_task->ptls
     };
 
     jl_code_info_t *code = jl_new_code_info_uninit();

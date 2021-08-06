@@ -384,16 +384,27 @@ function get_value(sym::Expr, fn)
 end
 get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (getfield(fn, sym), true) : (nothing, false)
 get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.value), true) : (nothing, false)
+get_value(sym::GlobalRef, fn) = get_value(sym.name, sym.mod)
 get_value(sym, fn) = (sym, true)
 
-# Return the value of a getfield call expression
-function get_value_getfield(ex::Expr, fn)
-    # Example :((top(getfield))(Base,:max))
-    val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
-    (found && length(ex.args) >= 3) || return (nothing, false)
-    return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
+# Return the type of a getfield call expression
+function get_type_getfield(ex::Expr, fn::Module)
+    length(ex.args) == 3 || return Any, false # should never happen, but just for safety
+    obj, x = ex.args[2:3]
+    objt, found = get_type(obj, fn)
+    objt isa DataType || return Any, false
+    found || return Any, false
+    if x isa QuoteNode
+        fld = x.value
+    elseif isexpr(x, :quote) || isexpr(x, :inert)
+        fld = x.args[1]
+    else
+        fld = nothing # we don't know how to get the value of variable `x` here
+    end
+    fld isa Symbol || return Any, false
+    hasfield(objt, fld) || return Any, false
+    return fieldtype(objt, fld), true
 end
-get_value_getfield(sym, fn) = get_value(sym, fn)
 
 # Determines the return type with Base.return_types of a function call using the type information of the arguments.
 function get_type_call(expr::Expr)
@@ -413,9 +424,9 @@ function get_type_call(expr::Expr)
     end
     # use _methods_by_ftype as the function is supplied as a type
     world = Base.get_world_counter()
-    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
+    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)::Vector
     length(matches) == 1 || return (Any, false)
-    match = first(matches)
+    match = first(matches)::Core.MethodMatch
     # Typeinference
     interp = Core.Compiler.NativeInterpreter()
     return_type = Core.Compiler.typeinf_type(interp, match.method, match.spec_types, match.sparams)
@@ -423,7 +434,7 @@ function get_type_call(expr::Expr)
     return (return_type, true)
 end
 
-# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
+# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (SubString{String}, true)
 function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
     found && return Core.Typeof(val), found
@@ -431,10 +442,8 @@ function try_get_type(sym::Expr, fn::Module)
         # getfield call is special cased as the evaluation of getfield provides good type information,
         # is inexpensive and it is also performed in the complete_symbol function.
         a1 = sym.args[1]
-        if isa(a1,GlobalRef) && isconst(a1.mod,a1.name) && isdefined(a1.mod,a1.name) &&
-            eval(a1) === Core.getfield
-            val, found = get_value_getfield(sym, Main)
-            return found ? Core.Typeof(val) : Any, found
+        if a1 === :getfield || a1 === GlobalRef(Core, :getfield)
+            return get_type_getfield(sym, fn)
         end
         return get_type_call(sym)
     elseif sym.head === :thunk
@@ -456,6 +465,11 @@ function get_type(sym::Expr, fn::Module)
     # try to analyze nests of calls. if this fails, try using the expanded form.
     val, found = try_get_type(sym, fn)
     found && return val, found
+    # https://github.com/JuliaLang/julia/issues/27184
+    if isexpr(sym, :macrocall)
+        _, found = get_type(first(sym.args), fn)
+        found || return Any, false
+    end
     return try_get_type(Meta.lower(fn, sym), fn)
 end
 
@@ -809,6 +823,20 @@ function shell_completions(string, pos)
         return ret, range, true
     end
     return Completion[], 0:-1, false
+end
+
+function UndefVarError_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    if var === :or
+        print(io, "\nsuggestion: Use `||` for short-circuiting boolean OR.")
+    elseif var === :and
+        print(io, "\nsuggestion: Use `&&` for short-circuiting boolean AND.")
+    end
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
+    nothing
 end
 
 end # module

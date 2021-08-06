@@ -60,14 +60,20 @@ viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 
 # Simple utilities
-size(V::SubArray) = (@_inline_meta; map(unsafe_length, axes(V)))
+size(V::SubArray) = (@_inline_meta; map(length, axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
 sizeof(V::SubArray) = length(V) * sizeof(eltype(V))
 sizeof(V::SubArray{<:Any,<:Any,<:Array}) = length(V) * elsize(V.parent)
 
-copy(V::SubArray) = V.parent[V.indices...]
+function Base.copy(V::SubArray)
+    v = V.parent[V.indices...]
+    ndims(V) == 0 || return v
+    x = similar(V) # ensure proper type of x
+    x[] = v
+    return x
+end
 
 parent(V::SubArray) = V.parent
 parentindices(V::SubArray) = V.indices
@@ -196,6 +202,12 @@ end
 function view(r1::LinRange, r2::OrdinalRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
+end
+
+# getindex(r::AbstractRange, ::Colon) returns a copy of the range, and we may do the same for a view
+function view(r1::AbstractRange, c::Colon)
+    @_propagate_inbounds_meta
+    getindex(r1, c)
 end
 
 function unsafe_view(A::AbstractArray, I::Vararg{ViewIndex,N}) where {N}
@@ -356,7 +368,7 @@ compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{Vararg{ScalarIndex}}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
-    (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
+    (@_inline_meta; compute_stride1(s*length(inds[1]), tail(inds), tail(I)))
 compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
@@ -401,12 +413,12 @@ end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
     @_inline_meta
     Δi = I[1]-first(IP[1])
-    compute_linindex(f + Δi*s, s*unsafe_length(IP[1]), tail(IP), tail(I))
+    compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
     @_inline_meta
     Δi = first(I[1])-first(IP[1])
-    compute_linindex(f + Δi*s, s*unsafe_length(IP[1]), tail(IP), tail(I))
+    compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
 end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
 
@@ -441,5 +453,5 @@ _indices_sub(::Real, I...) = (@_inline_meta; _indices_sub(I...))
 _indices_sub() = ()
 function _indices_sub(i1::AbstractArray, I...)
     @_inline_meta
-    (unsafe_indices(i1)..., _indices_sub(I...)...)
+    (axes(i1)..., _indices_sub(I...)...)
 end

@@ -341,7 +341,7 @@ For example with `OProfile` you can try a simple recording :
 Or similary with `perf` :
 
 ```
-$ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf ./julia /test/fastmath.jl
+$ ENABLE_JITPROFILING=1 perf record -o /tmp/perf.data --call-graph dwarf -k 1 ./julia /test/fastmath.jl
 $ perf inject --jit --input /tmp/perf.data --output /tmp/perf-jit.data
 $ perf report --call-graph -G -i /tmp/perf-jit.data
 ```

@@ -4,7 +4,7 @@ module TestTriangular
 
 debug = false
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: BlasFloat, errorbounds, full!, naivesub!, transpose!,
+using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
 
@@ -198,7 +198,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         #exp/log
-        if (elty1 == Float64 || elty1 == ComplexF64) && (t1 == UpperTriangular || t1 == LowerTriangular)
+        if elty1 ∈ (Float32,Float64,ComplexF32,ComplexF64)
             @test exp(Matrix(log(A1))) ≈ A1
         end
 
@@ -282,7 +282,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test sqrt(A1) |> (t -> (t*t)::typeof(t)) ≈ A1
 
         # naivesub errors
-        @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(undef,n+1))
+        @test_throws DimensionMismatch ldiv!(A1, Vector{elty1}(undef, n+1))
 
         # eigenproblems
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
@@ -476,7 +476,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test_throws DimensionMismatch Ann'\bm
             @test_throws DimensionMismatch transpose(Ann)\bm
             if t1 == UpperTriangular || t1 == LowerTriangular
-                @test_throws LinearAlgebra.SingularException naivesub!(t1(zeros(elty1,n,n)),fill(eltyB(1),n))
+                if elty1 === eltyB <: BlasFloat
+                    @test_throws LAPACKException ldiv!(t1(zeros(elty1, n, n)), fill(eltyB(1), n))
+                else
+                    @test_throws SingularException ldiv!(t1(zeros(elty1, n, n)), fill(eltyB(1), n))
+                end
             end
             @test B/A1 ≈ B/Matrix(A1)
             @test B/transpose(A1) ≈ B/transpose(Matrix(A1))
@@ -496,10 +500,75 @@ end
 # Matrix square root
 Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
 Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
+Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 @test sqrt(Atn) |> t->t*t ≈ Atn
+@test sqrt(Atn) isa UpperTriangular
 @test typeof(sqrt(Atn)[1,1]) <: Complex
 @test sqrt(Atp) |> t->t*t ≈ Atp
+@test sqrt(Atp) isa UpperTriangular
 @test typeof(sqrt(Atp)[1,1]) <: Real
+@test typeof(sqrt(complex(Atp))[1,1]) <: Complex
+@test sqrt(Atu) |> t->t*t ≈ Atu
+@test sqrt(Atu) isa UnitUpperTriangular
+@test typeof(sqrt(Atu)[1,1]) <: Real
+@test typeof(sqrt(complex(Atu))[1,1]) <: Complex
+
+@testset "matrix square root quasi-triangular blockwise" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = schur(rand(T, 100, 100)^2).T
+        @test LinearAlgebra.sqrt_quasitriu(A; blockwidth=16)^2 ≈ A
+    end
+    n = 256
+    A = rand(ComplexF64, n, n)
+    U = schur(A).T
+    Ubig = Complex{BigFloat}.(U)
+    @test LinearAlgebra.sqrt_quasitriu(U; blockwidth=64) ≈ LinearAlgebra.sqrt_quasitriu(Ubig; blockwidth=64)
+end
+
+@testset "sylvester quasi-triangular blockwise" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64), m in (15, 40), n in (15, 45)
+        A = schur(rand(T, m, m)).T
+        B = schur(rand(T, n, n)).T
+        C = randn(T, m, n)
+        Ccopy = copy(C)
+        X = LinearAlgebra._sylvester_quasitriu!(A, B, C; blockwidth=16)
+        @test X === C
+        @test A * X + X * B ≈ -Ccopy
+
+        @testset "test raise=false does not break recursion" begin
+            Az = zero(A)
+            Bz = zero(B)
+            C2 = copy(Ccopy)
+            @test_throws LAPACKException LinearAlgebra._sylvester_quasitriu!(Az, Bz, C2; blockwidth=16)
+            m == n || @test any(C2 .== Ccopy)  # recursion broken
+            C3 = copy(Ccopy)
+            X3 = LinearAlgebra._sylvester_quasitriu!(Az, Bz, C3; blockwidth=16, raise=false)
+            @test !any(X3 .== Ccopy)  # recursion not broken
+        end
+    end
+end
+
+@testset "check matrix logarithm type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+    A = UpperTriangular(exp(triu(randn(elty, n, n))))
+    @inferred Union{typeof(A),typeof(complex(A))} log(A)
+    @test exp(Matrix(log(A))) ≈ A
+    if elty <: Real
+        @test typeof(log(A)) <: UpperTriangular{elty}
+        @test typeof(log(complex(A))) <: UpperTriangular{complex(elty)}
+        @test isreal(log(complex(A)))
+        @test log(complex(A)) ≈ log(A)
+    end
+
+    Au = UnitUpperTriangular(exp(triu(randn(elty, n, n), 1)))
+    @inferred Union{typeof(A),typeof(complex(A))} log(Au)
+    @test exp(Matrix(log(Au))) ≈ Au
+    if elty <: Real
+        @test typeof(log(Au)) <: UpperTriangular{elty}
+        @test typeof(log(complex(Au))) <: UpperTriangular{complex(elty)}
+        @test isreal(log(complex(Au)))
+        @test log(complex(Au)) ≈ log(Au)
+    end
+end
 
 Areal   = randn(n, n)/2
 Aimg    = randn(n, n)/2
@@ -629,6 +698,25 @@ end
         @test isa(similar(trisparsemat, Float32), TriType{Float32,<:SparseMatrixCSC{Float32}})
         @test isa(similar(trisparsemat, (n, n)), typeof(sparsemat))
         @test isa(similar(trisparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
+    end
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "AbstractArray constructor should preserve underlying storage type" begin
+    # tests corresponding to #34995
+    local m = 4
+    local T, S = Float32, Float64
+    immutablemat = ImmutableArray(randn(T,m,m))
+    for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        trimat = TriType(immutablemat)
+        @test convert(AbstractArray{S}, trimat).data isa ImmutableArray{S}
+        @test convert(AbstractMatrix{S}, trimat).data isa ImmutableArray{S}
+        @test AbstractArray{S}(trimat).data isa ImmutableArray{S}
+        @test AbstractMatrix{S}(trimat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, trimat) == trimat
+        @test convert(AbstractMatrix{S}, trimat) == trimat
     end
 end
 

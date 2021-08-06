@@ -141,7 +141,7 @@ StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 stride(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, i::Int) = _stride(a, i)
 
 function stride(a::ReinterpretArray, i::Int)
-    a.parent isa StridedArray || ArgumentError("Parent must be strided.") |> throw
+    a.parent isa StridedArray || throw(ArgumentError("Parent must be strided."))
     return _stride(a, i)
 end
 
@@ -157,7 +157,7 @@ function _stride(a, i)
 end
 
 function strides(a::ReinterpretArray)
-    a.parent isa StridedArray || ArgumentError("Parent must be strided.") |> throw
+    a.parent isa StridedArray || throw(ArgumentError("Parent must be strided."))
     size_to_strides(1, size(a)...)
 end
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
@@ -683,7 +683,7 @@ end
 
 @noinline function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted,
                                   ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
-    if ifirst.j + blksize > ilast.j
+    if ilast.j - ifirst.j < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[SCI(2,ifirst.j)]
@@ -702,7 +702,7 @@ end
         return v
     else
         # pairwise portion
-        jmid = (ifirst.j + ilast.j) >> 1
+        jmid = ifirst.j + (ilast.j - ifirst.j) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, SCI(K,jmid), blksize)
         v2 = mapreduce_impl(f, op, A, SCI(1,jmid+1), ilast, blksize)
         return op(v1, v2)
