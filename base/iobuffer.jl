@@ -334,12 +334,6 @@ end
 
 eof(io::GenericIOBuffer) = (io.ptr-1 == io.size)
 
-function shutdown(io::GenericIOBuffer)
-    io.writable = false
-    # OR throw(_UVError("shutdown", UV_ENOTSOCK))
-    nothing
-end
-
 @noinline function close(io::GenericIOBuffer{T}) where T
     io.readable = false
     io.writable = false
