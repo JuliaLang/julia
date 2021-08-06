@@ -86,6 +86,7 @@ IteratorSize(::Type{<:WeakKeyDict}) = SizeUnknown()
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
 lock(wkh::WeakKeyDict) = lock(wkh.lock)
 unlock(wkh::WeakKeyDict) = unlock(wkh.lock)
+trylock(wkh::WeakKeyDict) = trylock(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
 trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 
