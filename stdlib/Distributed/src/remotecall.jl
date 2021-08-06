@@ -262,7 +262,7 @@ end
 
 function send_del_client(rr)
     if rr.where == myid()
-        del_client(rr)
+        Threads.@spawn del_client(rr)
     elseif id_in_procs(rr.where) # process only if a valid worker
         w = worker_from_id(rr.where)::Worker
         push!(w.del_msgs, (remoteref_id(rr), myid()))
