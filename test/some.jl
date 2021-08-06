@@ -87,6 +87,11 @@ end
 
     @test @something(1, error("failed")) === 1
     @test_throws ErrorException @something(nothing, error("failed"))
+
+    @test let
+        val = 1
+        @something(val)
+    end == 1
 end
 
 # issue #26927

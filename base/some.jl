@@ -141,5 +141,5 @@ macro something(args...)
         expr = :(val = $(esc(arg)); val === nothing ? $expr : val)
     end
     something = GlobalRef(Base, :something)
-    return :($something(let val; $expr; end))
+    return :($something($expr))
 end
