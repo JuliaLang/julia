@@ -1801,7 +1801,7 @@ let X1 = Tuple{AlmostLU, Vector{T}} where T,
     # TODO: the quality of this intersection is not great; for now just test that it
     # doesn't stack overflow
     @test I<:X1 || I<:X2
-    actual = Tuple{AlmostLU{S, X} where X<:Matrix{S}, Vector{S}} where S<:Union{Float32, Float64}
+    actual = Tuple{Union{AlmostLU{S, X} where X<:Matrix{S}, AlmostLU{S, <:Matrix}}, Vector{S}} where S<:Union{Float32, Float64}
     @test I == actual
 end
 
@@ -1937,4 +1937,11 @@ let A = Tuple{Dict{I,T}, I, T} where T where I,
     B = Tuple{AbstractDict{I,T}, T, I} where T where I
     # TODO: we should probably have I == T here
     @test typeintersect(A, B) == Tuple{Dict{I,T}, I, T} where {I, T}
+end
+
+let A = Tuple{UnionAll, Vector{Any}},
+    B = Tuple{Type{T}, T} where T<:AbstractArray,
+    I = typeintersect(A, B)
+    @test !isconcretetype(I)
+    @test_broken I == Tuple{Type{T}, Vector{Any}} where T<:AbstractArray
 end
