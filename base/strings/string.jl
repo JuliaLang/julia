@@ -254,7 +254,7 @@ end
 
 getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
-@inline function getindex(s::String, r::AbstractUnitRange{Int})
+@inline function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
     i, j = first(r), last(r)
     @boundscheck begin
