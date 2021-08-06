@@ -551,42 +551,17 @@ end
         r = @async close(s)
         @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
-        close(srv)
     end
 end
 
 @testset "iswritable" begin
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
         srv = listen(addr)
-        let s = Sockets.TCPSocket()
-            Sockets.connect!(s, addr)
-            @test iswritable(s) broken=Sys.iswindows()
-            close(s)
-            @test !iswritable(s)
-        end
-        let s = Sockets.connect(addr)
-            @test iswritable(s)
-            shutdown(s)
-            @test !iswritable(s)
-            close(s)
-        end
-        close(srv)
-        srv = listen(addr)
-        let s = Sockets.connect(addr)
-            let c = accept(srv)
-                Base.errormonitor(@async try; write(c, c); finally; close(c); end)
-            end
-            @test iswritable(s)
-            write(s, "hello world\n")
-            shutdown(s)
-            @test !iswritable(s)
-            @test isreadable(s)
-            @test read(s, String) == "hello world\n"
-            @test !isreadable(s)
-            @test !isopen(s)
-            close(s)
-        end
-        close(srv)
+        s = Sockets.TCPSocket()
+        Sockets.connect!(s, addr)
+        @test iswritable(s)
+        close(s)
+        @test !iswritable(s)
     end
 end
 

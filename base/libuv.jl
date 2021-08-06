@@ -107,7 +107,6 @@ end
 function uv_alloc_buf end
 function uv_readcb end
 function uv_writecb_task end
-function uv_shutdowncb_task end
 function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
