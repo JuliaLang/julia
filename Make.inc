@@ -90,10 +90,6 @@ endef
 COMMA:=,
 SPACE:=$(eval) $(eval)
 
-# force a sane / stable configuration
-export LC_ALL=C
-export LANG=C
-
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
 PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
