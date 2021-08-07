@@ -744,32 +744,31 @@ mulpi_ext(x::Real) = pi*x # Fallback
     x² = x*x
     x⁴ = x²*x²
     r  = evalpoly(x², (2.5501640398773415, -0.5992645293202981, 0.08214588658006512,
-					   -0.007370429884921779, 0.0004662827319453555, -2.1717412523382308e-5))
-	
-    return muladd(3.141592653589793, x, x*muladd(-5.16771278004997, 
-				  x², muladd(x⁴, r,  1.2245907532225998e-16)))
+                      -7.370429884921779e-3, 4.662827319453555e-4, -2.1717412523382308e-5))
+    return muladd(3.141592653589793, x, x*muladd(-5.16771278004997,
+                  x², muladd(x⁴, r,  1.2245907532225998e-16)))
 end
 
 @inline function cospi_kernel(x::Float64)
     x² = x*x
-	r = x²*evalpoly(x², (4.058712126416765, -1.3352627688537357, 0.23533063027900392,
-						-0.025806887811869204, 0.0019294917136379183, -0.00010368935675474665))
+    r = x²*evalpoly(x², (4.058712126416765, -1.3352627688537357, 0.23533063027900392,
+                        -0.025806887811869204, 1.9294917136379183e-3, -1.0368935675474665e-4))
     a_x² = 4.934802200544679 * x²
-	a_x²lo = muladd(3.109686485461973e-16, x², muladd(4.934802200544679, x², -a_x²))
-	
+    a_x²lo = muladd(3.109686485461973e-16, x², muladd(4.934802200544679, x², -a_x²))
+
     w  = 1.0-a_x²
-	return w + muladd(x², r, ((1.0-w)-a_x²) - a_x²lo)
+    return w + muladd(x², r, ((1.0-w)-a_x²) - a_x²lo)
 end
 
 @inline function sinpi_kernel(x::Float32)
-	x = Float64(x)
-	return Float32(x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
-				2.5501626483206374, -0.5992021090314925, 0.08100185277841528)))
+    x = Float64(x)
+    return Float32(x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
+                                    2.5501626483206374, -0.5992021090314925, 0.08100185277841528)))
 end
 @inline function cospi_kernel(x::Float32)
-	x = Float64(x)
-	return Float32(evalpoly(x*x, (1f0, -4.934802200541122, 4.058712123568637,
-				-1.3352624040152927, 0.23531426791507182, -0.02550710082498761)))
+    x = Float64(x)
+    return Float32(evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
+                                 -1.3352624040152927, 0.23531426791507182, -0.02550710082498761)))
 end
 
 """
@@ -797,10 +796,10 @@ function sinpi(x::T) where T<:AbstractFloat
     if arx < 0.25
         return sinpi_kernel(rx)
     elseif arx < .75
-		return copysign(cospi_kernel(T(0.5) - arx), rx)
-	else
-		return sinpi_kernel(copysign(one(T), rx) - rx)
-	end
+        return copysign(cospi_kernel(T(0.5) - arx), rx)
+    else
+        return sinpi_kernel(copysign(one(T), rx) - rx)
+    end
 end
 
 """
