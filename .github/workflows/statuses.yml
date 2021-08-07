@@ -52,7 +52,7 @@ jobs:
       - run: echo "SHA=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
         if: github.event_name == 'pull_request_target'
 
-      - run: echo "SHA=${{ env.GITHUB_SHA }}" >> $GITHUB_ENV
+      - run: echo "SHA=${{ github.sha }}" >> $GITHUB_ENV
         if: github.event_name != 'pull_request_target'
 
       - run: echo "The SHA is ${{ env.SHA }}"
