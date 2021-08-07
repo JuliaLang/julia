@@ -21,7 +21,7 @@ on:
   # When using the `pull_request_target` event, all PRs will get a `GITHUB_TOKEN` that has
   # write permissions, even if the PR is from a fork.
   # Therefore, for security reasons, we do not checkout any code in this workflow.
-  pull_request:
+  pull_request_target:
     branches:
       - 'master'
       - 'release-*'
