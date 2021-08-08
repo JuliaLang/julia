@@ -68,8 +68,6 @@ jobs:
                 "buildbot/tester_linuxarmv7l"
                 "buildbot/tester_linuxppc64le"
                 "buildbot/tester_macos64"
-                "buildbot/tester_macosaarch64"
-                "buildbot/tester_musl64"
                 "buildbot/tester_win32"
                 "buildbot/tester_win64"
                 )
