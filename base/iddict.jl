@@ -84,7 +84,7 @@ function sizehint!(d::IdDict, newsz)
 end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
-    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
+    !isa(key, K) && __throw_key_not_valid_for_type(key, K)
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)
     end
@@ -97,6 +97,7 @@ function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where
     d.count += inserted[]
     return d
 end
+__throw_key_not_valid_for_type(key, K) = throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
 
 function get(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
     val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, default)
