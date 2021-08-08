@@ -253,7 +253,8 @@ function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, Lin
         return nosamples
     elseif format === :flat
         fmt.recur === :off || throw(ArgumentError("format flat only implements recur=:off"))
-        flat(io, data, lidict, cols, fmt)
+        nosamples = flat(io, data, lidict, cols, fmt, threads, tasks, is_subsection)
+        return nosamples
     else
         throw(ArgumentError("output format $(repr(format)) not recognized"))
     end
@@ -523,7 +524,8 @@ end
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level and at the topmost level
 # Merging multiple equivalent entries and recursive calls
-function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool) where {T}
+function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, C::Bool,
+                    threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}) where {T}
     lilist = StackFrame[]
     n = Int[]
     m = Int[]
@@ -531,32 +533,46 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     recursive = Set{T}()
     first = true
     totalshots = 0
-    for ip in data
+    startframe = length(data)
+    skip = false
+    for i in startframe:-1:1
+        startframe - 1 <= i <= startframe - 3 && continue # skip metadata (it's read ahead below)
+        ip = data[i]
         if ip == 0
+            # read metadata
+            # time = data[i - 1]
+            taskid = data[i - 2]
+            threadid = data[i - 3]
+            if !in(threadid, threads) || !in(taskid, tasks)
+                skip = true
+                continue
+            end
+            skip = false
             totalshots += 1
             empty!(recursive)
             first = true
-            continue
-        end
-        frames = lidict[ip]
-        nframes = (frames isa Vector ? length(frames) : 1)
-        for i = 1:nframes
-            frame = (frames isa Vector ? frames[i] : frames)
-            !C && frame.from_c && continue
-            key = (T === UInt64 ? ip : frame)
-            idx = get!(lilist_idx, key, length(lilist) + 1)
-            if idx > length(lilist)
-                push!(recursive, key)
-                push!(lilist, frame)
-                push!(n, 1)
-                push!(m, 0)
-            elseif !(key in recursive)
-                push!(recursive, key)
-                n[idx] += 1
-            end
-            if first
-                m[idx] += 1
-                first = false
+            startframe = i
+        elseif !skip
+            frames = lidict[ip]
+            nframes = (frames isa Vector ? length(frames) : 1)
+            for j = 1:nframes
+                frame = (frames isa Vector ? frames[j] : frames)
+                !C && frame.from_c && continue
+                key = (T === UInt64 ? ip : frame)
+                idx = get!(lilist_idx, key, length(lilist) + 1)
+                if idx > length(lilist)
+                    push!(recursive, key)
+                    push!(lilist, frame)
+                    push!(n, 1)
+                    push!(m, 0)
+                elseif !(key in recursive)
+                    push!(recursive, key)
+                    n[idx] += 1
+                end
+                if first
+                    m[idx] += 1
+                    first = false
+                end
             end
         end
     end
@@ -564,11 +580,17 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     return (lilist, n, m, totalshots)
 end
 
-function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat)
-    lilist, n, m, totalshots = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C)
+function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat,
+                threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
+    lilist, n, m, totalshots = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
     if isempty(lilist)
-        warning_empty()
-        return
+        if is_subsection
+            Base.print(io, "Total snapshots: ")
+            printstyled(io, "$(totalshots)\n", color=Base.warn_color())
+        else
+            warning_empty()
+        end
+        return true
     end
     if false # optional: drop the "non-interpretable" ones
         keep = map(frame -> frame != UNKNOWN && frame.line != 0, lilist)
@@ -579,7 +601,7 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
     filenamemap = Dict{Symbol,String}()
     print_flat(io, lilist, n, m, cols, filenamemap, fmt)
     Base.println(io, "Total snapshots: ", totalshots)
-    nothing
+    return false
 end
 
 function print_flat(io::IO, lilist::Vector{StackFrame},
