@@ -11,7 +11,14 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(12343219)
+if parse(Int,get(ENV,"TEST_RESEEDRNG","0")) != 0
+    let seed = round(Int,1024*rand(RandomDevice()))
+        @info "rng seed is $seed"
+        Random.seed!(seed)
+    end
+else
+    Random.seed!(12343219)
+end
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -35,7 +42,7 @@ aimg  = randn(n,n)/2
         @testset "non-symmetric eigen decomposition" begin
             d, v = eigen(a)
             for i in 1:size(a,2)
-                @test a*v[:,i] ≈ d[i]*v[:,i]
+                @test a*v[:,i] ≈ d[i]*v[:,i] # fragile
             end
             f = eigen(a)
             @test det(a) ≈ det(f)
@@ -109,8 +116,9 @@ aimg  = randn(n,n)/2
             end
             sortfunc = x -> real(x) + imag(x)
             f = eigen(a1_nsg, a2_nsg; sortby = sortfunc)
-            @test a1_nsg*f.vectors ≈ (a2_nsg*f.vectors) * Diagonal(f.values)
+            @test a1_nsg*f.vectors ≈ (a2_nsg*f.vectors) * Diagonal(f.values) # fragile
             @test f.values ≈ eigvals(a1_nsg, a2_nsg; sortby = sortfunc)
+            # next test is fragile
             @test prod(f.values) ≈ prod(eigvals(a1_nsg/a2_nsg, sortby = sortfunc)) atol=50000ε
             @test eigvecs(a1_nsg, a2_nsg; sortby = sortfunc) == f.vectors
             @test_throws ErrorException f.Z
@@ -119,6 +127,54 @@ aimg  = randn(n,n)/2
             @test d == f.values
             @test v == f.vectors
         end
+    end
+end
+
+breal = triu(ones(n,n)) + Diagonal(1:n)
+bimg = eps(Float32(1)) * randn(n,n)
+creal = Float64[0.5 0 0 0; 0 1 1 0; 0 0 1 0; 0 0 0 2] + eps(Float32(1)) * randn(4,4)
+cimg = eps(Float32(1)) * randn(4,4)
+dreal = Diagonal(1.0:1.0:Float64(n)) + eps(Float32(1)) * randn(n,n)
+@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
+    bb = convert(Matrix{eltya}, eltya <: Complex ? complex.(breal, bimg) : breal)
+    cc = convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimg) : creal)
+    dd = convert(Matrix{eltya}, eltya <: Complex ? complex.(dreal, bimg) : dreal)
+    @testset "extensions of eigen (conditions, etc.)" begin
+        ed = eigen(dd, jvl=true, jce=true, jcv=true)
+        ec = eigen(cc, jvl=true, jce=true, jcv=true)
+        eb = eigen(bb, jvl=true, jce=true, jcv=true)
+        if eltya <: Real
+            @test_broken maximum(eb.rconde) <= 1 + sqrt(eps(real(eltya)))
+            @test_broken minimum(ec.rconde) < 0.01
+            @test_broken minimum(ec.rcondv) < 0.01
+        else
+            # allow for small normalization errors
+            @test maximum(eb.rconde) <= 1 + sqrt(eps(real(eltya)))
+            # note no such guarantee for rcondv
+            @test minimum(ec.rconde) < 0.01
+            @test minimum(ec.rcondv) < 0.01
+        end
+        @test minimum(ed.rconde) > 0.1
+        @test minimum(ed.rcondv) > 0.1
+        @test ed.vectorsl' * dd ≈ Diagonal(ed.values) * ed.vectorsl'
+        @test eb.vectorsl' * bb ≈ Diagonal(eb.values) * eb.vectorsl'
+        @test ec.vectorsl' * cc ≈ Diagonal(ec.values) * ec.vectorsl'
+    end
+    @testset "eigen of Bidiagonal" begin
+        ff = Bidiagonal(diag(bb,0), diag(bb,1), :U)
+        ef = eigen(ff)
+        @test_broken ef.unitary == false
+        @test_broken norm(inv(ef) * ff - I) < sqrt(eps(real(eltya)))
+    end
+    @testset "eigen of Triangular" begin
+        ff = UpperTriangular(bb)
+        ef = eigen(ff)
+        @test_broken ef.unitary == false
+        @test_broken norm(inv(ef) * ff - I) < sqrt(eps(real(eltya)))
+        ff = LowerTriangular(copy(bb'))
+        ef = eigen(ff)
+        @test_broken ef.unitary == false
+        @test_broken norm(inv(ef) * ff - I) < sqrt(eps(real(eltya)))
     end
 end
 
@@ -166,6 +222,7 @@ end
     A = randn(3,3)
     @test eigvals(A') == eigvals(copy(A'))
     @test eigen(A')   == eigen(copy(A'))
+    A = A + A'
     @test eigmin(A') == eigmin(copy(A'))
     @test eigmax(A') == eigmax(copy(A'))
 end
