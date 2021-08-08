@@ -5180,7 +5180,24 @@ static Function* gen_cfun_wrapper(
         // add nest parameter (pointer to jl_value_t* data array) after sret arg
         assert(closure_types);
         std::vector<Type*> fargt_sig(sig.fargt_sig);
+
         fargt_sig.insert(fargt_sig.begin() + sig.sret, T_pprjlvalue);
+        // Shift LLVM attributes for parameters one to the right, as
+        // we are adding the extra nest parameter after sret arg.
+        // AttributeList has function attributes and return value
+        // attributes before the parameter attributes.
+        if (attributes.getNumAttrSets() > static_cast<unsigned>(2 + sig.sret)) {
+            AttrBuilder toShift;
+            // Skip past function and return and sret attributes to the first real parameter
+            for (auto it = attributes.index_begin() + 2 + sig.sret; it != attributes.index_end(); ++it) {
+                AttrBuilder toShiftTemp(attributes.getAttributes(it));
+                attributes = attributes.removeAttributes(jl_LLVMContext, it);
+                attributes = attributes.addAttributes(jl_LLVMContext, it, toShift);
+                toShift = std::move(toShiftTemp);
+            }
+            attributes = attributes.addAttributes(jl_LLVMContext, attributes.index_end(), toShift);
+        }
+
         functype = FunctionType::get(sig.sret ? T_void : sig.prt, fargt_sig, /*isVa*/false);
         attributes = attributes.addAttribute(jl_LLVMContext, 1 + sig.sret, Attribute::Nest);
     }
