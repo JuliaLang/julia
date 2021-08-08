@@ -369,6 +369,9 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     // store task id
                     bt_data_prof[bt_size_cur++].uintptr = ptls->current_task;
 
+                    // store time
+                    bt_data_prof[bt_size_cur++].uintptr = jl_hrtime();
+
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++].uintptr = 0;
                 }

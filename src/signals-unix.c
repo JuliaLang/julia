@@ -794,6 +794,9 @@ static void *signal_listener(void *arg)
                     // store task id
                     bt_data_prof[bt_size_cur++].uintptr = ptls->current_task;
 
+                    // store time
+                    bt_data_prof[bt_size_cur++].uintptr = jl_hrtime();
+
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++].uintptr = 0;
                 }

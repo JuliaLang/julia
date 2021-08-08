@@ -503,7 +503,7 @@ function fetch(;include_meta = false)
         return data
     else
         nblocks = count(iszero, data)
-        nmeta = 2 # number of metadata fields (threadid, taskid)
+        nmeta = 3 # number of metadata fields (threadid, taskid, time)
         data_stripped = Vector{UInt}(undef, length(data) - (nblocks * nmeta))
         j = length(data_stripped)
         i = length(data)
@@ -750,12 +750,13 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     startframe = length(all)
     skip = false
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - 2 && continue # skip metadata (its read ahead below)
+        startframe - 1 <= i <= startframe - 3 && continue # skip metadata (its read ahead below)
         ip = all[i]
         if ip == 0
             # read metadata
-            taskid = all[i - 1]
-            threadid = all[i - 2]
+            # time = all[i - 1]
+            taskid = all[i - 2]
+            threadid = all[i - 3]
             if !in(threadid, threads) || !in(taskid, tasks)
                 skip = true
                 continue
