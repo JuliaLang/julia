@@ -61,16 +61,6 @@ jobs:
       # remove them from the `context_list`.
       - run: |
           declare -a CONTEXT_LIST=(
-                "buildbot/package_freebsd64"
-                "buildbot/package_linux32"
-                "buildbot/package_linuxaarch64"
-                "buildbot/package_linuxarmv7l"
-                "buildbot/package_linuxppc64le"
-                "buildbot/package_macos64"
-                "buildbot/package_macosaarch64"
-                "buildbot/package_musl64"
-                "buildbot/package_win32"
-                "buildbot/package_win64"
                 "buildbot/tester_freebsd64"
                 "buildbot/tester_linux32"
                 "buildbot/tester_linux64"
