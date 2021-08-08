@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Profile, Serialization
+using Test, Profile, Serialization, Logging
 
 Profile.clear()
 Profile.init()
@@ -60,11 +60,13 @@ let iobuf = IOBuffer()
 end
 
 @testset "Profile.print() groupby options" begin
-    for tasks in [typemin(UInt):typemax(UInt), UInt(0), UInt(0):UInt(1), [UInt(0), UInt(3)]]
-        for threads in [1:Threads.nthreads(), 1, 1:1, 1:2, [1,3]]
-            for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
-                @testset "tasks = $tasks threads = $threads groupby = $groupby" begin
-                    Profile.print(devnull; groupby, threads, tasks)
+    iobuf = IOBuffer()
+    with_logger(NullLogger()) do
+        @testset for format in [:flat, :tree]
+            @testset for threads in [1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
+                @testset for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
+                    Profile.print(iobuf; groupby, threads, format)
+                    @test !isempty(String(take!(iobuf)))
                 end
             end
         end
