@@ -2875,6 +2875,7 @@ partial_return_2(x) = Val{partial_return_1(x)[2]}
 # Precision of abstract_iteration
 f_splat(x) = (x...,)
 @test Base.return_types(f_splat, (Pair{Int,Int},)) == Any[Tuple{Int, Int}]
+@test Base.return_types(f_splat, (UnitRange{Int},)) == Any[Tuple{Vararg{Int}}]
 
 # issue #32699
 f32699(a) = (id = a[1],).id

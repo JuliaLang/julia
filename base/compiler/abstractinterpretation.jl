@@ -869,8 +869,12 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # the precise (potentially const) state type
     statetype = widenconst(statetype)
     valtype = widenconst(valtype)
-    while valtype !== Any
+    if statetype === Bottom
+        stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype], sv).rt
+    else
         stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv).rt
+    end
+    while valtype !== Any
         stateordonet = widenconst(stateordonet)
         nounion = typesubtract(stateordonet, Nothing, 0)
         if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
@@ -886,6 +890,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         end
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
+        stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv).rt
     end
     push!(ret, Vararg{valtype})
     return ret, nothing
