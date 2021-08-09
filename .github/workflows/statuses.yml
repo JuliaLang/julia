@@ -10,6 +10,7 @@
 # Here are some steps that we take in this workflow file for security reasons:
 # 1. We do not checkout any code.
 # 2. We do not run any external actions.
+# 3. We only give `GITHUB_TOKEN` the minimum necessary set of permissions.
 
 name: Statuses
 
