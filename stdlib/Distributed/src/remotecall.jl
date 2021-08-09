@@ -87,7 +87,6 @@ function finalize_ref(r::AbstractRemoteRef)
         if trylock(client_refs.lock) # trylock doesn't call wait which causes yields
             try
                 delete!(client_refs.ht, r) # direct removal avoiding locks
-
                 if isa(r, RemoteChannel)
                     send_del_client_no_lock(r)
                 else
@@ -96,16 +95,13 @@ function finalize_ref(r::AbstractRemoteRef)
                     r.v = nothing
                 end
                 r.where = 0
-
-            catch
-                unlock(client_refs.lock)
-                finalizer(finalize_ref, r)
-                return nothing
             finally
                 unlock(client_refs.lock)
             end
+        else
+            finalizer(finalize_ref, r)
+            return nothing
         end
-
     end
     nothing
 end
@@ -251,6 +247,7 @@ function _del_client(pg, id, client)
             #print("$(myid()) collected $id\n")
         end
     end
+    nothing
 end
 
 function del_clients(pairs::Vector)
