@@ -91,6 +91,16 @@ static inline void multiq_init(void)
     unbias_cong(heap_p, &cong_unbias);
 }
 
+// Returns number of tasks contained in the queues
+JL_DLLEXPORT uint64_t jl_task_queue_length()
+{
+    uint64_t total = 0;
+    for (int32_t i = 0; i < heap_p; ++i) {
+        total += heaps[i].ntasks;
+    }
+    return total;
+}
+
 
 static inline void sift_up(taskheap_t *heap, int32_t idx)
 {
