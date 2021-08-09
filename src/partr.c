@@ -92,7 +92,7 @@ static inline void multiq_init(void)
 }
 
 // Returns number of tasks contained in the queues
-JL_DLLEXPORT uint64_t jl_task_queue_length()
+JL_DLLEXPORT uint64_t jl_task_queue_length(void)
 {
     uint64_t total = 0;
     for (int32_t i = 0; i < heap_p; ++i) {
