@@ -55,6 +55,7 @@ import ..LineEdit:
     history_last,
     history_search,
     accept_result,
+    setmodifiers!,
     terminal,
     MIState,
     PromptState,
@@ -470,9 +471,14 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
         false, false, false, envcolors
     )
 
-mutable struct REPLCompletionProvider <: CompletionProvider end
+mutable struct REPLCompletionProvider <: CompletionProvider
+    modifiers::LineEdit.Modifiers
+end
+REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
+
+setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
@@ -480,6 +486,15 @@ function complete_line(c::REPLCompletionProvider, s::PromptState)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, lastindex(partial))
+    if !c.modifiers.shift
+        # Filter out methods where all arguments are `Any`
+        filter!(ret) do c
+            isa(c, REPLCompletions.MethodCompletion) || return true
+            sig = Base.unwrap_unionall(c.method.sig)::DataType
+            return !all(T -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
+        end
+    end
+    c.modifiers = LineEdit.Modifiers()
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
