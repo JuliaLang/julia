@@ -17,7 +17,7 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 # Examples
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}, Vector{Float64}}
+Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}, Vector{Float64}, Float64}
 values:
 3-element Vector{Float64}:
   1.0
@@ -72,8 +72,9 @@ function Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}, vectorsl=s
         n = length(values)
         vectorsl = vectors
         balnorm = maximum(abs.(values))
-        rce = ones(real(T),n)
-        rcv = ones(real(T),n)
+        # CHECKME: rce = 1 follows LUG, but is not universally appropriate.
+        # [Note: Activation would require revision of eigen docstring.]
+        # rce = ones(real(T),n)
     end
     Eigen{T,V,typeof(vectors),typeof(values),typeof(rce),typeof(balnorm)}(values, vectors, vectorsl, normal, rce, rcv, balnorm)
 end
@@ -237,7 +238,7 @@ end
     eigen(A; sortby, keywords...) -> Eigen
 
 Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
-which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
+which contains the eigenvalues in `F.values` and the right eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
@@ -266,7 +267,7 @@ their defaults, and their effects on the returned `F::Eigen` object, are as foll
 # Examples
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}, Vector{Float64}}
+Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}, Vector{Float64}, Float64}
 values:
 3-element Vector{Float64}:
   1.0
@@ -497,18 +498,19 @@ function eigmin(A::Union{Number, AbstractMatrix};
 end
 
 """
-    spectral(f, F::Eigen)
+    matrix_function(f, F::Eigen)
 
-Construct a matrix from an eigen-decomposition `F` by applying the function to
-the spectrum (diagonal) of `F`.
+Evaluate a function `f` of a matrix `A` from its eigen-decomposition `F` by applying the
+function to the spectrum (diagonal) of `F`. Note that this may be inaccurate if `A` is
+not nearly normal.
 """
-function spectral(f, A::Eigen)
+function matrix_function(f, A::Eigen)
     d = Diagonal(f.(A.values))
     v = A.vectors
     vd = v * d
     A.unitary ? vd * v' : vd / v
 end
-inv(A::Eigen) = spectral(inv, A)
+inv(A::Eigen) = matrix_function(inv, A)
 det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
@@ -735,7 +737,7 @@ end
 # Conversion methods
 
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
-AbstractMatrix(F::Eigen) = spectral(identity, F)
+AbstractMatrix(F::Eigen) = matrix_function(identity, F)
 AbstractArray(F::Eigen) = AbstractMatrix(F)
 Matrix(F::Eigen) = Array(AbstractArray(F))
 Array(F::Eigen) = Matrix(F)
