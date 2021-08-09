@@ -60,49 +60,9 @@ function isopen end
 Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
-
-"""
-    shutdown(stream)
-
-Shutdown the write half of a full-duplex I/O stream. Performs a [`flush`](@ref)
-first. Notify the other end that no more data will be written to the underlying
-file. This is not supported by all IO types.
-
-# Examples
-```jldoctest
-julia> io = Base.BufferStream(); # this never blocks, so we can read and write on the same Task
-
-julia> write(io, "request");
-
-julia> # calling `read(io)` here would block forever
-
-julia> shutdown(io);
-
-julia> read(io, String)
-"request"
-"""
-function shutdown end
-
-"""
-    flush(stream)
-
-Commit all currently buffered writes to the given stream.
-"""
 function flush end
-
-"""
-    bytesavailable(io)
-
-Return the number of bytes available for reading before a read from this stream or buffer will block.
-
-# Examples
-```jldoctest
-julia> io = IOBuffer("JuliaLang is a GitHub organization");
-
-julia> bytesavailable(io)
-34
-```
-"""
+function wait_readnb end
+function wait_close end
 function bytesavailable end
 
 """
@@ -121,7 +81,7 @@ function readavailable end
 """
     isreadable(io) -> Bool
 
-Return `false` if the specified IO object is not readable.
+Return `true` if the specified IO object is readable (if that can be determined).
 
 # Examples
 ```jldoctest
@@ -139,12 +99,12 @@ true
 julia> rm("myfile.txt")
 ```
 """
-isreadable(io::IO) = isopen(io)
+function isreadable end
 
 """
     iswritable(io) -> Bool
 
-Return `false` if the specified IO object is not writable.
+Return `true` if the specified IO object is writable (if that can be determined).
 
 # Examples
 ```jldoctest
@@ -162,22 +122,9 @@ false
 julia> rm("myfile.txt")
 ```
 """
-iswritable(io::IO) = isopen(io)
-
-"""
-    eof(stream) -> Bool
-
-Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
-function will block to wait for more data if necessary, and then return `false`. Therefore
-it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
-`false` as long as buffered data is still available, even if the remote end of a connection
-is closed.
-"""
-function eof end
-
+function iswritable end
 function copy end
-function wait_readnb end
-function wait_close end
+function eof end
 
 """
     read(io::IO, T)
@@ -410,36 +357,64 @@ end
 function pipe_reader end
 function pipe_writer end
 
-for f in (:flush, :shutdown, :iswritable)
-    @eval $(f)(io::AbstractPipe) = $(f)(pipe_writer(io)::IO)
-end
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
 write(to::IO, from::AbstractPipe) = write(to, pipe_reader(from))
 unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)::Union{Int,UInt}
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
+flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
 
-for f in (
-        # peek/mark interface
-        :mark, :unmark, :reset, :ismarked,
-        # Simple reader functions
-        :read, :readavailable, :bytesavailable, :reseteof, :isreadable)
-    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
-end
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)::UInt8
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
+read(io::AbstractPipe) = read(pipe_reader(io)::IO)
 readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
 readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
-peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
-wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
-eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
 
+for f in (
+        # peek/mark interface
+        :mark, :unmark, :reset, :ismarked,
+        # Simple reader functions
+        :readavailable, :isreadable)
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
+end
+peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
+
+iswritable(io::AbstractPipe) = iswritable(pipe_writer(io)::IO)
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)::IO) || isopen(pipe_reader(io)::IO)
 close(io::AbstractPipe) = (close(pipe_writer(io)::IO); close(pipe_reader(io)::IO))
+wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe_reader(io)::IO))
+
+"""
+    bytesavailable(io)
+
+Return the number of bytes available for reading before a read from this stream or buffer will block.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> bytesavailable(io)
+34
+```
+"""
+bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io)::IO)
+bytesavailable(io::DevNull) = 0
+
+"""
+    eof(stream) -> Bool
+
+Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
+function will block to wait for more data if necessary, and then return `false`. Therefore
+it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
+`false` as long as buffered data is still available, even if the remote end of a connection
+is closed.
+"""
+eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
+reseteof(io::AbstractPipe) = reseteof(pipe_reader(io)::IO)
 
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
@@ -1144,6 +1119,11 @@ ismarked(io::IO) = io.mark >= 0
 # Make sure all IO streams support flush, even if only as a no-op,
 # to make it easier to write generic I/O code.
 
+"""
+    flush(stream)
+
+Commit all currently buffered writes to the given stream.
+"""
 flush(io::IO) = nothing
 
 """
