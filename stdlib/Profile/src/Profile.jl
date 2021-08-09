@@ -41,9 +41,9 @@ end
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of instruction pointers that may be
 stored per thread. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long
-list of instruction pointers. Note that 3 instruction pointers per backtrace are used to store metadata. Current settings can be
-obtained by calling this function with no arguments, and each can be set independently using keywords or in the order
-`(n, delay)`.
+list of instruction pointers. Note that 4 instruction pointers per backtrace are used to store metadata and markers. Current
+settings can be obtained by calling this function with no arguments, and each can be set independently using keywords or
+in the order `(n, delay)`.
 
 !!! compat "Julia 1.8"
     As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
@@ -504,7 +504,7 @@ function fetch(;include_meta = false)
         return data
     else
         nblocks = count(iszero, data)
-        nmeta = 3 # number of metadata fields (threadid, taskid, time)
+        nmeta = 3 # number of metadata fields (threadid, taskid, cpu_cycle_clock)
         data_stripped = Vector{UInt}(undef, length(data) - (nblocks * nmeta))
         j = length(data_stripped)
         i = length(data)
@@ -540,7 +540,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
         ip = data[i]
         if ip == 0
             # read metadata
-            # time = data[i - 1]
+            # cpu_cycle_clock = data[i - 1]
             taskid = data[i - 2]
             threadid = data[i - 3]
             if !in(threadid, threads) || !in(taskid, tasks)
@@ -776,7 +776,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         ip = all[i]
         if ip == 0
             # read metadata
-            # time = all[i - 1]
+            # cpu_cycle_clock = all[i - 1]
             taskid = all[i - 2]
             threadid = all[i - 3]
             if !in(threadid, threads) || !in(taskid, tasks)
