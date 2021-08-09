@@ -120,9 +120,9 @@
     XX(jl_dlsym) \
     XX(jl_dump_compiles) \
     XX(jl_dump_fptr_asm) \
+    XX(jl_dump_function_asm) \
     XX(jl_dump_function_ir) \
     XX(jl_dump_host_cpu) \
-    XX(jl_dump_llvm_asm) \
     XX(jl_dump_method_asm) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
