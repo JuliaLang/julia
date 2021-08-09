@@ -28,6 +28,7 @@ struct Spec{T} # T => %type => Val{'type'}
     space::Bool
     zero::Bool
     hash::Bool
+    apostrophe::Bool
     width::Int
     precision::Int
 end
@@ -35,14 +36,14 @@ end
 # recreate the format specifier string from a typed Spec
 Base.string(f::Spec{T}; modifier::String="") where {T} =
     string("%", f.leftalign ? "-" : "", f.plus ? "+" : "", f.space ? " " : "",
-        f.zero ? "0" : "", f.hash ? "#" : "", f.width > 0 ? f.width : "",
+        f.zero ? "0" : "", f.hash ? "#" : "", f.apostrophe ? "'" : "", f.width > 0 ? f.width : "",
         f.precision == 0 ? ".0" : f.precision > 0 ? ".$(f.precision)" : "", modifier, char(T))
 Base.show(io::IO, f::Spec) = print(io, string(f))
 
 floatfmt(s::Spec{T}) where {T} =
-    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.width, 0)
+    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.apostrophe, s.width, 0)
 ptrfmt(s::Spec{T}, x) where {T} =
-    Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.width, sizeof(x) == 8 ? 16 : 8)
+    Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.apostrophe, s.width, sizeof(x) == 8 ? 16 : 8)
 
 """
     Printf.Format(format_str)
@@ -105,7 +106,7 @@ function Format(f::AbstractString)
         pos += 1
         # positioned at start of first format str %
         # parse flags
-        leftalign = plus = space = zero = hash = false
+        leftalign = plus = space = zero = hash = apostrophe = false
         while true
             if b == UInt8('-')
                 leftalign = true
@@ -117,6 +118,8 @@ function Format(f::AbstractString)
                 zero = true
             elseif b == UInt8('#')
                 hash = true
+            elseif b == UInt8(''')
+                apostrophe = true
             else
                 break
             end
@@ -178,7 +181,7 @@ function Format(f::AbstractString)
         elseif type <: Floats && !parsedprecdigits
             precision = 6
         end
-        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision))
+        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, apostrophe, width, precision))
         start = pos
         while pos <= len
             b = bytes[pos]
@@ -287,16 +290,17 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     fmt(buf, pos, arg, floatfmt(spec))
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+    leftalign, plus, space, zero, hash, apostrophe, width, prec =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.apostrophe, spec.width, spec.precision
     bs = base(T)
     arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
+    numsep = apostrophe ? countthousandsep(spec, arg2) : 0
     x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
-    arglen = n + (neg || (plus | space)) +
+    arglen = n + (neg || (plus | space)) + numsep +
         (T == Val{'o'} && hash ? 1 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
-    arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) : arglen
+    arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) - numsep : arglen
     if !leftalign && !zero && arglen2 < width
         # pad left w/ spaces
         for _ = 1:(width - arglen2)
@@ -328,14 +332,22 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
             buf[pos] = UInt8('0')
             pos += 1
         end
-    elseif n < prec
-        for _ = 1:(prec - n)
+    elseif (n + numsep) < prec
+        for _ = 1:(prec - (n + numsep))
             buf[pos] = UInt8('0')
             pos += 1
         end
     elseif arglen < arglen2
         for _ = 1:(arglen2 - arglen)
             buf[pos] = UInt8('0')
+            pos += 1
+        end
+    end
+    headpos = pos
+    if apostrophe && numsep > 0 && T in (Val{'d'}, Val{'i'}, Val{'u'})
+        # pad left for thousand separators
+        for _ = 1:numsep
+            buf[pos] = UInt8(' ')
             pos += 1
         end
     end
@@ -353,6 +365,10 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
         i -= 1
     end
     pos += n
+    if apostrophe && numsep > 0
+        onesplace = pos - 1
+        insertsep(buf, headpos, numsep, onesplace)
+    end
     if leftalign && arglen2 < width
         # pad right
         for _ = 1:(width - arglen2)
@@ -761,6 +777,32 @@ const UNROLL_UPTO = 16
     return pos
 end
 
+
+function insertsep(buf, headpos, numsep, onesplace)
+    intlength = (onesplace - headpos + 1) - numsep
+
+    headdivlength = mod1(intlength, 3)
+    seconddiv = headpos + numsep + headdivlength
+
+    separation = headpos + headdivlength
+    buf[headpos:(separation - 1)] = buf[(headpos + numsep):(headpos + numsep + headdivlength - 1)]
+
+    for i in 1:numsep
+        div = seconddiv + 3 * (i - 1)
+        buf[separation] = UInt8(',')
+        buf[(separation + 1):(separation + 3)] = buf[div:(div + 2)]
+        separation += 4
+    end
+end
+
+
+countthousandsep(::Spec, x) = 0
+function countthousandsep(::Spec{T}, x) where {T <: Union{Ints, Floats}}
+    (isnan(x) || isinf(x)) && return 0
+    x2 = trunc(BigInt, x)
+    return base(T) == 10 ? ((ndigits(x2) - 1) ÷ 3) : 0
+end
+
 function plength(f::Spec{T}, x) where {T <: Chars}
     c = Char(first(x))
     w = textwidth(c)
@@ -777,13 +819,13 @@ end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
-    return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
+    return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + countthousandsep(f, x) + 5)
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, 0 + 309 + 17 + f.hash + 5)
+    max(f.width, 0 + 309 + 17 + f.hash + countthousandsep(f, x) + 5)
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.precision + 309 + 17 + f.hash + 5)
+    max(f.width, f.precision + 309 + 17 + f.hash + countthousandsep(f, x) + 5)
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)

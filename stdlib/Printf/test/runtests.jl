@@ -107,6 +107,12 @@ end
     @test Printf.@sprintf("%.15g", 0) == "0"
     @test Printf.@sprintf("%#.15g", 0) == "0.00000000000000"
 
+    # %'
+    @test Printf.@sprintf("%'g", 0.00012) == "0.00012"
+    @test Printf.@sprintf("%'g", 0.000012) == "1.2e-05"
+    @test Printf.@sprintf("%'g", 123456.7) == "123,457"
+    @test Printf.@sprintf("%'g", 1234567.8) == "1.23457e+06"
+
 end
 
 @testset "%f" begin
@@ -116,19 +122,24 @@ end
     @test (Printf.@sprintf "%+f" Inf) == "+Inf"
     @test (Printf.@sprintf "% f" Inf) == " Inf"
     @test (Printf.@sprintf "% #f" Inf) == " Inf"
+    @test (Printf.@sprintf "%'f" Inf) == "Inf"
     @test (Printf.@sprintf "%f" -Inf) == "-Inf"
     @test (Printf.@sprintf "%+f" -Inf) == "-Inf"
+    @test (Printf.@sprintf "%'f" -Inf) == "-Inf"
     @test (Printf.@sprintf "%f" NaN) == "NaN"
     @test (Printf.@sprintf "%+f" NaN) == "+NaN"
     @test (Printf.@sprintf "% f" NaN) == " NaN"
     @test (Printf.@sprintf "% #f" NaN) == " NaN"
+    @test (Printf.@sprintf "%'f" NaN) == "NaN"
     @test (Printf.@sprintf "%e" big"Inf") == "Inf"
     @test (Printf.@sprintf "%e" big"NaN") == "NaN"
 
     @test (Printf.@sprintf "%.0f" 3e142) == "29999999999999997463140672961703247153805615792184250659629251954072073858354858644285983761764971823910371920726635399393477049701891710124032"
 
     @test Printf.@sprintf("%f", 1.234) == "1.234000"
+    @test Printf.@sprintf("%'f", 1.234) == "1.234000"
     @test Printf.@sprintf("%F", 1.234) == "1.234000"
+    @test Printf.@sprintf("%'F", 1.234) == "1.234000"
     @test Printf.@sprintf("%+f", 1.234) == "+1.234000"
     @test Printf.@sprintf("% f", 1.234) == " 1.234000"
     @test Printf.@sprintf("%f", -1.234) == "-1.234000"
@@ -160,6 +171,12 @@ end
     #40303
     @test Printf.@sprintf("%+7.1f", 9.96) == "  +10.0"
     @test Printf.@sprintf("% 7.1f", 9.96) == "   10.0"
+
+    # %'
+    @test (Printf.@sprintf "%'.0f" 3e142) == "29,999,999,999,999,997,463,140,672,961,703,247,153,805,615,792,184,250,659,629,251,954,072,073,858,354,858,644,285,983,761,764,971,823,910,371,920,726,635,399,393,477,049,701,891,710,124,032"
+    @test (Printf.@sprintf "%'f" 3e142) == "29,999,999,999,999,997,463,140,672,961,703,247,153,805,615,792,184,250,659,629,251,954,072,073,858,354,858,644,285,983,761,764,971,823,910,371,920,726,635,399,393,477,049,701,891,710,124,032.000000"
+    @test (Printf.@sprintf "%'#.0f" 3e142) == "29,999,999,999,999,997,463,140,672,961,703,247,153,805,615,792,184,250,659,629,251,954,072,073,858,354,858,644,285,983,761,764,971,823,910,371,920,726,635,399,393,477,049,701,891,710,124,032."
+
 end
 
 @testset "%e" begin
@@ -342,6 +359,7 @@ end
     @test_throws ArgumentError Printf.Format("")
     @test_throws ArgumentError Printf.Format("%+")
     @test_throws ArgumentError Printf.Format("%.")
+    @test_throws ArgumentError Printf.Format("%'")
     @test_throws ArgumentError Printf.Format("%.0")
     @test isempty(Printf.Format("%%").formats)
     @test Printf.@sprintf("%d%d", 1, 2) == "12"
@@ -478,6 +496,7 @@ end
 
     # print float as %d uses round(x)
     @test @sprintf("%d", 25.5) == "26"
+    @test @sprintf("%'d", 999.9) == "1,000"
 
     # 37539
     @test @sprintf(" %.1e\n", 0.999) == " 1.0e+00\n"
@@ -626,6 +645,12 @@ end
     @test Printf.@sprintf("%+ x",  UInt(3989525555)) == "+edcb5433"
     @test Printf.@sprintf("%+ X",  305441741) == "+1234ABCD"
     @test Printf.@sprintf("%+ X",  UInt(3989525555)) == "+EDCB5433"
+    @test Printf.@sprintf("%'d",  1024) == "1,024"
+    @test Printf.@sprintf("%'d", -1024) == "-1,024"
+    @test Printf.@sprintf("%'i",  1024) == "1,024"
+    @test Printf.@sprintf("%'i", -1024) == "-1,024"
+    @test Printf.@sprintf("%'u",  1024) == "1,024"
+    @test Printf.@sprintf("%'u",  UInt(4294966272)) == "4,294,966,272"
     @test Printf.@sprintf("%#o",  511) == "0777"
     @test Printf.@sprintf("%#o",  UInt(4294966785)) == "037777777001"
     @test Printf.@sprintf("%#x",  305441741) == "0x1234abcd"
@@ -659,6 +684,12 @@ end
     @test Printf.@sprintf("%20x",  UInt(3989525555)) == "            edcb5433"
     @test Printf.@sprintf("%20X",  305441741) == "            1234ABCD"
     @test Printf.@sprintf("%20X",  UInt(3989525555)) == "            EDCB5433"
+    @test Printf.@sprintf("%'20d",  1024) == "               1,024"
+    @test Printf.@sprintf("%'20d", -1024) == "              -1,024"
+    @test Printf.@sprintf("%'20i",  1024) == "               1,024"
+    @test Printf.@sprintf("%'20i", -1024) == "              -1,024"
+    @test Printf.@sprintf("%'20u",  1024) == "               1,024"
+    @test Printf.@sprintf("%'20u",  UInt(4294966272)) == "       4,294,966,272"
     @test Printf.@sprintf("%-20d",  1024) == "1024                "
     @test Printf.@sprintf("%-20d", -1024) == "-1024               "
     @test Printf.@sprintf("%-20i",  1024) == "1024                "
@@ -671,8 +702,16 @@ end
     @test Printf.@sprintf("%-20x",  UInt(3989525555)) == "edcb5433            "
     @test Printf.@sprintf("%-20X",  305441741) == "1234ABCD            "
     @test Printf.@sprintf("%-20X",  UInt(3989525555)) == "EDCB5433            "
+    @test Printf.@sprintf("%'-20d",  1024) == "1,024               "
+    @test Printf.@sprintf("%'-20d", -1024) == "-1,024              "
+    @test Printf.@sprintf("%'-20i",  1024) == "1,024               "
+    @test Printf.@sprintf("%'-20i", -1024) == "-1,024              "
+    @test Printf.@sprintf("%'-20u",  1024) == "1,024               "
+    @test Printf.@sprintf("%'-20u",  UInt(4294966272)) == "4,294,966,272       "
     @test Printf.@sprintf("%020d",  1024) == "00000000000000001024"
     @test Printf.@sprintf("%020d", -1024) == "-0000000000000001024"
+    @test Printf.@sprintf("%'020d",  1024) == "0000000000000001,024"
+    @test Printf.@sprintf("%'020d", -1024) == "-000000000000001,024"
     @test Printf.@sprintf("%020i",  1024) == "00000000000000001024"
     @test Printf.@sprintf("%020i", -1024) == "-0000000000000001024"
     @test Printf.@sprintf("%020u",  1024) == "00000000000000001024"
@@ -700,6 +739,11 @@ end
     @test Printf.@sprintf("%0-20i",  1024) == "1024                "
     @test Printf.@sprintf("%0-20i", -1024) == "-1024               "
     @test Printf.@sprintf("%0-20u",  1024) == "1024                "
+    @test Printf.@sprintf("%'0-20d",  1024) == "1,024               "
+    @test Printf.@sprintf("%'0-20d", -1024) == "-1,024              "
+    @test Printf.@sprintf("%'0-20i",  1024) == "1,024               "
+    @test Printf.@sprintf("%'0-20i", -1024) == "-1,024              "
+    @test Printf.@sprintf("%'0-20u",  1024) == "1,024               "
     @test Printf.@sprintf("%0-20u",  UInt(4294966272)) == "4294966272          "
     @test Printf.@sprintf("%-020o",  511) == "777                 "
     @test Printf.@sprintf("%-020o",  UInt(4294966785)) == "37777777001         "
@@ -709,6 +753,8 @@ end
     @test Printf.@sprintf("%-020X",  UInt(3989525555)) == "EDCB5433            "
     @test Printf.@sprintf("%.20d",  1024) == "00000000000000001024"
     @test Printf.@sprintf("%.20d", -1024) == "-00000000000000001024"
+    @test Printf.@sprintf("%'.20d",  1024) == "0000000000000001,024"
+    @test Printf.@sprintf("%'.20d",  -1024) == "-0000000000000001,024"
     @test Printf.@sprintf("%.20i",  1024) == "00000000000000001024"
     @test Printf.@sprintf("%.20i", -1024) == "-00000000000000001024"
     @test Printf.@sprintf("%.20u",  1024) == "00000000000000001024"
@@ -724,6 +770,12 @@ end
     @test Printf.@sprintf("%20.5i",  1024) == "               01024"
     @test Printf.@sprintf("%20.5i", -1024) == "              -01024"
     @test Printf.@sprintf("%20.5u",  1024) == "               01024"
+    @test Printf.@sprintf("%'20.6d", 1024) == "              01,024"
+    @test Printf.@sprintf("%'20.6d", -1024) == "             -01,024"
+    @test Printf.@sprintf("%'20.6i", 1024) == "              01,024"
+    @test Printf.@sprintf("%'20.6i", -1024) == "             -01,024"
+    @test Printf.@sprintf("%'20.6u", 1024) == "              01,024"
+    @test Printf.@sprintf("%'20.6u", -1024) == "             -01,024"
     @test Printf.@sprintf("%20.5u",  UInt(4294966272)) == "          4294966272"
     @test Printf.@sprintf("%20.5o",  511) == "               00777"
     @test Printf.@sprintf("%20.5o",  UInt(4294966785)) == "         37777777001"
@@ -736,6 +788,12 @@ end
     @test Printf.@sprintf("%020.5i",  1024) == "               01024"
     @test Printf.@sprintf("%020.5i", -1024) == "              -01024"
     @test Printf.@sprintf("%020.5u",  1024) == "               01024"
+    @test Printf.@sprintf("%'020.6d", 1024) == "              01,024"
+    @test Printf.@sprintf("%'020.6d", -1024) == "             -01,024"
+    @test Printf.@sprintf("%'020.6i", 1024) == "              01,024"
+    @test Printf.@sprintf("%'020.6i", -1024) == "             -01,024"
+    @test Printf.@sprintf("%'020.6u", 1024) == "              01,024"
+    @test Printf.@sprintf("%'020.6u", -1024) == "             -01,024"
     @test Printf.@sprintf("%020.5u",  UInt(4294966272)) == "          4294966272"
     @test Printf.@sprintf("%020.5o",  511) == "               00777"
     @test Printf.@sprintf("%020.5o",  UInt(4294966785)) == "         37777777001"
