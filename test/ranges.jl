@@ -299,8 +299,6 @@ end
         @inferred((:)(-3.2, one, zero))
     end
 
-
-
     @testset "indexing" begin
         L32 = @inferred(range(Int32(1), stop=Int32(4), length=4))
         L64 = @inferred(range(Int64(1), stop=Int64(4), length=4))

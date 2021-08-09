@@ -376,3 +376,32 @@ Complex{BigInt}
 ```
 """
 big(::Type{T}) where {T<:Number} = typeof(big(zero(T)))
+
+# Range construction with colon, one, and zero
+
+# start isa typeof(zero)
+(:)(::typeof(zero), stop::T) where {T<:Real} = zero(stop):stop
+(:)(::typeof(zero), step, stop::T) where {T<:Real} = zero(stop):step:stop
+(:)(::typeof(zero), ::typeof(one), stop::T) where {T<:Real} = zero(stop):stop
+
+# start isa typeof(one)
+(:)(::typeof(one), stop::T) where {T<:Integer} = Base.OneTo(stop)
+(:)(::typeof(one), stop::T) where {T<:Real} = one(stop):stop
+(:)(::typeof(one), step, stop::T) where {T<:Real} = one(stop):step:stop
+(:)(::typeof(one), ::typeof(one), stop::T) where {T<:Real} = one(stop):stop
+
+# step isa typeof(one), also see above
+(:)(start::A, ::typeof(one), stop::C) where {A<:Real,C<:Real} = start:stop
+(:)(a::T, b::typeof(one), c::T) where {T<:Real} = a:c
+(:)(a::T, b::typeof(one), c::T) where {T<:AbstractFloat} = a:c
+(:)(a::T, b::typeof(one), c::T) where {T<:AbstractFloat} = a:c
+
+# stop isa typeof(zero)
+(:)(start::T, ::typeof(zero)) where {T<:Real} = start:zero(start)
+(:)(start::T, step, ::typeof(zero)) where {T<:Real} = start:step:zero(start)
+(:)(start::T, ::typeof(one), ::typeof(zero)) where {T<:Real} = start:zero(start)
+
+# stop isa typeof(one)
+(:)(start::T, ::typeof(one)) where {T<:Real} = start:one(start)
+(:)(start::T, step, ::typeof(one)) where {T<:Real} = start:step:one(start)
+(:)(start::T, ::typeof(one), ::typeof(one)) where {T<:Real} = start:one(start)
