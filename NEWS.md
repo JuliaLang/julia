@@ -81,7 +81,7 @@ Standard library changes
 #### Random
 
 #### REPL
-
+* `RadioMenu` now supports optional `keybindings` to directly select options ([#41576]).
 * ` ?(x, y` followed by TAB displays all methods that can be called
   with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
   `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
