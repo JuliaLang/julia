@@ -550,7 +550,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
-    Eigen(sorteig!(eigvals(D), eigvecs(D), sortby)...)
+    Eigen(sorteig!(eigvals(D), eigvecs(D), sortby)...; normal=true)
 end
 
 #Singular system

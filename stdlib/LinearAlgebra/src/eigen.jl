@@ -9,7 +9,7 @@ matrix `A`. This is the return type of [`eigen`](@ref), the corresponding matrix
 factorization function.
 
 If `F::Eigen` is the factorization object, the eigenvalues can be obtained via
-`F.values` and the eigenvectors as the columns of the matrix `F.vectors`.
+`F.values` and the right eigenvectors as the columns of the matrix `F.vectors`.
 (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
@@ -46,19 +46,37 @@ julia> vals, vecs = F; # destructuring via iteration
 julia> vals == F.values && vecs == F.vectors
 true
 ```
+
+Depending on the constructing algorithm, an object `F::Eigen` may optionally also contain:
+
+* the left eigenvectors as the columns of the matrix `F.vectorsl`,
+* the reciprocal condition numbers of the eigenvalues in the vector `F.rconde`,
+* the reciprocal condition numbers of the eigenvectors in the vector `F.rcondv`,
+* the norm (usu. `p=1`) of the balanced form of the matrix in `F.balnorm`.
 """
-struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector,R<:AbstractVector} <: Factorization{T}
+struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector,R<:AbstractVector,B} <: Factorization{T}
     values::U
     vectors::S
     vectorsl::S
-    unitary::Bool
+    unitary::Bool # indicates that the vectors form a unitary matrix (normality)
     rconde::R
     rcondv::R
-    Eigen{T,V,S,U,R}(values::AbstractVector{V}, vectors::AbstractMatrix{T}, vectorsl::AbstractMatrix{T}, unitary::Bool, rconde::R, rcondv::R) where {T,V,S,U,R} =
-        new(values, vectors, vectorsl, unitary, rconde, rcondv)
+    balnorm::B
+    Eigen{T,V,S,U,R,B}(values::AbstractVector{V}, vectors::AbstractMatrix{T}, vectorsl::AbstractMatrix{T}, unitary::Bool, rconde::R, rcondv::R, abnrm::B) where {T,V,S,U,R,B} =
+        new(values, vectors, vectorsl, unitary, rconde, rcondv, abnrm)
 end
-Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}, vectorsl=vectors, uni=true, rce=zeros(real(T),0), rcv=zeros(real(T), 0)) where {T,V} =
-    Eigen{T,V,typeof(vectors),typeof(values),typeof(rce)}(values, vectors, vectorsl, uni, rce, rcv)
+
+# Normal matrices are exceptional, so it's safer to force their processors to do extra work.
+function Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}, vectorsl=similar(vectors,0,0), rce=zeros(real(T),0), rcv=zeros(real(T), 0), balnorm=0/zero(real(T)); normal=false) where {T,V}
+    if normal
+        n = length(values)
+        vectorsl = vectors
+        balnorm = maximum(abs.(values))
+        rce = ones(real(T),n)
+        rcv = ones(real(T),n)
+    end
+    Eigen{T,V,typeof(vectors),typeof(values),typeof(rce),typeof(balnorm)}(values, vectors, vectorsl, normal, rce, rcv, balnorm)
+end
 
 # Generalized eigenvalue problem.
 """
@@ -69,7 +87,7 @@ Matrix factorization type of the generalized eigenvalue/spectral decomposition o
 matrix factorization function, when called with two matrix arguments.
 
 If `F::GeneralizedEigen` is the factorization object, the eigenvalues can be obtained via
-`F.values` and the eigenvectors as the columns of the matrix `F.vectors`.
+`F.values` and the right eigenvectors as the columns of the matrix `F.vectors`.
 (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
@@ -141,7 +159,7 @@ function sorteig!(λ::AbstractVector, X::AbstractMatrix, sortby::Union{Function,
     end
     return λ, X
 end
-function sorteig!(λ::AbstractVector, X::AbstractMatrix, sortby::Union{Function,Nothing}, Y::AbstractMatrix, rconde::AbstractVector, rcondv::AbstractVector)
+function sorteig!(λ::AbstractVector, X::AbstractMatrix, sortby::Union{Function,Nothing}, Y::AbstractMatrix, rconde::AbstractVector, rcondv::AbstractVector, balnorm)
     if sortby !== nothing && !issorted(λ, by=sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
         permute!(λ, p)
@@ -150,7 +168,7 @@ function sorteig!(λ::AbstractVector, X::AbstractMatrix, sortby::Union{Function,
         !isempty(X) && Base.permutecols!!(X, copy(p))
         !isempty(Y) && X !== Y && Base.permutecols!!(Y, p)
     end
-    return λ, X, Y, false, rconde, rcondv
+    return λ, X, Y, rconde, rcondv, balnorm
 end
 sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
 
@@ -160,15 +178,15 @@ sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby
 Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
 """
-function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby, jvl::Bool=false, jvr::Bool=true, jce::Bool=false, jcv::Bool=false) where T<:BlasReal
+function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby, rvectors::Bool=true, lvectors::Bool=false, valscond::Bool=false, vecscond::Bool=false) where T<:BlasReal
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     issymmetric(A) && return eigen!(Symmetric(A), sortby=sortby)
 
     balance = permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N')
-    jobvl = jvl || jce ? 'V' : 'N'
-    jobvr = jvr || jce ? 'V' : 'N'
-    sense = jce && jcv ? 'B' : jce ? 'E' : jcv ? 'V' : 'N'
+    jobvl = lvectors || valscond ? 'V' : 'N'
+    jobvr = rvectors || valscond ? 'V' : 'N'
+    sense = valscond && vecscond ? 'B' : valscond ? 'E' : vecscond ? 'V' : 'N'
     A, WR, WI, VL, VR, _, _, scale, abnrm, rconde, rcondv = LAPACK.geevx!(balance, jobvl, jobvr, sense, A)
     if iszero(WI)
         evecr = VR
@@ -179,9 +197,9 @@ function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
         evecl = complexeig(WI, VL)
         evals = complex.(WR, WI)
     end
-    rconde = jce ? inv.(rconde) : zeros(T, 0)
-    rcondv = jcv ? inv.(rcondv) : zeros(T, 0)
-    return Eigen(sorteig!(evals, evecr, sortby, evecl, rconde, rcondv)...)
+    rconde = valscond ? rconde : zeros(T, 0)
+    rcondv = vecscond ? rcondv : zeros(T, 0)
+    return Eigen(sorteig!(evals, evecr, sortby, evecl, rconde, rcondv, abnrm)...)
 end
 
 function complexeig(WI::Vector{T}, VR::Matrix{T}) where T
@@ -203,20 +221,20 @@ function complexeig(WI::Vector{T}, VR::Matrix{T}) where T
     evec
 end
 
-function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby, jvl::Bool=false, jvr::Bool=true, jce::Bool=false, jcv::Bool=false) where T<:BlasComplex
+function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby, rvectors::Bool=true, lvectors::Bool=false, valscond::Bool=false, vecscond::Bool=false) where T<:BlasComplex
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    ishermitian(A) && return eigen!(Hermitian(A), sortby=sortby)
+    ishermitian(A) && return eigen!(Hermitian(A), sortby=sortby, )
     balance = permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N')
-    jobvl = jvl || jce ? 'V' : 'N'
-    jobvr = jvr || jce ? 'V' : 'N'
-    sense = jce && jcv ? 'B' : jce ? 'E' : jcv ? 'V' : 'N'
+    jobvl = lvectors || valscond ? 'V' : 'N'
+    jobvr = rvectors || valscond ? 'V' : 'N'
+    sense = valscond && vecscond ? 'B' : valscond ? 'E' : vecscond ? 'V' : 'N'
     A, W, VL, VR, _, _, scale, abnrm, rconde, rcondv = LAPACK.geevx!(balance, jobvl, jobvr, sense, A)
-    return Eigen(sorteig!(W, VR, sortby, VL, rconde, rcondv)...)
+    return Eigen(sorteig!(W, VR, sortby, VL, rconde, rcondv, abnrm)...)
 end
 
 """
-    eigen(A; permute::Bool=true, scale::Bool=true, sortby) -> Eigen
+    eigen(A; sortby, keywords...) -> Eigen
 
 Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
@@ -224,18 +242,26 @@ matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vec
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
-The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
-
-For general nonsymmetric matrices it is possible to specify how the matrix is balanced
-before the eigenvector calculation. The option `permute=true` permutes the matrix to become
-closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
-make rows and columns more equal in norm. The default is `true` for both options.
+The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and
+[`isposdef`](@ref). (Note that `inv` may be useless if the eigensystem is ill-conditioned.)
 
 By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
 A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
 `sortby=nothing` to leave the eigenvalues in an arbitrary order.   Some special matrix types
 (e.g. [`Diagonal`](@ref) or [`SymTridiagonal`](@ref)) may implement their own sorting convention and not
 accept a `sortby` keyword.
+
+For general nonsymmetric matrices it is possible to specify how the matrix is balanced
+before the eigenvector calculation, and which eigenvectors are returned, and also to obtain
+information about the accuracy of the decomposition. The relevant optional keywords, with
+their defaults, and their effects on the returned `F::Eigen` object, are as follows:
+
+* `permute::Bool=true` permutes the matrix to become closer to upper triangular.
+* `scale::Bool=true` scales the matrix by its diagonal elements to make rows and columns more equal in norm.
+* `rvectors::Bool=true` stores the right eigenvectors in `F`.
+* `lvectors::Bool=false` stores the left eigenvectors in `F`.
+* `valscond::Bool=false` stores reciprocal condition numbers for eigenvalues in `F`.
+* `vecscond::Bool=false` stores reciprocal condition numbers for eigenvectors in `F` (may be expensive).
 
 # Examples
 ```jldoctest
@@ -270,10 +296,10 @@ julia> vals == F.values && vecs == F.vectors
 true
 ```
 """
-function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby, jvl::Bool=false, jvr::Bool=true, jce::Bool=false, jcv::Bool=false) where T
+function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby, rvectors::Bool=true, lvectors::Bool=false, valscond::Bool=false, vecscond::Bool=false) where T
     AA = copy_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
-    return eigen!(AA; permute=permute, scale=scale, sortby=sortby, jvl=jvl, jvr=jvr, jce=jce, jcv=jcv)
+    return eigen!(AA; permute=permute, scale=scale, sortby=sortby, lvectors=lvectors, rvectors=rvectors, valscond=valscond, vecscond=vecscond)
 end
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
     AA = copy_oftype(A, eigtype(T))
@@ -284,7 +310,7 @@ function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     vectorsl = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectorsl)
     rconde = convert(Vector{Float16}, A.rconde)
     rcondv = convert(Vector{Float16}, A.rcondv)
-    return Eigen(values, vectors, vectorsl, A.unitary, rconde, rcondv)
+    return Eigen(values, vectors, vectorsl, rconde, rcondv; normal=A.unitary)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 

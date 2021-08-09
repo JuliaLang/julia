@@ -11,14 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-if parse(Int,get(ENV,"TEST_RESEEDRNG","0")) != 0
-    let seed = round(Int,1024*rand(RandomDevice()))
-        @info "rng seed is $seed"
-        Random.seed!(seed)
-    end
-else
-    Random.seed!(12343219)
-end
+Random.seed!(12343219)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -135,25 +128,19 @@ bimg = eps(Float32(1)) * randn(n,n)
 creal = Float64[0.5 0 0 0; 0 1 1 0; 0 0 1 0; 0 0 0 2] + eps(Float32(1)) * randn(4,4)
 cimg = eps(Float32(1)) * randn(4,4)
 dreal = Diagonal(1.0:1.0:Float64(n)) + eps(Float32(1)) * randn(n,n)
-@testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
+@testset "$eltya extensions" for eltya in (Float32, Float64, ComplexF32, ComplexF64)
     bb = convert(Matrix{eltya}, eltya <: Complex ? complex.(breal, bimg) : breal)
     cc = convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimg) : creal)
     dd = convert(Matrix{eltya}, eltya <: Complex ? complex.(dreal, bimg) : dreal)
-    @testset "extensions of eigen (conditions, etc.)" begin
-        ed = eigen(dd, jvl=true, jce=true, jcv=true)
-        ec = eigen(cc, jvl=true, jce=true, jcv=true)
-        eb = eigen(bb, jvl=true, jce=true, jcv=true)
-        if eltya <: Real
-            @test_broken maximum(eb.rconde) <= 1 + sqrt(eps(real(eltya)))
-            @test_broken minimum(ec.rconde) < 0.01
-            @test_broken minimum(ec.rcondv) < 0.01
-        else
-            # allow for small normalization errors
-            @test maximum(eb.rconde) <= 1 + sqrt(eps(real(eltya)))
-            # note no such guarantee for rcondv
-            @test minimum(ec.rconde) < 0.01
-            @test minimum(ec.rcondv) < 0.01
-        end
+    @testset "conditions and lvectors" begin
+        ed = eigen(dd, lvectors=true, valscond=true, vecscond=true)
+        ec = eigen(cc, lvectors=true, valscond=true, vecscond=true)
+        eb = eigen(bb, lvectors=true, valscond=true, vecscond=true)
+        # allow for small normalization errors
+        @test maximum(eb.rconde) <= 1 + sqrt(eps(real(eltya)))
+        # note no such guarantee for rcondv
+        @test minimum(ec.rconde) < 0.01
+        @test minimum(ec.rcondv) < 0.01
         @test minimum(ed.rconde) > 0.1
         @test minimum(ed.rcondv) > 0.1
         @test ed.vectorsl' * dd ≈ Diagonal(ed.values) * ed.vectorsl'
@@ -163,18 +150,18 @@ dreal = Diagonal(1.0:1.0:Float64(n)) + eps(Float32(1)) * randn(n,n)
     @testset "eigen of Bidiagonal" begin
         ff = Bidiagonal(diag(bb,0), diag(bb,1), :U)
         ef = eigen(ff)
-        @test_broken ef.unitary == false
-        @test_broken norm(inv(ef) * ff - I) < sqrt(eps(real(eltya)))
+        @test ef.unitary == false
+        @test norm(inv(ef) * ff - I) < sqrt(eps(real(eltya)))
     end
     @testset "eigen of Triangular" begin
         ff = UpperTriangular(bb)
         ef = eigen(ff)
-        @test_broken ef.unitary == false
-        @test_broken norm(inv(ef) * ff - I) < sqrt(eps(real(eltya)))
+        @test ef.unitary == false
+        @test norm(inv(ef) * ff - I) < sqrt(eps(real(eltya)))
         ff = LowerTriangular(copy(bb'))
         ef = eigen(ff)
-        @test_broken ef.unitary == false
-        @test_broken norm(inv(ef) * ff - I) < sqrt(eps(real(eltya)))
+        @test ef.unitary == false
+        @test norm(inv(ef) * ff - I) < sqrt(eps(real(eltya)))
     end
 end
 
