@@ -62,6 +62,7 @@ Standard library changes
 #### Random
 
 #### REPL
+* `RadioMenu` now supports optional `keybindings` to directly select options ([#41576]).
 
 #### SparseArrays
 
