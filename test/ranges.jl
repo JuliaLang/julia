@@ -232,6 +232,51 @@ end
         @inferred((:)(0.0, -0.5))
     end
 
+    @testset "one:?step:stop" begin
+        @inferred((:)(one, 1, 0))
+        @inferred((:)(one, .2, 2))
+        @inferred((:)(one, .2, 2.))
+        @inferred((:)(one, -.2, 1))
+        @inferred((:)(one, 0))
+        @inferred((:)(one, -0.5))
+    end
+
+    @testset "zero:?step:stop" begin
+        @inferred((:)(zero, 1, 0))
+        @inferred((:)(zero, .2, 2))
+        @inferred((:)(zero, .2, 2.))
+        @inferred((:)(zero, -.2, 1))
+        @inferred((:)(zero, 0))
+        @inferred((:)(zero, -0.5))
+    end
+
+    @testset "start:one:stop" begin
+        @inferred((:)(10, one, 0))
+        @inferred((:)(1, one, 2))
+        @inferred((:)(1., one, 2.))
+        @inferred((:)(2, one, 1))
+        @inferred((:)(1, one, 0))
+        @inferred((:)(0.0, one, -0.5))
+    end
+
+    @testset "one:one:stop" begin
+        @inferred((:)(one, one, 0))
+        @inferred((:)(one, one, 2))
+        @inferred((:)(one, one, 2.))
+        @inferred((:)(one, one, 1))
+        @inferred((:)(one, one, 0))
+        @inferred((:)(one, one, -0.5))
+    end
+
+    @testset "zero:one:stop" begin
+        @inferred((:)(zero, one, 0))
+        @inferred((:)(zero, one, 2))
+        @inferred((:)(zero, one, 2.))
+        @inferred((:)(zero, one, 1))
+        @inferred((:)(zero, one, 0))
+        @inferred((:)(zero, one, -0.5))
+    end
+
     @testset "indexing" begin
         L32 = @inferred(range(Int32(1), stop=Int32(4), length=4))
         L64 = @inferred(range(Int64(1), stop=Int64(4), length=4))

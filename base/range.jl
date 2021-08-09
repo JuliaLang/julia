@@ -31,7 +31,7 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
 """
     (:)(start, [step], stop)
 
-Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (a [`UnitRange`](@ref))
+Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (a [`AbstractUnitRange`](@ref))
 , and `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref)).
 
 `:` is also used in indexing to select whole dimensions
@@ -45,6 +45,23 @@ function _colon(start::T, step, stop::T) where T
     T′ = typeof(start+zero(step))
     StepRange(convert(T′,start), step, convert(T′,stop))
 end
+
+# start isa typeof(zero)
+(:)(::typeof(zero), stop::T) where {T<:Real} = zero(stop):stop
+(:)(::typeof(zero), step, stop::T) where {T<:Real} = zero(stop):step:stop
+(:)(::typeof(zero), ::typeof(one), stop::T) where {T<:Real} = zero(stop):stop
+
+# start isa typeof(one)
+(:)(::typeof(one), stop::T) where {T<:Integer} = Base.OneTo(stop)
+(:)(::typeof(one), stop::T) where {T<:Real} = one(stop):stop
+(:)(::typeof(one), step, stop::T) where {T<:Real} = one(stop):step:stop
+(:)(::typeof(one), ::typeof(one), stop::T) where {T<:Real} = one(stop):stop
+
+# step isa typeof(one), also see above
+(:)(start::A, ::typeof(one), stop::C) where {A<:Real,C<:Real} = start:stop
+(:)(a::T, b::typeof(one), c::T) where {T<:Real} = a:c
+(:)(a::T, b::typeof(one), c::T) where {T<:AbstractFloat} = a:c
+(:)(a::T, b::typeof(one), c::T) where {T<:AbstractFloat} = a:c
 
 """
     range(start, stop, length)
