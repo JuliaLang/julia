@@ -3106,3 +3106,23 @@ function keepat!(a::AbstractVector, inds)
     deleteat!(a, i:lastindex(a))
     return a
 end
+
+"""
+    deepmap!(f,a::AbstractArray)
+Like [`map!`](@ref), but multi level.
+
+# Examples
+```jldoctest
+julia> a = [1,[2,[3,4]]]
+2-element Array{Any,1}:
+ 1
+  Any[2, [3, 4]]
+
+julia> deepmap!(x -> x^2, a)
+2-element Array{Any,1}:
+ 1
+  Any[4, [9, 16]]
+```
+"""
+deepmap!(f, arg) = f(arg)
+deepmap!(f, a::AbstractArray) = collect(a[i] = deepmap!(f,a[i]) for i in eachindex(a))
