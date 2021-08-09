@@ -24,6 +24,8 @@ cancel(::Pager) = nothing
 
 pick(::Pager, ::Int) = true
 
+accepts_vim_bindings(::Pager) = true
+
 function writeline(buf::IOBuffer, pager::Pager{Config}, idx::Int, iscursor::Bool)
     print(buf, pager.lines[idx])
 end

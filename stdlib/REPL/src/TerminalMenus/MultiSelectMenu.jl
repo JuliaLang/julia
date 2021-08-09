@@ -127,6 +127,7 @@ function keypress(menu::MultiSelectMenu, key::UInt32)
     false # don't break
 end
 
+accepts_vim_bindings(::MultiSelectMenu) = true
 
 ## Legacy interface
 function TerminalMenus.writeLine(buf::IOBuffer, menu::MultiSelectMenu{<:Dict}, idx::Int, cursor::Bool)

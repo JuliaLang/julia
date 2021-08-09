@@ -47,7 +47,13 @@ subtypes.
   - `keypress(m::AbstractMenu, i::UInt32)`
   - `numoptions(m::AbstractMenu)`
   - `selected(m::AbstractMenu)`
+  - `accepts_vim_bindings(m::AbstractMenu)`
+  - `accepts_jk(m::AbstractMenu)`
+  - `accepts_space(m::AbstractMenu)`
 
+!!! compat "Julia 1.7"
+    The functions `accepts_vim_bindings`, `accepts_jk`, `accepts_space` require
+    Julia 1.7 or later.
 """
 abstract type AbstractMenu end
 
@@ -203,9 +209,9 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
             lastoption = numoptions(m)
             c = readkey(term.in_stream)
 
-            if c == Int(ARROW_UP) || c == Int('k')
+            if c == Int(ARROW_UP) || (accepts_jk(m) && c == Int('k'))
                 cursor[] = move_up!(m, cursor[], lastoption)
-            elseif c == Int(ARROW_DOWN) || c == Int('j')
+            elseif c == Int(ARROW_DOWN) || (accepts_jk(m) && c == Int('j'))
                 cursor[] = move_down!(m, cursor[], lastoption)
             elseif c == Int(PAGE_UP)
                 cursor[] = page_up!(m, cursor[], lastoption)
@@ -217,7 +223,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
             elseif c == Int(END_KEY)
                 cursor[] = lastoption
                 m.pageoffset = lastoption - m.pagesize
-            elseif c == 13 || c == Int(' ') # <enter> or <space>
+            elseif c == 13 || (accepts_space(m) && c == Int(' ')) # <enter> or <space>
                 # will break if pick returns true
                 pick(m, cursor[]) && break
             elseif c == UInt32('q')
@@ -259,6 +265,42 @@ function request(term::REPL.Terminals.TTYTerminal, msg::AbstractString, m::Abstr
     request(term, m; kwargs...)
 end
 
+"""
+    accepts_vim_bindings(m::AbstractMenu)
+
+Returns whether `m` accepts `j` and `k` to move the cursor and Space to pick
+the selected option.
+Defaults to `false`.
+See also: [`accepts_jk`](@ref), [`accepts_space`](@ref).
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+"""
+accepts_vim_bindings(::AbstractMenu) = false
+
+"""
+    accepts_jk(m::AbstractMenu)
+
+Returns whether `m` accepts `j`/`k` to move the cursor down/up.
+Defaults to `false`.
+See also: [`accepts_vim_bindings`](@ref).
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+"""
+accepts_jk(m::AbstractMenu) = accepts_vim_bindings(m)
+
+"""
+    accepts_space(m::AbstractMenu)
+
+Returns whether `m` accepts Space to pick the currently selected option.
+Defaults to `false`.
+See also: [`accepts_vim_bindings`](@ref).
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
+"""
+accepts_space(m::AbstractMenu) = accepts_vim_bindings(m)
 
 function move_up!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     if cursor > 1

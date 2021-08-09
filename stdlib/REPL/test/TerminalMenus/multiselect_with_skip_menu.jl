@@ -85,6 +85,8 @@ function TerminalMenus.keypress(menu::MultiSelectWithSkipMenu, key::UInt32)
     false # don't break
 end
 
+TerminalMenus.accepts_vim_bindings(::MultiSelectWithSkipMenu) = true
+
 function move_cursor!(menu, direction, selected)
     c = menu.cursor[]
     while true

@@ -13,10 +13,12 @@ function simulate_input(expected, menu::TerminalMenus.AbstractMenu, keys...;
                    :down => "j",
                    :enter => " ")
     errs = []
-    got = _simulate_input(keydict, deepcopy(menu), keys...; kwargs...)
+    if TerminalMenus.accepts_vim_bindings(menu)
+        got = _simulate_input(vimdict, deepcopy(menu), keys...; kwargs...)
+        got == expected || push!(errs, :vim => got)
+    end
+    got = _simulate_input(keydict, menu, keys...; kwargs...)
     got == expected || push!(errs, :arrows => got)
-    got = _simulate_input(vimdict, menu, keys...; kwargs...)
-    got == expected || push!(errs, :vim => got)
     isempty(errs) || return errs
 end
 

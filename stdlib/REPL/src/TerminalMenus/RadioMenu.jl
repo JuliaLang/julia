@@ -99,6 +99,10 @@ function keypress(m::RadioMenu, i::UInt32)
     return true
 end
 
+accepts_jk(m::RadioMenu) = !('j' in m.keybindings || 'k' in m.keybindings)
+accepts_space(m::RadioMenu) = !(' ' in m.keybindings)
+accepts_vim_bindings(m::RadioMenu) = accepts_jk(m) && accepts_space(m)
+
 # Legacy interface
 function writeLine(buf::IOBuffer, menu::RadioMenu{<:Dict}, idx::Int, cursor::Bool)
     # print a ">" on the selected entry
