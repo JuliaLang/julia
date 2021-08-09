@@ -277,6 +277,30 @@ end
         @inferred((:)(zero, one, -0.5))
     end
 
+    @testset "start:?step:one" begin
+        @inferred((:)(-5, 1, one))
+        @inferred((:)(-3.2, .2, one))
+        @inferred((:)(0., .2, one))
+        @inferred((:)(-3, -.2, one))
+        @inferred((:)(1, one))
+        @inferred((:)(0.0, one))
+        @inferred((:)(0, one, one))
+        @inferred((:)(-3., one, one))
+    end
+
+    @testset "start:?step:zero" begin
+        @inferred((:)(-5, 1, zero))
+        @inferred((:)(-3.2, .2, zero))
+        @inferred((:)(0., .2, zero))
+        @inferred((:)(-3, -.2, zero))
+        @inferred((:)(1, zero))
+        @inferred((:)(0.0, zero))
+        @inferred((:)(-3, one, zero))
+        @inferred((:)(-3.2, one, zero))
+    end
+
+
+
     @testset "indexing" begin
         L32 = @inferred(range(Int32(1), stop=Int32(4), length=4))
         L64 = @inferred(range(Int64(1), stop=Int64(4), length=4))

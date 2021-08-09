@@ -63,6 +63,16 @@ end
 (:)(a::T, b::typeof(one), c::T) where {T<:AbstractFloat} = a:c
 (:)(a::T, b::typeof(one), c::T) where {T<:AbstractFloat} = a:c
 
+# stop isa typeof(zero)
+(:)(start::T, ::typeof(zero)) where {T<:Real} = start:zero(start)
+(:)(start::T, step, ::typeof(zero)) where {T<:Real} = start:step:zero(start)
+(:)(start::T, ::typeof(one), ::typeof(zero)) where {T<:Real} = start:zero(start)
+
+# stop isa typeof(one)
+(:)(start::T, ::typeof(one)) where {T<:Real} = start:one(start)
+(:)(start::T, step, ::typeof(one)) where {T<:Real} = start:step:one(start)
+(:)(start::T, ::typeof(one), ::typeof(one)) where {T<:Real} = start:one(start)
+
 """
     range(start, stop, length)
     range(start, stop; length, step)
