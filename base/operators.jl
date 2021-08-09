@@ -608,7 +608,6 @@ identity(x) = x
 xor(x::Integer) = x
 
 const − = -
-const × = *
 const ⊻ = xor
 const ⊼ = nand
 const ⊽ = nor
