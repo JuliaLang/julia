@@ -84,20 +84,28 @@ end
 
 function finalize_ref(r::AbstractRemoteRef)
     if r.where > 0 # Handle the case of the finalizer having been called manually
-        if islocked(client_refs)
-            # delay finalizer for later, when it's not already locked
-            finalizer(finalize_ref, r)
-            return nothing
+        if trylock(client_refs.lock) # trylock doesn't call wait which causes yields
+            try
+                delete!(client_refs.ht, r) # direct removal avoiding locks
+
+                if isa(r, RemoteChannel)
+                    send_del_client_no_lock(r)
+                else
+                    # send_del_client only if the reference has not been set
+                    r.v === nothing && send_del_client_no_lock(r)
+                    r.v = nothing
+                end
+                r.where = 0
+
+            catch
+                unlock(client_refs.lock)
+                finalizer(finalize_ref, r)
+                return nothing
+            finally
+                unlock(client_refs.lock)
+            end
         end
-        delete!(client_refs, r)
-        if isa(r, RemoteChannel)
-            send_del_client(r)
-        else
-            # send_del_client only if the reference has not been set
-            r.v === nothing && send_del_client(r)
-            r.v = nothing
-        end
-        r.where = 0
+
     end
     nothing
 end
@@ -229,16 +237,20 @@ del_client(rr::AbstractRemoteRef) = del_client(remoteref_id(rr), myid())
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
     lock(client_refs) do
-        rv = get(pg.refs, id, false)
-        if rv !== false
-            delete!(rv.clientset, client)
-            if isempty(rv.clientset)
-                delete!(pg.refs, id)
-                #print("$(myid()) collected $id\n")
-            end
-        end
+        _del_client(pg, id, client)
     end
     nothing
+end
+
+function _del_client(pg, id, client)
+    rv = get(pg.refs, id, false)
+    if rv !== false
+        delete!(rv.clientset, client)
+        if isempty(rv.clientset)
+            delete!(pg.refs, id)
+            #print("$(myid()) collected $id\n")
+        end
+    end
 end
 
 function del_clients(pairs::Vector)
@@ -259,11 +271,24 @@ function send_del_client(rr)
     if rr.where == myid()
         del_client(rr)
     elseif id_in_procs(rr.where) # process only if a valid worker
-        w = worker_from_id(rr.where)::Worker
-        push!(w.del_msgs, (remoteref_id(rr), myid()))
-        w.gcflag = true
-        notify(any_gc_flag)
+        process_worker(rr)
     end
+end
+
+function send_del_client_no_lock(rr)
+    # for gc context to avoid yields
+    if rr.where == myid()
+        _del_client(PGRP, remoteref_id(rr), myid())
+    elseif id_in_procs(rr.where) # process only if a valid worker
+        process_worker(rr)
+    end
+end
+
+function process_worker(rr)
+    w = worker_from_id(rr.where)::Worker
+    push!(w.del_msgs, (remoteref_id(rr), myid()))
+    w.gcflag = true
+    notify(any_gc_flag)
 end
 
 function add_client(id, client)
