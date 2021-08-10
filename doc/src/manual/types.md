@@ -1108,6 +1108,47 @@ julia> NoFieldsParam{Int}() === NoFieldsParam{Int}()
 true
 ```
 
+## Types of functions and closures (anonymous functions)
+
+Each function has its own type, which is a subtype of `Function`.
+
+```jldoctest
+julia> foo41(x) = x + 1
+foo (generic function with 1 method)
+
+julia> typeof(foo41)
+typeof(foo41) (singleton type of function foo41, subtype of Function)
+```
+
+Note how `typeof(foo41)` prints as itself. This is merely a convention for printing, as it is a first-class object that can be used like any other value:
+
+```jldoctest
+julia> T = typeof(foo41)
+typeof(foo41) (singleton type of function foo41, subtype of Function)
+
+julia> T <: Function
+true
+```
+
+Types of functions are singletons. When necessary, you can compare them with [`===`](@ref).
+
+[Anonymous functions](@ref man-anonymous-functions) also have their own type, which is printed with names that include `#<number>`. Numbers for different function types are distinct, but not guaranteed to be the same across sessions.
+
+```jldoctest; filter = r"[0-9\.]+"
+julia> typeof(x -> x + 1)
+var"#9#10"
+```
+
+Types of anonymous function are not necessarily singletons, for example in cases where a variable is captured.
+
+```jldoctest
+julia> addy(y) = x -> x + y
+addy (generic function with 1 method)
+
+julia> Base.issingletontype(addy(1))
+false
+```
+
 ## [`Type{T}` type selectors](@id man-typet-type)
 
 For each type `T`, `Type{T}` is an abstract parametric type whose only instance is the
