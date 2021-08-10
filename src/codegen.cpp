@@ -4977,7 +4977,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     std::string name;
     raw_string_ostream(name) << "tojlinvoke" << globalUnique++;
     Function *f = Function::Create(jl_func_sig,
-            GlobalVariable::PrivateLinkage,
+            GlobalVariable::InternalLinkage,
             name, M);
     jl_init_function(f);
     f->addFnAttr(Thunk);
@@ -7539,8 +7539,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         JL_UNLOCK(&m->writelock);
     }
 
-    // link the dependent llvmcall modules, but switch their function's linkage to private
-    // so that they don't show up in the execution engine.
+    // link the dependent llvmcall modules, but switch their function's linkage to internal
+    // so that they don't conflict when they show up in the execution engine.
     for (auto &Mod : ctx.llvmcall_modules) {
         SmallVector<std::string, 1> Exports;
         for (const auto &F: Mod->functions())
@@ -7550,7 +7550,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             jl_error("Failed to link LLVM bitcode");
         }
         for (auto FN: Exports)
-            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::PrivateLinkage);
+            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     // link in opaque closure modules
@@ -7561,7 +7561,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 Exports.push_back(F.getName().str());
         jl_merge_module(jl_Module, std::move(Mod));
         for (auto FN: Exports)
-            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::PrivateLinkage);
+            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     JL_GC_POP();
@@ -7759,9 +7759,9 @@ void jl_compile_workqueue(
             if (!preal_specsig) {
                 // emit specsig-to-(jl)invoke conversion
                 Function *preal = emit_tojlinvoke(codeinst, mod, params);
-                protodecl->setLinkage(GlobalVariable::PrivateLinkage);
+                protodecl->setLinkage(GlobalVariable::InternalLinkage);
                 //protodecl->setAlwaysInline();
-                protodecl->addFnAttr("no-frame-pointer-elim", "true");
+                jl_init_function(protodecl);
                 size_t nrealargs = jl_nparams(codeinst->def->specTypes); // number of actual arguments being passed
                 // TODO: maybe this can be cached in codeinst->specfptr?
                 emit_cfunc_invalidate(protodecl, proto_cc, proto_return_roots, codeinst->def->specTypes, codeinst->rettype, nrealargs, params, preal);
