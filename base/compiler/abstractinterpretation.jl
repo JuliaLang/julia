@@ -867,13 +867,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     end
     # From here on, we start asking for results on the widened types, rather than
     # the precise (potentially const) state type
-    statetype = widenconst(statetype)
     valtype = widenconst(valtype)
-    if statetype === Bottom
-        stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype], sv).rt
-    else
-        stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv).rt
-    end
     while valtype !== Any
         stateordonet = widenconst(stateordonet)
         nounion = typesubtract(stateordonet, Nothing, 0)
@@ -881,7 +875,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
             valtype = Any
             break
         end
-        if nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype
+        if nounion.parameters[1] <: valtype && nounion.parameters[2] ⊑ statetype
             if typeintersect(stateordonet, Nothing) === Union{}
                 # Reached a fixpoint, but Nothing is not possible => iterator is infinite or failing
                 return Any[Bottom], nothing
