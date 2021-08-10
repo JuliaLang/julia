@@ -684,7 +684,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         if (!type_is_ghost(ptrty)) {
             thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
             typed_store(ctx, thePtr, im1, x, jl_cgval_t(), ety, tbaa_data, nullptr, nullptr, isboxed,
-                        AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, false, true, false, false);
+                        AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, false, true, false, false, false, false, "");
         }
     }
     return e;
@@ -778,15 +778,18 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 // e[i] = x (set)
 // e[i] <= x (swap)
 // e[i] y => x (replace)
-static jl_cgval_t emit_atomic_pointerset(jl_codectx_t &ctx, intrinsic f, const jl_cgval_t *argv, int nargs)
+// x(e[i], y) (modify)
+static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl_cgval_t *argv, int nargs)
 {
     bool issetfield = f == atomic_pointerset;
     bool isreplacefield = f == atomic_pointerreplace;
+    bool isswapfield = f == atomic_pointerswap;
+    bool ismodifyfield = f == atomic_pointermodify;
     const jl_cgval_t undefval;
     const jl_cgval_t &e = argv[0];
-    const jl_cgval_t &x = isreplacefield ? argv[2] : argv[1];
-    const jl_cgval_t &y = isreplacefield ? argv[1] : undefval;
-    const jl_cgval_t &ord = isreplacefield ? argv[3] : argv[2];
+    const jl_cgval_t &x = isreplacefield || ismodifyfield ? argv[2] : argv[1];
+    const jl_cgval_t &y = isreplacefield || ismodifyfield ? argv[1] : undefval;
+    const jl_cgval_t &ord = isreplacefield || ismodifyfield ? argv[3] : argv[2];
     const jl_cgval_t &failord = isreplacefield ? argv[4] : undefval;
 
     jl_value_t *aty = e.typ;
@@ -814,7 +817,7 @@ static jl_cgval_t emit_atomic_pointerset(jl_codectx_t &ctx, intrinsic f, const j
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
         bool isboxed = true;
         jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, tbaa_data, nullptr, nullptr, isboxed,
-                    llvm_order, llvm_failorder, sizeof(jl_value_t*), false, issetfield, isreplacefield, false);
+                    llvm_order, llvm_failorder, sizeof(jl_value_t*), false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, "atomic_pointermodify");
         if (issetfield)
             ret = e;
         return ret;
@@ -826,7 +829,8 @@ static jl_cgval_t emit_atomic_pointerset(jl_codectx_t &ctx, intrinsic f, const j
         emit_error(ctx, msg);
         return jl_cgval_t();
     }
-    emit_typecheck(ctx, x, ety, std::string(jl_intrinsic_name((int)f)));
+    if (!ismodifyfield)
+        emit_typecheck(ctx, x, ety, std::string(jl_intrinsic_name((int)f)));
 
     size_t nb = jl_datatype_size(ety);
     if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE) {
@@ -847,7 +851,7 @@ static jl_cgval_t emit_atomic_pointerset(jl_codectx_t &ctx, intrinsic f, const j
         assert(!isboxed);
         Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
         jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, tbaa_data, nullptr, nullptr, isboxed,
-                    llvm_order, llvm_failorder, nb, false, issetfield, isreplacefield, false);
+                    llvm_order, llvm_failorder, nb, false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, "atomic_pointermodify");
         if (issetfield)
             ret = e;
         return ret;
@@ -1087,10 +1091,9 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return emit_atomic_pointerref(ctx, argv);
     case atomic_pointerset:
     case atomic_pointerswap:
-    case atomic_pointerreplace:
-        return emit_atomic_pointerset(ctx, f, argv, nargs);
     case atomic_pointermodify:
-        return emit_runtime_call(ctx, f, argv, nargs);
+    case atomic_pointerreplace:
+        return emit_atomic_pointerop(ctx, f, argv, nargs);
     case bitcast:
         return generic_bitcast(ctx, argv);
     case trunc_int:

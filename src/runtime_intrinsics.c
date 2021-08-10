@@ -142,15 +142,25 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
     return y;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order_sym)
+JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order)
 {
-    // n.b. we use seq_cst always here, but need to verify the order sym
-    // against the weaker load-only that happens first
-    if (order_sym == (jl_value_t*)acquire_release_sym)
-        order_sym = (jl_value_t*)acquire_sym;
-    jl_value_t *expected = jl_atomic_pointerref(p, order_sym);
+    JL_TYPECHK(atomic_pointerref, pointer, p);
+    JL_TYPECHK(atomic_pointerref, symbol, order)
+    (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
+    jl_value_t *expected;
+    if (ety == (jl_value_t*)jl_any_type) {
+        expected = jl_atomic_load((jl_value_t**)pp);
+    }
+    else {
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointermodify: invalid pointer");
+        size_t nb = jl_datatype_size(ety);
+        if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
+            jl_error("atomic_pointermodify: invalid pointer for atomic operation");
+        expected = jl_atomic_new_bits(ety, pp);
+    }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2);
     args[0] = expected;
