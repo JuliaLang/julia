@@ -30,17 +30,7 @@ on:
 # These are the permissions for the `GITHUB_TOKEN` token.
 # We should only give the token the minimum necessary set of permissions.
 permissions:
-  statuses:            write
-  actions:             none
-  checks:              none
-  contents:            none
-  deployments:         none
-  issues:              none
-  discussions:         none
-  packages:            none
-  pull-requests:       none
-  repository-projects: none
-  security-events:     none
+  statuses: write
 
 jobs:
   statuses:
