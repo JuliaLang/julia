@@ -171,7 +171,7 @@ export
     # key types
     Any, DataType, Vararg, NTuple,
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
-    AbstractArray, DenseArray, NamedTuple,
+    AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
     Function, Method,
     Module, Symbol, Task, Array, UndefInitializer, undef, WeakRef, VecElement,
@@ -812,5 +812,17 @@ _parse = nothing
 
 # support for deprecated uses of internal _apply function
 _apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
+
+struct Pair{A, B}
+    first::A
+    second::B
+    # if we didn't inline this, it's probably because the callsite was actually dynamic
+    # to avoid potentially compiling many copies of this, we mark the arguments with `@nospecialize`
+    # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
+    # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
+    Pair(a, b) = new{typeof(a), typeof(b)}(a, b)
+    Pair{A, B}(a::A, b::B) where {A, B} = new(a, b)
+    Pair{Any, Any}(@nospecialize(a::Any), @nospecialize(b::Any)) = new(a, b)
+end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

@@ -953,18 +953,13 @@ JL_DLLEXPORT int jl_atomic_bool_cmpswap_bits(char *dst, const jl_value_t *expect
     return success;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb)
+JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_datatype_t *rettyp, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb)
 {
     // dst must have the required alignment for an atomic of the given size
     // n.b.: this does not spuriously fail if there are padding bits
-    jl_value_t *params[2];
-    params[0] = (jl_value_t*)dt;
-    params[1] = (jl_value_t*)jl_bool_type;
-    jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
-    JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
-    int isptr = jl_field_isptr(tuptyp, 0);
     jl_task_t *ct = jl_current_task;
-    jl_value_t *y = jl_gc_alloc(ct->ptls, isptr ? nb : tuptyp->size, isptr ? dt : tuptyp);
+    int isptr = jl_field_isptr(rettyp, 0);
+    jl_value_t *y = jl_gc_alloc(ct->ptls, isptr ? nb : rettyp->size, isptr ? dt : rettyp);
     int success;
     jl_datatype_t *et = (jl_datatype_t*)jl_typeof(expected);
     if (nb == 0) {
@@ -1053,7 +1048,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, char *dst, co
     }
     if (isptr) {
         JL_GC_PUSH1(&y);
-        jl_value_t *z = jl_gc_alloc(ct->ptls, tuptyp->size, tuptyp);
+        jl_value_t *z = jl_gc_alloc(ct->ptls, rettyp->size, rettyp);
         *(jl_value_t**)z = y;
         JL_GC_POP();
         y = z;
@@ -1658,8 +1653,11 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
         args[0] = r;
         jl_gc_safepoint();
     }
-    // args[0] == r (old); args[1] == y (new)
-    args[0] = jl_f_tuple(NULL, args, 2);
+    // args[0] == r (old)
+    // args[1] == y (new)
+    jl_datatype_t *rettyp = jl_apply_modify_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    args[0] = jl_new_struct(rettyp, args[0], args[1]);
     JL_GC_POP();
     return args[0];
 }
@@ -1671,6 +1669,8 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
         jl_type_error("replacefield!", ty, rhs);
     size_t offs = jl_field_offset(st, i);
     jl_value_t *r = expected;
+    jl_datatype_t *rettyp = jl_apply_cmpswap_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
     if (jl_field_isptr(st, i)) {
         jl_value_t **p = (jl_value_t**)((char*)v + offs);
         int success;
@@ -1683,11 +1683,8 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
             if (success || !jl_egal(r, expected))
                 break;
         }
-        jl_value_t **args;
-        JL_GC_PUSHARGS(args, 2);
-        args[0] = r;
-        args[1] = success ? jl_true : jl_false;
-        r = jl_f_tuple(NULL, args, 2);
+        JL_GC_PUSH1(&r);
+        r = jl_new_struct(rettyp, r, success ? jl_true : jl_false);
         JL_GC_POP();
     }
     else {
@@ -1695,7 +1692,7 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
         int isunion = jl_is_uniontype(ty);
         int needlock;
         jl_value_t *rty = ty;
-        size_t fsz;
+        size_t fsz = jl_field_size(st, i);
         if (isunion) {
             assert(!isatomic);
             hasptr = 0;
@@ -1708,7 +1705,7 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
             needlock = (isatomic && fsz > MAX_ATOMIC_SIZE);
         }
         if (isatomic && !needlock) {
-            r = jl_atomic_cmpswap_bits((jl_datatype_t*)rty, (char*)v + offs, r, rhs, fsz);
+            r = jl_atomic_cmpswap_bits((jl_datatype_t*)ty, rettyp, (char*)v + offs, r, rhs, fsz);
             int success = *((uint8_t*)r + fsz);
             if (success && hasptr)
                 jl_gc_multi_wb(v, rhs); // rhs is immutable
@@ -1717,23 +1714,17 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
             jl_task_t *ct = jl_current_task;
             uint8_t *psel;
             if (isunion) {
-                size_t fsz = jl_field_size(st, i);
                 psel = &((uint8_t*)v)[offs + fsz - 1];
                 rty = jl_nth_union_component(rty, *psel);
             }
-            jl_value_t *params[2];
-            params[0] = rty;
-            params[1] = (jl_value_t*)jl_bool_type;
-            jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
-            JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
-            assert(!jl_field_isptr(tuptyp, 0));
-            r = jl_gc_alloc(ct->ptls, tuptyp->size, (jl_value_t*)tuptyp);
+            assert(!jl_field_isptr(rettyp, 0));
+            r = jl_gc_alloc(ct->ptls, rettyp->size, (jl_value_t*)rettyp);
             int success = (rty == jl_typeof(expected));
             if (needlock)
                 jl_lock_value(v);
-            size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
-            memcpy((char*)r, (char*)v + offs, fsz);
+            memcpy((char*)r, (char*)v + offs, fsz); // copy field, including union bits
             if (success) {
+                size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
                 if (((jl_datatype_t*)rty)->layout->haspadding)
                     success = jl_egal__bits(r, expected, (jl_datatype_t*)rty);
                 else
