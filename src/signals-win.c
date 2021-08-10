@@ -137,7 +137,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
             ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, ptls->pgcstack);
         }
         else if (have_backtrace_fiber) {
-            JL_LOCK(&backtrace_lock);
+            JL_LOCK_NOGC(&backtrace_lock);
             stkerror_ctx = ctxThread;
             stkerror_ptls = ptls;
             jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
