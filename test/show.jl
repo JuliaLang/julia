@@ -1774,7 +1774,7 @@ end
     # spurious binding resolutions
     show(IOContext(b, :module => TestShowType), Base.Pair)
     @test !Base.isbindingresolved(TestShowType, :Pair)
-    @test String(take!(b)) == "Base.Pair"
+    @test String(take!(b)) == "Core.Pair"
     show(IOContext(b, :module => TestShowType), Base.Complex)
     @test Base.isbindingresolved(TestShowType, :Complex)
     @test String(take!(b)) == "Complex"

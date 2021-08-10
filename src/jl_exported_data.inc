@@ -71,6 +71,7 @@
     XX(jl_nothing) \
     XX(jl_nothing_type) \
     XX(jl_number_type) \
+    XX(jl_pair_type) \
     XX(jl_partial_struct_type) \
     XX(jl_partial_opaque_type) \
     XX(jl_interconditional_type) \

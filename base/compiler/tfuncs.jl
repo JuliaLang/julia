@@ -466,29 +466,51 @@ add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
 add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
+
 function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
-    if a <: Ptr
-        if isa(a, DataType) && isa(a.parameters[1], Type)
-            return a.parameters[1]
-        elseif isa(a, UnionAll) && !has_free_typevars(a)
-            unw = unwrap_unionall(a)
-            if isa(unw, DataType)
-                return rewrap_unionall(unw.parameters[1], a)
-            end
+    if !has_free_typevars(a)
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType) && unw.name === Ptr.body.name
+            T = unw.parameters[1]
+            T isa Type && return rewrap_unionall(T, a)
         end
     end
     return Any
 end
+function atomic_pointermodify_tfunc(ptr, op, v, order)
+    @nospecialize
+    a = widenconst(ptr)
+    if !has_free_typevars(a)
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType) && unw.name === Ptr.body.name
+            T = unw.parameters[1]
+            # note: we could sometimes refine this to a PartialStruct if we analyzed `op(T, T)::T`
+            T isa Type && return rewrap_unionall(Pair{T, T}, a)
+        end
+    end
+    return Pair
+end
+function atomic_pointerreplace_tfunc(ptr, x, v, success_order, failure_order)
+    @nospecialize
+    a = widenconst(ptr)
+    if !has_free_typevars(a)
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType) && unw.name === Ptr.body.name
+            T = unw.parameters[1]
+            T isa Type && return rewrap_unionall(ccall(:jl_apply_cmpswap_type, Any, (Any,), T), a)
+        end
+    end
+    return ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
+end
 add_tfunc(pointerref, 3, 3, (a, i, align) -> (@nospecialize; pointer_eltype(a)), 4)
 add_tfunc(pointerset, 4, 4, (a, v, i, align) -> (@nospecialize; a), 5)
-
 add_tfunc(atomic_fence, 1, 1, (order) -> (@nospecialize; Nothing), 4)
 add_tfunc(atomic_pointerref, 2, 2, (a, order) -> (@nospecialize; pointer_eltype(a)), 4)
 add_tfunc(atomic_pointerset, 3, 3, (a, v, order) -> (@nospecialize; a), 5)
 add_tfunc(atomic_pointerswap, 3, 3, (a, v, order) -> (@nospecialize; pointer_eltype(a)), 5)
-add_tfunc(atomic_pointermodify, 4, 4, (a, op, v, order) -> (@nospecialize; T = pointer_eltype(a); Tuple{T, T}), 5)
-add_tfunc(atomic_pointerreplace, 5, 5, (a, x, v, success_order, failure_order) -> (@nospecialize; Tuple{pointer_eltype(a), Bool}), 5)
+add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
+add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
 function typeof_concrete_vararg(t::DataType)
@@ -911,11 +933,25 @@ setfield!_tfunc(o, f, v) = (@nospecialize; v)
 
 swapfield!_tfunc(o, f, v, order) = (@nospecialize; getfield_tfunc(o, f))
 swapfield!_tfunc(o, f, v) = (@nospecialize; getfield_tfunc(o, f))
-modifyfield!_tfunc(o, f, op, v, order) = (@nospecialize; T = getfield_tfunc(o, f); T === Bottom ? T : Tuple{T, T})
-modifyfield!_tfunc(o, f, op, v) = (@nospecialize; T = getfield_tfunc(o, f); T === Bottom ? T : Tuple{T, T}) # TODO: also model op(o.f, v) call
+modifyfield!_tfunc(o, f, op, v, order) = (@nospecialize; modifyfield!_tfunc(o, f, op, v))
+function modifyfield!_tfunc(o, f, op, v)
+    @nospecialize
+    T = _fieldtype_tfunc(o, isconcretetype(o), f)
+    T === Bottom && return Bottom
+    # note: we could sometimes refine this to a PartialStruct if we analyzed `op(o.f, v)::T`
+    PT = Const(Pair)
+    return instanceof_tfunc(apply_type_tfunc(PT, T, T))[1]
+end
 replacefield!_tfunc(o, f, x, v, success_order, failure_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
 replacefield!_tfunc(o, f, x, v, success_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
-replacefield!_tfunc(o, f, x, v) = (@nospecialize; T = getfield_tfunc(o, f); T === Bottom ? T : Tuple{widenconst(T), Bool})
+function replacefield!_tfunc(o, f, x, v)
+    @nospecialize
+    T = _fieldtype_tfunc(o, isconcretetype(o), f)
+    T === Bottom && return Bottom
+    PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
+    return instanceof_tfunc(apply_type_tfunc(PT, T))[1]
+end
+
 # we could use tuple_tfunc instead of widenconst, but `o` is mutable, so that is unlikely to be beneficial
 
 add_tfunc(getfield, 2, 4, getfield_tfunc, 1)

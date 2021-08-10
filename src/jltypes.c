@@ -19,6 +19,8 @@
 extern "C" {
 #endif
 
+jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
+
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define h2index(hv, sz) (size_t)((hv) & ((sz)-1))
@@ -977,20 +979,42 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
 
 JL_DLLEXPORT jl_value_t *jl_apply_type1(jl_value_t *tc, jl_value_t *p1)
 {
-    JL_GC_PUSH1(&p1);
-    jl_value_t *t = jl_apply_type(tc, &p1, 1);
-    JL_GC_POP();
-    return t;
+    return jl_apply_type(tc, &p1, 1);
 }
 
 JL_DLLEXPORT jl_value_t *jl_apply_type2(jl_value_t *tc, jl_value_t *p1, jl_value_t *p2)
 {
-    jl_value_t **args;
-    JL_GC_PUSHARGS(args, 2);
-    args[0] = p1; args[1] = p2;
-    jl_value_t *t = jl_apply_type(tc, args, 2);
-    JL_GC_POP();
-    return t;
+    jl_value_t *args[2];
+    args[0] = p1;
+    args[1] = p2;
+    return jl_apply_type(tc, args, 2);
+}
+
+jl_datatype_t *jl_apply_modify_type(jl_value_t *dt)
+{
+    jl_datatype_t *rettyp = (jl_datatype_t*)jl_apply_type2(jl_pair_type, dt, dt);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    return rettyp;
+}
+
+jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *dt)
+{
+    jl_value_t *params[2];
+    jl_value_t *names = jl_atomic_load_relaxed(&cmpswap_names);
+    if (names == NULL) {
+        params[0] = jl_symbol("old");
+        params[1] = jl_symbol("success");
+        jl_value_t *lnames = jl_f_tuple(NULL, params, 2);
+        if (jl_atomic_cmpswap(&cmpswap_names, &names, lnames))
+            names = jl_atomic_load_relaxed(&cmpswap_names); // == lnames
+    }
+    params[0] = dt;
+    params[1] = (jl_value_t*)jl_bool_type;
+    jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
+    JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
+    jl_datatype_t *rettyp = (jl_datatype_t*)jl_apply_type2(jl_namedtuple_type, names, tuptyp);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    return rettyp;
 }
 
 JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v)

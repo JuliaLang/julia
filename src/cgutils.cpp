@@ -1560,9 +1560,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             Value *Success = emit_f_is(ctx, cmp, ghostValue(jltype));
             Success = ctx.builder.CreateZExt(Success, T_int8);
             jl_cgval_t argv[2] = {ghostValue(jltype), mark_julia_type(ctx, Success, false, jl_bool_type)};
-            // TODO: do better here
-            Value *instr = emit_jlcall(ctx, jltuple_func, V_rnull, argv, 2, JLCALL_F_CC);
-            return mark_julia_type(ctx, instr, true, jl_any_type);
+            jl_datatype_t *rettyp = jl_apply_cmpswap_type(jltype);
+            return emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
         }
         else {
             return ghostValue(jltype);
@@ -1803,10 +1802,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         }
         oldval = mark_julia_type(ctx, instr, isboxed, jltype);
         if (isreplacefield) {
-            // TODO: do better here
+            Success = ctx.builder.CreateZExt(Success, T_int8);
             jl_cgval_t argv[2] = {oldval, mark_julia_type(ctx, Success, false, jl_bool_type)};
-            instr = emit_jlcall(ctx, jltuple_func, V_rnull, argv, 2, JLCALL_F_CC);
-            oldval = mark_julia_type(ctx, instr, true, jl_any_type);
+            jl_datatype_t *rettyp = jl_apply_cmpswap_type(jltype);
+            oldval = emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
         }
     }
     return oldval;
@@ -3247,10 +3246,10 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         if (needlock)
             emit_lockstate_value(ctx, strct, false);
         if (isreplacefield) {
+            Success = ctx.builder.CreateZExt(Success, T_int8);
             jl_cgval_t argv[2] = {oldval, mark_julia_type(ctx, Success, false, jl_bool_type)};
-            // TODO: do better here
-            Value *instr = emit_jlcall(ctx, jltuple_func, V_rnull, argv, 2, JLCALL_F_CC);
-            oldval = mark_julia_type(ctx, instr, true, jl_any_type);
+            jl_datatype_t *rettyp = jl_apply_cmpswap_type(jfty);
+            oldval = emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
         }
         return oldval;
     }
