@@ -44,6 +44,10 @@ instruction pointers that may be stored per thread. Each instruction pointer cor
 line of code; backtraces generally consist of a long list of instruction pointers. Current
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
+
+!!! compat "Julia 1.8"
+    As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
+    Previously this was `n` total.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
