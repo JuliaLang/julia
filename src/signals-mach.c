@@ -524,7 +524,6 @@ static kern_return_t profiler_segv_handler
 void *mach_profile_listener(void *arg)
 {
     (void)arg;
-    int i;
     const int max_size = 512;
     attach_exception_port(mach_thread_self(), 1);
 #ifdef LLVMLIBUNWIND
@@ -541,7 +540,10 @@ void *mach_profile_listener(void *arg)
         jl_lock_profile();
         void *unused = NULL;
         int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
-        for (i = jl_n_threads; i-- > 0; ) {
+        jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
+        for (int idx = jl_n_threads; idx-- > 0; ) {
+            // Stop the threads in the random round-robin order.
+            int i = profile_round_robin_thread_order[idx];
             // if there is no space left, break early
             if (jl_profile_is_buffer_full()) {
                 jl_profile_stop_timer();

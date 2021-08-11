@@ -35,6 +35,9 @@ steps:
       make release
       make install
 
+      echo "--- Make sure that the working directory is clean"
+      if [ -z "$(git status --short)" ]; then echo "INFO: The working directory is clean."; else echo "ERROR: The working directory is dirty."; echo "Output of git status:"; git status; exit 1; fi
+
       echo "--- Print Julia version info"
       ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
 

@@ -1000,3 +1000,5 @@ let script = :(let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
     @test !success(`$(Base.julia_cmd()) -e $script`)
 end
 
+# issue #41656
+@test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)

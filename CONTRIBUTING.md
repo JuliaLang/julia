@@ -287,6 +287,11 @@ runtest harness).
    - To remove whitespace relative to the `master` branch, run
      `git rebase --whitespace=fix master`.
 
+#### Git Recommendations For Pull Request Reviewers
+
+- When merging, we generally like `squash+merge`. Unless it is the rare case of a PR with carefully staged individual commits that you want in the history separately, in which case `merge` is acceptable, but usually prefer `squash+merge`.
+
+
 ## Resources
 
 * Julia
