@@ -40,10 +40,14 @@ end
     init(; n::Integer, delay::Real))
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of
-instruction pointers that may be stored. Each instruction pointer corresponds to a single
+instruction pointers that may be stored per thread. Each instruction pointer corresponds to a single
 line of code; backtraces generally consist of a long list of instruction pointers. Current
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
+
+!!! compat "Julia 1.8"
+    As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
+    Previously this was `n` total.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
@@ -51,15 +55,17 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     if n === nothing && delay === nothing
         return Int(n_cur), delay_cur
     end
-    nnew = (n === nothing) ? n_cur : n
+    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
+    nnew = (n === nothing) ? n_cur : n * nthreads
     delaynew = (delay === nothing) ? delay_cur : delay
     init(nnew, delaynew)
 end
 
 function init(n::Integer, delay::Real)
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
+    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n * nthreads, round(UInt64,10^9*delay))
     if status == -1
-        error("could not allocate space for ", n, " instruction pointers")
+        error("could not allocate space for ", n, " instruction pointers per thread being profiled ($nthreads threads)")
     end
 end
 

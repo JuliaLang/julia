@@ -141,7 +141,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
                                               ct->gcstack);
         }
         else if (have_backtrace_fiber) {
-            JL_LOCK(&backtrace_lock);
+            JL_LOCK_NOGC(&backtrace_lock);
             stkerror_ctx = ctxThread;
             stkerror_ptls = ptls;
             jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
