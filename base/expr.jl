@@ -523,16 +523,16 @@ julia> @atomic a.x += 1 # increment field x of a, with sequential consistency
 3
 
 julia> @atomic a.x + 1 # increment field x of a, with sequential consistency
-(3, 4)
+3 => 4
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 
 julia> @atomic max(a.x, 10) # change field x of a to the max value, with sequential consistency
-(4, 10)
+4 => 10
 
 julia> @atomic a.x max 5 # again change field x of a to the max value, with sequential consistency
-(10, 10)
+10 => 10
 ```
 """
 macro atomic(ex)
@@ -653,18 +653,18 @@ julia> a = Atomic(1)
 Atomic{Int64}(1)
 
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
-(1, true)
+(old = 1, success = true)
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 2
 
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
-(2, false)
+(old = 2, success = false)
 
 julia> xchg = 2 => 0; # replace field x of a with 0 if it was 1, with sequential consistency
 
 julia> @atomicreplace a.x xchg
-(2, true)
+(old = 2, success = true)
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 0

@@ -1,7 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
-
 #include "llvm-version.h"
 #include "platform.h"
 
@@ -181,7 +179,7 @@ static jl_callptr_t _jl_compile_codeinst(
             jl_atomic_store_release(&this_code->invoke, addr);
         }
         else if (this_code->invoke == jl_fptr_const_return && !decls.specFunctionObject.empty()) {
-            // hack to export this pointer value to jl_dump_method_asm
+            // hack to export this pointer value to jl_dump_method_disasm
             this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
         }
         if (this_code== codeinst)
@@ -407,7 +405,7 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
 // get a native disassembly for a compiled method
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
-        int raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
+        char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
@@ -457,9 +455,10 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
     }
 
     // whatever, that didn't work - use the assembler output instead
-    if (raw_mc) // eh, give up, this flag doesn't really work anyways normally
-        return (jl_value_t*)jl_pchar_to_array("", 0);
-    return jl_dump_llvm_asm(jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams), asm_variant, debuginfo);
+    void *F = jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams);
+    if (!F)
+        return jl_an_empty_string;
+    return jl_dump_function_asm(F, raw_mc, asm_variant, debuginfo, binary);
 }
 
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr

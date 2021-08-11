@@ -1,0 +1,23 @@
+From 6fe0f1fab9d6a7f46d71d37ebb210fbf56924fbc Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Mon, 11 Jan 2021 19:05:29 +0100
+Subject: [PATCH] Label get_cpu_ftr as volatile to keep gcc from rearranging
+ the code
+
+---
+ driver/others/dynamic_arm64.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/driver/others/dynamic_arm64.c b/driver/others/dynamic_arm64.c
+index 4f1b12f27a..37c0694b6f 100644
+--- a/driver/others/dynamic_arm64.c
++++ b/driver/others/dynamic_arm64.c
+@@ -68,7 +68,7 @@ extern void openblas_warning(int verbose, const char * msg);
+ #endif
+ 
+ #define get_cpu_ftr(id, var) ({					\
+-		__asm__("mrs %0, "#id : "=r" (var));		\
++		__asm__ __volatile__("mrs %0, "#id : "=r" (var));		\
+ 	})
+ 
+ static char *corename[] = {
