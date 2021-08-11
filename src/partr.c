@@ -96,7 +96,7 @@ JL_DLLEXPORT uint64_t jl_task_queue_length(void)
 {
     uint64_t total = 0;
     for (int32_t i = 0; i < heap_p; ++i) {
-        total += heaps[i].ntasks;
+        total += jl_atomic_fetch_relaxed(&heaps[i].ntasks);
     }
     return total;
 }
