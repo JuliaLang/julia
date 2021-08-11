@@ -1,7 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
-
 #include "llvm-version.h"
 #include "platform.h"
 
