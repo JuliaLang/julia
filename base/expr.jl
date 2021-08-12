@@ -505,7 +505,7 @@ result into the field in the first argument and return the values `(old, new)`.
 This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
 
 
-See [atomics](#man-atomics) in the manual for more details.
+See [atomics](../manual/multi-threading.html#man-atomics) in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -534,6 +534,9 @@ julia> @atomic max(a.x, 10) # change field x of a to the max value, with sequent
 julia> @atomic a.x max 5 # again change field x of a to the max value, with sequential consistency
 10 => 10
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomic(ex)
     if !isa(ex, Symbol) && !is_expr(ex, :(::))
@@ -601,7 +604,7 @@ Stores `new` into `a.b.x` and returns the old value of `a.b.x`.
 
 This operation translates to a `swapproperty!(a.b, :x, new)` call.
 
-See [atomics](#man-atomics) in the manual for more details.
+See [atomics](../manual/multi-threading.html#man-atomics) in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -615,6 +618,9 @@ julia> @atomicswap a.x = 2+2 # replace field x of a with 4, with sequential cons
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomicswap(order, ex)
     order isa QuoteNode || (order = esc(order))
@@ -644,7 +650,7 @@ replacement was completed.
 
 This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` call.
 
-See [atomics](#man-atomics) in the manual for more details.
+See [atomics](../manual/multi-threading.html#man-atomics) in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -669,6 +675,9 @@ julia> @atomicreplace a.x xchg
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 0
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomicreplace(success_order, fail_order, ex, old_new)
     fail_order isa QuoteNode || (fail_order = esc(fail_order))

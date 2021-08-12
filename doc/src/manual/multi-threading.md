@@ -249,6 +249,9 @@ orderings (:monotonic, :acquire, :release, :acquire\_release, or
 with an atomic ordering constraint, or will be done with monotonic (relaxed)
 ordering if unspecified.
 
+!!! compat "Julia 1.7"
+    Per-field atomics requires at least Julia 1.7.
+
 
 ## Side effects and mutable function arguments
 
