@@ -432,7 +432,7 @@ JL_DLLEXPORT int jl_get_random_thread_for_spawned_task()
 }
 
 
-JL_DLLEXPORT int jl_accept_spawned_tasks(int16_t tid, bool accept)
+JL_DLLEXPORT int jl_accept_spawned_tasks(int tid, int accept)
 {
     if (tid < 0 || tid >= jl_n_threads)
         return 1;
