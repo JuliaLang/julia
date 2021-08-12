@@ -181,6 +181,14 @@ macro spawn(expr)
     end
 end
 
+function disable_spawning_on_this_thread()
+    ccall(:jl_accept_spawned_tasks, Cint, (Cint, Cint), threadid() - 1, 0)
+end
+
+function enable_spawning_on_this_thread()
+    ccall(:jl_accept_spawned_tasks, Cint, (Cint, Cint), threadid() - 1, 0)
+end
+
 # This is a stub that can be overloaded for downstream structures like `Channel`
 function foreach end
 
