@@ -591,7 +591,7 @@ function enq_work(t::Task)
     else
         tid = 0
         if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
-            tid = ccall(:jl_get_random_thread_for_new_task, Cint, ())
+            tid = ccall(:jl_get_random_thread_for_spawned_task, Cint, ())
             ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid)
 
             # Note that tid is obtained from c, and is therefore 0-indexed.
