@@ -101,6 +101,7 @@ typedef struct jl_stenv_t {
     int ignore_free;          // treat free vars as black boxes; used during intersection
     int intersection;         // true iff subtype is being called from intersection
     int emptiness_only;       // true iff intersection only needs to test for emptiness
+    int triangular;           // when intersecting Ref{X} with Ref{<:Y}
 } jl_stenv_t;
 
 // state manipulation utilities
@@ -1444,6 +1445,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->ignore_free = 0;
     e->intersection = 0;
     e->emptiness_only = 0;
+    e->triangular = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
     e->Lunions.used = 0;       e->Runions.used = 0;
@@ -2203,7 +2205,7 @@ static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_sten
         return;
     jl_varbinding_t *btemp = e->vars;
     while (btemp != NULL) {
-        if (btemp->lb == (jl_value_t*)v && btemp->ub == (jl_value_t*)v &&
+        if ((btemp->lb == (jl_value_t*)v || btemp->ub == (jl_value_t*)v) &&
             in_union(val, (jl_value_t*)btemp->var))
             return;
         btemp = btemp->prev;
@@ -2255,6 +2257,21 @@ static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e)
     return reachable_var(xv->ub, y, e) || reachable_var(xv->lb, y, e);
 }
 
+// check whether setting v == t implies v == SomeType{v}, which is unsatisfiable.
+static int check_unsat_bound(jl_value_t *t, jl_tvar_t *v, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    if (var_occurs_inside(t, v, 0, 0))
+        return 1;
+    jl_varbinding_t *btemp = e->vars;
+    while (btemp != NULL) {
+        if (btemp->lb == (jl_value_t*)v && btemp->ub == (jl_value_t*)v &&
+            var_occurs_inside(t, btemp->var, 0, 0))
+            return 1;
+        btemp = btemp->prev;
+    }
+    return 0;
+}
+
 static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int8_t R, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
@@ -2284,7 +2301,9 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             ub = a;
         }
         else {
+            e->triangular++;
             ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
+            e->triangular--;
             save_env(e, &root, &se);
             int issub = subtype_in_env_existential(bb->lb, ub, e, 0, d);
             restore_env(e, root, &se);
@@ -2296,19 +2315,9 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         }
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {
-                // constraint X == Ref{X} is unsatisfiable. also check variables set equal to X.
-                if (var_occurs_inside(ub, b, 0, 0)) {
+                if (check_unsat_bound(ub, b, e)) {
                     JL_GC_POP();
                     return jl_bottom_type;
-                }
-                jl_varbinding_t *btemp = e->vars;
-                while (btemp != NULL) {
-                    if (btemp->lb == (jl_value_t*)b && btemp->ub == (jl_value_t*)b &&
-                        var_occurs_inside(ub, btemp->var, 0, 0)) {
-                        JL_GC_POP();
-                        return jl_bottom_type;
-                    }
-                    btemp = btemp->prev;
                 }
             }
             bb->ub = ub;
@@ -2320,7 +2329,13 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
     if (ub == jl_bottom_type)
         return jl_bottom_type;
-    if (bb->constraintkind == 0) {
+    if (bb->constraintkind == 1 || e->triangular) {
+        if (e->triangular && check_unsat_bound(ub, b, e))
+            return jl_bottom_type;
+        set_bound(&bb->ub, ub, b, e);
+        return (jl_value_t*)b;
+    }
+    else if (bb->constraintkind == 0) {
         JL_GC_PUSH1(&ub);
         if (!jl_is_typevar(a) && try_subtype_in_env(bb->ub, a, e, 0, d)) {
             JL_GC_POP();
@@ -2328,10 +2343,6 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         }
         JL_GC_POP();
         return ub;
-    }
-    else if (bb->constraintkind == 1) {
-        set_bound(&bb->ub, ub, b, e);
-        return (jl_value_t*)b;
     }
     assert(bb->constraintkind == 2);
     if (!jl_is_typevar(a)) {
@@ -2598,11 +2609,11 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
 
 static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
-    jl_value_t *res=NULL, *res2=NULL, *save=NULL, *save2=NULL;
-    jl_savedenv_t se, se2;
+    jl_value_t *res=NULL, *save=NULL;
+    jl_savedenv_t se;
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0,
                            R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
-    JL_GC_PUSH6(&res, &save2, &vb.lb, &vb.ub, &save, &vb.innervars);
+    JL_GC_PUSH5(&res, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
     if (vb.limited) {
@@ -2617,18 +2628,11 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.constraintkind = vb.concrete ? 1 : 2;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
-        else if (vb.occurs_cov) {
-            save_env(e, &save2, &se2);
+        else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0)) {
             restore_env(e, save, &se);
             vb.occurs_cov = vb.occurs_inv = 0;
-            vb.lb = u->var->lb; vb.ub = u->var->ub;
             vb.constraintkind = 1;
-            res2 = intersect_unionall_(t, u, e, R, param, &vb);
-            if (res2 != jl_bottom_type)
-                res = res2;
-            else
-                restore_env(e, save2, &se2);
-            free_env(&se2);
+            res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
     free_env(&se);
