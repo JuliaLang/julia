@@ -1193,6 +1193,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_apply(interp, argtypes, sv, max_methods)
         elseif f === invoke
             return abstract_invoke(interp, argtypes, sv)
+        elseif f === modifyfield!
+            return abstract_modifyfield!(interp, argtypes, sv)
         end
         return CallMeta(abstract_call_builtin(interp, f, fargs, argtypes, sv, max_methods), false)
     elseif f === Core.kwfunc
@@ -1458,7 +1460,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         return abstract_eval_special_value(interp, e, vtypes, sv)
     end
     e = e::Expr
-    if e.head === :call
+    ehead = e.head
+    if ehead === :call
         ea = e.args
         argtypes = collect_argtypes(interp, ea, vtypes, sv)
         if argtypes === nothing
@@ -1468,7 +1471,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             sv.stmt_info[sv.currpc] = callinfo.info
             t = callinfo.rt
         end
-    elseif e.head === :new
+    elseif ehead === :new
         t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
         if isconcretetype(t) && !ismutabletype(t)
             args = Vector{Any}(undef, length(e.args)-1)
@@ -1505,7 +1508,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 end
             end
         end
-    elseif e.head === :splatnew
+    elseif ehead === :splatnew
         t = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))[1]
         if length(e.args) == 2 && isconcretetype(t) && !ismutabletype(t)
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
@@ -1518,7 +1521,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 t = PartialStruct(t, at.fields)
             end
         end
-    elseif e.head === :new_opaque_closure
+    elseif ehead === :new_opaque_closure
         t = Union{}
         if length(e.args) >= 5
             ea = e.args
@@ -1537,7 +1540,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 end
             end
         end
-    elseif e.head === :foreigncall
+    elseif ehead === :foreigncall
         abstract_eval_value(interp, e.args[1], vtypes, sv)
         t = sp_type_rewrap(e.args[2], sv.linfo, true)
         for i = 3:length(e.args)
@@ -1545,21 +1548,21 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 t = Bottom
             end
         end
-    elseif e.head === :cfunction
+    elseif ehead === :cfunction
         t = e.args[1]
         isa(t, Type) || (t = Any)
         abstract_eval_cfunction(interp, e, vtypes, sv)
-    elseif e.head === :method
+    elseif ehead === :method
         t = (length(e.args) == 1) ? Any : Nothing
-    elseif e.head === :copyast
+    elseif ehead === :copyast
         t = abstract_eval_value(interp, e.args[1], vtypes, sv)
         if t isa Const && t.val isa Expr
             # `copyast` makes copies of Exprs
             t = Expr
         end
-    elseif e.head === :invoke
+    elseif ehead === :invoke || ehead === :invoke_modify
         error("type inference data-flow error: tried to double infer a function")
-    elseif e.head === :isdefined
+    elseif ehead === :isdefined
         sym = e.args[1]
         t = Bool
         if isa(sym, SlotNumber)

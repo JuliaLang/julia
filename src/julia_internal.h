@@ -1326,6 +1326,7 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
 int isabspath(const char *in) JL_NOTSAFEPOINT;
 
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
+extern jl_sym_t *invoke_modify_sym;
 extern jl_sym_t *empty_sym;   extern jl_sym_t *top_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;

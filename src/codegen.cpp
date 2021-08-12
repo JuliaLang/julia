@@ -1161,12 +1161,13 @@ static Value *get_current_ptls(jl_codectx_t &ctx);
 static Value *get_current_signal_page(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
-                             jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
+                             const jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *theF,
-                             jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
+                             const jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                         Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr);
 static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv);
+static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt);
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
@@ -2660,6 +2661,102 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     return emit_box_compare(ctx, arg1, arg2, nullcheck1, nullcheck2);
 }
 
+static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
+                           const jl_cgval_t *argv, size_t nargs, const jl_cgval_t *modifyop)
+{
+    bool issetfield = f == jl_builtin_setfield;
+    bool isreplacefield = f == jl_builtin_replacefield;
+    bool isswapfield = f == jl_builtin_swapfield;
+    bool ismodifyfield = f == jl_builtin_modifyfield;
+    const jl_cgval_t undefval;
+    const jl_cgval_t &obj = argv[1];
+    const jl_cgval_t &fld = argv[2];
+    jl_cgval_t val = argv[isreplacefield || ismodifyfield ? 4 : 3];
+    const jl_cgval_t &cmp = isreplacefield || ismodifyfield ? argv[3] : undefval;
+    enum jl_memory_order order = jl_memory_order_notatomic;
+    const std::string fname = issetfield ? "setfield!" : isreplacefield ? "replacefield!" : isswapfield ? "swapfield!" : "modifyfield!";
+    if (nargs >= (isreplacefield || ismodifyfield ? 5 : 4)) {
+        const jl_cgval_t &ord = argv[isreplacefield || ismodifyfield ? 5 : 4];
+        emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
+        if (!ord.constant)
+            return false;
+        order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetfield, true);
+    }
+    enum jl_memory_order fail_order = order;
+    if (isreplacefield && nargs == 6) {
+        const jl_cgval_t &ord = argv[6];
+        emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
+        if (!ord.constant)
+            return false;
+        fail_order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
+    }
+    if (order == jl_memory_order_invalid || fail_order == jl_memory_order_invalid || fail_order > order) {
+        emit_atomic_error(ctx, "invalid atomic ordering");
+        *ret = jl_cgval_t(); // unreachable
+        return true;
+    }
+
+    jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
+    if (jl_is_datatype(uty) && jl_struct_try_layout(uty)) {
+        ssize_t idx = -1;
+        if (fld.constant && fld.typ == (jl_value_t*)jl_symbol_type) {
+            idx = jl_field_index(uty, (jl_sym_t*)fld.constant, 0);
+        }
+        else if (fld.constant && fld.typ == (jl_value_t*)jl_long_type) {
+            ssize_t i = jl_unbox_long(fld.constant);
+            if (i > 0 && i <= jl_datatype_nfields(uty))
+                idx = i - 1;
+        }
+        if (idx != -1) {
+            jl_value_t *ft = jl_svecref(uty->types, idx);
+            if (!jl_has_free_typevars(ft)) {
+                if (!ismodifyfield && !jl_subtype(val.typ, ft)) {
+                    emit_typecheck(ctx, val, ft, fname);
+                    val = update_julia_type(ctx, val, ft);
+                }
+                // TODO: attempt better codegen for approximate types
+                bool isboxed = jl_field_isptr(uty, idx);
+                bool isatomic = jl_field_isatomic(uty, idx);
+                bool needlock = isatomic && !isboxed && jl_datatype_size(jl_field_type(uty, idx)) > MAX_ATOMIC_SIZE;
+                if (isatomic == (order == jl_memory_order_notatomic)) {
+                    emit_atomic_error(ctx,
+                            issetfield ?
+                            (isatomic ? "setfield!: atomic field cannot be written non-atomically"
+                                      : "setfield!: non-atomic field cannot be written atomically") :
+                            isreplacefield ?
+                            (isatomic ? "replacefield!: atomic field cannot be written non-atomically"
+                                      : "replacefield!: non-atomic field cannot be written atomically") :
+                            isswapfield ?
+                            (isatomic ? "swapfield!: atomic field cannot be written non-atomically"
+                                      : "swapfield!: non-atomic field cannot be written atomically") :
+                            (isatomic ? "modifyfield!: atomic field cannot be written non-atomically"
+                                      : "modifyfield!: non-atomic field cannot be written atomically"));
+                    *ret = jl_cgval_t();
+                    return true;
+                }
+                if (isatomic == (fail_order == jl_memory_order_notatomic)) {
+                    emit_atomic_error(ctx,
+                            (isatomic ? "replacefield!: atomic field cannot be accessed non-atomically"
+                                      : "replacefield!: non-atomic field cannot be accessed atomically"));
+                    *ret = jl_cgval_t();
+                    return true;
+                }
+                *ret = emit_setfield(ctx, uty, obj, idx, val, cmp, true, true,
+                        (needlock || order <= jl_memory_order_notatomic)
+                        ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                        : get_llvm_atomic_order(order),
+                        (needlock || fail_order <= jl_memory_order_notatomic)
+                        ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                        : get_llvm_atomic_order(fail_order),
+                        needlock, issetfield, isreplacefield, isswapfield, ismodifyfield,
+                        modifyop, fname);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     emit_function(
         jl_method_instance_t *lam,
@@ -2989,6 +3086,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                     false,
                                     false,
                                     false,
+                                    nullptr,
                                     "");
                     }
                 }
@@ -3132,97 +3230,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if ((f == jl_builtin_setfield && (nargs == 3 || nargs == 4)) ||
              (f == jl_builtin_swapfield && (nargs == 3 || nargs == 4)) ||
              (f == jl_builtin_replacefield && (nargs == 4 || nargs == 5 || nargs == 6)) ||
-             (true && f == jl_builtin_modifyfield && (nargs == 4 || nargs == 5))) {
-        bool issetfield = f == jl_builtin_setfield;
-        bool isreplacefield = f == jl_builtin_replacefield;
-        bool isswapfield = f == jl_builtin_swapfield;
-        bool ismodifyfield = f == jl_builtin_modifyfield;
-        const jl_cgval_t undefval;
-        const jl_cgval_t &obj = argv[1];
-        const jl_cgval_t &fld = argv[2];
-        jl_cgval_t val = argv[isreplacefield || ismodifyfield ? 4 : 3];
-        const jl_cgval_t &cmp = isreplacefield || ismodifyfield ? argv[3] : undefval;
-        enum jl_memory_order order = jl_memory_order_notatomic;
-        const std::string fname = issetfield ? "setfield!" : isreplacefield ? "replacefield!" : isswapfield ? "swapfield!" : "modifyfield!";
-        if (nargs >= (isreplacefield || ismodifyfield ? 5 : 4)) {
-            const jl_cgval_t &ord = argv[isreplacefield || ismodifyfield ? 5 : 4];
-            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
-            if (!ord.constant)
-                return false;
-            order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetfield, true);
-        }
-        enum jl_memory_order fail_order = order;
-        if (isreplacefield && nargs == 6) {
-            const jl_cgval_t &ord = argv[6];
-            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
-            if (!ord.constant)
-                return false;
-            fail_order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
-        }
-        if (order == jl_memory_order_invalid || fail_order == jl_memory_order_invalid || fail_order > order) {
-            emit_atomic_error(ctx, "invalid atomic ordering");
-            *ret = jl_cgval_t(); // unreachable
-            return true;
-        }
-
-        jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
-        if (jl_is_datatype(uty) && jl_struct_try_layout(uty)) {
-            ssize_t idx = -1;
-            if (fld.constant && fld.typ == (jl_value_t*)jl_symbol_type) {
-                idx = jl_field_index(uty, (jl_sym_t*)fld.constant, 0);
-            }
-            else if (fld.constant && fld.typ == (jl_value_t*)jl_long_type) {
-                ssize_t i = jl_unbox_long(fld.constant);
-                if (i > 0 && i <= jl_datatype_nfields(uty))
-                    idx = i - 1;
-            }
-            if (idx != -1) {
-                jl_value_t *ft = jl_svecref(uty->types, idx);
-                if (!jl_has_free_typevars(ft)) {
-                    if (!ismodifyfield && !jl_subtype(val.typ, ft)) {
-                        emit_typecheck(ctx, val, ft, fname);
-                        val = update_julia_type(ctx, val, ft);
-                    }
-                    // TODO: attempt better codegen for approximate types
-                    bool isboxed = jl_field_isptr(uty, idx);
-                    bool isatomic = jl_field_isatomic(uty, idx);
-                    bool needlock = isatomic && !isboxed && jl_datatype_size(jl_field_type(uty, idx)) > MAX_ATOMIC_SIZE;
-                    if (isatomic == (order == jl_memory_order_notatomic)) {
-                        emit_atomic_error(ctx,
-                                issetfield ?
-                                (isatomic ? "setfield!: atomic field cannot be written non-atomically"
-                                          : "setfield!: non-atomic field cannot be written atomically") :
-                                isreplacefield ?
-                                (isatomic ? "replacefield!: atomic field cannot be written non-atomically"
-                                          : "replacefield!: non-atomic field cannot be written atomically") :
-                                isswapfield ?
-                                (isatomic ? "swapfield!: atomic field cannot be written non-atomically"
-                                          : "swapfield!: non-atomic field cannot be written atomically") :
-                                (isatomic ? "modifyfield!: atomic field cannot be written non-atomically"
-                                          : "modifyfield!: non-atomic field cannot be written atomically"));
-                        *ret = jl_cgval_t();
-                        return true;
-                    }
-                    if (isatomic == (fail_order == jl_memory_order_notatomic)) {
-                        emit_atomic_error(ctx,
-                                (isatomic ? "replacefield!: atomic field cannot be accessed non-atomically"
-                                          : "replacefield!: non-atomic field cannot be accessed atomically"));
-                        *ret = jl_cgval_t();
-                        return true;
-                    }
-                    *ret = emit_setfield(ctx, uty, obj, idx, val, cmp, true, true,
-                            (needlock || order <= jl_memory_order_notatomic)
-                            ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                            : get_llvm_atomic_order(order),
-                            (needlock || fail_order <= jl_memory_order_notatomic)
-                            ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic) // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                            : get_llvm_atomic_order(fail_order),
-                            needlock, issetfield, isreplacefield, isswapfield, ismodifyfield,
-                            fname);
-                    return true;
-                }
-            }
-        }
+             (f == jl_builtin_modifyfield && (nargs == 4 || nargs == 5))) {
+        return emit_f_opfield(ctx, ret, f, argv, nargs, nullptr);
     }
 
     else if (f == jl_builtin_nfields && nargs == 1) {
@@ -3449,7 +3458,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
 // Returns T_prjlvalue
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
-                             jl_cgval_t *argv, size_t nargs, CallingConv::ID cc)
+                             const jl_cgval_t *argv, size_t nargs, CallingConv::ID cc)
 {
     // emit arguments
     SmallVector<Value*, 3> theArgs;
@@ -3473,14 +3482,14 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
 }
 // Returns T_prjlvalue
 static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *theF,
-                             jl_cgval_t *argv, size_t nargs, CallingConv::ID cc)
+                             const jl_cgval_t *argv, size_t nargs, CallingConv::ID cc)
 {
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, cc);
 }
 
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_t *mi, jl_value_t *jlretty, StringRef specFunctionObject,
-                                          jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty)
+                                          const jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty)
 {
     // emit specialized call site
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
@@ -3560,7 +3569,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     jl_cgval_t retval;
     switch (returninfo.cc) {
         case jl_returninfo_t::Boxed:
-            retval = mark_julia_type(ctx, call, true, inferred_retty);
+            retval = mark_julia_type(ctx, call, true, jlretty);
             break;
         case jl_returninfo_t::Register:
             retval = mark_julia_type(ctx, call, false, jlretty);
@@ -3590,20 +3599,18 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
             break;
     }
     // see if inference has a different / better type for the call than the lambda
-    if (inferred_retty != retval.typ)
-        retval = update_julia_type(ctx, retval, inferred_retty);
-    return retval;
+    return update_julia_type(ctx, retval, inferred_retty);
 }
 
-static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, StringRef specFunctionObject,
-                                          jl_cgval_t *argv, size_t nargs, jl_value_t *inferred_retty)
+static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject,
+                                          const jl_cgval_t *argv, size_t nargs, jl_value_t *inferred_retty)
 {
     auto theFptr = cast<Function>(
         jl_Module->getOrInsertFunction(specFunctionObject, jl_func_sig).getCallee());
     add_return_attr(theFptr, Attribute::NonNull);
     theFptr->addFnAttr(Thunk);
     Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, JLCALL_F_CC);
-    return mark_julia_type(ctx, ret, true, inferred_retty);
+    return update_julia_type(ctx, mark_julia_type(ctx, ret, true, jlretty), inferred_retty);
 }
 
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
@@ -3620,7 +3627,11 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
         if (argv[i].typ == jl_bottom_type)
             return jl_cgval_t();
     }
+    return emit_invoke(ctx, lival, argv, nargs, rt);
+}
 
+static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt)
+{
     bool handled = false;
     jl_cgval_t result;
     if (lival.constant) {
@@ -3632,7 +3643,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
             FunctionType *ft = ctx.f->getFunctionType();
             StringRef protoname = ctx.f->getName();
             if (ft == jl_func_sig) {
-                result = emit_call_specfun_boxed(ctx, protoname, argv, nargs, rt);
+                result = emit_call_specfun_boxed(ctx, ctx.rettype, protoname, argv, nargs, rt);
                 handled = true;
             }
             else if (ft != jl_func_sig_sparams) {
@@ -3674,7 +3685,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
                     if (specsig)
                         result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, argv, nargs, &cc, &return_roots, rt);
                     else
-                        result = emit_call_specfun_boxed(ctx, protoname, argv, nargs, rt);
+                        result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, argv, nargs, rt);
                     handled = true;
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
@@ -3691,6 +3702,40 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
     if (result.typ == jl_bottom_type)
         CreateTrap(ctx.builder);
     return result;
+}
+
+static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
+{
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
+    size_t arglen = jl_array_dim0(ex->args);
+    size_t nargs = arglen - 1;
+    assert(arglen >= 2);
+    jl_cgval_t lival = emit_expr(ctx, args[0]);
+    jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
+    for (size_t i = 0; i < nargs; ++i) {
+        argv[i] = emit_expr(ctx, args[i + 1]);
+        if (argv[i].typ == jl_bottom_type)
+            return jl_cgval_t();
+    }
+    const jl_cgval_t &f = argv[0];
+    jl_cgval_t ret;
+    if (f.constant && f.constant == jl_builtin_modifyfield) {
+        if (emit_f_opfield(ctx, &ret, jl_builtin_modifyfield, argv, nargs - 1, &lival))
+            return ret;
+        auto it = builtin_func_map.find(&jl_f_modifyfield);
+        assert(it != builtin_func_map.end());
+        Value *oldnew = emit_jlcall(ctx, it->second, V_rnull, &argv[1], nargs - 1, JLCALL_F_CC);
+        return mark_julia_type(ctx, oldnew, true, rt);
+    }
+    if (f.constant && jl_typeis(f.constant, jl_intrinsic_type)) {
+        JL_I::intrinsic fi = (intrinsic)*(uint32_t*)jl_data_ptr(f.constant);
+        if (fi == JL_I::atomic_pointermodify && jl_intrinsic_nargs((int)fi) == nargs - 1)
+            return emit_atomic_pointerop(ctx, fi, argv, nargs - 1, &lival);
+    }
+
+    // emit function and arguments
+    Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, JLCALL_F_CC);
+    return mark_julia_type(ctx, callval, true, rt);
 }
 
 static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
@@ -4538,6 +4583,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
             jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaval);
         return emit_invoke(ctx, ex, expr_t);
+    }
+    else if (head == invoke_modify_sym) {
+        assert(ssaval >= 0);
+        jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
+            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaval);
+        return emit_invoke_modify(ctx, ex, expr_t);
     }
     else if (head == call_sym) {
         jl_value_t *expr_t;

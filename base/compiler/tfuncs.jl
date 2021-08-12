@@ -938,9 +938,39 @@ function modifyfield!_tfunc(o, f, op, v)
     @nospecialize
     T = _fieldtype_tfunc(o, isconcretetype(o), f)
     T === Bottom && return Bottom
-    # note: we could sometimes refine this to a PartialStruct if we analyzed `op(o.f, v)::T`
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(PT, T, T))[1]
+end
+function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    nargs = length(argtypes)
+    if !isempty(argtypes) && isvarargtype(argtypes[nargs])
+        nargs - 1 <= 6 || return CallMeta(Bottom, false)
+        nargs > 3 || return CallMeta(Any, false)
+    else
+        5 <= nargs <= 6 || return CallMeta(Bottom, false)
+    end
+    o = unwrapva(argtypes[2])
+    f = unwrapva(argtypes[3])
+    RT = modifyfield!_tfunc(o, f, Any, Any)
+    info = false
+    if nargs >= 5 && RT !== Bottom
+        # we may be able to refine this to a PartialStruct by analyzing `op(o.f, v)::T`
+        # as well as compute the info for the method matches
+        op = unwrapva(argtypes[4])
+        v = unwrapva(argtypes[5])
+        TF = getfield_tfunc(o, f)
+        push!(sv.ssavalue_uses[sv.currpc], sv.currpc) # temporarily disable `call_result_unused` check for this call
+        callinfo = abstract_call(interp, nothing, Any[op, TF, v], sv, #=max_methods=# 1)
+        pop!(sv.ssavalue_uses[sv.currpc], sv.currpc)
+        TF2 = tmeet(callinfo.rt, widenconst(TF))
+        if TF2 === Bottom
+            RT = Bottom
+        elseif isconcretetype(RT) && has_nontrivial_const_info(TF2) # isconcrete condition required to form a PartialStruct
+            RT = PartialStruct(RT, Any[TF, TF2])
+        end
+        info = callinfo.info
+    end
+    return CallMeta(RT, info)
 end
 replacefield!_tfunc(o, f, x, v, success_order, failure_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
 replacefield!_tfunc(o, f, x, v, success_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))

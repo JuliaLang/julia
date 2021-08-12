@@ -1148,6 +1148,22 @@ function process_simple!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int, sta
         ir.stmts[idx][:inst] = res
         return nothing
     end
+    if (sig.f === modifyfield! || sig.ft ⊑ typeof(modifyfield!)) && 5 <= length(stmt.args) <= 6
+        let info = ir.stmts[idx][:info]
+            info isa MethodResultPure && (info = info.info)
+            info isa ConstCallInfo && (info = info.call)
+            info isa MethodMatchInfo || return nothing
+            length(info.results) == 1 || return nothing
+            match = info.results[1]::MethodMatch
+            match.fully_covers || return nothing
+            case = compileable_specialization(state.et, match)
+            case === nothing && return nothing
+            stmt.head = :invoke_modify
+            pushfirst!(stmt.args, case)
+            ir.stmts[idx][:inst] = stmt
+        end
+        return nothing
+    end
 
     check_effect_free!(ir, stmt, calltype, idx)
 
