@@ -1616,8 +1616,10 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
         codeinst->precompile = 1;
     codeinst->next = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->next);
     jl_gc_wb(codeinst, codeinst->next);
-    if (validate)
+    if (validate) {
         codeinst->min_world = jl_world_counter;
+        codeinst->max_world = ~(size_t)0;
+    }
     return (jl_value_t*)codeinst;
 }
 
@@ -2042,15 +2044,25 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
                     jl_method_table_add_backedge(mt, callee, (jl_value_t*)caller);
                 }
             }
-            // then enable it
+        }
+        else {
+            // invalid, so disable it
             jl_code_instance_t *codeinst = caller->cache;
             while (codeinst) {
                 if (codeinst->min_world > 0)
-                    codeinst->max_world = ~(size_t)0;
+                    codeinst->max_world = 0;
                 codeinst = jl_atomic_load_relaxed(&codeinst->next);
             }
-        }
-        else {
+            jl_array_t *backedges = caller->backedges;
+            if (backedges) {
+                // invalidate callers (if any)
+                caller->backedges = NULL;
+                size_t i, l = jl_array_len(backedges);
+                jl_method_instance_t **callers = (jl_method_instance_t**)jl_array_ptr_data(backedges);
+                for (i = 0; i < l; i++) {
+                    jl_invalidate_method_instance(callers[i], 0, 1);
+                }
+            }
             if (_jl_debug_method_invalidation) {
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)caller);
                 loctag = jl_cstr_to_string("insert_backedges");

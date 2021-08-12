@@ -1357,7 +1357,7 @@ static void invalidate_external(jl_method_instance_t *mi, size_t max_world) {
 }
 
 // recursively invalidate cached methods that had an edge to a replaced method
-static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
+void jl_invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
     if (_jl_debug_method_invalidation) {
         jl_value_t *boxeddepth = NULL;
@@ -1386,7 +1386,7 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
         size_t i, l = jl_array_len(backedges);
         for (i = 0; i < l; i++) {
             jl_method_instance_t *replaced = (jl_method_instance_t*)jl_array_ptr_ref(backedges, i);
-            invalidate_method_instance(replaced, max_world, depth + 1);
+            jl_invalidate_method_instance(replaced, max_world, depth + 1);
         }
     }
     JL_UNLOCK(&replaced->def.method->writelock);
@@ -1403,7 +1403,7 @@ static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_w
         size_t i, l = jl_array_len(backedges);
         jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_ptr_data(backedges);
         for (i = 0; i < l; i++) {
-            invalidate_method_instance(replaced[i], max_world, 1);
+            jl_invalidate_method_instance(replaced[i], max_world, 1);
         }
     }
     JL_UNLOCK(&replaced_mi->def.method->writelock);
@@ -1696,7 +1696,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 if (missing) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_external(backedge, max_world);
-                    invalidate_method_instance(backedge, max_world, 0);
+                    jl_invalidate_method_instance(backedge, max_world, 0);
                     invalidated = 1;
                     if (_jl_debug_method_invalidation)
                         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
