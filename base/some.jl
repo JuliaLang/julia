@@ -138,8 +138,8 @@ true
 macro something(args...)
     expr = :(nothing)
     for arg in reverse(args)
-        expr = :((val = $arg) !== nothing ? val : $expr)
+        expr = :(val = $(esc(arg)); val !== nothing ? val : ($expr))
     end
-    return esc(:(something(let val; $expr; end)))
+    something = GlobalRef(Base, :something)
+    return :($something($expr))
 end
-
