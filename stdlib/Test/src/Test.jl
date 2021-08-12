@@ -347,9 +347,10 @@ end
     @test ex broken=true
     @test ex skip=true
 
-Tests that the expression `ex` evaluates to `true`.
-Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
+Test that the expression `ex` evaluates to `true`.
+If executed inside a `@testset`, return a `Pass` `Result` if it does, a `Fail` `Result` if it is
 `false`, and an `Error` `Result` if it could not be evaluated.
+If executed outside a `@testset`, throw an exception instead of returning `Fail` or `Error`.
 
 # Examples
 ```jldoctest
