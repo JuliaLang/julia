@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
 #include "julia.h"
@@ -75,8 +76,8 @@ static inline void tsan_switch_to_ctx(jl_ucontext_t *ctx) {}
 
 // empirically, jl_finish_task needs about 64k stack space to infer/run
 // and additionally, gc-stack reserves 64k for the guard pages
-#if defined(MINSIGSTKSZ) && MINSIGSTKSZ > 131072
-#define MINSTKSZ MINSIGSTKSZ
+#if defined(MINSIGSTKSZ)
+#define MINSTKSZ (MINSIGSTKSZ > 131072 ? MINSIGSTKSZ : 131072)
 #else
 #define MINSTKSZ 131072
 #endif
