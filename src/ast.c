@@ -28,6 +28,7 @@ extern "C" {
 
 // head symbols for each expression type
 jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
+jl_sym_t *invoke_modify_sym;
 jl_sym_t *empty_sym;   jl_sym_t *top_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
@@ -345,6 +346,7 @@ void jl_init_common_symbols(void)
     empty_sym = jl_symbol("");
     call_sym = jl_symbol("call");
     invoke_sym = jl_symbol("invoke");
+    invoke_modify_sym = jl_symbol("invoke_modify");
     foreigncall_sym = jl_symbol("foreigncall");
     cfunction_sym = jl_symbol("cfunction");
     quote_sym = jl_symbol("quote");

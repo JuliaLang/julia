@@ -684,7 +684,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         if (!type_is_ghost(ptrty)) {
             thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
             typed_store(ctx, thePtr, im1, x, jl_cgval_t(), ety, tbaa_data, nullptr, nullptr, isboxed,
-                        AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, false, true, false, false, false, false, "");
+                        AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, false, true, false, false, false, false, nullptr, "");
         }
     }
     return e;
@@ -779,7 +779,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 // e[i] <= x (swap)
 // e[i] y => x (replace)
 // x(e[i], y) (modify)
-static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl_cgval_t *argv, int nargs)
+static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl_cgval_t *argv, int nargs, const jl_cgval_t *modifyop)
 {
     bool issetfield = f == atomic_pointerset;
     bool isreplacefield = f == atomic_pointerreplace;
@@ -817,7 +817,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
         bool isboxed = true;
         jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, tbaa_data, nullptr, nullptr, isboxed,
-                    llvm_order, llvm_failorder, sizeof(jl_value_t*), false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, "atomic_pointermodify");
+                    llvm_order, llvm_failorder, sizeof(jl_value_t*), false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, modifyop, "atomic_pointermodify");
         if (issetfield)
             ret = e;
         return ret;
@@ -851,7 +851,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         assert(!isboxed);
         Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
         jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, tbaa_data, nullptr, nullptr, isboxed,
-                    llvm_order, llvm_failorder, nb, false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, "atomic_pointermodify");
+                    llvm_order, llvm_failorder, nb, false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, modifyop, "atomic_pointermodify");
         if (issetfield)
             ret = e;
         return ret;
@@ -1093,7 +1093,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     case atomic_pointerswap:
     case atomic_pointermodify:
     case atomic_pointerreplace:
-        return emit_atomic_pointerop(ctx, f, argv, nargs);
+        return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
     case bitcast:
         return generic_bitcast(ctx, argv);
     case trunc_int:
