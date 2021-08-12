@@ -88,8 +88,8 @@ static inline void multiq_init(void)
 {
     heap_p = heap_c * jl_n_threads;
     heaps = (taskheap_t *)calloc(heap_p, sizeof(taskheap_t));
-    thread_accepts_spawned_tasks = (uint8_t*)realloc(thread_accepts_new_tasks, jl_n_threads * sizeof(*thread_accepts_new_tasks));
-    memset(thread_accepts_spawned_tasks, 1, jl_n_threads * sizeof(*thread_accepts_new_tasks));
+    thread_accepts_spawned_tasks = (uint8_t*)realloc(thread_accepts_spawned_tasks, jl_n_threads * sizeof(*thread_accepts_spawned_tasks));
+    memset(thread_accepts_spawned_tasks, 1, jl_n_threads * sizeof(*thread_accepts_spawned_tasks));
 
     for (int32_t i = 0; i < heap_p; ++i) {
         jl_mutex_init(&heaps[i].lock);
@@ -441,7 +441,7 @@ JL_DLLEXPORT int jl_accept_spawned_tasks(int tid, int accept)
     JL_LOCK(&thread_scheduling_lock);
     if (accept) {
         thread_accepts_spawned_tasks[tid] = 1;
-    } else if (thread_accepts_spanwed_tasks[tid]) {
+    } else if (thread_accepts_spawned_tasks[tid]) {
         // Ensure that there is at least one more thread that still
         // accepts spawned tasks.
         int other_available = 0;
