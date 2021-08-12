@@ -2839,6 +2839,7 @@ function mapslices(f, A::AbstractArray; dims)
     isempty(dims) && return map(f, A)
 
     for d in dims
+        d isa Integer || throw(ArgumentError("dimension must be integers, got $d"))
         d >= 1 || throw(ArgumentError("dimension must be ≥ 1, got $d"))
         # Indexing a matrix M[:,1,:] produces a 1-column matrix, but dims=(1,3) here
         # would otherwise ignore 3, and slice M[:,i]. Previously this gave error:
@@ -2854,7 +2855,7 @@ function mapslices(f, A::AbstractArray; dims)
 
     if r1 isa AbstractArray && ndims(r1) > 0
         n = sum(dim_mask)
-        if ndims(r1) > n && prod(d -> size(r1,d), n+1:ndims(r1)) > 1
+        if ndims(r1) > n && any(ntuple(d -> size(r1,d+n)>1, ndims(r1)-n))
             s = size(r1)[1:n]
             throw(DimensionMismatch("cannot assign slice f(x) of size $(size(r1)) into output of size $s"))
         end
@@ -2868,10 +2869,10 @@ function mapslices(f, A::AbstractArray; dims)
     end
 
     # Determine result size and allocate. We always pad ndims(res1) out to length(dims):
-    din = 0
+    din = Ref(0)
     Rsize = ntuple(ndims(A)) do d
         if d in dims
-            axes(res1, din += 1)
+            axes(res1, din[] += 1)
         else
             axes(A,d)
         end
@@ -2880,11 +2881,11 @@ function mapslices(f, A::AbstractArray; dims)
 
     # Determine iteration space. It will be convenient in the loop to mask N-dimensional
     # CartesianIndices, with some trivial dimensions:
-    itershape = ifelse.(dim_mask, Ref(Base.OneTo(1)), axes(A))
+    itershape = ntuple(d -> d in dims ? Base.OneTo(1) : axes(A,d), ndims(A))
     indices = Iterators.drop(CartesianIndices(itershape), 1)
 
     # That skips the first element, which we already have:
-    ridx = ifelse.(dim_mask, Slice.(axes(R)), idx1)
+    ridx = ntuple(d -> d in dims ? Slice(axes(R,d)) : firstindex(A,d), ndims(A))
     concatenate_setindex!(R, res1, ridx...)
 
     # In some cases, we can re-use the first slice for a dramatic performance
