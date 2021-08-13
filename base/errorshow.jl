@@ -199,19 +199,20 @@ function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), color::S
     end
 end
 
-function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_param))
+function show_convert_error(io::IO, ex::MethodError, arg_types_param)
     # See #13033
     T = striptype(ex.args[1])
     if T === nothing
         print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
     else
-        print_one_line = isa(T, DataType) && isa(arg_types_param[2], DataType) && T.name != arg_types_param[2].name
+        p2 = arg_types_param[2]
+        print_one_line = isa(T, DataType) && isa(p2, DataType) && T.name != p2.name
         printstyled(io, "Cannot `convert` an object of type ")
         print_one_line || printstyled(io, "\n  ")
-        print_with_compare(io, arg_types_param[2], T, :light_green)
+        print_with_compare(io, p2, T, :light_green)
         printstyled(io, " to an object of type ")
         print_one_line || printstyled(io, "\n  ")
-        print_with_compare(io, T, arg_types_param[2], :light_red)
+        print_with_compare(io, T, p2, :light_red)
     end
 end
 
