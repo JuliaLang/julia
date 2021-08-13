@@ -786,6 +786,8 @@ end
     end
 
     @testset "empty cases" begin
+        errchecker(str) = occursin("reducing over an empty collection is not allowed", str) ||
+                          occursin("collection slices must be non-empty", str)
         @test sum(sparse(Int[])) === 0
         @test prod(sparse(Int[])) === 1
         @test_throws ArgumentError minimum(sparse(Int[]))
@@ -798,9 +800,9 @@ end
             @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
         for f in (minimum, maximum, findmin, findmax)
-            @test_throws ArgumentError f(spzeros(0, 1), dims=1)
+            @test_throws errchecker f(spzeros(0, 1), dims=1)
             @test isequal(f(spzeros(0, 1), dims=2), f(Matrix{Int}(I, 0, 1), dims=2))
-            @test_throws ArgumentError f(spzeros(0, 1), dims=(1, 2))
+            @test_throws errchecker f(spzeros(0, 1), dims=(1, 2))
             @test isequal(f(spzeros(0, 1), dims=3), f(Matrix{Int}(I, 0, 1), dims=3))
         end
     end

@@ -90,7 +90,7 @@ end
 
 # Combining dims and init
 A = Array{Int}(undef, 0, 3)
-@test_throws ArgumentError maximum(A; dims=1)
+@test_throws "reducing over an empty collection is not allowed" maximum(A; dims=1)
 @test maximum(A; dims=1, init=-1) == reshape([-1,-1,-1], 1, 3)
 
 # Test reduction along first dimension; this is special-cased for
@@ -169,8 +169,9 @@ end
     A = Matrix{Int}(undef, 0,1)
     @test sum(A) === 0
     @test prod(A) === 1
-    @test_throws ArgumentError minimum(A)
-    @test_throws ArgumentError maximum(A)
+    @test_throws ["reducing over an empty",
+                  "consider supplying `init`"] minimum(A)
+    @test_throws "consider supplying `init`" maximum(A)
 
     @test isequal(sum(A, dims=1), zeros(Int, 1, 1))
     @test isequal(sum(A, dims=2), zeros(Int, 0, 1))
@@ -182,9 +183,9 @@ end
     @test isequal(prod(A, dims=3), fill(1, 0, 1))
 
     for f in (minimum, maximum)
-        @test_throws ArgumentError f(A, dims=1)
+        @test_throws "reducing over an empty collection is not allowed" f(A, dims=1)
         @test isequal(f(A, dims=2), zeros(Int, 0, 1))
-        @test_throws ArgumentError f(A, dims=(1, 2))
+        @test_throws "reducing over an empty collection is not allowed" f(A, dims=(1, 2))
         @test isequal(f(A, dims=3), zeros(Int, 0, 1))
     end
     for f in (findmin, findmax)
