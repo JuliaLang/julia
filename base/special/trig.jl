@@ -722,24 +722,7 @@ function acos(x::T) where T <: Union{Float32, Float64}
     end
 end
 
-# multiply in extended precision
-function mulpi_ext(x::Float64)
-    m = 3.141592653589793
-    m_hi = 3.1415926218032837
-    m_lo = 3.178650954705639e-8
-
-    x_hi = reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
-    x_lo = x-x_hi
-
-    y_hi = m*x
-    y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
-
-    DoubleFloat64(y_hi,y_lo)
-end
-mulpi_ext(x::Float32) = DoubleFloat32(pi*Float64(x))
-mulpi_ext(x::Rational) = mulpi_ext(float(x))
-mulpi_ext(x::Real) = pi*x # Fallback
-
+# Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
 @inline function sinpi_kernel(x::Float64) 
     x² = x*x
     x⁴ = x²*x²
@@ -748,7 +731,13 @@ mulpi_ext(x::Real) = pi*x # Fallback
     return muladd(3.141592653589793, x, x*muladd(-5.16771278004997,
                   x², muladd(x⁴, r,  1.2245907532225998e-16)))
 end
+@inline function sinpi_kernel(x::Float32)
+    x = Float64(x)
+    return Float32(x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
+                                    2.5501626483206374, -0.5992021090314925, 0.08100185277841528)))
+end
 
+# Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
 @inline function cospi_kernel(x::Float64)
     x² = x*x
     r = x²*evalpoly(x², (4.058712126416765, -1.3352627688537357, 0.23533063027900392,
@@ -758,12 +747,6 @@ end
 
     w  = 1.0-a_x²
     return w + muladd(x², r, ((1.0-w)-a_x²) - a_x²lo)
-end
-
-@inline function sinpi_kernel(x::Float32)
-    x = Float64(x)
-    return Float32(x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
-                                    2.5501626483206374, -0.5992021090314925, 0.08100185277841528)))
 end
 @inline function cospi_kernel(x::Float32)
     x = Float64(x)
