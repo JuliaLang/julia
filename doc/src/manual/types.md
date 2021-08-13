@@ -1108,7 +1108,7 @@ julia> NoFieldsParam{Int}() === NoFieldsParam{Int}()
 true
 ```
 
-## Types of functions and closures (anonymous functions)
+## Types of functions
 
 Each function has its own type, which is a subtype of `Function`.
 
