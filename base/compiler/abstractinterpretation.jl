@@ -567,16 +567,21 @@ end
 function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::MethodCallResult,
                                          @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
                                          sv::InferenceState)
-    const_prop_entry_heuristic(interp, result, sv) || return nothing
-    method = match.method
-    nargs::Int = method.nargs
-    method.isva && (nargs -= 1)
-    if length(argtypes) < nargs
+    if !InferenceParams(interp).ipo_constant_propagation
+        add_remark!(interp, sv, "[constprop] Disabled by parameter")
         return nothing
     end
-    const_prop_argument_heuristic(interp, argtypes) || const_prop_rettype_heuristic(interp, result.rt) || return nothing
-    allconst = is_allconst(argtypes)
+    method = match.method
     force = force_const_prop(interp, f, method)
+    force || const_prop_entry_heuristic(interp, result, sv) || return nothing
+    nargs::Int = method.nargs
+    method.isva && (nargs -= 1)
+    length(argtypes) < nargs && return nothing
+    if !(const_prop_argument_heuristic(interp, argtypes) || const_prop_rettype_heuristic(interp, result.rt))
+        add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
+        return nothing
+    end
+    allconst = is_allconst(argtypes)
     if !force
         if !const_prop_function_heuristic(interp, f, argtypes, nargs, allconst)
             add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
@@ -599,10 +604,12 @@ end
 
 function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, sv::InferenceState)
     if call_result_unused(sv) && result.edgecycle
-        add_remark!(interp, sv, "[constprop] Edgecycle with unused result")
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (edgecycle with unused result)")
         return false
     end
-    return is_improvable(result.rt) && InferenceParams(interp).ipo_constant_propagation
+    is_improvable(result.rt) && return true
+    add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
+    return false
 end
 
 # see if propagating constants may be worthwhile
