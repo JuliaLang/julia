@@ -41,9 +41,9 @@ end
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of instruction pointers that may be
 stored per thread. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long
-list of instruction pointers. Note that 4 instruction pointers per backtrace are used to store metadata and markers. Current
-settings can be obtained by calling this function with no arguments, and each can be set independently using keywords or
-in the order `(n, delay)`.
+list of instruction pointers. Note that 5 spaces for instruction pointers per backtrace are used to store metadata and a marker.
+Current settings can be obtained by calling this function with no arguments, and each can be set independently using keywords
+or in the order `(n, delay)`.
 
 !!! compat "Julia 1.8"
     As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
@@ -264,8 +264,8 @@ function get_task_ids(data::Vector{<:Unsigned}, threadid = nothing)
     taskids = UInt[]
     for i in length(data):-1:1
         if data[i] == 0 # find start of block
-            if isnothing(threadid) || data[i - 3] == threadid
-                taskid = data[i - 2]
+            if isnothing(threadid) || data[i - 4] == threadid
+                taskid = data[i - 3]
                 !in(taskid, taskids) && push!(taskids, taskid)
             end
         end
@@ -277,8 +277,8 @@ function get_thread_ids(data::Vector{<:Unsigned}, taskid = nothing)
     threadids = Int[]
     for i in length(data):-1:1
         if data[i] == 0 # find start of block
-            if isnothing(taskid) || data[i - 2] == taskid
-                threadid = data[i - 3]
+            if isnothing(taskid) || data[i - 3] == taskid
+                threadid = data[i - 4]
                 !in(threadid, threadids) && push!(threadids, threadid)
             end
         end
@@ -504,7 +504,7 @@ function fetch(;include_meta = false)
         return data
     else
         nblocks = count(iszero, data)
-        nmeta = 3 # number of metadata fields (threadid, taskid, cpu_cycle_clock)
+        nmeta = 4 # number of metadata fields (threadid, taskid, cpu_cycle_clock, thread_sleeping)
         data_stripped = Vector{UInt}(undef, length(data) - (nblocks * nmeta))
         j = length(data_stripped)
         i = length(data)
@@ -535,17 +535,22 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     totalshots = 0
     startframe = length(data)
     skip = false
+    nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - 3 && continue # skip metadata (it's read ahead below)
+        startframe - 1 <= i <= startframe - 4 && continue # skip metadata (it's read ahead below)
         ip = data[i]
         if ip == 0
             # read metadata
-            # cpu_cycle_clock = data[i - 1]
-            taskid = data[i - 2]
-            threadid = data[i - 3]
+            thread_sleeping = data[i - 1] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = data[i - 2]
+            taskid = data[i - 3]
+            threadid = data[i - 4]
             if !in(threadid, threads) || !in(taskid, tasks)
                 skip = true
                 continue
+            end
+            if thread_sleeping == 1
+                nsleeping += 1
             end
             skip = false
             totalshots += 1
@@ -577,16 +582,18 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
         end
     end
     @assert length(lilist) == length(n) == length(m) == length(lilist_idx)
-    return (lilist, n, m, totalshots)
+    return (lilist, n, m, totalshots, nsleeping)
 end
 
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
-    lilist, n, m, totalshots = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
+    lilist, n, m, totalshots, nsleeping = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
+    util_perc = (1 - (nsleeping / totalshots)) * 100
     if isempty(lilist)
         if is_subsection
             Base.print(io, "Total snapshots: ")
-            printstyled(io, "$(totalshots)\n", color=Base.warn_color())
+            printstyled(io, "$(totalshots)", color=Base.warn_color())
+            Base.println(io, " (", round(Int, util_perc), "% utilization)")
         else
             warning_empty()
         end
@@ -600,7 +607,12 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
     end
     filenamemap = Dict{Symbol,String}()
     print_flat(io, lilist, n, m, cols, filenamemap, fmt)
-    Base.println(io, "Total snapshots: ", totalshots)
+    Base.print(io, "Total snapshots: ", totalshots, " (", round(Int, util_perc), "% utilization")
+    if is_subsection
+        println(io, ")")
+    else
+        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task)")
+    end
     return false
 end
 
@@ -771,17 +783,22 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     build = Vector{StackFrameTree{T}}()
     startframe = length(all)
     skip = false
+    nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - 3 && continue # skip metadata (its read ahead below)
+        startframe - 1 <= i <= startframe - 4 && continue # skip metadata (its read ahead below)
         ip = all[i]
         if ip == 0
             # read metadata
-            # cpu_cycle_clock = all[i - 1]
-            taskid = all[i - 2]
-            threadid = all[i - 3]
+            thread_sleeping = all[i - 1] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = all[i - 2]
+            taskid = all[i - 3]
+            threadid = all[i - 4]
             if !in(threadid, threads) || !in(taskid, tasks)
                 skip = true
                 continue
+            end
+            if thread_sleeping == 1
+                nsleeping += 1
             end
             skip = false
             # sentinel value indicates the start of a new backtrace
@@ -886,7 +903,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         nothing
     end
     cleanup!(root)
-    return root
+    return root, nsleeping
 end
 
 function maxstats(root::StackFrameTree)
@@ -955,21 +972,28 @@ end
 function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
     if fmt.combine
-        root = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
+        root, nsleeping = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     else
-        root = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
+        root, nsleeping = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     end
+    util_perc = (1 - (nsleeping / root.count)) * 100
     if isempty(root.down)
         if is_subsection
             Base.print(io, "Total snapshots: ")
-            printstyled(io, "$(root.count)\n", color=Base.warn_color())
+            printstyled(io, "$(root.count)", color=Base.warn_color())
+            Base.println(io, " (", round(Int, util_perc), "% utilization)")
         else
             warning_empty()
         end
         return true
     end
     print_tree(io, root, cols, fmt, is_subsection)
-    Base.println(io, "Total snapshots: ", root.count)
+    Base.print(io, "Total snapshots: ", root.count, " (", round(Int, util_perc), "% utilization")
+    if is_subsection
+        println(io, ")")
+    else
+        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task)")
+    end
     return false
 end
 
@@ -1034,10 +1058,21 @@ function liperm(lilist::Vector{StackFrame})
     return sortperm(lilist, lt = lt)
 end
 
-warning_empty(;summary = false) = @warn """
-        There were no samples collected$(summary ? " in one or more groups" : "").
+function warning_empty(;summary = false)
+    if summary
+        @warn """
+        There were no samples collected in one or more groups.
+        This may be due to idle threads, or you may need to run your
+        program longer (perhaps by running it multiple times),
+        or adjust the delay between samples with `Profile.init()`."""
+    else
+        @warn """
+        There were no samples collected in one or more groups.
         Run your program longer (perhaps by running it multiple times),
         or adjust the delay between samples with `Profile.init()`."""
+    end
+end
+
 
 
 # Given Base.intersect isn't efficient for mixtures of UnitRange and Vectors
