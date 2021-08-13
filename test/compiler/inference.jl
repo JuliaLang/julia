@@ -2988,6 +2988,13 @@ f_apply_cglobal(args...) = cglobal(args...)
 f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 @test Base.return_types(f37532, Tuple{Any, Int}) == Any[Int]
 
+@test Core.Compiler.return_types() do
+    Base.not_int()
+end |> first === Union{}
+@test Core.Compiler.return_types() do
+    Base.not_int("ABC")
+end |> first === Union{}
+
 # PR #37749
 # Helper functions for Core.Compiler.Timings. These are normally accessed via a package -
 # usually (SnoopCompileCore).
