@@ -1139,7 +1139,7 @@ julia> typeof(x -> x + 1)
 var"#9#10"
 ```
 
-Types of anonymous function are not necessarily singletons, for example in cases where a variable is captured.
+Types of closures are not necessarily singletons, for example in cases where a variable is captured.
 
 ```jldoctest
 julia> addy(y) = x -> x + y
