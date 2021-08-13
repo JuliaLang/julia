@@ -1112,7 +1112,7 @@ true
 
 Each function has its own type, which is a subtype of `Function`.
 
-```jldoctest
+```jldoctest foo41
 julia> foo41(x) = x + 1
 foo41 (generic function with 1 method)
 
@@ -1122,7 +1122,7 @@ typeof(foo41) (singleton type of function foo41, subtype of Function)
 
 Note how `typeof(foo41)` prints as itself. This is merely a convention for printing, as it is a first-class object that can be used like any other value:
 
-```jldoctest
+```jldoctest foo41
 julia> T = typeof(foo41)
 typeof(foo41) (singleton type of function foo41, subtype of Function)
 
