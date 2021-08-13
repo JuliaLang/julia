@@ -1114,7 +1114,7 @@ Each function has its own type, which is a subtype of `Function`.
 
 ```jldoctest
 julia> foo41(x) = x + 1
-foo (generic function with 1 method)
+foo41 (generic function with 1 method)
 
 julia> typeof(foo41)
 typeof(foo41) (singleton type of function foo41, subtype of Function)
