@@ -1130,7 +1130,7 @@ julia> T <: Function
 true
 ```
 
-Types of functions are singletons. When necessary, you can compare them with [`===`](@ref).
+Types of functions defined at top-level are singletons. When necessary, you can compare them with [`===`](@ref).
 
 [Anonymous functions](@ref man-anonymous-functions) also have their own type, which is printed with names that include `#<number>`. Numbers for different function types are distinct, but not guaranteed to be the same across sessions.
 
