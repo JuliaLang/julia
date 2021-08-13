@@ -505,7 +505,7 @@ result into the field in the first argument and return the values `(old, new)`.
 This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
 
 
-See [atomics](../manual/multi-threading.html#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -604,7 +604,7 @@ Stores `new` into `a.b.x` and returns the old value of `a.b.x`.
 
 This operation translates to a `swapproperty!(a.b, :x, new)` call.
 
-See [atomics](../manual/multi-threading.html#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -650,7 +650,7 @@ replacement was completed.
 
 This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` call.
 
-See [atomics](../manual/multi-threading.html#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
