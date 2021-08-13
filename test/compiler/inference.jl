@@ -2669,7 +2669,7 @@ const DenseIdx = Union{IntRange,Integer}
     foo_26724((result..., length(r)), I...)
 @test @inferred(foo_26724((), 1:4, 1:5, 1:6)) === (4, 5, 6)
 
-# Non uniformity in expresions with PartialTypeVar
+# Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
     @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),

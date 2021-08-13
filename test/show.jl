@@ -1825,7 +1825,7 @@ end
     @test showstr(Dict(true=>false)) == "Dict{Bool, Bool}(1 => 0)"
     @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
 
-    # issue #27979 (dislaying arrays of pairs containing arrays as first member)
+    # issue #27979 (displaying arrays of pairs containing arrays as first member)
     @test replstr([[1.0]=>1.0]) == "1-element Vector{Pair{Vector{Float64}, Float64}}:\n [1.0] => 1.0"
 
     # issue #28159

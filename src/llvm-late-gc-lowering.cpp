@@ -1573,7 +1573,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 for (Use &U : CI->arg_operands()) {
                     // Find all callee rooted arguments.
                     // Record them instead of simply remove them from live values here
-                    // since they can be useful during refinment
+                    // since they can be useful during refinement
                     // (e.g. to remove roots of objects that are refined to these)
                     Value *V = U;
                     if (isa<Constant>(V) || !isa<PointerType>(V->getType()) ||

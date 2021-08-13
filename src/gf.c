@@ -1351,7 +1351,7 @@ static void invalidate_external(jl_method_instance_t *mi, size_t max_world) {
             jl_printf((JL_STREAM*)STDERR_FILENO, "error in invalidation callback: ");
             jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-            jlbacktrace(); // writen to STDERR_FILENO
+            jlbacktrace(); // written to STDERR_FILENO
         }
     }
 }

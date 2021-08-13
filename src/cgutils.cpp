@@ -234,7 +234,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
                                 false, GlobalVariable::PrivateLinkage,
                                 NULL, localname);
     // LLVM passes sometimes strip metadata when moving load around
-    // since the load at the new location satisfy the same condition as the origional one.
+    // since the load at the new location satisfy the same condition as the original one.
     // Mark the global as constant to LLVM code using our own metadata
     // which is much less likely to be striped.
     gv->setMetadata("julia.constgv", MDNode::get(gv->getContext(), None));
@@ -2407,7 +2407,7 @@ static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo,
         ctx.builder.CreateStructGEP(jl_array_llvmt,
             emit_bitcast(ctx, t, jl_parray_llvmt),
             0); // index (not offset) of data field in jl_parray_llvmt
-    // Normally allocated array of 0 dimention always have a inline pointer.
+    // Normally allocated array of 0 dimension always have a inline pointer.
     // However, we can't rely on that here since arrays can also be constructed from C pointers.
     MDNode *tbaa = arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arrayptr;
     PointerType *PT = cast<PointerType>(addr->getType());
