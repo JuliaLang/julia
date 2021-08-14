@@ -259,15 +259,6 @@ unioncomplexity(u::UnionAll) = max(unioncomplexity(u.body)::Int, unioncomplexity
 unioncomplexity(t::Core.TypeofVararg) = isdefined(t, :T) ? unioncomplexity(t.T)::Int : 0
 unioncomplexity(@nospecialize(x)) = 0
 
-function improvable_via_constant_propagation(@nospecialize(t))
-    if isconcretetype(t) && t <: Tuple
-        for p in t.parameters
-            p === DataType && return true
-        end
-    end
-    return false
-end
-
 # convert a Union of Tuple types to a Tuple of Unions
 function unswitchtupleunion(u::Union)
     ts = uniontypes(u)

@@ -38,6 +38,18 @@ end
 
 anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
 
+bitflag(n::Int) = 0x01 << (n-1)
+
+@pure function bitflags(flags::Bool...)
+    r = 0x00
+    for i in 1:length(flags)
+        if flags[i]
+            r |= bitflag(i)
+        end
+    end
+    return r
+end
+
 ###########
 # scoping #
 ###########
@@ -188,7 +200,7 @@ function specialize_method(method::Method, @nospecialize(atypes), sparams::Simpl
     if preexisting
         # check cached specializations
         # for an existing result stored there
-        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
+        return ccall(:jl_specializations_lookup, Ref{MethodInstance}, (Any, Any), method, atypes)
     end
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end
