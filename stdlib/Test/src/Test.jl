@@ -86,8 +86,9 @@ struct Pass <: Result
     data
     value
     source::Union{Nothing,LineNumberNode}
-    function Pass(test_type::Symbol, orig_expr, data, thrown, source=nothing)
-        return new(test_type, orig_expr, data, thrown isa String ? "String" : thrown, source)
+    message_only::Bool
+    function Pass(test_type::Symbol, orig_expr, data, thrown, source=nothing, message_only=false)
+        return new(test_type, orig_expr, data, thrown, source, message_only)
     end
 end
 
@@ -98,7 +99,11 @@ function Base.show(io::IO, t::Pass)
     end
     if t.test_type === :test_throws
         # The correct type of exception was thrown
-        print(io, "\n      Thrown: ", t.value isa String ? t.value : typeof(t.value))
+        if t.message_only
+            print(io, "\n     Message: ", t.value)
+        else
+            print(io, "\n      Thrown: ", typeof(t.value))
+        end
     elseif t.test_type === :test && t.data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
@@ -118,12 +123,14 @@ struct Fail <: Result
     data::Union{Nothing, String}
     value::String
     source::LineNumberNode
-    function Fail(test_type::Symbol, orig_expr, data, value, source::LineNumberNode)
+    message_only::Bool
+    function Fail(test_type::Symbol, orig_expr, data, value, source::LineNumberNode, message_only::Bool=false)
         return new(test_type,
             string(orig_expr),
             data === nothing ? nothing : string(data),
             string(isa(data, Type) ? typeof(value) : value),
-            source)
+            source,
+            message_only)
     end
 end
 
@@ -132,18 +139,24 @@ function Base.show(io::IO, t::Fail)
     print(io, " at ")
     printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     print(io, "  Expression: ", t.orig_expr)
+    value, data = t.value, t.data
     if t.test_type === :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
-        print(io, "\n    Expected: ", t.data)
-        print(io, "\n      Thrown: ", t.value)
+        if t.message_only
+            print(io, "\n    Expected: ", data)
+            print(io, "\n     Message: ", value)
+        else
+            print(io, "\n    Expected: ", data)
+            print(io, "\n      Thrown: ", value)
+        end
     elseif t.test_type === :test_throws_nothing
         # An exception was expected, but no exception was thrown
-        print(io, "\n    Expected: ", t.data)
+        print(io, "\n    Expected: ", data)
         print(io, "\n  No exception thrown")
-    elseif t.test_type === :test && t.data !== nothing
+    elseif t.test_type === :test && data !== nothing
         # The test was an expression, so display the term-by-term
         # evaluated version as well
-        print(io, "\n   Evaluated: ", t.data)
+        print(io, "\n   Evaluated: ", data)
     end
 end
 
@@ -238,6 +251,7 @@ function Serialization.serialize(s::Serialization.AbstractSerializer, t::Pass)
     Serialization.serialize(s, t.data === nothing ? nothing : string(t.data))
     Serialization.serialize(s, string(t.value))
     Serialization.serialize(s, t.source === nothing ? nothing : t.source)
+    Serialization.serialize(s, t.message_only)
     nothing
 end
 
@@ -657,6 +671,7 @@ end
 
 Tests that the expression `expr` throws `exception`.
 The exception may specify either a type,
+a string or regular expression occurring in the displayed error message,
 or a value (which will be tested for equality by comparing fields).
 Note that `@test_throws` does not support a trailing keyword form.
 
@@ -671,6 +686,11 @@ julia> @test_throws DimensionMismatch [1, 2, 3] + [1, 2]
 Test Passed
   Expression: [1, 2, 3] + [1, 2]
       Thrown: DimensionMismatch
+
+julia> @test_throws "Try sqrt(Complex" sqrt(-1)
+Test Passed
+  Expression: sqrt(-1)
+     Message: "DomainError with -1.0:\\nsqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
 ```
 """
 macro test_throws(extype, ex)
@@ -697,6 +717,7 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
     if isa(result, Threw)
         # Check that the right type of exception was thrown
         success = false
+        message_only = false
         exc = result.exception
         # NB: Throwing LoadError from macroexpands is deprecated, but in order to limit
         # the breakage in package tests we add extra logic here.
@@ -704,6 +725,9 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             orig_expr isa Expr &&
             orig_expr.head in (:call, :macrocall) &&
             orig_expr.args[1] in MACROEXPAND_LIKE
+        if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
+            extype = extype.error # deprecated
+        end
         if isa(extype, Type)
             success =
                 if from_macroexpand && extype == LoadError && exc isa Exception
@@ -712,24 +736,30 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
                 else
                     isa(exc, extype)
                 end
-        else
-            if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
-                extype = extype.error # deprecated
-            end
-            if isa(exc, typeof(extype))
-                success = true
-                for fld in 1:nfields(extype)
-                    if !isequal(getfield(extype, fld), getfield(exc, fld))
-                        success = false
-                        break
-                    end
+        elseif isa(exc, typeof(extype))
+            success = true
+            for fld in 1:nfields(extype)
+                if !isequal(getfield(extype, fld), getfield(exc, fld))
+                    success = false
+                    break
                 end
+            end
+        elseif isa(extype, Exception)
+        else
+            message_only = true
+            exc = sprint(showerror, exc)
+            success = contains_warn(exc, extype)
+            exc = '"' * escape_string(exc) * '"'
+            if isa(extype, AbstractString)
+                extype = '"' * escape_string(extype) * '"'
+            elseif isa(extype, Function)
+                extype = "< match function >"
             end
         end
         if success
-            testres = Pass(:test_throws, orig_expr, extype, exc, result.source)
+            testres = Pass(:test_throws, orig_expr, extype, exc, result.source, message_only)
         else
-            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, result.source)
+            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, result.source, message_only)
         end
     else
         testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, result.source)
