@@ -720,20 +720,19 @@ function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState)
-    spec = todo.spec::DelayedInliningSpec
+    (; match) = todo.spec::DelayedInliningSpec
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     isconst, src = false, nothing
-    if isa(spec.match, InferenceResult)
-        let inferred_src = spec.match.src
-            if isa(inferred_src, Const)
-                if !is_inlineable_constant(inferred_src.val)
-                    return compileable_specialization(state.et, spec.match)
-                end
-                isconst, src = true, quoted(inferred_src.val)
-            else
-                isconst, src = false, inferred_src
+    if isa(match, InferenceResult)
+        inferred_src = match.src
+        if isa(inferred_src, Const)
+            if !is_inlineable_constant(inferred_src.val)
+                return compileable_specialization(state.et, match)
             end
+            isconst, src = true, quoted(inferred_src.val)
+        else
+            isconst, src = false, inferred_src
         end
     else
         linfo = get(state.mi_cache, todo.mi, nothing)
@@ -761,7 +760,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
     end
 
     if src === nothing
-        return compileable_specialization(et, spec.match)
+        return compileable_specialization(et, match)
     end
 
     if isa(src, IRCode)
