@@ -563,7 +563,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
 end
 
 # if there's a possibility we could get a better result (hopefully without doing too much work)
-# returns `MethodInstance` with constant arguments, returns nothing otherwise
+# returns `MethodInstance` with constant arguments, returns `nothing` otherwise
 function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::MethodCallResult,
                                          @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
                                          sv::InferenceState)
@@ -571,35 +571,87 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         add_remark!(interp, sv, "[constprop] Disabled by parameter")
         return nothing
     end
+    config = UInt8(const_prop_config(interp, result, f, argtypes, match, sv))
+    if config & bitflag(1) ≠ 0
+        if !const_prop_entry_heuristic(interp, result, sv)
+            return nothing
+        end
+    end
     method = match.method
-    force = force_const_prop(interp, f, method)
-    force || const_prop_entry_heuristic(interp, result, sv) || return nothing
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
     length(argtypes) < nargs && return nothing
-    if !(const_prop_argument_heuristic(interp, argtypes) || const_prop_rettype_heuristic(interp, result.rt))
-        add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
-        return nothing
+    if config & bitflag(2) ≠ 0
+        if !const_prop_argument_heuristic(interp, argtypes, result)
+            add_remark!(interp, sv, "[constprop] Disabled by argument heuristic")
+            return nothing
+        end
     end
     allconst = is_allconst(argtypes)
-    if !force
+    if config & bitflag(3) ≠ 0
         if !const_prop_function_heuristic(interp, f, argtypes, nargs, allconst)
             add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
             return nothing
         end
     end
-    force |= allconst
-    mi = specialize_method(match, !force)
+    if allconst
+        config &= ~bitflag(4)
+    end
+    mi = specialize_method(match, config & bitflag(4) ≠ 0)
     if mi === nothing
         add_remark!(interp, sv, "[constprop] Failed to specialize")
         return nothing
     end
     mi = mi::MethodInstance
-    if !force && !const_prop_methodinstance_heuristic(interp, method, mi)
-        add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
-        return nothing
+    if allconst
+        config &= ~bitflag(5)
+    end
+    if config & bitflag(5) ≠ 0
+        if !const_prop_methodinstance_heuristic(interp, method, mi)
+            add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
+            return nothing
+        end
     end
     return mi
+end
+
+"""
+    const_prop_config(interp::AbstractInterpreter, result::MethodCallResult,
+                      @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
+                      sv::InferenceState) -> config::UInt8
+
+Configures which constant-propagation application strategies to be used for the given abstract call.
+`maybe_get_const_prop_profitable` will apply following heuristics based on the value of `config::UInt8`
+and determine whether or not to try constant-propagation:
+- `config & bitflag(1) ≠ 0`: applies `const_prop_entry_heuristic` to skip const-prop' when
+                             `result` can't be improved anymore
+- `config & bitflag(2) ≠ 0`: applies `const_prop_argument_heuristic` to skip const-prop'
+                             when `argtypes` aren't likely profitable
+- `config & bitflag(3) ≠ 0`: applies `const_prop_function_heuristic` to heuristically
+                             skip const-prop' for a selection of generic function calls
+- `config & bitflag(4) ≠ 0`: retrieves `MethodInstance` for this constant call using cached
+                             specializations, otherwise it forces the retrieval by getting
+                             new `MethodInstance`
+- `config & bitflag(5) ≠ 0`: applies `const_prop_methodinstance_heuristic` to suppress const-prop'
+                             for a complicated method where const-prop' is unlikely to simplify
+                             its body and help the optimizer inline it
+
+Note that flag `bitflag(4)` and `bitflag(5)` are automatically turned off when all the arguments are constant.
+"""
+function const_prop_config(interp::AbstractInterpreter, result::MethodCallResult,
+                           @nospecialize(f), argtypes::Vector{Any}, match::MethodMatch,
+                           sv::InferenceState)
+    if InferenceParams(interp).aggressive_constant_propagation || match.method.aggressive_constprop
+        return bitflags(false, true, false, false, false)
+    elseif istopfunction(f, :setproperty!)
+        return bitflags(false, true, false, false, false)
+    elseif istopfunction(f, :getproperty)
+        # turn on `const_prop_entry_heuristic` because `getproperty` is supposed to have
+        # relatively simple method body, and we often don't need constant-prop'
+        # if we already have accurate result
+        return bitflags(true, true, false, false, false)
+    end
+    return bitflags(true, true, true, true, true) # turn on all the checks by default
 end
 
 function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, sv::InferenceState)
@@ -613,14 +665,14 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
 end
 
 # see if propagating constants may be worthwhile
-function const_prop_argument_heuristic(interp::AbstractInterpreter, argtypes::Vector{Any})
+function const_prop_argument_heuristic(interp::AbstractInterpreter, argtypes::Vector{Any}, result::MethodCallResult)
     for a in argtypes
         a = widenconditional(a)
         if has_nontrivial_const_info(a) && is_const_prop_profitable_arg(a)
             return true
         end
     end
-    return false
+    return improvable_via_constant_propagation(result.rt)
 end
 
 function is_const_prop_profitable_arg(@nospecialize(arg))
@@ -638,8 +690,13 @@ function is_const_prop_profitable_arg(@nospecialize(arg))
     return isa(val, Symbol) || isa(val, Type) || (!isa(val, String) && !ismutable(val))
 end
 
-function const_prop_rettype_heuristic(interp::AbstractInterpreter, @nospecialize(rettype))
-    return improvable_via_constant_propagation(rettype)
+function improvable_via_constant_propagation(@nospecialize(t))
+    if isconcretetype(t) && t <: Tuple
+        for p in t.parameters
+            p === DataType && return true
+        end
+    end
+    return false
 end
 
 function is_allconst(argtypes::Vector{Any})
@@ -650,13 +707,6 @@ function is_allconst(argtypes::Vector{Any})
         end
     end
     return true
-end
-
-function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method::Method)
-    return method.aggressive_constprop ||
-           InferenceParams(interp).aggressive_constant_propagation ||
-           istopfunction(f, :getproperty) ||
-           istopfunction(f, :setproperty!)
 end
 
 function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any}, nargs::Int, allconst::Bool)
@@ -1205,7 +1255,7 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     # since some checks within `abstract_call_method_with_const_args` seem a bit costly
     const_prop_entry_heuristic(interp, result, sv) || return CallMeta(rt, InvokeCallInfo(match, nothing))
     argtypes′ = argtypes[4:end]
-    const_prop_argument_heuristic(interp, argtypes′) || const_prop_rettype_heuristic(interp, rt) || return CallMeta(rt, InvokeCallInfo(match, nothing))
+    const_prop_argument_heuristic(interp, argtypes′, result) || return CallMeta(rt, InvokeCallInfo(match, nothing))
     pushfirst!(argtypes′, ft)
     # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons
     # for i in 1:length(argtypes′)
