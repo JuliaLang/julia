@@ -603,11 +603,6 @@ end
 Called from `@inbounds` macro to warn some known pitfalls.
 """
 function inbounds_warning(__source__::LineNumberNode, __module__::Module, blk::Expr)
-    hint = """
-    HINT: It is recommended to avoid using `@inbounds` around the code you don't write.
-    A macro can introduce arbitrary code which may not satisfy the requirement of
-    `@inbounds`.
-    """
     if Meta.isexpr(blk, :macrocall) && length(blk.args) > 1
         f = @something(maybe_resolve_global(__module__, blk.args[1]), return)
         if f === Threads.var"@threads"
@@ -624,9 +619,8 @@ function inbounds_warning(__source__::LineNumberNode, __module__::Module, blk::E
             return
         end
         msg = replace(msg, "\n" => " ")
-        hint = replace(hint, "\n" => " ")
         @warn(
-            "$msg\n\n$hint",
+            msg,
             maxlog = 1,
             _line = __source__.line,
             _file = String(something(__source__.file, @__FILE__)),
