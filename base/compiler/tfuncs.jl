@@ -1177,7 +1177,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     else
         return false
     end
-    # We know the apply_type is well formed. Oherwise our rt would have been
+    # We know the apply_type is well formed. Otherwise our rt would have been
     # Bottom (or Type).
     (headtype === Union) && return true
     isa(rt, Const) && return true
