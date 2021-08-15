@@ -563,12 +563,17 @@ end
     that all accesses are in bounds.
 """
 macro inbounds(blk)
+    inbounds_warning(__source__, __module__, blk)
     return Expr(:block,
         Expr(:inbounds, true),
         Expr(:local, Expr(:(=), :val, esc(blk))),
         Expr(:inbounds, :pop),
         :val)
 end
+
+# `inbounds_warning` is defined elsewhere on `Expr` so that we can use features
+# that are not available inside `Core.Compiler`.
+inbounds_warning(::Any, ::Any, ::Any) = nothing
 
 """
     @label name

@@ -574,3 +574,62 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end
 end
+
+function maybe_resolve_global(m::Module, name::Symbol)
+    try
+        return Some(getfield(m, name))
+    catch
+        return nothing
+    end
+end
+function maybe_resolve_global(m::Module, ex)
+    Meta.isexpr(ex, :., 2) || return nothing
+    a, b = ex.args
+    a isa Union{Symbol,Expr} || return nothing
+    b isa QuoteNode || return nothing
+    c = b.value
+    c isa Symbol || return nothing
+    obj = @something(maybe_resolve_global(m, a), return nothing)
+    if obj isa Module
+        return  maybe_resolve_global(obj, c)
+    else
+        return nothing
+    end
+end
+
+"""
+    inbounds_warning(__source__::LineNumberNode, __module__::Module, blk::Expr)
+
+Called from `@inbounds` macro to warn some known pitfalls.
+"""
+function inbounds_warning(__source__::LineNumberNode, __module__::Module, blk::Expr)
+    hint = """
+    HINT: It is recommended to avoid using `@inbounds` around the code you don't write.
+    A macro can introduce arbitrary code which may not satisfy the requirement of
+    `@inbounds`.
+    """
+    if Meta.isexpr(blk, :macrocall) && length(blk.args) > 1
+        f = @something(maybe_resolve_global(__module__, blk.args[1]), return)
+        if f === Threads.var"@threads"
+            msg = """
+            [Performance] `@inbounds Threads.@threads for ...` does not elide the bound
+            check inside the `for` loop. Use `@inbounds` inside the loop body instead.
+            """
+        elseif f in (Threads.var"@spawn", var"@async", var"@task")
+            msg = """
+            [Performance] `@inbounds $f begin ... end` does not elide the bound check inside
+            the task code. Use `$f @inbounds begin ... end` instead.
+            """
+        else
+            return
+        end
+        msg = replace(msg, "\n" => " ")
+        hint = replace(hint, "\n" => " ")
+        @warn(
+            "$msg\n\n$hint",
+            maxlog = 1,
+            _line = __source__.line,
+            _file = String(something(__source__.file, @__FILE__)),
+        )
+    end
+end

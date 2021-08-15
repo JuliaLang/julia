@@ -16,3 +16,8 @@ cmd = `$(Base.julia_cmd()) --check-bounds=no --startup-file=no --depwarn=error b
 if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
     error("boundscheck test failed, cmd : $cmd")
 end
+
+@testset "@inbounds warnings" begin
+    @test_logs (:warn, r"@threads") @eval @inbounds Threads.@threads for _ in 1:0 end
+    @test_logs (:warn, r"@spawn") @eval @inbounds Threads.@spawn begin end
+end
