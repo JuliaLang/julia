@@ -591,7 +591,7 @@ function maybe_resolve_global(m::Module, ex)
     c isa Symbol || return nothing
     obj = @something(maybe_resolve_global(m, a), return nothing)
     if obj isa Module
-        return  maybe_resolve_global(obj, c)
+        return maybe_resolve_global(obj, c)
     else
         return nothing
     end
