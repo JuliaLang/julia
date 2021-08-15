@@ -270,7 +270,7 @@ julia> length([1 2; 3 4])
 4
 ```
 """
-length(t::AbstractArray) = (@_inline_meta; _prod_simple(size(t)))
+length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
 
 # `eachindex` is mostly an optimization of `keys`
 eachindex(itrs...) = keys(itrs...)

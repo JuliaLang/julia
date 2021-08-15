@@ -489,13 +489,9 @@ reverse(t::Tuple) = revargs(t...)
 ## specialized reduction ##
 
 prod(x::Tuple{}) = 1
-
-# NOTE: should remove, but often used on array sizes
-# TODO: this is inconsistent with the regular prod in cases where the arguments
-# require size promotion to system size.
-_prod_simple(x) = prod(x)
-_prod_simple(x::Tuple{}) = 1
-_prod_simple(x::Tuple{Any, Vararg{Any}}) = *(x...)
+# This is consistent with the regular prod because there is no need for size promotion
+# if all elements in the tuple are of system size.
+prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
 
 all(x::Tuple{}) = true
 all(x::Tuple{Bool}) = x[1]
