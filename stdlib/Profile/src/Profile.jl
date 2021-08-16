@@ -1067,7 +1067,7 @@ function warning_empty(;summary = false)
         or adjust the delay between samples with `Profile.init()`."""
     else
         @warn """
-        There were no samples collected in one or more groups.
+        There were no samples collected.
         Run your program longer (perhaps by running it multiple times),
         or adjust the delay between samples with `Profile.init()`."""
     end
