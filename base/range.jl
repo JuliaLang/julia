@@ -58,6 +58,9 @@ Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
   to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
+* Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be one.
+
+See Extended Help for additional details on the returned type.
 
 # Examples
 ```jldoctest
@@ -87,6 +90,15 @@ julia> range(stop=10, step=1, length=5)
 
 julia> range(start=1, step=1, stop=10)
 1:1:10
+
+julia> range(; length = 10)
+Base.OneTo(10)
+
+julia> range(; stop = 6)
+Base.OneTo(6)
+
+julia> range(; stop = 6.5)
+1.0:1.0:6.0
 ```
 If `length` is not specified and `stop - start` is not an integer multiple of `step`, a range that ends before `stop` will be produced.
 ```jldoctest
@@ -103,6 +115,23 @@ To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 !!! compat "Julia 1.7"
     The versions without keyword arguments and `start` as a keyword argument
     require at least Julia 1.7.
+
+!!! compat "Julia 1.8"
+    The versions with `stop` as a sole keyword argument,
+    or `length` as a sole keyword argument require at least Julia 1.8.
+
+
+# Extended Help
+
+`range` will produce a `Base.OneTo` when the arguments are Integers and
+* Only `length` is provided
+* Only `stop` is provided
+
+`range` will produce a `UnitRange` when the arguments are Integers and
+* Only `start`  and `stop` are provided
+* Only `length` and `stop` are provided
+
+A `UnitRange` is not produced if `step` is provided even if specified as one.
 """
 function range end
 
@@ -115,8 +144,8 @@ range(;start=nothing, stop=nothing, length::Union{Integer, Nothing}=nothing, ste
     _range(start, step, stop, length)
 
 _range(start::Nothing, step::Nothing, stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
-_range(start::Nothing, step::Nothing, stop::Nothing, len::Any    ) = range_error(start, step, stop, len)
-_range(start::Nothing, step::Nothing, stop::Any    , len::Nothing) = range_error(start, step, stop, len)
+_range(start::Nothing, step::Nothing, stop::Nothing, len::Any    ) = range_length(len)
+_range(start::Nothing, step::Nothing, stop::Any    , len::Nothing) = range_stop(stop)
 _range(start::Nothing, step::Nothing, stop::Any    , len::Any    ) = range_stop_length(stop, len)
 _range(start::Nothing, step::Any    , stop::Nothing, len::Nothing) = range_error(start, step, stop, len)
 _range(start::Nothing, step::Any    , stop::Nothing, len::Any    ) = range_error(start, step, stop, len)
@@ -131,6 +160,14 @@ _range(start::Any    , step::Any    , stop::Nothing, len::Any    ) = range_start
 _range(start::Any    , step::Any    , stop::Any    , len::Nothing) = range_start_step_stop(start, step, stop)
 _range(start::Any    , step::Any    , stop::Any    , len::Any    ) = range_error(start, step, stop, len)
 
+# Length as the only argument
+range_length(len::Integer) = OneTo(len)
+
+# Stop as the only argument
+range_stop(stop) = range_start_stop(oneunit(stop), stop)
+range_stop(stop::Integer) = range_length(stop)
+
+# Stop and length as the only argument
 range_stop_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(oftype(a, a-len+1), a)
 range_stop_length(a::AbstractFloat, len::Integer) = range_step_stop_length(oftype(a, 1), a, len)
 range_stop_length(a,                len::Integer) = range_step_stop_length(oftype(a-a, 1), a, len)
