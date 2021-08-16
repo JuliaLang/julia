@@ -771,6 +771,12 @@ let text = "input-test-text"
     @test proc.out === out
     @test read(out, String) == text
     @test success(proc)
+
+    out = PipeBuffer()
+    proc = run(catcmd, IOBuffer(SubString(text)), out)
+    @test success(proc)
+    @test proc.out === proc.err === proc.in === devnull
+    @test String(take!(out)) == text
 end
 
 
