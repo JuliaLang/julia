@@ -128,7 +128,7 @@ struct ExceptionStack <: AbstractArray{Any,1}
 end
 
 """
-    current_exceptions(task=current_task(); [inclue_bt=true])
+    current_exceptions(task::Task=current_task(); [backtrace::Bool=true])
 
 Get the stack of exceptions currently being handled. For nested catch blocks
 there may be more than one current exception in which case the most recently
@@ -145,7 +145,7 @@ uncaught exceptions.
     This function went by the experiemental name `catch_stack()` in Julia
     1.1–1.6, and had a plain Vector-of-tuples as a return type.
 """
-function current_exceptions(task=current_task(); backtrace=true)
+function current_exceptions(task::Task=current_task(); backtrace::Bool=true)
     raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, backtrace, typemax(Cint))::Vector{Any}
     formatted = Any[]
     stride = backtrace ? 3 : 1
