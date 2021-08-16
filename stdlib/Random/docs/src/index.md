@@ -9,7 +9,7 @@ by default, with per-`Task` state.
 Other RNG types can be plugged in by inheriting the `AbstractRNG` type; they can then be used to
 obtain multiple streams of random numbers.
 
-The types exported by the `Random` package are:
+The PRNGs (pseudorandom number generators) exported by the `Random` package are:
 * `TaskLocalRNG`: the default with 1 stream per task.
 * `Xoshiro`: for explicitly-managed Xoshiro256++ streams.
 * `RandomDevice`: for OS-provided entropy. This may be used for cryptographically secure random numbers (CS(P)RNG).
