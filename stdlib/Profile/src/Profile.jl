@@ -1083,6 +1083,15 @@ function _intersect(v::AbstractVector, r::AbstractRange)
     return Base.vectorfilter(Base._shrink_filter!(seen), common)
 end
 _intersect(r::AbstractRange, v::AbstractVector) = _intersect(v, r)
+function _intersect(r1::AbstractRange, r2::AbstractRange)
+    # To iterate over the shorter range
+    length(r1) > length(r2) && return _intersect(r2, r1)
+
+    r1 = Base.unique(r1)
+    T = Base.promote_eltype(r1, r2)
+
+    return T[x for x in r1 if x ∈ r2]
+end
 _intersect(a, b) = Base.intersect(a, b)
 
 
