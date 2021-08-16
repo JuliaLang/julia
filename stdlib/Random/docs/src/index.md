@@ -12,7 +12,7 @@ obtain multiple streams of random numbers.
 The types exported by the `Random` package are:
 * `TaskLocalRNG`: the default with 1 stream per task.
 * `Xoshiro`: for explicitly-managed Xoshiro256++ streams.
-* `RandomDevice`: for OS-provided entropy. This should be used for cryptographically secure random numbers (CPR.
+* `RandomDevice`: for OS-provided entropy. This may be used for cryptographically secure random numbers (CS(P)RNG).
 * `MersenneTwister`: for backward compatibility (usually slower and worse quality than Xoshiro).
 
 Most functions related to random generation accept an optional `AbstractRNG` object as first argument.
