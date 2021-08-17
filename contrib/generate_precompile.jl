@@ -202,16 +202,20 @@ function generate_precompile_statements()
               module $pkgname
               end
               """)
-        tmp = tempname()
+        tmp_prec = tempname()
+        tmp_proc = tempname()
         s = """
             pushfirst!(DEPOT_PATH, $(repr(prec_path)));
-            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
+            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             $precompile_script
             """
-        run(`$(julia_exepath()) -O0 --sysimage $sysimg --startup-file=no -Cnative -e $s`)
-        for statement in split(read(tmp, String), '\n')
-            push!(statements, statement)
+        run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
+        for f in (tmp_prec, tmp_proc)
+            for statement in split(read(f, String), '\n')
+                occursin("Main.", statement) && continue
+                push!(statements, statement)
+            end
         end
     end
 
