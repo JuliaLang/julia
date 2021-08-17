@@ -758,17 +758,16 @@ end
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
 atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
 
-max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
-                                    ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
+_isless(x::T, y::T) where {T<:AbstractFloat} = (x < y) || (signbit(x) > signbit(y))
+min(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(x, y) ? x : y
+max(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(y, x) ? x : y
+minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
+_isless(x::T, y::T) where {T<:Union{Float32,Float64}} = signbit(x - y)
+min(x::T, y::T) where {T<:Union{Float32,Float64}} = ifelse(isnan(x) | ~isnan(y) & _isless(x, y), x, y)
+max(x::T, y::T) where {T<:Union{Float32,Float64}} = ifelse(isnan(x) | ~isnan(y) & _isless(y, x), x, y)
 
-min(x::T, y::T) where {T<:AbstractFloat} = ifelse((y < x) | (signbit(y) > signbit(x)),
-                                    ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
-
-minmax(x::T, y::T) where {T<:AbstractFloat} =
-    ifelse(isnan(x) | isnan(y), ifelse(isnan(x), (x,x), (y,y)),
-           ifelse((y > x) | (signbit(x) > signbit(y)), (x,y), (y,x)))
-
+_isless(x::Float16, y::Float16) = _isless(widen(x), widen(y))
 
 """
     ldexp(x, n)
