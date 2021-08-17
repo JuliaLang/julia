@@ -3005,14 +3005,14 @@ end
 # Some very limited testing of timing the type inference (#37749).
 @testset "Core.Compiler.Timings" begin
     # Functions that call each other
-    @eval module M
+    @eval module M1
         i(x) = x+5
         i2(x) = x+2
         h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
         g(y::Integer, x) = h(Any[y]) + Int(x)
     end
     timing1 = time_inference() do
-        @eval M.g(2, 3.0)
+        @eval M1.g(2, 3.0)
     end
     @test occursin(r"Core.Compiler.Timings.Timing\(InferenceFrameInfo for Core.Compiler.Timings.ROOT\(\)\) with \d+ children", sprint(show, timing1))
     # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
@@ -3024,11 +3024,11 @@ end
     @test isa(stacktrace(timing1.children[1].bt), Vector{Base.StackTraces.StackFrame})
     # Test that inference has cached some of the Method Instances
     timing2 = time_inference() do
-        @eval M.g(2, 3.0)
+        @eval M1.g(2, 3.0)
     end
     @test length(flatten_times(timing2)) < length(flatten_times(timing1))
     # Printing of InferenceFrameInfo for mi.def isa Module
-    @eval module M
+    @eval module M2
         i(x) = x+5
         i2(x) = x+2
         h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
@@ -3038,7 +3038,7 @@ end
     timingmod = time_inference() do
         @eval @testset "Outer" begin
             @testset "Inner" begin
-                for i = 1:2 M.g(2, 3.0) end
+                for i = 1:2 M2.g(2, 3.0) end
             end
         end
     end
