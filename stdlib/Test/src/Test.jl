@@ -671,7 +671,8 @@ end
 
 Tests that the expression `expr` throws `exception`.
 The exception may specify either a type,
-a string or regular expression occurring in the displayed error message,
+a string, regular expression, or list of strings occurring in the displayed error message,
+a matching function,
 or a value (which will be tested for equality by comparing fields).
 Note that `@test_throws` does not support a trailing keyword form.
 
@@ -692,6 +693,12 @@ Test Passed
   Expression: sqrt(-1)
      Message: "DomainError with -1.0:\\nsqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
 ```
+
+In the final example, instead of matching a single string it could alternatively have been performed with:
+
+- `["Try", "Complex"]` (a list of strings)
+- `r"Try sqrt\\([Cc]omplex"` (a regular expression)
+- `str -> occursin("complex", str)` (a matching function)
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
