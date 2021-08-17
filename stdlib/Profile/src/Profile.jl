@@ -55,8 +55,7 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     if n === nothing && delay === nothing
         return Int(n_cur), delay_cur
     end
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
-    nnew = (n === nothing) ? n_cur : n * nthreads
+    nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
     init(nnew, delaynew)
 end
