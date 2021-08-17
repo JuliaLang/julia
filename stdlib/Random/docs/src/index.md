@@ -11,7 +11,7 @@ obtain multiple streams of random numbers.
 
 The PRNGs (pseudorandom number generators) exported by the `Random` package are:
 * `TaskLocalRNG`: a token that represents use of the currently active Task-local stream, deterministically seeded from the parent task, or by `RandomDevice` (with system randomness) at program start
-* `Xoshiro`: for explicitly-managed Xoshiro256++ streams.
+* `Xoshiro`: generates a high-quality stream of random numbers with a small state vector and high performance using the Xoshiro256++ algorithm
 * `RandomDevice`: for OS-provided entropy. This may be used for cryptographically secure random numbers (CS(P)RNG).
 * `MersenneTwister`: for backward compatibility (usually slower and worse quality than Xoshiro).
 
