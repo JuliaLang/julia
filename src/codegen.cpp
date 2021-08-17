@@ -1897,6 +1897,17 @@ static void coverageAllocLine(StringRef filename, int line)
     allocLine(coverageData[filename], line);
 }
 
+extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char* filename, size_t len_filename, int line)
+{
+    assert(!imaging_mode);
+    if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
+        return;
+    StringRef _filename = StringRef(filename, len_filename);
+    std::vector<logdata_block*> &vec = coverageData[_filename];
+    uint64_t *ptr = allocLine(vec, line);
+    (*ptr)++;
+}
+
 // Memory allocation log (malloc_log)
 
 static logdata_t mallocData;
