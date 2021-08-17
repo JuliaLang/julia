@@ -11,7 +11,7 @@ Set{T}(s::Set{T}) where {T} = unsafe_set(Dict{T,Nothing}(s.dict))
 Set{T}(itr) where {T} = union!(Set{T}(), itr)
 Set() = Set{Any}()
 
-function Set{T}(s::KeySet) where {T}
+function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
     d = s.dict
     slots = copy(d.slots)
     keys = copyto!(similar(d.keys, T), d.keys)
