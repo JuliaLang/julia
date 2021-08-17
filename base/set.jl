@@ -14,7 +14,7 @@ Set() = Set{Any}()
 function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
     d = s.dict
     slots = copy(d.slots)
-    keys = copyto!(similar(d.keys, T), d.keys)
+    keys = copy(d.keys)
     vals = similar(d.vals, Nothing)
     unsafe_set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
 end
