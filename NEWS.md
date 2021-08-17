@@ -39,7 +39,7 @@ New library features
 
 * `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
   contains "some message" regardless of the specific exception type.
-  Regular expressions are also supported. ([#41888)
+  Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
 
 Standard library changes
 ------------------------

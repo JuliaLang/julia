@@ -725,9 +725,6 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             orig_expr isa Expr &&
             orig_expr.head in (:call, :macrocall) &&
             orig_expr.args[1] in MACROEXPAND_LIKE
-        if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
-            extype = extype.error # deprecated
-        end
         if isa(extype, Type)
             success =
                 if from_macroexpand && extype == LoadError && exc isa Exception
@@ -736,22 +733,26 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
                 else
                     isa(exc, extype)
                 end
-        elseif isa(exc, typeof(extype))
-            success = true
-            for fld in 1:nfields(extype)
-                if !isequal(getfield(extype, fld), getfield(exc, fld))
-                    success = false
-                    break
+        elseif isa(extype, Exception) || !isa(exc, Exception)
+            if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
+                extype = extype.error # deprecated
+            end
+            if isa(exc, typeof(extype))
+                success = true
+                for fld in 1:nfields(extype)
+                    if !isequal(getfield(extype, fld), getfield(exc, fld))
+                        success = false
+                        break
+                    end
                 end
             end
-        elseif isa(extype, Exception)
         else
             message_only = true
             exc = sprint(showerror, exc)
             success = contains_warn(exc, extype)
-            exc = '"' * escape_string(exc) * '"'
+            exc = repr(exc)
             if isa(extype, AbstractString)
-                extype = '"' * escape_string(extype) * '"'
+                extype = repr(extype)
             elseif isa(extype, Function)
                 extype = "< match function >"
             end
