@@ -43,6 +43,8 @@ const disable_text_style = Dict{Symbol,String}(
     :nothing   => "",
 )
 
+const named_styles = Dict{String, NamedTuple{(:color, :properties), Tuple{Union{Symbol,Int}, Dict{Symbol, Bool}}}}()
+
 # Create a docstring with an automatically generated list
 # of colors.
 let color_syms = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors))),
@@ -122,10 +124,19 @@ If the keyword `reverse` is given as `true`, the result will have foreground and
 If the keyword `hidden` is given as `true`, the result will be hidden.
 Keywords can be given in any combination.
 """
-printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
-    with_output_color(print, color, io, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
-printstyled(msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
-    printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
+function printstyled(io::IO, msg...; namedstyle::Union{Nothing, String}=nothing, kwargs...)
+    if namedstyle ≠ nothing
+        style = named_styles[namedstyle]
+        properties = merge(style.properties, kwargs)
+        color = pop!(properties, :color, style.color)
+    else
+        properties = copy(kwargs)
+        color = pop!(properties, :color, :normal)
+    end
+    with_output_color(print, color, io, msg...; properties...)
+end
+printstyled(msg...; namedstyle::Union{Nothing, String}=nothing, kwargs...) =
+    printstyled(stdout, msg...; namedstyle=namedstyle, kwargs...)
 
 """
     Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
