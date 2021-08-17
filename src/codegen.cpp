@@ -1897,13 +1897,12 @@ static void coverageAllocLine(StringRef filename, int line)
     allocLine(coverageData[filename], line);
 }
 
-extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char* filename, size_t len_filename, int line)
+extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char* filename_, size_t len_filename, int line)
 {
-    assert(!imaging_mode);
-    if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
+    StringRef filename = StringRef(filename_, len_filename);
+    if (imaging_mode || filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    StringRef _filename = StringRef(filename, len_filename);
-    std::vector<logdata_block*> &vec = coverageData[_filename];
+    std::vector<logdata_block*> &vec = coverageData[filename];
     uint64_t *ptr = allocLine(vec, line);
     (*ptr)++;
 }
