@@ -81,7 +81,7 @@ end
 @testset "For issue #24021" begin
     types = [Float16, Float32, Float64, BigFloat, Int16, Int32, Int64, BigInt]
     for T in types, S in types[1:4]
-        x = round(T, S(1.1))
+        x = round(T, S(1.234))
         @test x == 1
         @test x isa T
     end
