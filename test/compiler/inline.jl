@@ -4,6 +4,16 @@ using Test
 using Base.Meta
 using Core: ReturnNode
 
+# check if `x` is a statically-resolved call of a function whose name is `sym`
+isinvoke(@nospecialize(x), sym::Symbol) = isinvoke(x, mi->mi.def.name===sym)
+function isinvoke(@nospecialize(x), pred)
+    if Meta.isexpr(x, :invoke)
+        return pred(x.args[1]::Core.MethodInstance)
+    end
+    return false
+end
+code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
+
 """
 Helper to walk the AST and call a function on every node.
 """
@@ -116,7 +126,7 @@ end
 # issue #29083
 f29083(;μ,σ) = μ + σ*randn()
 g29083() = f29083(μ=2.0,σ=0.1)
-let c = code_typed(g29083, ())[1][1].code
+let c = code_typed1(g29083, ()).code
     # make sure no call to kwfunc remains
     @test !any(e->(isa(e,Expr) && ((e.head === :invoke && e.args[1].def.name === :kwfunc) ||
                                    (e.head === :foreigncall && e.args[1] === QuoteNode(:jl_get_keyword_sorter)))),
@@ -151,13 +161,13 @@ end
 end
 
 function fully_eliminated(f, args)
-    let code = code_typed(f, args)[1][1].code
+    let code = code_typed1(f, args).code
         return length(code) == 1 && isa(code[1], ReturnNode)
     end
 end
 
 function fully_eliminated(f, args, retval)
-    let code = code_typed(f, args)[1][1].code
+    let code = code_typed1(f, args).code
         return length(code) == 1 && isa(code[1], ReturnNode) && code[1].val == retval
     end
 end
@@ -173,7 +183,7 @@ function f_ifelse(x)
     return b ? x + 1 : x
 end
 # 2 for now because the compiler leaves a GotoNode around
-@test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+@test_broken length(code_typed1(f_ifelse, (String,)).code) <= 2
 
 # Test that inlining of _apply_iterate properly hits the inference cache
 @noinline cprop_inline_foo1() = (1, 1)
@@ -210,7 +220,7 @@ end
 function cprop_inline_baz2()
     return cprop_inline_bar(cprop_inline_foo2()..., cprop_inline_foo2()...)
 end
-@test length(code_typed(cprop_inline_baz2, ())[1][1].code) == 2
+@test length(code_typed1(cprop_inline_baz2, ()).code) == 2
 
 # Check that apply_type/TypeVar can be fully eliminated
 function f_apply_typevar(T)
@@ -230,7 +240,7 @@ function f_div(x, y)
     div(x, y)
     return x
 end
-@test length(code_typed(f_div, (Int, Int))[1][1].code) > 1
+@test length(code_typed1(f_div, (Int, Int)).code) > 1
 
 f_identity_splat(t) = (t...,)
 @test fully_eliminated(f_identity_splat, (Tuple{Int,Int},))
@@ -250,7 +260,7 @@ end
 
 # check that pointerref gets deleted if unused
 f_pointerref(T::Type{S}) where S = Val(length(T.parameters))
-let code = code_typed(f_pointerref, Tuple{Type{Int}})[1][1].code
+let code = code_typed1(f_pointerref, Tuple{Type{Int}}).code
     any_ptrref = false
     for i = 1:length(code)
         stmt = code[i]
@@ -286,16 +296,26 @@ f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 @test fully_eliminated(f34900, Tuple{Int, Int}, Core.Argument(2))
 
-@testset "check jl_ir_flag_inlineable for inline macro" begin
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+@testset "check `@inline`/`@noinline` declaration" begin
+    import Core.Compiler: is_inlineable, is_declared_noinline
+    @test is_inlineable(only(methods(@inline x -> x)))
+    @test is_inlineable(only(methods(x -> (@inline; x))))
+    @test !is_inlineable(only(methods(x -> x)))
+    @test is_inlineable(only(methods(@inline function f(x) x end)))
+    @test is_inlineable(only(methods(function f(x) @inline; x end)))
+    @test !is_inlineable(only(methods(function f(x) x end)))
+
+    @test is_declared_noinline(only(methods(@noinline x -> x)))
+    @test is_declared_noinline(only(methods(x -> (@noinline; x))))
+    @test !is_declared_noinline(only(methods(x -> x)))
+    @test is_declared_noinline(only(methods(@noinline function f(x) x end)))
+    @test is_declared_noinline(only(methods(function f(x) @noinline; x end)))
+    @test !is_declared_noinline(only(methods(function f(x) x end)))
 end
 
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
-let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
+let ci = code_typed1(f_inline_global_getindex, Tuple{})
     @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :arrayref)), ci.code)
 end
 
@@ -303,11 +323,11 @@ end
 f_29115(x) = (x...,)
 @test @allocated(f_29115(1)) == 0
 @test @allocated(f_29115(1=>2)) == 0
-let ci = code_typed(f_29115, Tuple{Int64})[1].first
+let ci = code_typed1(f_29115, Tuple{Int64})
     @test length(ci.code) == 2 && isexpr(ci.code[1], :call) &&
         ci.code[1].args[1] === GlobalRef(Core, :tuple)
 end
-let ci = code_typed(f_29115, Tuple{Pair{Int64, Int64}})[1].first
+let ci = code_typed1(f_29115, Tuple{Pair{Int64, Int64}})
     @test length(ci.code) == 4 && isexpr(ci.code[1], :call) &&
         ci.code[end-1].args[1] === GlobalRef(Core, :tuple)
 end
@@ -324,7 +344,7 @@ struct NonIsBitsDims
     dims::NTuple{N, Int} where N
 end
 NonIsBitsDims() = NonIsBitsDims(())
-let ci = code_typed(NonIsBitsDims, Tuple{})[1].first
+let ci = code_typed1(NonIsBitsDims, Tuple{})
     @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode) &&
         ci.code[1].val.value == NonIsBitsDims()
 end
@@ -365,8 +385,8 @@ end
 
 # Union splitting of convert
 f_convert_missing(x) = convert(Int64, x)
-let ci = code_typed(f_convert_missing, Tuple{Union{Int64, Missing}})[1][1],
-    ci_unopt = code_typed(f_convert_missing, Tuple{Union{Int64, Missing}}; optimize=false)[1][1]
+let ci = code_typed1(f_convert_missing, Tuple{Union{Int64, Missing}}),
+    ci_unopt = code_typed1(f_convert_missing, Tuple{Union{Int64, Missing}}; optimize=false)
     # We want to check that inlining was able to union split this, but we don't
     # want to make the test too specific to the exact structure that inlining
     # generates, so instead, we just check that the compiler made it bigger.
@@ -380,16 +400,6 @@ end
 using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
-
-# check if `x` is a statically-resolved call of a function whose name is `sym`
-isinvoke(@nospecialize(x), sym::Symbol) = isinvoke(x, mi->mi.def.name===sym)
-function isinvoke(@nospecialize(x), pred)
-    if Meta.isexpr(x, :invoke)
-        return pred(x.args[1]::Core.MethodInstance)
-    end
-    return false
-end
-code_typed1(args...; kwargs...) = (first∘first)(code_typed(args...; kwargs...))::Core.CodeInfo
 
 @testset "@inline/@noinline annotation before definition" begin
     m = Module()

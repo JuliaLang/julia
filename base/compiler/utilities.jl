@@ -96,6 +96,34 @@ function is_inlineable_constant(@nospecialize(x))
     return count_const_size(x) <= MAX_INLINE_CONST_SIZE
 end
 
+"""
+    is_inlineable(method::Method) -> Bool
+
+Check if `method` is eligible for inlining.
+"""
+function is_inlineable(method::Method)
+    isdefined(method, :source) || return false
+    return ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
+end
+
+"""
+    is_declared_noinline(method::Method) -> Bool
+
+Check if `method` is declared as `@noinline`.
+"""
+function is_declared_noinline(method::Method)
+    isdefined(method, :source) || return false
+    source = method.source
+    if isa(source, Vector{UInt8})
+        return source[1] & 1 << 3 ≠ 0
+    elseif isa(source, CodeInfo)
+        return _any(source.code) do @nospecialize stmt
+            isexpr(stmt, :meta) && stmt.args[1] === :noinline
+        end
+    end
+    return false
+end
+
 ###########################
 # MethodInstance/CodeInfo #
 ###########################

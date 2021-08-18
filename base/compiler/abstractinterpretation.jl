@@ -700,17 +700,20 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, method
         # isn't particularly helpful here.
         return true
     end
-    # Peek at the inferred result for the function to determine if the optimizer
-    # was able to cut it down to something simple (inlineable in particular).
-    # If so, there's a good chance we might be able to const prop all the way
-    # through and learn something new.
-    code = get(code_cache(interp), mi, nothing)
-    declared_inline = isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
-    cache_inlineable = declared_inline
-    if isdefined(code, :inferred) && !cache_inlineable
-        cache_inf = code.inferred
-        if !(cache_inf === nothing)
-            cache_inlineable = inlining_policy(interp)(cache_inf) !== nothing
+    # we approximate the profitability of the const-prop by inlineability below,
+    # check if the method is declared or already analyzed to be inlined first
+    cache_inlineable = is_inlineable(method)
+    if !cache_inlineable
+        # Peek at the inferred result for the function to determine if the optimizer
+        # was able to cut it down to something simple (inlineable in particular).
+        # If so, there's a good chance we might be able to const prop all the way
+        # through and learn something new.
+        code = get(code_cache(interp), mi, nothing)
+        if isdefined(code, :inferred)
+            cache_inf = code.inferred
+            if !(cache_inf === nothing)
+                cache_inlineable = inlining_policy(interp)(cache_inf) !== nothing
+            end
         end
     end
     if !cache_inlineable

@@ -289,8 +289,11 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                     li->propagate_inbounds = 1;
                 else if (ma == (jl_value_t*)aggressive_constprop_sym)
                     li->aggressive_constprop = 1;
-                else
+                else {
+                    if (ma == (jl_value_t*)noinline_sym)
+                        li->inlineable = 2;
                     jl_array_ptr_set(meta, ins++, ma);
+                }
             }
             if (ins == 0)
                 bd[j] = jl_nothing;

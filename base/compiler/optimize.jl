@@ -195,7 +195,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
     (; src, linfo) = opt
     (; def, specTypes) = linfo
 
-    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
+    force_noinline = isa(def, Method) && is_declared_noinline(def)
 
     # compute inlining and other related optimizations
     if (isa(result, Const) || isconstType(result))
