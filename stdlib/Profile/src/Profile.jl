@@ -62,7 +62,7 @@ end
 
 function init(n::Integer, delay::Real)
     nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
-    sample_size_bytes = 1 # what should this be?
+    sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
     buffer_samples = n * nthreads
     buffer_size_bytes = buffer_samples * sample_size_bytes
     if buffer_size_bytes > 2^29 && Sys.WORD_SIZE == 32
