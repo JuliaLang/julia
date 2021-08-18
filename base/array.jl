@@ -766,13 +766,25 @@ function collect(itr::Generator)
     et = @default_eltype(itr)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
-    else
+    elseif isa(isz, HasLength)
+        len = length(itr)
         y = iterate(itr)
         if y === nothing
-            return _array_for(et, itr.iter, isz)
+            return et[]
         end
         v1, st = y
-        collect_to_with_first!(_array_for(typeof(v1), itr.iter, isz), v1, itr, st)
+        return collect_to_with_first!(Vector{typeof(v1)}(undef, len), v1, itr, st)
+    elseif isa(isz, HasShape)
+        axs = axes(itr)
+        y = iterate(itr)
+        if y === nothing
+            return similar(Array{et,length(axs)}, axs)
+        end
+        v1, st = y
+        arr = similar(Array{typeof(v1),length(axs)}, axs)
+        return collect_to_with_first!(arr, v1, itr, st)
+    else
+        error("unreachable")
     end
 end
 
