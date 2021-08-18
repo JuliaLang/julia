@@ -2938,6 +2938,14 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                     int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
                     int rsubt2 = jl_egal((jl_value_t*)matc2->spec_types, m2->sig);
                     jl_value_t *ti;
+                    if (!subt && !subt2 && rsubt && rsubt2 && lim == -1 && ambig == NULL)
+                        // these would only be filtered out of the list as
+                        // ambiguous if they are also type-equal, as we
+                        // aren't skipping matches and the user doesn't
+                        // care if we report any ambiguities
+                        continue;
+                    if (jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
+                        continue;
                     if (subt) {
                         ti = (jl_value_t*)matc2->spec_types;
                         isect2 = NULL;
@@ -2946,18 +2954,11 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                         ti = (jl_value_t*)matc->spec_types;
                         isect2 = NULL;
                     }
-                    else if (rsubt && rsubt2 && lim == -1 && ambig == NULL) {
-                        // these would only be filtered out of the list as
-                        // ambiguous if they are also type-equal, as we
-                        // aren't skipping matches and the user doesn't
-                        // care if we report any ambiguities
-                        ti = jl_bottom_type;
-                    }
                     else {
                         jl_type_intersection2((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types, &env.match.ti, &isect2);
                         ti = env.match.ti;
                     }
-                    if (ti != jl_bottom_type && !jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig)) {
+                    if (ti != jl_bottom_type) {
                         disjoint = 0;
                         // m and m2 are ambiguous, but let's see if we can find another method (m3)
                         // that dominates their intersection, and means we can ignore this
