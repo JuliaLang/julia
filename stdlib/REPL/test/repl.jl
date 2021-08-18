@@ -1360,8 +1360,6 @@ end
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("ex = :(using Foo)"))
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("# comment"))
-        @test isempty(mods)
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
         @test isempty(mods)
     end

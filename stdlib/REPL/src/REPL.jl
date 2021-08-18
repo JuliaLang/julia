@@ -167,6 +167,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
 end
 
 function check_for_missing_packages_and_run_hooks(ast)
+    isa(ast, Expr) || return
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
@@ -176,16 +177,18 @@ function check_for_missing_packages_and_run_hooks(ast)
     end
 end
 
-function modules_to_be_loaded(ast, mods = Symbol[])
+function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
     ast.head == :quote && return mods # don't search if it's not going to be run during this eval
     if ast.head in [:using, :import]
         for arg in ast.args
-            if first(arg.args) isa Symbol # i.e. `Foo`
-                if first(arg.args) != :. # don't include local imports
-                    push!(mods, first(arg.args))
+            arg = arg::Expr
+            arg1 = first(arg.args)
+            if arg1 isa Symbol # i.e. `Foo`
+                if arg1 != :. # don't include local imports
+                    push!(mods, arg1)
                 end
             else # i.e. `Foo: bar`
-                push!(mods, first(first(arg.args).args))
+                push!(mods, first((arg1::Expr).args))
             end
         end
     end
@@ -195,7 +198,6 @@ function modules_to_be_loaded(ast, mods = Symbol[])
     filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
     return mods
 end
-modules_to_be_loaded(::Nothing) = Symbol[] # comments are parsed as nothing
 
 """
     start_repl_backend(repl_channel::Channel, response_channel::Channel)
