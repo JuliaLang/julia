@@ -124,7 +124,7 @@ function catch_backtrace()
 end
 
 struct ExceptionStack <: AbstractArray{Any,1}
-    stack
+    stack::Array{Any,1}
 end
 
 """

@@ -402,8 +402,9 @@ function symbol_latex(s::String)
 
     return get(symbols_latex, s, "")
 end
-function repl_latex(io::IO, s::String)
-    latex = symbol_latex(s)
+function repl_latex(io::IO, s0::String)
+    s::String = s0
+    latex::String = symbol_latex(s)
     if isempty(latex)
         # Decompose NFC-normalized identifier to match tab-completion
         # input if the first search came up empty.
@@ -420,7 +421,7 @@ function repl_latex(io::IO, s::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
-        state = '\0'
+        state::Char = '\0'
         with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
