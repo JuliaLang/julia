@@ -475,7 +475,8 @@ end
     @test precision(z) == 240
     x = BigFloat(12)
     @test precision(x) == old_precision
-    @test_throws DomainError setprecision(1)
+    @test precision(setprecision(1) do; BigFloat(23); end) == 1  # minimum-precision
+    @test_throws DomainError setprecision(0)
     @test_throws DomainError BigFloat(1, precision = 0)
     @test_throws DomainError BigFloat(big(1.1), precision = 0)
     @test_throws DomainError BigFloat(2.5, precision = -900)
