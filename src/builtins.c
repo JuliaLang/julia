@@ -812,7 +812,7 @@ enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char sto
 {
     if (order == not_atomic_sym)
         return jl_memory_order_notatomic;
-    if (order == unordered_sym && (loading || storing))
+    if (order == unordered_sym && (loading ^ storing))
         return jl_memory_order_unordered;
     if (order == monotonic_sym && (loading || storing))
         return jl_memory_order_monotonic;
@@ -1557,9 +1557,9 @@ JL_CALLABLE(jl_f__typebody)
             // able to compute the layout of the object before needing to
             // publish it, so we must assume it cannot be inlined, if that
             // check passes, then we also still need to check the fields too.
-            if (!dt->name->mutabl && !references_name((jl_value_t*)dt->super, dt->name, 1)) {
+            if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 1))) {
                 int mayinlinealloc = 1;
-                size_t i, nf = jl_svec_len(ft);
+                size_t i;
                 for (i = 0; i < nf; i++) {
                     jl_value_t *fld = jl_svecref(ft, i);
                     if (references_name(fld, dt->name, 1)) {
@@ -1652,7 +1652,6 @@ static unsigned intrinsic_nargs[num_intrinsics];
 
 JL_CALLABLE(jl_f_intrinsic_call)
 {
-    JL_NARGSV(intrinsic_call, 1);
     JL_TYPECHK(intrinsic_call, intrinsic, F);
     enum intrinsic f = (enum intrinsic)*(uint32_t*)jl_data_ptr(F);
     if (f == cglobal && nargs == 1)

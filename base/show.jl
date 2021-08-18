@@ -1303,6 +1303,7 @@ const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
                          :ref => ('[',']'), :curly => ('{','}'), :(.) => ('(',')'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
                          :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'),
+                         :ncat =>('[',']'), :nrow =>('[',']'),
                          :braces=>('{','}'), :bracescat=>('{','}'))
 
 ## AST decoding helpers ##
@@ -1811,14 +1812,16 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # list-like forms, e.g. "[1, 2, 3]"
     elseif haskey(expr_parens, head) ||                          # :vcat etc.
-        head === :typed_vcat || head === :typed_hcat
+        head === :typed_vcat || head === :typed_hcat || head === :typed_ncat
         # print the type and defer to the untyped case
-        if head === :typed_vcat || head === :typed_hcat
+        if head === :typed_vcat || head === :typed_hcat || head === :typed_ncat
             show_unquoted(io, args[1], indent, prec, quote_level)
             if head === :typed_vcat
                 head = :vcat
-            else
+            elseif head === :typed_hcat
                 head = :hcat
+            else
+                head = :ncat
             end
             args = args[2:end]
             nargs = nargs - 1
@@ -1828,15 +1831,19 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             sep = "; "
         elseif head === :hcat || head === :row
             sep = " "
+        elseif head === :ncat || head === :nrow
+            sep = ";"^args[1]::Int * " "
+            args = args[2:end]
+            nargs = nargs - 1
         else
             sep = ", "
         end
-        head !== :row && print(io, op)
+        head !== :row && head !== :nrow && print(io, op)
         show_list(io, args, sep, indent, 0, quote_level)
-        if nargs == 1 && head === :vcat
-            print(io, ';')
+        if nargs <= 1 && (head === :vcat || head === :ncat)
+            print(io, sep[1:end-1])
         end
-        head !== :row && print(io, cl)
+        head !== :row && head !== :nrow && print(io, cl)
 
     # transpose
     elseif (head === Symbol("'") && nargs == 1) || (

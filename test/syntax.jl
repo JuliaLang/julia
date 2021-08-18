@@ -2949,3 +2949,13 @@ end
     @test x == 1
     @test f() == (2, 3)
 end
+
+@testset "long function bodies" begin
+    ex = Expr(:block)
+    ex.args = fill!(Vector{Any}(undef, 700000), 1)
+    f = eval(Expr(:function, :(), ex))
+    @test f() == 1
+    ex = Expr(:vcat)
+    ex.args = fill!(Vector{Any}(undef, 600000), 1)
+    @test_throws ErrorException("syntax: expression too large") eval(ex)
+end

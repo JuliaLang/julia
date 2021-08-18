@@ -1,9 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // --- the ccall, cglobal, and llvm intrinsics ---
-#include "llvm/Support/Path.h" // for llvm::sys::path
-#include <llvm/Bitcode/BitcodeReader.h>
-#include <llvm/Linker/Linker.h>
 
 #ifdef _OS_WINDOWS_
 extern const char jl_crtdll_basename[];
@@ -290,9 +287,9 @@ static Value *emit_plt(
 class AbiLayout {
 public:
     virtual ~AbiLayout() {}
-    virtual bool use_sret(jl_datatype_t *ty) = 0;
-    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&) = 0;
-    virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret) const = 0;
+    virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) = 0;
+    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx) = 0;
+    virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret, LLVMContext &ctx) const = 0;
 };
 
 // Determine if object of bitstype ty maps to a native x86 SIMD type (__m128, __m256, or __m512) in C
@@ -1008,14 +1005,14 @@ std::string generate_func_sig(const char *fname)
 
     if (type_is_ghost(lrt)) {
         prt = lrt = T_void;
-        abi->use_sret(jl_nothing_type);
+        abi->use_sret(jl_nothing_type, jl_LLVMContext);
     }
     else {
         if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_layout_opaque(((jl_datatype_t*)rt)->layout) || jl_is_cpointer_type(rt) || retboxed) {
             prt = lrt; // passed as pointer
-            abi->use_sret(jl_voidpointer_type);
+            abi->use_sret(jl_voidpointer_type, jl_LLVMContext);
         }
-        else if (abi->use_sret((jl_datatype_t*)rt)) {
+        else if (abi->use_sret((jl_datatype_t*)rt, jl_LLVMContext)) {
             AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
 #if JL_LLVM_VERSION < 120000
@@ -1031,7 +1028,7 @@ std::string generate_func_sig(const char *fname)
             prt = lrt;
         }
         else {
-            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true);
+            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true, jl_LLVMContext);
             if (prt == NULL)
                 prt = lrt;
         }
@@ -1077,7 +1074,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab);
+        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, jl_LLVMContext);
 
         if (jl_is_cpointer_type(tti)) {
             pat = t;
@@ -1086,7 +1083,7 @@ std::string generate_func_sig(const char *fname)
             pat = PointerType::get(t, AddressSpace::Derived);
         }
         else {
-            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false);
+            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, jl_LLVMContext);
             if (pat == NULL)
                 pat = t;
         }

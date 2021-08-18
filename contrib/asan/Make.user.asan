@@ -1,10 +1,12 @@
-TOOLCHAIN=$(BUILDROOT)/../toolchain/usr/tools
+TOOLCHAIN=$(BUILDROOT)/../toolchain
+BINDIR=$(TOOLCHAIN)/usr/bin
+TOOLDIR=$(TOOLCHAIN)/usr/tools
 
 # use our new toolchain
 USECLANG=1
-override CC=$(TOOLCHAIN)/clang
-override CXX=$(TOOLCHAIN)/clang++
-export ASAN_SYMBOLIZER_PATH=$(TOOLCHAIN)/llvm-symbolizer
+override CC=$(BINDIR)/clang
+override CXX=$(TOOLDIR)/clang++
+export ASAN_SYMBOLIZER_PATH=$(TOOLDIR)/llvm-symbolizer
 
 USE_BINARYBUILDER_LLVM=1
 
@@ -19,6 +21,3 @@ override JULIA_BUILD_MODE=debug
 
 # make ASAN consume less memory
 export ASAN_OPTIONS=detect_leaks=0:fast_unwind_on_malloc=0:allow_user_segv_handler=1:malloc_context_size=2
-
-# tell libblastrampoline to not use RTLD_DEEPBIND
-export LBT_USE_RTLD_DEEPBIND=0

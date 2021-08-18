@@ -276,21 +276,21 @@ issubset, ⊆, ⊇
 
 const FASTIN_SET_THRESHOLD = 70
 
-function issubset(l, r)
-    if haslength(r) && (isa(l, AbstractSet) || !hasfastin(r))
-        rlen = length(r) # conditions above make this length computed only when needed
-        # check l for too many unique elements
-        if isa(l, AbstractSet) && length(l) > rlen
+function issubset(a, b)
+    if haslength(b) && (isa(a, AbstractSet) || !hasfastin(b))
+        blen = length(b) # conditions above make this length computed only when needed
+        # check a for too many unique elements
+        if isa(a, AbstractSet) && length(a) > blen
             return false
         end
-        # when `in` would be too slow and r is big enough, convert it to a Set
+        # when `in` would be too slow and b is big enough, convert it to a Set
         # this threshold was empirically determined (cf. #26198)
-        if !hasfastin(r) && rlen > FASTIN_SET_THRESHOLD
-            return issubset(l, Set(r))
+        if !hasfastin(b) && blen > FASTIN_SET_THRESHOLD
+            return issubset(a, Set(b))
         end
     end
-    for elt in l
-        elt in r || return false
+    for elt in a
+        elt in b || return false
     end
     return true
 end
@@ -308,7 +308,7 @@ hasfastin(::Type) = false
 hasfastin(::Union{Type{<:AbstractSet},Type{<:AbstractDict},Type{<:AbstractRange}}) = true
 hasfastin(x) = hasfastin(typeof(x))
 
-⊇(l, r) = r ⊆ l
+⊇(a, b) = b ⊆ a
 
 ## strict subset comparison
 
@@ -333,9 +333,9 @@ false
 """
 ⊊, ⊋
 
-⊊(l::AbstractSet, r) = length(l) < length(r) && l ⊆ r
-⊊(l, r) = Set(l) ⊊ r
-⊋(l, r) = r ⊊ l
+⊊(a::AbstractSet, b) = length(a) < length(b) && a ⊆ b
+⊊(a, b) = Set(a) ⊊ b
+⊋(a, b) = b ⊊ a
 
 function ⊈ end
 function ⊉ end
@@ -358,8 +358,8 @@ false
 """
 ⊈, ⊉
 
-⊈(l, r) = !⊆(l, r)
-⊉(l, r) = r ⊈ l
+⊈(a, b) = !⊆(a, b)
+⊉(a, b) = b ⊈ a
 
 ## set equality comparison
 
@@ -380,56 +380,65 @@ julia> issetequal([1, 2], [2, 1])
 true
 ```
 """
-issetequal(l::AbstractSet, r::AbstractSet) = l == r
-issetequal(l::AbstractSet, r) = issetequal(l, Set(r))
+issetequal(a::AbstractSet, b::AbstractSet) = a == b
+issetequal(a::AbstractSet, b) = issetequal(a, Set(b))
 
-function issetequal(l, r::AbstractSet)
-    if haslength(l)
-        # check r for too many unique elements
-        length(l) < length(r) && return false
+function issetequal(a, b::AbstractSet)
+    if haslength(a)
+        # check b for too many unique elements
+        length(a) < length(b) && return false
     end
-    return issetequal(Set(l), r)
+    return issetequal(Set(a), b)
 end
 
-function issetequal(l, r)
-    haslength(l) && return issetequal(l, Set(r))
-    haslength(r) && return issetequal(r, Set(l))
-    return issetequal(Set(l), Set(r))
+function issetequal(a, b)
+    haslength(a) && return issetequal(a, Set(b))
+    haslength(b) && return issetequal(b, Set(a))
+    return issetequal(Set(a), Set(b))
 end
 
 ## set disjoint comparison
 """
-    isdisjoint(v1, v2) -> Bool
+    isdisjoint(a, b) -> Bool
 
-Return whether the collections `v1` and `v2` are disjoint, i.e. whether
-their intersection is empty.
+Determine whether the collections `a` and `b` are disjoint.
+Equivalent to `isempty(a ∩ b)` but more efficient when possible.
 
-See also: [`issetequal`](@ref), [`intersect`](@ref).
+See also: [`intersect`](@ref), [`isempty`](@ref), [`issetequal`](@ref).
 
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
+
+# Examples
+```jldoctest
+julia> isdisjoint([1, 2], [2, 3, 4])
+false
+
+julia> isdisjoint([3, 1], [2, 4])
+true
+```
 """
-function isdisjoint(l, r)
-    function _isdisjoint(l, r)
-        hasfastin(r) && return !any(in(r), l)
-        hasfastin(l) && return !any(in(l), r)
-        haslength(r) && length(r) < FASTIN_SET_THRESHOLD &&
-            return !any(in(r), l)
-        return !any(in(Set(r)), l)
+function isdisjoint(a, b)
+    function _isdisjoint(a, b)
+        hasfastin(b) && return !any(in(b), a)
+        hasfastin(a) && return !any(in(a), b)
+        haslength(b) && length(b) < FASTIN_SET_THRESHOLD &&
+            return !any(in(b), a)
+        return !any(in(Set(b)), a)
     end
-    if haslength(l) && haslength(r) && length(r) < length(l)
-        return _isdisjoint(r, l)
+    if haslength(a) && haslength(b) && length(b) < length(a)
+        return _isdisjoint(b, a)
     end
-    _isdisjoint(l, r)
+    _isdisjoint(a, b)
 end
 
 ## partial ordering of sets by containment
 
-==(l::AbstractSet, r::AbstractSet) = length(l) == length(r) && l ⊆ r
+==(a::AbstractSet, b::AbstractSet) = length(a) == length(b) && a ⊆ b
 # convenience functions for AbstractSet
 # (if needed, only their synonyms ⊊ and ⊆ must be specialized)
-<( l::AbstractSet, r::AbstractSet) = l ⊊ r
-<=(l::AbstractSet, r::AbstractSet) = l ⊆ r
+<( a::AbstractSet, b::AbstractSet) = a ⊊ b
+<=(a::AbstractSet, b::AbstractSet) = a ⊆ b
 
 ## filtering sets
 

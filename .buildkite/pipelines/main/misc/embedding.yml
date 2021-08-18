@@ -1,0 +1,34 @@
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+
+steps:
+  - label: "embedding"
+    key: "embedding"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
+    commands: |
+      prefix="/tmp/prefix"
+      echo "+++ Build julia, deploy to $${prefix}"
+      make -j$${JULIA_NUM_CORES} JULIA_PRECOMPILE=0 prefix=$${prefix} install
+
+      embedding_output="/tmp/embedding-test"
+      echo "+++ Run embedding tests, deploy to $${embedding_output}"
+      mkdir -p "$${embedding_output}"
+      make -j$${JULIA_NUM_CORES} -C test/embedding JULIA="$${prefix}/bin/julia" BIN="$${embedding_output}"
+
+    timeout_in_minutes: 60
+    notify:
+      - github_commit_status:
+          context: "embedding"

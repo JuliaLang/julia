@@ -519,5 +519,18 @@ end
     #Test combined Fixed and Other Periods
     @test (1m + 1d < 1m + 1s) == false
 end
+
+@testset "Convert CompoundPeriod to Period" begin
+    @test convert(Month, Year(1) + Month(1)) === Month(13)
+    @test convert(Second, Minute(1) + Second(30)) === Second(90)
+    @test convert(Minute, Minute(1) + Second(60)) === Minute(2)
+    @test convert(Millisecond, Minute(1) + Second(30)) === Millisecond(90_000)
+    @test_throws InexactError convert(Minute, Minute(1) + Second(30))
+    @test_throws MethodError convert(Month, Minute(1) + Second(30))
+    @test_throws MethodError convert(Second, Month(1) + Second(30))
+    @test_throws MethodError convert(Period, Minute(1) + Second(30))
+    @test_throws MethodError convert(Dates.FixedPeriod, Minute(1) + Second(30))
+end
+
 end
 

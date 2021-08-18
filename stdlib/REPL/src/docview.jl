@@ -221,7 +221,7 @@ function lookup_doc(ex)
         str = string(ex)
         isdotted = startswith(str, ".")
         if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment && ex !== :(:=)
-            op = str[1:end-1]
+            op = chop(str)
             eq = isdotted ? ".=" : "="
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
         elseif isdotted && ex !== :(..)
@@ -403,9 +403,13 @@ function symbol_latex(s::String)
     return get(symbols_latex, s, "")
 end
 function repl_latex(io::IO, s::String)
-    # decompose NFC-normalized identifier to match tab-completion input
-    s = normalize(s, :NFD)
     latex = symbol_latex(s)
+    if isempty(latex)
+        # Decompose NFC-normalized identifier to match tab-completion
+        # input if the first search came up empty.
+        s = normalize(s, :NFD)
+        latex = symbol_latex(s)
+    end
     if !isempty(latex)
         print(io, "\"")
         printstyled(io, s, color=:cyan)

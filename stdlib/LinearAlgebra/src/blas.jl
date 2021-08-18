@@ -79,7 +79,7 @@ import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismat
 include("lbt.jl")
 
 """
-get_config()
+    get_config()
 
 Return an object representing the current `libblastrampoline` configuration.
 

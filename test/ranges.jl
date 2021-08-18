@@ -20,6 +20,20 @@ using Base.Checked: checked_length
     # the next ones use ==, because it changes the eltype
     @test r ==  range(first(r),       last(r),      length(r)       )
     @test r ==  range(start=first(r), stop=last(r), length=length(r))
+    @test r === range(                stop=last(r), length=length(r))
+
+    r = 1:5
+    o = Base.OneTo(5)
+    let start=first(r), step=step(r), stop=last(r), length=length(r)
+        @test o === range(;              stop        )
+        @test o === range(;                    length)
+        @test r === range(; start,       stop        )
+        @test r === range(;              stop, length)
+        # the next three lines uses ==, because it changes the eltype
+        @test r ==  range(; start,       stop, length)
+        @test r ==  range(; start, step,       length)
+        @test r ==  range(; stop=Float64(stop))
+    end
 
     for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
         @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
@@ -544,6 +558,19 @@ end
     end
 end
 
+# A number type with the overflow behavior of `UInt8`. Conversion to `Integer` returns an
+# `Int32`, i.e., a type with different `typemin`/`typemax`. See  #41479
+struct OverflowingReal <: Real
+    val::UInt8
+end
+OverflowingReal(x::OverflowingReal) = x
+Base.:<=(x::OverflowingReal, y::OverflowingReal) = x.val <= y.val
+Base.:+(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val + y.val)
+Base.:-(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val - y.val)
+Base.round(x::OverflowingReal, ::RoundingMode) = x
+Base.Integer(x::OverflowingReal) = Int32(x.val)
+@test length(OverflowingReal(1):OverflowingReal(0)) == 0
+
 @testset "loops involving typemin/typemax" begin
     n = 0
     s = 0
@@ -652,8 +679,8 @@ end
     @test broadcast(-, T(1):2:6, 0.3) === T(1)-0.3:2:5-0.3
     is_unsigned = T <: Unsigned
     is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
-    @test broadcast(-, T(1):3) == -T(1):-1:-T(3) broken=is_unsigned
-    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1) broken=is_unsigned
+    @test broadcast(-, T(1):3) == -T(1):-T(1):-T(3)
+    @test broadcast(-, 2, T(1):3) == T(1):-T(1):-T(1)
 end
 @testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
     @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
@@ -1095,7 +1122,7 @@ end
 @testset "issue 10950" begin
     r = 1//2:3
     @test length(r) == 3
-    @test_throws MethodError checked_length(r) == 3 # this would work if checked_sub is defined on Rational
+    @test checked_length(r) == 3
     i = 1
     for x in r
         @test x == i//2
@@ -1108,10 +1135,11 @@ end
     # repr/show should display the range nicely
     # to test print_range in range.jl
     replrepr(x) = repr("text/plain", x; context=IOContext(stdout, :limit=>true, :displaysize=>(24, 80)))
+    nb = Sys.WORD_SIZE
     @test replrepr(1:4) == "1:4"
     @test repr("text/plain", 1:4) == "1:4"
     @test repr("text/plain", range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
+    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64, Int$nb}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
     @test repr(range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
     @test repr(LinRange{Float64}(1,5,7)) == "range(1.0, stop=5.0, length=7)"
     @test replrepr(0:100.) == "0.0:1.0:100.0"
@@ -1119,7 +1147,7 @@ end
     # only examines spacing of the left and right edges of the range, sufficient
     # to cover the designated screen size.
     @test replrepr(range(0, stop=100, length=10000)) == "0.0:0.010001000100010001:100.0"
-    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
+    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64, Int$nb}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
@@ -1443,6 +1471,7 @@ using .Main.Furlongs
 @testset "dimensional correctness" begin
     @test length(Vector(Furlong(2):Furlong(10))) == 9
     @test length(range(Furlong(2), length=9)) == checked_length(range(Furlong(2), length=9)) == 9
+    @test @inferred(length(StepRange(Furlong(2), Furlong(1), Furlong(1)))) == 0
     @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
           Vector(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
@@ -1493,8 +1522,12 @@ end
     @test_throws ArgumentError range(1)
     @test_throws ArgumentError range(nothing)
     @test_throws ArgumentError range(1, step=4)
-    @test_throws ArgumentError range(nothing, length=2)
+    @test_throws ArgumentError range(; step=1, length=6)
+    @test_throws ArgumentError range(; step=2, stop=7.5)
     @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
+    @test_throws ArgumentError range(; stop=nothing)
+    @test_throws ArgumentError range(; length=nothing)
+    @test_throws TypeError range(; length=5.5)
 end
 
 @testset "issue #23300#issuecomment-371575548" begin
@@ -1516,6 +1549,8 @@ end
     @test view(1:10, 1:5) === 1:5
     @test view(1:10, 1:2:5) === 1:2:5
     @test view(1:2:9, 1:5) === 1:2:9
+    @test view(1:10, :) === 1:10
+    @test view(1:2:9, :) === 1:2:9
 
     # Ensure we don't hit a fallback `view` if there's a better `getindex` implementation
     vmt = collect(methods(view, Tuple{AbstractRange, AbstractRange}))
@@ -2045,3 +2080,35 @@ end
         @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
     end
 end
+
+@testset "non 1-based ranges indexing" begin
+    struct ZeroBasedUnitRange{T,A<:AbstractUnitRange{T}} <: AbstractUnitRange{T}
+        a :: A
+        function ZeroBasedUnitRange(a::AbstractUnitRange{T}) where {T}
+            @assert !Base.has_offset_axes(a)
+            new{T, typeof(a)}(a)
+        end
+    end
+
+    Base.parent(A::ZeroBasedUnitRange) = A.a
+    Base.first(A::ZeroBasedUnitRange) = first(parent(A))
+    Base.length(A::ZeroBasedUnitRange) = length(parent(A))
+    Base.last(A::ZeroBasedUnitRange) = last(parent(A))
+    Base.size(A::ZeroBasedUnitRange) = size(parent(A))
+    Base.axes(A::ZeroBasedUnitRange) = map(x -> Base.IdentityUnitRange(0:x-1), size(parent(A)))
+    Base.getindex(A::ZeroBasedUnitRange, i::Int) = parent(A)[i + 1]
+    Base.getindex(A::ZeroBasedUnitRange, i::Integer) = parent(A)[i + 1]
+    Base.firstindex(A::ZeroBasedUnitRange) = 0
+    function Base.show(io::IO, A::ZeroBasedUnitRange)
+        show(io, parent(A))
+        print(io, " with indices $(axes(A,1))")
+    end
+
+    r = ZeroBasedUnitRange(5:8)
+    @test r[0:2] == r[0]:r[2]
+    @test r[0:1:2] == r[0]:1:r[2]
+end
+
+@test length(range(1, 100, length=big(100)^100)) == big(100)^100
+@test length(range(big(1), big(100)^100, length=big(100)^100)) == big(100)^100
+@test length(0 * (1:big(100)^100)) == big(100)^100

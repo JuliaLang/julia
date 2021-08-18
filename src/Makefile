@@ -84,10 +84,18 @@ endif
 
 SRCS += $(RUNTIME_SRCS)
 
+ifeq ($(WITH_DTRACE),1)
+DTRACE_HEADERS := uprobes.h.gen
+ifneq ($(OS),Darwin)
+SRCS += uprobes
+endif
+else
+DTRACE_HEADERS :=
+endif
 
 # headers are used for dependency tracking, while public headers will be part of the dist
 UV_HEADERS :=
-HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h locks.h atomics.h julia_internal.h options.h timing.h)
+HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h locks.h atomics.h julia_internal.h options.h timing.h) $(addprefix $(BUILDDIR)/, $(DTRACE_HEADERS))
 PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h locks.h atomics.h julia_gcext.h)
 ifeq ($(USE_SYSTEM_LIBUV),0)
 UV_HEADERS += uv.h
@@ -163,6 +171,13 @@ $(BUILDDIR):
 
 LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG))
 
+# Generate the DTrace header file, while also renaming the macros from
+# JULIA_ to JL_PROBE to clearly delinate them.
+$(BUILDDIR)/%.h.gen : $(SRCDIR)/%.d
+	@$(call PRINT_DTRACE, $(DTRACE) -h -s $< -o $@)
+	sed 's/JULIA_/JL_PROBE_/' $@ > $@.tmp
+	mv $@.tmp $@
+
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
@@ -172,6 +187,10 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONF
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(SHIPFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+$(BUILDDIR)/%.o : $(SRCDIR)/%.d
+	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
+$(BUILDDIR)/%.dbg.obj : $(SRCDIR)/%.d
+	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
 
 # public header rules
 $(eval $(call dir_target,$(build_includedir)/julia))
@@ -242,7 +261,7 @@ $(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/builtin_pro
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/codegen_shared.h
 $(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/codegen_shared.h $(BUILDDIR)/julia_version.h
-$(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/codegen_shared.h $(SRCDIR)/llvm-pass-helpers.h
 $(BUILDDIR)/llvm-final-gc-lowering.o $(BUILDDIR)/llvm-final-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
 $(BUILDDIR)/llvm-gc-invariant-verifier.o $(BUILDDIR)/llvm-gc-invariant-verifier.dbg.obj: $(SRCDIR)/codegen_shared.h
 $(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
@@ -358,9 +377,9 @@ endif
 clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 
 clang-sa-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS)  -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS)  -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
 clang-sa-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
 
 # Add C files as a target of `analyzegc`
 analyzegc: $(addprefix clang-sa-,$(RUNTIME_SRCS))

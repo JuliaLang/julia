@@ -48,7 +48,6 @@ mutable struct OptimizationState
     ir::Union{Nothing, IRCode}
     stmt_info::Vector{Any}
     mod::Module
-    nargs::Int
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     const_api::Bool
@@ -60,7 +59,7 @@ mutable struct OptimizationState
             WorldView(code_cache(interp), frame.world),
             inlining_policy(interp))
         return new(frame.linfo,
-                   frame.src, nothing, frame.stmt_info, frame.mod, frame.nargs,
+                   frame.src, nothing, frame.stmt_info, frame.mod,
                    frame.sptypes, frame.slottypes, false,
                    inlining)
     end
@@ -70,6 +69,8 @@ mutable struct OptimizationState
         nssavalues = src.ssavaluetypes
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
+        else
+            nssavalues = length(src.ssavaluetypes)
         end
         nslots = length(src.slotflags)
         slottypes = src.slottypes
@@ -78,15 +79,8 @@ mutable struct OptimizationState
         end
         stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
-        toplevel = !isa(linfo.def, Method)
-        if !toplevel
-            meth = linfo.def
-            inmodule = meth.module
-            nargs = meth.nargs
-        else
-            inmodule = linfo.def::Module
-            nargs = 0
-        end
+        def = linfo.def
+        mod = isa(def, Method) ? def.module : def
         # Allow using the global MI cache, but don't track edges.
         # This method is mostly used for unit testing the optimizer
         inlining = InliningState(params,
@@ -94,10 +88,10 @@ mutable struct OptimizationState
             WorldView(code_cache(interp), get_world_counter()),
             inlining_policy(interp))
         return new(linfo,
-                   src, nothing, stmt_info, inmodule, nargs,
+                   src, nothing, stmt_info, mod,
                    sptypes_from_meth_instance(linfo), slottypes, false,
                    inlining)
-        end
+    end
 end
 
 function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
@@ -107,15 +101,15 @@ function OptimizationState(linfo::MethodInstance, params::OptimizationParams, in
 end
 
 function ir_to_codeinf!(opt::OptimizationState)
-    replace_code_newstyle!(opt.src, opt.ir::IRCode, opt.nargs - 1)
+    (; linfo, src) = opt
+    optdef = linfo.def
+    replace_code_newstyle!(src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
     opt.ir = nothing
-    let src = opt.src::CodeInfo
-        widen_all_consts!(src)
-        src.inferred = true
-        # finish updating the result struct
-        validate_code_in_debug_mode(opt.linfo, src, "optimized")
-        return src
-    end
+    widen_all_consts!(src)
+    src.inferred = true
+    # finish updating the result struct
+    validate_code_in_debug_mode(linfo, src, "optimized")
+    return src
 end
 
 #############
@@ -174,7 +168,7 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
         end
     end
     if !inlineable
-        inlineable = inline_worthy(me.ir, params, union_penalties, cost_threshold + bonus)
+        inlineable = inline_worthy(me.ir::IRCode, params, union_penalties, cost_threshold + bonus)
     end
     return inlineable
 end
@@ -196,10 +190,10 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
     return true
 end
 
-# Convert IRCode back to CodeInfo and compute inlining cost and sideeffects
+# compute inlining cost and sideeffects
 function finish(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, ir::IRCode, @nospecialize(result))
-    def = opt.linfo.def
-    nargs = Int(opt.nargs) - 1
+    (; src, linfo) = opt
+    (; def, specTypes) = linfo
 
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
@@ -221,7 +215,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
                 end
             end
             if proven_pure
-                for fl in opt.src.slotflags
+                for fl in src.slotflags
                     if (fl & SLOT_USEDUNDEF) != 0
                         proven_pure = false
                         break
@@ -230,7 +224,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             end
         end
         if proven_pure
-            opt.src.pure = true
+            src.pure = true
         end
 
         if proven_pure
@@ -243,7 +237,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
             if !(isa(result, Const) && !is_inlineable_constant(result.val))
                 opt.const_api = true
             end
-            force_noinline || (opt.src.inlineable = true)
+            force_noinline || (src.inlineable = true)
         end
     end
 
@@ -252,7 +246,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
     # determine and cache inlineability
     union_penalties = false
     if !force_noinline
-        sig = unwrap_unionall(opt.linfo.specTypes)
+        sig = unwrap_unionall(specTypes)
         if isa(sig, DataType) && sig.name === Tuple.name
             for P in sig.parameters
                 P = unwrap_unionall(P)
@@ -264,25 +258,25 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState, params::Opt
         else
             force_noinline = true
         end
-        if !opt.src.inlineable && result === Union{}
+        if !src.inlineable && result === Union{}
             force_noinline = true
         end
     end
     if force_noinline
-        opt.src.inlineable = false
+        src.inlineable = false
     elseif isa(def, Method)
-        if opt.src.inlineable && isdispatchtuple(opt.linfo.specTypes)
+        if src.inlineable && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
         else
             bonus = 0
             if result ⊑ Tuple && !isconcretetype(widenconst(result))
                 bonus = params.inline_tupleret_bonus
             end
-            if opt.src.inlineable
+            if src.inlineable
                 # For functions declared @inline, increase the cost threshold 20x
                 bonus += params.inline_cost_threshold*19
             end
-            opt.src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
+            src.inlineable = isinlineable(def, opt, params, union_penalties, bonus)
         end
     end
 
@@ -291,15 +285,14 @@ end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
-    nargs = Int(opt.nargs) - 1
-    @timeit "optimizer" ir = run_passes(opt.src, nargs, opt)
+    @timeit "optimizer" ir = run_passes(opt.src, opt)
     finish(interp, opt, params, ir, result)
 end
 
-function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
+function run_passes(ci::CodeInfo, sv::OptimizationState)
     preserve_coverage = coverage_enabled(sv.mod)
-    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, nargs, sv)
-    ir = slot2reg(ir, ci, nargs, sv)
+    ir = convert_to_ircode(ci, copy_exprargs(ci.code), preserve_coverage, sv)
+    ir = slot2reg(ir, ci, sv)
     #@Base.show ("after_construct", ir)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @timeit "compact 1" ir = compact!(ir)
@@ -321,7 +314,7 @@ function run_passes(ci::CodeInfo, nargs::Int, sv::OptimizationState)
     return ir
 end
 
-function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, nargs::Int, sv::OptimizationState)
+function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::OptimizationState)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     idx = 1
@@ -394,7 +387,7 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, narg
     cfg = compute_basic_blocks(code)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, flags)
-    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), sv.slottypes, meta, sv.sptypes)
+    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable::Union{Vector{LineInfoNode},Vector{Any}}), sv.slottypes, meta, sv.sptypes)
     return ir
 end
 
@@ -411,11 +404,13 @@ function normalize(@nospecialize(stmt), meta::Vector{Any})
     return stmt
 end
 
-function slot2reg(ir::IRCode, ci::CodeInfo, nargs::Int, sv::OptimizationState)
+function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
+    svdef = sv.linfo.def
+    nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, nargs, sv.slottypes) # consumes `ir`
+    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes) # consumes `ir`
     return ir
 end
 
@@ -625,8 +620,11 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
             body[i] = GotoIfNot(cond, el.dest + labelchangemap[el.dest])
         elseif isa(el, ReturnNode)
-            if isdefined(el, :val) && isa(el.val, SSAValue)
-                body[i] = ReturnNode(SSAValue(el.val.id + ssachangemap[el.val.id]))
+            if isdefined(el, :val)
+                val = el.val
+                if isa(val, SSAValue)
+                    body[i] = ReturnNode(SSAValue(val.id + ssachangemap[val.id]))
+                end
             end
         elseif isa(el, SSAValue)
             body[i] = SSAValue(el.id + ssachangemap[el.id])

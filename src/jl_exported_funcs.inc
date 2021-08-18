@@ -11,6 +11,7 @@
     XX(jl_alloc_svec_uninit) \
     XX(jl_alloc_vec_any) \
     XX(jl_apply_array_type) \
+    XX(jl_apply_cmpswap_type) \
     XX(jl_apply_generic) \
     XX(jl_apply_tuple_type) \
     XX(jl_apply_tuple_type_v) \
@@ -45,6 +46,12 @@
     XX(jl_arrayunset) \
     XX(jl_astaggedvalue) \
     XX(jl_atexit_hook) \
+    XX(jl_atomic_bool_cmpswap_bits) \
+    XX(jl_atomic_cmpswap_bits) \
+    XX(jl_atomic_error) \
+    XX(jl_atomic_new_bits) \
+    XX(jl_atomic_store_bits) \
+    XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_binding_owner) \
@@ -114,9 +121,9 @@
     XX(jl_dlsym) \
     XX(jl_dump_compiles) \
     XX(jl_dump_fptr_asm) \
+    XX(jl_dump_function_asm) \
     XX(jl_dump_function_ir) \
     XX(jl_dump_host_cpu) \
-    XX(jl_dump_llvm_asm) \
     XX(jl_dump_method_asm) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
@@ -543,3 +550,4 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_yield) \
+

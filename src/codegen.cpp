@@ -84,6 +84,10 @@
 #endif
 #include <llvm/Target/TargetMachine.h>
 
+#include "llvm/Support/Path.h" // for llvm::sys::path
+#include <llvm/Bitcode/BitcodeReader.h>
+#include <llvm/Linker/Linker.h>
+
 using namespace llvm;
 
 typedef Instruction TerminatorInst;
@@ -946,11 +950,13 @@ static bool jl_is_pointerfree(jl_value_t* t)
 
 // these queries are usually related, but we split them out here
 // for convenience and clarity (and because it changes the calling convention)
+// n.b. this must include jl_is_datatype_singleton (ghostType) and primitive types
 static bool deserves_stack(jl_value_t* t)
 {
     if (!jl_is_concrete_immutable(t))
         return false;
-    return jl_datatype_isinlinealloc((jl_datatype_t*)t, 0);
+    jl_datatype_t *dt = (jl_datatype_t*)t;
+    return jl_is_datatype_singleton(dt) || jl_datatype_isinlinealloc(dt, 0);
 }
 static bool deserves_argbox(jl_value_t* t)
 {
@@ -1164,6 +1170,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *t
                              jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                         Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr);
+static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv);
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
@@ -1770,7 +1777,7 @@ static void jl_init_function(Function *F)
 #ifdef JL_DISABLE_FPO
     F->addFnAttr("frame-pointer", "all");
 #endif
-#if !defined(JL_ASAN_ENABLED) && !defined(_OS_WINDOWS_)
+#if !defined(_COMPILER_ASAN_ENABLED_) && !defined(_OS_WINDOWS_)
     // ASAN won't like us accessing undefined memory causing spurious issues,
     // and Windows has platform-specific handling which causes it to mishandle
     // this annotation. Other platforms should just ignore this if they don't
@@ -1888,6 +1895,16 @@ static void coverageAllocLine(StringRef filename, int line)
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     allocLine(coverageData[filename], line);
+}
+
+extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char* filename_, size_t len_filename, int line)
+{
+    StringRef filename = StringRef(filename_, len_filename);
+    if (imaging_mode || filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
+        return;
+    std::vector<logdata_block*> &vec = coverageData[filename];
+    uint64_t *ptr = allocLine(vec, line);
+    (*ptr)++;
 }
 
 // Memory allocation log (malloc_log)
@@ -2883,7 +2900,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
     else if (f == jl_builtin_arrayset && nargs >= 4) {
         const jl_cgval_t &ary = argv[2];
-        const jl_cgval_t &val = argv[3];
+        jl_cgval_t val = argv[3];
         bool indices_ok = true;
         for (size_t i = 4; i <= nargs; i++) {
             if (argv[i].typ != (jl_value_t*)jl_long_type) {
@@ -2896,101 +2913,103 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             jl_value_t *ety = jl_tparam0(aty_dt);
             jl_value_t *ndp = jl_tparam1(aty_dt);
             if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nargs == 4)) {
-                if (jl_subtype(val.typ, ety)) { // TODO: probably should just convert this to a type-assert
-                    size_t elsz = 0, al = 0;
-                    int union_max = jl_islayout_inline(ety, &elsz, &al);
-                    bool isboxed = (union_max == 0);
-                    if (isboxed)
-                        ety = (jl_value_t*)jl_any_type;
-                    jl_value_t *ary_ex = jl_exprarg(ex, 2);
-                    ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
-                    jl_value_t *boundscheck = argv[1].constant;
-                    emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "arrayset");
-                    Value *idx = emit_array_nd_index(ctx, ary, ary_ex, nd, &argv[4], nargs - 3, boundscheck);
-                    if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
-                        // no-op
-                    }
-                    else {
-                        PHINode *data_owner = NULL; // owner object against which the write barrier must check
-                        if (isboxed || (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->layout->npointers > 0)) { // if elements are just bits, don't need a write barrier
-                            Value *aryv = boxed(ctx, ary);
-                            Value *flags = emit_arrayflags(ctx, ary);
-                            // the owner of the data is ary itself except if ary->how == 3
-                            flags = ctx.builder.CreateAnd(flags, 3);
-                            Value *is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(T_int16, 3));
-                            BasicBlock *curBB = ctx.builder.GetInsertBlock();
-                            BasicBlock *ownedBB = BasicBlock::Create(jl_LLVMContext, "array_owned", ctx.f);
-                            BasicBlock *mergeBB = BasicBlock::Create(jl_LLVMContext, "merge_own", ctx.f);
-                            ctx.builder.CreateCondBr(is_owned, ownedBB, mergeBB);
-                            ctx.builder.SetInsertPoint(ownedBB);
-                            // load owner pointer
-                            Instruction *own_ptr;
-                            if (jl_is_long(ndp)) {
-                                own_ptr = ctx.builder.CreateAlignedLoad(T_prjlvalue,
-                                        ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue,
-                                            emit_bitcast(ctx, decay_derived(ctx, aryv), T_pprjlvalue),
-                                            jl_array_data_owner_offset(nd) / sizeof(jl_value_t*)),
-                                        Align(sizeof(void*)));
-                                tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
-                            }
-                            else {
-                                own_ptr = ctx.builder.CreateCall(
-                                    prepare_call(jlarray_data_owner_func),
-                                    {aryv});
-                            }
-                            ctx.builder.CreateBr(mergeBB);
-                            ctx.builder.SetInsertPoint(mergeBB);
-                            data_owner = ctx.builder.CreatePHI(T_prjlvalue, 2);
-                            data_owner->addIncoming(aryv, curBB);
-                            data_owner->addIncoming(own_ptr, ownedBB);
-                        }
-                        if (!isboxed && jl_is_uniontype(ety)) {
-                            Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
-                            Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
-                            // compute tindex from val
-                            jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
-                            Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
-                            tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
-                            Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
-                            Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
-                            Value *offset = emit_arrayoffset(ctx, ary, nd);
-                            Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
-                            Value *selidx_m = emit_arraylen(ctx, ary);
-                            Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
-                            Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
-                            ptindex = emit_bitcast(ctx, ptindex, T_pint8);
-                            ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
-                            ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
-                            tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
-                            if (jl_is_datatype(val.typ) && jl_datatype_size(val.typ) == 0) {
-                                // no-op
-                            }
-                            else {
-                                // copy data
-                                Value *addr = ctx.builder.CreateInBoundsGEP(AT, data, idx);
-                                emit_unionmove(ctx, addr, tbaa_arraybuf, val, nullptr);
-                            }
+                if (!jl_subtype(val.typ, ety)) {
+                    emit_typecheck(ctx, val, ety, "arrayset");
+                    val = update_julia_type(ctx, val, ety);
+                }
+                size_t elsz = 0, al = 0;
+                int union_max = jl_islayout_inline(ety, &elsz, &al);
+                bool isboxed = (union_max == 0);
+                if (isboxed)
+                    ety = (jl_value_t*)jl_any_type;
+                jl_value_t *ary_ex = jl_exprarg(ex, 2);
+                ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
+                jl_value_t *boundscheck = argv[1].constant;
+                emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "arrayset");
+                Value *idx = emit_array_nd_index(ctx, ary, ary_ex, nd, &argv[4], nargs - 3, boundscheck);
+                if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
+                    // no-op
+                }
+                else {
+                    PHINode *data_owner = NULL; // owner object against which the write barrier must check
+                    if (isboxed || (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->layout->npointers > 0)) { // if elements are just bits, don't need a write barrier
+                        Value *aryv = boxed(ctx, ary);
+                        Value *flags = emit_arrayflags(ctx, ary);
+                        // the owner of the data is ary itself except if ary->how == 3
+                        flags = ctx.builder.CreateAnd(flags, 3);
+                        Value *is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(T_int16, 3));
+                        BasicBlock *curBB = ctx.builder.GetInsertBlock();
+                        BasicBlock *ownedBB = BasicBlock::Create(jl_LLVMContext, "array_owned", ctx.f);
+                        BasicBlock *mergeBB = BasicBlock::Create(jl_LLVMContext, "merge_own", ctx.f);
+                        ctx.builder.CreateCondBr(is_owned, ownedBB, mergeBB);
+                        ctx.builder.SetInsertPoint(ownedBB);
+                        // load owner pointer
+                        Instruction *own_ptr;
+                        if (jl_is_long(ndp)) {
+                            own_ptr = ctx.builder.CreateAlignedLoad(T_prjlvalue,
+                                    ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue,
+                                        emit_bitcast(ctx, decay_derived(ctx, aryv), T_pprjlvalue),
+                                        jl_array_data_owner_offset(nd) / sizeof(jl_value_t*)),
+                                    Align(sizeof(void*)));
+                            tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
                         }
                         else {
-                            typed_store(ctx,
-                                        emit_arrayptr(ctx, ary, ary_ex, isboxed),
-                                        idx, val, jl_cgval_t(), ety,
-                                        isboxed ? tbaa_ptrarraybuf : tbaa_arraybuf,
-                                        ctx.aliasscope,
-                                        data_owner,
-                                        isboxed,
-                                        isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                                        isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                                        0,
-                                        false,
-                                        true,
-                                        false,
-                                        false);
+                            own_ptr = ctx.builder.CreateCall(
+                                prepare_call(jlarray_data_owner_func),
+                                {aryv});
+                        }
+                        ctx.builder.CreateBr(mergeBB);
+                        ctx.builder.SetInsertPoint(mergeBB);
+                        data_owner = ctx.builder.CreatePHI(T_prjlvalue, 2);
+                        data_owner->addIncoming(aryv, curBB);
+                        data_owner->addIncoming(own_ptr, ownedBB);
+                    }
+                    if (!isboxed && jl_is_uniontype(ety)) {
+                        Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
+                        Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, ary, ary_ex), AT->getPointerTo());
+                        // compute tindex from val
+                        jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
+                        Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
+                        tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
+                        Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(T_int16, nd));
+                        Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(T_int16, 1));
+                        Value *offset = emit_arrayoffset(ctx, ary, nd);
+                        Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, T_size));
+                        Value *selidx_m = emit_arraylen(ctx, ary);
+                        Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
+                        Value *ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                        ptindex = emit_bitcast(ctx, ptindex, T_pint8);
+                        ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, offset);
+                        ptindex = ctx.builder.CreateInBoundsGEP(T_int8, ptindex, idx);
+                        tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
+                        if (jl_is_datatype(val.typ) && jl_datatype_size(val.typ) == 0) {
+                            // no-op
+                        }
+                        else {
+                            // copy data
+                            Value *addr = ctx.builder.CreateInBoundsGEP(AT, data, idx);
+                            emit_unionmove(ctx, addr, tbaa_arraybuf, val, nullptr);
                         }
                     }
-                    *ret = ary;
-                    return true;
+                    else {
+                        typed_store(ctx,
+                                    emit_arrayptr(ctx, ary, ary_ex, isboxed),
+                                    idx, val, jl_cgval_t(), ety,
+                                    isboxed ? tbaa_ptrarraybuf : tbaa_arraybuf,
+                                    ctx.aliasscope,
+                                    data_owner,
+                                    isboxed,
+                                    isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                                    isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+                                    0,
+                                    false,
+                                    true,
+                                    false,
+                                    false);
+                    }
                 }
+                *ret = ary;
+                return true;
             }
         }
     }
@@ -3134,13 +3153,13 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         const jl_cgval_t undefval;
         const jl_cgval_t &obj = argv[1];
         const jl_cgval_t &fld = argv[2];
-        const jl_cgval_t &val = argv[isreplacefield ? 4 : 3];
+        jl_cgval_t val = argv[isreplacefield ? 4 : 3];
         const jl_cgval_t &cmp = isreplacefield ? argv[3] : undefval;
         enum jl_memory_order order = jl_memory_order_notatomic;
+        const std::string fname = issetfield ? "setfield!" : isreplacefield ? "replacefield!" : "swapfield!";
         if (nargs >= (isreplacefield ? 5 : 4)) {
             const jl_cgval_t &ord = argv[isreplacefield ? 5 : 4];
-            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type,
-                    issetfield ? "setfield!" : isreplacefield ? "replacefield!" : "swapfield!");
+            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
             if (!ord.constant)
                 return false;
             order = jl_get_atomic_order((jl_sym_t*)ord.constant, !issetfield, true);
@@ -3148,7 +3167,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         enum jl_memory_order fail_order = order;
         if (isreplacefield && nargs == 6) {
             const jl_cgval_t &ord = argv[6];
-            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, "replacefield!");
+            emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
             if (!ord.constant)
                 return false;
             fail_order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
@@ -3172,7 +3191,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
             if (idx != -1) {
                 jl_value_t *ft = jl_svecref(uty->types, idx);
-                if (!jl_has_free_typevars(ft) && jl_subtype(val.typ, ft)) {
+                if (!jl_has_free_typevars(ft)) {
+                    if (!jl_subtype(val.typ, ft)) {
+                        emit_typecheck(ctx, val, ft, fname);
+                        val = update_julia_type(ctx, val, ft);
+                    }
                     // TODO: attempt better codegen for approximate types
                     bool isboxed = jl_field_isptr(uty, idx);
                     bool isatomic = jl_field_isatomic(uty, idx);
@@ -4965,7 +4988,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     std::string name;
     raw_string_ostream(name) << "tojlinvoke" << globalUnique++;
     Function *f = Function::Create(jl_func_sig,
-            GlobalVariable::PrivateLinkage,
+            GlobalVariable::InternalLinkage,
             name, M);
     jl_init_function(f);
     f->addFnAttr(Thunk);
@@ -6331,7 +6354,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     f->addFnAttr(Attribute::StackProtectStrong);
 #endif
 
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
     // TODO: enable this only when a argument like `-race` is passed to Julia
     //       add a macro for no_sanitize_thread
     f->addFnAttr(llvm::Attribute::SanitizeThread);
@@ -7527,8 +7550,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         JL_UNLOCK(&m->writelock);
     }
 
-    // link the dependent llvmcall modules, but switch their function's linkage to private
-    // so that they don't show up in the execution engine.
+    // link the dependent llvmcall modules, but switch their function's linkage to internal
+    // so that they don't conflict when they show up in the execution engine.
     for (auto &Mod : ctx.llvmcall_modules) {
         SmallVector<std::string, 1> Exports;
         for (const auto &F: Mod->functions())
@@ -7538,7 +7561,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             jl_error("Failed to link LLVM bitcode");
         }
         for (auto FN: Exports)
-            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::PrivateLinkage);
+            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     // link in opaque closure modules
@@ -7549,7 +7572,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 Exports.push_back(F.getName().str());
         jl_merge_module(jl_Module, std::move(Mod));
         for (auto FN: Exports)
-            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::PrivateLinkage);
+            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     JL_GC_POP();
@@ -7747,9 +7770,9 @@ void jl_compile_workqueue(
             if (!preal_specsig) {
                 // emit specsig-to-(jl)invoke conversion
                 Function *preal = emit_tojlinvoke(codeinst, mod, params);
-                protodecl->setLinkage(GlobalVariable::PrivateLinkage);
+                protodecl->setLinkage(GlobalVariable::InternalLinkage);
                 //protodecl->setAlwaysInline();
-                protodecl->addFnAttr("no-frame-pointer-elim", "true");
+                jl_init_function(protodecl);
                 size_t nrealargs = jl_nparams(codeinst->def->specTypes); // number of actual arguments being passed
                 // TODO: maybe this can be cached in codeinst->specfptr?
                 emit_cfunc_invalidate(protodecl, proto_cc, proto_return_roots, codeinst->def->specTypes, codeinst->rettype, nrealargs, params, preal);

@@ -803,6 +803,7 @@ export
 
 # I/O and events
     close,
+    shutdown,
     countlines,
     eachline,
     readeach,
@@ -895,6 +896,7 @@ export
     filemode,
     filesize,
     gperm,
+    hardlink,
     isblockdev,
     ischardev,
     isdir,

@@ -244,10 +244,13 @@ which will later be published formally.
 
 Any field in a struct declaration can be decorated with `@atomic`, and then any
 write must be marked with `@atomic` also, and must use one of the defined atomic
-orderings (:monotonic, :acquire, :release, :acquire\_release, or
-:sequentially\_consistent). Any read of an atomic field can also be annotated
+orderings (`:monotonic`, `:acquire`, `:release`, `:acquire_release`, or
+`:sequentially_consistent`). Any read of an atomic field can also be annotated
 with an atomic ordering constraint, or will be done with monotonic (relaxed)
 ordering if unspecified.
+
+!!! compat "Julia 1.7"
+    Per-field atomics requires at least Julia 1.7.
 
 
 ## Side effects and mutable function arguments

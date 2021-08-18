@@ -4,7 +4,7 @@
 # generic #
 ###########
 
-if !isdefined(@__MODULE__, Symbol("@timeit"))
+if !@isdefined(var"@timeit")
     # This is designed to allow inserting timers when loading a second copy
     # of inference for performing performance experiments.
     macro timeit(args...)
@@ -134,6 +134,7 @@ function retrieve_code_info(linfo::MethodInstance)
         c.parent = linfo
         return c
     end
+    return nothing
 end
 
 # Get at the nonfunction_mt, which happens to be the mt of SimpleVector
@@ -175,7 +176,7 @@ function normalize_typevars(method::Method, @nospecialize(atypes), sparams::Simp
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false, compilesig::Bool=false)
+function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
     if isa(atypes, UnionAll)
         atypes, sparams = normalize_typevars(method, atypes, sparams)
     end
@@ -192,14 +193,14 @@ function specialize_method(method::Method, @nospecialize(atypes), sparams::Simpl
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end
 
-function specialize_method(match::MethodMatch, preexisting::Bool=false, compilesig::Bool=false)
-    return specialize_method(match.method, match.spec_types, match.sparams, preexisting, compilesig)
+function specialize_method(match::MethodMatch; kwargs...)
+    return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
 # This function is used for computing alternate limit heuristics
 function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
     if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams, false)
+        method_instance = specialize_method(method, sig, sparams)
         if isa(method_instance, MethodInstance)
             cinfo = get_staged(method_instance)
             if isa(cinfo, CodeInfo)
@@ -220,7 +221,7 @@ const empty_slottypes = Any[]
 function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]]
+            return sptypes[x.args[1]::Int]
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast

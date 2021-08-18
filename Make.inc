@@ -75,6 +75,9 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
+# Enable DTrace support
+WITH_DTRACE := 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -86,6 +89,10 @@ define newline # a literal \n
 endef
 COMMA:=,
 SPACE:=$(eval) $(eval)
+
+# force a sane / stable configuration
+export LC_ALL=C
+export LANG=C
 
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
@@ -755,6 +762,13 @@ JCXXFLAGS += -DGC_DEBUG_ENV
 JCFLAGS += -DGC_DEBUG_ENV
 endif
 
+ifeq ($(WITH_DTRACE), 1)
+JCXXFLAGS += -DUSE_DTRACE
+JCFLAGS += -DUSE_DTRACE
+DTRACE := dtrace
+else
+endif
+
 # ===========================================================================
 
 # Select the cpu architecture to target, or automatically detects the user's compiler
@@ -1168,7 +1182,10 @@ BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(s
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP CSL
+# Note: we explicitly _do not_ define `CSL` here, since it requires some more
+# advanced techniques to decide whether it should be installed from a BB source
+# or not.  See `deps/csl.mk` for more detail.
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1387,7 +1404,7 @@ endif
 # Note: we're passing *FLAGS here computed based on your system compiler to
 # clang. If that causes you problems, you might want to build and/or run
 # specific clang-sa-* files with clang explicitly selected:
-#   make CC=~+/../usr/tools/clang CXX=~+/../usr/tools/clang USECLANG=1 analyzegc
+#   make CC=~+/../usr/bin/clang CXX=~+/../usr/bin/clang USECLANG=1 analyzegc
 #   make USECLANG=1 clang-sa-*
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
@@ -1548,6 +1565,7 @@ LINKCOLOR:="\033[34;1m"
 PERLCOLOR:="\033[35m"
 FLISPCOLOR:="\033[32m"
 JULIACOLOR:="\033[32;1m"
+DTRACECOLOR:="\033[32;1m"
 
 SRCCOLOR:="\033[33m"
 BINCOLOR:="\033[37;1m"
@@ -1561,6 +1579,7 @@ PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)
 PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_DTRACE = printf '    %b %b\n' $(DTRACECOLOR)DTRACE$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 
 else
 QUIET_MAKE =
@@ -1570,6 +1589,7 @@ PRINT_LINK = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_DTRACE = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
 

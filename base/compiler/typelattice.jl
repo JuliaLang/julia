@@ -299,7 +299,7 @@ function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
 end
 
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
-@inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n, o)))
+@inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n::VarState, o::VarState)))
 
 widenconditional(@nospecialize typ) = typ
 function widenconditional(typ::AnyConditional)
@@ -396,7 +396,7 @@ function stupdate1!(state::VarTable, change::StateUpdate)
                 if isa(oldtypetyp, Conditional) && slot_id(oldtypetyp.var) == changeid
                     oldtypetyp = widenconditional(oldtypetyp)
                     if oldtype.typ isa LimitedAccuracy
-                        oldtypetyp = LimitedAccuracy(oldtypetyp, oldtype.typ.causes)
+                        oldtypetyp = LimitedAccuracy(oldtypetyp, (oldtype.typ::LimitedAccuracy).causes)
                     end
                     state[i] = VarState(oldtypetyp, oldtype.undef)
                 end

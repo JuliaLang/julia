@@ -1645,7 +1645,6 @@ min_world(m::Core.CodeInfo) = m.min_world
 max_world(m::Core.CodeInfo) = m.max_world
 get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 
-
 """
     propertynames(x, private=false)
 
@@ -1676,3 +1675,51 @@ Return a boolean indicating whether the object `x` has `s` as one of its own pro
 See also: [`propertynames`](@ref), [`hasfield`](@ref).
 """
 hasproperty(x, s::Symbol) = s in propertynames(x)
+
+"""
+    @invoke f(arg::T, ...; kwargs...)
+
+Provides a convenient way to call [`invoke`](@ref);
+`@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
+When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
+`@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
+"""
+macro invoke(ex)
+    f, args, kwargs = destructure_callex(ex)
+    arg2typs = map(args) do x
+        isexpr(x, :(::)) ? (x.args...,) : (x, GlobalRef(Core, :Any))
+    end
+    args, argtypes = first.(arg2typs), last.(arg2typs)
+    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(argtypes...)}, $(args...); $(kwargs...))))
+end
+
+"""
+    @invokelatest f(args...; kwargs...)
+
+Provides a convenient way to call [`Base.invokelatest`](@ref).
+`@invokelatest f(args...; kwargs...)` will simply be expanded into
+`Base.invokelatest(f, args...; kwargs...)`.
+"""
+macro invokelatest(ex)
+    f, args, kwargs = destructure_callex(ex)
+    return esc(:($(GlobalRef(@__MODULE__, :invokelatest))($(f), $(args...); $(kwargs...))))
+end
+
+function destructure_callex(ex)
+    isexpr(ex, :call) || throw(ArgumentError("a call expression f(args...; kwargs...) should be given"))
+
+    f = first(ex.args)
+    args = []
+    kwargs = []
+    for x in ex.args[2:end]
+        if isexpr(x, :parameters)
+            append!(kwargs, x.args)
+        elseif isexpr(x, :kw)
+            push!(kwargs, x)
+        else
+            push!(args, x)
+        end
+    end
+
+    return f, args, kwargs
+end
