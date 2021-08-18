@@ -160,6 +160,8 @@ enum class CPU : uint32_t {
     apple_a11,
     apple_a12,
     apple_a13,
+    apple_a14,
+    apple_m1,
     apple_s4,
     apple_s5,
 
@@ -342,7 +344,10 @@ constexpr auto apple_a10 = armv8a_crc_crypto | get_feature_masks(rdm);
 constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16, sha3);
-constexpr auto apple_s4 = apple_a12;
+constexpr auto apple_a14 = armv8_5a | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_m1 = armv8_5a | get_feature_masks(dotprod,fp16fml, fullfp16, sha3); // Features based on https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Support/AArch64TargetParser.def 
+                                                                                         // and sysctl -a hw.optional
+constexpr auto apple_s4 = apple_a12;                                                    
 constexpr auto apple_s5 = apple_a12;
 
 }
@@ -420,6 +425,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"apple-a11", CPU::apple_a11, CPU::generic, 100000, Feature::apple_a11},
     {"apple-a12", CPU::apple_a12, CPU::generic, 100000, Feature::apple_a12},
     {"apple-a13", CPU::apple_a13, CPU::generic, 100000, Feature::apple_a13},
+    {"apple-a14", CPU::apple_a14, CPU::generic, 100000, Feature::apple_a14},
+    {"apple-m1", CPU::apple_m1, CPU::generic, 100000, Feature::apple_m1},
     {"apple-s4", CPU::apple_s4, CPU::generic, 100000, Feature::apple_s4},
     {"apple-s5", CPU::apple_s5, CPU::generic, 100000, Feature::apple_s5},
     {"thunderx3t110", CPU::marvell_thunderx3t110, CPU::cavium_thunderx2t99, 110000,
@@ -1002,6 +1009,10 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0x12: // Lightning
         case 0x13: // Thunder
             return CPU::apple_a13;
+        case 0x20: // Icestorm
+        case 0x21: // Firestorm
+            return CPU::apple_a14;
+            // return CPU::apple_m1; //LLVM doesn't have support for this name yet
         default: return CPU::generic;
         }
     case 0x68: // 'h': Huaxintong Semiconductor
@@ -1187,6 +1198,18 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     // Here we assume that only the lower 32bit are used on aarch64
     // Change the cast here when that's not the case anymore (and when there's features in the
     // high bits that we want to detect).
+#ifdef _CPU_AARCH64_ && _OS_DARWIN_
+    CPUID info = {
+            uint8_t(0x61),
+            uint8_t(0),
+            uint16_t(0x21)
+        }; // Hardcoded Firestorm core data based on https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
+    std::vector<std::pair<uint32_t,CPUID>> list;
+    auto name = (uint32_t)get_cpu_name(info);
+    auto arch = get_elf_arch();
+    features = find_cpu(name)->features;
+    list.emplace_back(name, info);
+#else
     features[0] = (uint32_t)jl_getauxval(AT_HWCAP);
     features[1] = (uint32_t)jl_getauxval(AT_HWCAP2);
 #ifdef _CPU_AARCH64_
@@ -1291,6 +1314,7 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     };
     shrink_big_little(list, v7order, sizeof(v7order) / sizeof(CPU));
 #endif
+#endif
     uint32_t cpu = 0;
     if (list.empty()) {
         cpu = (uint32_t)generic_for_arch(arch);
@@ -1301,9 +1325,9 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
         // one...
         cpu = list[0].first;
     }
+
     // Ignore feature bits that we are not interested in.
     mask_features(feature_masks, &features[0]);
-
     return std::make_pair(cpu, features);
 }
 
