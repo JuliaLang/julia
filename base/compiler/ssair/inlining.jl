@@ -708,13 +708,13 @@ function singleton_type(@nospecialize(ft))
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch)
-    mi = specialize_method(match, false, true)
+    mi = specialize_method(match; compilesig=true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     return mi
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::InferenceResult)
-    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals, false, true)
+    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     return mi
 end
@@ -809,7 +809,7 @@ function analyze_method!(match::MethodMatch, atypes::Vector{Any},
     end
 
     # See if there exists a specialization for this method signature
-    mi = specialize_method(match, true) # Union{Nothing, MethodInstance}
+    mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
     if !isa(mi, MethodInstance)
         return compileable_specialization(et, match)
     end
