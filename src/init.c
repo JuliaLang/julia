@@ -431,21 +431,7 @@ static void init_stdio(void)
     jl_flush_cstdio();
 }
 
-#ifdef JL_USE_INTEL_JITEVENTS
-char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
-#endif
-
-#ifdef JL_USE_OPROFILE_JITEVENTS
-char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
-#endif
-
-#ifdef JL_USE_PERF_JITEVENTS
-char jl_using_perf_jitevents = 0;
-#endif
-
-char jl_using_gdb_jitevents = 0;
-
-int isabspath(const char *in) JL_NOTSAFEPOINT
+int jl_isabspath(const char *in) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];
@@ -517,7 +503,7 @@ static char *abspath(const char *in, int nprefix)
 // unless `in` starts with `%`
 static const char *absformat(const char *in)
 {
-    if (in[0] == '%' || isabspath(in))
+    if (in[0] == '%' || jl_isabspath(in))
         return in;
     // get an escaped copy of cwd
     size_t path_size = PATH_MAX;
@@ -572,7 +558,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     free(free_path);
     free_path = NULL;
     if (jl_options.image_file) {
-        if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
+        if (rel == JL_IMAGE_JULIA_HOME && !jl_isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_BINDIR
             free_path = (char*)malloc_s(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
@@ -676,40 +662,6 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #else
     jl_RTLD_DEFAULT_handle = jl_exe_handle;
 #endif
-#endif
-
-#if \
-    defined(JL_USE_INTEL_JITEVENTS) || \
-    defined(JL_USE_OPROFILE_JITEVENTS) || \
-    defined(JL_USE_PERF_JITEVENTS)
-    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
-#endif
-
-#if defined(JL_USE_INTEL_JITEVENTS)
-    if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_intel_jitevents = 1;
-    }
-#endif
-
-#if defined(JL_USE_OPROFILE_JITEVENTS)
-    if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_oprofile_jitevents = 1;
-    }
-#endif
-
-#if defined(JL_USE_PERF_JITEVENTS)
-    if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_perf_jitevents= 1;
-    }
-#endif
-
-#if defined(JL_DEBUG_BUILD)
-    jl_using_gdb_jitevents = 1;
-# else
-    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
-    if (jit_gdb && atoi(jit_gdb)) {
-        jl_using_gdb_jitevents = 1;
-    }
 #endif
 
     if ((jl_options.outputo || jl_options.outputbc || jl_options.outputasm) &&

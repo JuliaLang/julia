@@ -972,7 +972,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;
-        if (e->head == assign_sym && jl_array_len(e->args) == 2) {
+        if (e->head == jl_assign_sym && jl_array_len(e->args) == 2) {
             n += jl_static_show_x(out, jl_exprarg(e,0), depth);
             n += jl_printf(out, " = ");
             n += jl_static_show_x(out, jl_exprarg(e,1), depth);

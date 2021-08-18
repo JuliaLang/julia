@@ -587,12 +587,12 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
         if (frame.func_name)
             jl_svecset(r, 0, jl_symbol(frame.func_name));
         else
-            jl_svecset(r, 0, empty_sym);
+            jl_svecset(r, 0, jl_empty_sym);
         free(frame.func_name);
         if (frame.file_name)
             jl_svecset(r, 1, jl_symbol(frame.file_name));
         else
-            jl_svecset(r, 1, empty_sym);
+            jl_svecset(r, 1, jl_empty_sym);
         free(frame.file_name);
         jl_svecset(r, 2, jl_box_long(frame.line));
         jl_svecset(r, 3, frame.linfo != NULL ? (jl_value_t*)frame.linfo : jl_nothing);

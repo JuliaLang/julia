@@ -151,7 +151,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
     else if (jl_is_expr(v)) {
         jl_expr_t *e = (jl_expr_t*)v;
         size_t l = jl_array_len(e->args);
-        if (e->head == call_sym) {
+        if (e->head == jl_call_sym) {
             if (l == 2) {
                 write_uint8(s->s, TAG_CALL1);
                 jl_encode_value(s, jl_exprarg(e, 0));
@@ -475,11 +475,11 @@ static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag) JL_GC_D
     }
     else if (tag == TAG_CALL1) {
         len = 2;
-        head = call_sym;
+        head = jl_call_sym;
     }
     else if (tag == TAG_CALL2) {
         len = 3;
-        head = call_sym;
+        head = jl_call_sym;
     }
     else {
         len = read_int32(s->s);

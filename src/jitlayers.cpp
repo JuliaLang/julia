@@ -229,7 +229,7 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
 extern "C"
 int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -256,9 +256,9 @@ int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt
         if (success && llvmmod == NULL)
             jl_add_to_ee(std::unique_ptr<Module>(into));
     }
-    if (codegen_lock.count == 1 && measure_compile_time_enabled)
+    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-    JL_UNLOCK(&codegen_lock);
+    JL_UNLOCK(&jl_codegen_lock);
     return success;
 }
 
@@ -279,10 +279,10 @@ void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
     // compute / validate return type
     if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
         jl_error("@ccallable: return type must be concrete and correspond to a C type");
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&jl_codegen_lock);
     if (!jl_type_mappable_to_c(declrt))
         jl_error("@ccallable: return type doesn't correspond to a C type");
-    JL_UNLOCK(&codegen_lock);
+    JL_UNLOCK(&jl_codegen_lock);
 
     // validate method signature
     size_t i, nargs = jl_nparams(sigt);
@@ -311,7 +311,7 @@ void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
 extern "C"
 jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
-    JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -352,9 +352,9 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
     else {
         codeinst = NULL;
     }
-    if (codegen_lock.count == 1 && measure_compile_time_enabled)
+    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-    JL_UNLOCK(&codegen_lock);
+    JL_UNLOCK(&jl_codegen_lock);
     JL_GC_POP();
     return codeinst;
 }
@@ -365,7 +365,7 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
     if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
         return;
     }
-    JL_LOCK(&codegen_lock);
+    JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -396,9 +396,9 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
         }
         JL_GC_POP();
     }
-    if (codegen_lock.count == 1 && measure_compile_time_enabled)
+    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-    JL_UNLOCK(&codegen_lock); // Might GC
+    JL_UNLOCK(&jl_codegen_lock); // Might GC
 }
 
 
@@ -418,7 +418,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
             // normally we prevent native code from being generated for these functions,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
-            JL_LOCK(&codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+            JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -448,7 +448,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
             }
             if (measure_compile_time_enabled)
                 jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-            JL_UNLOCK(&codegen_lock);
+            JL_UNLOCK(&jl_codegen_lock);
         }
         if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);

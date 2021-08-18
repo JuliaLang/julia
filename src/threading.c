@@ -337,7 +337,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 }
 
 // lock for code generation
-jl_mutex_t codegen_lock;
+JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 jl_mutex_t typecache_lock;
 
 ssize_t jl_tls_offset = -1;

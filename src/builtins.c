@@ -810,19 +810,19 @@ JL_CALLABLE(jl_f_svec)
 
 enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing)
 {
-    if (order == not_atomic_sym)
+    if (order == jl_not_atomic_sym)
         return jl_memory_order_notatomic;
-    if (order == unordered_sym && (loading ^ storing))
+    if (order == jl_unordered_sym && (loading ^ storing))
         return jl_memory_order_unordered;
-    if (order == monotonic_sym && (loading || storing))
+    if (order == jl_monotonic_sym && (loading || storing))
         return jl_memory_order_monotonic;
-    if (order == acquire_sym && loading)
+    if (order == jl_acquire_sym && loading)
         return jl_memory_order_acquire;
-    if (order == release_sym && storing)
+    if (order == jl_release_sym && storing)
         return jl_memory_order_release;
-    if (order == acquire_release_sym && loading && storing)
+    if (order == jl_acquire_release_sym && loading && storing)
         return jl_memory_order_acq_rel;
-    if (order == sequentially_consistent_sym)
+    if (order == jl_sequentially_consistent_sym)
         return jl_memory_order_seq_cst;
     return jl_memory_order_invalid;
 }
@@ -1684,7 +1684,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
-    gc_debug_critical_error();
+    jl_gc_debug_critical_error();
     abort();
 }
 

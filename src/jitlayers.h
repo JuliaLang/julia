@@ -16,6 +16,8 @@
 
 using namespace llvm;
 
+extern "C" JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
+
 extern TargetMachine *jl_TargetMachine;
 extern bool imaging_mode;
 
