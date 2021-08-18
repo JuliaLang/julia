@@ -1963,6 +1963,8 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
     size_t i, l = jl_array_len(targets) / 2;
     jl_array_t *valids = jl_alloc_array_1d(jl_array_uint8_type, l);
     memset(jl_array_data(valids), 1, l);
+    jl_value_t *loctag = NULL;
+    JL_GC_PUSH1(&loctag);
     *pvalids = valids;
     for (i = 0; i < l; i++) {
         jl_value_t *callee = jl_array_ptr_ref(targets, i * 2);
@@ -2004,7 +2006,13 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
             }
         }
         jl_array_uint8_set(valids, i, valid);
+        if (!valid && _jl_debug_method_invalidation) {
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)callee);
+            loctag = jl_cstr_to_string("insert_backedges_callee");
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+        }
     }
+    JL_GC_POP();
 }
 
 static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
