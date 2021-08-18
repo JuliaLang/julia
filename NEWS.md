@@ -148,6 +148,7 @@ Standard library changes
   overflow in most cases. The new function `checked_length` is now available, which will try to use checked
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
   constructing the range. ([#40382])
+* New `replace` methods to replace elements of a `Tuple` ([#38216]).
 
 #### Package Manager
 
@@ -316,6 +317,7 @@ Tooling Improvements
 [#37971]: https://github.com/JuliaLang/julia/issues/37971
 [#37978]: https://github.com/JuliaLang/julia/issues/37978
 [#38041]: https://github.com/JuliaLang/julia/issues/38041
+[#38216]: https://github.com/JuliaLang/julia/issues/38216
 [#38379]: https://github.com/JuliaLang/julia/issues/38379
 [#38438]: https://github.com/JuliaLang/julia/issues/38438
 [#38574]: https://github.com/JuliaLang/julia/issues/38574
