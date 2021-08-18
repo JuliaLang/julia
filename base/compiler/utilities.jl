@@ -176,7 +176,7 @@ function normalize_typevars(method::Method, @nospecialize(atypes), sparams::Simp
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false, compilesig::Bool=false)
+function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
     if isa(atypes, UnionAll)
         atypes, sparams = normalize_typevars(method, atypes, sparams)
     end
@@ -193,14 +193,14 @@ function specialize_method(method::Method, @nospecialize(atypes), sparams::Simpl
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end
 
-function specialize_method(match::MethodMatch, preexisting::Bool=false, compilesig::Bool=false)
-    return specialize_method(match.method, match.spec_types, match.sparams, preexisting, compilesig)
+function specialize_method(match::MethodMatch; kwargs...)
+    return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
 # This function is used for computing alternate limit heuristics
 function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
     if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams, false)
+        method_instance = specialize_method(method, sig, sparams)
         if isa(method_instance, MethodInstance)
             cinfo = get_staged(method_instance)
             if isa(cinfo, CodeInfo)

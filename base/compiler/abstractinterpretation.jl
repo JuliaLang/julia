@@ -584,7 +584,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         end
     end
     force |= allconst
-    mi = specialize_method(match, !force)
+    mi = specialize_method(match; preexisting=!force)
     if mi === nothing
         add_remark!(interp, sv, "[constprop] Failed to specialize")
         return nothing
@@ -983,7 +983,7 @@ end
 function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVector)
     if isdefined(method, :generator)
         method.generator.expand_early || return false
-        mi = specialize_method(method, sig, sparams, false)
+        mi = specialize_method(method, sig, sparams)
         isa(mi, MethodInstance) || return false
         staged = get_staged(mi)
         (staged isa CodeInfo && (staged::CodeInfo).pure) || return false
