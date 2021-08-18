@@ -527,7 +527,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
 
     jl_value_t *ptr = static_eval(ctx, arg);
     if (ptr == NULL) {
-        if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == call_sym && jl_expr_nargs(arg) == 3 &&
+        if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_call_sym && jl_expr_nargs(arg) == 3 &&
             jl_is_globalref(jl_exprarg(arg,0)) && jl_globalref_mod(jl_exprarg(arg,0)) == jl_core_module &&
             jl_globalref_name(jl_exprarg(arg,0)) == jl_symbol("tuple")) {
             // attempt to interpret a non-constant 2-tuple expression as (func_name, lib_name()), where

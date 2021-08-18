@@ -368,7 +368,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 if ((DWORD)-1 == ResumeThread(hMainThread)) {
                     jl_profile_stop_timer();
                     fputs("failed to resume main thread! aborting.", stderr);
-                    gc_debug_critical_error();
+                    jl_gc_debug_critical_error();
                     abort();
                 }
             }

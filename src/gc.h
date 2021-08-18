@@ -517,7 +517,7 @@ void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                            arraylist_t *list, size_t start);
 void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp);
 void sweep_stack_pools(void);
-void gc_debug_init(void);
+void jl_gc_debug_init(void);
 
 extern void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 
@@ -646,14 +646,14 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
 #define gc_sweep_always_full jl_gc_debug_env.always_full
-int gc_debug_check_other(void);
+int jl_gc_debug_check_other(void);
 int gc_debug_check_pool(void);
-void gc_debug_print(void);
+void jl_gc_debug_print(void);
 void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT;
 void gc_scrub(void);
 #else
 #define gc_sweep_always_full 0
-static inline int gc_debug_check_other(void)
+static inline int jl_gc_debug_check_other(void)
 {
     return 0;
 }
@@ -661,7 +661,7 @@ static inline int gc_debug_check_pool(void)
 {
     return 0;
 }
-static inline void gc_debug_print(void)
+static inline void jl_gc_debug_print(void)
 {
 }
 static inline void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT

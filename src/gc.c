@@ -877,7 +877,7 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
 
 static inline void maybe_collect(jl_ptls_t ptls)
 {
-    if (ptls->gc_num.allocd >= 0 || gc_debug_check_other()) {
+    if (ptls->gc_num.allocd >= 0 || jl_gc_debug_check_other()) {
         jl_gc_collect(JL_GC_AUTO);
     }
     else {
@@ -1644,9 +1644,9 @@ JL_NORETURN NOINLINE void gc_assert_datatype_fail(jl_ptls_t ptls, jl_datatype_t 
                                                   jl_gc_mark_sp_t sp)
 {
     jl_safe_printf("GC error (probable corruption) :\n");
-    gc_debug_print_status();
+    jl_gc_debug_print_status();
     jl_(vt);
-    gc_debug_critical_error();
+    jl_gc_debug_critical_error();
     gc_mark_loop_unwind(ptls, sp, 0);
     abort();
 }
@@ -3218,7 +3218,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         jl_atomic_add_fetch(&gc_num.deferred_alloc, localbytes);
         return;
     }
-    gc_debug_print();
+    jl_gc_debug_print();
 
     int8_t old_state = ptls->gc_state;
     jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
@@ -3338,7 +3338,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 void jl_gc_init(void)
 {
     jl_gc_init_page();
-    gc_debug_init();
+    jl_gc_debug_init();
 
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);

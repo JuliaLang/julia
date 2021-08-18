@@ -282,8 +282,8 @@ void gc_verify(jl_ptls_t ptls)
     }
     restore();
     gc_verify_track(ptls);
-    gc_debug_print_status();
-    gc_debug_critical_error();
+    jl_gc_debug_print_status();
+    jl_gc_debug_critical_error();
     abort();
 }
 #endif
@@ -496,12 +496,12 @@ int gc_debug_check_pool(void)
     return gc_debug_alloc_check(&jl_gc_debug_env.pool);
 }
 
-int gc_debug_check_other(void)
+int jl_gc_debug_check_other(void)
 {
     return gc_debug_alloc_check(&jl_gc_debug_env.other);
 }
 
-void gc_debug_print_status(void)
+void jl_gc_debug_print_status(void)
 {
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
@@ -510,9 +510,9 @@ void gc_debug_print_status(void)
                    pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
-void gc_debug_critical_error(void)
+void jl_gc_debug_critical_error(void)
 {
-    gc_debug_print_status();
+    jl_gc_debug_print_status();
     if (!jl_gc_debug_env.wait_for_debugger)
         return;
     jl_safe_printf("Waiting for debugger to attach\n");
@@ -521,11 +521,11 @@ void gc_debug_critical_error(void)
     }
 }
 
-void gc_debug_print(void)
+void jl_gc_debug_print(void)
 {
     if (!gc_debug_alloc_check(&jl_gc_debug_env.print))
         return;
-    gc_debug_print_status();
+    jl_gc_debug_print_status();
 }
 
 // a list of tasks for conservative stack scan during gc_scrub
@@ -607,11 +607,11 @@ void gc_scrub(void)
     jl_gc_debug_tasks.len = 0;
 }
 #else
-void gc_debug_critical_error(void)
+void jl_gc_debug_critical_error(void)
 {
 }
 
-void gc_debug_print_status(void)
+void jl_gc_debug_print_status(void)
 {
     // May not be accurate but should be helpful enough
     uint64_t pool_count = gc_num.poolalloc;
@@ -979,7 +979,7 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
 }
 #endif
 
-void gc_debug_init(void)
+void jl_gc_debug_init(void)
 {
 #ifdef GC_DEBUG_ENV
     char *env = getenv("JULIA_GC_NO_GENERATIONAL");

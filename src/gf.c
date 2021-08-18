@@ -3157,7 +3157,7 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 //   the best way to avoid acquisition priority
 //   ordering violations
 //static jl_mutex_t typeinf_lock;
-#define typeinf_lock codegen_lock
+#define typeinf_lock jl_codegen_lock
 
 static uint64_t inference_start_time = 0;
 

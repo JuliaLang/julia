@@ -190,7 +190,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         goto done;
     }
 
-    abspath = isabspath(modname);
+    abspath = jl_isabspath(modname);
 
     /*
       this branch permutes all base paths in DL_LOAD_PATH with all extensions

@@ -100,7 +100,7 @@ void jl_safepoint_init(void)
 #endif
     if (addr == NULL) {
         jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
-        gc_debug_critical_error();
+        jl_gc_debug_critical_error();
         abort();
     }
     // The signal page is for the gc safepoint.

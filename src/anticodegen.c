@@ -7,16 +7,19 @@
 
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
-void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname, const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
-int32_t jl_get_llvm_gv(jl_value_t *p) UNAVAILABLE
+void jl_dump_native(void *native_code,
+        const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
+        const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
+int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p) UNAVAILABLE
 void jl_write_malloc_log(void) UNAVAILABLE
-void jl_write_coverage_data(void) UNAVAILABLE
+void jl_write_coverage_data(const char *output) UNAVAILABLE
 
 JL_DLLEXPORT void jl_clear_malloc_data(void) UNAVAILABLE
 JL_DLLEXPORT int jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
 JL_DLLEXPORT void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt) UNAVAILABLE
-JL_DLLEXPORT jl_value_t *jl_dump_method_asm(jl_method_instance_t *linfo, size_t world, int raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo) UNAVAILABLE
-JL_DLLEXPORT const jl_value_t *jl_dump_function_ir(void *f, uint8_t strip_ir_metadata, uint8_t dump_module, const char *debuginfo) UNAVAILABLE
+JL_DLLEXPORT jl_value_t *jl_dump_method_asm(jl_method_instance_t *linfo, size_t world,
+        char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
+JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo) UNAVAILABLE
 JL_DLLEXPORT void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, char getwrapper, char optimize, const jl_cgparams_t params) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo, int TagType, void *GetOpInfo, void *SymbolLookUp) UNAVAILABLE
@@ -37,29 +40,59 @@ void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *
     (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
 }
 
-jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
+jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
-    jl_method_instance_t *li = *pli;
-    jl_llvm_functions_t decls = {};
-
-    if (jl_is_method(li->def.method)) {
-        jl_printf(JL_STDERR, "code missing for ");
-        jl_static_show(JL_STDERR, (jl_value_t*)li);
-        jl_printf(JL_STDERR, " : sysimg may not have been built with --compile=all\n");
-    }
-    else {
-        jl_printf(JL_STDERR, "top level expression cannot be compiled in this build of Julia");
-    }
-    return decls;
+    return NULL;
 }
 
-jl_value_t *jl_fptr_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
-jl_callptr_t jl_generate_fptr(jl_method_instance_t **pli, jl_llvm_functions_t decls, size_t world)
+void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
 {
-    return (jl_callptr_t)&jl_fptr_interpret_call;
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
 {
     return 0;
+}
+
+int jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+{
+    return 0;
+}
+
+void jl_teardown_codegen(void)
+{
+}
+
+void jl_lock_profile(void)
+{
+}
+
+void jl_unlock_profile(void)
+{
+}
+
+JL_DLLEXPORT void *jl_create_native(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
+
+JL_DLLEXPORT void jl_dump_compiles(void *s)
+{
+}
+
+JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
+
+JL_DLLEXPORT jl_value_t *jl_dump_function_asm(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
+
+JL_DLLEXPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
+        int32_t *func_idx, int32_t *specfunc_idx) UNAVAILABLE
+
+JL_DLLEXPORT void *jl_get_llvm_context(void *native_code) UNAVAILABLE
+
+JL_DLLEXPORT void *jl_get_llvm_function(void *native_code, uint32_t idx) UNAVAILABLE
+
+JL_DLLEXPORT void *jl_get_llvm_module(void *native_code) UNAVAILABLE
+
+JL_DLLEXPORT void *jl_type_to_llvm(jl_value_t *jt, bool_t *isboxed) UNAVAILABLE
+
+JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT
+{
+    return jl_nothing;
 }

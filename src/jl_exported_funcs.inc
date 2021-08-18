@@ -1,6 +1,5 @@
 #define JL_EXPORTED_FUNCS(XX) \
     XX(jl_active_task_stack) \
-    XX(jl_add_optimization_passes) \
     XX(jl_add_standard_imports) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \

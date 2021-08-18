@@ -2042,7 +2042,6 @@ JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 // Parse an argc/argv pair to extract general julia options, passing back out
 // any arguments that should be passed on to the script.
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
-JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv
@@ -2161,7 +2160,6 @@ typedef struct {
     // generic_context(f, args...) instead of f(args...).
     jl_value_t *generic_context;
 } jl_cgparams_t;
-extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
 #ifdef __cplusplus
