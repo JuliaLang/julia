@@ -123,7 +123,7 @@
     XX(jl_vecelement_typename) \
     XX(jl_voidpointer_type) \
     XX(jl_void_type) \
-    XX(jl_weakref_type) \
+    XX(jl_weakref_type)
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \

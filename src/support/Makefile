@@ -11,7 +11,7 @@ JLDFLAGS += $(LDFLAGS)
 SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod
 ifeq ($(OS),WINNT)
-SRCS += asprintf strptime win32_ucontext
+SRCS += asprintf strptime
 ifeq ($(ARCH),i686)
 SRCS += _setjmp.win32
 else ifeq ($(ARCH),x86_64)

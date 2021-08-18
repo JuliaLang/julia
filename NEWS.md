@@ -23,6 +23,10 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* The LLVM-based compiler has been separated from the run-time library into a new library,
+  `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
+  In deployments that do not need the compiler (e.g. system images where all needed code
+  is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
 
 Command-line option changes
 ---------------------------

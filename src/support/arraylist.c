@@ -104,7 +104,7 @@ void small_arraylist_free(small_arraylist_t *a)
     a->items = &a->_space[0];
 }
 
-void small_arraylist_grow(small_arraylist_t *a, uint32_t n)
+JL_DLLEXPORT void small_arraylist_grow(small_arraylist_t *a, uint32_t n)
 {
     size_t len = a->len;
     size_t newlen = len + n;
