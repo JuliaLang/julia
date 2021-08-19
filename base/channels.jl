@@ -33,7 +33,7 @@ mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
     cond_wait::Threads.Condition                 # waiting for data to become maybe available
     cond_put::Threads.Condition                  # waiting for a writeable slot
-    state::Symbol
+    @atomic state::Symbol
     excp::Union{Exception, Nothing}      # exception to be thrown when state !== :open
 
     data::Vector{T}
@@ -182,8 +182,8 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 function close(c::Channel, excp::Exception=closed_exception())
     lock(c)
     try
-        c.state = :closed
         c.excp = excp
+        @atomic :release c.state = :closed
         notify_error(c.cond_take, excp)
         notify_error(c.cond_wait, excp)
         notify_error(c.cond_put, excp)
@@ -192,7 +192,7 @@ function close(c::Channel, excp::Exception=closed_exception())
     end
     nothing
 end
-isopen(c::Channel) = (c.state === :open)
+isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
 
 """
     bind(chnl::Channel, task::Task)

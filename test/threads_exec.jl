@@ -912,3 +912,46 @@ end
         @test reproducible_rand(r, 10) == val
     end
 end
+
+hidden_spawn(f) = Threads.@spawn f()
+
+function sync_end_race()
+    y = Ref(:notset)
+    local t
+    @sync begin
+        t = hidden_spawn() do
+            Threads.@spawn y[] = :completed
+        end
+    end
+    try
+        wait(t)
+    catch
+        return :notscheduled
+    end
+    return y[]
+end
+
+function check_sync_end_race()
+    @sync begin
+        done = Threads.Atomic{Bool}(false)
+        try
+            # Additional task for randomizing the scheduling:
+            Threads.@spawn begin
+                while !done[]
+                    yield()
+                end
+            end
+            # `Threads.@spawn` must fail to be scheduled or complete its execution:
+            for i in 1:1000
+                sync_end_race() in (:completed, :notscheduled) || return i
+            end
+        finally
+            done[] = true
+        end
+    end
+    return nothing
+end
+
+@testset "Racy `@spawn`" begin
+    @test check_sync_end_race() === nothing
+end
