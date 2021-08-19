@@ -120,6 +120,9 @@ Set the number of threads the BLAS library should use equal to `n::Integer`.
 
 Also accepts `nothing`, in which case julia tries to guess the default number of threads.
 Passing `nothing` is discouraged and mainly exists for historical reasons.
+
+See also [`with_num_threads`](@ref BLAS.with_num_threads) to temporarily change
+number of BLAS threads.
 """
 set_num_threads(nt::Integer)::Nothing = lbt_set_num_threads(Int32(nt))
 function set_num_threads(::Nothing)
@@ -168,7 +171,7 @@ restore to previous threads setting.
 
 # Example
 
-The result differs on different machines.
+Depending on the number of available CPU cores, the result can be different:
 
 ```julia
 julia> BLAS.get_num_threads()
@@ -188,6 +191,9 @@ julia> BLAS.get_num_threads()
     This function is not thread safe. If there are multiple
     threads calling BLAS routines, then the threads they are
     using will also be changed until this function finishes.
+
+See also [`set_num_threads`](@ref BLAS.set_num_threads) to permanently change
+number of BLAS threads.
 """
 function with_num_threads(f, num_threads::Integer)
     prev_num_threads = BLAS.get_num_threads()

@@ -84,6 +84,9 @@ Standard library changes
 
 #### LinearAlgebra
 
+* A new unexported function `BLAS.with_num_threads` allows you to temporarily change the number of
+  BLAS threads. ([#41785])
+
 #### Markdown
 
 #### Printf
