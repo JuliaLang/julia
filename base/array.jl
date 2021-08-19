@@ -758,33 +758,25 @@ else
     end
 end
 
-_array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(undef, Int(length(itr)::Integer))
-_array_for(::Type{T}, itr, ::HasShape{N}) where {T,N} = similar(Array{T,N}, axes(itr))
+_array_for(::Type{T}, itr, isz::HasLength) where {T} = _array_for(T, itr, isz, length(itr))
+_array_for(::Type{T}, itr, isz::HasShape{N}) where {T,N} = _array_for(T, itr, isz, axes(itr))
+_array_for(::Type{T}, itr, ::HasLength, len) where {T} = Vector{T}(undef, len)
+_array_for(::Type{T}, itr, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
 
 function collect(itr::Generator)
     isz = IteratorSize(itr.iter)
     et = @default_eltype(itr)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
-    elseif isa(isz, HasLength)
-        len = length(itr)
-        y = iterate(itr)
-        if y === nothing
-            return et[]
-        end
-        v1, st = y
-        return collect_to_with_first!(Vector{typeof(v1)}(undef, len), v1, itr, st)
-    elseif isa(isz, HasShape)
-        axs = axes(itr)
-        y = iterate(itr)
-        if y === nothing
-            return similar(Array{et,length(axs)}, axs)
-        end
-        v1, st = y
-        arr = similar(Array{typeof(v1),length(axs)}, axs)
-        return collect_to_with_first!(arr, v1, itr, st)
     else
-        error("unreachable")
+        shape = isz isa HasLength ? length(itr) : axes(itr)
+        y = iterate(itr)
+        if y === nothing
+            return _array_for(et, itr.iter, isz)
+        end
+        v1, st = y
+        arr = _array_for(typeof(v1), itr.iter, isz, shape)
+        return collect_to_with_first!(arr, v1, itr, st)
     end
 end
 
