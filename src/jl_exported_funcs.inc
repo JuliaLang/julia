@@ -1,4 +1,4 @@
-#define JL_EXPORTED_FUNCS(XX) \
+#define JL_RUNTIME_EXPORTED_FUNCS(XX) \
     XX(jl_active_task_stack) \
     XX(jl_add_standard_imports) \
     XX(jl_alignment) \
@@ -93,7 +93,6 @@
     XX(jl_cglobal_auto) \
     XX(jl_checked_assignment) \
     XX(jl_clear_implicit_imports) \
-    XX(jl_clear_malloc_data) \
     XX(jl_clock_now) \
     XX(jl_close_uv) \
     XX(jl_code_for_staged) \
@@ -107,7 +106,6 @@
     XX(jl_cpu_threads) \
     XX(jl_cpu_wake) \
     XX(jl_crc32c_sw) \
-    XX(jl_create_native) \
     XX(jl_create_system_image) \
     XX(jl_cstr_to_string) \
     XX(jl_current_exception) \
@@ -118,12 +116,7 @@
     XX(jl_dlclose) \
     XX(jl_dlopen) \
     XX(jl_dlsym) \
-    XX(jl_dump_compiles) \
-    XX(jl_dump_fptr_asm) \
-    XX(jl_dump_function_asm) \
-    XX(jl_dump_function_ir) \
     XX(jl_dump_host_cpu) \
-    XX(jl_dump_method_asm) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
     XX(jl_egal__special) \
@@ -154,7 +147,6 @@
     XX(jl_expand_stmt_with_loc) \
     XX(jl_expand_with_loc) \
     XX(jl_expand_with_loc_warn) \
-    XX(jl_extern_c) \
     XX(jl_field_index) \
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
@@ -228,7 +220,6 @@
     XX(jl_get_field) \
     XX(jl_get_field_offset) \
     XX(jl_get_fieldtypes) \
-    XX(jl_get_function_id) \
     XX(jl_get_global) \
     XX(jl_get_image_file) \
     XX(jl_get_JIT) \
@@ -236,11 +227,6 @@
     XX(jl_get_julia_bindir) \
     XX(jl_get_keyword_sorter) \
     XX(jl_get_kwsorter) \
-    XX(jl_get_llvm_context) \
-    XX(jl_get_llvmf_defn) \
-    XX(jl_get_llvm_function) \
-    XX(jl_get_llvm_module) \
-    XX(jl_get_LLVM_VERSION) \
     XX(jl_get_method_inferred) \
     XX(jl_get_module_binding) \
     XX(jl_get_module_compile) \
@@ -518,7 +504,6 @@
     XX(jl_typeof) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
-    XX(jl_type_to_llvm) \
     XX(jl_type_union) \
     XX(jl_type_unionall) \
     XX(jl_unbox_bool) \
@@ -548,5 +533,37 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
-    XX(jl_yield) \
+    XX(jl_yield)
 
+#define JL_CODEGEN_EXPORTED_FUNCS(XX) \
+    XX(jl_clear_malloc_data) \
+    XX(jl_dump_function_ir) \
+    XX(jl_dump_method_asm) \
+    XX(jl_extern_c) \
+    XX(jl_get_llvm_context) \
+    XX(jl_get_llvmf_defn) \
+    XX(jl_get_llvm_function) \
+    XX(jl_get_llvm_module) \
+    XX(jl_get_LLVM_VERSION) \
+    XX(jl_dump_native) \
+    XX(jl_get_llvm_gv) \
+    XX(jl_write_malloc_log) \
+    XX(jl_write_coverage_data) \
+    XX(jl_dump_function_asm) \
+    XX(jl_LLVMCreateDisasm) \
+    XX(jl_LLVMDisasmInstruction) \
+    XX(jl_init_codegen) \
+    XX(jl_getFunctionInfo) \
+    XX(jl_register_fptrs) \
+    XX(jl_generate_fptr) \
+    XX(jl_generate_fptr_for_unspecialized) \
+    XX(jl_compile_extern_c) \
+    XX(jl_teardown_codegen) \
+    XX(jl_lock_profile) \
+    XX(jl_unlock_profile) \
+    XX(jl_create_native) \
+    XX(jl_dump_compiles) \
+    XX(jl_dump_fptr_asm) \
+    XX(jl_get_function_id) \
+    XX(jl_type_to_llvm) \
+    XX(jl_get_libllvm)

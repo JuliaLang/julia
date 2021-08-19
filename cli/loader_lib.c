@@ -30,7 +30,7 @@ void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * 
 }
 
 /* Wrapper around dlopen(), with extra relative pathing thrown in*/
-static void * load_library(const char * rel_path, const char * src_dir) {
+static void * load_library(const char * rel_path, const char * src_dir, int err) {
     char path[2*PATH_MAX + 1] = {0};
     strncat(path, src_dir, sizeof(path) - 1);
     strncat(path, PATHSEPSTRING, sizeof(path) - 1);
@@ -49,6 +49,8 @@ static void * load_library(const char * rel_path, const char * src_dir) {
 #endif
 
     if (handle == NULL) {
+        if (!err)
+            return NULL;
         jl_loader_print_stderr3("ERROR: Unable to load dependent library ", path, "\n");
 #if defined(_OS_WINDOWS_)
         LPWSTR wmsg = TEXT("");
@@ -149,23 +151,36 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 
         // Chop the string at the colon, load this library.
         *colon = '\0';
-        load_library(curr_dep, lib_dir);
+        load_library(curr_dep, lib_dir, 1);
 
         // Skip ahead to next dependency
         curr_dep = colon + 1;
     }
 
     // Last dependency is `libjulia-internal`, so load that and we're done with `dep_libs`!
-    libjulia_internal = load_library(curr_dep, lib_dir);
+    libjulia_internal = load_library(curr_dep, lib_dir, 1);
+
+    void *libjulia_codegen = load_library(CODEGEN_LIB, lib_dir, 0);
+    if (libjulia_codegen == NULL)
+        // if codegen is not available, use fallback implementation in libjulia-internal
+        libjulia_codegen = libjulia_internal;
 
     // Once we have libjulia-internal loaded, re-export its symbols:
-    for (unsigned int symbol_idx=0; jl_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
-        void *addr = lookup_symbol(libjulia_internal, jl_exported_func_names[symbol_idx]);
-        if (addr == NULL || addr == *jl_exported_func_addrs[symbol_idx]) {
-            jl_loader_print_stderr3("ERROR: Unable to load ", jl_exported_func_names[symbol_idx], " from libjulia-internal");
+    for (unsigned int symbol_idx=0; jl_runtime_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
+        void *addr = lookup_symbol(libjulia_internal, jl_runtime_exported_func_names[symbol_idx]);
+        if (addr == NULL || addr == *jl_runtime_exported_func_addrs[symbol_idx]) {
+            jl_loader_print_stderr3("ERROR: Unable to load ", jl_runtime_exported_func_names[symbol_idx], " from libjulia-internal");
             exit(1);
         }
-        (*jl_exported_func_addrs[symbol_idx]) = addr;
+        (*jl_runtime_exported_func_addrs[symbol_idx]) = addr;
+    }
+    for (unsigned int symbol_idx=0; jl_codegen_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
+        void *addr = lookup_symbol(libjulia_codegen, jl_codegen_exported_func_names[symbol_idx]);
+        if (addr == NULL || addr == *jl_codegen_exported_func_addrs[symbol_idx]) {
+            jl_loader_print_stderr3("ERROR: Unable to load ", jl_codegen_exported_func_names[symbol_idx], " from libjulia-codegen");
+            exit(1);
+        }
+        (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
     }
 }
 

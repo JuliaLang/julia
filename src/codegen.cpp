@@ -1913,7 +1913,7 @@ static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Val
 }
 
 // Resets the malloc counts.
-extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
+extern "C" JL_DLLEXPORT void jl_clear_malloc_data_impl(void)
 {
     logdata_t::iterator it = mallocData.begin();
     for (; it != mallocData.end(); it++) {
@@ -2103,7 +2103,7 @@ std::string jl_format_filename(StringRef output_pattern)
     return outfile.str();
 }
 
-extern "C" void jl_write_coverage_data(const char *output)
+extern "C" JL_DLLEXPORT void jl_write_coverage_data_impl(const char *output)
 {
     if (output) {
         StringRef output_pattern(output);
@@ -2117,7 +2117,7 @@ extern "C" void jl_write_coverage_data(const char *output)
     }
 }
 
-extern "C" void jl_write_malloc_log(void)
+extern "C" JL_DLLEXPORT void jl_write_malloc_log_impl(void)
 {
     std::string stm;
     raw_string_ostream(stm) << "." << jl_getpid() << ".mem";
@@ -8143,6 +8143,8 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
+void jl_init_debuginfo(void);
+
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
@@ -8344,7 +8346,7 @@ extern "C" void jl_init_llvm(void)
 #endif
 }
 
-extern "C" void jl_init_codegen(void)
+extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
 {
     jl_init_llvm();
     // Now that the execution engine exists, initialize all modules
@@ -8358,7 +8360,7 @@ extern "C" void jl_init_codegen(void)
     jl_init_intrinsic_functions_codegen();
 }
 
-extern "C" void jl_teardown_codegen()
+extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl()
 {
     // output LLVM timings and statistics
     reportAndResetTimings();
@@ -8433,7 +8435,7 @@ extern void jl_write_bitcode_module(void *M, char *fname) {
 
 #include <llvm-c/Core.h>
 
-JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT {
+extern "C" JL_DLLEXPORT jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFEPOINT {
 #if defined(_OS_WINDOWS_)
     HMODULE mod;
     // FIXME: GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS on LLVMContextCreate,
