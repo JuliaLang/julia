@@ -34,7 +34,7 @@ void jl_init_jit(void) { }
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
 extern "C" JL_DLLEXPORT
-void jl_dump_compiles(void *s)
+void jl_dump_compiles_impl(void *s)
 {
     dump_compiles_stream = (JL_STREAM*)s;
 }
@@ -226,8 +226,8 @@ static jl_callptr_t _jl_compile_codeinst(
 const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
-extern "C"
-int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+extern "C" JL_DLLEXPORT
+int jl_compile_extern_c_impl(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
@@ -264,7 +264,7 @@ int jl_compile_extern_c(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt
 
 // declare a C-callable entry point; called during code loading from the toplevel
 extern "C" JL_DLLEXPORT
-void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
+void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 {
     // validate arguments. try to do as many checks as possible here to avoid
     // throwing errors later during codegen.
@@ -308,8 +308,8 @@ void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
 }
 
 // this compiles li and emits fptr
-extern "C"
-jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
+extern "C" JL_DLLEXPORT
+jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     uint64_t compiler_start_time = 0;
@@ -359,8 +359,8 @@ jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT
     return codeinst;
 }
 
-extern "C"
-void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
+extern "C" JL_DLLEXPORT
+void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
 {
     if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
         return;
@@ -404,7 +404,7 @@ void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
 
 // get a native disassembly for a compiled method
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
+jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly

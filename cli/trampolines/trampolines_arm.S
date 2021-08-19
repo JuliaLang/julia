@@ -14,5 +14,6 @@ CONCAT(.L,CNAMEADDR(name))##: ; \
     .word CNAMEADDR(name)##-(CONCAT(.L,CNAME(name)) + 8); \
 .cfi_endproc; \
 
-JL_EXPORTED_FUNCS(XX)
+JL_RUNTIME_EXPORTED_FUNCS(XX)
+JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX

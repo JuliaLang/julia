@@ -12,5 +12,6 @@ CNAME(name)##:; \
 .cfi_endproc; \
 EXPORT(name); \
 
-JL_EXPORTED_FUNCS(XX)
+JL_RUNTIME_EXPORTED_FUNCS(XX)
+JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX

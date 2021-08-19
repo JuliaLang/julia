@@ -45,7 +45,7 @@ RUNTIME_SRCS := \
 	simplevector runtime_intrinsics precompile \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks method \
 	jlapi signal-handling safepoint timing subtype \
-	crc32c APInt-C processor ircode opaque_closure anticodegen
+	crc32c APInt-C processor ircode opaque_closure codegen-stubs
 SRCS := jloptions runtime_ccall rtutils
 
 RT_LLVMLINK :=
@@ -243,7 +243,7 @@ endif
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
-	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCXXFLAGS) $(JCPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) $(NO_WHOLE_ARCHIVE) $(LLVMLINK)) -lpthread
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCXXFLAGS) $(JCPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) $(NO_WHOLE_ARCHIVE) $(CG_LLVMLINK)) -lpthread
 
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
@@ -257,7 +257,7 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
 
 # additional dependency links
-$(BUILDDIR)/anticodegen.o $(BUILDDIR)/anticodegen.dbg.obj: $(SRCDIR)/intrinsics.h
+$(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj: $(SRCDIR)/intrinsics.h
 $(BUILDDIR)/aotcompile.o $(BUILDDIR)/aotcompile.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/codegen_shared.h
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/iddict.c $(SRCDIR)/builtin_proto.h
@@ -354,10 +354,6 @@ libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_
 libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-internal-debug libjulia-internal-release: $(PUBLIC_HEADER_TARGETS)
 
-libjulia-codegen-release: $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT)
-libjulia-codegen-debug: $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
-libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
-
 $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(CODEGEN_OBJS) $(BUILDDIR)/support/libsupport.a libjulia-internal-release
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(CODEGEN_OBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(JLIBLDFLAGS) $(CG_RELEASE_LIBS) -ljulia-internal $(call SONAME_FLAGS,libjulia-codegen.$(JL_MAJOR_SHLIB_EXT)))
@@ -370,8 +366,22 @@ $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/
 	@$(INSTALL_NAME_CMD)libjulia-codegen-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
+ifneq ($(OS), WINNT)
+$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT): $(build_shlibdir)/libjulia-codegen%.$(JL_MAJOR_SHLIB_EXT): \
+		$(build_shlibdir)/libjulia-codegen%.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
+$(build_shlibdir)/libjulia-codegen.$(SHLIB_EXT) $(build_shlibdir)/libjulia-codegen-debug.$(SHLIB_EXT): $(build_shlibdir)/libjulia-codegen%.$(SHLIB_EXT): \
+		$(build_shlibdir)/libjulia-codegen%.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
+libjulia-codegen-release: $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-codegen.$(SHLIB_EXT)
+libjulia-codegen-debug: $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-codegen-debug.$(SHLIB_EXT)
+endif
+libjulia-codegen-release: $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT)
+libjulia-codegen-debug: $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
+
 clean:
-	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
+	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a
 	-rm -f $(BUILDDIR)/julia_version.h

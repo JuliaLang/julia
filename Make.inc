@@ -1498,6 +1498,12 @@ LIBJULIAINTERNAL_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlib
 LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
 LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
 
+LIBJULIACODEGEN_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
+
+LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
+
 ifeq ($(OS),WINNT)
 ifeq ($(BINARY),32)
 LIBGCC_NAME := libgcc_s_sjlj-1.$(SHLIB_EXT)
