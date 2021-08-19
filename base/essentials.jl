@@ -85,7 +85,8 @@ f(y) = [x for x in y]
 !!! note
     `@nospecialize` affects code generation but not inference: it limits the diversity
     of the resulting native code, but it does not impose any limitations (beyond the
-    standard ones) on type-inference.
+    standard ones) on type-inference. Use [`Base.@nospecializeinfer`](@ref) together with
+    `@nospecialize` to additionally suppress inference.
 
 # Example
 

@@ -83,6 +83,7 @@ JL_DLLEXPORT jl_sym_t *jl_aggressive_constprop_sym;
 JL_DLLEXPORT jl_sym_t *jl_no_constprop_sym;
 JL_DLLEXPORT jl_sym_t *jl_purity_sym;
 JL_DLLEXPORT jl_sym_t *jl_nospecialize_sym;
+JL_DLLEXPORT jl_sym_t *jl_nospecializeinfer_sym;
 JL_DLLEXPORT jl_sym_t *jl_macrocall_sym;
 JL_DLLEXPORT jl_sym_t *jl_colon_sym;
 JL_DLLEXPORT jl_sym_t *jl_hygienicscope_sym;
@@ -342,6 +343,7 @@ void jl_init_common_symbols(void)
     jl_isdefined_sym = jl_symbol("isdefined");
     jl_nospecialize_sym = jl_symbol("nospecialize");
     jl_specialize_sym = jl_symbol("specialize");
+    jl_nospecializeinfer_sym = jl_symbol("nospecializeinfer");
     jl_optlevel_sym = jl_symbol("optlevel");
     jl_compile_sym = jl_symbol("compile");
     jl_force_compile_sym = jl_symbol("force_compile");

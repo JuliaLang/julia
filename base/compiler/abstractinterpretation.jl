@@ -521,6 +521,10 @@ function abstract_call_method(interp::AbstractInterpreter,
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType || return MethodCallResult(Any, false, false, nothing, Effects())
 
+    if is_nospecializeinfer(method)
+        sig = get_nospecializeinfer_sig(method, sig, sparams)
+    end
+
     # Limit argument type tuple growth of functions:
     # look through the parents list to see if there's a call to the same method
     # and from the same method.
