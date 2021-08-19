@@ -300,7 +300,7 @@ If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a [`UnitRange`](@ref)
 if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
-If the arrays have different sizes and/or dimensionalities, a DimensionMismatch exception
+If the arrays have different sizes and/or dimensionalities, a `DimensionMismatch` exception
 will be thrown.
 # Examples
 ```jldoctest
