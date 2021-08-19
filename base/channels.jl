@@ -166,9 +166,13 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
-        excp = c.excp
-        excp !== nothing && throw(excp)
-        throw(closed_exception())
+        lock(c)
+        excp = try
+            @something(c.excp, closed_exception())
+        finally
+            unlock(c)
+        end
+        throw(excp)
     end
 end
 """
@@ -182,8 +186,8 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 function close(c::Channel, excp::Exception=closed_exception())
     lock(c)
     try
+        @atomic :monotonic c.state = :closed
         c.excp = excp
-        @atomic :release c.state = :closed
         notify_error(c.cond_take, excp)
         notify_error(c.cond_wait, excp)
         notify_error(c.cond_put, excp)
@@ -192,7 +196,7 @@ function close(c::Channel, excp::Exception=closed_exception())
     end
     nothing
 end
-isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
+isopen(c::Channel) = ((@atomic :monotonic c.state) === :open)
 
 """
     bind(chnl::Channel, task::Task)
@@ -324,6 +328,7 @@ function put_buffered(c::Channel, v)
             check_channel_state(c)
             wait(c.cond_put)
         end
+        check_channel_state(c)
         push!(c.data, v)
         # notify all, since some of the waiters may be on a "fetch" call.
         notify(c.cond_take, nothing, true, false)
@@ -341,6 +346,7 @@ function put_unbuffered(c::Channel, v)
             notify(c.cond_wait)
             wait(c.cond_put)
         end
+        check_channel_state(c)
         # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
         popfirst!(c.cond_take.waitq)
     finally
