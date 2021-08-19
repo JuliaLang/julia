@@ -345,9 +345,8 @@ constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16, sha3);
 constexpr auto apple_a14 = armv8_5a | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
-constexpr auto apple_m1 = armv8_5a | get_feature_masks(dotprod,fp16fml, fullfp16, sha3); // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
-                                                                                         // and sysctl -a hw.optional
-constexpr auto apple_s4 = apple_a12;                                                    
+constexpr auto apple_m1 = armv8_5a | get_feature_masks(dotprod,fp16fml, fullfp16, sha3); // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def and sysctl -a hw.optional
+constexpr auto apple_s4 = apple_a12;
 constexpr auto apple_s5 = apple_a12;
 
 }
@@ -1325,7 +1324,6 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
         // one...
         cpu = list[0].first;
     }
-
     // Ignore feature bits that we are not interested in.
     mask_features(feature_masks, &features[0]);
     return std::make_pair(cpu, features);
