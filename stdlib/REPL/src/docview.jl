@@ -403,6 +403,9 @@ function symbol_latex(s::String)
     return get(symbols_latex, s, "")
 end
 function repl_latex(io::IO, s0::String)
+    # This has rampant `Core.Box` problems (#15276). Use the tricks of
+    # https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
+    # We're changing some of the values so the `let` trick isn't applicable. 
     s::String = s0
     latex::String = symbol_latex(s)
     if isempty(latex)

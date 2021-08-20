@@ -60,7 +60,7 @@ column going across the screen.
 function alignment(io::IO, @nospecialize(X::AbstractVecOrMat),
         rows::AbstractVector{T}, cols::AbstractVector{V},
         cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer,
-        ncols::Integer=size(X, 2)) where {T,V}
+        #= `size(X) may not infer, set this in caller =# ncols::Integer=size(X, 2)) where {T,V}
     a = Tuple{T, V}[]
     for j in cols # need to go down each column one at a time
         l = r = 0
@@ -97,7 +97,7 @@ is specified as string sep.
 function print_matrix_row(io::IO,
         @nospecialize(X::AbstractVecOrMat), A::Vector,
         i::Integer, cols::AbstractVector, sep::AbstractString,
-        idxlast::Integer=last(axes(X, 2)))
+        #= `axes(X)` may not infer, set this in caller =# idxlast::Integer=last(axes(X, 2)))
     for (k, j) = enumerate(cols)
         k > length(A) && break
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
