@@ -134,12 +134,14 @@ const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
 const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 # const SLOT_CALLED      = 64
 
-# This statement was marked as @inbounds by the user. If replaced by inlining,
-# any contained boundschecks may be removed
-const IR_FLAG_INBOUNDS       = 0x01
-# This statement was marked as @inline by the user
+# NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
+
+# This statement is marked as @inbounds by user.
+# Ff replaced by inlining, any contained boundschecks may be removed.
+const IR_FLAG_INBOUNDS       = 0x01 << 0
+# This statement is marked as @inline by user
 const IR_FLAG_INLINE         = 0x01 << 1
-# This statement was marked as @noinline by the user
+# This statement is marked as @noinline by user
 const IR_FLAG_NOINLINE       = 0x01 << 2
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
@@ -374,74 +376,36 @@ function convert_to_ircode(ci::CodeInfo, code::Vector{Any}, coverage::Bool, sv::
     end
     renumber_ir_elements!(code, changemap, labelmap)
 
-    inbounds_depth = 0 # Number of stacked inbounds
-    inline_flags = BitVector()
     meta = Any[]
-    flags = fill(0x00, length(code))
     for i = 1:length(code)
-        stmt = code[i]
-        if isexpr(stmt, :inbounds)
-            arg1 = stmt.args[1]
-            if arg1 === true # push
-                inbounds_depth += 1
-            elseif arg1 === false # clear
-                inbounds_depth = 0
-            elseif inbounds_depth > 0 # pop
-                inbounds_depth -= 1
-            end
-            stmt = nothing
-        elseif isexpr(stmt, :inline)
-            if stmt.args[1]::Bool
-                push!(inline_flags, true)
-            else
-                pop!(inline_flags)
-            end
-            stmt = nothing
-        elseif isexpr(stmt, :noinline)
-            if stmt.args[1]::Bool
-                push!(inline_flags, false)
-            else
-                pop!(inline_flags)
-            end
-            stmt = nothing
-        else
-            stmt = normalize(stmt, meta)
-        end
-        code[i] = stmt
-        if stmt !== nothing
-            if inbounds_depth > 0
-                flags[i] |= IR_FLAG_INBOUNDS
-            end
-            if !isempty(inline_flags)
-                if last(inline_flags)
-                    flags[i] |= IR_FLAG_INLINE
-                else
-                    flags[i] |= IR_FLAG_NOINLINE
-                end
-            end
-        end
+        code[i] = remove_meta!(code[i], meta)
     end
-    @assert isempty(inline_flags) "malformed meta flags"
-    strip_trailing_junk!(ci, code, stmtinfo, flags)
+    strip_trailing_junk!(ci, code, stmtinfo)
     cfg = compute_basic_blocks(code)
     types = Any[]
-    stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, flags)
+    stmts = InstructionStream(code, types, stmtinfo, ci.codelocs, ci.ssaflags)
     ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable::Union{Vector{LineInfoNode},Vector{Any}}), sv.slottypes, meta, sv.sptypes)
     return ir
 end
 
-function normalize(@nospecialize(stmt), meta::Vector{Any})
+function remove_meta!(@nospecialize(stmt), meta::Vector{Any})
     if isa(stmt, Expr)
-        if stmt.head === :meta
+        head = stmt.head
+        if head === :meta
             args = stmt.args
             if length(args) > 0
                 push!(meta, stmt)
             end
             return nothing
+        elseif is_ssaflag_head(head)
+            # we processed these flags in `jl_code_info_set_ir`
+            return nothing
         end
     end
     return stmt
 end
+
+is_ssaflag_head(head::Symbol) = head === :inbounds || head === :inline || head === :noinline
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code

@@ -183,7 +183,7 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}, flags::Vector{UInt8})
+function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
@@ -193,7 +193,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
             resize!(ssavaluetypes, i)
             resize!(ci.codelocs, i)
             resize!(info, i)
-            resize!(flags, i)
+            resize!(ci.ssaflags, i)
             break
         end
     end
@@ -205,7 +205,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
         push!(ssavaluetypes, Union{})
         push!(ci.codelocs, 0)
         push!(info, nothing)
-        push!(flags, 0x00)
+        push!(ci.ssaflags, 0x00)
     end
     nothing
 end
