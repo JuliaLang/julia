@@ -856,19 +856,32 @@ copy(r::AbstractRange) = r
 
 ## iteration
 
-function iterate(r::Union{StepRangeLen,LinRange}, i::Integer=zero(length(r)))
+# The trait IterationStyle is used to dispatch on the appropriate iterate method.
+# This is especially important for wrapper types, as they may choose the
+# use the parent's iterate method instead of the fallback implementation by defining
+# their IterationStyle to be the same as their parents'.
+struct IterationStyle{T} end
+IterationStyle(x) = IterationStyle{typeof(x)}()
+
+iterate(r::Union{StepRangeLen, LinRange}, i::Integer = zero(length(r))) = _iterate(r, IterationStyle(r), i)
+function _iterate(r::AbstractArray, ::IterationStyle{<:AbstractRange}, i = zero(length(r)))
     @inline
     i += oneunit(i)
     length(r) < i && return nothing
     unsafe_getindex(r, i), i
 end
 
-iterate(r::OrdinalRange) = isempty(r) ? nothing : (first(r), first(r))
+iterate(r::OrdinalRange) = _iterate_ordinalrange(r)
+_iterate(r::AbstractArray, ::IterationStyle{<:OrdinalRange}) = _iterate_ordinalrange(r)
 
-function iterate(r::OrdinalRange{T}, i) where {T}
+iterate(r::OrdinalRange, i) = _iterate_ordinalrange(r, i)
+_iterate(r::AbstractArray, ::IterationStyle{<:OrdinalRange}, i) = _iterate_ordinalrange(r, i)
+
+_iterate_ordinalrange(r) = isempty(r) ? nothing : (x = first(r); (x, x))
+function _iterate_ordinalrange(r, i)
     @inline
     i == last(r) && return nothing
-    next = convert(T, i + step(r))
+    next = convert(eltype(r), i + step(r))
     (next, next)
 end
 

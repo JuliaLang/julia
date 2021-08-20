@@ -870,7 +870,9 @@ end
 
 ## Iteration ##
 
-iterate(A::Array, i=1) = (@inline; (i % UInt) - 1 < length(A) ? (@inbounds A[i], i + 1) : nothing)
+_iterate_array(A, i) = (@inline; (i % UInt) - 1 < length(A) ? (@inbounds A[i - 1 + firstindex(A)], i + 1) : nothing)
+iterate(A::Array, i=1) = _iterate_array(A, i)
+_iterate(A::AbstractArray, ::IterationStyle{<:Array}, i=1) = _iterate_array(A, i)
 
 ## Indexing: getindex ##
 
