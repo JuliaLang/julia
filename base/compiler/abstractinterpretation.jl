@@ -873,16 +873,25 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # (widened) stateordonet, which has not yet been fully analyzed in the loop above
     statetype = Bottom
     valtype = Bottom
+    may_have_terminated = Nothing <: stateordonet
     while valtype !== Any
-        nounion = typesubtract(stateordonet, Nothing, 0)
-        if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
+        nounion = typeintersect(stateordonet, Tuple{Any,Any})
+        if nounion !== Union{} && !isa(nounion, DataType)
+            # nounion is of a type we cannot handle
             valtype = Any
             break
         end
-        if nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype
+        if nounion === Union{} || (nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype)
+            # reached a fixpoint or iterator failed/gave invalid answer
             if typeintersect(stateordonet, Nothing) === Union{}
-                # Reached a fixpoint, but Nothing is not possible => iterator is infinite or failing
-                return Any[Bottom], nothing
+                # ... but cannot terminate
+                if !may_have_terminated
+                    #  ... and cannot have terminated prior to this loop
+                    return Any[Bottom], nothing
+                else
+                    # iterator may have terminated prior to this loop, but not during it
+                    valtype = Bottom
+                end
             end
             break
         end
@@ -891,7 +900,9 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv).rt
         stateordonet = widenconst(stateordonet)
     end
-    push!(ret, Vararg{valtype})
+    if valtype !== Union{}
+        push!(ret, Vararg{valtype})
+    end
     return ret, nothing
 end
 
