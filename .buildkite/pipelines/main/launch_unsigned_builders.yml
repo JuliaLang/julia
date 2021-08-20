@@ -17,6 +17,7 @@ steps:
     commands: |
       # First, we launch the `whitespace` builder, because we want that builder to finish as quickly as possible.
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/whitespace.yml
+      buildkite-agent start
 
       # Next, we launch the miscellaneous builders in alphabetical order.
       buildkite-agent pipeline upload .buildkite/pipelines/main/misc/doctest.yml
