@@ -144,7 +144,7 @@ is stated to be the API. This has several benefits:
 - Package developers are freer to change the implementation without breaking
   user code.
 - Methods can be passed to higher-order constructs like [`map`](@ref) (e.g.
-  `map(imag, zs))` rather than `[z.im for z in zs]`).
+  `map(imag, zs)`) rather than `[z.im for z in zs]`).
 - Methods can be defined on abstract types.
 - Methods can describe a conceptual operation that can be shared across
   disparate types (e.g. `real(z)` works on Complex numbers or Quaternions).

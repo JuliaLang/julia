@@ -516,7 +516,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     s->continue_at = 0;
                     continue;
                 }
-                else { // a real exeception
+                else { // a real exception
                     ip = catch_ip;
                     continue;
                 }

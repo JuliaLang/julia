@@ -37,10 +37,14 @@ New library functions
 New library features
 --------------------
 
+* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
+  contains "some message" regardless of the specific exception type.
+  Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
 
 Standard library changes
 ------------------------
 
+* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
 * The `length` function on certain ranges of certain specific element types no longer checks for integer
   overflow in most cases. The new function `checked_length` is now available, which will try to use checked
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
@@ -62,6 +66,12 @@ Standard library changes
 #### Random
 
 #### REPL
+
+* ` ?(x, y` followed by TAB displays all methods that can be called
+  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
+  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
+  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
+  to allow any compatible methods.
 
 #### SparseArrays
 
