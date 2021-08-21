@@ -789,3 +789,19 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
         end
     end
 end  # Sys.isapple()
+
+@testset "ScheduledAfterSyncException" begin
+    t = :DummyTask
+    msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t]))
+    @test occursin(":DummyTask is registered after the end of a `@sync` block", msg)
+    msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t, t]))
+    @test occursin(
+        ":DummyTask and one more Symbol are registered after the end of a `@sync` block",
+        msg,
+    )
+    msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t, t, t]))
+    @test occursin(
+        ":DummyTask and 2 more objects are registered after the end of a `@sync` block",
+        msg,
+    )
+end
