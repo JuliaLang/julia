@@ -976,7 +976,7 @@ JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
-ifeq ($(OS),Darwin)
+ifneq (,$(filter $(OS),Darwin FreeBSD))
 LIBUNWIND:=-lunwind
 JCPPFLAGS+=-DLLVMLIBUNWIND
 else

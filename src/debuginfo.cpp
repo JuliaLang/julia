@@ -739,7 +739,7 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
     bool needs_name = name && (!*name || untrusted_dladdr);
     // Try platform specific methods first since they are usually faster
     if (needs_saddr) {
-#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && !defined(JL_DISABLE_LIBUNWIND)
+#if defined(_OS_LINUX_) && !defined(JL_DISABLE_LIBUNWIND)
         unw_proc_info_t pip;
         // Seems that libunwind may return NULL IP depending on what info it finds...
         if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer,
@@ -1264,7 +1264,7 @@ static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
 }
 #endif
 
-#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+#if (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)) || defined(_OS_FREEBSD_)
 
 /*
  * We use a custom unwinder, so we need to make sure that when registering dynamic
@@ -1308,7 +1308,7 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
     });
 }
 
-#elif (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && \
+#elif defined(_OS_LINUX_) && \
     defined(JL_UNW_HAS_FORMAT_IP) && \
     !defined(_CPU_ARM_) // ARM does not have/use .eh_frame, so we handle this elsewhere
 #include <type_traits>

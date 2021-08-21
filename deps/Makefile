@@ -54,9 +54,7 @@ ifeq ($(DISABLE_LIBUNWIND), 0)
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
 DEP_LIBS += unwind
-else ifeq ($(OS), FreeBSD)
-DEP_LIBS += unwind
-else ifeq ($(OS), Darwin)
+else ifneq (,$(filter $(OS),Darwin FreeBSD))
 DEP_LIBS += llvmunwind
 endif
 endif
