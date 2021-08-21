@@ -123,7 +123,7 @@ typedef enum {
 } jl_cpu_feature_t;
 #undef JL_FEATURE_DEF_NAME
 
-int jl_test_cpu_feature(jl_cpu_feature_t feature);
+JL_DLLEXPORT int jl_test_cpu_feature(jl_cpu_feature_t feature);
 
 static const uint32_t jl_sysimg_tag_mask = 0x80000000u;
 static const uint32_t jl_sysimg_val_mask = ~((uint32_t)0x80000000u);
@@ -166,6 +166,10 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
 
+JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);
+JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault);
+JL_DLLEXPORT int32_t jl_get_default_nans(void);
 #ifdef __cplusplus
 }
 

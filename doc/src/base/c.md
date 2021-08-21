@@ -1,6 +1,7 @@
 # C Interface
 
 ```@docs
+@ccall
 ccall
 Core.Intrinsics.cglobal
 Base.@cfunction
@@ -23,6 +24,7 @@ Base.systemerror
 Base.windowserror
 Core.Ptr
 Core.Ref
+Base.isassigned(::Base.RefValue)
 Base.Cchar
 Base.Cuchar
 Base.Cshort

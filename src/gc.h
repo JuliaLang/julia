@@ -81,6 +81,7 @@ enum {
     GC_MARK_L_finlist,
     GC_MARK_L_objarray,
     GC_MARK_L_array8,
+    GC_MARK_L_array16,
     GC_MARK_L_obj8,
     GC_MARK_L_obj16,
     GC_MARK_L_obj32,
@@ -149,6 +150,13 @@ typedef struct {
     gc_mark_obj8_t elem;
 } gc_mark_array8_t;
 
+typedef struct {
+    jl_value_t **begin; // The first slot to be scanned.
+    jl_value_t **end; // The end address (after the last slot to be scanned)
+    uint16_t *rebegin;
+    gc_mark_obj16_t elem;
+} gc_mark_array16_t;
+
 // Stack frame
 typedef struct {
     jl_gcframe_t *s; // The current stack frame
@@ -192,6 +200,7 @@ union _jl_gc_mark_data {
     gc_mark_marked_obj_t marked;
     gc_mark_objarray_t objarray;
     gc_mark_array8_t array8;
+    gc_mark_array16_t array16;
     gc_mark_obj8_t obj8;
     gc_mark_obj16_t obj16;
     gc_mark_obj32_t obj32;
@@ -692,6 +701,8 @@ void gc_stats_big_obj(void);
 
 // For debugging
 void gc_count_pool(void);
+
+size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

@@ -17,10 +17,12 @@ include("config.jl")
 include("AbstractMenu.jl")
 include("RadioMenu.jl")
 include("MultiSelectMenu.jl")
+include("Pager.jl")
 
 export
     RadioMenu,
     MultiSelectMenu,
+    Pager,
     request
 
 # TODO: remove in Julia 2.0

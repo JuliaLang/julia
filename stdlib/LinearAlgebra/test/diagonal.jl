@@ -88,7 +88,7 @@ Random.seed!(1)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
-            for func in (exp, sinh, cosh, tanh, sech, csch, coth)
+            for func in (exp, cis, sinh, cosh, tanh, sech, csch, coth)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)
             end
             @test log(Diagonal(abs.(D.diag))) ≈ log(abs.(DM)) atol=n^3*eps(relty)
@@ -100,6 +100,10 @@ Random.seed!(1)
                 @test func(D) ≈ func(DM) atol=n^2*eps(relty)*2
             end
         end
+    end
+
+    @testset "Two-dimensional Euler formula for Diagonal" begin
+        @test cis(Diagonal([π, π])) ≈ -I
     end
 
     @testset "Linear solve" begin
@@ -172,12 +176,24 @@ Random.seed!(1)
             @test Array(a*D) ≈ a*DM
             @test Array(D*a) ≈ DM*a
             @test Array(D/a) ≈ DM/a
-            if relty <: BlasFloat
-                for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
-                    @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
-                    @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
-                    @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
-                end
+            if elty <: Real
+                @test Array(abs.(D)^a) ≈ abs.(DM)^a
+            else
+                @test Array(D^a) ≈ DM^a
+            end
+            @test Diagonal(1:100)^2 == Diagonal((1:100).^2)
+            p = 3
+            @test Diagonal(1:100)^p == Diagonal((1:100).^p)
+            @test Diagonal(1:100)^(-1) == Diagonal(inv.(1:100))
+            @test Diagonal(1:100)^2.0 == Diagonal((1:100).^2.0)
+            @test Diagonal(1:100)^(2.0+0im) == Diagonal((1:100).^(2.0+0im))
+        end
+
+        if relty <: BlasFloat
+            for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+                @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
+                @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
@@ -213,14 +229,14 @@ Random.seed!(1)
                 @test Array(op(Dr, Aherm)) ≈ Array(Hermitian(op(Array(Dr), Array(Aherm))))
             end
         end
-        @test Array(D*Transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
-        @test Array(D*Adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
-        @test Array(D*Transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
-        @test Array(D*Adjoint(Aherm)) ≈ Array(D) * Array(adjoint(Aherm))
-        @test Array(Transpose(Asym)*Transpose(D)) ≈ Array(transpose(Asym)) * Array(transpose(D))
-        @test Array(Transpose(D)*Transpose(Asym)) ≈ Array(transpose(D)) * Array(transpose(Asym))
-        @test Array(Adjoint(Aherm)*Adjoint(D)) ≈ Array(adjoint(Aherm)) * Array(adjoint(D))
-        @test Array(Adjoint(D)*Adjoint(Aherm)) ≈ Array(adjoint(D)) * Array(adjoint(Aherm))
+        @test Array(D*transpose(Asym)) ≈ Array(D) * Array(transpose(Asym))
+        @test Array(D*adjoint(Asym)) ≈ Array(D) * Array(adjoint(Asym))
+        @test Array(D*transpose(Aherm)) ≈ Array(D) * Array(transpose(Aherm))
+        @test Array(D*adjoint(Aherm)) ≈ Array(D) * Array(adjoint(Aherm))
+        @test Array(transpose(Asym)*transpose(D)) ≈ Array(transpose(Asym)) * Array(transpose(D))
+        @test Array(transpose(D)*transpose(Asym)) ≈ Array(transpose(D)) * Array(transpose(Asym))
+        @test Array(adjoint(Aherm)*adjoint(D)) ≈ Array(adjoint(Aherm)) * Array(adjoint(D))
+        @test Array(adjoint(D)*adjoint(Aherm)) ≈ Array(adjoint(D)) * Array(adjoint(Aherm))
 
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
@@ -230,7 +246,7 @@ Random.seed!(1)
 
         UUU = similar(UU)
         for transformA in (identity, adjoint, transpose)
-            for transformD in (identity, Adjoint, Transpose, adjoint, transpose)
+            for transformD in (identity, adjoint, transpose)
                 @test mul!(UUU, transformA(UU), transformD(D)) ≈  transformA(UU) * Matrix(transformD(D))
                 @test mul!(UUU, transformD(D), transformA(UU)) ≈  Matrix(transformD(D)) * transformA(UU)
             end
@@ -295,6 +311,10 @@ Random.seed!(1)
         M4 = rand(elty, n÷2, n÷2)
         @test kron(D3, M4) ≈ kron(DM3, M4)
         @test kron(M4, D3) ≈ kron(M4, DM3)
+        X = [ones(1,1) for i in 1:2, j in 1:2]
+        @test kron(I(2), X)[1,3] == zeros(1,1)
+        X = [ones(2,2) for i in 1:2, j in 1:2]
+        @test kron(I(2), X)[1,3] == zeros(2,2)
     end
     @testset "iszero, isone, triu, tril" begin
         Dzero = Diagonal(zeros(elty, 10))
@@ -361,6 +381,8 @@ Random.seed!(1)
         d2, s2 = logabsdet(lM)
         @test d1 ≈ d2
         @test s1 == s2
+        @test logdet(Diagonal(relty[-1,-2])) ≈ log(2)
+        @test_throws DomainError logdet(Diagonal(relty[-1,-2,-3]))
     end
 
     @testset "similar" begin
@@ -391,6 +413,28 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+end
+
+@testset "rdiv! (#40887)" begin
+    @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
+    @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
+end
+
+@testset "kron (issue #40595)" begin
+    # custom array type to test that kron on Diagonal matrices preserves types of the parents if possible
+    struct KronTestArray{T, N, AT} <: AbstractArray{T, N}
+        data::AT
+    end
+    KronTestArray(data::AbstractArray) = KronTestArray{eltype(data), ndims(data), typeof(data)}(data)
+    Base.size(A::KronTestArray) = size(A.data)
+    LinearAlgebra.kron(A::KronTestArray, B::KronTestArray) = KronTestArray(kron(A.data, B.data))
+    Base.getindex(K::KronTestArray{<:Any,N}, i::Vararg{Int,N}) where {N} = K.data[i...]
+
+    A = KronTestArray([1, 2, 3]);
+    @test kron(A, A) isa KronTestArray
+    Ad = Diagonal(A);
+    @test kron(Ad, Ad).diag isa KronTestArray
+    @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
 end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin
@@ -466,7 +510,7 @@ end
 @test all(Diagonal(range(1, stop=3, length=3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
-for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
+for t in (Float32, Float64, Int, ComplexF64, Rational{Int})
     @test Diagonal(Matrix{t}[fill(t(1), 2, 2), fill(t(1), 3, 3)])[2,1] == zeros(t, 3, 2)
 end
 
@@ -538,7 +582,7 @@ end
     D = Diagonal(randn(5))
     Q = qr(randn(5, 5)).Q
     @test D * Q' == Array(D) * Q'
-    Q = qr(randn(5, 5), Val(true)).Q
+    Q = qr(randn(5, 5), ColumnNorm()).Q
     @test_throws ArgumentError lmul!(Q, D)
 end
 
@@ -566,11 +610,19 @@ end
     @test ishermitian(Dsym) == false
 
     @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
+    @test cis(D) == Diagonal([cis([1 2; 3 4]), cis([1 2; 3 4])])
     @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
     @test sqrt(D) == Diagonal([sqrt([1 2; 3 4]), sqrt([1 2; 3 4])])
 
     @test tr(D) == 10
     @test det(D) == 4
+
+    # sparse matrix block diagonals
+    s = SparseArrays.sparse([1 2; 3 4])
+    D = Diagonal([s, s])
+    @test D[1, 1] == s
+    @test D[1, 2] == zero(s)
+    @test isa(D[2, 1], SparseMatrixCSC)
 end
 
 @testset "linear solve for block diagonal matrices" begin
@@ -600,7 +652,7 @@ end
 end
 
 @testset "multiplication of transposes of Diagonal (#22428)" begin
-    for T in (Float64, Complex{Float64})
+    for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, 5, 5))
         B = Diagonal(randn(T, 5, 5))
         DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
@@ -609,15 +661,13 @@ end
         fullBB = copyto!(Matrix{Matrix{T}}(undef, 2, 2), BB)
         for (transform1, transform2) in ((identity,  identity),
                 (identity,  adjoint  ), (adjoint,   identity ), (adjoint,   adjoint  ),
-                (identity,  transpose), (transpose, identity ), (transpose, transpose),
-                (identity,  Adjoint  ), (Adjoint,   identity ), (Adjoint,   Adjoint  ),
-                (identity,  Transpose), (Transpose, identity ), (Transpose, Transpose))
+                (identity,  transpose), (transpose, identity ), (transpose, transpose))
             @test *(transform1(D), transform2(B))::typeof(D) ≈ *(transform1(Matrix(D)), transform2(Matrix(B))) atol=2 * eps()
             @test *(transform1(DD), transform2(BB))::typeof(DD) == *(transform1(fullDD), transform2(fullBB))
         end
         M = randn(T, 5, 5)
         MM = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
-        for transform in (identity, adjoint, transpose, Adjoint, Transpose)
+        for transform in (identity, adjoint, transpose)
             @test lmul!(transform(D), copy(M)) ≈ *(transform(Matrix(D)), M)
             @test rmul!(copy(M), transform(D)) ≈ *(M, transform(Matrix(D)))
             @test lmul!(transform(DD), copy(MM)) ≈ *(transform(fullDD), MM)
@@ -631,7 +681,7 @@ end
     @test Diagonal(transpose([1, 2, 3])) == Diagonal([1 2 3])
 end
 
-@testset "Multiplication with Adjoint and Transpose vectors (#26863)" begin
+@testset "Multiplication with adjoint and transpose vectors (#26863)" begin
     x = collect(1:2)
     xt = transpose(x)
     A = reshape([[1 2; 3 4], zeros(Int,2,2), zeros(Int, 2, 2), [5 6; 7 8]], 2, 2)
@@ -642,6 +692,17 @@ end
     yt = transpose(y)
     @test y'*D*y == (y'*D)*y == (y'*A)*y
     @test yt*D*y == (yt*D)*y == (yt*A)*y
+end
+
+@testset "Multiplication of single element Diagonal (#36746, #40726)" begin
+    @test_throws DimensionMismatch Diagonal(randn(1)) * randn(5)
+    @test_throws DimensionMismatch Diagonal(randn(1)) * Diagonal(randn(3, 3))
+    A = [1 0; 0 2]
+    v = [3, 4]
+    @test Diagonal(A) * v == A * v
+    @test Diagonal(A) * Diagonal(A) == A * A
+    @test_throws DimensionMismatch [1 0;0 1] * Diagonal([2 3])   # Issue #40726
+    @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
 end
 
 @testset "Triangular division by Diagonal #27989" begin
@@ -715,6 +776,54 @@ end
     @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
     @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
+end
+
+@testset "Diagonal(undef)" begin
+    d = Diagonal{Float32}(undef, 2)
+    @test length(d.diag) == 2
+end
+
+@testset "permutedims (#39447)" begin
+    for D in (Diagonal(zeros(5)), Diagonal(zeros(5) .+ 1im), Diagonal([[1,2],[3,4]]))
+        @test permutedims(D) === permutedims(D,(1,2)) === permutedims(D,(2,1)) === D
+        @test_throws ArgumentError permutedims(D,(1,3))
+    end
+end
+
+@testset "Inner product" begin
+    A = Diagonal(rand(10) .+ im)
+    B = Diagonal(rand(10) .+ im)
+    @test dot(A, B) ≈ dot(Matrix(A), B)
+    @test dot(A, B) ≈ dot(A, Matrix(B))
+    @test dot(A, B) ≈ dot(Matrix(A), Matrix(B))
+    @test dot(A, B) ≈ conj(dot(B, A))
+end
+
+@testset "eltype relaxation(#41015)" begin
+    A = rand(3,3)
+    for trans in (identity, adjoint, transpose)
+        @test ldiv!(trans(I(3)), A) == A
+        @test rdiv!(A, trans(I(3))) == A
+    end
+end
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    d = ImmutableArray([1, 2, 3, 4])
+    D = Diagonal(d)
+
+    @test convert(AbstractArray{Float64}, D)::Diagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == D
+    @test convert(AbstractMatrix{Float64}, D)::Diagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == D
+end
+
+@testset "divisions functionality" for elty in (Int, Float64, ComplexF64)
+    B = Diagonal(rand(elty,5,5))
+    x = rand(elty)
+    @test \(x, B) == /(B, x)
 end
 
 end # module TestDiagonal

@@ -17,7 +17,7 @@ int jl_printf(uv_stream_t *s, const char *format, ...);
 int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 ```
 
-These `printf` functions are used by the `.c` files in the `src/` and `ui/` directories wherever stdio is
+These `printf` functions are used by the `.c` files in the `src/` and `cli/` directories wherever stdio is
 needed to ensure that output buffering is handled in a unified way.
 
 In special cases, like signal handlers, where the full libuv infrastructure is too heavy, `jl_safe_printf()`

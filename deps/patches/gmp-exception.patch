@@ -1,0 +1,14 @@
+diff --git a/errno.c b/errno.c
+index b4be555..3f772a5 100644
+--- a/errno.c
++++ b/errno.c
+@@ -68,5 +68,8 @@ __gmp_sqrt_of_negative (void)
+ void
+ __gmp_divide_by_zero (void)
+ {
++  /* try to force a division by zero system exception */
++  __gmp_junk = 10 / __gmp_0;
++
+   __gmp_exception (GMP_ERROR_DIVISION_BY_ZERO);
+ }
+

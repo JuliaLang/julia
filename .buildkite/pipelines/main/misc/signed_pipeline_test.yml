@@ -1,0 +1,17 @@
+agents:
+  queue: "julia"
+  os: "linux"
+
+## pipeline that showcases decryption of environment variable
+steps:
+  - label: ":lock: :rocket: Signed pipeline test"
+    plugins:
+      - staticfloat/cryptic#v1:
+          variables:
+            - SECRET_KEY="U2FsdGVkX18tb7st0SuQAvh4Yv4xENxOAu8q9XkmOeDVKBNY4FngEwK3xmiKUqaS"
+    commands: |
+      echo "SECRET_KEY: $${SECRET_KEY}"
+
+# We must accept the signed job id secret in order to propagate secrets
+env:
+  BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET: ${BUILDKITE_PLUGIN_CRYPTIC_BASE64_SIGNED_JOB_ID_SECRET?}

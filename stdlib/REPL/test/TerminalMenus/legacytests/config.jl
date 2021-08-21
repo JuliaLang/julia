@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # This file tests the Julia 1.0-1.5 extension interface of TerminalMenus
 
 # scroll must only accept symbols

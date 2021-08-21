@@ -27,6 +27,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * pagealloc
 >   * gc_perm_lock
 >   * flisp
+>   * jl_in_stackwalk (Win32)
 >
 >     > flisp itself is already threadsafe, this lock only protects the `jl_ast_context_list_t` pool
 

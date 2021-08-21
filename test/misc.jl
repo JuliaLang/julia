@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
@@ -78,18 +79,33 @@ end
 @test GC.enable(true)
 
 # PR #10984
-# Disable on windows because of issue (missing flush) when redirecting stderr.
 let
     redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
-    script = "$redir_err; module A; f() = 1; end; A.f() = 1"
+    script = """
+        $redir_err
+        module A; f() = 1; end; A.f() = 1
+        A.f() = 1
+        outer() = (g() = 1; g() = 2; g)
+        """
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
-    @test occursin("f()", warning_str)
+    @test warning_str == """
+        WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
+        WARNING: Method definition f() in module Main at none:2 overwritten at none:3.
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
+    warning_str = read(`$exename --startup-file=no -e $script`, String)
+    @test warning_str == """
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
 end
+
+# Debugging tool: return the current state of the enable_finalizers counter.
+get_finalizers_inhibited() = ccall(:jl_gc_get_finalizers_inhibited, Int32, (Ptr{Cvoid},), C_NULL)
 
 # lock / unlock
 let l = ReentrantLock()
-    lock(l)
+    @test lock(l) === nothing
     @test islocked(l)
     success = Ref(false)
     @test trylock(l) do
@@ -102,12 +118,44 @@ let l = ReentrantLock()
     @test success[]
     t = @async begin
         @test trylock(l) do
-            @test false
+            error("unreachable")
         end === false
     end
+    @test get_finalizers_inhibited() == 1
     Base.wait(t)
-    unlock(l)
+    @test get_finalizers_inhibited() == 1
+    @test unlock(l) === nothing
+    @test get_finalizers_inhibited() == 0
     @test_throws ErrorException unlock(l)
+end
+
+for l in (Threads.SpinLock(), ReentrantLock())
+    @test get_finalizers_inhibited() == 0
+    @test lock(get_finalizers_inhibited, l) == 1
+    @test get_finalizers_inhibited() == 0
+    try
+        GC.enable_finalizers(false)
+        GC.enable_finalizers(false)
+        @test get_finalizers_inhibited() == 2
+        GC.enable_finalizers(true)
+        @test get_finalizers_inhibited() == 1
+    finally
+        @test get_finalizers_inhibited() == 1
+        GC.enable_finalizers(false)
+        @test get_finalizers_inhibited() == 2
+    end
+    @test get_finalizers_inhibited() == 2
+    GC.enable_finalizers(true)
+    @test get_finalizers_inhibited() == 1
+    GC.enable_finalizers(true)
+    @test get_finalizers_inhibited() == 0
+    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        # Note this warning only exists in debug builds
+        @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
+    end
+
+    @test lock(l) === nothing
+    @test try unlock(l) finally end === nothing
 end
 
 # task switching
@@ -133,6 +181,17 @@ let c = Ref(0),
 end
 
 @test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+
+# issue #41347
+let t = @async 1
+    wait(t)
+    @test_throws ErrorException yield(t)
+end
+
+let t = @async error(42)
+    Base._wait(t)
+    @test_throws ErrorException("42") yieldto(t)
+end
 
 # test that @sync is lexical (PR #27164)
 
@@ -183,6 +242,27 @@ v11801, t11801 = @timed sin(1)
 
 @test names(@__MODULE__, all = true) == names_before_timing
 
+# PR #39133, ensure that @time evaluates in the same scope
+function time_macro_scope()
+    try # try/throw/catch bypasses printing
+        @time (time_macro_local_var = 1; throw("expected"))
+        return time_macro_local_var
+    catch ex
+        ex === "expected" || rethrow()
+    end
+end
+@test time_macro_scope() == 1
+
+function timev_macro_scope()
+    try # try/throw/catch bypasses printing
+        @timev (time_macro_local_var = 1; throw("expected"))
+        return time_macro_local_var
+    catch ex
+        ex === "expected" || rethrow()
+    end
+end
+@test timev_macro_scope() == 1
+
 # interactive utilities
 
 struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
@@ -220,6 +300,11 @@ end
 # issue #33675
 let vec = vcat(missing, ones(100000))
     @test length(unique(summarysize(vec) for i = 1:20)) == 1
+end
+
+# issue #40773
+let s = Set(1:100)
+    @test summarysize([s]) > summarysize(s)
 end
 
 # issue #13021
@@ -552,6 +637,26 @@ let buf = IOBuffer()
     # Check that boldness is turned off
     printstyled(buf_color, "foo"; bold=true, color=:red)
     @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
+
+    # Check that underline is turned off
+    printstyled(buf_color, "foo"; color = :red, underline = true)
+    @test String(take!(buf)) == "\e[31m\e[4mfoo\e[24m\e[39m"
+
+    # Check that blink is turned off
+    printstyled(buf_color, "foo"; color = :red, blink = true)
+    @test String(take!(buf)) == "\e[31m\e[5mfoo\e[25m\e[39m"
+
+    # Check that reverse is turned off
+    printstyled(buf_color, "foo"; color = :red, reverse = true)
+    @test String(take!(buf)) == "\e[31m\e[7mfoo\e[27m\e[39m"
+
+    # Check that hidden is turned off
+    printstyled(buf_color, "foo"; color = :red, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[8mfoo\e[28m\e[39m"
+
+    # Check that all options can be turned on simultaneously
+    printstyled(buf_color, "foo"; color = :red, bold = true, underline = true, blink = true, reverse = true, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[1m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
@@ -634,6 +739,71 @@ let foo() = begin
     @test foo() == 1
 end
 
+module atinvokelatest
+f(x) = 1
+g(x, y; z=0) = x * y + z
+end
+
+let foo() = begin
+        @eval atinvokelatest.f(x::Int) = 3
+        return Base.@invokelatest atinvokelatest.f(0)
+    end
+    @test foo() == 3
+end
+
+let foo() = begin
+        @eval atinvokelatest.f(x::Int) = 3
+        return Base.@invokelatest atinvokelatest.f(0)
+    end
+    @test foo() == 3
+
+    bar() = begin
+        @eval atinvokelatest.g(x::Int, y::Int; z=3) = z
+        return Base.@invokelatest atinvokelatest.g(2, 3; z=1)
+    end
+    @test bar() == 1
+end
+
+@testset "@invoke macro" begin
+    # test against `invoke` doc example
+    let
+        f(x::Real) = x^2
+        f(x::Integer) = 1 + Base.@invoke f(x::Real)
+        @test f(2) == 5
+    end
+
+    let
+        f1(::Integer) = Integer
+        f1(::Real) = Real;
+        f2(x::Real) = _f2(x)
+        _f2(::Integer) = Integer
+        _f2(_) = Real
+        @test f1(1) === Integer
+        @test f2(1) === Integer
+        @test Base.@invoke(f1(1::Real)) === Real
+        @test Base.@invoke(f2(1::Real)) === Integer
+    end
+
+    # when argment's type annotation is omitted, it should be specified as `Any`
+    let
+        f(_) = Any
+        f(x::Integer) = Integer
+        @test f(1) === Integer
+        @test Base.@invoke(f(1::Any)) === Any
+        @test Base.@invoke(f(1)) === Any
+    end
+
+    # handle keyword arguments correctly
+    let
+        f(a; kw1 = nothing, kw2 = nothing) = a + max(kw1, kw2)
+        f(::Integer; kwargs...) = error("don't call me")
+
+        @test_throws Exception f(1; kw1 = 1, kw2 = 2)
+        @test 3 == Base.@invoke f(1::Any; kw1 = 1, kw2 = 2)
+        @test 3 == Base.@invoke f(1; kw1 = 1, kw2 = 2)
+    end
+end
+
 # Endian tests
 # For now, we only support little endian.
 # Add an `Sys.ARCH` test for big endian when/if we add support for that.
@@ -685,36 +855,19 @@ end
 
 # issue #27239
 @testset "strftime tests issue #27239" begin
-
-    # save current locales
-    locales = Dict()
-    for cat in 0:9999
-        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, C_NULL)
-        if cstr != C_NULL
-            locales[cat] = unsafe_string(cstr)
-        end
-    end
-
     # change to non-Unicode Korean
-    for (cat, _) in locales
-        korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
-        for lc in korloc
-            cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
-        end
+    korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
+    timestrs = String[]
+    withlocales(korloc) do
+        # system dependent formats
+        push!(timestrs, Libc.strftime(0.0))
+        push!(timestrs, Libc.strftime("%a %A %b %B %p %Z", 0))
     end
-
-    # system dependent formats
-    timestr_c = Libc.strftime(0.0)
-    timestr_aAbBpZ = Libc.strftime("%a %A %b %B %p %Z", 0)
-
-    # recover locales
-    for (cat, lc) in locales
-        cstr = ccall(:setlocale, Cstring, (Cint, Cstring), cat, lc)
-    end
-
     # tests
-    @test isvalid(timestr_c)
-    @test isvalid(timestr_aAbBpZ)
+    isempty(timestrs) && @warn "skipping stftime tests: no locale found for testing"
+    for s in timestrs
+        @test isvalid(s)
+    end
 end
 
 
@@ -828,5 +981,24 @@ end
 end
 
 @testset "fieldtypes Module" begin
-    @test fieldtypes(Module) isa Tuple
+    @test fieldtypes(Module) === ()
 end
+
+
+@testset "issue #28188" begin
+    @test `$(@__FILE__)` == let file = @__FILE__; `$file` end
+end
+
+# Test that read fault on a prot-none region does not incorrectly give
+# ReadOnlyMemoryEror, but rather crashes the program
+const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
+let script = :(let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
+    (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
+    C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0)); try
+    unsafe_load(ptr)
+    catch e; println(e) end; end)
+    @test !success(`$(Base.julia_cmd()) -e $script`)
+end
+
+# issue #41656
+@test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)

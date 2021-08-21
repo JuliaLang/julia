@@ -25,7 +25,7 @@ function Base.showerror(io::IO, exc::StringIndexError)
     end
 end
 
-const ByteArray = Union{Vector{UInt8},Vector{Int8}}
+const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, FastContiguousSubArray{UInt8,1,CodeUnits{UInt8,String}}, FastContiguousSubArray{UInt8,1,Vector{UInt8}}, FastContiguousSubArray{Int8,1,Vector{Int8}}}
 
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
@@ -39,7 +39,8 @@ const ByteArray = Union{Vector{UInt8},Vector{Int8}}
 Create a new `String` object from a byte vector `v` containing UTF-8 encoded
 characters. If `v` is `Vector{UInt8}` it will be truncated to zero length and
 future modification of `v` cannot affect the contents of the resulting string.
-To avoid truncation use `String(copy(v))`.
+To avoid truncation of `Vector{UInt8}` data, use `String(copy(v))`; for other
+`AbstractVector` types, `String(v)` already makes a copy.
 
 When possible, the memory of `v` will be used without copying when the `String`
 object is created. This is guaranteed to be the case for byte vectors returned
@@ -92,10 +93,9 @@ String(s::CodeUnits{UInt8,String}) = s.s
 ## low-level functions ##
 
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
-pointer(s::String, i::Integer) = pointer(s)+(i-1)
+pointer(s::String, i::Integer) = pointer(s) + Int(i)::Int - 1
 
 @pure ncodeunits(s::String) = Core.sizeof(s)
-@pure sizeof(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
@@ -252,7 +252,7 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     return reinterpret(Char, u)
 end
 
-getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
+getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
 @inline function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
@@ -321,7 +321,8 @@ end
 """
     repeat(c::AbstractChar, r::Integer) -> String
 
-Repeat a character `r` times. This can equivalently be accomplished by calling [`c^r`](@ref ^).
+Repeat a character `r` times. This can equivalently be accomplished by calling
+[`c^r`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer)).
 
 # Examples
 ```jldoctest

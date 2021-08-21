@@ -4,7 +4,7 @@ module TestTriangular
 
 debug = false
 using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: BlasFloat, errorbounds, full!, naivesub!, transpose!,
+using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
 
@@ -158,9 +158,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test copy(viewA1') == Matrix(viewA1)'
             # transpose!
             @test transpose!(copy(A1)) == transpose(A1)
+            @test typeof(transpose!(copy(A1))).name == typeof(transpose(A1)).name
             @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == transpose(viewA1)
             # adjoint!
             @test adjoint!(copy(A1)) == adjoint(A1)
+            @test typeof(adjoint!(copy(A1))).name == typeof(adjoint(A1)).name
             @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == adjoint(viewA1)
         end
 
@@ -196,7 +198,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         #exp/log
-        if (elty1 == Float64 || elty1 == ComplexF64) && (t1 == UpperTriangular || t1 == LowerTriangular)
+        if elty1 ∈ (Float32,Float64,ComplexF32,ComplexF64)
             @test exp(Matrix(log(A1))) ≈ A1
         end
 
@@ -277,10 +279,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test sqrt(A1) |> t -> t*t ≈ A1
+        @test sqrt(A1) |> (t -> (t*t)::typeof(t)) ≈ A1
 
         # naivesub errors
-        @test_throws DimensionMismatch naivesub!(A1,Vector{elty1}(undef,n+1))
+        @test_throws DimensionMismatch ldiv!(A1, Vector{elty1}(undef, n+1))
 
         # eigenproblems
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
@@ -303,6 +305,10 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             elty1 <: BlasFloat && svd!(copy(A1))
             svdvals(A1)
         end
+
+        @test ((A1*A1)::t1) ≈ Matrix(A1) * Matrix(A1)
+        @test ((A1/A1)::t1) ≈ Matrix(A1) / Matrix(A1)
+        @test ((A1\A1)::t1) ≈ Matrix(A1) \ Matrix(A1)
 
         # Begin loop for second Triangular matrix
         for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
@@ -338,6 +344,27 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1'A2' ≈ Matrix(A1)'Matrix(A2)'
                 @test A1/A2 ≈ Matrix(A1)/Matrix(A2)
                 @test A1\A2 ≈ Matrix(A1)\Matrix(A2)
+                if uplo1 === :U && uplo2 === :U
+                    if t1 === UnitUpperTriangular && t2 === UnitUpperTriangular
+                        @test A1*A2 isa UnitUpperTriangular
+                        @test A1/A2 isa UnitUpperTriangular
+                        @test A1\A2 isa UnitUpperTriangular
+                    else
+                        @test A1*A2 isa UpperTriangular
+                        @test A1/A2 isa UpperTriangular
+                        @test A1\A2 isa UpperTriangular
+                    end
+                elseif uplo1 === :L && uplo2 === :L
+                    if t1 === UnitLowerTriangular && t2 === UnitLowerTriangular
+                        @test A1*A2 isa UnitLowerTriangular
+                        @test A1/A2 isa UnitLowerTriangular
+                        @test A1\A2 isa UnitLowerTriangular
+                    else
+                        @test A1*A2 isa LowerTriangular
+                        @test A1/A2 isa LowerTriangular
+                        @test A1\A2 isa LowerTriangular
+                    end
+                end
                 offsizeA = Matrix{Float64}(I, n+1, n+1)
                 @test_throws DimensionMismatch offsizeA / A2
                 @test_throws DimensionMismatch offsizeA / transpose(A2)
@@ -449,7 +476,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test_throws DimensionMismatch Ann'\bm
             @test_throws DimensionMismatch transpose(Ann)\bm
             if t1 == UpperTriangular || t1 == LowerTriangular
-                @test_throws LinearAlgebra.SingularException naivesub!(t1(zeros(elty1,n,n)),fill(eltyB(1),n))
+                if elty1 === eltyB <: BlasFloat
+                    @test_throws LAPACKException ldiv!(t1(zeros(elty1, n, n)), fill(eltyB(1), n))
+                else
+                    @test_throws SingularException ldiv!(t1(zeros(elty1, n, n)), fill(eltyB(1), n))
+                end
             end
             @test B/A1 ≈ B/Matrix(A1)
             @test B/transpose(A1) ≈ B/transpose(Matrix(A1))
@@ -469,10 +500,75 @@ end
 # Matrix square root
 Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
 Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
+Atu = UnitUpperTriangular([1 1 2; 0 1 2; 0 0 1])
 @test sqrt(Atn) |> t->t*t ≈ Atn
+@test sqrt(Atn) isa UpperTriangular
 @test typeof(sqrt(Atn)[1,1]) <: Complex
 @test sqrt(Atp) |> t->t*t ≈ Atp
+@test sqrt(Atp) isa UpperTriangular
 @test typeof(sqrt(Atp)[1,1]) <: Real
+@test typeof(sqrt(complex(Atp))[1,1]) <: Complex
+@test sqrt(Atu) |> t->t*t ≈ Atu
+@test sqrt(Atu) isa UnitUpperTriangular
+@test typeof(sqrt(Atu)[1,1]) <: Real
+@test typeof(sqrt(complex(Atu))[1,1]) <: Complex
+
+@testset "matrix square root quasi-triangular blockwise" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = schur(rand(T, 100, 100)^2).T
+        @test LinearAlgebra.sqrt_quasitriu(A; blockwidth=16)^2 ≈ A
+    end
+    n = 256
+    A = rand(ComplexF64, n, n)
+    U = schur(A).T
+    Ubig = Complex{BigFloat}.(U)
+    @test LinearAlgebra.sqrt_quasitriu(U; blockwidth=64) ≈ LinearAlgebra.sqrt_quasitriu(Ubig; blockwidth=64)
+end
+
+@testset "sylvester quasi-triangular blockwise" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64), m in (15, 40), n in (15, 45)
+        A = schur(rand(T, m, m)).T
+        B = schur(rand(T, n, n)).T
+        C = randn(T, m, n)
+        Ccopy = copy(C)
+        X = LinearAlgebra._sylvester_quasitriu!(A, B, C; blockwidth=16)
+        @test X === C
+        @test A * X + X * B ≈ -Ccopy
+
+        @testset "test raise=false does not break recursion" begin
+            Az = zero(A)
+            Bz = zero(B)
+            C2 = copy(Ccopy)
+            @test_throws LAPACKException LinearAlgebra._sylvester_quasitriu!(Az, Bz, C2; blockwidth=16)
+            m == n || @test any(C2 .== Ccopy)  # recursion broken
+            C3 = copy(Ccopy)
+            X3 = LinearAlgebra._sylvester_quasitriu!(Az, Bz, C3; blockwidth=16, raise=false)
+            @test !any(X3 .== Ccopy)  # recursion not broken
+        end
+    end
+end
+
+@testset "check matrix logarithm type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+    A = UpperTriangular(exp(triu(randn(elty, n, n))))
+    @inferred Union{typeof(A),typeof(complex(A))} log(A)
+    @test exp(Matrix(log(A))) ≈ A
+    if elty <: Real
+        @test typeof(log(A)) <: UpperTriangular{elty}
+        @test typeof(log(complex(A))) <: UpperTriangular{complex(elty)}
+        @test isreal(log(complex(A)))
+        @test log(complex(A)) ≈ log(A)
+    end
+
+    Au = UnitUpperTriangular(exp(triu(randn(elty, n, n), 1)))
+    @inferred Union{typeof(A),typeof(complex(A))} log(Au)
+    @test exp(Matrix(log(Au))) ≈ Au
+    if elty <: Real
+        @test typeof(log(Au)) <: UpperTriangular{elty}
+        @test typeof(log(complex(Au))) <: UpperTriangular{complex(elty)}
+        @test isreal(log(complex(Au)))
+        @test log(complex(Au)) ≈ log(Au)
+    end
+end
 
 Areal   = randn(n, n)/2
 Aimg    = randn(n, n)/2
@@ -605,14 +701,74 @@ end
     end
 end
 
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "AbstractArray constructor should preserve underlying storage type" begin
+    # tests corresponding to #34995
+    local m = 4
+    local T, S = Float32, Float64
+    immutablemat = ImmutableArray(randn(T,m,m))
+    for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        trimat = TriType(immutablemat)
+        @test convert(AbstractArray{S}, trimat).data isa ImmutableArray{S}
+        @test convert(AbstractMatrix{S}, trimat).data isa ImmutableArray{S}
+        @test AbstractArray{S}(trimat).data isa ImmutableArray{S}
+        @test AbstractMatrix{S}(trimat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, trimat) == trimat
+        @test convert(AbstractMatrix{S}, trimat) == trimat
+    end
+end
+
+@testset "inplace mul of appropriate types should preserve triagular structure" begin
+    for elty1 in (Float64, ComplexF32), elty2 in (Float64, ComplexF32)
+        T = promote_type(elty1, elty2)
+        M1 = rand(elty1, 5, 5)
+        M2 = rand(elty2, 5, 5)
+        A = UpperTriangular(M1)
+        A2 = UpperTriangular(M2)
+        Au = UnitUpperTriangular(M1)
+        Au2 = UnitUpperTriangular(M2)
+        B = LowerTriangular(M1)
+        B2 = LowerTriangular(M2)
+        Bu = UnitLowerTriangular(M1)
+        Bu2 = UnitLowerTriangular(M2)
+
+        @test mul!(similar(A), A, A)::typeof(A) == A*A
+        @test mul!(similar(A, T), A, A2) ≈ A*A2
+        @test mul!(similar(A, T), A2, A) ≈ A2*A
+        @test mul!(typeof(similar(A, T))(A), A, A2, 2.0, 3.0) ≈ 2.0*A*A2 + 3.0*A
+        @test mul!(typeof(similar(A2, T))(A2), A2, A, 2.0, 3.0) ≈ 2.0*A2*A + 3.0*A2
+
+        @test mul!(similar(A), A, Au)::typeof(A) == A*Au
+        @test mul!(similar(A), Au, A)::typeof(A) == Au*A
+        @test mul!(similar(Au), Au, Au)::typeof(Au) == Au*Au
+        @test mul!(similar(A, T), A, Au2) ≈ A*Au2
+        @test mul!(similar(A, T), Au2, A) ≈ Au2*A
+        @test mul!(similar(Au2), Au2, Au2) == Au2*Au2
+
+        @test mul!(similar(B), B, B)::typeof(B) == B*B
+        @test mul!(similar(B, T), B, B2) ≈ B*B2
+        @test mul!(similar(B, T), B2, B) ≈ B2*B
+        @test mul!(typeof(similar(B, T))(B), B, B2, 2.0, 3.0) ≈ 2.0*B*B2 + 3.0*B
+        @test mul!(typeof(similar(B2, T))(B2), B2, B, 2.0, 3.0) ≈ 2.0*B2*B + 3.0*B2
+
+        @test mul!(similar(B), B, Bu)::typeof(B) == B*Bu
+        @test mul!(similar(B), Bu, B)::typeof(B) == Bu*B
+        @test mul!(similar(Bu), Bu, Bu)::typeof(Bu) == Bu*Bu
+        @test mul!(similar(B, T), B, Bu2) ≈ B*Bu2
+        @test mul!(similar(B, T), Bu2, B) ≈ Bu2*B
+    end
+end
+
 @testset "special printing of Lower/UpperTriangular" begin
-    @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64,Array{Int64,2}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
+    @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64, Matrix{Int64}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
                    sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))))
-    @test occursin(r"3×3 (LinearAlgebra\.)?UnitLowerTriangular{Int64,Array{Int64,2}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1",
+    @test occursin(r"3×3 (LinearAlgebra\.)?UnitLowerTriangular{Int64, Matrix{Int64}}:\n 1  ⋅  ⋅\n 2  1  ⋅\n 2  2  1",
                    sprint(show, MIME"text/plain"(), UnitLowerTriangular(2ones(Int64,3,3))))
-    @test occursin(r"3×3 (LinearAlgebra\.)?UpperTriangular{Int64,Array{Int64,2}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2",
+    @test occursin(r"3×3 (LinearAlgebra\.)?UpperTriangular{Int64, Matrix{Int64}}:\n 2  2  2\n ⋅  2  2\n ⋅  ⋅  2",
                    sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))))
-    @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64,Array{Int64,2}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
+    @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64, Matrix{Int64}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
                    sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))))
 end
 

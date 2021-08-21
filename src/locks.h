@@ -20,24 +20,23 @@ extern "C" {
 
 static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
 {
-    unsigned long self = jl_thread_self();
-    unsigned long owner = jl_atomic_load_acquire(&lock->owner);
+    jl_thread_t self = jl_thread_self();
+    jl_thread_t owner = jl_atomic_load_relaxed(&lock->owner);
+    jl_task_t *ct = jl_current_task;
     if (owner == self) {
         lock->count++;
         return;
     }
     while (1) {
-        if (owner == 0 &&
-            jl_atomic_compare_exchange(&lock->owner, 0, self) == 0) {
+        if (owner == 0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
             return;
         }
         if (safepoint) {
-            jl_ptls_t ptls = jl_get_ptls_states();
-            jl_gc_safepoint_(ptls);
+            jl_gc_safepoint_(ct->ptls);
         }
         jl_cpu_pause();
-        owner = lock->owner;
+        owner = jl_atomic_load_relaxed(&lock->owner);
     }
 }
 
@@ -53,14 +52,11 @@ static inline void jl_mutex_lock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 
 static inline void jl_lock_frame_push(jl_mutex_t *lock)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // For early bootstrap
-    if (__unlikely(!ptls->current_task))
-        return;
-    arraylist_t *locks = &ptls->current_task->locks;
-    size_t len = locks->len;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    small_arraylist_t *locks = &ptls->locks;
+    uint32_t len = locks->len;
     if (__unlikely(len >= locks->max)) {
-        arraylist_grow(locks, 1);
+        small_arraylist_grow(locks, 1);
     }
     else {
         locks->len = len + 1;
@@ -69,42 +65,38 @@ static inline void jl_lock_frame_push(jl_mutex_t *lock)
 }
 static inline void jl_lock_frame_pop(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (__likely(ptls->current_task)) {
-        ptls->current_task->locks.len--;
-    }
+    jl_ptls_t ptls = jl_current_task->ptls;
+    assert(ptls->locks.len > 0);
+    ptls->locks.len--;
 }
 
 #define JL_SIGATOMIC_BEGIN() do {               \
-        jl_get_ptls_states()->defer_signal++;   \
+        jl_current_task->ptls->defer_signal++;  \
         jl_signal_fence();                      \
     } while (0)
 #define JL_SIGATOMIC_END() do {                                 \
         jl_signal_fence();                                      \
-        if (--jl_get_ptls_states()->defer_signal == 0) {        \
-            jl_sigint_safepoint(jl_get_ptls_states());          \
+        if (--jl_current_task->ptls->defer_signal == 0) {       \
+            jl_sigint_safepoint(jl_current_task->ptls);         \
         }                                                       \
     } while (0)
 
 static inline void jl_mutex_lock(jl_mutex_t *lock)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
     jl_mutex_wait(lock, 1);
     jl_lock_frame_push(lock);
-    jl_gc_enable_finalizers(ptls, 0);
 }
 
 static inline int jl_mutex_trylock_nogc(jl_mutex_t *lock)
 {
-    unsigned long self = jl_thread_self();
-    unsigned long owner = jl_atomic_load_acquire(&lock->owner);
+    jl_thread_t self = jl_thread_self();
+    jl_thread_t owner = jl_atomic_load_acquire(&lock->owner);
     if (owner == self) {
         lock->count++;
         return 1;
     }
-    if (owner == 0 &&
-        jl_atomic_compare_exchange(&lock->owner, 0, self) == 0) {
+    if (owner == 0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
         lock->count = 1;
         return 1;
     }
@@ -115,10 +107,8 @@ static inline int jl_mutex_trylock(jl_mutex_t *lock)
 {
     int got = jl_mutex_trylock_nogc(lock);
     if (got) {
-        jl_ptls_t ptls = jl_get_ptls_states();
         JL_SIGATOMIC_BEGIN();
         jl_lock_frame_push(lock);
-        jl_gc_enable_finalizers(ptls, 0);
     }
     return got;
 }
@@ -136,11 +126,12 @@ static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 
 static inline void jl_mutex_unlock(jl_mutex_t *lock)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_mutex_unlock_nogc(lock);
-    jl_gc_enable_finalizers(ptls, 1);
     jl_lock_frame_pop();
     JL_SIGATOMIC_END();
+    if (jl_gc_have_pending_finalizers) {
+        jl_gc_run_pending_finalizers(jl_current_task); // may GC
+    }
 }
 
 static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT

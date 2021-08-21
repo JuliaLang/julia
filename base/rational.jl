@@ -18,21 +18,22 @@ unsafe_rational(num::T, den::T) where {T<:Integer} = unsafe_rational(T, num, den
 unsafe_rational(num::Integer, den::Integer) = unsafe_rational(promote(num, den)...)
 
 @noinline __throw_rational_argerror_typemin(T) = throw(ArgumentError("invalid rational: denominator can't be typemin($T)"))
-function checked_den(num::T, den::T) where T<:Integer
+function checked_den(::Type{T}, num::T, den::T) where T<:Integer
     if signbit(den)
         den = -den
-        signbit(den) && __throw_rational_argerror_typemin(T)
+        signbit(den) && __throw_rational_argerror_typemin(typeof(den))
         num = -num
     end
     return unsafe_rational(T, num, den)
 end
+checked_den(num::T, den::T) where T<:Integer = checked_den(T, num, den)
 checked_den(num::Integer, den::Integer) = checked_den(promote(num, den)...)
 
 @noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 function Rational{T}(num::Integer, den::Integer) where T<:Integer
     iszero(den) && iszero(num) && __throw_rational_argerror_zero(T)
     num, den = divgcd(num, den)
-    return checked_den(T(num), T(den))
+    return checked_den(T, T(num), T(den))
 end
 
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
@@ -106,13 +107,13 @@ Rational(x::Rational) = x
 
 Bool(x::Rational) = x==0 ? false : x==1 ? true :
     throw(InexactError(:Bool, Bool, x)) # to resolve ambiguity
-(::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
+(::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num)::T :
     throw(InexactError(nameof(T), T, x)))
 
-AbstractFloat(x::Rational) = float(x.num)/float(x.den)
+AbstractFloat(x::Rational) = (float(x.num)/float(x.den))::AbstractFloat
 function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
-    convert(T, convert(P,x.num)/convert(P,x.den))
+    convert(T, convert(P,x.num)/convert(P,x.den))::T
 end
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
@@ -262,6 +263,7 @@ typemin(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, zero(T), on
 typemax(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, one(T), zero(T))
 
 isinteger(x::Rational) = x.den == 1
+ispow2(x::Rational) = ispow2(x.num) & ispow2(x.den)
 
 +(x::Rational) = unsafe_rational(+x.num, x.den)
 -(x::Rational) = unsafe_rational(-x.num, x.den)
@@ -277,13 +279,35 @@ function -(x::Rational{T}) where T<:Unsigned
     x
 end
 
-for (op,chop) in ((:+,:checked_add), (:-,:checked_sub), (:rem,:rem), (:mod,:mod))
+function +(x::Rational, y::Rational)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
+    if isinf(x) && x == y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(checked_add(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+end
+
+function -(x::Rational, y::Rational)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
+    if isinf(x) && x == -y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(checked_sub(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+end
+
+for (op,chop) in ((:rem,:rem), (:mod,:mod))
     @eval begin
         function ($op)(x::Rational, y::Rational)
             xd, yd = divgcd(promote(x.den, y.den)...)
             Rational(($chop)(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
         end
+    end
+end
 
+for (op,chop) in ((:+,:checked_add), (:-,:checked_sub), (:rem,:rem), (:mod,:mod))
+    @eval begin
         function ($op)(x::Rational, y::Integer)
             unsafe_rational(($chop)(x.num, checked_mul(x.den, y)), x.den)
         end
@@ -484,4 +508,46 @@ function gcdx(x::Rational, y::Rational)
         _, a, b = gcdx(idiv(x, c), idiv(y, c))
     end
     c, a, b
+end
+
+## streamlined hashing for smallish rational types ##
+
+decompose(x::Rational) = numerator(x), 0, denominator(x)
+function hash(x::Rational{<:BitInteger64}, h::UInt)
+    num, den = Base.numerator(x), Base.denominator(x)
+    den == 1 && return hash(num, h)
+    den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
+    if isodd(den)
+        pow = trailing_zeros(num)
+        num >>= pow
+    else
+        pow = trailing_zeros(den)
+        den >>= pow
+        pow = -pow
+        if den == 1 && abs(num) < 9007199254740992
+            return hash(ldexp(Float64(num),pow),h)
+        end
+    end
+    h = hash_integer(den, h)
+    h = hash_integer(pow, h)
+    h = hash_integer(num, h)
+    return h
+end
+
+# These methods are only needed for performance. Since `first(r)` and `last(r)` have the
+# same denominator (because their difference is an integer), `length(r)` can be calulated
+# without calling `gcd`.
+function length(r::AbstractUnitRange{T}) where T<:Rational
+    @_inline_meta
+    f = first(r)
+    l = last(r)
+    return div(l.num - f.num + f.den, f.den)
+end
+function checked_length(r::AbstractUnitRange{T}) where T<:Rational
+    f = first(r)
+    l = last(r)
+    if isempty(r)
+        return f.num - f.num
+    end
+    return div(checked_add(checked_sub(l.num, f.num), f.den), f.den)
 end

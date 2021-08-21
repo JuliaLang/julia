@@ -28,6 +28,7 @@
 #undef DEFINE_BUILTIN_GLOBALS
 #include "threading.h"
 #include "julia_assert.h"
+#include "processor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -114,7 +115,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 static void jl_prep_sanitizers(void)
 {
 #if !defined(_OS_WINDOWS_)
-#if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
     struct rlimit rl;
 
     // When using the sanitizers, increase stack size because they bloat
@@ -156,20 +157,12 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
     jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
-void jl_write_coverage_data(const char*);
-void jl_write_malloc_log(void);
-void jl_write_compiler_output(void);
-
 static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
 {
     struct uv_shutdown_queue_item *rv = item->next;
     free(item);
     return rv;
 }
-
-void jl_init_timing(void);
-void jl_destroy_timing(void);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 static void jl_close_item_atexit(uv_handle_t *handle)
 {
@@ -212,7 +205,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     if (jl_all_tls_states == NULL)
         return;
 
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
 
     if (exitcode == 0)
         jl_write_compiler_output();
@@ -225,14 +218,16 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             JL_TRY {
-                size_t last_age = ptls->world_age;
-                ptls->world_age = jl_get_world_counter();
+                size_t last_age = ct->world_age;
+                ct->world_age = jl_get_world_counter();
                 jl_apply(&f, 1);
-                ptls->world_age = last_age;
+                ct->world_age = last_age;
             }
             JL_CATCH {
-                jl_printf(JL_STDERR, "\natexit hook threw an error: ");
-                jl_static_show(JL_STDERR, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
             }
         }
     }
@@ -242,7 +237,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
     JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
-    jl_gc_run_all_finalizers(ptls);
+    jl_gc_run_all_finalizers(ct);
 
     uv_loop_t *loop = jl_global_event_loop();
 
@@ -254,7 +249,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     JL_UV_LOCK();
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
-    if (ptls->current_task != NULL) {
+    if (ct != NULL) {
         while (item) {
             JL_TRY {
                 while (item) {
@@ -266,8 +261,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 //error handling -- continue cleanup, as much as possible
                 assert(item);
                 uv_unref(item->h);
-                jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-                jl_static_show(JL_STDERR, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
                 item = next_shutdown_queue_item(item);
             }
         }
@@ -296,7 +293,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
 static void post_boot_hooks(void);
 
-JL_DLLEXPORT void *jl_dl_handle;
+JL_DLLEXPORT void *jl_libjulia_internal_handle;
+JL_DLLEXPORT void *jl_libjulia_handle;
 void *jl_RTLD_DEFAULT_handle;
 JL_DLLEXPORT void *jl_exe_handle;
 #ifdef _OS_WINDOWS_
@@ -304,12 +302,13 @@ void *jl_ntdll_handle;
 void *jl_kernel32_handle;
 void *jl_crtdll_handle;
 void *jl_winsock_handle;
+extern const char jl_crtdll_name[];
 #endif
 
 uv_loop_t *jl_io_loop;
 
 #ifdef _OS_WINDOWS_
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     HANDLE current_process;
 
     if (fd == UV_STDIN_FD || fd == UV_STDOUT_FD || fd == UV_STDERR_FD)
@@ -343,7 +342,7 @@ int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     return 0;
 }
 #else
-int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
+static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
     if ((*dupfd = fcntl(fd, F_DUPFD_CLOEXEC, 3)) == -1)
         return -errno;
     return 0;
@@ -424,7 +423,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     return handle;
 }
 
-void init_stdio(void)
+static void init_stdio(void)
 {
     JL_STDIN  = (uv_stream_t*)init_stdio_handle("stdin", UV_STDIN_FD, 1);
     JL_STDOUT = (uv_stream_t*)init_stdio_handle("stdout", UV_STDOUT_FD, 0);
@@ -444,7 +443,9 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-int isabspath(const char *in)
+char jl_using_gdb_jitevents = 0;
+
+int isabspath(const char *in) JL_NOTSAFEPOINT
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];
@@ -614,19 +615,24 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 
 static void jl_set_io_wait(int v)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->io_wait = v;
+    jl_task_t *ct = jl_current_task;
+    ct->ptls->io_wait = v;
 }
 
 extern jl_mutex_t jl_modules_mutex;
 
-void _julia_init(JL_IMAGE_SEARCH rel)
+static void restore_fp_env(void)
+{
+    if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
+        jl_error("Failed to configure floating point environment");
+    }
+}
+
+JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_init_timing();
     // Make sure we finalize the tls callback before starting any threads.
-    jl_get_ptls_states_getter();
-    jl_ptls_t ptls = jl_get_ptls_states();
-    (void)ptls; assert(ptls); // make sure early that we have initialized ptls
+    (void)jl_get_pgcstack();
     jl_safepoint_init();
     libsupport_init();
     htable_new(&jl_current_modules, 0);
@@ -636,30 +642,27 @@ void _julia_init(JL_IMAGE_SEARCH rel)
                                     // best to call this first, since it also initializes libuv
     jl_init_uv();
     init_stdio();
+    restore_fp_env();
     restore_signals();
+    jl_init_intrinsic_properties();
 
     jl_page_size = jl_getpagesize();
-    uint64_t total_mem = uv_get_total_memory();
-    if (total_mem >= (size_t)-1) {
-        total_mem = (size_t)-1;
-    }
-    jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
-    jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+
+    // Load libjulia-internal (which contains this function), and libjulia, explicitly.
+    jl_libjulia_internal_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+    jl_libjulia_handle = jl_load_dynamic_library(JL_LIBJULIA_SONAME, JL_RTLD_DEFAULT, 1);
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
-#if defined(_MSC_VER) && _MSC_VER == 1800
-    jl_crtdll_handle = jl_dlopen("msvcr120.dll", 0);
-#else
-    jl_crtdll_handle = jl_dlopen("msvcrt.dll", 0);
-#endif
+    jl_crtdll_handle = jl_dlopen(jl_crtdll_name, 0);
     jl_winsock_handle = jl_dlopen("ws2_32.dll", 0);
     jl_exe_handle = GetModuleHandleA(NULL);
-    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-    if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
+    JL_MUTEX_INIT(&jl_in_stackwalk);
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
+    if (!SymInitialize(GetCurrentProcess(), "", 1)) {
         jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
     }
     needsSymRefreshModuleList = 0;
@@ -675,24 +678,37 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #endif
 #endif
 
-#if defined(JL_USE_INTEL_JITEVENTS)
+#if \
+    defined(JL_USE_INTEL_JITEVENTS) || \
+    defined(JL_USE_OPROFILE_JITEVENTS) || \
+    defined(JL_USE_PERF_JITEVENTS)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
+#endif
+
+#if defined(JL_USE_INTEL_JITEVENTS)
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_intel_jitevents = 1;
     }
 #endif
 
 #if defined(JL_USE_OPROFILE_JITEVENTS)
-    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_oprofile_jitevents = 1;
     }
 #endif
 
 #if defined(JL_USE_PERF_JITEVENTS)
-    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_perf_jitevents= 1;
+    }
+#endif
+
+#if defined(JL_DEBUG_BUILD)
+    jl_using_gdb_jitevents = 1;
+# else
+    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
+    if (jit_gdb && atoi(jit_gdb)) {
+        jl_using_gdb_jitevents = 1;
     }
 #endif
 
@@ -702,11 +718,14 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 
     jl_gc_init();
-
+    jl_init_tasks();
     jl_init_threading();
-    jl_init_intrinsic_properties();
 
-    jl_gc_enable(0);
+    jl_ptls_t ptls = jl_init_threadtls(0);
+    jl_init_root_task(ptls, stack_lo, stack_hi);
+    jl_task_t *ct = jl_current_task;
+
+    jl_init_threadinginfra();
 
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
@@ -717,18 +736,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
-    }
-    else {
+    } else {
         jl_init_types();
         jl_init_codegen();
-        jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     }
 
-    jl_init_tasks();
-    jl_init_root_task(stack_lo, stack_hi);
-#ifdef ENABLE_TIMINGS
-    jl_root_task->timing_stack = jl_root_timing;
-#endif
     jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
@@ -749,10 +761,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         // Do initialization needed before starting child threads
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
         if (f) {
-            size_t last_age = ptls->world_age;
-            ptls->world_age = jl_get_world_counter();
+            size_t last_age = ct->world_age;
+            ct->world_age = jl_get_world_counter();
             jl_apply(&f, 1);
-            ptls->world_age = last_age;
+            ct->world_age = last_age;
         }
     }
     else {
@@ -816,6 +828,7 @@ static void post_boot_hooks(void)
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
+    jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
@@ -828,6 +841,7 @@ static void post_boot_hooks(void)
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
+    jl_pair_type           = core("Pair");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

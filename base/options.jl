@@ -21,6 +21,7 @@ struct JLOptions
     code_coverage::Int8
     malloc_log::Int8
     opt_level::Int8
+    opt_level_min::Int8
     debug_level::Int8
     check_bounds::Int8
     depwarn::Int8
@@ -44,6 +45,8 @@ struct JLOptions
     incremental::Int8
     image_file_specified::Int8
     warn_scope::Int8
+    image_codegen::Int8
+    rr_detach::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

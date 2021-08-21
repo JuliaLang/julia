@@ -4,13 +4,13 @@ module GMP
 
 export BigInt
 
-import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
+import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
-             sum, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
+             sum, prod, trailing_zeros, trailing_ones, count_ones, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -132,7 +132,7 @@ module MPZ
 # - a method modifying its input has a "!" appendend to its name, according to Julia's conventions
 # - some convenient methods are added (in addition to the pure MPZ ones), e.g. `add(a, b) = add!(BigInt(), a, b)`
 #   and `add!(x, a) = add!(x, x, a)`.
-using .Base.GMP: BigInt, Limb, BITS_PER_LIMB
+using ..GMP: BigInt, Limb, BITS_PER_LIMB
 
 const mpz_t = Ref{BigInt}
 const bitcnt_t = Culong
@@ -308,21 +308,21 @@ BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
-    x == 0 && return BigInt(Culong(0))
+    # On 64-bit Windows, `Clong` is `Int32`, not `Int64`, so construction of
+    # `Int64` constants, e.g. `BigInt(3)`, uses this method.
+    isbits(x) && typemin(Clong) <= x <= typemax(Clong) && return BigInt((x % Clong)::Clong)
     nd = ndigits(x, base=2)
     z = MPZ.realloc2(nd)
-    s = sign(x)
-    s == -1 && (x = -x)
-    x = unsigned(x)
+    ux = unsigned(x < 0 ? -x : x)
     size = 0
     limbnbits = sizeof(Limb) << 3
     while nd > 0
         size += 1
-        unsafe_store!(z.d, x % Limb, size)
-        x >>>= limbnbits
+        unsafe_store!(z.d, ux % Limb, size)
+        ux >>= limbnbits
         nd -= limbnbits
     end
-    z.size = s*size
+    z.size = x < 0 ? -size : size
     z
 end
 
@@ -343,6 +343,7 @@ end
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
 isodd(x::BigInt) = MPZ.tstbit(x, 0)
+iseven(x::BigInt) = !isodd(x)
 
 function (::Type{T})(x::BigInt) where T<:Base.BitUnsigned
     if sizeof(T) < sizeof(Limb)
@@ -460,7 +461,8 @@ promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
     big(x)
 
 Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
-`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+`BigFloat`). See [`BigFloat`](@ref BigFloat(::Any, rounding::RoundingMode)) for
+information about some pitfalls with floating-point numbers.
 """
 function big end
 
@@ -630,13 +632,26 @@ function gcdx(a::BigInt, b::BigInt)
     g, s, t
 end
 
-sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, arr; init=BigInt(0))
-# Note: a similar implementation for `prod` won't be efficient:
-# 1) the time complexity of the allocations is negligible compared to the multiplications
-# 2) assuming arr contains similarly sized BigInts, the multiplications are much more
-# performant when doing e.g. ((a1*a2)*(a3*a4))*(...) rather than a1*(a2*(a3*(...))),
-# which is exactly what the default implementation of `prod` does, via `mapreduce`
-# (which maybe could be slightly optimized for BigInt).
++(x::BigInt, y::BigInt, rest::BigInt...) = sum(tuple(x, y, rest...))
+sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}) =
+    foldl(MPZ.add!, arr; init=BigInt(0))
+
+function prod(arr::AbstractArray{BigInt})
+    # compute first the needed number of bits for the result,
+    # to avoid re-allocations;
+    # GMP will always request n+m limbs for the result in MPZ.mul!,
+    # if the arguments have n and m limbs; so we add all the bits
+    # taken by the array elements, and add BITS_PER_LIMB to that,
+    # to account for the rounding to limbs in MPZ.mul!
+    # (BITS_PER_LIMB-1 would typically be enough, to which we add
+    # 1 for the initial multiplication by init=1 in foldl)
+    nbits = GC.@preserve arr sum(arr; init=BITS_PER_LIMB) do x
+        abs(x.size) * BITS_PER_LIMB - leading_zeros(unsafe_load(x.d))
+    end
+    init = BigInt(; nbits)
+    MPZ.set_si!(init, 1)
+    foldl(MPZ.mul!, arr; init)
+end
 
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 
@@ -693,6 +708,24 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     String(sv)
 end
 
+function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
+    if 2 ≤ base ≤ 62
+        s = codeunits(string(n; base))
+        i, j = firstindex(a)-1, length(s)+1
+        lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
+        while i < lasti
+            # base ≤ 36: 0-9, plus a-z for 10-35
+            # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
+            x = s[j -= 1]
+            a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
+        end
+        lasti = lastindex(a)
+        while i < lasti; a[i+=1] = zero(T); end
+        return isneg(n) ? map!(-,a,a) : a
+    end
+    return invoke(digits!, Tuple{typeof(a), Integer}, a, n; base) # slow generic fallback
+end
+
 function ndigits0zpb(x::BigInt, b::Integer)
     b < 2 && throw(DomainError(b, "`b` cannot be less than 2."))
     x.size == 0 && return 0 # for consistency with other ndigits0z methods
@@ -736,13 +769,186 @@ Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
 Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
 Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
-function Base.deepcopy_internal(x::BigInt, stackdict::IdDict)
-    if haskey(stackdict, x)
-        return stackdict[x]
+Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)
+
+## streamlined hashing for BigInt, by avoiding allocation from shifts ##
+
+if Limb === UInt
+    # this condition is true most (all?) of the time, and in this case we can define
+    # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
+    # and of hash
+
+    using .Base: hash_uint
+
+    function hash_integer(n::BigInt, h::UInt)
+        GC.@preserve n begin
+            s = n.size
+            s == 0 && return hash_integer(0, h)
+            p = convert(Ptr{UInt}, n.d)
+            b = unsafe_load(p)
+            h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
+            for k = 2:abs(s)
+                h ⊻= hash_uint(unsafe_load(p, k) ⊻ h)
+            end
+            return h
+        end
     end
-    y = MPZ.set(x)
-    stackdict[x] = y
-    return y
+
+    _divLimb(n) = UInt === UInt64 ? n >>> 6 : n >>> 5
+    _modLimb(n) = UInt === UInt64 ? n & 63 : n & 31
+
+    function hash(x::BigInt, h::UInt)
+        GC.@preserve x begin
+            sz = x.size
+            sz == 0 && return hash(0, h)
+            ptr = Ptr{UInt}(x.d)
+            if sz == 1
+                return hash(unsafe_load(ptr), h)
+            elseif sz == -1
+                limb = unsafe_load(ptr)
+                limb <= typemin(Int) % UInt && return hash(-(limb % Int), h)
+            end
+            pow = trailing_zeros(x)
+            nd = Base.ndigits0z(x, 2)
+            idx = _divLimb(pow) + 1
+            shift = _modLimb(pow) % UInt
+            upshift = BITS_PER_LIMB - shift
+            asz = abs(sz)
+            if shift == 0
+                limb = unsafe_load(ptr, idx)
+            else
+                limb1 = unsafe_load(ptr, idx)
+                limb2 = idx < asz ? unsafe_load(ptr, idx+1) : UInt(0)
+                limb = limb2 << upshift | limb1 >> shift
+            end
+            if nd <= 1024 && nd - pow <= 53
+                return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
+            end
+            h = hash_integer(1, h)
+            h = hash_integer(pow, h)
+            h ⊻= hash_uint(flipsign(limb, sz) ⊻ h)
+            for idx = idx+1:asz
+                if shift == 0
+                    limb = unsafe_load(ptr, idx)
+                else
+                    limb1 = limb2
+                    if idx == asz
+                        limb = limb1 >> shift
+                        limb == 0 && break # don't hash leading zeros
+                    else
+                        limb2 = unsafe_load(ptr, idx+1)
+                        limb = limb2 << upshift | limb1 >> shift
+                    end
+                end
+                h ⊻= hash_uint(limb ⊻ h)
+            end
+            return h
+        end
+    end
 end
+
+module MPQ
+
+# Rational{BigInt}
+import .Base: unsafe_rational, __throw_rational_argerror_zero
+import ..GMP: BigInt, MPZ, Limb, isneg
+
+mutable struct _MPQ
+    num_alloc::Cint
+    num_size::Cint
+    num_d::Ptr{Limb}
+    den_alloc::Cint
+    den_size::Cint
+    den_d::Ptr{Limb}
+    # to prevent GC
+    rat::Rational{BigInt}
+end
+
+const mpq_t = Ref{_MPQ}
+
+_MPQ(x::BigInt,y::BigInt) = _MPQ(x.alloc, x.size, x.d,
+                                 y.alloc, y.size, y.d,
+                                 unsafe_rational(BigInt, x, y))
+_MPQ() = _MPQ(BigInt(), BigInt())
+_MPQ(x::Rational{BigInt}) = _MPQ(x.num, x.den)
+
+function sync_rational!(xq::_MPQ)
+    xq.rat.num.alloc = xq.num_alloc
+    xq.rat.num.size  = xq.num_size
+    xq.rat.num.d     = xq.num_d
+    xq.rat.den.alloc = xq.den_alloc
+    xq.rat.den.size  = xq.den_size
+    xq.rat.den.d     = xq.den_d
+    return xq.rat
+end
+
+function Rational{BigInt}(num::BigInt, den::BigInt)
+    if iszero(den)
+        iszero(num) && __throw_rational_argerror_zero(BigInt)
+        num = isneg(num) ? -one(BigInt) : one(BigInt)
+        return unsafe_rational(BigInt, num, den)
+    end
+    xq = _MPQ(MPZ.set(num), MPZ.set(den))
+    ccall((:__gmpq_canonicalize, :libgmp), Cvoid, (mpq_t,), xq)
+    return sync_rational!(xq)
+end
+
+function Base.:+(x::Rational{BigInt}, y::Rational{BigInt})
+    if iszero(x.den) || iszero(y.den)
+        if iszero(x.den) && iszero(y.den) && isneg(x.num) != isneg(y.num)
+            throw(DivideError())
+        end
+        return iszero(x.den) ? x : y
+    end
+    zq = _MPQ()
+    ccall((:__gmpq_add, :libgmp), Cvoid,
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+    return sync_rational!(zq)
+end
+function Base.:-(x::Rational{BigInt}, y::Rational{BigInt})
+    if iszero(x.den) || iszero(y.den)
+        if iszero(x.den) && iszero(y.den) && isneg(x.num) == isneg(y.num)
+            throw(DivideError())
+        end
+        return iszero(x.den) ? x : -y
+    end
+    zq = _MPQ()
+    ccall((:__gmpq_sub, :libgmp), Cvoid,
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+    return sync_rational!(zq)
+end
+function Base.:*(x::Rational{BigInt}, y::Rational{BigInt})
+    if iszero(x.den) || iszero(y.den)
+        if iszero(x.num) || iszero(y.num)
+            throw(DivideError())
+        end
+        return xor(isneg(x.num),isneg(y.num)) ? -one(BigInt)//zero(BigInt) : one(BigInt)//zero(BigInt)
+    end
+    zq = _MPQ()
+    ccall((:__gmpq_mul, :libgmp), Cvoid,
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+    return sync_rational!(zq)
+end
+function Base.://(x::Rational{BigInt}, y::Rational{BigInt})
+    if iszero(x.den)
+        if iszero(y.den)
+            throw(DivideError())
+        end
+        return isneg(y.num) ? -x : x
+    elseif iszero(y.den)
+        return y.den // y.num
+    elseif iszero(y.num)
+        if iszero(x.num)
+            throw(DivideError())
+        end
+        return (isneg(x.num) ? -one(BigInt) : one(BigInt)) // y.num
+    end
+    zq = _MPQ()
+    ccall((:__gmpq_div, :libgmp), Cvoid,
+          (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
+    return sync_rational!(zq)
+end
+
+end # MPQ module
 
 end # module

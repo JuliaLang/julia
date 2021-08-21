@@ -19,7 +19,7 @@ extern "C" {
 // 1: at least one sigint is pending, only the sigint page is enabled.
 // 2: at least one sigint is pending, both safepoint pages are enabled.
 JL_DLLEXPORT sig_atomic_t jl_signal_pending = 0;
-volatile uint32_t jl_gc_running = 0;
+uint32_t jl_gc_running = 0;
 char *jl_safepoint_pages = NULL;
 // The number of safepoints enabled on the three pages.
 // The first page, is the SIGINT page, only used by the master thread.
@@ -115,13 +115,14 @@ int jl_safepoint_start_gc(void)
         return 1;
     }
     // The thread should have set this already
-    assert(jl_get_ptls_states()->gc_state == JL_GC_STATE_WAITING);
+    assert(jl_current_task->ptls->gc_state == JL_GC_STATE_WAITING);
     jl_mutex_lock_nogc(&safepoint_lock);
     // In case multiple threads enter the GC at the same time, only allow
     // one of them to actually run the collection. We can't just let the
     // master thread do the GC since it might be running unmanaged code
     // and can take arbitrarily long time before hitting a safe point.
-    if (jl_atomic_compare_exchange(&jl_gc_running, 0, 1) != 0) {
+    uint32_t running = 0;
+    if (!jl_atomic_cmpswap(&jl_gc_running, &running, 1)) {
         jl_mutex_unlock_nogc(&safepoint_lock);
         jl_safepoint_wait_gc();
         return 0;
@@ -156,10 +157,10 @@ void jl_safepoint_end_gc(void)
 void jl_safepoint_wait_gc(void)
 {
     // The thread should have set this is already
-    assert(jl_get_ptls_states()->gc_state != 0);
-    // Use normal volatile load in the loop.
-    // Use a acquire load to make sure the GC result is visible on this thread.
-    while (jl_gc_running || jl_atomic_load_acquire(&jl_gc_running)) {
+    assert(jl_current_task->ptls->gc_state != 0);
+    // Use normal volatile load in the loop for speed until GC finishes.
+    // Then use an acquire load to make sure the GC result is visible on this thread.
+    while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
         jl_cpu_pause(); // yield?
     }
 }

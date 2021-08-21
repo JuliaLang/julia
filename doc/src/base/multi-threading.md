@@ -19,9 +19,27 @@ See also [Synchronization](@ref lib-task-sync).
 
 ## Atomic operations
 
+```@docs
+Base.@atomic
+Base.@atomicswap
+Base.@atomicreplace
+```
+
+!!! note
+
+    The following APIs are fairly primitive, and will likely be exposed through an `unsafe_*`-like wrapper.
+
+```
+Core.Intrinsics.atomic_pointerref(pointer::Ptr{T}, order::Symbol) --> T
+Core.Intrinsics.atomic_pointerset(pointer::Ptr{T}, new::T, order::Symbol) --> pointer
+Core.Intrinsics.atomic_pointerswap(pointer::Ptr{T}, new::T, order::Symbol) --> old
+Core.Intrinsics.atomic_pointermodify(pointer::Ptr{T}, function::(old::T,arg::S)->T, arg::S, order::Symbol) --> old
+Core.Intrinsics.atomic_pointerreplace(pointer::Ptr{T}, expected::Any, new::T, success_order::Symbol, failure_order::Symbol) --> (old, cmp)
+```
+
 !!! warning
 
-    The API for atomic operations has not yet been finalized and is likely to change.
+    The following APIs are deprecated, though support for them is likely to remain for several releases.
 
 ```@docs
 Base.Threads.Atomic

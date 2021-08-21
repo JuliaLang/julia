@@ -15,5 +15,5 @@ end
 
 let exename = Base.julia_cmd()
     @show readchomperrors(`$exename -e "f() = f(); f()"`)
-    @show readchomperrors(`$exename -e "f() = f(); fetch(@schedule f())"`)
+    @show readchomperrors(`$exename -e "f() = f(); fetch(@async f())"`)
 end

@@ -10,6 +10,7 @@
 module Experimental
 
 using Base: Threads, sync_varname
+using Base.Meta
 
 """
     Const(A::Array)
@@ -114,10 +115,51 @@ parent module.
 Supported values are 0, 1, 2, and 3.
 
 The effective optimization level is the minimum of that specified on the
-command line and in per-module settings.
+command line and in per-module settings. If a `--min-optlevel` value is
+set on the command line, that is enforced as a lower bound.
 """
 macro optlevel(n::Int)
     return Expr(:meta, :optlevel, n)
+end
+
+"""
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no}
+
+Set compiler options for code in the enclosing module. Options correspond directly to
+command-line options with the same name, where applicable. The following options
+are currently supported:
+
+  * `optimize`: Set optimization level.
+  * `compile`: Toggle native code compilation. Currently only `min` is supported, which
+    requests the minimum possible amount of compilation.
+  * `infer`: Enable or disable type inference. If disabled, implies [`@nospecialize`](@ref).
+"""
+macro compiler_options(args...)
+    opts = Expr(:block)
+    for ex in args
+        if isa(ex, Expr) && ex.head === :(=) && length(ex.args) == 2
+            if ex.args[1] === :optimize
+                push!(opts.args, Expr(:meta, :optlevel, ex.args[2]::Int))
+            elseif ex.args[1] === :compile
+                a = ex.args[2]
+                a = #a === :no  ? 0 :
+                    #a === :yes ? 1 :
+                    #a === :all ? 2 :
+                    a === :min ? 3 : error("invalid argument to \"compile\" option")
+                push!(opts.args, Expr(:meta, :compile, a))
+            elseif ex.args[1] === :infer
+                a = ex.args[2]
+                a = a === false || a === :no  ? 0 :
+                    a === true  || a === :yes ? 1 : error("invalid argument to \"infer\" option")
+                push!(opts.args, Expr(:meta, :infer, a))
+            else
+                error("unknown option \"$(ex.args[1])\"")
+            end
+        else
+            error("invalid option syntax")
+        end
+    end
+    return opts
 end
 
 # UI features for errors
@@ -180,8 +222,8 @@ Closest candidates are:
     To insulate yourself against changes, consider putting any registrations inside an
     `if isdefined(Base.Experimental, :register_error_hint) ... end` block.
 """
-function register_error_hint(handler, exct::Type)
-    list = get!(()->[], _hint_handlers, exct)
+function register_error_hint(@nospecialize(handler), @nospecialize(exct::Type))
+    list = get!(Vector{Any}, _hint_handlers, exct)
     push!(list, handler)
     return nothing
 end
@@ -211,5 +253,50 @@ function show_error_hints(io, ex, args...)
         end
     end
 end
+
+# OpaqueClosure
+include("opaque_closure.jl")
+
+"""
+    Experimental.@overlay mt [function def]
+
+Define a method and add it to the method table `mt` instead of to the global method table.
+This can be used to implement a method override mechanism. Regular compilation will not
+consider these methods, and you should customize the compilation flow to look in these
+method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+
+"""
+macro overlay(mt, def)
+    def = macroexpand(__module__, def) # to expand @inline, @generated, etc
+    if !isexpr(def, [:function, :(=)])
+        error("@overlay requires a function Expr")
+    end
+    if isexpr(def.args[1], :call)
+        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
+    elseif isexpr(def.args[1], :where)
+        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    else
+        error("@overlay requires a function Expr")
+    end
+    esc(def)
+end
+
+let new_mt(name::Symbol, mod::Module) = begin
+        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "@MethodTable")
+        ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
+    end
+    @eval macro MethodTable(name::Symbol)
+        esc(:(const $name = $$new_mt($(quot(name)), $(__module__))))
+    end
+end
+
+"""
+    Experimental.@MethodTable(name)
+
+Create a new MethodTable in the current module, bound to `name`. This method table can be
+used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
+adding them to the global method table.
+"""
+:@MethodTable
 
 end

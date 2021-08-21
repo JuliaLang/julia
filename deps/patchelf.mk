@@ -9,6 +9,9 @@ $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PA
 	touch -c $(SRCCACHE)/patchelf-$(PATCHELF_VER)/configure # old target
 	echo 1 > $@
 
+checksum-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.gz
+	$(JLCHECKSUM) $<
+
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted | $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \

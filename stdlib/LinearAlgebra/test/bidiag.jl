@@ -5,6 +5,11 @@ module TestBidiagonal
 using Test, LinearAlgebra, SparseArrays, Random
 using LinearAlgebra: BlasReal, BlasFloat
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
@@ -26,23 +31,26 @@ Random.seed!(1)
             ev += im*convert(Vector{elty}, rand(1:10, n-1))
         end
     end
+    dv0 = zeros(elty, 0)
+    ev0 = zeros(elty, 0)
 
     @testset "Constructors" begin
-        for (x, y) in ((dv, ev), (GenericArray(dv), GenericArray(ev)))
+        for (x, y) in ((dv0, ev0), (dv, ev), (GenericArray(dv), GenericArray(ev)))
             # from vectors
             ubd = Bidiagonal(x, y, :U)
             lbd = Bidiagonal(x, y, :L)
-            @test ubd != lbd
+            @test ubd != lbd || x === dv0
             @test ubd.dv === x
             @test lbd.ev === y
             @test_throws ArgumentError Bidiagonal(x, y, :R)
-            @test_throws DimensionMismatch Bidiagonal(x, x, :U)
+            x == dv0 || @test_throws DimensionMismatch Bidiagonal(x, x, :U)
             @test_throws MethodError Bidiagonal(x, y)
             # from matrix
             @test Bidiagonal(ubd, :U) == Bidiagonal(Matrix(ubd), :U) == ubd
             @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
         end
         @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
+        @test eltype(Bidiagonal([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == Float32 # promotion test
         @test isa(Bidiagonal{elty,Vector{elty}}(GenericArray(dv), ev, :U), Bidiagonal{elty,Vector{elty}})
         @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
         @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
@@ -232,6 +240,10 @@ Random.seed!(1)
             @test_throws DimensionMismatch transpose(T) \ offsizemat
             @test_throws DimensionMismatch T' \ offsizemat
 
+            if elty <: BigFloat
+                @test_throws SingularException ldiv!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :U), rand(elty, n))
+                @test_throws SingularException ldiv!(Bidiagonal(zeros(elty, n), ones(elty, n-1), :L), rand(elty, n))
+            end
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
                     if atype == "Array"
@@ -244,7 +256,7 @@ Random.seed!(1)
                 end
                 x = T \ b
                 tx = Tfull \ b
-                @test_throws DimensionMismatch LinearAlgebra.naivesub!(T,Vector{elty}(undef,n+1))
+                @test_throws DimensionMismatch ldiv!(T, Vector{elty}(undef, n+1))
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 x = transpose(T) \ b
                 tx = transpose(Tfull) \ b
@@ -375,7 +387,7 @@ Random.seed!(1)
         @test factorize(T) === T
     end
     BD = Bidiagonal(dv, ev, :U)
-    @test Matrix{Complex{Float64}}(BD) == BD
+    @test Matrix{ComplexF64}(BD) == BD
 end
 
 # Issue 10742 and similar
@@ -586,6 +598,71 @@ Base.transpose(n::MyNotANumberType) = n
     tB = transpose(B)
     @test tB == Bidiagonal(a, b, :L)
     @test transpose(copy(tB)) == B
+end
+
+@testset "empty bidiagonal matrices" begin
+    dv0 = zeros(0)
+    ev0 = zeros(0)
+    zm = zeros(0, 0)
+    ubd = Bidiagonal(dv0, ev0, :U)
+    lbd = Bidiagonal(dv0, ev0, :L)
+    @test size(ubd) == (0, 0)
+    @test_throws BoundsError getindex(ubd, 1, 1)
+    @test_throws BoundsError setindex!(ubd, 0.0, 1, 1)
+    @test similar(ubd) == ubd
+    @test similar(lbd, Int) == zeros(Int, 0, 0)
+    @test ubd == zm
+    @test lbd == zm
+    @test ubd == lbd
+    @test ubd * ubd == ubd
+    @test lbd + lbd == lbd
+    @test lbd' == ubd
+    @test ubd' == lbd
+    @test triu(ubd, 1) == ubd
+    @test triu(lbd, 1) == ubd
+    @test tril(ubd, -1) == ubd
+    @test tril(lbd, -1) == ubd
+    @test_throws ArgumentError triu(ubd)
+    @test_throws ArgumentError tril(ubd)
+    @test sum(ubd) == 0.0
+    @test reduce(+, ubd) == 0.0
+    @test reduce(+, ubd, dims=1) == zeros(1, 0)
+    @test reduce(+, ubd, dims=2) == zeros(0, 1)
+    @test hcat(ubd, ubd) == zm
+    @test vcat(ubd, lbd) == zm
+    @test hcat(lbd, ones(0, 3)) == ones(0, 3)
+    @test fill!(copy(ubd), 1.0) == ubd
+    @test map(abs, ubd) == zm
+    @test lbd .+ 1 == zm
+    @test lbd + ubd isa Bidiagonal
+    @test lbd .+ ubd isa Bidiagonal
+    @test ubd * 5 == ubd
+    @test ubd .* 3 == ubd
+end
+
+@testset "non-commutative algebra (#39701)" begin
+    A = Bidiagonal(Quaternion.(randn(5), randn(5), randn(5), randn(5)), Quaternion.(randn(4), randn(4), randn(4), randn(4)), :U)
+    c = Quaternion(1,2,3,4)
+    @test A * c ≈ Matrix(A) * c
+    @test A / c ≈ Matrix(A) / c
+    @test c * A ≈ c * Matrix(A)
+    @test c \ A ≈ c \ Matrix(A)
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    dv = ImmutableArray([1, 2, 3, 4])
+    ev = ImmutableArray([7, 8, 9])
+    Bu = Bidiagonal(dv, ev, :U)
+    Bl = Bidiagonal(dv, ev, :L)
+
+    @test convert(AbstractArray{Float64}, Bu)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bu
+    @test convert(AbstractMatrix{Float64}, Bu)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bu
+    @test convert(AbstractArray{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
+    @test convert(AbstractMatrix{Float64}, Bl)::Bidiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Bl
 end
 
 end # module TestBidiagonal

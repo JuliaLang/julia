@@ -63,15 +63,28 @@
 */
 
 #ifdef _OS_WINDOWS_
-#define STDCALL __stdcall
+#define STDCALL  __stdcall
 # ifdef LIBRARY_EXPORTS
 #  define JL_DLLEXPORT __declspec(dllexport)
 # else
 #  define JL_DLLEXPORT __declspec(dllimport)
 # endif
+#define JL_DLLIMPORT   __declspec(dllimport)
 #else
 #define STDCALL
-#define JL_DLLEXPORT __attribute__ ((visibility("default")))
+# define JL_DLLEXPORT __attribute__ ((visibility("default")))
+#define JL_DLLIMPORT
+#endif
+
+/*
+ * Debug builds include `-fstack-protector`, which adds a bit of extra prologue to
+ * functions, even naked ones.  We don't want that, but we also don't want the
+ * compiler warnings when `no_stack_protector` has no effect.
+ */
+#ifdef JL_DEBUG_BUILD
+#define JL_NAKED __attribute__ ((naked,no_stack_protector))
+#else
+#define JL_NAKED __attribute__ ((naked))
 #endif
 
 #ifdef _OS_LINUX_

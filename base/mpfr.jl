@@ -11,19 +11,18 @@ import
         inv, exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
-        sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        log1p,
+        sum, sqrt, string, print, trunc, precision, exp10, expm1, log1p,
         eps, signbit, sign, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
-        cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh,
+        cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n
+        isone, big, _string_n, decompose
 
-import .Base.Rounding: rounding_raw, setrounding_raw
+import ..Rounding: rounding_raw, setrounding_raw
 
-import .Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
+import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb
 
-import .Base.FastMath.sincos_fast
+import ..FastMath.sincos_fast
 
 version() = VersionNumber(unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ())))
 patches() = split(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())),' ')
@@ -152,6 +151,11 @@ global precision; `convert` will always return `x`.
 convenience since decimal literals are converted to `Float64` when parsed, so
 `BigFloat(2.1)` may not yield what you expect.
 
+See also:
+- [`@big_str`](@ref)
+- [`rounding`](@ref) and [`setrounding`](@ref)
+- [`precision`](@ref) and [`setprecision`](@ref)
+
 !!! compat "Julia 1.1"
     `precision` as a keyword argument requires at least Julia 1.1.
     In Julia 1.0 `precision` is the second positional argument (`BigFloat(x, precision)`).
@@ -170,11 +174,6 @@ julia> BigFloat("2.1", RoundUp)
 julia> BigFloat("2.1", RoundUp, precision=128)
 2.100000000000000000000000000000000000007
 ```
-
-# See also
-- [`@big_str`](@ref)
-- [`rounding`](@ref) and [`setrounding`](@ref)
-- [`precision`](@ref) and [`setprecision`](@ref)
 """
 BigFloat(x, r::RoundingMode)
 
@@ -224,8 +223,10 @@ function BigFloat(x::BigInt, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Int
     return z
 end
 
-BigFloat(x::Integer, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(BigInt(x), r; precision=precision)
+BigFloat(x::Integer; precision::Integer=DEFAULT_PRECISION[]) =
+    BigFloat(BigInt(x)::BigInt, ROUNDING_MODE[]; precision=precision)
+BigFloat(x::Integer, r::MPFRRoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
+    BigFloat(BigInt(x)::BigInt, r; precision=precision)
 
 BigFloat(x::Union{Bool,Int8,Int16,Int32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(convert(Clong, x), r; precision=precision)
@@ -238,7 +239,7 @@ BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precisi
 function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     setprecision(BigFloat, precision) do
         setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x)) / BigFloat(denominator(x))
+            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x))::BigFloat
         end
     end
 end
@@ -259,7 +260,7 @@ AbstractFloat(x::BigInt) = BigFloat(x)
 float(::Type{BigInt}) = BigFloat
 
 BigFloat(x::Real, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
+    BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)::BigFloat
 BigFloat(x::AbstractString, r::RoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(x, convert(MPFRRoundingMode, r); precision=precision)
 
@@ -338,7 +339,7 @@ Float32(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) =
 Float32(x::BigFloat, r::RoundingMode) = Float32(x, convert(MPFRRoundingMode, r))
 
 # TODO: avoid double rounding
-Float16(x::BigFloat) = Float16(Float32(x))
+Float16(x::BigFloat) = Float16(Float64(x))
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
@@ -814,8 +815,8 @@ Set the precision (in bits) to be used for `T` arithmetic.
     setting.
 """
 function setprecision(::Type{BigFloat}, precision::Integer)
-    if precision < 2
-        throw(DomainError(precision, "`precision` cannot be less than 2."))
+    if precision < 1
+        throw(DomainError(precision, "`precision` cannot be less than 1."))
     end
     DEFAULT_PRECISION[] = precision
     return precision
@@ -981,7 +982,7 @@ function _prettify_bigfloat(s::String)::String
             neg = startswith(int, '-')
             neg == true && (int = lstrip(int, '-'))
             @assert length(int) == 1
-            string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac)
+            string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
         end
     else
         string(mantissa, 'e', exponent)
@@ -1020,17 +1021,29 @@ set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, :libmpfr), Cint, (Clong
 set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, :libmpfr), Cint, (Clong,), x))
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
-    haskey(stackdict, x) && return stackdict[x]
-    # d = copy(x._d)
-    d = x._d
-    d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
-    y = _BigFloat(x.prec, x.sign, x.exp, d′)
-    #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
-    stackdict[x] = y
-    return y
+    get!(stackdict, x) do
+        # d = copy(x._d)
+        d = x._d
+        d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
+        y = _BigFloat(x.prec, x.sign, x.exp, d′)
+        #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
+        return y
+    end
 end
 
-function Base.lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
+function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
+    isnan(x) && return 0, 0, 0
+    isinf(x) && return x.sign, 0, 0
+    x == 0 && return 0, 0, x.sign
+    s = BigInt()
+    s.size = cld(x.prec, 8*sizeof(Limb)) # limbs
+    b = s.size * sizeof(Limb)            # bytes
+    ccall((:__gmpz_realloc2, :libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.d, x.d, b) # bytes
+    s, x.exp - 8b, x.sign
+end
+
+function lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
     t = BigFloat(j)/d
     fma(t, b, fma(-t, a, a))
 end

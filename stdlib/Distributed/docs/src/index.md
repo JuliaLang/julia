@@ -1,4 +1,4 @@
-# Distributed Computing
+# [Distributed Computing](@id man-distributed)
 
 ```@docs
 Distributed.addprocs
@@ -65,4 +65,5 @@ Distributed.connect(::ClusterManager, ::Int, ::WorkerConfig)
 Distributed.init_worker
 Distributed.start_worker
 Distributed.process_messages
+Distributed.default_addprocs_params
 ```

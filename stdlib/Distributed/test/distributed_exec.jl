@@ -63,7 +63,7 @@ let
     count_condition = Condition()
 
     function remote_wait(c)
-        @async begin
+        @async_logerr begin
             count += 1
             remote(take!)(c)
             count -= 1
@@ -87,7 +87,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
@@ -106,7 +106,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
@@ -267,7 +267,7 @@ end
 
 # Tests for issue #23109 - should not hang.
 f = @spawnat :any rand(1, 1)
-@sync begin
+@Base.Experimental.sync begin
     for _ in 1:10
         @async fetch(f)
     end
@@ -275,7 +275,7 @@ end
 
 wid1, wid2 = workers()[1:2]
 f = @spawnat wid1 rand(1,1)
-@sync begin
+@Base.Experimental.sync begin
     @async fetch(f)
     @async remotecall_fetch(()->fetch(f), wid2)
 end
@@ -439,7 +439,7 @@ catch ex
     # test showerror
     err_str = sprint(showerror, ex)
     err_one_str = sprint(showerror, ex.exceptions[1])
-    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
+    @test err_str == err_one_str * "\n\n...and 4 more exceptions.\n"
 end
 @test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
@@ -853,6 +853,13 @@ end
         return :OK
     end, id_other, rc_unbuffered) == :OK
 
+# github issue 33972
+rc_unbuffered_other = RemoteChannel(()->Channel{Int}(0), id_other)
+close(rc_unbuffered_other)
+try; take!(rc_unbuffered_other); catch; end
+@test !remotecall_fetch(rc -> islocked(Distributed.lookup_ref(remoteref_id(rc)).synctake),
+                        id_other, rc_unbuffered_other)
+
 # github PR #14456
 n = DoFullTest ? 6 : 5
 for i = 1:10^n
@@ -1005,30 +1012,8 @@ end
 
 # Test addprocs enable_threaded_blas parameter
 
-const get_num_threads = function() # anonymous so it will be serialized when called
-    blas = LinearAlgebra.BLAS.vendor()
-    # Wrap in a try to catch unsupported blas versions
-    try
-        if blas == :openblas
-            return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
-        elseif blas == :openblas64
-            return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
-        elseif blas == :mkl
-            return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
-        end
-
-        # OSX BLAS looks at an environment variable
-        if Sys.isapple()
-            return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
-        end
-    catch
-    end
-
-    return nothing
-end
-
 function get_remote_num_threads(processes_added)
-    return [remotecall_fetch(get_num_threads, proc_id) for proc_id in processes_added]
+    return [remotecall_fetch(BLAS.get_num_threads, proc_id) for proc_id in processes_added]
 end
 
 function test_blas_config(pid, expected)
@@ -1041,7 +1026,7 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    master_blas_thread_count = get_num_threads()
+    master_blas_thread_count = BLAS.get_num_threads()
     if master_blas_thread_count === nothing
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
@@ -1055,7 +1040,7 @@ function test_add_procs_threaded_blas()
     end
 
     # Master thread should not have changed
-    @test get_num_threads() == master_blas_thread_count
+    @test BLAS.get_num_threads() == master_blas_thread_count
 
     # Threading disabled in children by default
     thread_counts_by_process = get_remote_num_threads(processes_added)
@@ -1069,9 +1054,9 @@ function test_add_procs_threaded_blas()
         test_blas_config(proc_id, true)
     end
 
-    @test get_num_threads() == master_blas_thread_count
+    @test BLAS.get_num_threads() == master_blas_thread_count
 
-    # BLAS.set_num_threads(`num`) doesn't  cause get_num_threads to return `num`
+    # BLAS.set_num_threads(`num`) doesn't  cause BLAS.get_num_threads to return `num`
     # depending on the machine, the BLAS version, and BLAS configuration, so
     # we need a very lenient test.
     thread_counts_by_process = get_remote_num_threads(processes_added)
@@ -1399,6 +1384,13 @@ let thrown = false
     @test thrown
 end
 
+# issue #34333
+let
+    @test fetch(remotecall(Float64, id_other, 1)) == Float64(1)
+    @test fetch(remotecall_wait(Float64, id_other, 1)) == Float64(1)
+    @test remotecall_fetch(Float64, id_other, 1) == Float64(1)
+end
+
 #19463
 function foo19463()
     w1 = workers()[1]
@@ -1683,16 +1675,20 @@ let (h, t) = Distributed.head_and_tail(Int[], 0)
 end
 
 # issue #35937
-let e
-    try
-        pmap(1) do _
+let e = @test_throws RemoteException pmap(1) do _
             wait(@async error(42))
         end
-    catch ex
-        e = ex
-    end
     # check that the inner TaskFailedException is correctly formed & can be printed
-    @test sprint(showerror, e) isa String
+    es = sprint(showerror, e.value)
+    @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
+    @test contains(es, "\n\n    nested task error:")
+    @test contains(es, "\n\n    nested task error: 42\n")
+end
+
+# issue #27429, propagate relative `include` path to workers
+@everywhere include("includefile.jl")
+for p in procs()
+    @test @fetchfrom(p, i27429) == 27429
 end
 
 include("splitrange.jl")

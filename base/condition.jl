@@ -5,7 +5,7 @@
 @noinline function concurrency_violation()
     # can be useful for debugging
     #try; error(); catch; ccall(:jlbacktrace, Cvoid, ()); end
-    error("concurrency violation detected")
+    throw(ConcurrencyViolationError("lock must be held"))
 end
 
 """
@@ -58,7 +58,7 @@ islocked(::AlwaysLockedST) = true
     GenericCondition
 
 Abstract implementation of a condition object
-for synchonizing tasks objects with a given lock.
+for synchronizing tasks objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
     waitq::InvasiveLinkedList{Task}
@@ -76,7 +76,14 @@ trylock(c::GenericCondition) = trylock(c.lock)
 islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
-unlock(f, c::GenericCondition) = unlock(f, c.lock)
+
+# have waiter wait for c
+function _wait2(c::GenericCondition, waiter::Task)
+    ct = current_task()
+    assert_havelock(c)
+    push!(c.waitq, waiter)
+    return
+end
 
 """
     wait([x])
@@ -99,8 +106,7 @@ proceeding.
 """
 function wait(c::GenericCondition)
     ct = current_task()
-    assert_havelock(c)
-    push!(c.waitq, ct)
+    _wait2(c, ct)
     token = unlockall(c.lock)
     try
         return wait()

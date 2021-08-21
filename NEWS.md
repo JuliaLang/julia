@@ -1,11 +1,13 @@
-Julia v1.6 Release Notes
+Julia v1.8 Release Notes
 ========================
+
 
 New language features
 ---------------------
 
-* Types written with `where` syntax can now be used to define constructors, e.g.
-  `(Foo{T} where T)(x) = ...`.
+* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
+* `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
+* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 
 Language changes
 ----------------
@@ -14,10 +16,6 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
-* All platforms can now use `@executable_path` within `jl_load_dynamic_library()`.
-  This allows executable-relative paths to be embedded within executables on all
-  platforms, not just MacOS, which the syntax is borrowed from. ([#35627])
-* Constant propogation now occurs through keyword arguments ([#35976])
 
 Command-line option changes
 ---------------------------
@@ -34,79 +32,76 @@ Build system changes
 New library functions
 ---------------------
 
-* New function `Base.kron!` and corresponding overloads for various matrix types for performing Kronecker product in-place. ([#31069]).
-* New function `Base.Threads.foreach(f, channel::Channel)` for multithreaded `Channel` consumption. ([#34543]).
+* `hardlink(src, dst)` can be used to create hard links. ([#41639])
 
 New library features
 --------------------
 
+* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
+  contains "some message" regardless of the specific exception type.
+  Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
 
 Standard library changes
 ------------------------
 
-* The `nextprod` function now accepts tuples and other array types for its first argument ([#35791]).
-* The function `isapprox(x,y)` now accepts the `norm` keyword argument also for numeric (i.e., non-array) arguments `x` and `y` ([#35883]).
-* `view`, `@view`, and `@views` now work on `AbstractString`s, returning a `SubString` when appropriate ([#35879]).
-* All `AbstractUnitRange{<:Integer}`s now work with `SubString`, `view`, `@view` and `@views` on strings ([#35879]).
-* `sum`, `prod`, `maximum`, `minimum`, and `extrema` now support `init` keyword argument ([#36188], [#35839], [#36265]).
-* `unique(f, itr; seen=Set{T}())` now allows you to declare the container type used for
-  keeping track of values returned by `f` on elements of `itr` ([#36280]).
+* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
+* The `length` function on certain ranges of certain specific element types no longer checks for integer
+  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
+  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
+  constructing the range. ([#40382])
+* TCP socket objects now expose `shutdown` functionality and support half-open mode usage ([#40783]).
+* `extrema` now supports `init` keyword argument ([#36265]).
+
+#### InteractiveUtils
+* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
+
+#### Package Manager
 
 #### LinearAlgebra
-* New method `LinearAlgebra.issuccess(::CholeskyPivoted)` for checking whether pivoted Cholesky factorization was successful ([#36002]).
-* `UniformScaling` can now be indexed into using ranges to return dense matrices and vectors ([#24359]).
 
 #### Markdown
 
+#### Printf
+* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
 #### Random
 
-
 #### REPL
 
-* The `AbstractMenu` extension interface of `REPL.TerminalMenus` has been extensively
-  overhauled. The new interface does not rely on global configuration variables, is more
-  consistent in delegating printing of the navigation/selection markers, and provides
-  improved support for dynamic menus.  These changes are compatible with the previous
-  (deprecated) interface, so are non-breaking.
-
-  The new API offers several enhancements:
-
-  + Menus are configured in their constructors via keyword arguments
-  + For custom menu types, the new `Config` and `MultiSelectConfig` replace the global `CONFIG` Dict
-  + `request(menu; cursor=1)` allows you to control the initial cursor position in the menu (defaults to first item)
-  + `MultiSelectMenu` allows you to pass a list of initially-selected items with the `selected` keyword argument
-  + `writeLine` was deprecated to `writeline`, and `writeline` methods are not expected to print the cursor indicator.
-    The old `writeLine` continues to work, and any of its method extensions should print the cursor indicator as before.
-  + `printMenu` has been deprecated to `printmenu`, and it both accepts a state input and returns a state output
-    that controls the number of terminal lines erased when the menu is next refreshed. This plus related changes
-    makes `printmenu` work properly when the number of menu items might change depending on user choices.
-  + `numoptions`, returning the number of items in the menu, has been added as an alternative to implementing `options`
-  + `suppress_output` (primarily a testing option) has been added as a keyword argument to `request`,
-    rather than a configuration option
+* ` ?(x, y` followed by TAB displays all methods that can be called
+  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
+  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
+  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
+  to allow any compatible methods.
 
 #### SparseArrays
 
-* Display large sparse matrices with a Unicode "spy" plot of their nonzero patterns, and display small sparse matrices by an `Matrix`-like 2d layout of their contents.
-
 #### Dates
 
+#### Downloads
 
 #### Statistics
 
-
 #### Sockets
 
+#### Tar
 
 #### Distributed
 
-
 #### UUIDs
-* Change `uuid1` and `uuid4` to use `Random.RandomDevice()` as default random number generator ([#35872]).
-* Added `parse(::Type{UUID}, ::AbstractString)` method
+
+#### Mmap
+
+#### DelimitedFiles
+
+#### Logging
+* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
+  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
+
 
 Deprecated or removed
 ---------------------
+
 
 External dependencies
 ---------------------

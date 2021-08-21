@@ -63,23 +63,25 @@ call. Finally, chains of comparisons have their own special expression structure
 
 ### Bracketed forms
 
-| Input                    | AST                                  |
-|:------------------------ |:------------------------------------ |
-| `a[i]`                   | `(ref a i)`                          |
-| `t[i;j]`                 | `(typed_vcat t i j)`                 |
-| `t[i j]`                 | `(typed_hcat t i j)`                 |
-| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))` |
-| `a{b}`                   | `(curly a b)`                        |
-| `a{b;c}`                 | `(curly a (parameters c) b)`         |
-| `[x]`                    | `(vect x)`                           |
-| `[x,y]`                  | `(vect x y)`                         |
-| `[x;y]`                  | `(vcat x y)`                         |
-| `[x y]`                  | `(hcat x y)`                         |
-| `[x y; z t]`             | `(vcat (row x y) (row z t))`         |
-| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`  |
-| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`  |
-| `(a, b, c)`              | `(tuple a b c)`                      |
-| `(a; b; c)`              | `(block a (block b c))`              |
+| Input                    | AST                                               |
+|:------------------------ |:------------------------------------------------- |
+| `a[i]`                   | `(ref a i)`                                       |
+| `t[i;j]`                 | `(typed_vcat t i j)`                              |
+| `t[i j]`                 | `(typed_hcat t i j)`                              |
+| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))`              |
+| `t[a b;;; c d]`          | `(typed_ncat t 3 (row a b) (row c d))`            |
+| `a{b}`                   | `(curly a b)`                                     |
+| `a{b;c}`                 | `(curly a (parameters c) b)`                      |
+| `[x]`                    | `(vect x)`                                        |
+| `[x,y]`                  | `(vect x y)`                                      |
+| `[x;y]`                  | `(vcat x y)`                                      |
+| `[x y]`                  | `(hcat x y)`                                      |
+| `[x y; z t]`             | `(vcat (row x y) (row z t))`                      |
+| `[x;y;; z;t;;;]`         | `(ncat 3 (nrow 2 (nrow 1 x y) (nrow 1 z t)))`     |
+| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`               |
+| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`               |
+| `(a, b, c)`              | `(tuple a b c)`                                   |
+| `(a; b; c)`              | `(block a (block b c))`                           |
 
 ### Macros
 
@@ -247,16 +249,21 @@ types exist in lowered form:
     Has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
     subexpressions.
     While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
-    limited number of `Expr`s, mostly for calls, conditional branches (`gotoifnot`), and returns.
+    limited number of `Expr`s, mostly for calls and some top-level-only forms.
 
   * `Slot`
 
     Identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
     with subtypes `SlotNumber` and `TypedSlot`. Both types have an integer-valued `id` field giving
     the slot index. Most slots have the same type at all uses, and so are represented with `SlotNumber`.
-    The types of these slots are found in the `slottypes` field of their `MethodInstance` object.
+    The types of these slots are found in the `slottypes` field of their `CodeInfo` object.
     Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
     field.
+
+  * `Argument`
+
+    The same as `SlotNumber`, but appears only post-optimization. Indicates that the
+    referenced slot is an argument of the enclosing function.
 
   * `CodeInfo`
 
@@ -266,6 +273,16 @@ types exist in lowered form:
 
     Unconditional branch. The argument is the branch target, represented as an index in
     the code array to jump to.
+
+  * `GotoIfNot`
+
+    Conditional branch. If the `cond` field evaluates to false, goes to the index identified
+    by the `dest` field.
+
+  * `ReturnNode`
+
+    Returns its argument (the `val` field) as the value of the enclosing function.
+    If the `val` field is undefined, then this represents an unreachable statement.
 
   * `QuoteNode`
 
@@ -305,10 +322,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Reference a static parameter by index.
 
-  * `gotoifnot`
-
-    Conditional branch. If `args[1]` is false, goes to the index identified in `args[2]`.
-
   * `=`
 
     Assignment. In the IR, the first argument is always a Slot or a GlobalRef.
@@ -330,9 +343,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[1]`
 
-        A function name, or `false` if unknown. If a symbol, then the expression first
-        behaves like the 1-argument form above. This argument is ignored from then on. When
-        this is `false`, it means a method is being added strictly by type, `(::T)(x) = x`.
+        A function name, or `nothing` if unknown or unneeded. If a symbol, then the expression
+        first behaves like the 1-argument form above. This argument is ignored from then on.
+        It can be `nothing` when methods are added strictly by type, `(::T)(x) = x`,
+        or when a method is being added to an existing function, `MyModule.f(x) = x`.
 
       * `args[2]`
 
@@ -415,10 +429,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
     `Base.splat(new)` if `new` were a first-class function, hence the name.
 
-  * `return`
-
-    Returns its argument as the value of the enclosing function.
-
   * `isdefined`
 
     `Expr(:isdefined, :x)` returns a Bool indicating whether `x` has
@@ -497,11 +507,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The calling convention for the call.
 
-      * `args[6:length(args[3])]` : arguments
+      * `args[6:6+length(args[3])]` : arguments
 
         The values for all the arguments (with types of each given in args[3]).
 
-      * `args[(length(args[3]) + 1):end]` : gc-roots
+      * `args[6+(length(args[3])+1):end]` : gc-roots
 
         The additional objects that may need to be gc-rooted for the duration of the call.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
@@ -579,7 +589,7 @@ for important details on how to modify these fields safely.
     We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after a new method definitions.
     This works by keeping a list of the other `MethodInstance` that have been inferred or optimized to contain a possible call to this `MethodInstance`.
     Those optimization results might be stored somewhere in the `cache`, or it might have been the result of something we didn't want to cache, such as constant propagation.
-    Thus we merge all of those backedges to various cache entries here (there's almost always only the one applicable cache entry with a sentinal value for max_world anyways).
+    Thus we merge all of those backedges to various cache entries here (there's almost always only the one applicable cache entry with a sentinel value for max_world anyways).
 
   * `cache`
 

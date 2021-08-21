@@ -17,7 +17,7 @@ using Base.GMP: Limb
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
 import Base: copymutable, copy, copy!, ==, hash, convert,
-             rand, randn
+             rand, randn, show
 
 export rand!, randn!,
        randexp, randexp!,
@@ -27,7 +27,7 @@ export rand!, randn!,
        shuffle, shuffle!,
        randperm, randperm!,
        randcycle, randcycle!,
-       AbstractRNG, MersenneTwister, RandomDevice
+       AbstractRNG, MersenneTwister, RandomDevice, TaskLocalRNG, Xoshiro
 
 ## general definitions
 
@@ -253,7 +253,7 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 rand(rng::AbstractRNG, X)                                           = rand(rng, Sampler(rng, X, Val(1)))
 # this is needed to disambiguate
 rand(rng::AbstractRNG, X::Dims)                                     = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))
+rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))::X
 
 rand(X)                   = rand(default_rng(), X)
 rand(::Type{X}) where {X} = rand(default_rng(), X)
@@ -291,11 +291,17 @@ rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, d
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
 
+# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
+SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
+const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
 
+
+include("Xoshiro.jl")
 include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
+include("XoshiroSimd.jl")
 
 ## rand & rand! & seed! docstrings
 
@@ -365,7 +371,7 @@ but without allocating a new array.
 julia> rng = MersenneTwister(1234);
 
 julia> rand!(rng, zeros(5))
-5-element Array{Float64,1}:
+5-element Vector{Float64}:
  0.5908446386657102
  0.7667970365022592
  0.5662374165061859
@@ -386,7 +392,7 @@ After the call to `seed!`, `rng` is equivalent to a newly created
 object initialized with the same seed.
 
 If `rng` is not specified, it defaults to seeding the state of the
-shared thread-local generator.
+shared task-local generator.
 
 # Examples
 ```julia-repl

@@ -22,7 +22,8 @@ endif
 
 
 ifeq ($(LLVM_VER),svn)
-LLVM_MONOSRC_DIR:=$(SRCCACHE)/llvm-project-$(LLVM_VER)
+LLVM_BARESRC_DIR:=$(SRCCACHE)/llvm-project-bare
+LLVM_MONOSRC_DIR:=$(SRCCACHE)/llvm-project-$(LLVM_VER)-${LLVM_GIT_VER}
 LLVM_SRC_DIR:=$(LLVM_MONOSRC_DIR)/llvm
 LIBCXX_ROOT_DIR:=$(LLVM_MONOSRC_DIR)
 else

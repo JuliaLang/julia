@@ -1,0 +1,1 @@
+Dict{String,Any}("million" => Dict{String,Any}("value" => "1000000","type" => "float"),"minustenth" => Dict{String,Any}("value" => "-0.1","type" => "float"),"beast" => Dict{String,Any}("value" => "666","type" => "float"))

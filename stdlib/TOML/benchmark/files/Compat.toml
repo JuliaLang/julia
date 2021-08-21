@@ -1,0 +1,153 @@
+[5]
+DelayDiffEq = "3.4-5"
+DiffEqBase = "3-5"
+DiffEqBiological = "1-3"
+DiffEqDevTools = "1-2"
+DiffEqJump = ["1", "4-6"]
+DiffEqNoiseProcess = "1-3"
+DiffEqParamEstim = "1"
+DiffEqSensitivity = "1-3"
+DiffEqUncertainty = "0.1-1"
+MultiScaleArrays = "0.5-1"
+OrdinaryDiffEq = "3.11-5"
+ParameterizedFunctions = "3-4"
+RecursiveArrayTools = "0.14.0 - 0.20"
+Reexport = "0.0.3 - 0.2"
+SteadyStateDiffEq = "0.2-1"
+StochasticDiffEq = "3-6"
+Sundials = "1-3"
+
+["5-5.2"]
+julia = ["0.7", "1"]
+
+["5-6.2"]
+DiffEqPDEBase = "0.4.0 - 0.4"
+
+["5-6.3"]
+BoundaryValueDiffEq = "1-2"
+DiffEqCallbacks = "1-2"
+DiffEqFinancial = "1-2"
+DiffEqPhysics = "1-3"
+DimensionalPlotRecipes = "0.0.2 - 0.2"
+
+["5-6.4"]
+DiffEqMonteCarlo = "0.10.0 - 0.15"
+
+["5.3-6.3"]
+julia = "1"
+
+["6-6.3"]
+DelayDiffEq = "5"
+DiffEqBase = "5"
+DiffEqJump = "6"
+DiffEqNoiseProcess = "3"
+MultiScaleArrays = "1.4-1"
+OrdinaryDiffEq = "5"
+RecursiveArrayTools = "0.20.0 - 0.20"
+SteadyStateDiffEq = "1.4-1"
+StochasticDiffEq = "6"
+Sundials = "3"
+
+["6-6.7"]
+Reexport = "0.2.0 - 0.2"
+
+["6.10-6"]
+RecursiveArrayTools = "2"
+
+["6.10.0"]
+DiffEqBase = "6.11.0-6"
+
+["6.10.1-6"]
+DiffEqBase = "6.12.2-6"
+
+["6.11"]
+julia = "1.2.0-1"
+
+["6.12-6"]
+ParameterizedFunctions = "5"
+julia = "1.3.0-1"
+
+["6.13-6"]
+Sundials = "3.8.1-4"
+
+["6.14"]
+DiffEqNoiseProcess = "3.6.0-4"
+
+["6.15-6"]
+DiffEqNoiseProcess = "3.6.0-5"
+
+["6.4"]
+DiffEqBase = "5.4.0 - 6"
+
+["6.4-6.6"]
+BoundaryValueDiffEq = "1.0.0 - 2"
+DelayDiffEq = "5.2.0 - 5"
+DiffEqCallbacks = "1.0.0 - 2"
+DiffEqFinancial = "1.0.0 - 2"
+DiffEqJump = "6.0.0 - 6"
+DiffEqNoiseProcess = "3.0.0 - 3"
+DiffEqPhysics = "1.0.0 - 3"
+OrdinaryDiffEq = "5.3.0 - 5"
+RecursiveArrayTools = "0.20.0 - 1"
+SteadyStateDiffEq = "1.4.0 - 1"
+StochasticDiffEq = "6.0.0 - 6"
+Sundials = "3.0.0 - 3"
+
+["6.4-6.7"]
+DimensionalPlotRecipes = "0.0.2 - 1"
+MultiScaleArrays = "1.4.0 - 1"
+julia = "1.1.0-1"
+
+["6.6"]
+DiffEqBase = "5.10.0 - 6"
+
+["6.7"]
+DiffEqBase = "6"
+RecursiveArrayTools = "1.0.0 - 1"
+SteadyStateDiffEq = "1.5.0 - 1"
+
+["6.7-6"]
+DiffEqFinancial = "2.2.0-2"
+DiffEqJump = "6.2.1-6"
+DiffEqPhysics = "3.2.0-3"
+
+["6.7-6.8"]
+BoundaryValueDiffEq = "2"
+DelayDiffEq = "5.15.0-5"
+DiffEqCallbacks = "2.8.0-2"
+DiffEqNoiseProcess = "3.3.0-3"
+OrdinaryDiffEq = "5.16.0-5"
+StochasticDiffEq = "6.9.0-6"
+Sundials = "3.7.0-3"
+
+["6.8"]
+DiffEqBase = "6.2.2-6"
+DimensionalPlotRecipes = "0.0.2-*"
+MultiScaleArrays = "1.4.0-*"
+RecursiveArrayTools = "1.0.0-*"
+Reexport = "0.2.0-*"
+SteadyStateDiffEq = "1.5.0-*"
+
+["6.8-6.10"]
+julia = "1"
+
+["6.9"]
+DiffEqBase = "6.6.0-6"
+RecursiveArrayTools = "1"
+
+["6.9-6"]
+BoundaryValueDiffEq = "2.3.0-2"
+DelayDiffEq = "5.18.0-5"
+DiffEqCallbacks = "2.10.0-2"
+DimensionalPlotRecipes = "1"
+MultiScaleArrays = "1.5.0-1"
+OrdinaryDiffEq = "5.23.0-5"
+Reexport = "0.2"
+SteadyStateDiffEq = "1.5.0-1"
+StochasticDiffEq = "6.13.0-6"
+
+["6.9-6.12"]
+Sundials = "3.8.1-3"
+
+["6.9-6.13"]
+DiffEqNoiseProcess = "3.6.0-3"

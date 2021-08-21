@@ -33,6 +33,9 @@ x1_full[SparseArrays.nonzeroinds(spv_x1)] = nonzeros(spv_x1)
     @test SparseArrays.nonzeroinds(x) == [2, 5, 6]
     @test nonzeros(x) == [1.25, -0.75, 3.5]
     @test count(SparseVector(8, [2, 5, 6], [true,false,true])) == 2
+    y = SparseVector(typemax(Int128), Int128[4], [5])
+    @test y isa SparseVector{Int,Int128}
+    @test @inferred size(y) == (@inferred(length(y)),)
 end
 
 @testset "isstored" begin
@@ -60,7 +63,7 @@ end
     @test occursin("3.5", string(spv_x1))
 
     # issue #30589
-    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool,$Int} with 1 stored entry:\n  [1]  =  1"
+    @test repr("text/plain", sparse([true])) == "1-element SparseArrays.SparseVector{Bool, $Int} with 1 stored entry:\n  [1]  =  1"
 end
 
 ### Comparison helper to ensure exact equality with internal structure
@@ -75,7 +78,11 @@ end
 @testset "other constructors" begin
     # construct empty sparse vector
 
-    @test exact_equal(spzeros(Float64, 8), SparseVector(8, Int[], Float64[]))
+    for dims in (8, (8,))
+        @test exact_equal(spzeros(dims), SparseVector(8, Int[], Float64[]))
+        @test exact_equal(spzeros(Float64, dims), SparseVector(8, Int[], Float64[]))
+        @test exact_equal(spzeros(Float64, Int16, dims), SparseVector(8, Int16[], Float64[]))
+    end
 
     @testset "from list of indices and values" begin
         @test exact_equal(
@@ -431,6 +438,11 @@ end
         copyto!(x2, x) # copyto!(SparseVector, AbstractVector)
         @test Vector(x2) == collect(x)
     end
+    let x = 1:9, x1 = spzeros(length(x)), x2 = spzeros(length(x)-1)
+        @test_throws ArgumentError copy!(x2, x)
+        copy!(x1, convert.(eltype(x1), collect(x))) # copy!(SparseVector, AbstractVector)
+        @test Vector(x1) == collect(x)
+    end
 end
 @testset "vec/reinterpret/float/complex" begin
     a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
@@ -480,6 +492,25 @@ end
         @test isa(xm, SparseMatrixCSC{Float32,Int})
         @test Array(xm) == reshape(convert(Vector{Float32}, xf), 8, 1)
     end
+end
+
+@testset "Conversion from other issparse types" begin
+    n = 10
+    D = Diagonal(rand(1:9, n, n))
+    Bl = Bidiagonal(rand(1:9, n, n), :L)
+    Bu = Bidiagonal(rand(1:9, n, n), :U)
+    T = Tridiagonal(rand(1:9, n, n))
+    S = SymTridiagonal(Symmetric(rand(1:9, n, n)))
+    @test SparseMatrixCSC(D) == D
+    @test SparseMatrixCSC(Bl) == Bl
+    @test SparseMatrixCSC(Bu) == Bu
+    @test SparseMatrixCSC(T) == T
+    @test SparseMatrixCSC(S) == S
+    @test SparseMatrixCSC{Float64, Int16}(D) == D
+    @test SparseMatrixCSC{Float64, Int16}(Bl) == Bl
+    @test SparseMatrixCSC{Float64, Int16}(Bu) == Bu
+    @test SparseMatrixCSC{Float64, Int16}(T) == T
+    @test SparseMatrixCSC{Float64, Int16}(S) == S
 end
 
 @testset "Concatenation" begin
@@ -765,6 +796,19 @@ end
     @test sum(x) == 4.0
     @test sum(abs, x) == 5.5
     @test sum(abs2, x) == 14.375
+    @test @inferred(sum(t -> true, x)) === 8
+    @test @inferred(sum(t -> abs(t) + one(t), x)) == 13.5
+
+    @test @inferred(sum(t -> true, spzeros(Float64, 8))) === 8
+    @test @inferred(sum(t -> abs(t) + one(t), spzeros(Float64, 8))) === 8.0
+
+    # reducing over an empty collection
+    # FIXME sum(f, []) throws, should be fixed both for generic and sparse vectors
+    @test_broken sum(t -> true, zeros(Float64, 0)) === 0
+    @test_broken sum(t -> true, spzeros(Float64, 0)) === 0
+    @test @inferred(sum(abs2, spzeros(Float64, 0))) === 0.0
+    @test_broken sum(t -> abs(t) + one(t), zeros(Float64, 0)) === 0.0
+    @test_broken sum(t -> abs(t) + one(t), spzeros(Float64, 0)) === 0.0
 
     @test norm(x) == sqrt(14.375)
     @test norm(x, 1) == 5.5
@@ -778,6 +822,12 @@ end
         @test minimum(x) == -0.75
         @test maximum(abs, x) == 3.5
         @test minimum(abs, x) == 0.0
+        @test @inferred(minimum(t -> true, x)) === true
+        @test @inferred(maximum(t -> true, x)) === true
+        @test @inferred(minimum(t -> abs(t) + one(t), x)) == 1.0
+        @test @inferred(maximum(t -> abs(t) + one(t), x)) == 4.5
+        @test @inferred(minimum(t -> t + one(t), x)) == 0.25
+        @test @inferred(maximum(t -> -abs(t) + one(t), x)) == 1.0
     end
 
     let x = abs.(spv_x1)
@@ -802,6 +852,15 @@ end
         @test minimum(x) == 0.0
         @test maximum(abs, x) == 0.0
         @test minimum(abs, x) == 0.0
+        @test @inferred(minimum(t -> true, x)) === true
+        @test @inferred(maximum(t -> true, x)) === true
+        @test @inferred(minimum(t -> abs(t) + one(t), x)) === 1.0
+        @test @inferred(maximum(t -> abs(t) + one(t), x)) === 1.0
+    end
+
+    let x = spzeros(Float64, 0)
+        @test_throws ArgumentError minimum(t -> true, x)
+        @test_throws ArgumentError maximum(t -> true, x)
     end
 end
 
@@ -1026,6 +1085,10 @@ end
             @test y == Af'x2f
         end
     end
+    @testset "ldiv with different element types (#40171)" begin
+        sA = sparse(Int16.(1:4), Int16.(1:4), ones(4))
+        @test all(ldiv!(LowerTriangular(sA), ones(4)) .≈ 1.)
+    end
     @testset "ldiv ops with triangular matrices and sparse vecs (#14005)" begin
         m = 10
         sparsefloatvecs = SparseVector[sprand(m, 0.4) for k in 1:3]
@@ -1039,11 +1102,11 @@ end
 
         denseintmat = I*10m + rand(1:m, m, m)
         densefloatmat = I + randn(m, m)/(2m)
-        densecomplexmat = I + randn(Complex{Float64}, m, m)/(4m)
+        densecomplexmat = I + randn(ComplexF64, m, m)/(4m)
 
         inttypes = (Int32, Int64, BigInt)
         floattypes = (Float32, Float64, BigFloat)
-        complextypes = (Complex{Float32}, Complex{Float64})
+        complextypes = (ComplexF32, ComplexF64)
         eltypes = (inttypes..., floattypes..., complextypes...)
 
         for eltypemat in eltypes
@@ -1297,9 +1360,9 @@ mutable struct t20488 end
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparsevec(Int64[1], [1.0]))
-    @test String(take!(io)) == "1-element SparseArrays.SparseVector{Float64,Int64} with 1 stored entry:\n  [1]  =  1.0"
+    @test String(take!(io)) == "1-element SparseArrays.SparseVector{Float64, Int64} with 1 stored entry:\n  [1]  =  1.0"
     show(io, MIME"text/plain"(),  spzeros(Float64, Int64, 2))
-    @test String(take!(io)) == "2-element SparseArrays.SparseVector{Float64,Int64} with 0 stored entries"
+    @test String(take!(io)) == "2-element SparseArrays.SparseVector{Float64, Int64} with 0 stored entries"
     show(io, similar(sparsevec(rand(3) .+ 0.1), t20488))
     @test String(take!(io)) == "  [1]  =  #undef\n  [2]  =  #undef\n  [3]  =  #undef"
 end
@@ -1359,27 +1422,27 @@ end
     # test entry points to similar with entry type, index type, and non-Dims shape specification
     @test similar(A, Float32, Int8, 6, 6) == similar(A, Float32, Int8, (6, 6))
     @test similar(A, Float32, Int8, 6) == similar(A, Float32, Int8, (6,))
-    # test similar with Dims{2} specification (preserves storage space only, not stored-entry structure)
+    # test similar with Dims{2} specification (preserves allocated storage space only, not stored-entry structure)
     simA = similar(A, (6,6))
     @test typeof(simA) == SparseMatrixCSC{eltype(nonzeros(A)),eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(nonzeroinds(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
-    # test similar with entry type and Dims{2} specification (preserves storage space only)
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
+    # test similar with entry type and Dims{2} specification (preserves allocated storage space only)
     simA = similar(A, Float32, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32,eltype(nonzeroinds(A))}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(nonzeroinds(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
     # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
     simA = similar(A, Float32, Int8, (6,6))
     @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
     @test size(simA) == (6,6)
     @test getcolptr(simA) == fill(1, 6+1)
-    @test length(rowvals(simA)) == length(nonzeroinds(A))
-    @test length(nonzeros(simA)) == length(nonzeros(A))
+    @test length(rowvals(simA)) == 0
+    @test length(nonzeros(simA)) == 0
 end
 
 @testset "Fast operations on full column views" begin

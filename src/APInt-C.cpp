@@ -9,6 +9,7 @@
 #include "APInt-C.h"
 #include "julia.h"
 #include "julia_assert.h"
+#include "julia_internal.h"
 
 using namespace llvm;
 
@@ -312,14 +313,16 @@ void LLVMByteSwap(unsigned numbits, integerPart *pa, integerPart *pr) {
     ASSIGN(r, a)
 }
 
-void LLVMFPtoInt(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr, bool isSigned, bool *isExact) {
+void LLVMFPtoInt(unsigned numbits, void *pa, unsigned onumbits, integerPart *pr, bool isSigned, bool *isExact) {
     double Val;
-    if (numbits == 32)
+    if (numbits == 16)
+        Val = __gnu_h2f_ieee(*(uint16_t*)pa);
+    else if (numbits == 32)
         Val = *(float*)pa;
     else if (numbits == 64)
         Val = *(double*)pa;
     else
-        jl_error("FPtoSI: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
+        jl_error("FPtoSI: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
     unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     if (onumbits <= 64) { // fast-path, if possible
         if (isSigned) {
@@ -387,12 +390,14 @@ void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         CREATE(a)
         val = a.roundToDouble(true);
     }
-    if (onumbits == 32)
+    if (onumbits == 16)
+        *(uint16_t*)pr = __gnu_f2h_ieee(val);
+    else if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)
         *(double*)pr = val;
     else
-        jl_error("SItoFP: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
+        jl_error("SItoFP: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
 }
 
 extern "C" JL_DLLEXPORT
@@ -402,7 +407,9 @@ void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         CREATE(a)
         val = a.roundToDouble(false);
     }
-    if (onumbits == 32)
+    if (onumbits == 16)
+        *(uint16_t*)pr = __gnu_f2h_ieee(val);
+    else if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)
         *(double*)pr = val;

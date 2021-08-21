@@ -4,7 +4,7 @@
 
 import Base: typesof, insert!
 
-separate_kwargs(args...; kwargs...) = (args, kwargs.data)
+separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
 """
 Transform a dot expression into one where each argument has been replaced by a
@@ -42,7 +42,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
-        if ex0.head === :. || (ex0.head === :call && string(ex0.args[1])[1] == '.')
+        if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
             codemacro = startswith(string(fcn), "code_")
             if codemacro && ex0.args[2] isa Expr
                 # Manually wrap a dot call in a function
@@ -68,12 +68,20 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 end
                 fully_qualified_symbol &= ex1 isa Symbol
                 if fully_qualified_symbol
-                    if string(fcn) == "which"
-                        return quote $(fcn)($(esc(ex0.args[1])), $(ex0.args[2])) end
-                    else
-                        return Expr(:call, :error, "expression is not a function call or symbol")
+                    return quote
+                        local arg1 = $(esc(ex0.args[1]))
+                        if isa(arg1, Module)
+                            $(if string(fcn) == "which"
+                                  :(which(arg1, $(ex0.args[2])))
+                              else
+                                  :(error("expression is not a function call"))
+                              end)
+                        else
+                            local args = typesof($(map(esc, ex0.args)...))
+                            $(fcn)(Base.getproperty, args)
+                        end
                     end
-                elseif ex0.args[2] isa Expr
+                else
                     return Expr(:call, :error, "dot expressions are not lowered to "
                                 * "a single function call, so @$fcn cannot analyze "
                                 * "them. You may want to use Meta.@lower to identify "
@@ -145,12 +153,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     exret = Expr(:none)
     if ex.head === :call
         if any(e->(isa(e, Expr) && e.head === :(...)), ex0.args) &&
-            (ex.args[1] === GlobalRef(Core,:_apply) ||
-             ex.args[1] === GlobalRef(Base,:_apply))
+            (ex.args[1] === GlobalRef(Core,:_apply_iterate) ||
+             ex.args[1] === GlobalRef(Base,:_apply_iterate))
             # check for splatting
-            exret = Expr(:call, ex.args[1], fcn,
-                        Expr(:tuple, esc(ex.args[2]),
-                            Expr(:call, typesof, map(esc, ex.args[3:end])...)))
+            exret = Expr(:call, ex.args[2], fcn,
+                        Expr(:tuple, esc(ex.args[3]),
+                            Expr(:call, typesof, map(esc, ex.args[4:end])...)))
         else
             exret = Expr(:call, fcn, esc(ex.args[1]),
                          Expr(:call, typesof, map(esc, ex.args[2:end])...), kws...)
@@ -179,7 +187,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
             if length(x.args) != 2
                 return Expr(:call, :error, "Invalid keyword argument: $x")
             end
-            push!(kws, Expr(:kw, x.args[1], x.args[2]))
+            push!(kws, Expr(:kw, esc(x.args[1]), esc(x.args[2])))
         else
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
@@ -211,7 +219,7 @@ end
 macro code_typed(ex0...)
     thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0)
     quote
-        results = $thecall
+        local results = $thecall
         length(results) == 1 ? results[1] : results
     end
 end
@@ -219,8 +227,19 @@ end
 macro code_lowered(ex0...)
     thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_lowered, ex0)
     quote
-        results = $thecall
+        local results = $thecall
         length(results) == 1 ? results[1] : results
+    end
+end
+
+macro time_imports(ex)
+    quote
+        try
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+            $(esc(ex))
+        finally
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
     end
 end
 
@@ -239,7 +258,9 @@ It calls out to the `functionloc` function.
 Applied to a function or macro call, it evaluates the arguments to the specified call, and
 returns the `Method` object for the method that would be called for those arguments. Applied
 to a variable, it returns the module in which the variable was bound. It calls out to the
-`which` function.
+[`which`](@ref) function.
+
+See also: [`@less`](@ref), [`@edit`](@ref).
 """
 :@which
 
@@ -248,6 +269,8 @@ to a variable, it returns the module in which the variable was bound. It calls o
 
 Evaluates the arguments to the function or macro call, determines their types, and calls the `less`
 function on the resulting expression.
+
+See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
 """
 :@less
 
@@ -256,6 +279,8 @@ function on the resulting expression.
 
 Evaluates the arguments to the function or macro call, determines their types, and calls the `edit`
 function on the resulting expression.
+
+See also: [`@less`](@ref), [`@which`](@ref).
 """
 :@edit
 
@@ -318,3 +343,36 @@ Set the optional keyword argument `debuginfo` by putting it before the function 
 `debuginfo` may be one of `:source` (default) or `:none`, to specify the verbosity of code comments.
 """
 :@code_native
+
+"""
+    @time_imports
+
+A macro to execute an expression and produce a report of any time spent importing packages and their
+dependencies.
+
+If a package's dependencies have already been imported either globally or by another dependency they will
+not appear under that package and the package will accurately report a faster load time than if it were to
+be loaded in isolation.
+
+```julia-repl
+julia> @time_imports using CSV
+      3.5 ms    ┌ IteratorInterfaceExtensions
+     27.4 ms  ┌ TableTraits
+    614.0 ms  ┌ SentinelArrays
+    138.6 ms  ┌ Parsers
+      2.7 ms  ┌ DataValueInterfaces
+      3.4 ms    ┌ DataAPI
+     59.0 ms  ┌ WeakRefStrings
+     35.4 ms  ┌ Tables
+     49.5 ms  ┌ PooledArrays
+    972.1 ms  CSV
+```
+
+!!! note
+    During the load process a package sequentially imports where necessary all of its dependencies, not just
+    its direct dependencies. That is also true for the dependencies themselves so nested importing will likely
+    occur, but not always. Therefore the nesting shown in this output report is not equivalent to the dependency
+    tree, but does indicate where import time has accumulated.
+
+"""
+:@time_imports

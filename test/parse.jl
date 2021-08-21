@@ -310,19 +310,3 @@ end
         @test isequal(parse(Float64, s), sign(v))
     end
 end
-
-@testset "unary ± and ∓" begin
-    @test Meta.parse("±x") == Expr(:call, :±, :x)
-    @test Meta.parse("∓x") == Expr(:call, :∓, :x)
-end
-
-@testset "test .<: and .>:" begin
-    tmp = [Int, Float64, String, Bool] .<: Union{Int, String}
-    @test tmp == Bool[1, 0, 1, 0]
-
-    tmp = [Int, Float64, String, Bool] .>: [Int, Float64, String, Bool]
-    @test tmp == Bool[1, 1, 1, 1]
-
-    tmp = @. [Int, Float64, String, Bool] <: Union{Int, String}
-    @test tmp == Bool[1, 0,1, 0]
-end

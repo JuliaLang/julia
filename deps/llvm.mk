@@ -9,16 +9,37 @@ BUILD_LLVM_CLANG := 1
 # because it's a build requirement
 endif
 
-ifeq ($(USE_POLLY),1)
+ifeq ($(USE_RV),1)
+BUILD_LLVM_CLANG := 1
+# because it's a build requirement
+endif
+
+
 ifeq ($(USE_SYSTEM_LLVM),0)
 ifneq ($(LLVM_VER),svn)
+ifeq ($(USE_POLLY),1)
 $(error USE_POLLY=1 requires LLVM_VER=svn)
+endif
+
+ifeq ($(USE_MLIR),1)
+$(error USE_MLIR=1 requires LLVM_VER=svn)
+endif
+
+ifeq ($(USE_RV),1)
+$(error USE_RV=1 requires LLVM_VER=svn)
 endif
 endif
 endif
 
+ifneq ($(USE_RV),)
+LLVM_RV_GIT_URL ?= https://github.com/cdl-saarland/rv
+LLVM_RV_GIT_VER ?= release_90
+endif
+
+
 # for Monorepo
 LLVM_ENABLE_PROJECTS :=
+LLVM_EXTERNAL_PROJECTS :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang;compiler-rt
 endif
@@ -28,11 +49,22 @@ endif
 ifeq ($(BUILD_LLDB), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lldb
 endif
+ifeq ($(USE_MLIR), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);mlir
+endif
+ifeq ($(USE_RV), 1)
+LLVM_EXTERNAL_PROJECTS := $(LLVM_EXTERNAL_PROJECTS);rv
+endif
 
 include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
+ifeq (,$(findstring rc,$(LLVM_VER)))
 LLVM_TAR_EXT:=$(LLVM_VER).src.tar.xz
+else
+LLVM_VER_SPLIT := $(subst -rc, ,$(LLVM_VER))
+LLVM_TAR_EXT:=$(word 1,$(LLVM_VER_SPLIT))rc$(word 2,$(LLVM_VER_SPLIT)).src.tar.xz
+endif
 
 ifneq ($(LLVM_VER),svn)
 LLVM_TAR:=$(SRCCACHE)/llvm-$(LLVM_TAR_EXT)
@@ -42,7 +74,11 @@ LLVM_LLDB_TAR:=$(SRCCACHE)/lldb-$(LLVM_TAR_EXT)
 endif # BUILD_LLDB
 
 ifeq ($(BUILD_LLVM_CLANG),1)
+ifeq ($(LLVM_VER_MAJ).$(LLVM_VER_MIN),9.0)
 LLVM_CLANG_TAR:=$(SRCCACHE)/cfe-$(LLVM_TAR_EXT)
+else
+LLVM_CLANG_TAR:=$(SRCCACHE)/clang-$(LLVM_TAR_EXT)
+endif
 LLVM_COMPILER_RT_TAR:=$(SRCCACHE)/compiler-rt-$(LLVM_TAR_EXT)
 else
 LLVM_CLANG_TAR:=
@@ -56,7 +92,7 @@ endif
 endif # LLVM_VER != svn
 
 # Figure out which targets to build
-LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly
+LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
@@ -67,6 +103,12 @@ LLVM_CMAKE :=
 # MONOREPO
 ifeq ($(LLVM_VER),svn)
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
+LLVM_CMAKE += -DLLVM_EXTERNAL_PROJECTS="$(LLVM_EXTERNAL_PROJECTS)"
+
+ifeq ($(USE_RV),1)
+LLVM_CMAKE += -DLLVM_EXTERNAL_RV_SOURCE_DIR=$(LLVM_MONOSRC_DIR)/rv
+LLVM_CMAKE += -DLLVM_CXX_STD=c++14
+endif
 endif
 
 # Allow adding LLVM specific flags
@@ -76,6 +118,7 @@ LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
 LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
+LLVM_CMAKE += -DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF -DCOMPILER_RT_ENABLE_TVOS=OFF
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
@@ -86,19 +129,14 @@ LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERM
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
 endif # LLVM_ASSERTIONS
-ifeq ($(LLVM_DEBUG), 1)
-ifeq ($(OS), WINNT)
-LLVM_CXXFLAGS += -Wa,-mbig-obj
-endif # OS == WINNT
-endif # LLVM_DEBUG
 ifeq ($(OS), WINNT)
 LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
-ifneq ($(BUILD_OS),WINNT)
-LLVM_CMAKE += -DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_TOOLCHAIN_FILE=$(SRCDIR)/NATIVE.cmake
-endif # BUILD_OS != WINNT
 endif # OS == WINNT
+ifneq ($(HOSTCC),$(CC))
+LLVM_CMAKE += -DCROSS_TOOLCHAIN_FLAGS_NATIVE="-DCMAKE_C_COMPILER=$$(which $(HOSTCC));-DCMAKE_CXX_COMPILER=$$(which $(HOSTCXX))"
+endif
 ifeq ($(OS), emscripten)
-LLVM_CMAKE += -DCMAKE_TOOLCHAIN_FILE=$(EMSCRIPTEN)/cmake/Modules/Platform/Emscripten.cmake -DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_TOOLCHAIN_FILE=$(SRCDIR)/NATIVE.cmake -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_BUILD_TOOLS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_THREADS=OFF -DLLVM_BUILD_UTILS=OFF
+LLVM_CMAKE += -DCMAKE_TOOLCHAIN_FILE=$(EMSCRIPTEN)/cmake/Modules/Platform/Emscripten.cmake -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_BUILD_TOOLS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_THREADS=OFF -DLLVM_BUILD_UTILS=OFF
 endif # OS == emscripten
 ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
@@ -152,6 +190,13 @@ LLVM_CPPFLAGS += -flto
 LLVM_LDFLAGS += -flto
 endif # LLVM_LTO
 
+ifeq ($(USE_LLVM_SHLIB),1)
+ifeq ($(USECLANG),0)
+# https://bugs.llvm.org/show_bug.cgi?id=48221
+LLVM_CXXFLAGS += -fno-gnu-unique
+endif
+endif
+
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
 endif
@@ -175,6 +220,10 @@ endif # BUILD_CUSTOM_LIBCXX
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
 	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)"
+ifeq ($(OS),Darwin)
+# Explicitly use the default for -mmacosx-version-min=10.9 and later
+LLVM_CMAKE += -DLLVM_ENABLE_LIBCXX=ON
+endif
 
 ifeq ($(BUILD_LLVM_CLANG),0)
 # block default building of Clang
@@ -187,12 +236,7 @@ LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
 ifneq ($(LLVM_VER),svn)
-ifeq (,$(findstring rc,$(LLVM_VER)))
 LLVM_SRC_URL := https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)
-else
-LLVM_VER_SPLIT := $(subst rc, ,$(LLVM_VER))
-LLVM_SRC_URL := https://prereleases.llvm.org/$(word 1,$(LLVM_VER_SPLIT))/rc$(word 2,$(LLVM_VER_SPLIT))
-endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCCACHE)
@@ -247,7 +291,7 @@ endif
 # These libraries require unwind.h from the libunwind dependency
 ifeq ($(USE_SYSTEM_LIBUNWIND),0)
 ifeq ($(OS),Darwin)
-BUILT_UNWIND := $(build_prefix)/manifest/osxunwind
+BUILT_UNWIND := $(build_prefix)/manifest/llvmunwind
 else
 BUILT_UNWIND := $(build_prefix)/manifest/unwind
 endif # Darwin
@@ -298,6 +342,7 @@ distclean-libcxx:
 distclean-libcxxabi:
 	-rm -rf $(LLVM_LIBCXXABI_TAR) $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_BUILD_DIR)/libcxxabi-build
 
+
 # We want to ensure that the libcxx linking flags don't get passed to the libcxx build, since it will
 # error on a fresh build
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)" \
@@ -311,6 +356,23 @@ LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LIBCXX_DEPENDENCY := $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1.0
 get-llvm: get-libcxx get-libcxxabi
+endif
+
+checksum-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
+ifneq ($(LLVM_CLANG_TAR),)
+	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
+endif
+ifneq ($(LLVM_COMPILER_RT_TAR),)
+	$(JLCHECKSUM) $(LLVM_COMPILER_RT_TAR)
+endif
+ifneq ($(LLVM_LIBCXX_TAR),)
+	$(JLCHECKSUM) $(LLVM_LIBCXX_TAR)
+endif
+ifneq ($(LLVM_VER),svn)
+	$(JLCHECKSUM) $(LLVM_TAR)
+endif
+ifneq ($(LLVM_LLDB_TAR),)
+	$(JLCHECKSUM) $(LLVM_LLDB_TAR)
 endif
 
 $(LLVM_SRC_DIR)/source-extracted: | $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
@@ -334,8 +396,12 @@ ifneq ($(LLVM_VER),svn)
 	mkdir -p $(LLVM_SRC_DIR)
 	$(TAR) -C $(LLVM_SRC_DIR) --strip-components 1 -xf $(LLVM_TAR)
 else
+	([ ! -d $(LLVM_BARESRC_DIR) ] && \
+		git clone --bare $(LLVM_GIT_URL) $(LLVM_BARESRC_DIR) ) || \
+		(cd $(LLVM_BARESRC_DIR) && \
+		git fetch)
 	([ ! -d $(LLVM_MONOSRC_DIR) ] && \
-		git clone $(LLVM_GIT_URL) $(LLVM_MONOSRC_DIR) ) || \
+		git clone --dissociate --reference $(LLVM_BARESRC_DIR) $(LLVM_GIT_URL) $(LLVM_MONOSRC_DIR) ) || \
 		(cd $(LLVM_MONOSRC_DIR) && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER),)
@@ -345,6 +411,11 @@ endif # LLVM_GIT_VER
 	# Debug output only. Disable pager and ignore error.
 	(cd $(LLVM_SRC_DIR) && \
 		git show HEAD --stat | cat) || true
+ifeq ($(USE_RV),1)
+	git clone -b $(LLVM_RV_GIT_VER) $(LLVM_RV_GIT_URL) $(LLVM_MONOSRC_DIR)/rv
+	(cd $(LLVM_MONOSRC_DIR)/rv && \
+		git submodule update --init) || true
+endif
 endif # LLVM_VER
 ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
@@ -377,59 +448,74 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
-ifeq ($(LLVM_VER_SHORT),8.0)
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
-$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
-$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
-$(eval $(call LLVM_PATCH,llvm7-D50010-VNCoercion-ni))
-$(eval $(call LLVM_PATCH,llvm-8.0-D50167-scev-umin))
-$(eval $(call LLVM_PATCH,llvm7-windows-race))
-$(eval $(call LLVM_PATCH,llvm-D57118-powerpc)) # remove for 9.0
-$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
-$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
-$(eval $(call LLVM_PATCH,llvm-8.0-D66401-mingw-reloc)) # remove for 9.0
-$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
-$(eval $(call LLVM_PATCH,llvm-8.0-D63688-wasm-isLocal)) # remove for 9.0
-$(eval $(call LLVM_PATCH,llvm-8.0-D55758-tablegen-cond)) # remove for 9.0
-$(eval $(call LLVM_PATCH,llvm-8.0-D59389-refactor-wmma)) # remove for 9.0
-$(eval $(call LLVM_PATCH,llvm-8.0-D59393-mma-ptx63-fix)) # remove for 9.0
-$(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
-$(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
-$(eval $(call LLVM_PATCH,llvm-8.0-D75072-SCEV-add-type))
-$(eval $(call LLVM_PATCH,llvm-8.0-D65174-limit-merge-stores)) # remove for 10.0
-endif # LLVM_VER 8.0
+define LLVM_PROJ_PATCH
+$$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
+	cd $$(LLVM_SRC_DIR) && patch -p2 < $$(SRCDIR)/patches/$1.patch
+	echo 1 > $$@
+# declare that applying any patch must re-run the compile step
+$$(LLVM_BUILDDIR_withtype)/build-compiled: $$(LLVM_SRC_DIR)/$1.patch-applied
+LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
+endef
 
-ifeq ($(LLVM_VER_SHORT),9.0)
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
-$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
-$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
-$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
-$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
-$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
-$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
-$(eval $(call LLVM_PATCH,llvm-8.0-D66657-codegen-degenerate)) # remove for 10.0
-$(eval $(call LLVM_PATCH,llvm-8.0-D71495-vectorize-freduce)) # remove for 10.0
-$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
-$(eval $(call LLVM_PATCH,llvm-9.0-D65174-limit-merge-stores)) # remove for 10.0
-$(eval $(call LLVM_PATCH,llvm9-D71443-PPC-MC-redef-symbol)) # remove for 10.0
-$(eval $(call LLVM_PATCH,llvm-9.0-D78196)) # remove for 11.0
-endif # LLVM_VER 9.0
+ifeq ($(LLVM_VER_SHORT),11.0)
+ifeq ($(LLVM_VER_PATCH), 0)
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1)) # remove for LLVM 12
+endif # LLVM_VER 11.0.0
+$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # replaced by D90969 for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS)) # Needs upstreaming
+$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485)) # Needs upstreaming
+$(eval $(call LLVM_PATCH,llvm-11-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
+$(eval $(call LLVM_PATCH,llvm-D80101)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-D84031)) # remove for LLVM 12
+ifeq ($(LLVM_VER_PATCH), 0)
+$(eval $(call LLVM_PATCH,llvm-10-D85553)) # remove for LLVM 12
+endif # LLVM_VER 11.0.0
+$(eval $(call LLVM_PATCH,llvm-10-unique_function_clang-sa)) # Needs upstreaming
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
+endif
+ifeq ($(LLVM_VER_PATCH), 0)
+$(eval $(call LLVM_PATCH,llvm-11-D85313-debuginfo-empty-arange)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D90722-rtdyld-absolute-relocs)) # remove for LLVM 12
+endif # LLVM_VER 11.0.0
+$(eval $(call LLVM_PATCH,llvm-invalid-addrspacecast-sink)) # Still being upstreamed as D92210
+$(eval $(call LLVM_PATCH,llvm-11-D92906-ppc-setjmp)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-PR48458-X86ISelDAGToDAG)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D93092-ppc-knownbits)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D93154-globalisel-as))
+$(eval $(call LLVM_PATCH,llvm-11-ppc-half-ctr)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-ppc-sp-from-bp)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-rGb498303066a6-gcc11-header-fix)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps))
+$(eval $(call LLVM_PATCH,llvm-11-D94980-CTR-half)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D94058-sext-atomic-ops)) # remove for LLVM 12
+$(eval $(call LLVM_PATCH,llvm-11-D96283-dagcombine-half)) # remove for LLVM 12
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-AArch64-FastIsel-bug))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97435-AArch64-movaddrreg))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97571-AArch64-loh)) # remove for LLVM 13
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
+endif # LLVM_VER 11.0
 
-ifeq ($(LLVM_VER_SHORT),10.0)
-$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_6.0.1))
-$(eval $(call LLVM_PATCH,llvm8-D34078-vectorize-fdiv))
-$(eval $(call LLVM_PATCH,llvm-7.0-D44650)) # mingw32 build fix
-$(eval $(call LLVM_PATCH,llvm-6.0-DISABLE_ABI_CHECKS))
-$(eval $(call LLVM_PATCH,llvm9-D50010-VNCoercion-ni))
-$(eval $(call LLVM_PATCH,llvm-exegesis-mingw)) # mingw build
-$(eval $(call LLVM_PATCH,llvm-test-plugin-mingw)) # mingw build
-$(eval $(call LLVM_PATCH,llvm7-revert-D44485))
-$(eval $(call LLVM_PATCH,llvm-D75072-SCEV-add-type))
-$(eval $(call LLVM_PATCH,llvm-10.0-PPC_SELECT_CC)) # delete for LLVM 11
-$(eval $(call LLVM_PATCH,llvm-10.0-PPC-LI-Elimination)) # delete for LLVM 11
-endif # LLVM_VER 10.0
+ifeq ($(LLVM_VER_SHORT),12.0)
+$(eval $(call LLVM_PATCH,llvm7-revert-D44485)) # Needs upstreaming
+$(eval $(call LLVM_PATCH,llvm-12-D75072-SCEV-add-type))
+$(eval $(call LLVM_PATCH,llvm-julia-tsan-custom-as))
+ifeq ($(BUILD_LLVM_CLANG),1)
+$(eval $(call LLVM_PATCH,llvm-D88630-clang-cmake))
+endif
+$(eval $(call LLVM_PATCH,llvm-invalid-addrspacecast-sink)) # Still being upstreamed as D92210
+$(eval $(call LLVM_PATCH,llvm-11-D93154-globalisel-as))
+$(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-AArch64-FastIsel-bug))
+$(eval $(call LLVM_PATCH,llvm-12-D97435-AArch64-movaddrreg))
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-D97571-AArch64-loh)) # remove for LLVM 13
+$(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
+$(eval $(call LLVM_PROJ_PATCH,llvm-12-fde-symbols-aarch64)) # remove for LLVM 13
+$(eval $(call LLVM_PROJ_PATCH,llvm-12-force-eh_frame-aarch64)) # remove for LLVM 13
+endif # LLVM_VER 12.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)
@@ -470,7 +556,7 @@ LLVM_INSTALL = \
     cp -r $$(LLVM_SRC_DIR)/utils/lit $2$$(build_depsbindir)/ && \
     $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
-LLVM_INSTALL += && cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
+LLVM_INSTALL += && cp $2$$(build_shlibdir)/libLLVM.dll $2$$(build_depsbindir)
 endif
 ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
@@ -505,19 +591,26 @@ check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:
-	cd $(LLVM_MONOSRC_DIR) && \
-		git pull --ff-only
+	(cd $(LLVM_BARESRC_DIR) && \
+		git fetch)
+	(cd $(LLVM_MONOSRC_DIR) && \
+		git fetch $(LLVM_BARESRC_DIR) +refs/remotes/*:refs/remotes/* && \
+		git pull --ff-only)
 endif
 else # USE_BINARYBUILDER_LLVM
-ifneq ($(BINARYBUILDER_LLVM_ASSERTS), 1)
-LLVM_BB_REPO_NAME := LLVM_full
-else
-LLVM_BB_REPO_NAME := LLVM_full_assert
-LLVM_BB_NAME := LLVM.asserts.v$(LLVM_VER)
+
+# We provide a way to subversively swap out which LLVM JLL we pull artifacts from
+ifeq ($(LLVM_ASSERTIONS), 1)
+LLVM_JLL_DOWNLOAD_NAME := libLLVM_assert
+LLVM_JLL_VER := $(LLVM_ASSERT_JLL_VER)
+LLVM_TOOLS_JLL_DOWNLOAD_NAME := LLVM_assert
+LLVM_TOOLS_JLL_VER := $(LLVM_TOOLS_ASSERT_JLL_VER)
 endif
-LLVM_BB_NAME := $(LLVM_BB_REPO_NAME).v$(LLVM_VER)
-LLVM_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/$(LLVM_BB_REPO_NAME)_jll.jl/releases/download/$(LLVM_BB_REPO_NAME)-v$(LLVM_VER)+$(LLVM_BB_REL)
 
 $(eval $(call bb-install,llvm,LLVM,false,true))
+$(eval $(call bb-install,clang,CLANG,false,true))
+$(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
+
+install-clang install-llvm-tools: install-llvm
 
 endif # USE_BINARYBUILDER_LLVM

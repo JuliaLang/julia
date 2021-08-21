@@ -1,0 +1,29 @@
+# This file launches all the build jobs that _don't_ require secrets access.
+# These jobs can pass their output off to jobs that do require secrets access,
+# but those privileged steps require signing before they can be run.
+#
+# Yes, this is creating another layer of indirection; the flow now looks like:
+#
+#   [webui] -> launch_unsigned_builders.yml -> misc/whitespace.yml
+#
+# when we could theoretically just have the `webui` launch `misc/whitespace.yml`,
+# however this raises the bar for contributors to add new (unsigned) steps to
+# our CI configuration, so I'd rather live with an extra layer of indirection
+# and only need to touch the webui configuration when we need to alter
+# something about the privileged steps.
+
+steps:
+  - label: ":buildkite: Launch unsigned builders"
+    commands: |
+      # First, we launch the `whitespace` builder, because we want that builder to finish as quickly as possible.
+      buildkite-agent pipeline upload .buildkite/pipelines/main/misc/whitespace.yml
+
+      # Next, we launch the miscellaneous builders in alphabetical order.
+      buildkite-agent pipeline upload .buildkite/pipelines/main/misc/doctest.yml
+      buildkite-agent pipeline upload .buildkite/pipelines/main/misc/embedding.yml
+      buildkite-agent pipeline upload .buildkite/pipelines/main/misc/llvmpasses.yml
+
+      # Finally, we launch the platform builders (`package_*`) and (`tester_*`) in alphabetical order.
+      buildkite-agent pipeline upload .buildkite/pipelines/main/platforms/linux64.yml
+    agents:
+      queue: julia

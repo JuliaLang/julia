@@ -465,7 +465,7 @@ struct _fl_context_t {
     unsigned char *tospace;
     unsigned char *curheap;
     unsigned char *lim;
-    uint32_t heapsize;//bytes
+    size_t heapsize;//bytes
     uint32_t *consflags;
 
     // error utilities --------------------------------------------------

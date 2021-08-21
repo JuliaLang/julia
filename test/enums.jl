@@ -143,6 +143,10 @@ let io = IOBuffer()
     @test String(take!(io)) == sprint(print, Fruit)
 end
 
+# Test printing of invalid enums
+@test repr("text/plain", reinterpret(Fruit, Int32(11))) == "<invalid #11>::Fruit = 11"
+@test repr("text/plain", reinterpret(Fruit, Int32(-5))) == "<invalid #-5>::Fruit = -5"
+
 @enum LogLevel DEBUG INFO WARN ERROR CRITICAL
 @test DEBUG < CRITICAL
 
@@ -159,6 +163,9 @@ end
 @test repr("text/plain", thr)   == "$(string(thr))::UI8 = 0x03"
 @test repr("text/plain", sevn)  == "$(string(sevn))::UI8 = 0x07"
 @test repr("text/plain", fiftn) == "$(string(fiftn))::UI8 = 0xf0"
+
+@test repr("text/plain", reinterpret(UI8, 0x01)) == "<invalid #1>::UI8 = 0x01"
+@test repr("text/plain", reinterpret(UI8, 0xff)) == "<invalid #255>::UI8 = 0xff"
 
 # test block form
 @enum BritishFood begin
@@ -200,3 +207,13 @@ end
     alphabet_z = 26
 end
 @test alphabet_z == Alphabet(26)
+
+let b = IOBuffer()
+    show(b, MIME"text/plain"(), Enum)
+    @test String(take!(b)) == "Enum"
+    b = IOBuffer()
+    show(b, MIME"text/plain"(), Union{Alphabet, BritishFood})
+    str = String(take!(b))
+    p = string(@__MODULE__)
+    @test str == "Union{$p.Alphabet, $p.BritishFood}" || str == "Union{$p.BritishFood, $p.Alphabet}"
+end

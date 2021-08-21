@@ -4,6 +4,10 @@ using Random
 
 # main tests
 
+# issue #35800
+# tested very early since it can be state-dependent
+@test @inferred(mapreduce(x->count(!iszero,x), +, [rand(1)]; init = 0.)) == 1.0
+
 function safe_mapslices(op, A, region)
     newregion = intersect(region, 1:ndims(A))
     return isempty(newregion) ? A : mapslices(op, A, dims = newregion)
@@ -73,6 +77,15 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     @test @inferred(maximum(abs, Areduc, dims=region)) ≈ safe_maxabs(Areduc, region)
     @test @inferred(minimum(abs, Areduc, dims=region)) ≈ safe_minabs(Areduc, region)
     @test @inferred(count(!, Breduc, dims=region)) ≈ safe_count(.!Breduc, region)
+
+    @test isequal(
+        @inferred(count(Breduc, dims=region, init=0x02)),
+        safe_count(Breduc, region) .% UInt8 .+ 0x02,
+    )
+    @test isequal(
+        @inferred(count(!, Breduc, dims=region, init=Int16(0))),
+        safe_count(.!Breduc, region) .% Int16,
+    )
 end
 
 # Combining dims and init
@@ -186,6 +199,7 @@ end
     end
 
 end
+
 ## findmin/findmax/minimum/maximum
 
 A = [1.0 5.0 6.0;
@@ -208,6 +222,39 @@ for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
     @test isequal(maximum!(copy(rval), A, init=false), rval)
+end
+
+@testset "missing in findmin/findmax" begin
+    B = [1.0 missing NaN;
+         5.0 NaN missing]
+    for (tup, rval, rind) in [(1, [5.0 missing missing], [CartesianIndex(2, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
+                              (2, [missing; missing],    [CartesianIndex(1, 2) CartesianIndex(2, 3)] |> permutedims)]
+        (rval′, rind′) = findmax(B, dims=tup)
+        @test all(rval′ .=== rval)
+        @test all(rind′ .== rind)
+        @test all(maximum(B, dims=tup) .=== rval)
+    end
+
+    for (tup, rval, rind) in [(1, [1.0 missing missing], [CartesianIndex(1, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
+                              (2, [missing; missing],    [CartesianIndex(1, 2) CartesianIndex(2, 3)] |> permutedims)]
+        (rval′, rind′) = findmin(B, dims=tup)
+        @test all(rval′ .=== rval)
+        @test all(rind′ .== rind)
+        @test all(minimum(B, dims=tup) .=== rval)
+    end
+end
+
+@testset "reducedim_init min/max unorderable handling" begin
+    x = Any[1.0, NaN]
+    y = [1, missing]
+    for (v, rval1, rval2) in [(x, [NaN], x),
+                              (y, [missing], y),
+                              (Any[1. NaN; 1. 1.], Any[1. NaN], Any[NaN, 1.])]
+        for f in (minimum, maximum)
+            @test all(f(v, dims=1) .=== rval1)
+            @test all(f(v, dims=2) .=== rval2)
+        end
+    end
 end
 
 #issue #23209
@@ -445,4 +492,20 @@ end
 @testset "count: throw on non-bool types" begin
     @test_throws TypeError count([1], dims=1)
     @test_throws TypeError count!([1], [1])
+end
+
+@test @inferred(count(false:true, dims=:, init=0x0004)) === 0x0005
+@test @inferred(count(isodd, reshape(1:9, 3, 3), dims=:, init=Int128(0))) === Int128(5)
+
+@testset "reduced_index for BigInt (issue #39995)" begin
+    for T in [Int8, Int16, Int32, Int64, Int128, BigInt]
+        r = T(1):T(2)
+        ax = axes(r, 1)
+        axred = Base.reduced_index(ax)
+        @test axred == Base.OneTo(1)
+        @test typeof(axred) === typeof(ax)
+        r_red = reduce(+, r, dims = 1)
+        @test eltype(r_red) == T
+        @test r_red == [3]
+    end
 end

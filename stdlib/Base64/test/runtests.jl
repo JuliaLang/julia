@@ -38,16 +38,30 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     # Byte-by-byte encode and decode.
     buf = IOBuffer()
     pipe = Base64EncodePipe(buf)
+    @test !isreadable(pipe) && iswritable(pipe)
     for char in inputText
         write(pipe, UInt8(char))
     end
     close(pipe)
     pipe = Base64DecodePipe(IOBuffer(take!(buf)))
+    @test isreadable(ipipe) && !iswritable(ipipe)
     decoded = UInt8[]
     while !eof(pipe)
         push!(decoded, read(pipe, UInt8))
     end
     @test String(decoded) == inputText
+
+    buf = IOBuffer(write=false)
+    pipe = Base64EncodePipe(buf)
+    @test !isreadable(pipe) && !iswritable(pipe)
+    @test_throws ArgumentError write(pipe, "Hello!")
+    close(pipe)
+    buf = IOBuffer(read=false)
+    write(buf, "SGVsbG8h")
+    pipe = Base64DecodePipe(buf)
+    @test !isreadable(pipe) && !iswritable(pipe)
+    @test isempty(read(pipe))
+
 
     # Encode to string and decode
     @test String(base64decode(base64encode(inputText))) == inputText

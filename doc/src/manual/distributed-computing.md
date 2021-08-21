@@ -1,6 +1,6 @@
 # Multi-processing and Distributed Computing
 
-An implementation of distributed memory parallel computing is provided by module `Distributed`
+An implementation of distributed memory parallel computing is provided by module [`Distributed`](@ref man-distributed)
 as part of the standard library shipped with Julia.
 
 Most modern computers possess more than one CPU, and several computers can be combined together
@@ -45,11 +45,11 @@ computation is running on the worker.
 
 Let's try this out. Starting with `julia -p n` provides `n` worker processes on the local machine.
 Generally it makes sense for `n` to equal the number of CPU threads (logical cores) on the machine. Note that the `-p`
-argument implicitly loads module `Distributed`.
+argument implicitly loads module [`Distributed`](@ref man-distributed).
 
 
 ```julia
-$ ./julia -p 2
+$ julia -p 2
 
 julia> r = remotecall(rand, 2, 2, 2)
 Future(2, 1, 4, nothing)
@@ -80,14 +80,22 @@ you read from a remote object to obtain data needed by the next local operation.
 but is more efficient.
 
 ```julia-repl
-julia> remotecall_fetch(getindex, 2, r, 1, 1)
+julia> remotecall_fetch(r-> fetch(r)[1, 1], 2, r)
 0.18526337335308085
+```
+
+This fetches the array on worker 2 and returns the first value. Note, that `fetch` doesn't move any data in
+this case, since it's executed on the worker that owns the array. One can also write:
+
+```julia-repl
+julia> remotecall_fetch(getindex, 2, r, 1, 1)
+0.10824216411304866
 ```
 
 Remember that [`getindex(r,1,1)`](@ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
 the first element of the future `r`.
 
-To make things easier, the symbol `:any` can be passed to [`@spawnat`], which picks where to do
+To make things easier, the symbol `:any` can be passed to [`@spawnat`](@ref), which picks where to do
 the operation for you:
 
 ```julia-repl
@@ -190,7 +198,7 @@ loaded
 ```
 
 As usual, this does not bring `DummyModule` into scope on any of the process, which requires
-`using` or `import`.  Moreover, when `DummyModule` is brought into scope on one process, it
+[`using`](@ref) or [`import`](@ref).  Moreover, when `DummyModule` is brought into scope on one process, it
 is not on any other:
 
 ```julia-repl
@@ -228,7 +236,7 @@ like a process providing an interactive prompt.
 
 Finally, if `DummyModule.jl` is not a standalone file but a package, then `using
 DummyModule` will _load_ `DummyModule.jl` on all processes, but only bring it into scope on
-the process where `using` was called.
+the process where [`using`](@ref) was called.
 
 ## Starting and managing worker processes
 
@@ -254,7 +262,7 @@ julia> addprocs(2)
  3
 ```
 
-Module `Distributed` must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
+Module [`Distributed`](@ref man-distributed) must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
 It is automatically made available on the worker processes.
 
 Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
@@ -314,8 +322,8 @@ is replaced with a more expensive operation. Then it might make sense to add ano
 statement just for this step.
 
 ## Global variables
-Expressions executed remotely via `@spawnat`, or closures specified for remote execution using
-`remotecall` may refer to global variables. Global bindings under module `Main` are treated
+Expressions executed remotely via [`@spawnat`](@ref), or closures specified for remote execution using
+[`remotecall`](@ref) may refer to global variables. Global bindings under module `Main` are treated
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
 
@@ -327,7 +335,7 @@ remotecall_fetch(()->sum(A), 2)
 In this case [`sum`](@ref) MUST be defined in the remote process.
 Note that `A` is a global variable defined in the local workspace. Worker 2 does not have a variable called
 `A` under `Main`. The act of shipping the closure `()->sum(A)` to worker 2 results in `Main.A` being defined
-on 2. `Main.A` continues to exist on worker 2 even after the call `remotecall_fetch` returns. Remote calls
+on 2. `Main.A` continues to exist on worker 2 even after the call [`remotecall_fetch`](@ref) returns. Remote calls
 with embedded global references (under `Main` module only) manage globals as follows:
 
 - New global bindings are created on destination workers if they are referenced as part of a remote call.
@@ -580,7 +588,7 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> @async make_jobs(n); # feed the jobs channel with "n" jobs
+julia> errormonitor(@async make_jobs(n)); # feed the jobs channel with "n" jobs
 
 julia> for p in workers() # start tasks on the workers to process requests in parallel
            remote_do(do_work, p, jobs, results)
@@ -648,7 +656,7 @@ Once finalized, a reference becomes invalid and cannot be used in any further ca
 ## Local invocations
 
 Data is necessarily copied over to the remote node for execution. This is the case for both
-remotecalls and when data is stored to a[`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
+remotecalls and when data is stored to a [`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed
@@ -1197,12 +1205,12 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom `ClusterManager`.
 
-  * If you specify `multiplex=true` as an option to `addprocs`, SSH multiplexing is used to create
+  * If you specify `multiplex=true` as an option to [`addprocs`](@ref), SSH multiplexing is used to create
     a tunnel between the master and workers. If you have configured SSH multiplexing on your own and
     the connection has already been established, SSH multiplexing is used regardless of `multiplex`
     option. If multiplexing is enabled, forwarding is set by using the existing connection
     (`-O forward` option in ssh). This is beneficial if your servers require password authentication;
-    you can avoid authentication in Julia by logging in to the server ahead of `addprocs`. The control
+    you can avoid authentication in Julia by logging in to the server ahead of [`addprocs`](@ref). The control
     socket will be located at `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing
     connection is used. Note that bandwidth may be limited if you create multiple processes on a node
     and enable multiplexing, because in that case processes share a single multiplexing TCP connection.
@@ -1228,7 +1236,7 @@ For example, cookies can be pre-shared and hence not specified as a startup argu
 
 ## Specifying Network Topology (Experimental)
 
-The keyword argument `topology` passed to `addprocs` is used to specify how the workers must be
+The keyword argument `topology` passed to [`addprocs`](@ref) is used to specify how the workers must be
 connected to each other:
 
   * `:all_to_all`, the default: all workers are connected to each other.

@@ -1,14 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compiler
+getfield(Core, :eval)(Core, :(baremodule Compiler
 
 using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
-             _apply, _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance, CodeInstance
+             _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
+             MethodInstance, CodeInstance, MethodMatch, PartialOpaque
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
+const swapproperty! = Core.swapfield!
+const modifyproperty! = Core.modifyfield!
+const replaceproperty! = Core.replacefield!
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
@@ -18,9 +22,14 @@ eval(m, x) = Core.eval(m, x)
 include(x) = Core.include(Compiler, x)
 include(mod, x) = Core.include(mod, x)
 
-#############
-# from Base #
-#############
+# The real @inline macro is not available until after array.jl, so this
+# internal macro splices the meta Expr directly into the function body.
+macro _inline_meta()
+    Expr(:meta, :inline)
+end
+macro _noinline_meta()
+    Expr(:meta, :noinline)
+end
 
 # essential files and libraries
 include("essentials.jl")
@@ -41,6 +50,7 @@ include("expr.jl")
 include("error.jl")
 
 # core numeric operations & types
+==(x::T, y::T) where {T} = x === y
 include("bool.jl")
 include("number.jl")
 include("int.jl")
@@ -95,6 +105,13 @@ using .Iterators: zip, enumerate
 using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
 
+ntuple(f, ::Val{0}) = ()
+ntuple(f, ::Val{1}) = (@_inline_meta; (f(1),))
+ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
+ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
+ntuple(f, ::Val{n}) where {n} = ntuple(f, n::Int)
+ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
+
 # core docsystem
 include("docs/core.jl")
 
@@ -108,22 +125,28 @@ using .Order
 include("sort.jl")
 using .Sort
 
+# We don't include some.jl, but this definition is still useful.
+something(x::Nothing, y...) = something(y...)
+something(x::Any, y...) = x
+
 ############
 # compiler #
 ############
 
+include("compiler/cicache.jl")
 include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
+include("compiler/methodtable.jl")
 
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
-include("compiler/cicache.jl")
 
 include("compiler/typeutils.jl")
 include("compiler/typelimits.jl")
 include("compiler/typelattice.jl")
 include("compiler/tfuncs.jl")
+include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
@@ -137,4 +160,3 @@ Core.eval(Core, :(_parse = Compiler.fl_parse))
 
 end # baremodule Compiler
 ))
-

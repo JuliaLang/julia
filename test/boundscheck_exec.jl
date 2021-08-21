@@ -251,5 +251,12 @@ if bc_opt == bc_default || bc_opt == bc_off
     @test occursin("vector.body", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
 end
 
+# Boundschecking removal of indices with different type, see #40281
+getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
+typed_40281 = sprint((io, args...) -> code_warntype(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
+if bc_opt == bc_default || bc_opt == bc_off
+    @test occursin("arrayref(false", typed_40281)
+    @test !occursin("arrayref(true", typed_40281)
+end
 
 end

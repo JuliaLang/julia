@@ -3,3 +3,17 @@
 /Pkg
 /Statistics-*
 /Statistics
+/LibCURL-*
+/LibCURL
+/Downloads-*
+/Downloads
+/ArgTools-*
+/ArgTools
+/Tar-*
+/Tar
+/NetworkOptions-*
+/NetworkOptions
+/SuiteSparse-*
+/SuiteSparse
+/*_jll/StdlibArtifacts.toml
+/*/Manifest.toml

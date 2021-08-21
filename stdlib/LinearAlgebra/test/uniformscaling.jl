@@ -7,8 +7,10 @@ using Test, LinearAlgebra, Random, SparseArrays
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
 
-Random.seed!(123)
+Random.seed!(1234543)
 
 @testset "basic functions" begin
     @test I === I' # transpose
@@ -101,7 +103,7 @@ end
     @test conj(UniformScaling(1))::UniformScaling{Int} == UniformScaling(1)
     @test conj(UniformScaling(1.0))::UniformScaling{Float64} == UniformScaling(1.0)
     @test conj(UniformScaling(1+1im))::UniformScaling{Complex{Int}} == UniformScaling(1-1im)
-    @test conj(UniformScaling(1.0+1.0im))::UniformScaling{Complex{Float64}} == UniformScaling(1.0-1.0im)
+    @test conj(UniformScaling(1.0+1.0im))::UniformScaling{ComplexF64} == UniformScaling(1.0-1.0im)
 end
 
 @testset "isdiag, istriu, istril, issymmetric, ishermitian, isposdef, isapprox" begin
@@ -153,6 +155,11 @@ end
     @test (α * I) .^ β == UniformScaling(α^β)
 end
 
+@testset "unary" begin
+    @test +I === +1*I
+    @test -I === -1*I
+end
+
 @testset "tr, det and logdet" begin
     for T in (Int, Float64, ComplexF64, Bool)
         @test tr(UniformScaling(zero(T))) === zero(T)
@@ -167,9 +174,9 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
-@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
+@test sprint(show,MIME"text/plain"(),UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{ComplexF64}\n(1.0 + 0.0im)*I"
 @test sprint(show,MIME"text/plain"(),UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}\n1.0*I"
-@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{Complex{Float64}}(1.0 + 0.0im)"
+@test sprint(show,UniformScaling(one(ComplexF64))) == "LinearAlgebra.UniformScaling{ComplexF64}(1.0 + 0.0im)"
 @test sprint(show,UniformScaling(one(Float32))) == "LinearAlgebra.UniformScaling{Float32}(1.0f0)"
 
 let
@@ -328,10 +335,19 @@ end
         B = T(rand(3,3))
         C = T(rand(0,3))
         D = T(rand(2,0))
+        E = T(rand(1,3))
+        F = T(rand(3,1))
+        α = rand()
         @test (hcat(A, 2I))::T == hcat(A, Matrix(2I, 3, 3))
+        @test (hcat(E, α))::T == hcat(E, [α])
+        @test (hcat(E, α, 2I))::T == hcat(E, [α], fill(2, 1, 1))
         @test (vcat(A, 2I))::T == vcat(A, Matrix(2I, 4, 4))
+        @test (vcat(F, α))::T == vcat(F, [α])
+        @test (vcat(F, α, 2I))::T == vcat(F, [α], fill(2, 1, 1))
         @test (hcat(C, 2I))::T == C
+        @test_throws DimensionMismatch hcat(C, α)
         @test (vcat(D, 2I))::T == D
+        @test_throws DimensionMismatch vcat(D, α)
         @test (hcat(I, 3I, A, 2I))::T == hcat(Matrix(I, 3, 3), Matrix(3I, 3, 3), A, Matrix(2I, 3, 3))
         @test (vcat(I, 3I, A, 2I))::T == vcat(Matrix(I, 4, 4), Matrix(3I, 4, 4), A, Matrix(2I, 4, 4))
         @test (hvcat((2,1,2), B, 2I, I, 3I, 4I))::T ==
@@ -346,6 +362,9 @@ end
             hvcat((2,2,2), B, Matrix(2I, 3, 3), C, C, Matrix(3I, 3, 3), Matrix(4I, 3, 3))
         @test hvcat((3,2,1), C, C, I, B ,3I, 2I)::T ==
             hvcat((2,2,1), C, C, B, Matrix(3I,3,3), Matrix(2I,6,6))
+        @test (hvcat((1,2), A, E, α))::T == hvcat((1,2), A, E, [α]) == hvcat((1,2), A, E, α*I)
+        @test (hvcat((2,2), α, E, F, 3I))::T == hvcat((2,2), [α], E, F, Matrix(3I, 3, 3))
+        @test (hvcat((2,2), 3I, F, E, α))::T == hvcat((2,2), Matrix(3I, 3, 3), F, E, [α])
     end
 end
 
@@ -395,6 +414,13 @@ end
     @test 0denseI != 2I != 0denseI # test generic path / inequality on diag
     @test alltwos != 2I != alltwos # test generic path / inequality off diag
     @test rdenseI !=  I != rdenseI # test square matrix check
+
+    # isequal
+    @test !isequal(I, I(3))
+    @test !isequal(I(1), I)
+    @test !isequal([1], I)
+    @test isequal(I, 1I)
+    @test !isequal(2I, 3I)
 end
 
 @testset "operations involving I should preserve eltype" begin
@@ -440,12 +466,37 @@ end
     target = J * A * alpha + C * beta
     @test mul!(copy(C), J, A, alpha, beta) ≈ target
     @test mul!(copy(C), A, J, alpha, beta) ≈ target
+
+    a = randn()
+    C = randn(3, 3)
+    target_5mul = a*alpha*J + beta*C
+    @test mul!(copy(C), a, J, alpha, beta) ≈ target_5mul
+    @test mul!(copy(C), J, a, alpha, beta) ≈ target_5mul
+    target_5mul = beta*C # alpha = 0
+    @test mul!(copy(C), a, J, 0, beta) ≈ target_5mul
+    target_5mul = a*alpha*Matrix(J, 3, 3) # beta = 0
+    @test mul!(copy(C), a, J, alpha, 0) ≈ target_5mul
+
 end
 
 @testset "Construct Diagonal from UniformScaling" begin
     @test size(I(3)) === (3,3)
     @test I(3) isa Diagonal
     @test I(3) == [1 0 0; 0 1 0; 0 0 1]
+end
+
+@testset "dot" begin
+    A = randn(3, 3)
+    λ = randn()
+    J = UniformScaling(λ)
+    @test dot(A, J) ≈ dot(J, A)
+    @test dot(A, J) ≈ tr(A' * J)
+
+    A = rand(ComplexF64, 3, 3)
+    λ = randn() + im * randn()
+    J = UniformScaling(λ)
+    @test dot(A, J) ≈ conj(dot(J, A))
+    @test dot(A, J) ≈ tr(A' * J)
 end
 
 @testset "generalized dot" begin
@@ -461,7 +512,7 @@ end
 
 @testset "Factorization solutions" begin
     J = complex(randn(),randn()) * I
-    qrp = A -> qr(A, Val(true))
+    qrp = A -> qr(A, ColumnNorm())
 
     # thin matrices
     X = randn(3,2)
@@ -490,6 +541,22 @@ end
         @test @inferred(F \ I) ≈ Z
         @test @inferred(F \ J) ≈ Z * J
     end
+end
+
+@testset "offset arrays" begin
+    A = OffsetArray(zeros(4,4), -1:2, 0:3)
+    @test sum(I + A) ≈ 3.0
+    @test sum(A + I) ≈ 3.0
+    @test sum(I - A) ≈ 3.0
+    @test sum(A - I) ≈ -3.0
+end
+
+@testset "type promotion when dividing UniformScaling by matrix" begin
+    A = randn(5,5)
+    cA = complex(A)
+    J = (5+2im)*I
+    @test J/A ≈ J/cA
+    @test A\J ≈ cA\J
 end
 
 end # module TestUniformscaling

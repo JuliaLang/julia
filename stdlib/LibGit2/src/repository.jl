@@ -32,7 +32,7 @@ end
 function cleanup(r::GitRepo)
     if r.ptr != C_NULL
         ensure_initialized()
-        ccall((:git_repository__cleanup, :libgit2), Cvoid, (Ptr{Cvoid},), r.ptr)
+        @check ccall((:git_repository__cleanup, :libgit2), Cint, (Ptr{Cvoid},), r.ptr)
     end
 end
 

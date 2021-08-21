@@ -27,6 +27,9 @@ include("forbidproperties.jl")
         @test map!(cos, X, A) == sparse(map!(cos, fX, fA))
         @test_throws DimensionMismatch map!(sin, X, spzeros((shapeA .- 1)...))
     end
+    # https://github.com/JuliaLang/julia/issues/37819
+    Z = spzeros(Float64, Int32, 50000, 50000)
+    @test isa(-Z, SparseMatrixCSC{Float64, Int32})
 end
 
 @testset "map[!] implementation specialized for a pair of (input) sparse vectors/matrices" begin
@@ -54,6 +57,9 @@ end
         @test map!(f, X, A, B) == sparse(map!(f, fX, fA, fB))
         @test_throws DimensionMismatch map!(f, X, A, spzeros((shapeA .- 1)...))
     end
+    # https://github.com/JuliaLang/julia/issues/37819
+    Z = spzeros(Float64, Int32, 50000, 50000)
+    @test isa(Z + Z, SparseMatrixCSC{Float64, Int32})
 end
 
 @testset "map[!] implementation capable of handling >2 (input) sparse vectors/matrices" begin
@@ -685,6 +691,39 @@ end
     @test SparseMatStyle(Val(1)) == SparseMatStyle()
     @test SparseMatStyle(Val(2)) == SparseMatStyle()
     @test SparseMatStyle(Val(3)) == Broadcast.DefaultArrayStyle{3}()
+end
+
+@testset "extrema" begin
+    n = 10
+    A = sprand(n, n, 0.2)
+    B = Array(A)
+    C = Array{Real}(undef, 0, 0)
+    x = sprand(n, 0.2)
+    y = Array(x)
+    z = Array{Real}(undef, 0)
+    f(x) = x^3
+    @test extrema(A) == extrema(B)
+    @test extrema(x) == extrema(y)
+    @test extrema(f, A) == extrema(f, B)
+    @test extrema(f, x) == extrema(f, y)
+    @test extrema(spzeros(n, n)) == (0.0, 0.0)
+    @test extrema(spzeros(n)) == (0.0, 0.0)
+    @test_throws ArgumentError extrema(spzeros(0, 0))
+    @test_throws ArgumentError extrema(spzeros(0))
+    @test extrema(sparse(ones(n, n))) == (1.0, 1.0)
+    @test extrema(sparse(ones(n))) == (1.0, 1.0)
+    @test extrema(A; dims=:) == extrema(B; dims=:)
+    @test extrema(A; dims=1) == extrema(B; dims=1)
+    @test extrema(A; dims=2) == extrema(B; dims=2)
+    @test extrema(A; dims=(1,2)) == extrema(B; dims=(1,2))
+    @test extrema(f, A; dims=1) == extrema(f, B; dims=1)
+    @test extrema(sparse(C); dims=1) == extrema(C; dims=1)
+    @test extrema(A; dims=[]) == extrema(B; dims=[])
+    @test extrema(x; dims=:) == extrema(y; dims=:)
+    @test extrema(x; dims=1) == extrema(y; dims=1)
+    @test extrema(f, x; dims=1) == extrema(f, y; dims=1)
+    @test_throws BoundsError extrema(sparse(z); dims=1)
+    @test extrema(x; dims=[]) == extrema(y; dims=[])
 end
 
 end # module
