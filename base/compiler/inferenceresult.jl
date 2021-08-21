@@ -141,12 +141,12 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing, va_override::
     return cache_argtypes, falses(length(cache_argtypes))
 end
 
-function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
+function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{Tuple{InferenceResult,Vector{Any}}})
     method = linfo.def::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
     length(given_argtypes) >= nargs || return nothing
-    for cached_result in cache
+    for (cached_result, stmt_info) in cache
         cached_result.linfo === linfo || continue
         cache_match = true
         cache_argtypes = cached_result.argtypes
@@ -165,7 +165,7 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
                                            cache_overridden_by_const[end])
         end
         cache_match || continue
-        return cached_result
+        return cached_result, stmt_info
     end
     return nothing
 end

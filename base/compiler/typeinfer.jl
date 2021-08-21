@@ -438,13 +438,14 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     # inspect whether our inference had a limited result accuracy,
     # else it may be suitable to cache
     me.bestguess = cycle_fix_limited(me.bestguess, me)
+    parent = me.parent
     limited_ret = me.bestguess isa LimitedAccuracy
     limited_src = false
     if !limited_ret
         gt = me.src.ssavaluetypes::Vector{Any}
         for j = 1:length(gt)
             gt[j] = gtj = cycle_fix_limited(gt[j], me)
-            if gtj isa LimitedAccuracy && me.parent !== nothing
+            if gtj isa LimitedAccuracy && parent !== nothing
                 limited_src = true
                 break
             end
@@ -452,20 +453,24 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
-        # we can throw everything else away now
-        me.result.src = nothing
+        # we can throw everything else away now, unless inlinear will still want to have the inferred source
+        if !(parent !== nothing && is_stmt_inline(get_curr_ssaflag(parent)))
+            me.result.src = nothing
+        end
         me.cached = false
         me.src.inlineable = false
         unlock_mi_inference(interp, me.linfo)
     elseif limited_src
         # a type result will be cached still, but not this intermediate work:
-        # we can throw everything else away now
-        me.result.src = nothing
+        # we can throw everything else away now, unless inlinear will still want to have the inferred source
+        if !(parent !== nothing && is_stmt_inline(get_curr_ssaflag(parent)))
+            me.result.src = nothing
+        end
         me.src.inlineable = false
     else
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
-        doopt = (me.cached || me.parent !== nothing)
+        doopt = (me.cached || parent !== nothing)
         type_annotate!(me, doopt)
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
@@ -834,14 +839,9 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     mi = specialize_method(method, atypes, sparams)::MethodInstance
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = InferenceResult(mi)
-    frame = InferenceState(result, false, interp)
+    frame = InferenceState(result, run_optimizer, interp)
     frame === nothing && return (nothing, Any)
-    if typeinf(interp, frame) && run_optimizer
-        opt_params = OptimizationParams(interp)
-        result.src = src = OptimizationState(frame, opt_params, interp)
-        optimize(interp, src, opt_params, ignorelimited(result.result))
-        frame.src = finish!(interp, result)
-    end
+    typeinf(interp, frame)
     ccall(:jl_typeinf_end, Cvoid, ())
     frame.inferred || return (nothing, Any)
     return (frame.src, widenconst(ignorelimited(result.result)))

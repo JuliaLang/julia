@@ -529,8 +529,8 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     mi === nothing && return nothing
     # try constant prop'
     inf_cache = get_inference_cache(interp)
-    inf_result = cache_lookup(mi, argtypes, inf_cache)
-    if inf_result === nothing
+    cache = cache_lookup(mi, argtypes, inf_cache)
+    if cache === nothing
         # if there might be a cycle, check to make sure we don't end up
         # calling ourselves here.
         let result = result # prevent capturing
@@ -549,8 +549,10 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
         frame = InferenceState(inf_result, #=cache=#false, interp)
         frame === nothing && return nothing # this is probably a bad generated function (unsound), but just ignore it
         frame.parent = sv
-        push!(inf_cache, inf_result)
+        push!(inf_cache, (inf_result, frame.stmt_info))
         typeinf(interp, frame) || return nothing
+    else
+        inf_result, _ = cache
     end
     result = inf_result.result
     # if constant inference hits a cycle, just bail out
@@ -592,7 +594,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         return nothing
     end
     mi = mi::MethodInstance
-    if !force && !const_prop_methodinstance_heuristic(interp, match, mi)
+    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, sv)
         add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
     end
@@ -696,7 +698,7 @@ end
 # This is a heuristic to avoid trying to const prop through complicated functions
 # where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
-function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, match::MethodMatch, mi::MethodInstance)
+function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, match::MethodMatch, mi::MethodInstance, sv::InferenceState)
     method = match.method
     if method.is_for_opaque_closure
         # Not inlining an opaque closure can be very expensive, so be generous
@@ -715,8 +717,8 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, match:
     if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
-            # TODO maybe we want to respect callsite `@inline`/`@noinline` annotations here ?
-            cache_inlineable = inlining_policy(interp, cache_inf, 0x00, match) !== nothing
+            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv), nothing)
+            cache_inlineable = src !== nothing
         end
     end
     if !cache_inlineable

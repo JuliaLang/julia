@@ -173,7 +173,7 @@ function f_ifelse(x)
     return b ? x + 1 : x
 end
 # 2 for now because the compiler leaves a GotoNode around
-@test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
 
 # Test that inlining of _apply_iterate properly hits the inference cache
 @noinline cprop_inline_foo1() = (1, 1)
@@ -543,9 +543,17 @@ end
 
         import Core.Compiler: isType
 
-        limited(a) = @noinline(isType(a)) ? @inline(limited(a.parameters[1])) : rand(a)
+        function limited(a)
+            @nospecialize a
+            if @noinline(isType(a))
+                return @inline(limited(a.parameters[1]))
+            else
+                return rand(a)
+            end
+        end
 
         function multilimited(a)
+            @nospecialize a
             if @noinline(isType(a))
                 return @inline(multilimited(a.parameters[1]))
             else
@@ -602,12 +610,13 @@ end
     end
 
     let code = code_typed1(m.limited, (Any,))
-        @test count(x->isinvoke(x, :isType), code) == 2
+        @test count(x->isinvoke(x, :isType), code) == 2 # caller + inlined callee
     end
-    # check that inlining for recursive callsites doesn't depend on inference local cache
     let code1 = code_typed1(m.multilimited, (Any,))
         code2 = code_typed1(m.multilimited, (Any,))
+        # check that inlining for recursive callsites doesn't depend on inference local cache
         @test code1 == code2
+        @test count(x->isinvoke(x, :isType), code1) == 3 # caller + inlined callee + inlined callee
     end
 end
 

@@ -722,7 +722,8 @@ function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
-    (; match) = todo.spec::DelayedInliningSpec
+    mi = todo.mi
+    (; match, atypes) = todo.spec::DelayedInliningSpec
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     isconst, src = false, nothing
@@ -737,7 +738,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
             isconst, src = false, inferred_src
         end
     else
-        linfo = get(state.mi_cache, todo.mi, nothing)
+        linfo = get(state.mi_cache, mi, nothing)
         if linfo isa CodeInstance
             if invoke_api(linfo) == 2
                 # in this case function can be inlined to a constant
@@ -753,11 +754,11 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     et = state.et
 
     if isconst && et !== nothing
-        push!(et, todo.mi)
+        push!(et, mi)
         return ConstantCase(src)
     end
 
-    src = inlining_policy(state.interp, src, flag, match)
+    src = inlining_policy(state.interp, src, flag, todo)
 
     if src === nothing
         return compileable_specialization(et, match)
@@ -767,8 +768,8 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
         src = copy(src)
     end
 
-    et !== nothing && push!(et, todo.mi)
-    return InliningTodo(todo.mi, src)
+    et !== nothing && push!(et, mi)
+    return InliningTodo(mi, src)
 end
 
 function resolve_todo(todo::UnionSplit, state::InliningState, flag::UInt8)

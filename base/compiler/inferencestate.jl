@@ -113,7 +113,7 @@ mutable struct InferenceState
             CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame
-        cached && push!(get_inference_cache(interp), result)
+        cached && push!(get_inference_cache(interp), (result, stmt_info))
         return frame
     end
 end
@@ -296,3 +296,5 @@ function print_callstack(sv::InferenceState)
         sv = sv.parent
     end
 end
+
+get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
