@@ -976,7 +976,9 @@ kw"..."
 `;` has a similar role in Julia as in many C-like languages, and is used to delimit the
 end of the previous statement. `;` is not necessary after new lines, but can be used to
 separate statements on a single line or to join statements into a single expression.
-`;` is also used to suppress output printing in the REPL and similar interfaces.
+To suppress output printing in the REPL and similar interfaces `;` is used.
+Functions with keyword arguments are defined using `;` in the signature.
+While constructing arrays, `;` is used for vertical concatenation. To access the shell REPL mode `;` is used.
 
 # Examples
 ```julia
@@ -993,6 +995,21 @@ julia> foo();
 
 julia> bar()
 "Hello, Mars!"
+
+julia> function plot(x, y; style="solid", width=1, color="black")
+           ###
+       end
+
+julia> [1:2; 4:5]
+4-element Vector{Int64}:
+ 1
+ 2
+ 4
+ 5
+
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+shell> echo hello
+hello
 ```
 """
 kw";"
