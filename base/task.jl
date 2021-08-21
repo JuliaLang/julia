@@ -341,45 +341,31 @@ end
 
 ## lexically-scoped waiting for multiple items
 
-"""
-    _sync1!(c_ex::T, waitable) -> c_ex′::T′
-
-where `T = T′ = Union{Nothing,CompositeException}`
-"""
-function _sync1!(c_ex, @nospecialize(r))
-    if isa(r, Task)
-        _wait(r)
-        if istaskfailed(r)
-            if c_ex === nothing
-                c_ex = CompositeException()
-            end
-            push!(c_ex, TaskFailedException(r))
-        end
-    else
-        try
-            wait(r)
-        catch e
-            if c_ex === nothing
-                c_ex = CompositeException()
-            end
-            push!(c_ex, e)
-        end
-    end
-    return c_ex
-end
-
 function sync_end(c::Channel{Any})
-    c_ex = nothing
+    local c_ex
     while isready(c)
-        c_ex = _sync1!(c_ex, take!(c))
+        r = take!(c)
+        if isa(r, Task)
+            _wait(r)
+            if istaskfailed(r)
+                if !@isdefined(c_ex)
+                    c_ex = CompositeException()
+                end
+                push!(c_ex, TaskFailedException(r))
+            end
+        else
+            try
+                wait(r)
+            catch e
+                if !@isdefined(c_ex)
+                    c_ex = CompositeException()
+                end
+                push!(c_ex, e)
+            end
+        end
     end
     close(c)
-    # Racy `@spawn`/`@async` many manage to `put!` tasks in the channel `c`.
-    # Let's synchronize them as well, to report possible errors:
-    for r in c
-        c_ex = _sync1!(c_ex, r)
-    end
-    if c_ex !== nothing
+    if @isdefined(c_ex)
         throw(c_ex)
     end
     nothing
