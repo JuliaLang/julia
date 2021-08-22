@@ -875,3 +875,18 @@ precompile_test_harness("Renamed Imports") do load_path
     Base.compilecache(Base.PkgId("RenameImports"))
     @test (@eval (using RenameImports; RenameImports.test())) isa Module
 end
+
+@testset "issue 38149" begin
+    M = Module()
+    @eval M begin
+        @nospecialize
+        f(x, y) = x + y
+        f(x::Int, y) = 2x + y
+    end
+    precompile(M.f, (Int, Any))
+    precompile(M.f, (AbstractFloat, Any))
+    mis = Base.method_instances(M.f, (Any, Any))
+    @test length(mis) == 2
+    @test any(mi -> mi.specTypes.parameters[2] === Any, mis)
+    @test all(mi -> isa(mi.cache, Core.CodeInstance), mis)
+end
