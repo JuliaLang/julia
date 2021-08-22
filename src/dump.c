@@ -1787,7 +1787,12 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             }
         }
         else {
-            jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(jl_get_global(m, sym));
+            jl_value_t *rawdt = jl_get_global(m, sym);
+            if (rawdt == NULL) {
+                jl_errorf("During deserialization, symbol %s was not found in module %s.",
+                    jl_symbol_name(sym), jl_symbol_name(m->name));
+            }
+            jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(rawdt);
             assert(jl_is_datatype(dt));
             tn = dt->name;
             backref_list.items[pos] = tn;
