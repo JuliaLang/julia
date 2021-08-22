@@ -885,8 +885,9 @@ end
     end
     precompile(M.f, (Int, Any))
     precompile(M.f, (AbstractFloat, Any))
-    mis = Base.method_instances(M.f, (Any, Any))
-    @test length(mis) == 2
+    mis = map(methods(M.f)) do m
+        m.specializations[1]
+    end
     @test any(mi -> mi.specTypes.parameters[2] === Any, mis)
     @test all(mi -> isa(mi.cache, Core.CodeInstance), mis)
 end
