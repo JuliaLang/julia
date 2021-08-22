@@ -578,3 +578,59 @@ let c = Channel(3)
     close(c)
     @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (closed)"
 end
+
+@testset "maybetake!(c)" begin
+    @testset "buffered" begin
+        c = Channel(Inf)
+        put!(c, 1)
+        close(c)
+        @test maybetake!(c) === Some(1)
+        @test maybetake!(c) === nothing
+    end
+
+    @testset "unbuffered" begin
+        c = Channel()
+        @testset "on put!" begin
+            t = @task maybetake!(c)
+            yield(t)
+            @test !istaskdone(t)
+            put!(c, 1)
+            @test fetch(t) === Some(1)
+        end
+        @testset "on close" begin
+            t = @task maybetake!(c)
+            yield(t)
+            @test !istaskdone(t)
+            close(c)
+            @test fetch(t) === nothing
+        end
+    end
+end
+
+@testset "tryput!(c, _)" begin
+    @testset "buffered" begin
+        c = Channel(Inf)
+        @test tryput!(c, 1)
+        close(c)
+        @test !tryput!(c, 2)
+        @test collect(c) == [1]
+    end
+
+    @testset "unbuffered" begin
+        c = Channel()
+        @testset "on take!" begin
+            t = @task tryput!(c, 1)
+            yield(t)
+            @test !istaskdone(t)
+            @test take!(c) == 1
+            @test fetch(t)
+        end
+        @testset "on close" begin
+            t = @task tryput!(c, 2)
+            yield(t)
+            @test !istaskdone(t)
+            close(c)
+            @test !fetch(t)
+        end
+    end
+end

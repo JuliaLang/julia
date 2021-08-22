@@ -301,6 +301,26 @@ end
 showerror(io::IO, ex::InvalidStateException) = print(io, "InvalidStateException: ", ex.msg)
 
 """
+    tryput!(c::Channel, v) -> success::Bool
+
+Try to append an item `v` to the channel `c` and return `true`.  Return `false`
+if the channel `c` is closed,
+
+This function blocks until the channel is not full or closed.
+"""
+function tryput!(c::Channel, v)
+    try
+        put!(c, v)
+        return true
+    catch e
+        if isa(e, InvalidStateException) && e.state === :closed
+            return false
+        end
+        rethrow()
+    end
+end
+
+"""
     put!(c::Channel, v)
 
 Append an item `v` to the channel `c`. Blocks if the channel is full.
@@ -372,6 +392,25 @@ function fetch_buffered(c::Channel)
 end
 fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
 
+"""
+    maybetake!(c::Channel{T}) -> Some(item) or nothing
+
+Take an `item` from channel `c` if it is open and return `Some(item)`. Return
+`nothing` if it is closed.
+
+When this function is called on an empty channel, it blocks until an item is
+available or the channel is closed.
+"""
+function maybetake!(c::Channel)
+    try
+        return Some(take!(c))
+    catch e
+        if isa(e, InvalidStateException) && e.state === :closed
+            return nothing
+        end
+        rethrow()
+    end
+end
 
 """
     take!(c::Channel)
@@ -462,16 +501,7 @@ function show(io::IO, ::MIME"text/plain", c::Channel)
     end
 end
 
-function iterate(c::Channel, state=nothing)
-    try
-        return (take!(c), nothing)
-    catch e
-        if isa(e, InvalidStateException) && e.state === :closed
-            return nothing
-        else
-            rethrow()
-        end
-    end
-end
+iterate(c::Channel, ::Nothing = nothing) =
+    (@something(maybetake!(c), return nothing), nothing)
 
 IteratorSize(::Type{<:Channel}) = SizeUnknown()
