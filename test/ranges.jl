@@ -2112,3 +2112,13 @@ end
 @test length(range(1, 100, length=big(100)^100)) == big(100)^100
 @test length(range(big(1), big(100)^100, length=big(100)^100)) == big(100)^100
 @test length(0 * (1:big(100)^100)) == big(100)^100
+
+@testset "ranges of CartesianIndexes" begin
+    a = CartesianIndex(1,1)
+    r1 = range(a, step = CartesianIndex(2,3), length = 3)
+    r2 = StepRangeLen(CartesianIndex(1,1), CartesianIndex(2,3), 3)
+    @test r1 == r2
+
+    @test range(a, length = 4) == StepRangeLen(a, a, 4)
+    @test range(stop = a, length = 4) == StepRangeLen(-2a, a, 4)
+end
