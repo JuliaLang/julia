@@ -304,7 +304,7 @@ showerror(io::IO, ex::InvalidStateException) = print(io, "InvalidStateException:
     tryput!(c::Channel, v) -> success::Bool
 
 Try to append an item `v` to the channel `c` and return `true`.  Return `false`
-if the channel `c` is closed,
+if the channel `c` is closed.
 
 This function blocks until the channel is not full or closed.
 """
