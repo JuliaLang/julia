@@ -876,6 +876,34 @@ precompile_test_harness("Renamed Imports") do load_path
     @test (@eval (using RenameImports; RenameImports.test())) isa Module
 end
 
+# issue #41872 (example from #38983)
+precompile_test_harness("No external edges") do load_path
+    write(joinpath(load_path, "NoExternalEdges.jl"),
+          """
+          module NoExternalEdges
+          bar(x::Int) = hcat(rand())
+          @inline bar() = hcat(rand())
+          bar(x::Float64) = bar()
+          foo1() = bar(1)
+          foo2() = bar(1.0)
+          foo3() = bar()
+          foo4() = hcat(rand())
+          precompile(foo1, ())
+          precompile(foo2, ())
+          precompile(foo3, ())
+          precompile(foo4, ())
+          end
+          """)
+    Base.compilecache(Base.PkgId("NoExternalEdges"))
+    @eval begin
+        using NoExternalEdges
+        @test only(methods(NoExternalEdges.foo1)).specializations[1].cache.max_world != 0
+        @test only(methods(NoExternalEdges.foo2)).specializations[1].cache.max_world != 0
+        @test only(methods(NoExternalEdges.foo3)).specializations[1].cache.max_world != 0
+        @test only(methods(NoExternalEdges.foo4)).specializations[1].cache.max_world != 0
+    end
+end
+
 @testset "issue 38149" begin
     M = Module()
     @eval M begin
