@@ -114,19 +114,8 @@ extern "C" {
 
 #include "builtin_proto.h"
 
-#ifdef HAVE_SSP
 extern uintptr_t __stack_chk_guard;
 extern void __stack_chk_fail();
-#else
-JL_DLLEXPORT uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
-JL_DLLEXPORT void __stack_chk_fail()
-{
-    /* put your panic function or similar in here */
-    fprintf(stderr, "fatal error: stack corruption detected\n");
-    jl_gc_debug_critical_error();
-    abort(); // end with abort, since the compiler destroyed the stack upon entry to this function, there's no going back now
-}
-#endif
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)

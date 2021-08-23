@@ -214,6 +214,17 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
         jl_type_error("typeassert", t, x);
 }
 
+#ifndef HAVE_SSP
+JL_DLLEXPORT uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
+JL_DLLEXPORT void __stack_chk_fail(void)
+{
+    /* put your panic function or similar in here */
+    fprintf(stderr, "fatal error: stack corruption detected\n");
+    jl_gc_debug_critical_error();
+    abort(); // end with abort, since the compiler destroyed the stack upon entry to this function, there's no going back now
+}
+#endif
+
 // exceptions -----------------------------------------------------------------
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
