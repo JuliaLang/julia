@@ -79,6 +79,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
 
+    // generic function definition
     if (jl_expr_nargs(ex) == 1) {
         jl_value_t **args = jl_array_ptr_data(ex->args);
         jl_sym_t *fname = (jl_sym_t*)args[0];
