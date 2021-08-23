@@ -46,7 +46,7 @@ static jl_value_t *deser_symbols[256];
 static htable_t backref_table;
 static int backref_table_numel;
 static arraylist_t backref_list;
-static arraylist_t new_code_instances;
+static htable_t new_code_instance_validate;
 
 // list of (jl_value_t **loc, size_t pos) entries
 // for anything that was flagged by the deserializer for later
@@ -1588,11 +1588,8 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     if (mi->callbacks)
         jl_gc_wb(mi, mi->callbacks);
     mi->cache = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&mi->cache);
-    if (mi->cache) {
+    if (mi->cache)
         jl_gc_wb(mi, mi->cache);
-        if (internal)
-            arraylist_push(&new_code_instances, mi->cache);
-    }
     return (jl_value_t*)mi;
 }
 
@@ -1620,8 +1617,10 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
         codeinst->precompile = 1;
     codeinst->next = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->next);
     jl_gc_wb(codeinst, codeinst->next);
-    if (validate)
+    if (validate) {
         codeinst->min_world = jl_world_counter;
+        ptrhash_put(&new_code_instance_validate, codeinst, (void*)(~(uintptr_t)HT_NOTFOUND));   // "HT_FOUND"
+    }
     return (jl_value_t*)codeinst;
 }
 
@@ -2040,7 +2039,6 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
             int32_t idx = idxs[j];
             valid = jl_array_uint8_ref(valids, idx);
         }
-        size_t ci_world;
         if (valid) {
             // if this callee is still valid, add all the backedges
             for (j = 0; j < jl_array_len(idxs_array); j++) {
@@ -2056,21 +2054,25 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
                 }
             }
             // then enable it
-            ci_world = ~(size_t)0;
+            jl_code_instance_t *codeinst = caller->cache;
+            while (codeinst) {
+                if (codeinst->min_world > 0)
+                    codeinst->max_world = ~(size_t)0;
+                ptrhash_put(&new_code_instance_validate, codeinst, HT_NOTFOUND);  // mark it as handled
+                codeinst = jl_atomic_load_relaxed(&codeinst->next);
+            }
         }
         else {
-            ci_world = jl_world_counter > 1 ? jl_world_counter - 1 : 1;
+            jl_code_instance_t *codeinst = caller->cache;
+            while (codeinst) {
+                ptrhash_put(&new_code_instance_validate, codeinst, HT_NOTFOUND);  // should be left invalid
+                codeinst = jl_atomic_load_relaxed(&codeinst->next);
+            }
             if (_jl_debug_method_invalidation) {
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)caller);
                 loctag = jl_cstr_to_string("insert_backedges");
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
             }
-        }
-        jl_code_instance_t *codeinst = caller->cache;
-        while (codeinst) {
-            if (codeinst->min_world > 0)
-                codeinst->max_world = ci_world;
-            codeinst = jl_atomic_load_relaxed(&codeinst->next);
         }
     }
     JL_GC_POP();
@@ -2079,12 +2081,10 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
 static void validate_new_code_instances(void)
 {
     size_t i;
-    for (i = 0; i < new_code_instances.len; i++) {
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)new_code_instances.items[i];
-        while (codeinst) {
-            if (codeinst->min_world > 0 && codeinst->max_world == 0) // lacks external edges
-                codeinst->max_world = ~(size_t)0;
-            codeinst = jl_atomic_load_relaxed(&codeinst->next);
+    for (i = 0; i < new_code_instance_validate.size; i += 2) {
+        if (new_code_instance_validate.table[i+1] != HT_NOTFOUND) {
+            ((jl_code_instance_t*)new_code_instance_validate.table[i])->max_world = ~(size_t)0;
+            new_code_instance_validate.table[i+1] = HT_NOTFOUND;
         }
     }
 }
@@ -2655,7 +2655,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
     arraylist_new(&flagref_list, 0);
-    arraylist_new(&new_code_instances, 0);
+    htable_new(&new_code_instance_validate, 0);
     arraylist_new(&ccallable_list, 0);
     htable_new(&uniquing_table, 0);
 
@@ -2695,7 +2695,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     validate_new_code_instances();
 
     serializer_worklist = NULL;
-    arraylist_free(&new_code_instances);
+    htable_free(&new_code_instance_validate);
     arraylist_free(&flagref_list);
     arraylist_free(&backref_list);
     ios_close(f);
