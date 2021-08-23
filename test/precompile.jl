@@ -904,6 +904,28 @@ precompile_test_harness("No external edges") do load_path
     end
 end
 
+# issue #40698
+precompile_test_harness("Undefined types") do load_path
+    write(joinpath(load_path, "UndefTypesA.jl"),
+        """
+        module UndefTypesA
+        macro define_fmissing()
+            return :(\$(GlobalRef(UndefTypesA, :fmissing))() = 1)
+        end
+        end
+        """)
+    Base.compilecache(Base.PkgId("UndefTypesA"))
+    write(joinpath(load_path, "UndefTypesB.jl"),
+        """
+        module UndefTypesB
+        using UndefTypesA: @define_fmissing
+        @define_fmissing
+        end
+        """)
+    Base.compilecache(Base.PkgId("UndefTypesB"))
+    @eval using UndefTypesB  # no segfault
+end
+
 @testset "issue 38149" begin
     M = Module()
     @eval M begin
