@@ -593,18 +593,17 @@ function put_future(rid, v, caller)
     del_client(rid, caller)
     nothing
 end
-
-
 put!(rv::RemoteValue, args...) = put!(rv.c, args...)
-function put_ref(rid, caller, args...)
+
+function tryput_ref(rid, caller, args...)
     rv = lookup_ref(rid)
-    put!(rv, args...)
+    success = tryput!(rv.c, args...)
     if myid() == caller && rv.synctake !== nothing
         # Wait till a "taken" value is serialized out - github issue #29932
         lock(rv.synctake)
         unlock(rv.synctake)
     end
-    nothing
+    return success
 end
 
 """
@@ -614,12 +613,18 @@ Store a set of values to the [`RemoteChannel`](@ref).
 If the channel is full, blocks until space is available.
 Return the first argument.
 """
-put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, myid(), args...); rr)
+function put!(rr::RemoteChannel, args...)
+    tryput!(rr, args...) || throw(Base.closed_exception())
+    return rr
+end
+
+tryput!(rr::RemoteChannel, args...) = call_on_owner(tryput_ref, rr, myid(), args...)::Bool
 
 # take! is not supported on Future
 
 take!(rv::RemoteValue, args...) = take!(rv.c, args...)
-function take_ref(rid, caller, args...)
+
+function maybetake_ref(rid, caller, args...)
     rv = lookup_ref(rid)
     synctake = false
     if myid() != caller && rv.synctake !== nothing
@@ -630,7 +635,7 @@ function take_ref(rid, caller, args...)
     end
 
     v = try
-        take!(rv, args...)
+        maybetake!(rv.c, args...)
     catch e
         # avoid unmatched unlock when exception occurs
         # github issue #33972
@@ -653,7 +658,13 @@ end
 Fetch value(s) from a [`RemoteChannel`](@ref) `rr`,
 removing the value(s) in the process.
 """
-take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)::eltype(rr)
+take!(rr::RemoteChannel, args...) =
+    @something(maybetake!(rr, args...), throw(Base.closed_exception()))
+maybetake!(rr::RemoteChannel, args...) =
+    call_on_owner(maybetake_ref, rr, myid(), args...)::Union{Some{<:eltype(rr)},Nothing}
+
+Base.iterate(c::RemoteChannel, ::Nothing = nothing) =
+    (@something(maybetake!(c), return nothing), nothing)
 
 # close and isopen are not supported on Future
 

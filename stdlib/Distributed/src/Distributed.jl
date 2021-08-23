@@ -7,7 +7,7 @@ module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, kill, close, isopen, showerror
+             hash, ==, kill, close, isopen, showerror, maybetake!, tryput!
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, buffer_writes, @sync_add,

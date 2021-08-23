@@ -389,12 +389,19 @@ function test_channel(c)
     @test take!(c) == 5.0
     @test isready(c) == false
     @test isopen(c) == true
+    @test tryput!(c, :World)
+    @test tryput!(c, nothing)
+    @test maybetake!(c) === Some(:World)
     close(c)
     @test isopen(c) == false
+    @test !tryput!(c, nothing)
+    @test maybetake!(c) === Some(nothing)
+    @test maybetake!(c) === nothing
 end
 
 test_channel(Channel(10))
 test_channel(RemoteChannel(()->Channel(10)))
+test_channel(RemoteChannel(()->Channel(10), procs()[end]))
 
 c=Channel{Int}(1)
 @test_throws MethodError put!(c, "Hello")
@@ -418,6 +425,9 @@ function test_iteration(in_c, out_c)
 end
 
 test_iteration(Channel(10), Channel(10))
+test_iteration(RemoteChannel(()->Channel(10)), Channel(10))
+test_iteration(RemoteChannel(()->Channel(10), procs()[end]), Channel(10))
+
 # make sure exceptions propagate when waiting on Tasks
 @test_throws CompositeException (@sync (@async error("oops")))
 try
