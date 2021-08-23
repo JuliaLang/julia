@@ -47,6 +47,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi 
 
 JL_DLLEXPORT void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
 {
+    jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_impl(void)
