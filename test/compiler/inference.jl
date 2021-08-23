@@ -3403,3 +3403,10 @@ end
         @test @inferred(f40177(T)) == fieldtype(T, 1)
     end
 end
+
+# issue #41908
+struct Diagonalish{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+end
+f41908(x::Diagonalish{Int, T}) where {Int<:T<:Int} = 1
+g41908() = f41908(Any[1][1])
+@test Base.return_types(g41908, ()) == Any[Int]
