@@ -170,13 +170,13 @@ range_stop(stop::Integer) = range_length(stop)
 # Stop and length as the only argument
 range_stop_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(oftype(a, a-len+1), a)
 range_stop_length(a::AbstractFloat, len::Integer) = range_step_stop_length(oftype(a, 1), a, len)
-range_stop_length(a,                len::Integer) = range_step_stop_length(oftype(a-a, oneunit(a)), a, len)
+range_stop_length(a,                len::Integer) = range_step_stop_length(oftype(a-a, 1), a, len)
 
 range_step_stop_length(step, stop, length) = reverse(range_start_step_length(stop, -step, length))
 
 range_start_length(a::Real,          len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
 range_start_length(a::AbstractFloat, len::Integer) = range_start_step_length(a, oftype(a, 1), len)
-range_start_length(a,                len::Integer) = range_start_step_length(a, oftype(a-a, oneunit(a)), len)
+range_start_length(a,                len::Integer) = range_start_step_length(a, oftype(a-a, 1), len)
 
 range_start_stop(start, stop) = start:stop
 

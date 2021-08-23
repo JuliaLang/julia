@@ -320,6 +320,12 @@ module IteratorsMD
     (:)(I::CartesianIndex{N}, S::CartesianIndex{N}, J::CartesianIndex{N}) where N =
         CartesianIndices(map((i,s,j) -> i:s:j, Tuple(I), Tuple(S), Tuple(J)))
 
+    function show(io::IO, r::Base.StepRangeLen{C,C,C,<:Integer}) where {C<:CartesianIndex}
+        # Since a:b:c with CartesianIndex arguments produces CartesianIndices instead of a StepRangeLen,
+        # the display of a StepRangeLen of CartesianIndexes should not use this notation
+        print(io, "StepRangeLen(", repr(first(r)), ", ", repr(step(r)), ", ", repr(length(r)), ")")
+    end
+
     promote_rule(::Type{CartesianIndices{N,R1}}, ::Type{CartesianIndices{N,R2}}) where {N,R1,R2} =
         CartesianIndices{N,Base.indices_promote_type(R1,R2)}
 

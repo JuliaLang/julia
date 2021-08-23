@@ -2114,11 +2114,18 @@ end
 @test length(0 * (1:big(100)^100)) == big(100)^100
 
 @testset "ranges of CartesianIndexes" begin
-    a = CartesianIndex(1,1)
-    r1 = range(a, step = CartesianIndex(2,3), length = 3)
-    r2 = StepRangeLen(CartesianIndex(1,1), CartesianIndex(2,3), 3)
+    start = CartesianIndex(1,1)
+    step = CartesianIndex(2,3)
+    len = 3
+    r1 = StepRangeLen(start, step, len)
+    @test r1[1] == start
+    @test r1[2] == start + step
+    @test r1[3] == start + 2step
+    r2 = range(start, step = step, length = len)
     @test r1 == r2
 
-    @test range(a, length = 4) == StepRangeLen(a, a, 4)
-    @test range(stop = a, length = 4) == StepRangeLen(-2a, a, 4)
+    # Make sure that a StepRangeLen of CartesianIndexes does not use the a:b:c notation
+    # while displayed
+    s = repr(r1)
+    @test s == "StepRangeLen($start, $step, $len)"
 end
