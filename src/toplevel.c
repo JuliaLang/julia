@@ -399,7 +399,7 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
                     *has_loops = 1;
             }
             else if (jl_is_gotoifnot(stmt)) {
-                if (jl_gotoifnot_label(stmt) <= i)
+                if (jl_gotoifnot_label(stmt) != 0 && jl_gotoifnot_label(stmt) <= i)
                     *has_loops = 1;
             }
         }

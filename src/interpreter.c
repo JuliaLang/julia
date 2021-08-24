@@ -430,7 +430,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         }
         else if (jl_is_gotoifnot(stmt)) {
             jl_value_t *cond = eval_value(jl_gotoifnot_cond(stmt), s);
-            if (cond == jl_false) {
+            if (cond == jl_false && jl_gotoifnot_label(stmt) != 0) {
                 next_ip = jl_gotoifnot_label(stmt) - 1;
             }
             else if (cond != jl_true) {

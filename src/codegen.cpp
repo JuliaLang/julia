@@ -7002,7 +7002,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
             if (jl_is_gotoifnot(stmt)) {
                 int dest = jl_gotoifnot_label(stmt);
-                branch_targets.insert(dest);
+                if (dest != 0)
+                    branch_targets.insert(dest);
                 // The next 1-indexed statement
                 branch_targets.insert(i + 2);
             } else if (jl_is_returnnode(stmt)) {
@@ -7190,13 +7191,17 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             Value *isfalse = emit_condition(ctx, cond, "if");
             mallocVisitStmt(debuginfoloc, nullptr);
             come_from_bb[cursor+1] = ctx.builder.GetInsertBlock();
-            workstack.push_back(lname - 1);
-            BasicBlock *ifnot = BB[lname];
             BasicBlock *ifso = BB[cursor+2];
-            if (ifnot == ifso)
-                ctx.builder.CreateBr(ifnot);
-            else
-                ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
+            if (lname == 0) {
+                ctx.builder.CreateBr(ifso);
+            } else {
+                workstack.push_back(lname - 1);
+                BasicBlock *ifnot = BB[lname];
+                if (ifnot == ifso)
+                    ctx.builder.CreateBr(ifnot);
+                else
+                    ctx.builder.CreateCondBr(isfalse, ifnot, ifso);
+            }
             find_next_stmt(cursor + 1);
             continue;
         }

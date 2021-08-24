@@ -105,7 +105,16 @@ function verify_ir(ir::IRCode, print::Bool=true)
                 @verify_error "Block $idx terminator forms a double edge to block $(idx+1)"
                 error("")
             end
-            if length(block.succs) != 2 || (block.succs != [terminator.dest, idx+1] && block.succs != [idx+1, terminator.dest])
+            if length(block.succs) == 1
+                if block.dest != 0
+                    @verify_error "Block $idx terminator has non-zero dest but only one successor"
+                    error("")
+                end
+                if block.succs[1] != idx + 1
+                    @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot fallthrough"
+                    error("")
+                end
+            elseif length(block.succs) != 2 || (block.succs != [terminator.dest, idx+1] && block.succs != [idx+1, terminator.dest])
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
                 error("")
             end

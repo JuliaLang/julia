@@ -637,9 +637,9 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # replace GotoIfNot with its condition if the branch target is unreachable
     for i = 1:nexpr
         expr = body[i]
-        if isa(expr, GotoIfNot)
+        if isa(expr, GotoIfNot) && expr.dest != 0
             if !isa(states[expr.dest], VarTable)
-                body[i] = expr.cond
+                body[i] = GotoIfNot(expr.cond, 0)
             end
         end
     end

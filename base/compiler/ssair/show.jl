@@ -129,7 +129,7 @@ end
 
 show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int) = show_unquoted_gotoifnot(io, stmt, indent, "%")
 function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String)
-    print(io, "goto ", prefix, stmt.dest, " if not ")
+    print(io, "goto ", prefix, stmt.dest == 0 ? "fallthrough" : stmt.dest, " if not ")
     show_unquoted(io, stmt.cond, indent)
 end
 
@@ -536,7 +536,7 @@ function statement_indices_to_labels(stmt, cfg::CFG)
             stmt = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
         end
     elseif isa(stmt, GotoIfNot)
-        stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+        stmt = GotoIfNot(stmt.cond, stmt.dest == 0 ? 0 : block_for_inst(cfg, stmt.dest))
     elseif stmt isa GotoNode
         stmt = GotoNode(block_for_inst(cfg, stmt.label))
     elseif stmt isa PhiNode

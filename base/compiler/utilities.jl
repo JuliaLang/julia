@@ -350,10 +350,10 @@ function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
         elseif isa(s, GotoIfNot)
             if i+1 in stmts
                 tgt = s.dest::Int
-                if isassigned(ir)
+                if isassigned(ir) && tgt != 0
                     tgt = first(ir[].cfg.blocks[tgt].stmts)
                 end
-                if tgt in stmts
+                if tgt == 0 || tgt in stmts
                     push!(stmts, i)
                 end
             end

@@ -1780,6 +1780,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
                 condval = maybe_extract_const_bool(condt)
                 l = stmt.dest::Int
+                if l == 0
+                    # Bool typecheck only - not control flow effect
+                    break
+                end
                 if !isempty(frame.pclimitations)
                     # we can't model the possible effect of control
                     # dependencies on the return value, so we propagate it

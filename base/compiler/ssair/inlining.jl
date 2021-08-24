@@ -402,7 +402,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             elseif isa(stmt′, Expr) && stmt′.head === :enter
                 stmt′ = Expr(:enter, stmt′.args[1]::Int + bb_offset)
             elseif isa(stmt′, GotoIfNot)
-                stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
+                stmt′ = GotoIfNot(stmt′.cond, stmt′.dest == 0 ? 0 : stmt′.dest + bb_offset)
             elseif isa(stmt′, PhiNode)
                 stmt′ = PhiNode(Int32[edge+bb_offset for edge in stmt′.edges], stmt′.values)
             end
@@ -588,7 +588,7 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
             elseif isa(stmt, Expr) && stmt.head === :enter
                 compact[idx] = Expr(:enter, state.bb_rename[stmt.args[1]::Int])
             elseif isa(stmt, GotoIfNot)
-                compact[idx] = GotoIfNot(stmt.cond, state.bb_rename[stmt.dest])
+                compact[idx] = GotoIfNot(stmt.cond, stmt.dest == 0 ? 0 : state.bb_rename[stmt.dest])
             elseif isa(stmt, PhiNode)
                 compact[idx] = PhiNode(Int32[edge == length(state.bb_rename) ? length(state.new_cfg_blocks) : state.bb_rename[edge+1]-1 for edge in stmt.edges], stmt.values)
             end

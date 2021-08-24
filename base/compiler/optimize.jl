@@ -543,7 +543,7 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
         # summing the cost of the not-taken branch
         thiscost = dst(stmt.label) < line ? 40 : 0
     elseif stmt isa GotoIfNot
-        thiscost = dst(stmt.dest) < line ? 40 : 0
+        thiscost = (stmt.dest != 0 && dst(stmt.dest) < line) ? 40 : 0
     end
     return thiscost
 end
@@ -619,7 +619,7 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             if isa(cond, SSAValue)
                 cond = SSAValue(cond.id + ssachangemap[cond.id])
             end
-            body[i] = GotoIfNot(cond, el.dest + labelchangemap[el.dest])
+            body[i] = GotoIfNot(cond, el.dest == 0 ? 0 : el.dest + labelchangemap[el.dest])
         elseif isa(el, ReturnNode)
             if isdefined(el, :val)
                 val = el.val

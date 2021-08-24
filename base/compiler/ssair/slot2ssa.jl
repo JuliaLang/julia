@@ -480,7 +480,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 node = result[nidx]
                 node[:inst], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
             end
-            result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
+            result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, terminator.dest == 0 ? 0 : bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, Expr)
                 if terminator.head == :enter
@@ -821,11 +821,14 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
         # Convert GotoNode/GotoIfNot/PhiNode to BB addressing
         if isa(stmt, GotoNode)
             new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
-        elseif isa(stmt, GotoIfNot)
+        elseif isa(stmt, GotoIfNot) && stmt.dest != 0
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1
-                # Drop this node - it's a noop
-                new_code[idx] = stmt.cond
+                # We need to keep this node for the bool typecheck
+                # (until we can prove that it doesn't throw at least),
+                # but we null the destination and don't record a separate
+                # edge to keep the unique edge invariant.
+                new_code[idx] = GotoIfNot(stmt.cond, 0)
             else
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end

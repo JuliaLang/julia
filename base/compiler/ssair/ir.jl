@@ -40,7 +40,7 @@ function basic_blocks_starts(stmts::Vector{Any})
     for idx in 1:length(stmts)
         stmt = stmts[idx]
         # Terminators
-        if isa(stmt, GotoIfNot)
+        if isa(stmt, GotoIfNot) && stmt.dest != 0
             push!(jump_dests, idx+1)
             push!(jump_dests, stmt.dest)
         elseif isa(stmt, ReturnNode)
@@ -106,7 +106,7 @@ function compute_basic_blocks(stmts::Vector{Any})
             continue
         end
         # Conditional Branch
-        if isa(terminator, GotoIfNot)
+        if isa(terminator, GotoIfNot) && terminator.dest != 0
             block′ = block_for_inst(basic_block_index, terminator.dest)
             if block′ == num + 1
                 # This GotoIfNot acts like a noop - treat it as such.
@@ -1012,9 +1012,11 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result[result_idx][:inst] = stmt
         cond = stmt.cond
         if isa(cond, Bool) && compact.fold_constant_branches
-            if cond
+            if cond || stmt.dest == 0
                 result[result_idx][:inst] = nothing
-                kill_edge!(compact, active_bb, active_bb, stmt.dest)
+                if stmt.dest != 0
+                    kill_edge!(compact, active_bb, active_bb, stmt.dest)
+                end
                 # Don't increment result_idx => Drop this statement
             else
                 result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.dest])
@@ -1022,7 +1024,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 result_idx += 1
             end
         else
-            result[result_idx][:inst] = GotoIfNot(cond, compact.bb_rename_succ[stmt.dest])
+            result[result_idx][:inst] = GotoIfNot(cond, stmt.dest == 0 ? 0 : compact.bb_rename_succ[stmt.dest])
             result_idx += 1
         end
     elseif isa(stmt, Expr)
