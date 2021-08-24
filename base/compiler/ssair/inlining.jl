@@ -662,7 +662,6 @@ function rewrite_apply_exprargs!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::
                 if isa(info, ConstCallInfo)
                     if !is_stmt_noinline(flag) && maybe_handle_const_call!(
                         ir, state1.id, new_stmt, info, new_sig,call.rt, istate, flag, false, todo)
-
                         handled = true
                     else
                         info = info.call

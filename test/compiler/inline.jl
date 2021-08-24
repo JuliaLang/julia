@@ -392,8 +392,8 @@ end
 code_typed1(args...; kwargs...) = (first(only(code_typed(args...; kwargs...)))::Core.CodeInfo).code
 
 @testset "@inline/@noinline annotation before definition" begin
-    m = Module()
-    @eval m begin
+    M = Module()
+    @eval M begin
         @inline function _def_inline(x)
             # this call won't be resolved and thus will prevent inlining to happen if we don't
             # annotate `@inline` at the top of this function body
@@ -414,23 +414,23 @@ code_typed1(args...; kwargs...) = (first(only(code_typed(args...; kwargs...)))::
         def_noinline_noconflict(x) = _def_noinline_noconflict(x)
     end
 
-    let code = code_typed1(m.def_inline, (Int,))
+    let code = code_typed1(M.def_inline, (Int,))
         @test all(code) do x
             !isinvoke(x, :_def_inline)
         end
     end
-    let code = code_typed1(m.def_noinline, (Int,))
+    let code = code_typed1(M.def_noinline, (Int,))
         @test any(code) do x
             isinvoke(x, :_def_noinline)
         end
     end
     # test that they don't conflict with other "before-definition" macros
-    let code = code_typed1(m.def_inline_noconflict, (Int,))
+    let code = code_typed1(M.def_inline_noconflict, (Int,))
         @test all(code) do x
             !isinvoke(x, :_def_inline_noconflict)
         end
     end
-    let code = code_typed1(m.def_noinline_noconflict, (Int,))
+    let code = code_typed1(M.def_noinline_noconflict, (Int,))
         @test any(code) do x
             isinvoke(x, :_def_noinline_noconflict)
         end
@@ -438,8 +438,8 @@ code_typed1(args...; kwargs...) = (first(only(code_typed(args...; kwargs...)))::
 end
 
 @testset "@inline/@noinline annotation within a function body" begin
-    m = Module()
-    @eval m begin
+    M = Module()
+    @eval M begin
         function _body_inline(x)
             @inline
             # this call won't be resolved and thus will prevent inlining to happen if we don't
@@ -471,18 +471,18 @@ end
         end
     end
 
-    let code = code_typed1(m.body_inline, (Int,))
+    let code = code_typed1(M.body_inline, (Int,))
         @test all(code) do x
             !isinvoke(x, :_body_inline)
         end
     end
-    let code = code_typed1(m.body_noinline, (Int,))
+    let code = code_typed1(M.body_noinline, (Int,))
         @test any(code) do x
             isinvoke(x, :_body_noinline)
         end
     end
     # test annotations for `do` blocks
-    let code = code_typed1(m.do_inline, (Int,))
+    let code = code_typed1(M.do_inline, (Int,))
         # what we test here is that both `simple_caller` and the anonymous function that the
         # `do` block creates should inlined away, and as a result there is only the unresolved call
         @test all(code) do x
@@ -490,7 +490,7 @@ end
             !isinvoke(x, mi->startswith(string(mi.def.name), '#'))
         end
     end
-    let code = code_typed1(m.do_noinline, (Int,))
+    let code = code_typed1(M.do_noinline, (Int,))
         # the anonymous function that the `do` block created shouldn't be inlined here
         @test any(code) do x
             isinvoke(x, mi->startswith(string(mi.def.name), '#'))
@@ -499,8 +499,8 @@ end
 end
 
 @testset "callsite @inline/@noinline annotations" begin
-    m = Module()
-    @eval m begin
+    M = Module()
+    @eval M begin
         # this global variable prevents inference to fold everything as constant, and/or the optimizer to inline the call accessing to this
         g = 0
 
@@ -540,57 +540,57 @@ end
         end
     end
 
-    let code = code_typed1(m.force_inline_explicit, (Int,))
+    let code = code_typed1(M.force_inline_explicit, (Int,))
         @test all(x->!isinvoke(x, :noinlined_explicit), code)
     end
-    let code = code_typed1(m.force_inline_block_explicit, (Int,))
+    let code = code_typed1(M.force_inline_block_explicit, (Int,))
         @test all(code) do x
             !isinvoke(x, :noinlined_explicit) &&
             !isinvoke(x, :(+))
         end
     end
-    let code = code_typed1(m.force_inline_implicit, (Int,))
+    let code = code_typed1(M.force_inline_implicit, (Int,))
         @test all(x->!isinvoke(x, :noinlined_implicit), code)
     end
-    let code = code_typed1(m.force_inline_block_implicit, (Int,))
+    let code = code_typed1(M.force_inline_block_implicit, (Int,))
         @test all(x->!isinvoke(x, :noinlined_explicit), code)
     end
 
-    let code = code_typed1(m.force_noinline_explicit, (Int,))
+    let code = code_typed1(M.force_noinline_explicit, (Int,))
         @test any(x->isinvoke(x, :inlined_explicit), code)
     end
-    let code = code_typed1(m.force_noinline_block_explicit, (Int,))
+    let code = code_typed1(M.force_noinline_block_explicit, (Int,))
         @test count(x->isinvoke(x, :inlined_explicit), code) == 2
     end
-    let code = code_typed1(m.force_noinline_implicit, (Int,))
+    let code = code_typed1(M.force_noinline_implicit, (Int,))
         @test any(x->isinvoke(x, :inlined_implicit), code)
     end
-    let code = code_typed1(m.force_noinline_block_implicit, (Int,))
+    let code = code_typed1(M.force_noinline_block_implicit, (Int,))
         @test count(x->isinvoke(x, :inlined_implicit), code) == 2
     end
 
-    let code = code_typed1(m.force_inline_constprop_explicit)
+    let code = code_typed1(M.force_inline_constprop_explicit)
         @test all(x->!isinvoke(x, :noinlined_constprop_explicit), code)
     end
-    let code = code_typed1(m.force_inline_constprop_implicit)
+    let code = code_typed1(M.force_inline_constprop_implicit)
         @test all(x->!isinvoke(x, :noinlined_constprop_implicit), code)
     end
 
-    let code = code_typed1(m.force_noinline_constprop_explicit)
+    let code = code_typed1(M.force_noinline_constprop_explicit)
         @test any(x->isinvoke(x, :inlined_constprop_explicit), code)
     end
-    let code = code_typed1(m.force_noinline_constprop_implicit)
+    let code = code_typed1(M.force_noinline_constprop_implicit)
         @test any(x->isinvoke(x, :inlined_constprop_implicit), code)
     end
 
-    let code = code_typed1(m.nested, (Int,Int))
+    let code = code_typed1(M.nested, (Int,Int))
         @test count(x->isinvoke(x, :notinlined), code) == 1
     end
 end
 
 # force constant-prop' for `setproperty!`
 # https://github.com/JuliaLang/julia/pull/41882
-let ci = @eval Module() begin
+let code = @eval Module() begin
         # if we don't force constant-prop', `T = fieldtype(Foo, ::Symbol)` will be union-split to
         # `Union{Type{Any},Type{Int}` and it will make `convert(T, nothing)` too costly
         # and it leads to inlining failure
@@ -608,7 +608,7 @@ let ci = @eval Module() begin
         $code_typed1(setter, (Vector{Foo},))
     end
 
-    @test !any(x->isinvoke(x, :setproperty!), ci.code)
+    @test !any(x->isinvoke(x, :setproperty!), code)
 end
 
 # Issue #41299 - inlining deletes error check in :>

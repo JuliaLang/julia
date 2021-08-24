@@ -393,15 +393,16 @@ function remove_meta!(@nospecialize(stmt), meta::Vector{Any})
                 push!(meta, stmt)
             end
             return nothing
-        elseif is_ssaflag_head(head)
-            # we processed these flags in `jl_code_info_set_ir`
+        elseif is_preprocessed_flag(head)
             return nothing
         end
     end
     return stmt
 end
 
-is_ssaflag_head(head::Symbol) = head === :inbounds || head === :inline || head === :noinline
+# check if this expression is preprocessed in `jl_code_info_set_ir`
+is_preprocessed_flag(head::Symbol) =
+    head === :inbounds || head === :inline || head === :noinline
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
