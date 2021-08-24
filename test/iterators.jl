@@ -292,6 +292,15 @@ let (a, b) = (1:3, [4 6;
     end
 end
 
+# collect stateful iterator
+let
+    itr = (i+1 for i in Base.Stateful([1,2,3]))
+    @test collect(itr) == [2, 3, 4]
+    A = zeros(Int, 0, 0)
+    itr = (i-1 for i in Base.Stateful(A))
+    @test collect(itr) == Int[] # Stateful do not preserve shape
+end
+
 # with 1D inputs
 let a = 1:2,
     b = 1.0:10.0,
