@@ -227,6 +227,7 @@ Vector{T}(s::AbstractString) where {T<:AbstractChar} = collect(T, s)
 
 Symbol(s::AbstractString) = Symbol(String(s))
 Symbol(x...) = Symbol(string(x...))
+Symbol(x::Symbol, y::Symbol) = Symbol(string(x), string(y)) # 2-arg form improves performance
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
 convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
