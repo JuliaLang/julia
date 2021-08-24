@@ -667,7 +667,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_initerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_methoderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;
@@ -1969,7 +1969,7 @@ JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
 
 extern JL_DLLEXPORT JL_STREAM *JL_STDIN;
 extern JL_DLLEXPORT JL_STREAM *JL_STDOUT;
-extern JL_DLLEXPORT JL_STREAM *JL_STDERR;
+extern JL_DLLIMPORT JL_STREAM *JL_STDERR;
 
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void);
@@ -2036,7 +2036,7 @@ typedef struct {
     int8_t rr_detach;
 } jl_options_t;
 
-extern JL_DLLEXPORT jl_options_t jl_options;
+extern JL_DLLIMPORT jl_options_t jl_options;
 JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 
 // Parse an argc/argv pair to extract general julia options, passing back out

@@ -114,7 +114,6 @@ extern "C" {
 
 #include "builtin_proto.h"
 
-extern uintptr_t __stack_chk_guard;
 extern void __stack_chk_fail();
 
 #ifdef _OS_WINDOWS_

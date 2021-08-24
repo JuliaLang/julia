@@ -51,8 +51,6 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
 
-size_t jl_page_size;
-
 void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 {
 #ifdef _OS_WINDOWS_
@@ -616,6 +614,70 @@ static void restore_fp_env(void)
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
+    // initialize shared global data
+    jl_tls_offset = -1;
+#ifdef JL_ELF_TLS_VARIANT
+    jl_tls_elf_support = 1;
+#else
+    jl_tls_elf_support = 0;
+#endif
+    jl_typeinf_world = 0;
+    jl_world_counter = 1;
+#ifndef HAVE_SSP
+    __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
+#endif
+    jl_gc_have_pending_finalizers = 0;
+    jl_options = (jl_options_t){ 0,    // quiet
+                            -1,   // banner
+                            NULL, // julia_bindir
+                            NULL, // julia_bin
+                            NULL, // cmds
+                            NULL, // image_file (will be filled in below)
+                            NULL, // cpu_target ("native", "core2", etc...)
+                            0,    // nthreads
+                            0,    // nprocs
+                            NULL, // machine_file
+                            NULL, // project
+                            0,    // isinteractive
+                            0,    // color
+                            JL_OPTIONS_HISTORYFILE_ON, // history file
+                            0,    // startup file
+                            JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
+                            0,    // code_coverage
+                            0,    // malloc_log
+                            2,    // opt_level
+                            0,    // opt_level_min
+#ifdef JL_DEBUG_BUILD
+                            2,    // debug_level [debug build]
+#else
+                            1,    // debug_level [release build]
+#endif
+                            JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
+                            JL_OPTIONS_DEPWARN_OFF,    // deprecation warning
+                            0,    // method overwrite warning
+                            1,    // can_inline
+                            JL_OPTIONS_POLLY_ON, // polly
+                            NULL, // trace_compile
+                            JL_OPTIONS_FAST_MATH_DEFAULT,
+                            0,    // worker
+                            NULL, // cookie
+                            JL_OPTIONS_HANDLE_SIGNALS_ON,
+                            JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
+                            JL_OPTIONS_USE_COMPILED_MODULES_YES,
+                            NULL, // bind-to
+                            NULL, // output-bc
+                            NULL, // output-unopt-bc
+                            NULL, // output-o
+                            NULL, // output-asm
+                            NULL, // output-ji
+                            NULL,    // output-code_coverage
+                            0, // incremental
+                            0, // image_file_specified
+                            JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
+                            0, // image-codegen
+                            0, // rr-detach
+    };
+
     jl_init_timing();
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();

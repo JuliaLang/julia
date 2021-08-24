@@ -287,8 +287,6 @@ void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 #endif
 
 jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
-uint8_t *jl_measure_compile_time = NULL;
-uint64_t *jl_cumulative_compile_time = NULL;
 
 // return calling thread's ID
 // Also update the suspended_threads list in signals-mach when changing the
@@ -336,14 +334,9 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     return ptls;
 }
 
-// lock for code generation
-JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 jl_mutex_t typecache_lock;
 
-ssize_t jl_tls_offset = -1;
-
 #ifdef JL_ELF_TLS_VARIANT
-const int jl_tls_elf_support = 1;
 // Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
 // To detect such case, we find the size of the TLS segment in the main
 // executable and the thread pointer (TP) and then see if the TLS pointer on the
@@ -439,7 +432,7 @@ static void jl_check_tls(void)
     jl_tls_offset = offset;
 }
 #else
-const int jl_tls_elf_support = 0;
+// !JL_ELF_TLS_VARIANT
 #endif
 
 // interface to Julia; sets up to make the runtime thread-safe

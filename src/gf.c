@@ -24,7 +24,6 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT size_t jl_world_counter = 1; // TODO: should this be atomic release/consume?
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT
 {
     return jl_world_counter;
@@ -493,7 +492,6 @@ static void reset_mt_caches(jl_methtable_t *mt, void *env)
 
 
 jl_function_t *jl_typeinf_func = NULL;
-size_t jl_typeinf_world = 0;
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {

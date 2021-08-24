@@ -323,6 +323,12 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_method_sym && nargs == 1) {
         return eval_methoddef(ex, s);
     }
+    else if (head == jl_foreigncall_sym) {
+        jl_error("`ccall` requires the compiler");
+    }
+    else if (head == jl_cfunction_sym) {
+        jl_error("`cfunction` requires the compiler");
+    }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
     abort();
 }

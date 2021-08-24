@@ -27,7 +27,7 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
     return &system_image_path[1];
 }
 
-
+/*
 jl_options_t jl_options = { 0,    // quiet
                             -1,   // banner
                             NULL, // julia_bindir
@@ -78,7 +78,7 @@ jl_options_t jl_options = { 0,    // quiet
                             0, // image-codegen
                             0, // rr-detach
 };
-
+*/
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
 static const char opts[]  =
     " -v, --version             Display version information\n"

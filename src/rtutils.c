@@ -215,7 +215,6 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
 }
 
 #ifndef HAVE_SSP
-JL_DLLEXPORT uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
 JL_DLLEXPORT void __stack_chk_fail(void)
 {
     /* put your panic function or similar in here */

@@ -11,12 +11,11 @@ extern "C" {
 
 #ifdef DEFINE_BUILTIN_GLOBALS
 #define DECLARE_BUILTIN(name) \
-    JL_CALLABLE(jl_f_##name); \
-    JL_DLLEXPORT jl_value_t *jl_builtin_##name
+    JL_CALLABLE(jl_f_##name);
 #else
 #define DECLARE_BUILTIN(name) \
     JL_CALLABLE(jl_f_##name); \
-    extern JL_DLLEXPORT jl_value_t *jl_builtin_##name
+    extern JL_DLLIMPORT jl_value_t *jl_builtin_##name
 #endif
 
 DECLARE_BUILTIN(applicable);
