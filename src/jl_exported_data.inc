@@ -122,7 +122,150 @@
     XX(jl_voidpointer_type) \
     XX(jl_void_type) \
     XX(jl_weakref_type) \
+    XX(jl_RTLD_DEFAULT_handle) \
+    XX(jl_uv_stdin) \
+    XX(jl_uv_stdout) \
+    XX(jl_uv_stderr) \
+    XX(jl_builtin_applicable) \
+    XX(jl_builtin__apply_iterate) \
+    XX(jl_builtin__apply_pure) \
+    XX(jl_builtin_apply_type) \
+    XX(jl_builtin_arrayref) \
+    XX(jl_builtin_arrayset) \
+    XX(jl_builtin_arraysize) \
+    XX(jl_builtin__call_in_world) \
+    XX(jl_builtin__call_latest) \
+    XX(jl_builtin_replacefield) \
+    XX(jl_builtin_const_arrayref) \
+    XX(jl_builtin__expr) \
+    XX(jl_builtin_fieldtype) \
+    XX(jl_builtin_getfield) \
+    XX(jl_builtin_ifelse) \
+    XX(jl_builtin_invoke) \
+    XX(jl_builtin_is) \
+    XX(jl_builtin_isa) \
+    XX(jl_builtin_isdefined) \
+    XX(jl_builtin_issubtype) \
+    XX(jl_builtin_modifyfield) \
+    XX(jl_builtin_nfields) \
+    XX(jl_builtin_setfield) \
+    XX(jl_builtin_sizeof) \
+    XX(jl_builtin_svec) \
+    XX(jl_builtin_swapfield) \
+    XX(jl_builtin_throw) \
+    XX(jl_builtin_tuple) \
+    XX(jl_builtin_typeassert) \
+    XX(jl_builtin__typebody) \
+    XX(jl_builtin_typeof) \
+    XX(jl_builtin__typevar) \
+    XX(jl_call_sym) \
+    XX(jl_invoke_sym) \
+    XX(jl_invoke_modify_sym) \
+    XX(jl_empty_sym) \
+    XX(jl_top_sym) \
+    XX(jl_module_sym) \
+    XX(jl_slot_sym) \
+    XX(jl_export_sym) \
+    XX(jl_import_sym) \
+    XX(jl_toplevel_sym) \
+    XX(jl_quote_sym) \
+    XX(jl_line_sym) \
+    XX(jl_incomplete_sym) \
+    XX(jl_goto_sym) \
+    XX(jl_goto_ifnot_sym) \
+    XX(jl_return_sym) \
+    XX(jl_lineinfo_sym) \
+    XX(jl_lambda_sym) \
+    XX(jl_assign_sym) \
+    XX(jl_globalref_sym) \
+    XX(jl_do_sym) \
+    XX(jl_method_sym) \
+    XX(jl_core_sym) \
+    XX(jl_enter_sym) \
+    XX(jl_leave_sym) \
+    XX(jl_pop_exception_sym) \
+    XX(jl_exc_sym) \
+    XX(jl_error_sym) \
+    XX(jl_new_sym) \
+    XX(jl_using_sym) \
+    XX(jl_splatnew_sym) \
+    XX(jl_block_sym) \
+    XX(jl_new_opaque_closure_sym) \
+    XX(jl_opaque_closure_method_sym) \
+    XX(jl_const_sym) \
+    XX(jl_thunk_sym) \
+    XX(jl_foreigncall_sym) \
+    XX(jl_as_sym) \
+    XX(jl_global_sym) \
+    XX(jl_list_sym) \
+    XX(jl_dot_sym) \
+    XX(jl_newvar_sym) \
+    XX(jl_boundscheck_sym) \
+    XX(jl_inbounds_sym) \
+    XX(jl_copyast_sym) \
+    XX(jl_cfunction_sym) \
+    XX(jl_pure_sym) \
+    XX(jl_loopinfo_sym) \
+    XX(jl_meta_sym) \
+    XX(jl_inert_sym) \
+    XX(jl_polly_sym) \
+    XX(jl_unused_sym) \
+    XX(jl_static_parameter_sym) \
+    XX(jl_inline_sym) \
+    XX(jl_noinline_sym) \
+    XX(jl_generated_sym) \
+    XX(jl_generated_only_sym) \
+    XX(jl_isdefined_sym) \
+    XX(jl_propagate_inbounds_sym) \
+    XX(jl_specialize_sym) \
+    XX(jl_aggressive_constprop_sym) \
+    XX(jl_nospecialize_sym) \
+    XX(jl_macrocall_sym) \
+    XX(jl_colon_sym) \
+    XX(jl_hygienicscope_sym) \
+    XX(jl_throw_undef_if_not_sym) \
+    XX(jl_getfield_undefref_sym) \
+    XX(jl_gc_preserve_begin_sym) \
+    XX(jl_gc_preserve_end_sym) \
+    XX(jl_coverageeffect_sym) \
+    XX(jl_escape_sym) \
+    XX(jl_aliasscope_sym) \
+    XX(jl_popaliasscope_sym) \
+    XX(jl_optlevel_sym) \
+    XX(jl_thismodule_sym) \
+    XX(jl_atom_sym) \
+    XX(jl_statement_sym) \
+    XX(jl_all_sym) \
+    XX(jl_compile_sym) \
+    XX(jl_infer_sym) \
+    XX(jl_libjulia_internal_handle) \
+    XX(jl_exe_handle) \
+    XX(jl_atomic_sym) \
+    XX(jl_not_atomic_sym) \
+    XX(jl_unordered_sym) \
+    XX(jl_monotonic_sym) \
+    XX(jl_acquire_sym) \
+    XX(jl_release_sym) \
+    XX(jl_acquire_release_sym) \
+    XX(jl_sequentially_consistent_sym)
+
+#define JL_EXPORTED_DATA_POINTERS_WIN(XX) \
+    XX(jl_crtdll_basename)
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \
-    XX(jl_n_threads, int)
+    XX(jl_n_threads, int) \
+    XX(jl_tls_offset, ssize_t) \
+    XX(jl_tls_elf_support, int) \
+    XX(jl_options, jl_options_t) \
+    XX(jl_codegen_lock, jl_mutex_t) \
+    XX(jl_typeinf_world, size_t) \
+    XX(jl_world_counter, size_t) \
+    XX(jl_gc_have_pending_finalizers, int) \
+    XX(jl_processor_print_help, int8_t) \
+    XX(jl_measure_compile_time_enabled, uint8_t) \
+    XX(jl_cumulative_compile_time, uint64_t) \
+    XX(jl_page_size, size_t)
+
+#define JL_EXPORTED_DATA_SYMBOLS_WIN(XX) \
+    XX(jl_in_stackwalk, jl_mutex_t)

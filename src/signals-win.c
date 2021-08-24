@@ -224,7 +224,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     return 1;
 }
 
-LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+JL_DLLEXPORT LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {

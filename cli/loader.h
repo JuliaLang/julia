@@ -22,10 +22,15 @@
 #define realloc loader_realloc
 #endif
 
+#include <stdint.h>
+
 #ifdef _OS_WINDOWS_
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
 #else
+
 #ifdef _OS_DARWIN_
 #include <mach-o/dyld.h>
 #endif
@@ -33,7 +38,6 @@
 #include <stddef.h>
 #include <sys/sysctl.h>
 #endif
-
 #define _GNU_SOURCE // Need this for `dladdr()`
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +46,7 @@
 #include <libgen.h>
 #include <unistd.h>
 #include <dlfcn.h>
+
 #endif
 
 // Borrow definition from `support/dtypes.h`
@@ -91,3 +96,16 @@ int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen);
 int utf8_to_wchar(const char * str, wchar_t *wstr, size_t maxlen);
 void setup_stdio(void);
 #endif
+
+#ifdef _OS_WINDOWS_
+typedef DWORD jl_thread_t;
+#else
+typedef pthread_t jl_thread_t;
+#endif
+
+typedef struct {
+    volatile jl_thread_t owner;
+    uint32_t count;
+} jl_mutex_t;
+
+#include "../src/jloptions.h"

@@ -27,57 +27,65 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
     return &system_image_path[1];
 }
 
+static int jl_options_initialized = 0;
 
-jl_options_t jl_options = { 0,    // quiet
-                            -1,   // banner
-                            NULL, // julia_bindir
-                            NULL, // julia_bin
-                            NULL, // cmds
-                            NULL, // image_file (will be filled in below)
-                            NULL, // cpu_target ("native", "core2", etc...)
-                            0,    // nthreads
-                            0,    // nprocs
-                            NULL, // machine_file
-                            NULL, // project
-                            0,    // isinteractive
-                            0,    // color
-                            JL_OPTIONS_HISTORYFILE_ON, // history file
-                            0,    // startup file
-                            JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
-                            0,    // code_coverage
-                            0,    // malloc_log
-                            2,    // opt_level
-                            0,    // opt_level_min
+JL_DLLEXPORT void jl_init_options(void)
+{
+    if (jl_options_initialized)
+        return;
+    jl_options =
+        (jl_options_t){ 0,    // quiet
+                        -1,   // banner
+                        NULL, // julia_bindir
+                        NULL, // julia_bin
+                        NULL, // cmds
+                        NULL, // image_file (will be filled in below)
+                        NULL, // cpu_target ("native", "core2", etc...)
+                        0,    // nthreads
+                        0,    // nprocs
+                        NULL, // machine_file
+                        NULL, // project
+                        0,    // isinteractive
+                        0,    // color
+                        JL_OPTIONS_HISTORYFILE_ON, // history file
+                        0,    // startup file
+                        JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
+                        0,    // code_coverage
+                        0,    // malloc_log
+                        2,    // opt_level
+                        0,    // opt_level_min
 #ifdef JL_DEBUG_BUILD
-                            2,    // debug_level [debug build]
+                        2,    // debug_level [debug build]
 #else
-                            1,    // debug_level [release build]
+                        1,    // debug_level [release build]
 #endif
-                            JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
-                            JL_OPTIONS_DEPWARN_OFF,    // deprecation warning
-                            0,    // method overwrite warning
-                            1,    // can_inline
-                            JL_OPTIONS_POLLY_ON, // polly
-                            NULL, // trace_compile
-                            JL_OPTIONS_FAST_MATH_DEFAULT,
-                            0,    // worker
-                            NULL, // cookie
-                            JL_OPTIONS_HANDLE_SIGNALS_ON,
-                            JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
-                            JL_OPTIONS_USE_COMPILED_MODULES_YES,
-                            NULL, // bind-to
-                            NULL, // output-bc
-                            NULL, // output-unopt-bc
-                            NULL, // output-o
-                            NULL, // output-asm
-                            NULL, // output-ji
-                            NULL,    // output-code_coverage
-                            0, // incremental
-                            0, // image_file_specified
-                            JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
-                            0, // image-codegen
-                            0, // rr-detach
-};
+                        JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
+                        JL_OPTIONS_DEPWARN_OFF,    // deprecation warning
+                        0,    // method overwrite warning
+                        1,    // can_inline
+                        JL_OPTIONS_POLLY_ON, // polly
+                        NULL, // trace_compile
+                        JL_OPTIONS_FAST_MATH_DEFAULT,
+                        0,    // worker
+                        NULL, // cookie
+                        JL_OPTIONS_HANDLE_SIGNALS_ON,
+                        JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
+                        JL_OPTIONS_USE_COMPILED_MODULES_YES,
+                        NULL, // bind-to
+                        NULL, // output-bc
+                        NULL, // output-unopt-bc
+                        NULL, // output-o
+                        NULL, // output-asm
+                        NULL, // output-ji
+                        NULL,    // output-code_coverage
+                        0, // incremental
+                        0, // image_file_specified
+                        JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
+                        0, // image-codegen
+                        0, // rr-detach
+    };
+    jl_options_initialized = 1;
+}
 
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
 static const char opts[]  =
@@ -263,6 +271,12 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "rr-detach",       no_argument,       0, opt_rr_detach },
         { 0, 0, 0, 0 }
     };
+
+    if (JL_STDIN == NULL) {
+        JL_STDIN  = (JL_STREAM*)STDIN_FILENO;
+        JL_STDOUT = (JL_STREAM*)STDOUT_FILENO;
+        JL_STDERR = (JL_STREAM*)STDERR_FILENO;
+    }
 
     // If CPUID specific binaries are enabled, this varies between runs, so initialize
     // it here, rather than as part of the static initialization above.

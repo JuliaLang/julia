@@ -2,10 +2,6 @@
 
 // --- the ccall, cglobal, and llvm intrinsics ---
 
-#ifdef _OS_WINDOWS_
-extern const char jl_crtdll_basename[];
-#endif
-
 // somewhat unusual variable, in that aotcompile wants to get the address of this for a sanity check
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 {

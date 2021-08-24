@@ -177,7 +177,7 @@ JL_DLLEXPORT int32_t jl_get_default_nans(void);
 #include <string>
 #include <vector>
 
-extern JL_DLLEXPORT bool jl_processor_print_help;
+extern JL_DLLIMPORT bool jl_processor_print_help;
 
 /**
  * Returns the CPU name and feature string to be used by LLVM JIT.

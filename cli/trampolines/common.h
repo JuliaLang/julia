@@ -1,3 +1,5 @@
+#include "../../src/support/platform.h"
+
 // Preprocessor annoyances
 #define CONCAT_(x,y)    x##y
 #define CONCAT(x,y)     CONCAT_(x, y)

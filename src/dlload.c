@@ -57,25 +57,6 @@ static int endswith_extension(const char *path) JL_NOTSAFEPOINT
     return 0;
 }
 
-#ifdef _OS_WINDOWS_
-#ifdef _MSC_VER
-#if (_MSC_VER >= 1930) || (_MSC_VER < 1800)
-#error This version of MSVC has not been tested.
-#elif _MSC_VER >= 1900 // VC++ 2015 / 2017 / 2019
-#define CRTDLL_BASENAME "vcruntime140"
-#elif _MSC_VER >= 1800 // VC++ 2013
-#define CRTDLL_BASENAME "msvcr120"
-#endif
-#else
-#define CRTDLL_BASENAME "msvcrt"
-#endif
-
-const char jl_crtdll_basename[] = CRTDLL_BASENAME;
-const char jl_crtdll_name[] = CRTDLL_BASENAME ".dll";
-
-#undef CRTDLL_BASENAME
-#endif
-
 #define PATHBUF 4096
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
@@ -320,7 +301,7 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
-const char *jl_dlfind_win32(const char *f_name)
+JL_DLLEXPORT const char *jl_dlfind_win32(const char *f_name)
 {
     void * dummy;
     if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))

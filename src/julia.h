@@ -220,14 +220,18 @@ typedef jl_call_t *jl_callptr_t;
 // "speccall" calling convention signatures.
 // This describes some of the special ABI used by compiled julia functions.
 JL_DLLEXPORT extern jl_call_t jl_fptr_args;
+JL_DLLIMPORT extern jl_callptr_t jl_fptr_args_addr;
 typedef jl_value_t *(*jl_fptr_args_t)(jl_value_t*, jl_value_t**, uint32_t);
 
 JL_DLLEXPORT extern jl_call_t jl_fptr_const_return;
+JL_DLLIMPORT extern jl_callptr_t jl_fptr_const_return_addr;
 
 JL_DLLEXPORT extern jl_call_t jl_fptr_sparam;
+JL_DLLIMPORT extern jl_callptr_t jl_fptr_sparam_addr;
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
 JL_DLLEXPORT extern jl_call_t jl_fptr_interpret_call;
+JL_DLLIMPORT extern jl_callptr_t jl_fptr_interpret_call_addr;
 
 JL_EXTENSION typedef union {
     void* fptr;
@@ -668,7 +672,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_initerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_methoderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;
@@ -1968,9 +1972,9 @@ JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 1, 2);
 
-extern JL_DLLEXPORT JL_STREAM *JL_STDIN;
-extern JL_DLLEXPORT JL_STREAM *JL_STDOUT;
-extern JL_DLLEXPORT JL_STREAM *JL_STDERR;
+extern JL_DLLIMPORT JL_STREAM *JL_STDIN;
+extern JL_DLLIMPORT JL_STREAM *JL_STDOUT;
+extern JL_DLLIMPORT JL_STREAM *JL_STDERR;
 
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void);
@@ -1988,61 +1992,16 @@ JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT; // deprecated
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
 
 // julia options -----------------------------------------------------------
-// NOTE: This struct needs to be kept in sync with JLOptions type in base/options.jl
-typedef struct {
-    int8_t quiet;
-    int8_t banner;
-    const char *julia_bindir;
-    const char *julia_bin;
-    const char **cmds;
-    const char *image_file;
-    const char *cpu_target;
-    int32_t nthreads;
-    int32_t nprocs;
-    const char *machine_file;
-    const char *project;
-    int8_t isinteractive;
-    int8_t color;
-    int8_t historyfile;
-    int8_t startupfile;
-    int8_t compile_enabled;
-    int8_t code_coverage;
-    int8_t malloc_log;
-    int8_t opt_level;
-    int8_t opt_level_min;
-    int8_t debug_level;
-    int8_t check_bounds;
-    int8_t depwarn;
-    int8_t warn_overwrite;
-    int8_t can_inline;
-    int8_t polly;
-    const char *trace_compile;
-    int8_t fast_math;
-    int8_t worker;
-    const char *cookie;
-    int8_t handle_signals;
-    int8_t use_sysimage_native_code;
-    int8_t use_compiled_modules;
-    const char *bindto;
-    const char *outputbc;
-    const char *outputunoptbc;
-    const char *outputo;
-    const char *outputasm;
-    const char *outputji;
-    const char *output_code_coverage;
-    int8_t incremental;
-    int8_t image_file_specified;
-    int8_t warn_scope;
-    int8_t image_codegen;
-    int8_t rr_detach;
-} jl_options_t;
 
-extern JL_DLLEXPORT jl_options_t jl_options;
+#include "jloptions.h"
+
+extern JL_DLLIMPORT jl_options_t jl_options;
 JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 
 // Parse an argc/argv pair to extract general julia options, passing back out
 // any arguments that should be passed on to the script.
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
+JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv

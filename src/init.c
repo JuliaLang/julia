@@ -23,9 +23,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#define DEFINE_BUILTIN_GLOBALS
 #include "builtin_proto.h"
-#undef DEFINE_BUILTIN_GLOBALS
 #include "threading.h"
 #include "julia_assert.h"
 #include "processor.h"
@@ -50,8 +48,6 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
-
-size_t jl_page_size;
 
 void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 {
@@ -293,16 +289,12 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
 static void post_boot_hooks(void);
 
-JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
-void *jl_RTLD_DEFAULT_handle;
-JL_DLLEXPORT void *jl_exe_handle;
 #ifdef _OS_WINDOWS_
 void *jl_ntdll_handle;
 void *jl_kernel32_handle;
 void *jl_crtdll_handle;
 void *jl_winsock_handle;
-extern const char jl_crtdll_name[];
 #endif
 
 uv_loop_t *jl_io_loop;
@@ -614,8 +606,47 @@ static void restore_fp_env(void)
     }
 }
 
+#ifdef _OS_WINDOWS_
+#ifdef _MSC_VER
+#if (_MSC_VER >= 1930) || (_MSC_VER < 1800)
+#error This version of MSVC has not been tested.
+#elif _MSC_VER >= 1900 // VC++ 2015 / 2017 / 2019
+#define CRTDLL_BASENAME "vcruntime140"
+#elif _MSC_VER >= 1800 // VC++ 2013
+#define CRTDLL_BASENAME "msvcr120"
+#endif
+#else
+#define CRTDLL_BASENAME "msvcrt"
+#endif
+
+const char jl_crtdll_name[] = CRTDLL_BASENAME ".dll";
+
+#endif
+
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
+    // initialize shared global data
+    jl_tls_offset = -1;
+#ifdef JL_ELF_TLS_VARIANT
+    jl_tls_elf_support = 1;
+#else
+    jl_tls_elf_support = 0;
+#endif
+    jl_typeinf_world = 0;
+    jl_world_counter = 1;
+#ifndef HAVE_SSP
+    __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
+#endif
+    jl_gc_have_pending_finalizers = 0;
+    JL_STDIN  = (JL_STREAM*)STDIN_FILENO;
+    JL_STDOUT = (JL_STREAM*)STDOUT_FILENO;
+    JL_STDERR = (JL_STREAM*)STDERR_FILENO;
+    jl_measure_compile_time_enabled = 0;
+    jl_cumulative_compile_time = 0;
+#ifdef _OS_WINDOWS_
+    jl_crtdll_basename = CRTDLL_BASENAME;
+#endif
+
     jl_init_timing();
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();

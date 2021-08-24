@@ -160,10 +160,10 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_callptr_t addr;
         bool isspecsig = false;
         if (decls.functionObject == "jl_fptr_args") {
-            addr = &jl_fptr_args;
+            addr = jl_fptr_args_addr;
         }
         else if (decls.functionObject == "jl_fptr_sparam") {
-            addr = &jl_fptr_sparam;
+            addr = jl_fptr_sparam_addr;
         }
         else {
             addr = (jl_callptr_t)getAddressForFunction(decls.functionObject);
@@ -178,7 +178,7 @@ static jl_callptr_t _jl_compile_codeinst(
             }
             jl_atomic_store_release(&this_code->invoke, addr);
         }
-        else if (this_code->invoke == jl_fptr_const_return && !decls.specFunctionObject.empty()) {
+        else if (this_code->invoke == jl_fptr_const_return_addr && !decls.specFunctionObject.empty()) {
             // hack to export this pointer value to jl_dump_method_disasm
             this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
         }
@@ -392,7 +392,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         _jl_compile_codeinst(unspec, src, unspec->min_world);
         if (unspec->invoke == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
-            jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
+            jl_atomic_store_release(&unspec->invoke, jl_fptr_interpret_call_addr);
         }
         JL_GC_POP();
     }
@@ -414,7 +414,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         if (getwrapper)
             return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
         uintptr_t specfptr = (uintptr_t)codeinst->specptr.fptr;
-        if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
+        if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
@@ -439,7 +439,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 fptr = (uintptr_t)codeinst->invoke;
                 specfptr = (uintptr_t)codeinst->specptr.fptr;
                 if (src && jl_is_code_info(src)) {
-                    if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
+                    if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
                         fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world);
                         specfptr = (uintptr_t)codeinst->specptr.fptr;
                     }
@@ -832,10 +832,10 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
         if (Addr == (uintptr_t)codeinst->invoke) {
             stream_fname << "jsysw_";
         }
-        else if (codeinst->invoke == &jl_fptr_args) {
+        else if (codeinst->invoke == jl_fptr_args_addr) {
             stream_fname << "jsys1_";
         }
-        else if (codeinst->invoke == &jl_fptr_sparam) {
+        else if (codeinst->invoke == jl_fptr_sparam_addr) {
             stream_fname << "jsys3_";
         }
         else {

@@ -15,6 +15,10 @@ ifeq ($(OS),WINNT)
 LOADER_CFLAGS += -municode -mconsole -nostdlib -fno-stack-check -fno-stack-protector -mno-stack-arg-probe
 endif
 
+ifeq ($(HAVE_SSP),1)
+LOADER_CFLAGS += -DHAVE_SSP=1
+endif
+
 ifeq ($(OS),WINNT)
 LOADER_LDFLAGS += -municode -mconsole -nostdlib --disable-auto-import \
                   --disable-runtime-pseudo-reloc -lntdll -lkernel32 -lpsapi

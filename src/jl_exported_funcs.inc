@@ -272,6 +272,7 @@
     XX(jl_init_restored_modules) \
     XX(jl_init_with_image) \
     XX(jl_init_with_image__threading) \
+    XX(jl_init_options) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -534,7 +535,92 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
-    XX(jl_yield)
+    XX(jl_yield) \
+    XX(jl_has_intersect_type_not_kind) \
+    XX(jl_unwrap_unionall) \
+    XX(jl_pointer_egal) \
+    XX(jl_datatype_isinlinealloc) \
+    XX(jl_wrap_Type) \
+    XX(jl_binding_deprecation_warning) \
+    XX(jl_special_vector_alignment) \
+    XX(jl_struct_try_layout) \
+    XX(uv_os_get_passwd) \
+    XX(uv_os_free_passwd) \
+    XX(jl_isabspath) \
+    XX(jl_nth_union_component) \
+    XX(jl_get_llvm_target) \
+    XX(jl_egal__unboxed) \
+    XX(jl_nth_slot_type) \
+    XX(jl_rewrap_unionall) \
+    XX(jl_compile_method_internal) \
+    XX(jl_get_specialization1) \
+    XX(jl_get_exceptionf) \
+    XX(jl_get_atomic_order) \
+    XX(jl_has_meta) \
+    XX(jl_is_submodule) \
+    XX(jl_gc_run_pending_finalizers) \
+    XX(jl_is_toplevel_only_expr) \
+    XX(jl_get_library_) \
+    XX(jl_intrinsic_nargs) \
+    XX(jl_get_builtin_fptr) \
+    XX(jl_gc_disable_finalizers_internal) \
+    XX(jlbacktrace) \
+    XX(jl_type_infer) \
+    XX(jl_pgcstack_getkey) \
+    XX(jl_type_mappable_to_c) \
+    XX(jl_method_compiled) \
+    XX(jl_get_llvm_disasm_target) \
+    XX(jl_gc_classify_pools) \
+    XX(jl_get_llvm_clone_targets) \
+    XX(jl_format_filename) \
+    XX(utf8proc_charwidth) \
+    XX(uv_rwlock_wrlock) \
+    XX(uv_rwlock_wrunlock) \
+    XX(uv_rwlock_rdlock) \
+    XX(uv_rwlock_rdunlock) \
+    XX(uv_rwlock_init)
+
+#define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
+    XX(jl_dlfind_win32) \
+    XX(jl_refresh_dbg_module_list) \
+    XX(jl_exception_handler)
+
+#define JL_RUNTIME_EXPORTED_FUNC_ADDRS(XX) \
+    XX(jl_f_is) \
+    XX(jl_f_typeof) \
+    XX(jl_f_sizeof) \
+    XX(jl_f_issubtype) \
+    XX(jl_f_isa) \
+    XX(jl_f_typeassert) \
+    XX(jl_f_ifelse) \
+    XX(jl_f__apply_iterate) \
+    XX(jl_f__apply_pure) \
+    XX(jl_f__call_latest) \
+    XX(jl_f__call_in_world) \
+    XX(jl_f_throw) \
+    XX(jl_f_tuple) \
+    XX(jl_f_svec) \
+    XX(jl_f_applicable) \
+    XX(jl_f_invoke) \
+    XX(jl_f_invoke_kwsorter) \
+    XX(jl_f_isdefined) \
+    XX(jl_f_getfield) \
+    XX(jl_f_setfield) \
+    XX(jl_f_swapfield) \
+    XX(jl_f_modifyfield) \
+    XX(jl_f_fieldtype) \
+    XX(jl_f_nfields) \
+    XX(jl_f__expr) \
+    XX(jl_f__typevar) \
+    XX(jl_f_arrayref) \
+    XX(jl_f_const_arrayref) \
+    XX(jl_f_arrayset) \
+    XX(jl_f_arraysize) \
+    XX(jl_f_apply_type) \
+    XX(jl_fptr_args) \
+    XX(jl_fptr_const_return) \
+    XX(jl_fptr_sparam) \
+    XX(jl_fptr_interpret_call)
 
 #define JL_CODEGEN_EXPORTED_FUNCS(XX) \
     XX(jl_clear_malloc_data) \

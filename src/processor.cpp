@@ -73,8 +73,6 @@
 //
 //     Optimize only for size. Clang's `-Oz`.
 
-bool jl_processor_print_help = false;
-
 namespace {
 
 // Helper functions to test/set feature bits
@@ -504,6 +502,7 @@ parse_cmdline(const char *option, F &&feature_cb)
 {
     if (!option)
         option = "native";
+    jl_processor_print_help = false;
     std::vector<TargetData<n>> res;
     TargetData<n> arg{};
     auto reset_arg = [&] {

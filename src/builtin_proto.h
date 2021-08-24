@@ -9,15 +9,10 @@ extern "C" {
 
 // declarations for julia-callable builtin functions
 
-#ifdef DEFINE_BUILTIN_GLOBALS
 #define DECLARE_BUILTIN(name) \
     JL_CALLABLE(jl_f_##name); \
-    JL_DLLEXPORT jl_value_t *jl_builtin_##name
-#else
-#define DECLARE_BUILTIN(name) \
-    JL_CALLABLE(jl_f_##name); \
-    extern JL_DLLEXPORT jl_value_t *jl_builtin_##name
-#endif
+    JL_DLLIMPORT extern jl_fptr_args_t jl_f_##name##_addr; \
+    JL_DLLIMPORT extern jl_value_t *jl_builtin_##name
 
 DECLARE_BUILTIN(applicable);
 DECLARE_BUILTIN(_apply_iterate);
@@ -53,6 +48,7 @@ DECLARE_BUILTIN(typeof);
 DECLARE_BUILTIN(_typevar);
 
 JL_CALLABLE(jl_f_invoke_kwsorter);
+JL_DLLIMPORT extern jl_fptr_args_t jl_f_invoke_kwsorter_addr;
 JL_CALLABLE(jl_f__structtype);
 JL_CALLABLE(jl_f__abstracttype);
 JL_CALLABLE(jl_f__primitivetype);

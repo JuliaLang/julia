@@ -114,7 +114,6 @@ extern "C" {
 
 #include "builtin_proto.h"
 
-extern uintptr_t __stack_chk_guard;
 extern void __stack_chk_fail();
 
 #ifdef _OS_WINDOWS_
@@ -851,39 +850,7 @@ static const auto pointer_from_objref_func = new JuliaFunction{
 };
 
 static const auto jltuple_func = new JuliaFunction{"jl_f_tuple", get_func_sig, get_func_attrs};
-static const std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map = {
-    { &jl_f_is,                 new JuliaFunction{"jl_f_is", get_func_sig, get_func_attrs} },
-    { &jl_f_typeof,             new JuliaFunction{"jl_f_typeof", get_func_sig, get_func_attrs} },
-    { &jl_f_sizeof,             new JuliaFunction{"jl_f_sizeof", get_func_sig, get_func_attrs} },
-    { &jl_f_issubtype,          new JuliaFunction{"jl_f_issubtype", get_func_sig, get_func_attrs} },
-    { &jl_f_isa,                new JuliaFunction{"jl_f_isa", get_func_sig, get_func_attrs} },
-    { &jl_f_typeassert,         new JuliaFunction{"jl_f_typeassert", get_func_sig, get_func_attrs} },
-    { &jl_f_ifelse,             new JuliaFunction{"jl_f_ifelse", get_func_sig, get_func_attrs} },
-    { &jl_f__apply_iterate,     new JuliaFunction{"jl_f__apply_iterate", get_func_sig, get_func_attrs} },
-    { &jl_f__apply_pure,        new JuliaFunction{"jl_f__apply_pure", get_func_sig, get_func_attrs} },
-    { &jl_f__call_latest,       new JuliaFunction{"jl_f__call_latest", get_func_sig, get_func_attrs} },
-    { &jl_f__call_in_world,     new JuliaFunction{"jl_f__call_in_world", get_func_sig, get_func_attrs} },
-    { &jl_f_throw,              new JuliaFunction{"jl_f_throw", get_func_sig, get_func_attrs} },
-    { &jl_f_tuple,              jltuple_func },
-    { &jl_f_svec,               new JuliaFunction{"jl_f_svec", get_func_sig, get_func_attrs} },
-    { &jl_f_applicable,         new JuliaFunction{"jl_f_applicable", get_func_sig, get_func_attrs} },
-    { &jl_f_invoke,             new JuliaFunction{"jl_f_invoke", get_func_sig, get_func_attrs} },
-    { &jl_f_invoke_kwsorter,    new JuliaFunction{"jl_f_invoke_kwsorter", get_func_sig, get_func_attrs} },
-    { &jl_f_isdefined,          new JuliaFunction{"jl_f_isdefined", get_func_sig, get_func_attrs} },
-    { &jl_f_getfield,           new JuliaFunction{"jl_f_getfield", get_func_sig, get_func_attrs} },
-    { &jl_f_setfield,           new JuliaFunction{"jl_f_setfield", get_func_sig, get_func_attrs} },
-    { &jl_f_swapfield,          new JuliaFunction{"jl_f_swapfield", get_func_sig, get_func_attrs} },
-    { &jl_f_modifyfield,        new JuliaFunction{"jl_f_modifyfield", get_func_sig, get_func_attrs} },
-    { &jl_f_fieldtype,          new JuliaFunction{"jl_f_fieldtype", get_func_sig, get_func_attrs} },
-    { &jl_f_nfields,            new JuliaFunction{"jl_f_nfields", get_func_sig, get_func_attrs} },
-    { &jl_f__expr,              new JuliaFunction{"jl_f__expr", get_func_sig, get_func_attrs} },
-    { &jl_f__typevar,           new JuliaFunction{"jl_f__typevar", get_func_sig, get_func_attrs} },
-    { &jl_f_arrayref,           new JuliaFunction{"jl_f_arrayref", get_func_sig, get_func_attrs} },
-    { &jl_f_const_arrayref,     new JuliaFunction{"jl_f_const_arrayref", get_func_sig, get_func_attrs} },
-    { &jl_f_arrayset,           new JuliaFunction{"jl_f_arrayset", get_func_sig, get_func_attrs} },
-    { &jl_f_arraysize,          new JuliaFunction{"jl_f_arraysize", get_func_sig, get_func_attrs} },
-    { &jl_f_apply_type,         new JuliaFunction{"jl_f_apply_type", get_func_sig, get_func_attrs} },
-};
+static std::map<jl_fptr_args_t, JuliaFunction*> builtin_func_map;
 
 static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction{"jl_new_opaque_closure_jlcall", get_func_sig, get_func_attrs};
 
@@ -2027,88 +1994,12 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     outf.close();
 }
 
-#ifndef MAXHOSTNAMELEN
-# define MAXHOSTNAMELEN 256
-#endif
-
-// Form a file name from a pattern made by replacing tokens,
-// similar to many of those provided by ssh_config TOKENS:
-//
-//           %%    A literal `%'.
-//           %p    The process PID
-//           %d    Local user's home directory.
-//           %i    The local user ID.
-//           %L    The local hostname.
-//           %l    The local hostname, including the domain name.
-//           %u    The local username.
-std::string jl_format_filename(StringRef output_pattern)
-{
-    std::string buf;
-    raw_string_ostream outfile(buf);
-    bool special = false;
-    char hostname[MAXHOSTNAMELEN + 1];
-    uv_passwd_t pwd;
-    bool got_pwd = false;
-    for (auto c : output_pattern) {
-        if (special) {
-            if (!got_pwd && (c == 'i' || c == 'd' || c == 'u')) {
-                int r = uv_os_get_passwd(&pwd);
-                if (r == 0)
-                    got_pwd = true;
-            }
-            switch (c) {
-            case 'p':
-                outfile << jl_getpid();
-                break;
-            case 'd':
-                if (got_pwd)
-                    outfile << pwd.homedir;
-                break;
-            case 'i':
-                if (got_pwd)
-                    outfile << pwd.uid;
-                break;
-            case 'l':
-            case 'L':
-                if (gethostname(hostname, sizeof(hostname)) == 0) {
-                    hostname[sizeof(hostname) - 1] = '\0'; /* Null terminate, just to be safe. */
-                    outfile << hostname;
-                }
-#ifndef _OS_WINDOWS_
-                if (c == 'l' && getdomainname(hostname, sizeof(hostname)) == 0) {
-                    hostname[sizeof(hostname) - 1] = '\0'; /* Null terminate, just to be safe. */
-                    outfile << hostname;
-                }
-#endif
-                break;
-            case 'u':
-                if (got_pwd)
-                    outfile << pwd.username;
-                break;
-            default:
-                outfile << c;
-                break;
-            }
-            special = false;
-        }
-        else if (c == '%') {
-            special = true;
-        }
-        else {
-            outfile << c;
-        }
-    }
-    if (got_pwd)
-        uv_os_free_passwd(&pwd);
-    return outfile.str();
-}
-
 extern "C" JL_DLLEXPORT void jl_write_coverage_data_impl(const char *output)
 {
     if (output) {
         StringRef output_pattern(output);
         if (output_pattern.endswith(".info"))
-            write_lcov_data(coverageData, jl_format_filename(output_pattern));
+            write_lcov_data(coverageData, jl_format_filename(output_pattern.str().c_str()));
     }
     else {
         std::string stm;
@@ -3739,8 +3630,8 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
         else {
             jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-            if (ci != jl_nothing && codeinst->invoke != jl_fptr_sparam) { // check if we know we definitely can't handle this specptr
-                if (codeinst->invoke == jl_fptr_const_return) {
+            if (ci != jl_nothing && codeinst->invoke != jl_fptr_sparam_addr) { // check if we know we definitely can't handle this specptr
+                if (codeinst->invoke == jl_fptr_const_return_addr) {
                     result = mark_julia_const(codeinst->rettype_const);
                     handled = true;
                 }
@@ -3754,7 +3645,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                         // optimization: emit the correct name immediately, if we know it
                         // TODO: use `emitted` map here too to try to consolidate names?
                         if (codeinst->specptr.fptr) {
-                            if (specsig ? codeinst->isspecsig : codeinst->invoke == jl_fptr_args) {
+                            if (specsig ? codeinst->isspecsig : codeinst->invoke == jl_fptr_args_addr) {
                                 protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->specptr.fptr, codeinst);
                                 need_to_emit = false;
                             }
@@ -5273,11 +5164,11 @@ static Function* gen_cfun_wrapper(
         // TODO: this isn't ideal to be unconditionally calling type inference (and compile) from here
         codeinst = jl_compile_method_internal(lam, world);
         assert(codeinst->invoke);
-        if (codeinst->invoke == jl_fptr_args) {
+        if (codeinst->invoke == jl_fptr_args_addr) {
             callptr = codeinst->specptr.fptr;
             calltype = 1;
         }
-        else if (codeinst->invoke == jl_fptr_const_return) {
+        else if (codeinst->invoke == jl_fptr_const_return_addr) {
             // don't need the fptr
             callptr = (void*)codeinst->rettype_const;
             calltype = 2;
@@ -7852,7 +7743,7 @@ jl_compile_result_t jl_emit_codeinst(
                      // and there is something to delete (test this before calling jl_ir_flag_inlineable)
                      codeinst->inferred != jl_nothing &&
                      // don't delete inlineable code, unless it is constant
-                     (codeinst->invoke == jl_fptr_const_return || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
+                     (codeinst->invoke == jl_fptr_const_return_addr || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
                      // don't delete code when generating a precompile file
                      !imaging_mode) {
                 // if not inlineable, code won't be needed again
@@ -7886,7 +7777,7 @@ void jl_compile_workqueue(
         StringRef preal_decl = "";
         bool preal_specsig = false;
         if (params.cache && codeinst->invoke != NULL) {
-            if (codeinst->invoke == jl_fptr_args) {
+            if (codeinst->invoke == jl_fptr_args_addr) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->specptr.fptr, codeinst);
             }
             else if (codeinst->isspecsig) {
@@ -8133,6 +8024,39 @@ static void init_julia_llvm_env(Module *m)
 
 static void init_jit_functions(void)
 {
+    builtin_func_map =
+        { { jl_f_is_addr,                 new JuliaFunction{"jl_f_is", get_func_sig, get_func_attrs} },
+          { jl_f_typeof_addr,             new JuliaFunction{"jl_f_typeof", get_func_sig, get_func_attrs} },
+          { jl_f_sizeof_addr,             new JuliaFunction{"jl_f_sizeof", get_func_sig, get_func_attrs} },
+          { jl_f_issubtype_addr,          new JuliaFunction{"jl_f_issubtype", get_func_sig, get_func_attrs} },
+          { jl_f_isa_addr,                new JuliaFunction{"jl_f_isa", get_func_sig, get_func_attrs} },
+          { jl_f_typeassert_addr,         new JuliaFunction{"jl_f_typeassert", get_func_sig, get_func_attrs} },
+          { jl_f_ifelse_addr,             new JuliaFunction{"jl_f_ifelse", get_func_sig, get_func_attrs} },
+          { jl_f__apply_iterate_addr,     new JuliaFunction{"jl_f__apply_iterate", get_func_sig, get_func_attrs} },
+          { jl_f__apply_pure_addr,        new JuliaFunction{"jl_f__apply_pure", get_func_sig, get_func_attrs} },
+          { jl_f__call_latest_addr,       new JuliaFunction{"jl_f__call_latest", get_func_sig, get_func_attrs} },
+          { jl_f__call_in_world_addr,     new JuliaFunction{"jl_f__call_in_world", get_func_sig, get_func_attrs} },
+          { jl_f_throw_addr,              new JuliaFunction{"jl_f_throw", get_func_sig, get_func_attrs} },
+          { jl_f_tuple_addr,              jltuple_func },
+          { jl_f_svec_addr,               new JuliaFunction{"jl_f_svec", get_func_sig, get_func_attrs} },
+          { jl_f_applicable_addr,         new JuliaFunction{"jl_f_applicable", get_func_sig, get_func_attrs} },
+          { jl_f_invoke_addr,             new JuliaFunction{"jl_f_invoke", get_func_sig, get_func_attrs} },
+          { jl_f_invoke_kwsorter_addr,    new JuliaFunction{"jl_f_invoke_kwsorter", get_func_sig, get_func_attrs} },
+          { jl_f_isdefined_addr,          new JuliaFunction{"jl_f_isdefined", get_func_sig, get_func_attrs} },
+          { jl_f_getfield_addr,           new JuliaFunction{"jl_f_getfield", get_func_sig, get_func_attrs} },
+          { jl_f_setfield_addr,           new JuliaFunction{"jl_f_setfield", get_func_sig, get_func_attrs} },
+          { jl_f_swapfield_addr,          new JuliaFunction{"jl_f_swapfield", get_func_sig, get_func_attrs} },
+          { jl_f_modifyfield_addr,        new JuliaFunction{"jl_f_modifyfield", get_func_sig, get_func_attrs} },
+          { jl_f_fieldtype_addr,          new JuliaFunction{"jl_f_fieldtype", get_func_sig, get_func_attrs} },
+          { jl_f_nfields_addr,            new JuliaFunction{"jl_f_nfields", get_func_sig, get_func_attrs} },
+          { jl_f__expr_addr,              new JuliaFunction{"jl_f__expr", get_func_sig, get_func_attrs} },
+          { jl_f__typevar_addr,           new JuliaFunction{"jl_f__typevar", get_func_sig, get_func_attrs} },
+          { jl_f_arrayref_addr,           new JuliaFunction{"jl_f_arrayref", get_func_sig, get_func_attrs} },
+          { jl_f_const_arrayref_addr,     new JuliaFunction{"jl_f_const_arrayref", get_func_sig, get_func_attrs} },
+          { jl_f_arrayset_addr,           new JuliaFunction{"jl_f_arrayset", get_func_sig, get_func_attrs} },
+          { jl_f_arraysize_addr,          new JuliaFunction{"jl_f_arraysize", get_func_sig, get_func_attrs} },
+          { jl_f_apply_type_addr,         new JuliaFunction{"jl_f_apply_type", get_func_sig, get_func_attrs} },
+        };
     add_named_global(jlstack_chk_guard_var, &__stack_chk_guard);
     add_named_global(jlRTLD_DEFAULT_var, &jl_RTLD_DEFAULT_handle);
 #ifdef _OS_WINDOWS_
