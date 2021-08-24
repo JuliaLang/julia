@@ -142,7 +142,7 @@ It contains many parameters used by the compilation pipeline.
 """
 struct NativeInterpreter <: AbstractInterpreter
     # Cache of inference results for this particular interpreter
-    cache::Vector{Tuple{InferenceResult,Vector{Any}}}
+    cache::Vector{InferenceResult}
     # The world age we're working inside of
     world::UInt
 
@@ -167,7 +167,7 @@ struct NativeInterpreter <: AbstractInterpreter
 
         return new(
             # Initially empty cache
-            Tuple{InferenceResult,Vector{Any}}[],
+            Vector{InferenceResult}(),
 
             # world age counter
             world,

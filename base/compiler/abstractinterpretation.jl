@@ -529,8 +529,8 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     mi === nothing && return nothing
     # try constant prop'
     inf_cache = get_inference_cache(interp)
-    cache = cache_lookup(mi, argtypes, inf_cache)
-    if cache === nothing
+    inf_result = cache_lookup(mi, argtypes, inf_cache)
+    if inf_result === nothing
         # if there might be a cycle, check to make sure we don't end up
         # calling ourselves here.
         let result = result # prevent capturing
@@ -549,10 +549,8 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
         frame = InferenceState(inf_result, #=cache=#false, interp)
         frame === nothing && return nothing # this is probably a bad generated function (unsound), but just ignore it
         frame.parent = sv
-        push!(inf_cache, (inf_result, frame.stmt_info))
+        push!(inf_cache, inf_result)
         typeinf(interp, frame) || return nothing
-    else
-        inf_result, _ = cache
     end
     result = inf_result.result
     # if constant inference hits a cycle, just bail out
@@ -717,7 +715,7 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, match:
     if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
-            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv), nothing)
+            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv))
             cache_inlineable = src !== nothing
         end
     end

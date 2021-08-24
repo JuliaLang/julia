@@ -113,7 +113,7 @@ mutable struct InferenceState
             CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame
-        cached && push!(get_inference_cache(interp), (result, stmt_info))
+        cached && push!(get_inference_cache(interp), result)
         return frame
     end
 end

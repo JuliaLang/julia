@@ -28,56 +28,24 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, T, I<:AbstractInterpreter
     interp::I
 end
 
-include("compiler/ssair/driver.jl")
-
-function inlining_policy(interp::AbstractInterpreter, @nospecialize(src),
-                         stmt_flag::UInt8, todo::Union{Nothing,InliningTodo})
+function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8)
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
         src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
     elseif isa(src, OptimizationState) && isdefined(src, :ir)
         return (is_stmt_inline(stmt_flag) || src.src.inlineable) ? src.ir : nothing
-    elseif src === nothing && todo !== nothing && is_stmt_inline(stmt_flag)
-        # if this statement is forced to be inlined, try additional effort to find the source
-        # in the local cache, and if found optimize and inline it
-        mi = todo.mi
-        (; match, atypes, stmttype) = todo.spec::DelayedInliningSpec
-        if isa(match, MethodMatch)
-            cache = cache_lookup(mi, atypes, get_inference_cache(interp))
-            cache === nothing && return nothing
-            inf_result, stmt_info = cache
-        else
-            local cache = nothing
-            for (inf_result, stmt_info) in get_inference_cache(interp)
-                if inf_result === match
-                    cache = inf_result, stmt_info
-                    break
-                end
-            end
-            cache === nothing && return nothing
-            inf_result, stmt_info = cache
-        end
-        src = inf_result.src
-        if isa(src, CodeInfo)
-        elseif isa(src, OptimizationState)
-            src = src.src
-        else
-            return nothing
-        end
-        # HACK disable inlining for this optimization, otherwise we're likely to come back to here again
-        params = OptimizationParams(interp)
-        newparams = OptimizationParams(; inlining = false,
-                                         max_methods = params.MAX_METHODS,
-                                         tuple_splat = params.MAX_TUPLE_SPLAT,
-                                         union_splitting = params.MAX_UNION_SPLITTING,
-                                         unoptimize_throw_blocks = params.unoptimize_throw_blocks)
-        opt = OptimizationState(mi, copy(src), newparams, interp; stmt_info)
-        optimize(interp, opt, newparams, stmttype)
-        return opt.ir
+    else
+        # maybe we want to make inference keep the source in a local cache if a statement is going to inlined
+        # and re-optimize it here with disabling further inlining to avoid infinite optimization loop
+        # (we can even natively try to re-infer it entirely)
+        # but it seems like that "single-level-inlining" is more trouble and complex than it's worth
+        # see https://github.com/JuliaLang/julia/pull/41328/commits/5557c2fe70d9672089a17c0f6a9f30fafcf0cb7c
+        return nothing
     end
-    return nothing
 end
+
+include("compiler/ssair/driver.jl")
 
 mutable struct OptimizationState
     linfo::MethodInstance
@@ -100,8 +68,7 @@ mutable struct OptimizationState
                    frame.sptypes, frame.slottypes, false,
                    inlining)
     end
-    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter;
-                               stmt_info::Union{Nothing,Vector{Any}} = nothing)
+    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
         # prepare src for running optimization passes
         # if it isn't already
         nssavalues = src.ssavaluetypes
@@ -115,9 +82,7 @@ mutable struct OptimizationState
         if slottypes === nothing
             slottypes = Any[ Any for i = 1:nslots ]
         end
-        if stmt_info === nothing
-            stmt_info = Any[nothing for i = 1:nssavalues]
-        end
+        stmt_info = Any[nothing for i = 1:nssavalues]
         # cache some useful state computations
         def = linfo.def
         mod = isa(def, Method) ? def.module : def
@@ -134,11 +99,10 @@ mutable struct OptimizationState
     end
 end
 
-function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter;
-                           stmt_info::Union{Nothing,Vector{Any}} = nothing)
+function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
     src = retrieve_code_info(linfo)
     src === nothing && return nothing
-    return OptimizationState(linfo, src, params, interp; stmt_info)
+    return OptimizationState(linfo, src, params, interp)
 end
 
 function ir_to_codeinf!(opt::OptimizationState)

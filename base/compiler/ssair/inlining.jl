@@ -758,7 +758,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
         return ConstantCase(src)
     end
 
-    src = inlining_policy(state.interp, src, flag, todo)
+    src = inlining_policy(state.interp, src, flag)
 
     if src === nothing
         return compileable_specialization(et, match)
