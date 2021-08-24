@@ -923,7 +923,7 @@ precompile_test_harness("Undefined types") do load_path
         end
         """)
     Base.compilecache(Base.PkgId("UndefTypesB"))
-    @eval using UndefTypesB  # no segfault
+    @test_throws ErrorException @eval using UndefTypesB  # no segfault
 end
 
 @testset "issue 38149" begin
