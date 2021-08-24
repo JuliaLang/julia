@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 // Save DEP_LIBS to a variable that is explicitly sized for expansion
-static char dep_libs[512] = DEP_LIBS;
+static char dep_libs[1024] = DEP_LIBS;
 
 JL_DLLEXPORT void jl_loader_print_stderr(const char * msg)
 {
@@ -158,24 +158,45 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     // Pre-load libraries that libjulia-internal needs.
     int deps_len = strlen(dep_libs);
     char * curr_dep = &dep_libs[0];
+
+    // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
+    // which are libraries that we want to load in some special, custom way, such as
+    // `libjulia-internal` or `libjulia-codegen`.
+    int special_idx = 0;
+    char * special_library_names[2] = {NULL};
     while (1) {
-        // try to find next colon character, if we can't, escape out.
+        // try to find next colon character, if we can't break out
         char * colon = strchr(curr_dep, ':');
         if (colon == NULL)
             break;
 
-        // Chop the string at the colon, load this library.
+        // Chop the string at the colon so it's a valid-ending-string
         *colon = '\0';
-        load_library(curr_dep, lib_dir, 1);
+
+        // If this library name starts with `@`, don't open it here (but mark it as special)
+        if (curr_dep[0] == '@') {
+            if (special_idx > sizeof(special_library_names)/sizeof(char *)) {
+                jl_loader_print_stderr("ERROR: Too many special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
+                exit(1);
+            }
+            special_library_names[special_idx] = curr_dep + 1;
+            special_idx += 1;
+        } else {
+            load_library(curr_dep, lib_dir, 1);
+        }
 
         // Skip ahead to next dependency
         curr_dep = colon + 1;
     }
 
-    // Last dependency is `libjulia-internal`, so load that and we're done with `dep_libs`!
-    libjulia_internal = load_library(curr_dep, lib_dir, 1);
+    if (special_idx != sizeof(special_library_names)/sizeof(char *)) {
+        jl_loader_print_stderr("ERROR: Too few special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
+        exit(1);
+    }
 
-    void *libjulia_codegen = load_library(CODEGEN_LIB, lib_dir, 0);
+    // Unpack our special library names.  This is why ordering of library names matters.
+    libjulia_internal = load_library(special_library_names[0], lib_dir, 1);
+    void *libjulia_codegen = load_library(special_library_names[1], lib_dir, 0);
     if (libjulia_codegen == NULL)
         // if codegen is not available, use fallback implementation in libjulia-internal
         libjulia_codegen = libjulia_internal;
@@ -184,7 +205,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     for (unsigned int symbol_idx=0; jl_runtime_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_internal, jl_runtime_exported_func_names[symbol_idx]);
         if (addr == NULL || addr == *jl_runtime_exported_func_addrs[symbol_idx]) {
-            jl_loader_print_stderr3("ERROR: Unable to load ", jl_runtime_exported_func_names[symbol_idx], " from libjulia-internal");
+            jl_loader_print_stderr3("ERROR: Unable to load ", jl_runtime_exported_func_names[symbol_idx], " from libjulia-internal\n");
             exit(1);
         }
         (*jl_runtime_exported_func_addrs[symbol_idx]) = addr;
@@ -192,7 +213,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     for (unsigned int symbol_idx=0; jl_codegen_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_codegen, jl_codegen_exported_func_names[symbol_idx]);
         if (addr == NULL || addr == *jl_codegen_exported_func_addrs[symbol_idx]) {
-            jl_loader_print_stderr3("ERROR: Unable to load ", jl_codegen_exported_func_names[symbol_idx], " from libjulia-codegen");
+            jl_loader_print_stderr3("ERROR: Unable to load ", jl_codegen_exported_func_names[symbol_idx], " from libjulia-codegen\n");
             exit(1);
         }
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
