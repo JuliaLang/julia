@@ -521,13 +521,11 @@ end
     @test readuntil(P, 'w') == "llo"
     Sys.iswindows() && wait(t)
     @test eof(P)
-    if Sys.isfreebsd()
-        # FIXME: eof test should have closed this by now, but it seems not to on FreeBSD 12
-        # See issue #41942
-        @test_broken !isopen(P)
-    else
-        @test !isopen(P) # eof test should have closed this by now
-    end
+
+    # FIXME: eof test should have closed this by now, but it seems not to on FreeBSD 12
+    # See issue #41942
+    @test !isopen(P) broken=Sys.isfreebsd() # eof test should have closed this by now
+
     close(P) # should be a no-op, just make sure
     @test !isopen(P)
     @test eof(P)
