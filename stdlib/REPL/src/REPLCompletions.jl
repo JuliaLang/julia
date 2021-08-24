@@ -911,6 +911,8 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
         println(io)
         # Show friendly help message when user types help or help() and help is undefined
         show(io, MIME("text/plain"), Base.Docs.parsedoc(Base.Docs.keywords[:help]))
+    elseif var === :quit
+        print(io, "\nsuggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
     end
 end
 
