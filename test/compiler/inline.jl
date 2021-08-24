@@ -464,6 +464,29 @@ let
     end
 end
 
+# force constant-prop' for `setproperty!`
+let m = Module()
+    code = @eval m begin
+        # if we don't force constant-prop', `T = fieldtype(Foo, ::Symbol)` will be union-split to
+        # `Union{Type{Any},Type{Int}` and it will make `convert(T, nothing)` too costly
+        # and it leads to inlining failure
+        mutable struct Foo
+            val
+            _::Int
+        end
+
+        function setter(xs)
+            for x in xs
+                x.val = nothing
+            end
+        end
+
+        $code_typed1(setter, (Vector{Foo},))
+    end
+
+    @test !any(x->isinvoke(x, :setproperty!), code)
+end
+
 # validate inlining processing
 
 @constprop :none @inline validate_unionsplit_inlining(@nospecialize(t)) = throw("invalid inlining processing detected")
