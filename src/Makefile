@@ -113,7 +113,7 @@ LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
 #       https://github.com/JuliaLang/julia/issues/29981
 else
 ifneq ($(USE_LLVM_SHLIB),1)
-LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
+LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS) --link-static) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
 LLVMLINK += $(LLVM_LDFLAGS) -lLLVM
 endif
@@ -230,7 +230,7 @@ endif
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
-	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCXXFLAGS) $(JCPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) $(NO_WHOLE_ARCHIVE) $(LLVMLINK))
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCXXFLAGS) $(JCPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) $(NO_WHOLE_ARCHIVE) $(LLVMLINK)) -lpthread
 
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
