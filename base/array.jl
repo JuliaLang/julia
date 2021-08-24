@@ -666,8 +666,10 @@ else
     end
 end
 
-_array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(undef, Int(length(itr)::Integer))
-_array_for(::Type{T}, itr, ::HasShape{N}) where {T,N} = similar(Array{T,N}, axes(itr))
+_array_for(::Type{T}, itr, isz::HasLength) where {T} = _array_for(T, itr, isz, length(itr))
+_array_for(::Type{T}, itr, isz::HasShape{N}) where {T,N} = _array_for(T, itr, isz, axes(itr))
+_array_for(::Type{T}, itr, ::HasLength, len) where {T} = Vector{T}(undef, len)
+_array_for(::Type{T}, itr, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
 
 function collect(itr::Generator)
     isz = IteratorSize(itr.iter)
@@ -675,12 +677,14 @@ function collect(itr::Generator)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
     else
+        shape = isz isa HasLength ? length(itr) : axes(itr)
         y = iterate(itr)
         if y === nothing
             return _array_for(et, itr.iter, isz)
         end
         v1, st = y
-        collect_to_with_first!(_array_for(typeof(v1), itr.iter, isz), v1, itr, st)
+        arr = _array_for(typeof(v1), itr.iter, isz, shape)
+        return collect_to_with_first!(arr, v1, itr, st)
     end
 end
 
