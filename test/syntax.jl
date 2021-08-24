@@ -2737,3 +2737,10 @@ function checkUserAccess(u::User)
 	return false
 end
 """)
+
+# issue 25678
+@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
+@test f25678(pi/6) === sin(pi/6)
+
+@generated g25678(x) = return :x
+@test g25678(7) === 7
