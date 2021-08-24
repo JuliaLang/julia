@@ -286,8 +286,8 @@ function banner(io::IO = stdout)
         print(io,"""               $(d3)_$(tx)
            $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help, \"exit()\" to exit.
-          $(jl)| | | | | | |/ _` |$(tx)  |
+           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
+          $(jl)| | | | | | |/ _` |$(tx)  |  Type \"exit()\" to exit.
           $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
         $(jl)|__/$(tx)                   |
@@ -298,8 +298,8 @@ function banner(io::IO = stdout)
                        _
            _       _ _(_)_     |  Documentation: https://docs.julialang.org
           (_)     | (_) (_)    |
-           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help, \"exit()\" to exit.
-          | | | | | | |/ _` |  |
+           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
+          | | | | | | |/ _` |  |  Type \"exit()\" to exit.
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
          _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
         |__/                   |
