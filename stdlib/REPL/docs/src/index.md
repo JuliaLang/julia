@@ -209,6 +209,9 @@ Just as `^R` is a reverse search, `^S` is a forward search, with the prompt ```(
  The two may be used in conjunction with each other to move through the previous or next matching
 results, respectively.
 
+Everything you type into the Julia REPL is logged into `~/.julia/logs/repl_history.jl` along with a timestamp of when you typed it
+and the current REPL mode you were in. Search mode queries this log file in order to find the commands which you previously ran. 
+
 ## Key bindings
 
 The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced
