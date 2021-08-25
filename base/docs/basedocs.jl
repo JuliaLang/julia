@@ -976,7 +976,7 @@ kw"..."
 `;` has a similar role in Julia as in many C-like languages, and is used to delimit the
 end of the previous statement.
 
-`;` is not necessary after new lines, but can be used to
+`;` is not necessary at the end of a line, but can be used to
 separate statements on a single line or to join statements into a single expression.
 
 Adding `;` at the end of a line in the REPL will suppress printing the result of that expression.
