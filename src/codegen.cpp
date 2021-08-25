@@ -5182,24 +5182,46 @@ static Function* gen_cfun_wrapper(
         std::vector<Type*> fargt_sig(sig.fargt_sig);
 
         fargt_sig.insert(fargt_sig.begin() + sig.sret, T_pprjlvalue);
+
         // Shift LLVM attributes for parameters one to the right, as
         // we are adding the extra nest parameter after sret arg.
-        // AttributeList has function attributes and return value
-        // attributes before the parameter attributes.
-        if (attributes.getNumAttrSets() > static_cast<unsigned>(2 + sig.sret)) {
-            AttrBuilder toShift;
-            // Skip past function and return and sret attributes to the first real parameter
-            for (auto it = attributes.index_begin() + 2 + sig.sret; it != attributes.index_end(); ++it) {
-                AttrBuilder toShiftTemp(attributes.getAttributes(it));
-                attributes = attributes.removeAttributes(jl_LLVMContext, it);
-                attributes = attributes.addAttributes(jl_LLVMContext, it, toShift);
-                toShift = std::move(toShiftTemp);
-            }
-            attributes = attributes.addAttributes(jl_LLVMContext, attributes.index_end(), toShift);
+        std::vector<std::pair<unsigned, AttributeSet>> newAttributes;
+        newAttributes.reserve(attributes.getNumAttrSets() + 1);
+        auto it = attributes.index_begin();
+
+        // Skip past FunctionIndex
+        if (it == AttributeList::AttrIndex::FunctionIndex) {
+            ++it;
         }
 
+        // Move past ReturnValue and parameter return value
+        for (;it < AttributeList::AttrIndex::FirstArgIndex + sig.sret; ++it) {
+            if (attributes.hasAttributes(it)) {
+                newAttributes.emplace_back(it, attributes.getAttributes(it));
+            }
+        }
+
+        // Add the new nest attribute
+        AttrBuilder attrBuilder;
+        attrBuilder.addAttribute(Attribute::Nest);
+        newAttributes.emplace_back(it, AttributeSet::get(jl_LLVMContext, attrBuilder));
+
+        // Shift forward the rest of the attributes
+        for(;it < attributes.index_end(); ++it) {
+            if (attributes.hasAttributes(it)) {
+                newAttributes.emplace_back(it + 1, attributes.getAttributes(it));
+            }
+        }
+
+        // Remember to add back FunctionIndex
+        if (attributes.hasAttributes(AttributeList::AttrIndex::FunctionIndex)) {
+            newAttributes.emplace_back(AttributeList::AttrIndex::FunctionIndex,
+                                       attributes.getAttributes(AttributeList::AttrIndex::FunctionIndex));
+        }
+
+        // Create the new AttributeList
+        attributes = AttributeList::get(jl_LLVMContext, newAttributes);
         functype = FunctionType::get(sig.sret ? T_void : sig.prt, fargt_sig, /*isVa*/false);
-        attributes = attributes.addAttribute(jl_LLVMContext, 1 + sig.sret, Attribute::Nest);
     }
     else {
         functype = sig.functype();
