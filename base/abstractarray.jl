@@ -1135,9 +1135,12 @@ zero(x::AbstractArray{T}) where {T} = fill!(similar(x, typeof(zero(T))), zero(T)
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
 
-# Subtypes of AbstractArray (such as AbstractRanges) may define custom iteration
-# behavior. Wrapper types may opt into the behavior of the parent through the trait
-# IterationStyle
+# Subtypes of AbstractArray (such as AbstractRanges) may have their own iteration
+# implementation defined that might be more performant than the default implementation.
+# A wrapper AbstractArray type may opt into the iteration implementation of the parent
+# by extending the trait IterationStyle.
+# This is disabled by default, and wrapper types fall back to the default
+# iteration implementation for AbstractArrays defined below, which uses indexing.
 
 # While the definitions for IndexLinear are all simple enough to inline on their
 # own, IndexCartesian's CartesianIndices is more complicated and requires explicit

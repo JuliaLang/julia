@@ -856,10 +856,9 @@ copy(r::AbstractRange) = r
 
 ## iteration
 
-# The trait IterationStyle is used to dispatch on the appropriate iterate method.
-# This is especially important for wrapper types, as they may choose the
-# use the parent's iterate method instead of the fallback implementation by defining
-# their IterationStyle to be the same as their parents'.
+# The trait IterationStyle is used to dispatch on the appropriate `iterate` method.
+# Wrapper types may choose to use the parents' iteration implementation instead of
+# the default fallback one by defining their IterationStyle to be the same as their parents'.
 struct IterationStyle{T} end
 IterationStyle(x) = IterationStyle{typeof(x)}()
 
