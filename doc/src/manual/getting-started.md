@@ -113,30 +113,6 @@ search: begin disable_sigint reenable_sigint
   begin
 
   begin...end denotes a block of code.
-
-  begin
-      println("Hello, ")
-      println("World!")
-  end
-
-  Usually begin will not be necessary, since keywords such as function and let
-  implicitly begin blocks of code. See also ;.
-
-  begin may also be used when indexing to represent the first index of a
-  collection or the first index of a dimension of an array.
-
-  Examples
-  ≡≡≡≡≡≡≡≡≡≡
-
-  julia> A = [1 2; 3 4]
-  2×2 Array{Int64,2}:
-   1  2
-   3  4
-
-  julia> A[begin, :]
-  2-element Array{Int64,1}:
-   1
-   2
 ```
 
 If you already know Julia a bit, you might want to peek ahead at [Performance Tips](@ref man-performance-tips) and [Workflow Tips](@ref man-workflow-tips).
