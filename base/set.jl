@@ -3,11 +3,11 @@
 struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Nothing}
 
-    global unsafe_set(dict::Dict{T,Nothing}) where {T} = new{T}(dict)
+    global _Set(dict::Dict{T,Nothing}) where {T} = new{T}(dict)
 end
 
-Set{T}() where {T} = unsafe_set(Dict{T,Nothing}())
-Set{T}(s::Set{T}) where {T} = unsafe_set(Dict{T,Nothing}(s.dict))
+Set{T}() where {T} = _Set(Dict{T,Nothing}())
+Set{T}(s::Set{T}) where {T} = _Set(Dict{T,Nothing}(s.dict))
 Set{T}(itr) where {T} = union!(Set{T}(), itr)
 Set() = Set{Any}()
 
@@ -16,7 +16,7 @@ function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
     slots = copy(d.slots)
     keys = copy(d.keys)
     vals = similar(d.vals, Nothing)
-    unsafe_set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
+    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
 end
 
 """
