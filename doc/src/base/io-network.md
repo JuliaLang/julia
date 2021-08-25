@@ -13,7 +13,7 @@ Base.take!(::Base.GenericIOBuffer)
 Base.fdio
 Base.flush
 Base.close
-Base.shutdown
+Base.closewrite
 Base.write
 Base.read
 Base.read!

@@ -46,7 +46,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     @test String(take!(io)) == ""
     @test write(io, ComplexF64(0)) === 16
     @test write(io, Rational{Int64}(1//2)) === 16
-    @test shutdown(io) === nothing
+    @test closewrite(io) === nothing
     @test_throws ArgumentError write(io, UInt8[0])
     @test eof(io)
     @test close(io) === nothing
@@ -253,7 +253,7 @@ end
     @test !eof(bstream)
     read!(bstream,c)
     @test c == a[3:10]
-    @test shutdown(bstream) === nothing
+    @test closewrite(bstream) === nothing
     @test eof(bstream)
     @test bytesavailable(bstream) == 0
     @test close(bstream) === nothing
