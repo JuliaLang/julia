@@ -404,7 +404,7 @@ unitrange(x) = UnitRange(x)
 if isdefined(Main, :Base)
     # Constant-fold-able indexing into tuples to functionally expose Base.tail and Base.front
     function getindex(@nospecialize(t::Tuple), r::AbstractUnitRange)
-        @_inline_meta
+        @inline
         require_one_based_indexing(r)
         if length(r) <= 10
             return ntuple(i -> t[i + first(r) - 1], length(r))
@@ -430,15 +430,15 @@ be 1.
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
     function OneTo{T}(stop) where {T<:Integer}
-        throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
+        throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
         T === Bool && throwbool(stop)
         return new(max(zero(T), stop))
     end
 
     function OneTo{T}(r::AbstractRange) where {T<:Integer}
-        throwstart(r) = (@_noinline_meta; throw(ArgumentError("first element must be 1, got $(first(r))")))
-        throwstep(r)  = (@_noinline_meta; throw(ArgumentError("step must be 1, got $(step(r))")))
-        throwbool(r)  = (@_noinline_meta; throw(ArgumentError("invalid index: $r of type Bool")))
+        throwstart(r) = (@noinline; throw(ArgumentError("first element must be 1, got $(first(r))")))
+        throwstep(r)  = (@noinline; throw(ArgumentError("step must be 1, got $(step(r))")))
+        throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
         first(r) == 1 || throwstart(r)
         step(r)  == 1 || throwstep(r)
         T === Bool && throwbool(r)
@@ -733,7 +733,7 @@ function length(r::OrdinalRange{T}) where T
 end
 
 function length(r::AbstractUnitRange{T}) where T
-    @_inline_meta
+    @inline
     a = last(r) - first(r) # even when isempty, by construction (with overflow)
     return Integer(a + oneunit(a))
 end
@@ -857,7 +857,7 @@ copy(r::AbstractRange) = r
 ## iteration
 
 function iterate(r::Union{StepRangeLen,LinRange}, i::Integer=zero(length(r)))
-    @_inline_meta
+    @inline
     i += oneunit(i)
     length(r) < i && return nothing
     unsafe_getindex(r, i), i
@@ -866,7 +866,7 @@ end
 iterate(r::OrdinalRange) = isempty(r) ? nothing : (first(r), first(r))
 
 function iterate(r::OrdinalRange{T}, i) where {T}
-    @_inline_meta
+    @inline
     i == last(r) && return nothing
     next = convert(T, i + step(r))
     (next, next)
@@ -877,7 +877,7 @@ end
 _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
 
 function getindex(v::UnitRange{T}, i::Integer) where T
-    @_inline_meta
+    @inline
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     val = convert(T, v.start + (i - 1))
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
@@ -888,7 +888,7 @@ const OverflowSafe = Union{Bool,Int8,Int16,Int32,Int64,Int128,
                            UInt8,UInt16,UInt32,UInt64,UInt128}
 
 function getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
-    @_inline_meta
+    @inline
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     val = v.start + (i - 1)
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
@@ -896,14 +896,14 @@ function getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
 end
 
 function getindex(v::OneTo{T}, i::Integer) where T
-    @_inline_meta
+    @inline
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck ((i > 0) & (i <= v.stop)) || throw_boundserror(v, i)
     convert(T, i)
 end
 
 function getindex(v::AbstractRange{T}, i::Integer) where T
-    @_inline_meta
+    @inline
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     ret = convert(T, first(v) + (i - 1)*step_hp(v))
     ok = ifelse(step(v) > zero(step(v)),
@@ -914,7 +914,7 @@ function getindex(v::AbstractRange{T}, i::Integer) where T
 end
 
 function getindex(r::Union{StepRangeLen,LinRange}, i::Integer)
-    @_inline_meta
+    @inline
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck checkbounds(r, i)
     unsafe_getindex(r, i)
@@ -939,7 +939,7 @@ function unsafe_getindex(r::LinRange, i::Integer)
 end
 
 function lerpi(j::Integer, d::Integer, a::T, b::T) where T
-    @_inline_meta
+    @inline
     t = j/d
     T((1-t)*a + t*b)
 end
@@ -947,7 +947,7 @@ end
 getindex(r::AbstractRange, ::Colon) = copy(r)
 
 function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integer}
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(r, s)
 
     if T === Bool
@@ -960,13 +960,13 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
 end
 
 function getindex(r::OneTo{T}, s::OneTo) where T
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(r, s)
     OneTo(T(s.stop))
 end
 
 function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(r, s)
 
     if T === Bool
@@ -978,7 +978,7 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
 end
 
 function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(r, s)
 
     if T === Bool
@@ -1000,7 +1000,7 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
 end
 
 function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(r, s)
 
     len = length(s)
@@ -1030,7 +1030,7 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
 end
 
 function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(r, s)
 
     len = length(s)

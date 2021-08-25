@@ -192,7 +192,7 @@ end
 
 # OpaqueClosure ABI
 f_oc_noinline(x) = @opaque function (y)
-    @Base._noinline_meta
+    @noinline
     x + y
 end
 

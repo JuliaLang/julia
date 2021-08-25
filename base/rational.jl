@@ -538,7 +538,7 @@ end
 # same denominator (because their difference is an integer), `length(r)` can be calulated
 # without calling `gcd`.
 function length(r::AbstractUnitRange{T}) where T<:Rational
-    @_inline_meta
+    @inline
     f = first(r)
     l = last(r)
     return div(l.num - f.num + f.den, f.den)

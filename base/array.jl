@@ -150,7 +150,7 @@ end
 size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N))::Dims)
+size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::Dims)
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
@@ -174,7 +174,7 @@ isbitsunion(u::Union) = allocatedinline(u)
 isbitsunion(x) = false
 
 function _unsetindex!(A::Array{T}, i::Int) where {T}
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(A, i)
     t = @_gc_preserve_begin A
     p = Ptr{Ptr{Cvoid}}(pointer(A, i))
@@ -217,7 +217,7 @@ elsize(::Type{<:Array{T}}) where {T} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
-    @_inline_meta
+    @inline
     ii = (_sub2ind(size(a), i...) % UInt) - 1
     @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
@@ -336,7 +336,7 @@ end
 # occurs, see discussion in #27874.
 # It is also mitigated by using a constant string.
 function _throw_argerror()
-    @_noinline_meta
+    @noinline
     throw(ArgumentError("Number of elements to copy must be nonnegative."))
 end
 
@@ -408,10 +408,10 @@ function getindex(::Type{T}, vals...) where T
     return a
 end
 
-getindex(::Type{T}) where {T} = (@_inline_meta; Vector{T}())
-getindex(::Type{T}, x) where {T} = (@_inline_meta; a = Vector{T}(undef, 1); @inbounds a[1] = x; a)
-getindex(::Type{T}, x, y) where {T} = (@_inline_meta; a = Vector{T}(undef, 2); @inbounds (a[1] = x; a[2] = y); a)
-getindex(::Type{T}, x, y, z) where {T} = (@_inline_meta; a = Vector{T}(undef, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
+getindex(::Type{T}) where {T} = (@inline; Vector{T}())
+getindex(::Type{T}, x) where {T} = (@inline; a = Vector{T}(undef, 1); @inbounds a[1] = x; a)
+getindex(::Type{T}, x, y) where {T} = (@inline; a = Vector{T}(undef, 2); @inbounds (a[1] = x; a[2] = y); a)
+getindex(::Type{T}, x, y, z) where {T} = (@inline; a = Vector{T}(undef, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, @nospecialize vals...)
     a = Vector{Any}(undef, length(vals))
@@ -804,7 +804,7 @@ function collect_to_with_first!(dest, v1, itr, st)
 end
 
 function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
-    @_inline_meta
+    @inline
     new = similar(dest, promote_typejoin(T, typeof(el)))
     f = first(LinearIndices(dest))
     copyto!(new, first(LinearIndices(new)), dest, f, i-f)
@@ -840,7 +840,7 @@ function grow_to!(dest, itr)
 end
 
 function push_widen(dest, el)
-    @_inline_meta
+    @inline
     new = sizehint!(empty(dest, promote_typejoin(eltype(dest), typeof(el))), length(dest))
     if new isa AbstractSet
         # TODO: merge back these two branches when copy! is re-enabled for sets/vectors
@@ -870,7 +870,7 @@ end
 
 ## Iteration ##
 
-iterate(A::Array, i=1) = (@_inline_meta; (i % UInt) - 1 < length(A) ? (@inbounds A[i], i + 1) : nothing)
+iterate(A::Array, i=1) = (@inline; (i % UInt) - 1 < length(A) ? (@inbounds A[i], i + 1) : nothing)
 
 ## Indexing: getindex ##
 
@@ -897,11 +897,11 @@ function getindex end
 
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
 @eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
-@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
+@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(A, I)
     lI = length(I)
     X = similar(A, axes(I))
@@ -940,7 +940,7 @@ function setindex! end
 
 @eval setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1)
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
-    (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
+    (@inline; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
 
 # This is redundant with the abstract fallbacks but needed and helpful for bootstrap
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
@@ -960,7 +960,7 @@ end
 
 # Faster contiguous setindex! with copyto!
 function setindex!(A::Array{T}, X::Array{T}, I::AbstractUnitRange{Int}) where T
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(A, I)
     lI = length(I)
     @boundscheck setindex_shape_check(X, lI)
@@ -970,7 +970,7 @@ function setindex!(A::Array{T}, X::Array{T}, I::AbstractUnitRange{Int}) where T
     return A
 end
 function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
-    @_inline_meta
+    @inline
     lI = length(A)
     @boundscheck setindex_shape_check(X, lI)
     if lI > 0
