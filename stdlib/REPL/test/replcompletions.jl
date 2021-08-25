@@ -68,6 +68,8 @@ let ex = quote
         test6()=[a, a]
         test7() = rand(Bool) ? 1 : 1.0
         test8() = Any[1][1]
+        test9(x::Char) = pass
+        test9(x::Char, i::Int) = pass
         kwtest(; x=1, y=2, w...) = pass
         kwtest2(a; x=1, y=2, w...) = pass
 
@@ -519,6 +521,34 @@ for s in ("CompletionFoo.kwtest2(1; x=1,",
     @test length(c) == 1
     @test occursin("a; x, y, w...", c[1])
 end
+
+#################################################################
+
+# method completion with `?` (arbitrary method with given argument types)
+let s = "CompletionFoo.?([1,2,3], 2.0)"
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test(x::AbstractArray{T}, y) where T<:Real", str), c)
+    @test  any(str->occursin("test(args...)", str), c)
+    @test !any(str->occursin("test3(x::AbstractArray{Int", str), c)
+    @test !any(str->occursin("test4", str), c)
+end
+
+let s = "CompletionFoo.?('c')"
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test9(x::Char)", str), c)
+    @test !any(str->occursin("test9(x::Char, i::Int", str), c)
+end
+
+let s = "CompletionFoo.?('c'"
+    c, r, res = test_complete(s)
+    @test !res
+    @test  any(str->occursin("test9(x::Char)", str), c)
+    @test  any(str->occursin("test9(x::Char, i::Int", str), c)
+end
+
+#################################################################
 
 # Test of inference based getfield completion
 let s = "(1+2im)."

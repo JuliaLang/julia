@@ -252,4 +252,4 @@ function filter(f, s::Union{String, SubString{String}})
     return String(out)
 end
 
-getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
+getindex(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)

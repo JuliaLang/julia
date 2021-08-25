@@ -745,7 +745,10 @@ static void *signal_listener(void *arg)
         // (so that thread zero gets notified last)
         if (critical || profile)
             jl_lock_profile();
-        for (int i = jl_n_threads; i-- > 0; ) {
+        jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
+        for (int idx = jl_n_threads; idx-- > 0; ) {
+            // Stop the threads in the random round-robin order.
+            int i = profile_round_robin_thread_order[idx];
             // notify thread to stop
             jl_thread_suspend_and_get_state(i, &signal_context);
 

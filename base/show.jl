@@ -1832,7 +1832,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         elseif head === :hcat || head === :row
             sep = " "
         elseif head === :ncat || head === :nrow
-            sep = ";"^args[1] * " "
+            sep = ";"^args[1]::Int * " "
             args = args[2:end]
             nargs = nargs - 1
         else

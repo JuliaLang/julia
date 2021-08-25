@@ -96,6 +96,16 @@ end
                    "Thrown: ErrorException")
     @test endswith(sprint(show, @test_throws ErrorException("test") error("test")),
                    "Thrown: ErrorException")
+    @test endswith(sprint(show, @test_throws "a test" error("a test")),
+                   "Message: \"a test\"")
+    @test occursin("Message: \"DomainError",
+                   sprint(show, @test_throws r"sqrt\([Cc]omplex" sqrt(-1)))
+    @test endswith(sprint(show, @test_throws str->occursin("a t", str) error("a test")),
+                   "Message: \"a test\"")
+    @test endswith(sprint(show, @test_throws ["BoundsError", "access", "1-element", "at index [2]"] [1][2]),
+                   "Message: \"BoundsError: attempt to access 1-element Vector{$Int} at index [2]\"")
+    @test_throws "\"" throw("\"")
+    @test_throws Returns(false) throw(Returns(false))
 end
 # Test printing of Fail results
 include("nothrow_testset.jl")
@@ -148,6 +158,11 @@ let fails = @testset NoThrowTestSet begin
         @test contains(str1, str2)
         # 22 - Fail - Type Comparison
         @test typeof(1) <: typeof("julia")
+        # 23 - 26 - Fail - wrong message
+        @test_throws "A test" error("a test")
+        @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
+        @test_throws str->occursin("a T", str) error("a test")
+        @test_throws ["BoundsError", "acess", "1-element", "at index [2]"] [1][2]
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -262,6 +277,27 @@ let fails = @testset NoThrowTestSet begin
         @test occursin("Expression: typeof(1) <: typeof(\"julia\")", str)
         @test occursin("Evaluated: $(typeof(1)) <: $(typeof("julia"))", str)
     end
+
+    let str = sprint(show, fails[23])
+        @test occursin("Expected: \"A test\"", str)
+        @test occursin("Message: \"a test\"", str)
+    end
+
+    let str = sprint(show, fails[24])
+        @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
+        @test occursin(r"Message: .*Try sqrt\(Complex", str)
+    end
+
+    let str = sprint(show, fails[25])
+        @test occursin("Expected: < match function >", str)
+        @test occursin("Message: \"a test\"", str)
+    end
+
+    let str = sprint(show, fails[26])
+        @test occursin("Expected: [\"BoundsError\", \"acess\", \"1-element\", \"at index [2]\"]", str)
+        @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
+    end
+
 end
 
 let errors = @testset NoThrowTestSet begin

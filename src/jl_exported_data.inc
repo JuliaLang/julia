@@ -74,6 +74,7 @@
     XX(jl_number_type) \
     XX(jl_opaque_closure_type) \
     XX(jl_opaque_closure_typename) \
+    XX(jl_pair_type) \
     XX(jl_partial_opaque_type) \
     XX(jl_partial_struct_type) \
     XX(jl_phicnode_type) \

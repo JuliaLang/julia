@@ -101,16 +101,15 @@ function OptimizationState(linfo::MethodInstance, params::OptimizationParams, in
 end
 
 function ir_to_codeinf!(opt::OptimizationState)
-    optdef = opt.linfo.def
-    replace_code_newstyle!(opt.src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
+    (; linfo, src) = opt
+    optdef = linfo.def
+    replace_code_newstyle!(src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
     opt.ir = nothing
-    let src = opt.src::CodeInfo
-        widen_all_consts!(src)
-        src.inferred = true
-        # finish updating the result struct
-        validate_code_in_debug_mode(opt.linfo, src, "optimized")
-        return src
-    end
+    widen_all_consts!(src)
+    src.inferred = true
+    # finish updating the result struct
+    validate_code_in_debug_mode(linfo, src, "optimized")
+    return src
 end
 
 #############

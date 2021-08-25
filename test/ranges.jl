@@ -20,6 +20,20 @@ using Base.Checked: checked_length
     # the next ones use ==, because it changes the eltype
     @test r ==  range(first(r),       last(r),      length(r)       )
     @test r ==  range(start=first(r), stop=last(r), length=length(r))
+    @test r === range(                stop=last(r), length=length(r))
+
+    r = 1:5
+    o = Base.OneTo(5)
+    let start=first(r), step=step(r), stop=last(r), length=length(r)
+        @test o === range(;              stop        )
+        @test o === range(;                    length)
+        @test r === range(; start,       stop        )
+        @test r === range(;              stop, length)
+        # the next three lines uses ==, because it changes the eltype
+        @test r ==  range(; start,       stop, length)
+        @test r ==  range(; start, step,       length)
+        @test r ==  range(; stop=Float64(stop))
+    end
 
     for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
         @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
@@ -1508,8 +1522,12 @@ end
     @test_throws ArgumentError range(1)
     @test_throws ArgumentError range(nothing)
     @test_throws ArgumentError range(1, step=4)
-    @test_throws ArgumentError range(nothing, length=2)
+    @test_throws ArgumentError range(; step=1, length=6)
+    @test_throws ArgumentError range(; step=2, stop=7.5)
     @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
+    @test_throws ArgumentError range(; stop=nothing)
+    @test_throws ArgumentError range(; length=nothing)
+    @test_throws TypeError range(; length=5.5)
 end
 
 @testset "issue #23300#issuecomment-371575548" begin
