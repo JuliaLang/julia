@@ -3316,7 +3316,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
                     emit_typecheck(ctx, rhs, jfty, fname);
                     rhs = update_julia_type(ctx, rhs, jfty);
                 }
-                jl_cgval_t rhs_union = convert_julia_type(ctx, rhs, jfty);
+               rhs_union = convert_julia_type(ctx, rhs, jfty);
                 if (rhs_union.typ == jl_bottom_type)
                     return jl_cgval_t();
                 if (needlock)
