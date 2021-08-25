@@ -377,7 +377,7 @@ function generate_precompile_statements()
                 # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
                 # Replacing N with a large number works around it.
                 l = l.args[end]
-                if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] == :Vararg # Vararg{T}
+                if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
                     push!(l.args, 100) # form Vararg{T, 100} instead
                 end
             end
