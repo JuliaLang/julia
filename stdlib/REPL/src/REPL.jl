@@ -128,11 +128,33 @@ const softscope! = softscope
     print_exit_hint(ex)
 
 Print a hint about how to exit Julia if the user just types "exit" while using the REPL.
+
+To remove this functionality, use
+`filter!(!=(REPL.print_exit_hint), Base.active_repl_backend.ast_transforms)`
+
+# Example
+```jldoctest
+julia> exit
+suggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.
+exit (generic function with 2 methods)
+
+julia> using REPL
+
+julia> filter!(!=(REPL.print_exit_hint), Base.active_repl_backend.ast_transforms)
+1-element Vector{Any}:
+ softscope (generic function with 1 method)
+
+julia> exit
+exit (generic function with 2 methods)
+```
 """
 function print_exit_hint(@nospecialize ex)
+    # Look to see if user just typed "exit". ex.args[1] is a LineNumberNode
     if ex isa Expr && ex.head === :toplevel && length(ex.args) == 2 && ex.args[2] === :exit
         quote
-            println("suggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
+            if Main.exit === Base.exit
+                println("suggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
+            end
             # Return the method exit
             exit
         end
