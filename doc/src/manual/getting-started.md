@@ -104,7 +104,11 @@ command-line-options).
 
 A curated list of useful learning resources to help new users get started can be found on the [learning](https://julialang.org/learning/) page of the main Julia web site.
 
-REPL can itself be used as a learning resource by switching into the help mode, you can switch to help mode by pressing `?`. Typing a keyword in help mode will fetch the documentation for the same along with examples.
+You can use the REPL as a learning resource by switching into the help mode.
+Switch to help mode by pressing `?` at an empty `julia> ` prompt, before typing
+anything else. Typing a keyword in help mode will fetch the documentation for
+it, along with examples. Similarly for most functions or other objects you
+might encounter!
 
 ```
 help?> begin
