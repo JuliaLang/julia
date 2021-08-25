@@ -2058,14 +2058,14 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
             while (codeinst) {
                 if (codeinst->min_world > 0)
                     codeinst->max_world = ~(size_t)0;
-                ptrhash_put(&new_code_instance_validate, codeinst, HT_NOTFOUND);  // mark it as handled
+                ptrhash_remove(&new_code_instance_validate, codeinst);  // mark it as handled
                 codeinst = jl_atomic_load_relaxed(&codeinst->next);
             }
         }
         else {
             jl_code_instance_t *codeinst = caller->cache;
             while (codeinst) {
-                ptrhash_put(&new_code_instance_validate, codeinst, HT_NOTFOUND);  // should be left invalid
+                ptrhash_remove(&new_code_instance_validate, codeinst);  // should be left invalid
                 codeinst = jl_atomic_load_relaxed(&codeinst->next);
             }
             if (_jl_debug_method_invalidation) {
@@ -2084,7 +2084,6 @@ static void validate_new_code_instances(void)
     for (i = 0; i < new_code_instance_validate.size; i += 2) {
         if (new_code_instance_validate.table[i+1] != HT_NOTFOUND) {
             ((jl_code_instance_t*)new_code_instance_validate.table[i])->max_world = ~(size_t)0;
-            new_code_instance_validate.table[i+1] = HT_NOTFOUND;
         }
     }
 }
