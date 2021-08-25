@@ -765,15 +765,7 @@ let text = "input-test-text"
     @test read(proc, String) == string(length(text), '\n')
     @test success(proc)
     @test String(take!(b)) == text
-
-    out = Base.BufferStream()
-    proc = run(catcmd, IOBuffer(text), out, wait=false)
-    @test proc.out === out
-    @test read(out, String) == text
-    @test success(proc)
 end
-
-
 @test repr(Base.CmdRedirect(``, devnull, 0, false)) == "pipeline(``, stdin>Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
