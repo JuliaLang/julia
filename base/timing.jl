@@ -98,10 +98,12 @@ function prettyprint_getunits(value, numunits, factor)
     return number, unit
 end
 
-function padded_nonzero_print(value, str)
+padded_nonzero_print(value, str) = padded_nonzero_print(stdout, value, str)
+
+function padded_nonzero_print(io::IO, value, str)
     if value != 0
         blanks = "                "[1:(18 - length(str))]
-        println(str, ":", blanks, value)
+        println(io, str, ":", blanks, value)
     end
 end
 
@@ -116,52 +118,58 @@ function format_bytes(bytes) # also used by InteractiveUtils
 end
 
 function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
+    time_print(stdout, elapsedtime, bytes, gctime, allocs, compile_time, newline)
+end
+
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
-    str = sprint() do io
-        print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
-        print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
-        parens && print(io, " (")
-        if bytes != 0 || allocs != 0
-            allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
-            if ma == 1
-                print(io, Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
-            else
-                print(io, Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
-            end
-            print(io, format_bytes(bytes))
+    print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+    print(io, timestr, " seconds")
+    parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+    parens && print(io, " (")
+    if bytes != 0 || allocs != 0
+        allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
+        if ma == 1
+            print(io, Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
+        else
+            print(io, Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
         end
-        if gctime > 0
-            if bytes != 0 || allocs != 0
-                print(io, ", ")
-            end
-            print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
-        end
-        if compile_time > 0
-            if bytes != 0 || allocs != 0 || gctime > 0
-                print(io, ", ")
-            end
-            print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
-        end
-        parens && print(io, ")")
+        print(io, format_bytes(bytes))
     end
-    newline ? println(str) : print(str)
+    if gctime > 0
+        if bytes != 0 || allocs != 0
+            print(io, ", ")
+        end
+        print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
+    end
+    if compile_time > 0
+        if bytes != 0 || allocs != 0 || gctime > 0
+            print(io, ", ")
+        end
+        print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+    end
+    parens && print(io, ")")
+    newline && println(io)
     nothing
 end
 
 function timev_print(elapsedtime, diff::GC_Diff, compile_time)
+    timev_print(stdout, elapsedtime, diff, compile_time)
+end
+
+function timev_print(io::IO, elapsedtime, diff::GC_Diff, compile_time)
     allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true)
+    time_print(io, elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true)
     print("elapsed time (ns): $elapsedtime\n")
-    padded_nonzero_print(diff.total_time,   "gc time (ns)")
-    padded_nonzero_print(diff.allocd,       "bytes allocated")
-    padded_nonzero_print(diff.poolalloc,    "pool allocs")
-    padded_nonzero_print(diff.bigalloc,     "non-pool GC allocs")
-    padded_nonzero_print(diff.malloc,       "malloc() calls")
-    padded_nonzero_print(diff.realloc,      "realloc() calls")
-    padded_nonzero_print(diff.freecall,     "free() calls")
-    padded_nonzero_print(diff.pause,        "GC pauses")
-    padded_nonzero_print(diff.full_sweep,   "full collections")
+    padded_nonzero_print(io, diff.total_time,   "gc time (ns)")
+    padded_nonzero_print(io, diff.allocd,       "bytes allocated")
+    padded_nonzero_print(io, diff.poolalloc,    "pool allocs")
+    padded_nonzero_print(io, diff.bigalloc,     "non-pool GC allocs")
+    padded_nonzero_print(io, diff.malloc,       "malloc() calls")
+    padded_nonzero_print(io, diff.realloc,      "realloc() calls")
+    padded_nonzero_print(io, diff.freecall,     "free() calls")
+    padded_nonzero_print(io, diff.pause,        "GC pauses")
+    padded_nonzero_print(io, diff.full_sweep,   "full collections")
 end
 
 """
