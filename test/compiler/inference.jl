@@ -3411,3 +3411,8 @@ end
         @test @inferred(f40177(T)) == fieldtype(T, 1)
     end
 end
+
+# issue #41908
+f41908(x::Complex{T}) where {String<:T<:String} = 1
+g41908() = f41908(Any[1][1])
+@test only(Base.return_types(g41908, ())) <: Int
