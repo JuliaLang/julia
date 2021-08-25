@@ -2083,8 +2083,12 @@ static void validate_new_code_instances(void)
     size_t i;
     for (i = 0; i < new_code_instance_validate.size; i += 2) {
         if (new_code_instance_validate.table[i+1] != HT_NOTFOUND) {
-            ((jl_code_instance_t*)new_code_instance_validate.table[i])->max_world = ~(size_t)0;
-            new_code_instance_validate.table[i+1] = HT_NOTFOUND;
+            // Sometimes a key can be in two places, safest to re-get it
+            void *key = new_code_instance_validate.table[i];
+            if (ptrhash_get(&new_code_instance_validate, key) != HT_NOTFOUND) {
+                ((jl_code_instance_t*)key)->max_world = ~(size_t)0;
+                new_code_instance_validate.table[i+1] = HT_NOTFOUND;
+            }
         }
     }
 }
