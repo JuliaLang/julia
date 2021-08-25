@@ -44,6 +44,11 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
     @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
 end
 
+# obtain Vararg with 2 undefined fields
+let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
+    @test Core.Compiler.limit_type_size(Tuple, va, Union{}, 2, 2) === Any
+end
+
 let # 40336
     t = Type{Type{Int}}
     c = Type{Int}
