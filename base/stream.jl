@@ -467,7 +467,9 @@ function shutdown(s::LibuvStream)
         end
         iolock_end()
         unpreserve_handle(ct)
-        if isopen(s) && (s.status == StatusEOF && !isa(s, TTY)) || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
+    end
+    if isopen(s)
+        if status < 0 || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
             close(s)
         end
     end
@@ -658,9 +660,9 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                 notify(stream.cond)
             elseif nread == UV_EOF # libuv called uv_stop_reading already
                 if stream.status != StatusClosing
-                    if stream isa TTY || ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
-                        # stream can still be used either by reseteof or write
-                        stream.status = StatusEOF
+                    stream.status = StatusEOF
+                    if stream isa TTY # TODO: || ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
+                        # stream can still be used either by reseteof # TODO: or write
                         notify(stream.cond)
                     else
                         # underlying stream is no longer useful: begin finalization
