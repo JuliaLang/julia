@@ -514,6 +514,19 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 1×5 reinterpret(Float32, ::Matrix{UInt32}):
  1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
+
+For lazy array containers, the `reinterpret` works on an element-wise sense, so the memory
+might not reflect the actual memory storage:
+
+```jldoctest
+julia> reinterpret(Int, CartesianIndices((2, 2))) # `CartesianIndices` doesn't allocates memory
+4×2 reinterpret($Int, ::CartesianIndices{2, Tuple{Base.OneTo{$Int}, Base.OneTo{$Int}}}):
+ 1  1
+ 1  2
+ 2  2
+ 1  2
+```
+
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 
