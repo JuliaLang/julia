@@ -831,7 +831,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
     // TODO: derive our debug name from the syntax instead of the type
     name = mt->name;
-    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt) {
+    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt || external_mt) {
         // our value for `name` is bad, try to guess what the syntax might have had,
         // like `jl_static_show_func_sig` might have come up with
         jl_datatype_t *dt = jl_first_argument_datatype(argtype);

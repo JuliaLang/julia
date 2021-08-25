@@ -438,6 +438,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
 
+  * `undefcheck`
+
+    Temporary node inserted by the compiler and will be processed in `type_lift_pass!`.
+
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
@@ -507,11 +511,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The calling convention for the call.
 
-      * `args[6:6+length(args[3])]` : arguments
+      * `args[6:5+length(args[3])]` : arguments
 
         The values for all the arguments (with types of each given in args[3]).
 
-      * `args[6+(length(args[3])+1):end]` : gc-roots
+      * `args[6+length(args[3])+1:end]` : gc-roots
 
         The additional objects that may need to be gc-rooted for the duration of the call.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.

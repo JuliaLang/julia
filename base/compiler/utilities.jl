@@ -156,7 +156,15 @@ function subst_trivial_bounds(@nospecialize(atypes))
     end
     v = atypes.var
     if isconcretetype(v.ub) || v.lb === v.ub
-        return subst_trivial_bounds(atypes{v.ub})
+        subst = try
+            atypes{v.ub}
+        catch
+            # Note in rare cases a var bound might not be valid to substitute.
+            nothing
+        end
+        if subst !== nothing
+            return subst_trivial_bounds(subst)
+        end
     end
     return UnionAll(v, subst_trivial_bounds(atypes.body))
 end

@@ -130,7 +130,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     elseif isa(t, DataType)
         if isa(c, Core.TypeofVararg)
             # Tuple{Vararg{T}} --> Tuple{T} is OK
-            return _limit_type_size(t, c.T, sources, depth, 0)
+            return _limit_type_size(t, unwrapva(c), sources, depth, 0)
         elseif isType(t) # allow taking typeof as Type{...}, but ensure it doesn't start nesting
             tt = unwrap_unionall(t.parameters[1])
             (!isa(tt, DataType) || isType(tt)) && (depth += 1)
