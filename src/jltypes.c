@@ -1326,8 +1326,15 @@ jl_value_t *normalize_unionalls(jl_value_t *t)
             u = (jl_unionall_t*)t;
         }
 
-        if (u->var->lb == u->var->ub || may_substitute_ub(body, u->var))
-            t = jl_instantiate_unionall(u, u->var->ub);
+        if (u->var->lb == u->var->ub || may_substitute_ub(body, u->var)) {
+            JL_TRY {
+                t = jl_instantiate_unionall(u, u->var->ub);
+            }
+            JL_CATCH {
+                // just skip normalization
+                // (may happen for bounds inconsistent with the wrapper's bounds)
+            }
+        }
     }
     JL_GC_POP();
     return t;
