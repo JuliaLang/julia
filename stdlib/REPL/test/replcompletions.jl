@@ -32,6 +32,10 @@ let ex = quote
             :()
         end
 
+        primitive type NonStruct 8 end
+        Base.propertynames(::NonStruct) = (:a, :b, :c)
+        x = reinterpret(NonStruct, 0x00)
+
         # Support non-Dict AbstractDicts, #19441
         mutable struct CustomDict{K, V} <: AbstractDict{K, V}
             mydict::Dict{K, V}
@@ -1115,10 +1119,7 @@ let s = "test_dict[\"ab"
     @test c == Any["\"abc\"", "\"abcd\""]
 end
 
-primitive type NonStruct 8 end
-Base.propertynames(::NonStruct) = (:a, :b, :c)
-x = reinterpret(NonStruct, 0x00)
-let s = "x."
+let s = "CompletionFoo.x."
     c, r = test_complete(s)
     @test "a" in c
 end
