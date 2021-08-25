@@ -464,7 +464,10 @@ macro generated(f)
                          Expr(:block,
                               lno,
                               Expr(:if, Expr(:generated),
-                                   body,
+                                   # https://github.com/JuliaLang/julia/issues/25678
+                                   Expr(:block,
+                                        :(local tmp = $body),
+                                        :(if tmp isa Core.CodeInfo; return tmp; else tmp; end)),
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))
@@ -505,7 +508,7 @@ result into the field in the first argument and return the values `(old, new)`.
 This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
 
 
-See [atomics](#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -523,17 +526,20 @@ julia> @atomic a.x += 1 # increment field x of a, with sequential consistency
 3
 
 julia> @atomic a.x + 1 # increment field x of a, with sequential consistency
-(3, 4)
+3 => 4
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 
 julia> @atomic max(a.x, 10) # change field x of a to the max value, with sequential consistency
-(4, 10)
+4 => 10
 
 julia> @atomic a.x max 5 # again change field x of a to the max value, with sequential consistency
-(10, 10)
+10 => 10
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomic(ex)
     if !isa(ex, Symbol) && !is_expr(ex, :(::))
@@ -601,7 +607,7 @@ Stores `new` into `a.b.x` and returns the old value of `a.b.x`.
 
 This operation translates to a `swapproperty!(a.b, :x, new)` call.
 
-See [atomics](#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -615,6 +621,9 @@ julia> @atomicswap a.x = 2+2 # replace field x of a with 4, with sequential cons
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomicswap(order, ex)
     order isa QuoteNode || (order = esc(order))
@@ -644,7 +653,7 @@ replacement was completed.
 
 This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` call.
 
-See [atomics](#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
@@ -653,22 +662,25 @@ julia> a = Atomic(1)
 Atomic{Int64}(1)
 
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
-(1, true)
+(old = 1, success = true)
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 2
 
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
-(2, false)
+(old = 2, success = false)
 
 julia> xchg = 2 => 0; # replace field x of a with 0 if it was 1, with sequential consistency
 
 julia> @atomicreplace a.x xchg
-(2, true)
+(old = 2, success = true)
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 0
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomicreplace(success_order, fail_order, ex, old_new)
     fail_order isa QuoteNode || (fail_order = esc(fail_order))

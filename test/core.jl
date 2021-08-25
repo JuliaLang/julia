@@ -7236,6 +7236,12 @@ end
 @test string((B40050(),)) == "($B40050(),)"
 @test_broken isbitstype(Tuple{B40050})
 
+# issue #41654
+struct X41654 <: Ref{X41654}
+end
+@test isbitstype(X41654)
+@test ('a'=>X41654(),)[1][2] isa X41654
+
 # Issue #34206/34207
 function mre34206(a, n)
     va = view(a, :)
@@ -7573,3 +7579,10 @@ const T35130 = Tuple{Vector{Int}, <:Any}
 end
 h35130(x) = A35130(Any[x][1]::Vector{T35130})
 @test h35130(T35130[([1],1)]) isa A35130
+
+# issue #41503
+let S = Tuple{Tuple{Tuple{K, UInt128} where K<:Tuple{Int64}, Int64}},
+    T = Tuple{Tuple{Tuple{Tuple{Int64}, UInt128}, Int64}}
+    @test pointer_from_objref(T) === pointer_from_objref(S)
+    @test isbitstype(T)
+end

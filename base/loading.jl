@@ -769,7 +769,7 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
     return restored
 end
 
-function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::Union{Nothing, String})
+function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::Union{Nothing, String}, depth::Int = 0)
     if root_module_exists(modkey)
         M = root_module(modkey)
         if PkgId(M) == modkey && module_build_id(M) === build_id
@@ -780,7 +780,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
             modpath = locate_package(modkey)
             modpath === nothing && return nothing
         end
-        mod = _require_search_from_serialized(modkey, String(modpath))
+        mod = _require_search_from_serialized(modkey, String(modpath), depth)
         get!(PkgOrigin, pkgorigins, modkey).path = modpath
         if !isa(mod, Bool)
             for callback in package_callbacks
@@ -821,10 +821,14 @@ function _require_from_serialized(path::String)
     return _include_from_serialized(path, depmods)
 end
 
+# use an Int counter so that nested @time_imports calls all remain open
+const TIMING_IMPORTS = Threads.Atomic{Int}(0)
+
 # returns `true` if require found a precompile cache for this sourcepath, but couldn't load it
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
-function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
+function _require_search_from_serialized(pkg::PkgId, sourcepath::String, depth::Int = 0)
+    t_before = time_ns()
     paths = find_all_in_cache_path(pkg)
     for path_to_try in paths::Vector{String}
         staledeps = stale_cachefile(sourcepath, path_to_try)
@@ -840,7 +844,7 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
             dep = staledeps[i]
             dep isa Module && continue
             modpath, modkey, build_id = dep::Tuple{String, PkgId, UInt64}
-            dep = _tryrequire_from_serialized(modkey, build_id, modpath)
+            dep = _tryrequire_from_serialized(modkey, build_id, modpath, depth + 1)
             if dep === nothing
                 @debug "Required dependency $modkey failed to load from cache file for $modpath."
                 staledeps = true
@@ -855,6 +859,13 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
+            if TIMING_IMPORTS[] > 0
+                elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
+                tree_prefix = depth == 0 ? "" : "$("  "^(depth-1))┌ "
+                print("$(lpad(elapsed, 9)) ms  ")
+                printstyled(tree_prefix, color = :light_black)
+                println(pkg.name)
+            end
             return restored
         end
     end

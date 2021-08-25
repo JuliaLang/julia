@@ -8,6 +8,7 @@ export
     chown,
     cp,
     cptree,
+    hardlink,
     mkdir,
     mkpath,
     mktemp,
@@ -358,6 +359,13 @@ If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created 
 symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` will be a copy
 of the file or directory `src` refers to.
 Return `dst`.
+
+!!! note
+    The `cp` function is different from the `cp` command. The `cp` function always operates on
+    the assumption that `dst` is a file, while the command does different things depending
+    on whether `dst` is a directory or a file.
+    Using `force=true` when `dst` is a directory will result in loss of all the contents present
+    in the `dst` directory, and `dst` will become a file that has the contents of `src` instead.
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
                                                       follow_symlinks::Bool=false)
@@ -999,6 +1007,26 @@ if Sys.iswindows()
 end
 
 """
+    hardlink(src::AbstractString, dst::AbstractString)
+
+Creates a hard link to an existing source file `src` with the name `dst`. The
+destination, `dst`, must not exist.
+
+See also: [`symlink`](@ref).
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+"""
+function hardlink(src::AbstractString, dst::AbstractString)
+    err = ccall(:jl_fs_hardlink, Int32, (Cstring, Cstring), src, dst)
+    if err < 0
+        msg = "hardlink($(repr(src)), $(repr(dst)))"
+        uv_error(msg, err)
+    end
+    return nothing
+end
+
+"""
     symlink(target::AbstractString, link::AbstractString; dir_target = false)
 
 Creates a symbolic link to `target` with the name `link`.
@@ -1019,6 +1047,8 @@ denoted by `isabspath(target)` returning `false`) a symlink will be used, else
 a junction point will be used.  Best practice for creating symlinks on Windows
 is to create them only after the files/directories they reference are already
 created.
+
+See also: [`hardlink`](@ref).
 
 !!! note
     This function raises an error under operating systems that do not support

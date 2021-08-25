@@ -44,6 +44,11 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
     @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
 end
 
+# obtain Vararg with 2 undefined fields
+let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
+    @test Core.Compiler.limit_type_size(Tuple, va, Union{}, 2, 2) === Any
+end
+
 let # 40336
     t = Type{Type{Int}}
     c = Type{Int}
@@ -1524,7 +1529,6 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src.ssavaluetypes isa Vector{Any}
     @test !opt.src.inferred
     @test opt.mod === Base
-    @test opt.nargs == 3
 end
 
 # approximate static parameters due to unions
@@ -2210,12 +2214,10 @@ code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
 ssachangemap = fill(0, length(code28279))
 labelchangemap = fill(0, length(code28279))
-worklist = Int[]
 let i
     for i in 1:length(code28279)
         stmt = code28279[i]
         if isa(stmt, GotoIfNot)
-            push!(worklist, i)
             ssachangemap[i] = 1
             if i < length(code28279)
                 labelchangemap[i + 1] = 1
@@ -2672,7 +2674,7 @@ const DenseIdx = Union{IntRange,Integer}
     foo_26724((result..., length(r)), I...)
 @test @inferred(foo_26724((), 1:4, 1:5, 1:6)) === (4, 5, 6)
 
-# Non uniformity in expresions with PartialTypeVar
+# Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
     @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),
@@ -3008,14 +3010,14 @@ end
 # Some very limited testing of timing the type inference (#37749).
 @testset "Core.Compiler.Timings" begin
     # Functions that call each other
-    @eval module M
+    @eval module M1
         i(x) = x+5
         i2(x) = x+2
         h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
         g(y::Integer, x) = h(Any[y]) + Int(x)
     end
     timing1 = time_inference() do
-        @eval M.g(2, 3.0)
+        @eval M1.g(2, 3.0)
     end
     @test occursin(r"Core.Compiler.Timings.Timing\(InferenceFrameInfo for Core.Compiler.Timings.ROOT\(\)\) with \d+ children", sprint(show, timing1))
     # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
@@ -3027,11 +3029,11 @@ end
     @test isa(stacktrace(timing1.children[1].bt), Vector{Base.StackTraces.StackFrame})
     # Test that inference has cached some of the Method Instances
     timing2 = time_inference() do
-        @eval M.g(2, 3.0)
+        @eval M1.g(2, 3.0)
     end
     @test length(flatten_times(timing2)) < length(flatten_times(timing1))
     # Printing of InferenceFrameInfo for mi.def isa Module
-    @eval module M
+    @eval module M2
         i(x) = x+5
         i2(x) = x+2
         h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
@@ -3041,7 +3043,7 @@ end
     timingmod = time_inference() do
         @eval @testset "Outer" begin
             @testset "Inner" begin
-                for i = 1:2 M.g(2, 3.0) end
+                for i = 1:2 M2.g(2, 3.0) end
             end
         end
     end
@@ -3341,10 +3343,10 @@ let
     sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
         Core.Compiler.NativeInterpreter())
     ir = Core.Compiler.convert_to_ircode(ci, Core.Compiler.copy_exprargs(ci.code),
-        false, 2, sv)
-    ir = Core.Compiler.slot2reg(ir, ci, 2, sv)
+        false, sv)
+    ir = Core.Compiler.slot2reg(ir, ci, sv)
     ir = Core.Compiler.compact!(ir)
-    Core.Compiler.replace_code_newstyle!(ci, ir, 3)
+    Core.Compiler.replace_code_newstyle!(ci, ir, 4)
     ci.ssavaluetypes = length(ci.code)
     @test any(x->isa(x, Core.PhiNode), ci.code)
     oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
@@ -3395,3 +3397,19 @@ end
         x.x
     end) == Any[Int]
 end
+
+@testset "fieldtype for unions" begin # e.g. issue #40177
+    f40177(::Type{T}) where {T} = fieldtype(T, 1)
+    for T in [
+        Union{Tuple{Val}, Tuple{Tuple}},
+        Union{Base.RefValue{T}, Type{Int32}} where T<:Real,
+        Union{Tuple{Vararg{Symbol}}, Tuple{Float64, Vararg{Float32}}},
+    ]
+        @test @inferred(f40177(T)) == fieldtype(T, 1)
+    end
+end
+
+# issue #41908
+f41908(x::Complex{T}) where {String<:T<:String} = 1
+g41908() = f41908(Any[1][1])
+@test only(Base.return_types(g41908, ())) <: Int

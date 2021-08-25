@@ -234,7 +234,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
                                 false, GlobalVariable::PrivateLinkage,
                                 NULL, localname);
     // LLVM passes sometimes strip metadata when moving load around
-    // since the load at the new location satisfy the same condition as the origional one.
+    // since the load at the new location satisfy the same condition as the original one.
     // Mark the global as constant to LLVM code using our own metadata
     // which is much less likely to be striped.
     gv->setMetadata("julia.constgv", MDNode::get(gv->getContext(), None));
@@ -1560,9 +1560,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             Value *Success = emit_f_is(ctx, cmp, ghostValue(jltype));
             Success = ctx.builder.CreateZExt(Success, T_int8);
             jl_cgval_t argv[2] = {ghostValue(jltype), mark_julia_type(ctx, Success, false, jl_bool_type)};
-            // TODO: do better here
-            Value *instr = emit_jlcall(ctx, jltuple_func, V_rnull, argv, 2, JLCALL_F_CC);
-            return mark_julia_type(ctx, instr, true, jl_any_type);
+            jl_datatype_t *rettyp = jl_apply_cmpswap_type(jltype);
+            return emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
         }
         else {
             return ghostValue(jltype);
@@ -1803,10 +1802,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         }
         oldval = mark_julia_type(ctx, instr, isboxed, jltype);
         if (isreplacefield) {
-            // TODO: do better here
+            Success = ctx.builder.CreateZExt(Success, T_int8);
             jl_cgval_t argv[2] = {oldval, mark_julia_type(ctx, Success, false, jl_bool_type)};
-            instr = emit_jlcall(ctx, jltuple_func, V_rnull, argv, 2, JLCALL_F_CC);
-            oldval = mark_julia_type(ctx, instr, true, jl_any_type);
+            jl_datatype_t *rettyp = jl_apply_cmpswap_type(jltype);
+            oldval = emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
         }
     }
     return oldval;
@@ -2408,7 +2407,7 @@ static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo,
         ctx.builder.CreateStructGEP(jl_array_llvmt,
             emit_bitcast(ctx, t, jl_parray_llvmt),
             0); // index (not offset) of data field in jl_parray_llvmt
-    // Normally allocated array of 0 dimention always have a inline pointer.
+    // Normally allocated array of 0 dimension always have a inline pointer.
     // However, we can't rely on that here since arrays can also be constructed from C pointers.
     MDNode *tbaa = arraytype_constshape(tinfo.typ) ? tbaa_const : tbaa_arrayptr;
     PointerType *PT = cast<PointerType>(addr->getType());
@@ -3247,10 +3246,10 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         if (needlock)
             emit_lockstate_value(ctx, strct, false);
         if (isreplacefield) {
+            Success = ctx.builder.CreateZExt(Success, T_int8);
             jl_cgval_t argv[2] = {oldval, mark_julia_type(ctx, Success, false, jl_bool_type)};
-            // TODO: do better here
-            Value *instr = emit_jlcall(ctx, jltuple_func, V_rnull, argv, 2, JLCALL_F_CC);
-            oldval = mark_julia_type(ctx, instr, true, jl_any_type);
+            jl_datatype_t *rettyp = jl_apply_cmpswap_type(jfty);
+            oldval = emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
         }
         return oldval;
     }
@@ -3458,16 +3457,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 
 static void emit_signal_fence(jl_codectx_t &ctx)
 {
-#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
-    // LLVM generates very inefficient code (and might include function call)
-    // for signal fence. Fallback to the poor man signal fence with
-    // inline asm instead.
-    // https://llvm.org/bugs/show_bug.cgi?id=27545
-    ctx.builder.CreateCall(InlineAsm::get(FunctionType::get(T_void, false), "",
-                                      "~{memory}", true));
-#else
     ctx.builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
-#endif
 }
 
 static Value *emit_defer_signal(jl_codectx_t &ctx)

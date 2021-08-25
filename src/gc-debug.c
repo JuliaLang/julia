@@ -315,7 +315,6 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
         char *cur_page = gc_page_data((char*)halfpages - 1);
         if (cur_page == data) {
             lim = (char*)halfpages - 1;
-            break;
         }
     }
     // compute the freelist_map

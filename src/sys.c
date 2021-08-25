@@ -54,7 +54,7 @@
 #include <intrin.h>
 #endif
 
-#ifdef JL_MSAN_ENABLED
+#ifdef _COMPILER_MSAN_ENABLED_
 #include <sanitizer/msan_interface.h>
 #endif
 
@@ -796,7 +796,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
     struct link_map *map;
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
-#ifdef JL_MSAN_ENABLED
+#ifdef _COMPILER_MSAN_ENABLED_
     __msan_unpoison(&map,sizeof(struct link_map*));
     if (map) {
         __msan_unpoison(map, sizeof(struct link_map));

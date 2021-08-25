@@ -758,8 +758,10 @@ else
     end
 end
 
-_array_for(::Type{T}, itr, ::HasLength) where {T} = Vector{T}(undef, Int(length(itr)::Integer))
-_array_for(::Type{T}, itr, ::HasShape{N}) where {T,N} = similar(Array{T,N}, axes(itr))
+_array_for(::Type{T}, itr, isz::HasLength) where {T} = _array_for(T, itr, isz, length(itr))
+_array_for(::Type{T}, itr, isz::HasShape{N}) where {T,N} = _array_for(T, itr, isz, axes(itr))
+_array_for(::Type{T}, itr, ::HasLength, len) where {T} = Vector{T}(undef, len)
+_array_for(::Type{T}, itr, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
 
 function collect(itr::Generator)
     isz = IteratorSize(itr.iter)
@@ -767,12 +769,14 @@ function collect(itr::Generator)
     if isa(isz, SizeUnknown)
         return grow_to!(Vector{et}(), itr)
     else
+        shape = isz isa HasLength ? length(itr) : axes(itr)
         y = iterate(itr)
         if y === nothing
             return _array_for(et, itr.iter, isz)
         end
         v1, st = y
-        collect_to_with_first!(_array_for(typeof(v1), itr.iter, isz), v1, itr, st)
+        arr = _array_for(typeof(v1), itr.iter, isz, shape)
+        return collect_to_with_first!(arr, v1, itr, st)
     end
 end
 
@@ -895,7 +899,7 @@ function getindex end
 @eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
 @eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
-# Faster contiguous indexing using copyto! for UnitRange and Colon
+# Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(A, I)
@@ -955,7 +959,7 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
 end
 
 # Faster contiguous setindex! with copyto!
-function setindex!(A::Array{T}, X::Array{T}, I::UnitRange{Int}) where T
+function setindex!(A::Array{T}, X::Array{T}, I::AbstractUnitRange{Int}) where T
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
@@ -1455,7 +1459,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
 """
 deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
 
-function deleteat!(a::Vector, r::UnitRange{<:Integer})
+function deleteat!(a::Vector, r::AbstractUnitRange{<:Integer})
     n = length(a)
     isempty(r) || _deleteat!(a, first(r), length(r))
     return a
@@ -1621,13 +1625,16 @@ Remove items at specified indices, and return a collection containing
 the removed items.
 Subsequent items are shifted left to fill the resulting gaps.
 If specified, replacement values from an ordered collection will be spliced in
-place of the removed items; in this case, `indices` must be a `UnitRange`.
+place of the removed items; in this case, `indices` must be a `AbstractUnitRange`.
 
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
 !!! compat "Julia 1.5"
     Prior to Julia 1.5, `indices` must always be a `UnitRange`.
+
+!!! compat "Julia 1.8"
+    Prior to Julia 1.8, `indices` must be a `UnitRange` if splicing in replacement values.
 
 # Examples
 ```jldoctest
@@ -1646,7 +1653,7 @@ julia> A
  -1
 ```
 """
-function splice!(a::Vector, r::UnitRange{<:Integer}, ins=_default_splice)
+function splice!(a::Vector, r::AbstractUnitRange{<:Integer}, ins=_default_splice)
     v = a[r]
     m = length(ins)
     if m == 0

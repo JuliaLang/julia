@@ -313,9 +313,10 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         push!(linetable, LineInfoNode(entry.module, entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
     end
-    (; def) = mi = item.mi
+    (; def, sparam_vals) = item.mi
     nargs_def = def.nargs::Int32
     isva = nargs_def > 0 && def.isva
+    sig = def.sig
     if isva
         vararg = mk_tuplecall!(compact, argexprs[nargs_def:end], compact.result[idx][:line])
         argexprs = Any[argexprs[1:(nargs_def - 1)]..., vararg]
@@ -347,7 +348,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             # face of rename_arguments! mutating in place - should figure out
             # something better eventually.
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, def.sig, mi.sparam_vals, linetable_offset, boundscheck_idx, compact)
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck_idx, compact)
             if isa(stmt′, ReturnNode)
                 val = stmt′.val
                 isa(val, SSAValue) && (compact.used_ssas[val.id] += 1)
@@ -374,7 +375,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         inline_compact = IncrementalCompact(compact, spec.ir, compact.result_idx)
         for ((_, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, def.sig, mi.sparam_vals, linetable_offset, boundscheck_idx, compact)
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck_idx, compact)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
@@ -707,33 +708,31 @@ function singleton_type(@nospecialize(ft))
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch)
-    mi = specialize_method(match, false, true)
+    mi = specialize_method(match; compilesig=true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     return mi
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult)
-    mi = specialize_method(result.linfo.def::Method, result.linfo.specTypes,
-        result.linfo.sparam_vals, false, true)
+function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::InferenceResult)
+    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     return mi
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState)
-    spec = todo.spec::DelayedInliningSpec
+    (; match) = todo.spec::DelayedInliningSpec
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     isconst, src = false, nothing
-    if isa(spec.match, InferenceResult)
-        let inferred_src = spec.match.src
-            if isa(inferred_src, Const)
-                if !is_inlineable_constant(inferred_src.val)
-                    return compileable_specialization(state.et, spec.match)
-                end
-                isconst, src = true, quoted(inferred_src.val)
-            else
-                isconst, src = false, inferred_src
+    if isa(match, InferenceResult)
+        inferred_src = match.src
+        if isa(inferred_src, Const)
+            if !is_inlineable_constant(inferred_src.val)
+                return compileable_specialization(state.et, match)
             end
+            isconst, src = true, quoted(inferred_src.val)
+        else
+            isconst, src = false, inferred_src
         end
     else
         linfo = get(state.mi_cache, todo.mi, nothing)
@@ -761,7 +760,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
     end
 
     if src === nothing
-        return compileable_specialization(et, spec.match)
+        return compileable_specialization(et, match)
     end
 
     if isa(src, IRCode)
@@ -810,7 +809,7 @@ function analyze_method!(match::MethodMatch, atypes::Vector{Any},
     end
 
     # See if there exists a specialization for this method signature
-    mi = specialize_method(match, true) # Union{Nothing, MethodInstance}
+    mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
     if !isa(mi, MethodInstance)
         return compileable_specialization(et, match)
     end
@@ -1059,9 +1058,9 @@ function inline_invoke!(ir::IRCode, idx::Int, sig::Signature, (; match, result):
     pushfirst!(atypes, atype0)
 
     if isa(result, InferenceResult)
-        item = InliningTodo(result, atypes, calltype)
-        validate_sparams(item.mi.sparam_vals) || return nothing
-        if argtypes_to_type(atypes) <: item.mi.def.sig
+        (; mi) = item = InliningTodo(result, atypes, calltype)
+        validate_sparams(mi.sparam_vals) || return nothing
+        if argtypes_to_type(atypes) <: mi.def.sig
             state.mi_cache !== nothing && (item = resolve_todo(item, state))
             handle_single_case!(ir, stmt, idx, item, true, todo)
             return nothing
@@ -1173,7 +1172,7 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
     for i in 1:length(infos)
         info = infos[i]
         meth = info.results
-        if meth === missing || meth.ambig
+        if meth.ambig
             # Too many applicable methods
             # Or there is a (partial?) ambiguity
             too_many = true
@@ -1191,8 +1190,9 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
             only_method = false
         end
         for match in meth
-            signature_union = Union{signature_union, match.spec_types}
-            if !isdispatchtuple(match.spec_types)
+            spec_types = match.spec_types
+            signature_union = Union{signature_union, spec_types}
+            if !isdispatchtuple(spec_types)
                 fully_covered = false
                 continue
             end
@@ -1200,10 +1200,10 @@ function analyze_single_call!(ir::IRCode, todo::Vector{Pair{Int, Any}}, idx::Int
             if case === nothing
                 fully_covered = false
                 continue
-            elseif _any(p->p[1] === match.spec_types, cases)
+            elseif _any(p->p[1] === spec_types, cases)
                 continue
             end
-            push!(cases, Pair{Any,Any}(match.spec_types, case))
+            push!(cases, Pair{Any,Any}(spec_types, case))
         end
     end
 

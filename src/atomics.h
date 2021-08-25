@@ -102,7 +102,7 @@ enum jl_memory_order {
     __atomic_load_n(obj, __ATOMIC_SEQ_CST)
 #  define jl_atomic_load_acquire(obj)           \
     __atomic_load_n(obj, __ATOMIC_ACQUIRE)
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
 // For the sake of tsan, call these loads consume ordering since they will act
 // as such on the processors we support while normally, the compiler would
 // upgrade this to acquire ordering, which is strong (and slower) than we want.

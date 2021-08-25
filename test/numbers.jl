@@ -2641,6 +2641,10 @@ end
     @test !isone(triu(fill(1, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(Matrix(1I, 5, 5))
+    @test !isone(view(rand(5,5), [1,3,4], :))
+    Dv = view(Diagonal([1,1, 1]), [1,2], 1:2)
+    @test isone(Dv)
+    @test (@allocated isone(Dv)) == 0
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
 

@@ -19,6 +19,8 @@
 extern "C" {
 #endif
 
+jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
+
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define h2index(hv, sz) (size_t)((hv) & ((sz)-1))
@@ -895,19 +897,19 @@ struct _jl_typestack_t;
 typedef struct _jl_typestack_t jl_typestack_t;
 
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
-                                       int cacheable, jl_typestack_t *stack, jl_typeenv_t *env);
+                                       jl_typestack_t *stack, jl_typeenv_t *env);
 
 // Build an environment mapping a TypeName's parameters to parameter values.
 // This is the environment needed for instantiating a type's supertype and field types.
 static jl_value_t *inst_datatype_env(jl_value_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
-                                     int cacheable, jl_typestack_t *stack, jl_typeenv_t *env, int c)
+                                     jl_typestack_t *stack, jl_typeenv_t *env, int c)
 {
     if (jl_is_datatype(dt))
-        return inst_datatype_inner((jl_datatype_t*)dt, p, iparams, ntp, cacheable, stack, env);
+        return inst_datatype_inner((jl_datatype_t*)dt, p, iparams, ntp, stack, env);
     assert(jl_is_unionall(dt));
     jl_unionall_t *ua = (jl_unionall_t*)dt;
     jl_typeenv_t e = { ua->var, iparams[c], env };
-    return inst_datatype_env(ua->body, p, iparams, ntp, cacheable, stack, &e, c + 1);
+    return inst_datatype_env(ua->body, p, iparams, ntp, stack, &e, c + 1);
 }
 
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
@@ -923,14 +925,7 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
         jl_value_t *u = jl_unwrap_unionall(tc);
         if (jl_is_datatype(u) && n == jl_nparams((jl_datatype_t*)u) &&
             ((jl_datatype_t*)u)->name->wrapper == tc) {
-            int cacheable = 1;
-            for (i = 0; i < n; i++) {
-                if (jl_has_free_typevars(params[i])) {
-                    cacheable = 0;
-                    break;
-                }
-            }
-            return inst_datatype_env(tc, NULL, params, n, cacheable, NULL, NULL, 0);
+            return inst_datatype_env(tc, NULL, params, n, NULL, NULL, 0);
         }
     }
     JL_GC_PUSH1(&tc);
@@ -977,20 +972,42 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
 
 JL_DLLEXPORT jl_value_t *jl_apply_type1(jl_value_t *tc, jl_value_t *p1)
 {
-    JL_GC_PUSH1(&p1);
-    jl_value_t *t = jl_apply_type(tc, &p1, 1);
-    JL_GC_POP();
-    return t;
+    return jl_apply_type(tc, &p1, 1);
 }
 
 JL_DLLEXPORT jl_value_t *jl_apply_type2(jl_value_t *tc, jl_value_t *p1, jl_value_t *p2)
 {
-    jl_value_t **args;
-    JL_GC_PUSHARGS(args, 2);
-    args[0] = p1; args[1] = p2;
-    jl_value_t *t = jl_apply_type(tc, args, 2);
-    JL_GC_POP();
-    return t;
+    jl_value_t *args[2];
+    args[0] = p1;
+    args[1] = p2;
+    return jl_apply_type(tc, args, 2);
+}
+
+jl_datatype_t *jl_apply_modify_type(jl_value_t *dt)
+{
+    jl_datatype_t *rettyp = (jl_datatype_t*)jl_apply_type2(jl_pair_type, dt, dt);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    return rettyp;
+}
+
+jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *dt)
+{
+    jl_value_t *params[2];
+    jl_value_t *names = jl_atomic_load_relaxed(&cmpswap_names);
+    if (names == NULL) {
+        params[0] = (jl_value_t*)jl_symbol("old");
+        params[1] = (jl_value_t*)jl_symbol("success");
+        jl_value_t *lnames = jl_f_tuple(NULL, params, 2);
+        if (jl_atomic_cmpswap(&cmpswap_names, &names, lnames))
+            names = jl_atomic_load_relaxed(&cmpswap_names); // == lnames
+    }
+    params[0] = dt;
+    params[1] = (jl_value_t*)jl_bool_type;
+    jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
+    JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
+    jl_datatype_t *rettyp = (jl_datatype_t*)jl_apply_type2((jl_value_t*)jl_namedtuple_type, names, (jl_value_t*)tuptyp);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    return rettyp;
 }
 
 JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v)
@@ -1319,18 +1336,32 @@ jl_value_t *normalize_unionalls(jl_value_t *t)
 static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack);
 
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
-                                       int cacheable, jl_typestack_t *stack, jl_typeenv_t *env)
+                                       jl_typestack_t *stack, jl_typeenv_t *env)
 {
     jl_typestack_t top;
     jl_typename_t *tn = dt->name;
     int istuple = (tn == jl_tuple_typename);
     int isnamedtuple = (tn == jl_namedtuple_typename);
     if (dt->name != jl_type_typename) {
-        for (size_t i = 0; i < ntp; i++)
+        size_t i;
+        for (i = 0; i < ntp; i++)
             iparams[i] = normalize_unionalls(iparams[i]);
     }
 
-    // check type cache
+    // check type cache, if applicable
+    int cacheable = 1;
+    if (istuple) {
+        size_t i;
+        for (i = 0; cacheable && i < ntp; i++)
+            if (!jl_is_concrete_type(iparams[i]) && iparams[i] != jl_bottom_type)
+                cacheable = 0;
+    }
+    else {
+        size_t i;
+        for (i = 0; cacheable && i < ntp; i++)
+            if (jl_has_free_typevars(iparams[i]))
+                cacheable = 0;
+    }
     if (cacheable) {
         size_t i;
         for (i = 0; i < ntp; i++) {
@@ -1529,13 +1560,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
 
 static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params)
 {
-    int cacheable = 1;
-    for (size_t i = 0; i < np; i++) {
-        assert(p[i]);
-        if (!jl_is_concrete_type(p[i]) && p[i] != jl_bottom_type)
-            cacheable = 0;
-    }
-    return (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, p, np, cacheable, NULL, NULL);
+    return (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, p, np, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type(jl_svec_t *params)
@@ -1557,7 +1582,6 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
 {
     jl_tupletype_t *tt = (jl_datatype_t*)lookup_typevalue(jl_tuple_typename, arg1, args, nargs, leaf);
     if (tt == NULL) {
-        int cacheable = 1;
         size_t i;
         jl_svec_t *params = jl_alloc_svec(nargs);
         JL_GC_PUSH1(&params);
@@ -1569,14 +1593,13 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
                 // `jl_typeof(ai)`, but that will require some redesign of the caching
                 // logic.
                 ai = (jl_value_t*)jl_wrap_Type(ai);
-                cacheable = 0;
             }
             else {
                 ai = jl_typeof(ai);
             }
             jl_svecset(params, i, ai);
         }
-        tt = (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, jl_svec_data(params), nargs, cacheable, NULL, NULL);
+        tt = (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, jl_svec_data(params), nargs, NULL, NULL);
         JL_GC_POP();
     }
     return tt;
@@ -1644,9 +1667,6 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         iparams = jl_svec_data(ip_heap);
     }
     int bound = 0;
-    int cacheable = 1;
-    if (jl_is_va_tuple(tt))
-        cacheable = 0;
     int i;
     for (i = 0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
@@ -1655,11 +1675,9 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         if (ip_heap)
             jl_gc_wb(ip_heap, pi);
         bound |= (pi != elt);
-        if (cacheable && !jl_is_concrete_type(pi))
-            cacheable = 0;
     }
     if (bound)
-        t = inst_datatype_inner(tt, ip_heap, iparams, ntp, cacheable, stack, env);
+        t = inst_datatype_inner(tt, ip_heap, iparams, ntp, stack, env);
     JL_GC_POP();
     return t;
 }
@@ -1746,18 +1764,16 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
     size_t ntp = jl_svec_len(tp);
     jl_value_t **iparams;
     JL_GC_PUSHARGS(iparams, ntp);
-    int cacheable = 1, bound = 0;
+    int bound = 0;
     for (i = 0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
         jl_value_t *pi = inst_type_w_(elt, env, stack, check);
         iparams[i] = pi;
         bound |= (pi != elt);
-        if (cacheable && jl_has_free_typevars(pi))
-            cacheable = 0;
     }
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
     if (bound)
-        t = inst_datatype_inner(tt, NULL, iparams, ntp, cacheable, stack, env);
+        t = inst_datatype_inner(tt, NULL, iparams, ntp, stack, env);
     JL_GC_POP();
     return t;
 }

@@ -713,7 +713,7 @@ call obsolete versions of a function `f`.
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
-    kwargs = Base.merge(NamedTuple(), kwargs)
+    kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
     end

@@ -30,7 +30,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    150
+#define NUM_TAGS    151
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -127,6 +127,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_floatingpoint_type);
         INSERT_TAG(jl_number_type);
         INSERT_TAG(jl_signed_type);
+        INSERT_TAG(jl_pair_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -1839,6 +1840,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     }
 
     s.s = &sysimg;
+    jl_init_codegen();
     jl_update_all_fptrs(&s); // fptr relocs and registration
     // reinit ccallables, which require codegen to be initialized
     s.s = f;

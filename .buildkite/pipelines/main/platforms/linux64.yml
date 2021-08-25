@@ -1,0 +1,95 @@
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+
+steps:
+  - label: "package_linux64"
+    key: package_linux64
+    plugins:
+      - JuliaCI/julia#v1:
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
+          uid: 1000
+          gid: 1000
+          workspaces:
+            # Include `/cache/repos` so that our `git` version introspection works.
+            - "/cache/repos:/cache/repos"
+    commands: |
+      echo "--- Print the short and long commit hashes"
+      SHORT_COMMIT_LENGTH=10
+      SHORT_COMMIT=`echo $$BUILDKITE_COMMIT | cut -c1-$$SHORT_COMMIT_LENGTH`
+      JULIA_DIRECTORY_NAME="julia-$$SHORT_COMMIT"
+      JULIA_BINARYDIST_FILENAME=`make print-JULIA_BINARYDIST_FILENAME | cut -c27-`
+      ARTIFACT_FILE_EXTENSION="tar.gz"
+      ARTIFACT_FILENAME="$$JULIA_BINARYDIST_FILENAME.$$ARTIFACT_FILE_EXTENSION"
+      echo "The full commit is $$BUILDKITE_COMMIT"
+      echo "The Julia directory name will be $$JULIA_DIRECTORY_NAME"
+      echo "The artifact filename will be $$ARTIFACT_FILENAME"
+
+      echo "--- Build Julia from source"
+      make -j 6
+      make release
+      make install
+
+      echo "--- Make sure that the working directory is clean"
+      if [ -z "$(git status --short)" ]; then echo "INFO: The working directory is clean."; else echo "ERROR: The working directory is dirty."; echo "Output of git status:"; git status; exit 1; fi
+
+      echo "--- Print Julia version info"
+      ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
+
+      echo "--- Compress build artifacts"
+      ls -ld $$JULIA_DIRECTORY_NAME/
+      rm -rf $$ARTIFACT_FILENAME
+      tar czf $$ARTIFACT_FILENAME $$JULIA_DIRECTORY_NAME/
+      ls -l $$ARTIFACT_FILENAME
+
+      echo "--- Upload build artifacts"
+      buildkite-agent artifact upload $$ARTIFACT_FILENAME
+    timeout_in_minutes: 60
+    notify:
+      - github_commit_status:
+          context: "package_linux64"
+
+  # TODO: uncomment the following lines in order to enable the `tester_linux64` builder
+  # - label: "tester_linux64"
+  #   key: tester_linux64
+  #   depends_on: package_linux64
+  #   plugins:
+  #     - JuliaCI/julia#v1:
+  #         version: 1.6
+  #     - staticfloat/sandbox#v1:
+  #         # TODO: use a separate `tester_linux` image, instead of using the `package_linux` image.
+  #         rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+  #         rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
+  #         uid: 1000
+  #         gid: 1000
+  #         workspaces:
+  #           # Include `/cache/repos` so that our `git` version introspection works.
+  #           - "/cache/repos:/cache/repos"
+  #   env:
+  #     JULIA_SHELL: "/bin/bash"
+  #   commands: |
+  #     echo "--- Download build artifacts"
+  #     rm -rf julia-linux64.tar.gz
+  #     buildkite-agent artifact download julia-linux64.tar.gz .
+  #
+  #     echo "--- Extract build artifacts"
+  #     rm -rf julia-artifact/
+  #     tar xzf julia-linux64.tar.gz julia-artifact/
+  #
+  #     echo "--- Print Julia version info"
+  #     julia-artifact/bin/julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'
+  #
+  #     echo "--- Run the Julia test suite"
+  #     unset JULIA_DEPOT_PATH
+  #     julia-artifact/bin/julia .buildkite/utilities/rr/rr_capture.jl julia-artifact/bin/julia -e 'Base.runtests(["all"]; ncores = Sys.CPU_THREADS)'
+  #   timeout_in_minutes: 120
+  #   notify:
+  #     - github_commit_status:
+  #         context: "tester_linux64"

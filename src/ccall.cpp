@@ -1,9 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // --- the ccall, cglobal, and llvm intrinsics ---
-#include "llvm/Support/Path.h" // for llvm::sys::path
-#include <llvm/Bitcode/BitcodeReader.h>
-#include <llvm/Linker/Linker.h>
 
 #ifdef _OS_WINDOWS_
 extern const char jl_crtdll_basename[];

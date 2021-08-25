@@ -479,3 +479,11 @@ end
 for b in [-100:-2; 2:100;]
     @test Base.ndigits0z(0, b) == 0
 end
+
+@testset "constant prop in gcd" begin
+    ci = code_typed(() -> gcd(14, 21))[][1]
+    @test ci.code == Any[Core.ReturnNode(7)]
+
+    ci = code_typed(() -> 14 // 21)[][1]
+    @test ci.code == Any[Core.ReturnNode(2 // 3)]
+end

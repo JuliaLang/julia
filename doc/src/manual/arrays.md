@@ -875,7 +875,7 @@ full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
 introspect which is which). As such, when iterating over an entire array, it's
 much better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
 Not only will the former be much faster in cases where `A` is `IndexCartesian`,
-but it will also support OffsetArrays, too.
+but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
 
 #### Omitted and extra indices
 

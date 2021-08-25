@@ -73,25 +73,6 @@
 #  define JL_THREAD_LOCAL
 #endif
 
-#if defined(__has_feature) // Clang flavor
-#if __has_feature(address_sanitizer)
-#define JL_ASAN_ENABLED
-#endif
-#if __has_feature(memory_sanitizer)
-#define JL_MSAN_ENABLED
-#endif
-#if __has_feature(thread_sanitizer)
-#if __clang_major__ < 11
-#error Thread sanitizer runtime libraries in clang < 11 leak memory and cannot be used
-#endif
-#define JL_TSAN_ENABLED
-#endif
-#else // GCC flavor
-#if defined(__SANITIZE_ADDRESS__)
-#define JL_ASAN_ENABLED
-#endif
-#endif // __has_feature
-
 #define container_of(ptr, type, member) \
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
@@ -726,6 +707,7 @@ extern JL_DLLIMPORT jl_typename_t *jl_llvmpointer_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_namedtuple_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_unionall_t *jl_namedtuple_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_task_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_pair_type JL_GLOBALLY_ROOTED;
 
 extern JL_DLLIMPORT jl_value_t *jl_array_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_any_type JL_GLOBALLY_ROOTED;
@@ -1381,6 +1363,8 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p
 JL_DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n);
 JL_DLLEXPORT jl_value_t *jl_apply_type1(jl_value_t *tc, jl_value_t *p1);
 JL_DLLEXPORT jl_value_t *jl_apply_type2(jl_value_t *tc, jl_value_t *p1, jl_value_t *p2);
+JL_DLLEXPORT jl_datatype_t *jl_apply_modify_type(jl_value_t *dt);
+JL_DLLEXPORT jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *dt);
 JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type(jl_svec_t *params);
 JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np);
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name,
@@ -1403,7 +1387,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_new_bits(jl_value_t *dt, const char *src);
 JL_DLLEXPORT void jl_atomic_store_bits(char *dst, const jl_value_t *src, int nb);
 JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl_value_t *src, int nb);
 JL_DLLEXPORT int jl_atomic_bool_cmpswap_bits(char *dst, const jl_value_t *expected, const jl_value_t *src, int nb);
-JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb);
+JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_datatype_t *rettype, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb);
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup);
@@ -1860,7 +1844,7 @@ typedef struct _jl_task_t {
         struct jl_stack_context_t copy_stack_ctx;
 #endif
     };
-#if defined(JL_TSAN_ENABLED)
+#if defined(_COMPILER_TSAN_ENABLED_)
     void *tsan_state;
 #endif
     void *stkbuf; // malloc'd memory (either copybuf or stack)
