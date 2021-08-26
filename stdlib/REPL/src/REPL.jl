@@ -133,7 +133,7 @@ To remove this functionality, use
 `filter!(!=(REPL.print_exit_hint), Base.active_repl_backend.ast_transforms)`
 
 # Example
-```jldoctest
+```julia
 julia> exit
 suggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.
 exit (generic function with 2 methods)
