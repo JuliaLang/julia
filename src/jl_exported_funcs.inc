@@ -653,4 +653,5 @@
     XX(jl_dump_fptr_asm) \
     XX(jl_get_function_id) \
     XX(jl_type_to_llvm) \
+    XX(jl_getUnwindInfo) \
     XX(jl_get_libllvm)

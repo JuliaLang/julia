@@ -1626,8 +1626,8 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 
 #endif
 
-extern "C"
-uint64_t jl_getUnwindInfo(uint64_t dwAddr)
+extern "C" JL_DLLEXPORT
+uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
     uv_rwlock_rdlock(&threadsafe);
