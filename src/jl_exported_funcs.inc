@@ -544,8 +544,6 @@
     XX(jl_binding_deprecation_warning) \
     XX(jl_special_vector_alignment) \
     XX(jl_struct_try_layout) \
-    XX(uv_os_get_passwd) \
-    XX(uv_os_free_passwd) \
     XX(jl_isabspath) \
     XX(jl_nth_union_component) \
     XX(jl_get_llvm_target) \
@@ -573,12 +571,7 @@
     XX(jl_gc_classify_pools) \
     XX(jl_get_llvm_clone_targets) \
     XX(jl_format_filename) \
-    XX(utf8proc_charwidth) \
-    XX(uv_rwlock_wrlock) \
-    XX(uv_rwlock_wrunlock) \
-    XX(uv_rwlock_rdlock) \
-    XX(uv_rwlock_rdunlock) \
-    XX(uv_rwlock_init)
+    XX(utf8proc_charwidth)
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
     XX(jl_dlfind_win32) \

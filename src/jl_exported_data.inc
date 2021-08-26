@@ -265,7 +265,8 @@
     XX(jl_processor_print_help, int8_t) \
     XX(jl_measure_compile_time_enabled, uint8_t) \
     XX(jl_cumulative_compile_time, uint64_t) \
-    XX(jl_page_size, size_t)
+    XX(jl_page_size, size_t) \
+    XX(jl_default_debug_info_kind, int)
 
 #define JL_EXPORTED_DATA_SYMBOLS_WIN(XX) \
     XX(jl_in_stackwalk, jl_mutex_t)

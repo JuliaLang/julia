@@ -2120,7 +2120,7 @@ typedef struct {
     // generic_context(f, args...) instead of f(args...).
     jl_value_t *generic_context;
 } jl_cgparams_t;
-extern JL_DLLEXPORT int jl_default_debug_info_kind;
+extern JL_DLLIMPORT int jl_default_debug_info_kind;
 
 #ifdef __cplusplus
 }

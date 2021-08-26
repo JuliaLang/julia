@@ -858,14 +858,13 @@ static int globalUnique = 0;
 
 // --- code generation ---
 extern "C" {
-    int jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_cgparams_t jl_default_cgparams = {1, 1, 0,
 #ifdef _OS_WINDOWS_
         0,
 #else
         1,
 #endif
-        jl_default_debug_info_kind,
+        (int) DICompileUnit::DebugEmissionKind::FullDebug,
         jl_rettype_inferred, NULL };
 }
 
@@ -8170,7 +8169,7 @@ void jl_init_debuginfo(void);
 
 extern "C" void jl_init_llvm(void)
 {
-    jl_page_size = jl_getpagesize();
+    jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     imaging_mode = jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
     jl_default_cgparams.generic_context = jl_nothing;
     jl_init_debuginfo();
