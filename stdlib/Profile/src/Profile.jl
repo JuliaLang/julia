@@ -40,10 +40,14 @@ end
     init(; n::Integer, delay::Real))
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of
-instruction pointers that may be stored. Each instruction pointer corresponds to a single
+instruction pointers that may be stored per thread. Each instruction pointer corresponds to a single
 line of code; backtraces generally consist of a long list of instruction pointers. Current
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
+
+!!! compat "Julia 1.8"
+    As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
+    Previously this was `n` total.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
@@ -57,9 +61,20 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real)
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
+    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
+    sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
+    buffer_samples = n * nthreads
+    buffer_size_bytes = buffer_samples * sample_size_bytes
+    if buffer_size_bytes > 2^29 && Sys.WORD_SIZE == 32
+        buffer_size_bytes_per_thread = floor(Int, 2^29 / nthreads)
+        buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
+        buffer_samples = buffer_samples_per_thread * nthreads
+        buffer_size_bytes = buffer_samples * sample_size_bytes
+        @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+    end
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
     if status == -1
-        error("could not allocate space for ", n, " instruction pointers")
+        error("could not allocate space for ", n, " instruction pointers per thread being profiled ($nthreads threads, $(Base.format_bytes(buffer_size_bytes)) total)")
     end
 end
 

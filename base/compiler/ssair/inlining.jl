@@ -708,32 +708,31 @@ function singleton_type(@nospecialize(ft))
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch)
-    mi = specialize_method(match, false, true)
+    mi = specialize_method(match; compilesig=true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     return mi
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::InferenceResult)
-    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals, false, true)
+    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=true)
     mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     return mi
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState)
-    spec = todo.spec::DelayedInliningSpec
+    (; match) = todo.spec::DelayedInliningSpec
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     isconst, src = false, nothing
-    if isa(spec.match, InferenceResult)
-        let inferred_src = spec.match.src
-            if isa(inferred_src, Const)
-                if !is_inlineable_constant(inferred_src.val)
-                    return compileable_specialization(state.et, spec.match)
-                end
-                isconst, src = true, quoted(inferred_src.val)
-            else
-                isconst, src = false, inferred_src
+    if isa(match, InferenceResult)
+        inferred_src = match.src
+        if isa(inferred_src, Const)
+            if !is_inlineable_constant(inferred_src.val)
+                return compileable_specialization(state.et, match)
             end
+            isconst, src = true, quoted(inferred_src.val)
+        else
+            isconst, src = false, inferred_src
         end
     else
         linfo = get(state.mi_cache, todo.mi, nothing)
@@ -761,7 +760,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState)
     end
 
     if src === nothing
-        return compileable_specialization(et, spec.match)
+        return compileable_specialization(et, match)
     end
 
     if isa(src, IRCode)
@@ -810,7 +809,7 @@ function analyze_method!(match::MethodMatch, atypes::Vector{Any},
     end
 
     # See if there exists a specialization for this method signature
-    mi = specialize_method(match, true) # Union{Nothing, MethodInstance}
+    mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
     if !isa(mi, MethodInstance)
         return compileable_specialization(et, match)
     end

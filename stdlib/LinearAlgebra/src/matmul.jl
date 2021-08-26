@@ -9,7 +9,7 @@ matprod(x, y) = x*y + x*y
 dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
 dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
+function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRange{TI}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
@@ -22,7 +22,7 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector
     GC.@preserve x y BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasComplex,TI<:Integer}
+function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRange{TI}) where {T<:BlasComplex,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
@@ -625,7 +625,7 @@ end
 
 lapack_size(t::AbstractChar, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
-function copyto!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
+function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
@@ -635,7 +635,7 @@ function copyto!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRang
     B
 end
 
-function copy_transpose!(B::AbstractMatrix, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
+function copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
         LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else

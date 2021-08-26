@@ -1,10 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-let nextidx = Threads.Atomic{Int}(0)
+let nextidx = 0
     global nextproc
     function nextproc()
-        idx = Threads.atomic_add!(nextidx, 1)
-        return workers()[(idx % nworkers()) + 1]
+        p = -1
+        if p == -1
+            p = workers()[(nextidx % nworkers()) + 1]
+            nextidx += 1
+        end
+        p
     end
 end
 
@@ -343,6 +347,9 @@ macro distributed(args...)
     var = loop.args[1].args[1]
     r = loop.args[1].args[2]
     body = loop.args[2]
+    if Meta.isexpr(body, :block) && body.args[end] isa LineNumberNode
+        resize!(body.args, length(body.args) - 1)
+    end
     if na==1
         syncvar = esc(Base.sync_varname)
         return quote

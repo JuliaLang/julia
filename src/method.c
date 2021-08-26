@@ -243,7 +243,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
     return expr;
 }
 
-void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
+JL_DLLEXPORT void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects)
 {
     size_t i, l = jl_array_len(stmts);
@@ -831,7 +831,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
     // TODO: derive our debug name from the syntax instead of the type
     name = mt->name;
-    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt) {
+    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt || external_mt) {
         // our value for `name` is bad, try to guess what the syntax might have had,
         // like `jl_static_show_func_sig` might have come up with
         jl_datatype_t *dt = jl_first_argument_datatype(argtype);

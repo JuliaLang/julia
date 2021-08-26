@@ -734,12 +734,13 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
-    if (jl_options.image_file)
+    if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
-    else
+    } else {
         jl_init_types();
+        jl_init_codegen();
+    }
 
-    jl_init_codegen();
     jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
@@ -840,6 +841,7 @@ static void post_boot_hooks(void)
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
+    jl_pair_type           = core("Pair");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

@@ -1191,11 +1191,11 @@ end
 struct IterationCutShort; end
 
 function iterate(itr::PartitionIterator, state...)
-    v = Vector{eltype(itr.c)}(undef, itr.n)
     # This is necessary to remember whether we cut the
     # last element short. In such cases, we do return that
     # element, but not the next one
     state === (IterationCutShort(),) && return nothing
+    v = Vector{eltype(itr.c)}(undef, itr.n)
     i = 0
     y = iterate(itr.c, state...)
     while y !== nothing

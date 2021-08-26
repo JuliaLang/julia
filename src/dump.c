@@ -46,6 +46,7 @@ static jl_value_t *deser_symbols[256];
 static htable_t backref_table;
 static int backref_table_numel;
 static arraylist_t backref_list;
+static htable_t new_code_instance_validate;
 
 // list of (jl_value_t **loc, size_t pos) entries
 // for anything that was flagged by the deserializer for later
@@ -1616,8 +1617,10 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
         codeinst->precompile = 1;
     codeinst->next = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->next);
     jl_gc_wb(codeinst, codeinst->next);
-    if (validate)
+    if (validate) {
         codeinst->min_world = jl_world_counter;
+        ptrhash_put(&new_code_instance_validate, codeinst, (void*)(~(uintptr_t)HT_NOTFOUND));   // "HT_FOUND"
+    }
     return (jl_value_t*)codeinst;
 }
 
@@ -1963,6 +1966,8 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
     size_t i, l = jl_array_len(targets) / 2;
     jl_array_t *valids = jl_alloc_array_1d(jl_array_uint8_type, l);
     memset(jl_array_data(valids), 1, l);
+    jl_value_t *loctag = NULL;
+    JL_GC_PUSH1(&loctag);
     *pvalids = valids;
     for (i = 0; i < l; i++) {
         jl_value_t *callee = jl_array_ptr_ref(targets, i * 2);
@@ -2004,7 +2009,13 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
             }
         }
         jl_array_uint8_set(valids, i, valid);
+        if (!valid && _jl_debug_method_invalidation) {
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)callee);
+            loctag = jl_cstr_to_string("insert_backedges_callee");
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+        }
     }
+    JL_GC_POP();
 }
 
 static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
@@ -2047,10 +2058,16 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
             while (codeinst) {
                 if (codeinst->min_world > 0)
                     codeinst->max_world = ~(size_t)0;
+                ptrhash_remove(&new_code_instance_validate, codeinst);  // mark it as handled
                 codeinst = jl_atomic_load_relaxed(&codeinst->next);
             }
         }
         else {
+            jl_code_instance_t *codeinst = caller->cache;
+            while (codeinst) {
+                ptrhash_remove(&new_code_instance_validate, codeinst);  // should be left invalid
+                codeinst = jl_atomic_load_relaxed(&codeinst->next);
+            }
             if (_jl_debug_method_invalidation) {
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)caller);
                 loctag = jl_cstr_to_string("insert_backedges");
@@ -2061,6 +2078,15 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
     JL_GC_POP();
 }
 
+static void validate_new_code_instances(void)
+{
+    size_t i;
+    for (i = 0; i < new_code_instance_validate.size; i += 2) {
+        if (new_code_instance_validate.table[i+1] != HT_NOTFOUND) {
+            ((jl_code_instance_t*)new_code_instance_validate.table[i])->max_world = ~(size_t)0;
+        }
+    }
+}
 
 static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *mod_list)
 {
@@ -2628,6 +2654,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
     arraylist_new(&flagref_list, 0);
+    htable_new(&new_code_instance_validate, 0);
     arraylist_new(&ccallable_list, 0);
     htable_new(&uniquing_table, 0);
 
@@ -2663,7 +2690,11 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 
     jl_insert_backedges((jl_array_t*)external_backedges, (jl_array_t*)external_edges); // restore external backedges (needs to be last)
 
+    // check new CodeInstances and validate any that lack external backedges
+    validate_new_code_instances();
+
     serializer_worklist = NULL;
+    htable_free(&new_code_instance_validate);
     arraylist_free(&flagref_list);
     arraylist_free(&backref_list);
     ios_close(f);

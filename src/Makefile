@@ -84,10 +84,18 @@ endif
 
 SRCS += $(RUNTIME_SRCS)
 
+ifeq ($(WITH_DTRACE),1)
+DTRACE_HEADERS := uprobes.h.gen
+ifneq ($(OS),Darwin)
+SRCS += uprobes
+endif
+else
+DTRACE_HEADERS :=
+endif
 
 # headers are used for dependency tracking, while public headers will be part of the dist
 UV_HEADERS :=
-HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h locks.h atomics.h julia_internal.h options.h timing.h)
+HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h locks.h atomics.h julia_internal.h options.h timing.h) $(addprefix $(BUILDDIR)/, $(DTRACE_HEADERS))
 PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h locks.h atomics.h julia_gcext.h)
 ifeq ($(USE_SYSTEM_LIBUV),0)
 UV_HEADERS += uv.h
@@ -105,7 +113,7 @@ LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
 #       https://github.com/JuliaLang/julia/issues/29981
 else
 ifneq ($(USE_LLVM_SHLIB),1)
-LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
+LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS) --link-static) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
 LLVMLINK += $(LLVM_LDFLAGS) -lLLVM
 endif
@@ -163,6 +171,13 @@ $(BUILDDIR):
 
 LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG))
 
+# Generate the DTrace header file, while also renaming the macros from
+# JULIA_ to JL_PROBE to clearly delinate them.
+$(BUILDDIR)/%.h.gen : $(SRCDIR)/%.d
+	@$(call PRINT_DTRACE, $(DTRACE) -h -s $< -o $@)
+	sed 's/JULIA_/JL_PROBE_/' $@ > $@.tmp
+	mv $@.tmp $@
+
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
@@ -172,6 +187,10 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONF
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(SHIPFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+$(BUILDDIR)/%.o : $(SRCDIR)/%.d
+	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
+$(BUILDDIR)/%.dbg.obj : $(SRCDIR)/%.d
+	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
 
 # public header rules
 $(eval $(call dir_target,$(build_includedir)/julia))
@@ -211,7 +230,7 @@ endif
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
-	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCXXFLAGS) $(JCPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) $(NO_WHOLE_ARCHIVE) $(LLVMLINK))
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCXXFLAGS) $(JCPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) $(NO_WHOLE_ARCHIVE) $(LLVMLINK)) -lpthread
 
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
@@ -242,7 +261,7 @@ $(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/builtin_pro
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/codegen_shared.h
 $(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/codegen_shared.h $(BUILDDIR)/julia_version.h
-$(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/codegen_shared.h $(SRCDIR)/llvm-pass-helpers.h
 $(BUILDDIR)/llvm-final-gc-lowering.o $(BUILDDIR)/llvm-final-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
 $(BUILDDIR)/llvm-gc-invariant-verifier.o $(BUILDDIR)/llvm-gc-invariant-verifier.dbg.obj: $(SRCDIR)/codegen_shared.h
 $(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h
@@ -259,10 +278,10 @@ $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc.o gc.dbg.obj init.c in
 $(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): $(SRCDIR)/APInt-C.h
 
 # archive library file rules
-$(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S) $(SRCDIR)/support/*.c
+$(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
-$(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S) $(SRCDIR)/support/*.c
+$(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support debug BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
 $(FLISP_EXECUTABLE_release): $(BUILDDIR)/flisp/libflisp.a

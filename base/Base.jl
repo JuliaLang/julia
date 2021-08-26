@@ -20,46 +20,42 @@ include(path::String) = include(Base, path)
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 
-# The real @inline macro is not available until after array.jl, so this
-# internal macro splices the meta Expr directly into the function body.
-macro _inline_meta()
-    Expr(:meta, :inline)
-end
-macro _noinline_meta()
-    Expr(:meta, :noinline)
-end
+# The @inline/@noinline macros that can be applied to a function declaration are not available
+# until after array.jl, and so we will mark them within a function body instead.
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
 
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
-getproperty(x::Module, f::Symbol) = (@_inline_meta; getfield(x, f))
+getproperty(x::Module, f::Symbol) = (@inline; getfield(x, f))
 setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v) # to get a decent error
-getproperty(x::Type, f::Symbol) = (@_inline_meta; getfield(x, f))
+getproperty(x::Type, f::Symbol) = (@inline; getfield(x, f))
 setproperty!(x::Type, f::Symbol, v) = error("setfield! fields of Types should not be changed")
-getproperty(x::Tuple, f::Int) = (@_inline_meta; getfield(x, f))
+getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
-getproperty(x, f::Symbol) = (@_inline_meta; getfield(x, f))
+getproperty(x, f::Symbol) = (@inline; getfield(x, f))
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
 
 dotgetproperty(x, f) = getproperty(x, f)
 
-getproperty(x::Module, f::Symbol, order::Symbol) = (@_inline_meta; getfield(x, f, order))
+getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Module, f::Symbol, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
-getproperty(x::Type, f::Symbol, order::Symbol) = (@_inline_meta; getfield(x, f, order))
+getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Type, f::Symbol, v, order::Symbol) = error("setfield! fields of Types should not be changed")
-getproperty(x::Tuple, f::Int, order::Symbol) = (@_inline_meta; getfield(x, f, order))
+getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
 
-getproperty(x, f::Symbol, order::Symbol) = (@_inline_meta; getfield(x, f, order))
-setproperty!(x, f::Symbol, v, order::Symbol) = (@_inline_meta; setfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
+getproperty(x, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
+setproperty!(x, f::Symbol, v, order::Symbol) = (@inline; setfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
 
 swapproperty!(x, f::Symbol, v, order::Symbol=:notatomic) =
-    (@_inline_meta; Core.swapfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
+    (@inline; Core.swapfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
 modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
-    (@_inline_meta; Core.modifyfield!(x, f, op, v, order))
+    (@inline; Core.modifyfield!(x, f, op, v, order))
 replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
-    (@_inline_meta; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
+    (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
 
 include("coreio.jl")
@@ -107,6 +103,9 @@ include("options.jl")
 include("promotion.jl")
 include("tuple.jl")
 include("expr.jl")
+Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B} = (@inline; Pair{A, B}(convert(A, a)::A, convert(B, b)::B))
+#Pair{Any, B}(@nospecialize(a::Any), b) where {B} = (@inline; Pair{Any, B}(a, Base.convert(B, b)::B))
+#Pair{A, Any}(a, @nospecialize(b::Any)) where {A} = (@inline; Pair{A, Any}(Base.convert(A, a)::A, b))
 include("pair.jl")
 include("traits.jl")
 include("range.jl")

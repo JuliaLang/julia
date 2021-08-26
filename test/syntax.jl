@@ -1510,7 +1510,7 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
 end
 
 # issue #27129
-f27129(x = 1) = (@Base._inline_meta; x)
+f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
     @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
@@ -2959,3 +2959,10 @@ end
     ex.args = fill!(Vector{Any}(undef, 600000), 1)
     @test_throws ErrorException("syntax: expression too large") eval(ex)
 end
+
+# issue 25678
+@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
+@test f25678(pi/6) === sin(pi/6)
+
+@generated g25678(x) = return :x
+@test g25678(7) === 7

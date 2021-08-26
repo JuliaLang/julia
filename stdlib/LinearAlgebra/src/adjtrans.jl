@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds, @_inline_meta
+using Base: @propagate_inbounds
 import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)

@@ -155,6 +155,7 @@ DevDocs = [
         "devdocs/debuggingtips.md",
         "devdocs/valgrind.md",
         "devdocs/sanitizers.md",
+        "devdocs/probes.md"
     ]
 ]
 

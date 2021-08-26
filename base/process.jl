@@ -275,6 +275,7 @@ function setup_stdio(stdio::Union{IOBuffer, BufferStream}, child_readable::Bool)
                 @warn "Process error" exception=(ex, catch_backtrace())
             finally
                 close(parent)
+                child_readable || closewrite(stdio)
             end
         end
     catch ex

@@ -20,6 +20,20 @@ using Base.Checked: checked_length
     # the next ones use ==, because it changes the eltype
     @test r ==  range(first(r),       last(r),      length(r)       )
     @test r ==  range(start=first(r), stop=last(r), length=length(r))
+    @test r === range(                stop=last(r), length=length(r))
+
+    r = 1:5
+    o = Base.OneTo(5)
+    let start=first(r), step=step(r), stop=last(r), length=length(r)
+        @test o === range(;              stop        )
+        @test o === range(;                    length)
+        @test r === range(; start,       stop        )
+        @test r === range(;              stop, length)
+        # the next three lines uses ==, because it changes the eltype
+        @test r ==  range(; start,       stop, length)
+        @test r ==  range(; start, step,       length)
+        @test r ==  range(; stop=Float64(stop))
+    end
 
     for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
         @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
@@ -543,6 +557,19 @@ end
         end
     end
 end
+
+# A number type with the overflow behavior of `UInt8`. Conversion to `Integer` returns an
+# `Int32`, i.e., a type with different `typemin`/`typemax`. See  #41479
+struct OverflowingReal <: Real
+    val::UInt8
+end
+OverflowingReal(x::OverflowingReal) = x
+Base.:<=(x::OverflowingReal, y::OverflowingReal) = x.val <= y.val
+Base.:+(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val + y.val)
+Base.:-(x::OverflowingReal, y::OverflowingReal) = OverflowingReal(x.val - y.val)
+Base.round(x::OverflowingReal, ::RoundingMode) = x
+Base.Integer(x::OverflowingReal) = Int32(x.val)
+@test length(OverflowingReal(1):OverflowingReal(0)) == 0
 
 @testset "loops involving typemin/typemax" begin
     n = 0
@@ -1095,7 +1122,7 @@ end
 @testset "issue 10950" begin
     r = 1//2:3
     @test length(r) == 3
-    @test_throws MethodError checked_length(r) == 3 # this would work if checked_sub is defined on Rational
+    @test checked_length(r) == 3
     i = 1
     for x in r
         @test x == i//2
@@ -1495,8 +1522,12 @@ end
     @test_throws ArgumentError range(1)
     @test_throws ArgumentError range(nothing)
     @test_throws ArgumentError range(1, step=4)
-    @test_throws ArgumentError range(nothing, length=2)
+    @test_throws ArgumentError range(; step=1, length=6)
+    @test_throws ArgumentError range(; step=2, stop=7.5)
     @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
+    @test_throws ArgumentError range(; stop=nothing)
+    @test_throws ArgumentError range(; length=nothing)
+    @test_throws TypeError range(; length=5.5)
 end
 
 @testset "issue #23300#issuecomment-371575548" begin

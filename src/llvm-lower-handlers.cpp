@@ -176,7 +176,7 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
 
     /* Step 2: EH Frame lowering */
     // Allocate stack space for each handler. We allocate these as separate
-    // allocas so the optimizer can later merge and reaarange them if it wants
+    // allocas so the optimizer can later merge and rearrange them if it wants
     // to.
     Value *handler_sz = ConstantInt::get(Type::getInt32Ty(F.getContext()),
                                          sizeof(jl_handler_t));

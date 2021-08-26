@@ -548,6 +548,9 @@ replaced.
 
 See also [`replace!`](@ref), [`splice!`](@ref), [`delete!`](@ref), [`insert!`](@ref).
 
+!!! compat "Julia 1.7"
+    Version 1.7 is required to replace elements of a `Tuple`.
+
 # Examples
 ```jldoctest
 julia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)
@@ -595,6 +598,9 @@ subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
 Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
+
+!!! compat "Julia 1.7"
+    Version 1.7 is required to replace elements of a `Tuple`.
 
 # Examples
 ```jldoctest
@@ -755,7 +761,7 @@ replace(f::Callable, t::Tuple; count::Integer=typemax(Int)) =
 
 function _replace(t::Tuple, count::Int, old_new::Tuple{Vararg{Pair}})
     _replace(t, count) do x
-        @_inline_meta
+        @inline
         for o_n in old_new
             isequal(first(o_n), x) && return last(o_n)
         end

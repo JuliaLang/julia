@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
 #include "julia.h"
@@ -67,8 +68,8 @@ static inline void tsan_switch_to_ctx(void *state)  {
 
 // empirically, jl_finish_task needs about 64k stack space to infer/run
 // and additionally, gc-stack reserves 64k for the guard pages
-#if defined(MINSIGSTKSZ) && MINSIGSTKSZ > 131072
-#define MINSTKSZ MINSIGSTKSZ
+#if defined(MINSIGSTKSZ)
+#define MINSTKSZ (MINSIGSTKSZ > 131072 ? MINSIGSTKSZ : 131072)
 #else
 #define MINSTKSZ 131072
 #endif
@@ -561,7 +562,10 @@ static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_M
     ptls->io_wait = 0;
     // @time needs its compile timer disabled on error,
     // and cannot use a try-finally as it would break scope for assignments
-    jl_measure_compile_time[ptls->tid] = 0;
+    // We blindly disable compilation time tracking here, for all running Tasks, even though
+    // it may cause some incorrect measurements. This is a known bug, and is being tracked
+    // here: https://github.com/JuliaLang/julia/pull/39138
+    jl_atomic_store_relaxed(&jl_measure_compile_time_enabled, 0);
     JL_GC_PUSH1(&exception);
     jl_gc_unsafe_enter(ptls);
     if (exception) {

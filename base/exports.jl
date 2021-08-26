@@ -803,6 +803,7 @@ export
 
 # I/O and events
     close,
+    closewrite,
     countlines,
     eachline,
     readeach,

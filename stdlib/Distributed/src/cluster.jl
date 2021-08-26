@@ -95,14 +95,13 @@ end
 @enum WorkerState W_CREATED W_CONNECTED W_TERMINATING W_TERMINATED
 mutable struct Worker
     id::Int
-    msg_lock::Threads.ReentrantLock # Lock for del_msgs, add_msgs, and gcflag
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     gcflag::Bool
     state::WorkerState
-    c_state::Threads.Condition # wait for state changes, lock for state
-    ct_time::Float64           # creation time
-    conn_func::Any             # used to setup connections lazily
+    c_state::Condition      # wait for state changes
+    ct_time::Float64        # creation time
+    conn_func::Any          # used to setup connections lazily
 
     r_stream::IO
     w_stream::IO
@@ -134,7 +133,7 @@ mutable struct Worker
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
-        w=new(id, Threads.ReentrantLock(), [], [], false, W_CREATED, Threads.Condition(), time(), conn_func)
+        w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
         w.initialized = Event()
         register_worker(w)
         w
@@ -144,16 +143,12 @@ mutable struct Worker
 end
 
 function set_worker_state(w, state)
-    lock(w.c_state) do
-        w.state = state
-        notify(w.c_state; all=true)
-    end
+    w.state = state
+    notify(w.c_state; all=true)
 end
 
 function check_worker_state(w::Worker)
-    lock(w.c_state)
     if w.state === W_CREATED
-        unlock(w.c_state)
         if !isclusterlazy()
             if PGRP.topology === :all_to_all
                 # Since higher pids connect with lower pids, the remote worker
@@ -173,8 +168,6 @@ function check_worker_state(w::Worker)
             errormonitor(t)
             wait_for_conn(w)
         end
-    else
-        unlock(w.c_state)
     end
 end
 
@@ -193,25 +186,13 @@ function exec_conn_func(w::Worker)
 end
 
 function wait_for_conn(w)
-    lock(w.c_state)
     if w.state === W_CREATED
-        unlock(w.c_state)
         timeout =  worker_timeout() - (time() - w.ct_time)
         timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
 
-        T = Threads.@spawn begin
-            sleep($timeout)
-            lock(w.c_state) do
-                notify(w.c_state; all=true)
-            end
-        end
-        errormonitor(T)
-        lock(w.c_state) do
-            wait(w.c_state)
-            w.state === W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
-        end
-    else
-        unlock(w.c_state)
+        @async (sleep(timeout); notify(w.c_state; all=true))
+        wait(w.c_state)
+        w.state === W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
     end
     nothing
 end
@@ -490,10 +471,6 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
     # The `launch` method should add an object of type WorkerConfig for every
     # worker launched. It provides information required on how to connect
     # to it.
-
-    # FIXME: launched should be a Channel, launch_ntfy should be a Threads.Condition
-    # but both are part of the public interface. This means we currently can't use
-    # `Threads.@spawn` in the code below.
     launched = WorkerConfig[]
     launch_ntfy = Condition()
 
@@ -506,10 +483,7 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
         while true
             if isempty(launched)
                 istaskdone(t_launch) && break
-                @async begin
-                    sleep(1)
-                    notify(launch_ntfy)
-                end
+                @async (sleep(1); notify(launch_ntfy))
                 wait(launch_ntfy)
             end
 
@@ -662,12 +636,7 @@ function create_worker(manager, wconfig)
         # require the value of config.connect_at which is set only upon connection completion
         for jw in PGRP.workers
             if (jw.id != 1) && (jw.id < w.id)
-                # wait for wl to join
-                lock(jw.c_state) do
-                    if jw.state === W_CREATED
-                        wait(jw.c_state)
-                    end
-                end
+                (jw.state === W_CREATED) && wait(jw.c_state)
                 push!(join_list, jw)
             end
         end
@@ -690,12 +659,7 @@ function create_worker(manager, wconfig)
         end
 
         for wl in wlist
-            lock(wl.c_state) do
-                if wl.state === W_CREATED
-                    # wait for wl to join
-                    wait(wl.c_state)
-                end
-            end
+            (wl.state === W_CREATED) && wait(wl.c_state)
             push!(join_list, wl)
         end
     end
@@ -712,11 +676,7 @@ function create_worker(manager, wconfig)
     @async manage(w.manager, w.id, w.config, :register)
     # wait for rr_ntfy_join with timeout
     timedout = false
-    @async begin
-        sleep($timeout)
-        timedout = true
-        put!(rr_ntfy_join, 1)
-    end
+    @async (sleep($timeout); timedout = true; put!(rr_ntfy_join, 1))
     wait(rr_ntfy_join)
     if timedout
         error("worker did not connect within $timeout seconds")

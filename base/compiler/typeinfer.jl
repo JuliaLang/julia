@@ -243,7 +243,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     # collect results for the new expanded frame
     results = Tuple{InferenceResult, Vector{Any}, Bool}[
             ( frames[i].result,
-              frames[i].stmt_edges[1],
+              frames[i].stmt_edges[1]::Vector{Any},
               frames[i].cached )
         for i in 1:length(frames) ]
     empty!(frames)
@@ -341,7 +341,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     if cache_the_tree
         if may_compress(interp)
             nslots = length(ci.slotflags)
-            resize!(ci.slottypes, nslots)
+            resize!(ci.slottypes::Vector{Any}, nslots)
             resize!(ci.slotnames, nslots)
             return ccall(:jl_compress_ir, Any, (Any, Any), def, ci)
         else
@@ -354,16 +354,10 @@ end
 
 function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
                                     valid_worlds::WorldRange, @nospecialize(inferred_result))
-    local const_flags::Int32
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState
-        opt = inferred_result
-        if isa(opt.src, CodeInfo)
-            inferred_result = ir_to_codeinf!(opt)
-        else
-            inferred_result = opt.src
-        end
+        inferred_result = ir_to_codeinf!(inferred_result)
     end
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
@@ -438,7 +432,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         empty!(edges)
     end
     if me.src.edges !== nothing
-        append!(s_edges, me.src.edges)
+        append!(s_edges, me.src.edges::Vector)
         me.src.edges = nothing
     end
     # inspect whether our inference had a limited result accuracy,
@@ -447,7 +441,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     limited_ret = me.bestguess isa LimitedAccuracy
     limited_src = false
     if !limited_ret
-        gt = me.src.ssavaluetypes
+        gt = me.src.ssavaluetypes::Vector{Any}
         for j = 1:length(gt)
             gt[j] = gtj = cycle_fix_limited(gt[j], me)
             if gtj isa LimitedAccuracy && me.parent !== nothing
@@ -511,8 +505,9 @@ end
 
 # widen all Const elements in type annotations
 function widen_all_consts!(src::CodeInfo)
-    for i = 1:length(src.ssavaluetypes)
-        src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
+    ssavaluetypes = src.ssavaluetypes::Vector{Any}
+    for i = 1:length(ssavaluetypes)
+        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
     end
 
     for i = 1:length(src.code)
@@ -577,6 +572,7 @@ function record_slot_assign!(sv::InferenceState)
     states = sv.stmt_types
     body = sv.src.code::Vector{Any}
     slottypes = sv.slottypes::Vector{Any}
+    ssavaluetypes = sv.src.ssavaluetypes::Vector{Any}
     for i = 1:length(body)
         expr = body[i]
         st_i = states[i]
@@ -585,7 +581,7 @@ function record_slot_assign!(sv::InferenceState)
             lhs = expr.args[1]
             rhs = expr.args[2]
             if isa(lhs, SlotNumber)
-                vt = widenconst(sv.src.ssavaluetypes[i])
+                vt = widenconst(ssavaluetypes[i])
                 if vt !== Bottom
                     id = slot_id(lhs)
                     otherTy = slottypes[id]
@@ -608,12 +604,11 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # (otherwise, we'll perhaps run the optimization passes later, outside of inference)
 
     # remove all unused ssa values
-    gt = sv.src.ssavaluetypes
-    for j = 1:length(gt)
-        if gt[j] === NOT_FOUND
-            gt[j] = Union{}
-        end
-        gt[j] = widenconditional(gt[j])
+    src = sv.src
+    ssavaluetypes = src.ssavaluetypes::Vector{Any}
+    for j = 1:length(ssavaluetypes)
+        t = ssavaluetypes[j]
+        ssavaluetypes[j] = t === NOT_FOUND ? Union{} : widenconditional(t)
     end
 
     # compute the required type for each slot
@@ -626,7 +621,6 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # annotate variables load types
     # remove dead code optimization
     # and compute which variables may be used undef
-    src = sv.src
     states = sv.stmt_types
     nargs = sv.nargs
     nslots = length(states[1]::VarTable)
@@ -639,7 +633,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         expr = body[i]
         if isa(expr, GotoIfNot)
             if !isa(states[expr.dest], VarTable)
-                body[i] = expr.cond
+                body[i] = Expr(:call, GlobalRef(Core, :typeassert), expr.cond, GlobalRef(Core, :Bool))
             end
         end
     end
@@ -669,7 +663,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
             elseif run_optimizer
                 deleteat!(body, i)
                 deleteat!(states, i)
-                deleteat!(src.ssavaluetypes, i)
+                deleteat!(ssavaluetypes, i)
                 deleteat!(src.codelocs, i)
                 deleteat!(sv.stmt_info, i)
                 nexpr -= 1

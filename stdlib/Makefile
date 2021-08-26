@@ -73,7 +73,11 @@ getall get: $(addprefix get-, $(STDLIBS_EXT) $(JLL_NAMES))
 install: version-check $(addprefix install-, $(STDLIBS_EXT) $(JLL_NAMES)) $(STDLIBS_LINK_TARGETS)
 version-check: $(addprefix version-check-, $(STDLIBS_EXT))
 uninstall: $(addprefix uninstall-, $(STDLIBS_EXT))
-clean: $(addprefix clean-, $(STDLIBS_EXT)) $(CLEAN_TARGETS)
+extstdlibclean:
+	for module in $(STDLIBS_EXT) ; do \
+		rm -rf $(JULIAHOME)/stdlib/$${module}-*; \
+	done
+clean: $(addprefix clean-, $(STDLIBS_EXT)) $(CLEAN_TARGETS) extstdlibclean
 distclean: $(addprefix distclean-, $(STDLIBS_EXT)) clean
 checksumall: $(addprefix checksum-, $(STDLIBS_EXT))
 

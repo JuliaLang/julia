@@ -1351,7 +1351,7 @@ static void invalidate_external(jl_method_instance_t *mi, size_t max_world) {
             jl_printf((JL_STREAM*)STDERR_FILENO, "error in invalidation callback: ");
             jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-            jlbacktrace(); // writen to STDERR_FILENO
+            jlbacktrace(); // written to STDERR_FILENO
         }
     }
 }
@@ -2938,6 +2938,14 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                     int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
                     int rsubt2 = jl_egal((jl_value_t*)matc2->spec_types, m2->sig);
                     jl_value_t *ti;
+                    if (!subt && !subt2 && rsubt && rsubt2 && lim == -1 && ambig == NULL)
+                        // these would only be filtered out of the list as
+                        // ambiguous if they are also type-equal, as we
+                        // aren't skipping matches and the user doesn't
+                        // care if we report any ambiguities
+                        continue;
+                    if (jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
+                        continue;
                     if (subt) {
                         ti = (jl_value_t*)matc2->spec_types;
                         isect2 = NULL;
@@ -2946,18 +2954,11 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, int offs,
                         ti = (jl_value_t*)matc->spec_types;
                         isect2 = NULL;
                     }
-                    else if (rsubt && rsubt2 && lim == -1 && ambig == NULL) {
-                        // these would only be filtered out of the list as
-                        // ambiguous if they are also type-equal, as we
-                        // aren't skipping matches and the user doesn't
-                        // care if we report any ambiguities
-                        ti = jl_bottom_type;
-                    }
                     else {
                         jl_type_intersection2((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types, &env.match.ti, &isect2);
                         ti = env.match.ti;
                     }
-                    if (ti != jl_bottom_type && !jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig)) {
+                    if (ti != jl_bottom_type) {
                         disjoint = 0;
                         // m and m2 are ambiguous, but let's see if we can find another method (m3)
                         // that dominates their intersection, and means we can ignore this
@@ -3160,19 +3161,23 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 #define typeinf_lock codegen_lock
 
 static uint64_t inference_start_time = 0;
+static uint8_t inference_is_measuring_compile_time = 0;
 
 JL_DLLEXPORT void jl_typeinf_begin(void)
 {
     JL_LOCK(&typeinf_lock);
-    if (jl_measure_compile_time[jl_threadid()])
+    if (jl_atomic_load_relaxed(&jl_measure_compile_time_enabled)) {
         inference_start_time = jl_hrtime();
+        inference_is_measuring_compile_time = 1;
+    }
 }
 
 JL_DLLEXPORT void jl_typeinf_end(void)
 {
-    int tid = jl_threadid();
-    if (typeinf_lock.count == 1 && jl_measure_compile_time[tid])
-        jl_cumulative_compile_time[tid] += (jl_hrtime() - inference_start_time);
+    if (typeinf_lock.count == 1 && inference_is_measuring_compile_time) {
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - inference_start_time));
+        inference_is_measuring_compile_time = 0;
+    }
     JL_UNLOCK(&typeinf_lock);
 }
 

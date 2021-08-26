@@ -9,6 +9,8 @@ steps:
     key: package_linux64
     plugins:
       - JuliaCI/julia#v1:
+          # Drop default "registries" directory, so it is not persisted from execution to execution
+          persist_depot_dirs: packages,artifacts,compiled
           version: 1.6
       - staticfloat/sandbox#v1:
           rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
@@ -34,6 +36,9 @@ steps:
       make -j 6
       make release
       make install
+
+      echo "--- Make sure that the working directory is clean"
+      if [ -z "$(git status --short)" ]; then echo "INFO: The working directory is clean."; else echo "ERROR: The working directory is dirty."; echo "Output of git status:"; git status; exit 1; fi
 
       echo "--- Print Julia version info"
       ./julia -e 'using InteractiveUtils; InteractiveUtils.versioninfo()'

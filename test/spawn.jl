@@ -579,8 +579,8 @@ end
 @test_throws ArgumentError run(Base.AndCmds(`$truecmd`, ``))
 
 # tests for reducing over collection of Cmd
-@test_throws ArgumentError reduce(&, Base.AbstractCmd[])
-@test_throws ArgumentError reduce(&, Base.Cmd[])
+@test_throws "reducing over an empty collection is not allowed" reduce(&, Base.AbstractCmd[])
+@test_throws "reducing over an empty collection is not allowed" reduce(&, Base.Cmd[])
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
 # readlines(::Cmd), accidentally broken in #20203
@@ -765,7 +765,15 @@ let text = "input-test-text"
     @test read(proc, String) == string(length(text), '\n')
     @test success(proc)
     @test String(take!(b)) == text
+
+    out = Base.BufferStream()
+    proc = run(catcmd, IOBuffer(text), out, wait=false)
+    @test proc.out === out
+    @test read(out, String) == text
+    @test success(proc)
 end
+
+
 @test repr(Base.CmdRedirect(``, devnull, 0, false)) == "pipeline(``, stdin>Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"

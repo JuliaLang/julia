@@ -825,7 +825,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1
                 # Drop this node - it's a noop
-                new_code[idx] = stmt.cond
+                new_code[idx] = Expr(:call, GlobalRef(Core, :typeassert), stmt.cond, GlobalRef(Core, :Bool))
             else
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
@@ -873,7 +873,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
         changed = false
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
-            new_typ = recompute_type(node[:inst], ci, ir, ir.sptypes, slottypes)
+            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes)
             if !(node[:type] ⊑ new_typ) || !(new_typ ⊑ node[:type])
                 node[:type] = new_typ
                 changed = true
