@@ -150,6 +150,7 @@
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
     XX(jl_expand) \
+    XX(jl_resolve_globals_in_ir) \
     XX(jl_expand_and_resolve) \
     XX(jl_expand_stmt) \
     XX(jl_expand_stmt_with_loc) \
@@ -550,4 +551,3 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_yield) \
-
