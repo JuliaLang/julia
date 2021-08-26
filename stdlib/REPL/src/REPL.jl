@@ -1390,5 +1390,4 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     nothing
 end
 
-
 end # module
