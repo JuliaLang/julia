@@ -617,3 +617,54 @@ end
     allops = split(join(ops, " "), " ")
     @test all(s->Base.isoperator(Symbol(s)) == Tokens.isoperator(first(collect(tokenize(s))).kind), allops)
 end
+
+@testset "simple_hash" begin
+    is_kw(x) = uppercase(x) in (
+        "ABSTRACT",
+        "BAREMODULE",
+        "BEGIN",
+        "BREAK",
+        "CATCH",
+        "CONST",
+        "CONTINUE",
+        "DO",
+        "ELSE",
+        "ELSEIF",
+        "END",
+        "EXPORT",
+        "FINALLY",
+        "FOR",
+        "FUNCTION",
+        "GLOBAL",
+        "IF",
+        "IMPORT",
+        "IMPORTALL",
+        "LET",
+        "LOCAL",
+        "MACRO",
+        "MODULE",
+        "MUTABLE",
+        "OUTER",
+        "PRIMITIVE",
+        "QUOTE",
+        "RETURN",
+        "STRUCT",
+        "TRY",
+        "TYPE",
+        "USING",
+        "WHILE",
+        "IN",
+        "ISA",
+        "WHERE",
+        "TRUE",
+        "FALSE",
+    )
+    for len in 1:5
+        for cs in Iterators.product(['a':'z' for _ in 1:len]...)
+            str = String([cs...])
+            is_kw(str) && continue
+
+            @test Tokenize.Lexers.simple_hash(str) ∉ keys(Tokenize.Lexers.kw_hash)
+        end
+    end
+end
