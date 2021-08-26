@@ -1,25 +1,16 @@
-@inline function writeexp(buf, pos, v::T,
+function writeexp(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
     @assert 0 < pos <= length(buf)
     startpos = pos
     x = Float64(v)
-    neg = signbit(x)
+    pos = append_sign(x, plus, space, buf, pos)
+
     # special cases
     if x == 0
-        if neg
-            buf[pos] = UInt8('-')
-            pos += 1
-        elseif plus
-            buf[pos] = UInt8('+')
-            pos += 1
-        elseif space
-            buf[pos] = UInt8(' ')
-            pos += 1
-        end
         buf[pos] = UInt8('0')
         pos += 1
-        if precision > 0
+        if precision > 0 && !trimtrailingzeros
             buf[pos] = decchar
             pos += 1
             for _ = 1:precision
@@ -41,16 +32,6 @@
         buf[pos + 2] = UInt8('N')
         return pos + 3
     elseif !isfinite(x)
-        if neg
-            buf[pos] = UInt8('-')
-            pos += 1
-        elseif plus
-            buf[pos] = UInt8('+')
-            pos += 1
-        elseif space
-            buf[pos] = UInt8(' ')
-            pos += 1
-        end
         buf[pos] = UInt8('I')
         buf[pos + 1] = UInt8('n')
         buf[pos + 2] = UInt8('f')
@@ -70,16 +51,6 @@
     end
     nonzero = false
     precision += 1
-    if neg
-        buf[pos] = UInt8('-')
-        pos += 1
-    elseif plus
-        buf[pos] = UInt8('+')
-        pos += 1
-    elseif space
-        buf[pos] = UInt8(' ')
-        pos += 1
-    end
     digits = 0
     printedDigits = 0
     availableDigits = 0
@@ -213,7 +184,7 @@
         roundPos = pos
         while true
             roundPos -= 1
-            if roundPos == (startpos - 1) || buf[roundPos] == UInt8('-')
+            if roundPos == (startpos - 1) || buf[roundPos] == UInt8('-') || (plus && buf[roundPos] == UInt8('+')) || (space && buf[roundPos] == UInt8(' '))
                 buf[roundPos + 1] = UInt8('1')
                 e += 1
                 break

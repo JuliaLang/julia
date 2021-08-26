@@ -371,7 +371,7 @@ julia> A[1:2,:]
  2.0  5.0  8.0
 ```
 
-In this example it is accomplished by defining `Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims)`
+In this example it is accomplished by defining `Base.similar(A::SparseArray, ::Type{T}, dims::Dims) where T`
 to create the appropriate wrapped array. (Note that while `similar` supports 1- and 2-argument
 forms, in most case you only need to specialize the 3-argument form.) For this to work it's important
 that `SparseArray` is mutable (supports `setindex!`). Defining `similar`, `getindex` and
@@ -479,7 +479,7 @@ they are iterable collections of their characters (see [Strings](@ref) for more)
 The next two steps (selecting the output array and implementation) are dependent upon
 determining a single answer for a given set of arguments. Broadcast must take all the varied
 types of its arguments and collapse them down to just one output array and one
-implementation. Broadcast calls this single answer a "style." Every broadcastable object
+implementation. Broadcast calls this single answer a "style". Every broadcastable object
 each has its own preferred style, and a promotion-like system is used to combine these
 styles into a single answer — the "destination style".
 
@@ -549,7 +549,7 @@ Base.showarg(io::IO, A::ArrayAndChar, toplevel) = print(io, typeof(A), " with ch
 
 ```
 
-You might want broadcasting to preserve the `char` "metadata." First we define
+You might want broadcasting to preserve the `char` "metadata". First we define
 
 ```jldoctest ArrayAndChar; output = false
 Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()

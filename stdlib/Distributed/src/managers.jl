@@ -82,7 +82,10 @@ Keyword arguments:
 
 * `shell`: specifies the type of shell to which ssh connects on the workers.
 
-    + `shell=:posix`: a POSIX-compatible Unix/Linux shell (bash, sh, etc.). The default.
+    + `shell=:posix`: a POSIX-compatible Unix/Linux shell
+      (sh, ksh, bash, dash, zsh, etc.). The default.
+
+    + `shell=:csh`: a Unix C shell (csh, tcsh).
 
     + `shell=:wincmd`: Microsoft Windows `cmd.exe`.
 
@@ -158,22 +161,15 @@ default_addprocs_params(::SSHManager) =
 function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy::Condition)
     # Launch one worker on each unique host in parallel. Additional workers are launched later.
     # Wait for all launches to complete.
-    launch_tasks = Vector{Any}(undef, length(manager.machines))
-
-    for (i, (machine, cnt)) in enumerate(manager.machines)
+    @sync for (i, (machine, cnt)) in enumerate(manager.machines)
         let machine=machine, cnt=cnt
-            launch_tasks[i] = @async try
-                    launch_on_machine(manager, machine, cnt, params, launched, launch_ntfy)
-                catch e
-                    print(stderr, "exception launching on machine $(machine) : $(e)\n")
-                end
+             @async try
+                launch_on_machine(manager, $machine, $cnt, params, launched, launch_ntfy)
+            catch e
+                print(stderr, "exception launching on machine $(machine) : $(e)\n")
+            end
         end
     end
-
-    for t in launch_tasks
-        wait(t::Task)
-    end
-
     notify(launch_ntfy)
 end
 
@@ -187,7 +183,7 @@ function parse_machine(machine::AbstractString)
 
     if machine[begin] == '['  # ipv6 bracket notation (RFC 2732)
         ipv6_end = findlast(']', machine)
-        if ipv6_end == nothing
+        if ipv6_end === nothing
             throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
         end
         hoststr = machine[begin+1 : prevind(machine,ipv6_end)]
@@ -205,7 +201,7 @@ function parse_machine(machine::AbstractString)
         portstr = machine_def[2]
 
         portnum = tryparse(Int, portstr)
-        if portnum == nothing
+        if portnum === nothing
             msg = "invalid machine definition format string: invalid port format \"$machine_def\""
             throw(ArgumentError(msg))
         end
@@ -287,6 +283,22 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
 
         # shell login (-l) with string command (-c) to launch julia process
         remotecmd = shell_escape_posixly(`sh -l -c $cmds`)
+
+    elseif shell == :csh
+        # ssh connects to (t)csh
+
+        remotecmd = "$(shell_escape_csh(exename)) $(shell_escape_csh(exeflags))"
+
+        # set environment variables
+        for (var, val) in env
+            occursin(r"^[a-zA-Z_][a-zA-Z_0-9]*\z", var) ||
+                throw(ArgumentError("invalid env key $var"))
+            remotecmd = "setenv $(var) $(shell_escape_csh(val))\n$remotecmd"
+        end
+        # change working directory
+        if dir !== nothing && dir != ""
+            remotecmd = "cd $(shell_escape_csh(dir))\n$remotecmd"
+        end
 
     elseif shell == :wincmd
         # ssh connects to Windows cmd.exe

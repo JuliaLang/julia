@@ -1,11 +1,13 @@
-Julia v1.7 Release Notes
+Julia v1.8 Release Notes
 ========================
+
 
 New language features
 ---------------------
 
-* `(; a, b) = x` can now be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
-  and similarly for `b`. ([#39285])
+* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
+* `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
+* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 
 Language changes
 ----------------
@@ -18,12 +20,10 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
-* The Julia `--project` option and the `JULIA_PROJECT` environment variable now support selecting shared environments like `.julia/environments/myenv` the same way the package management console does: use `julia --project=@myenv` resp. `export JULIA_PROJECT="@myenv"` ([#40025]).
-
 
 Multi-threading changes
 -----------------------
-* If the `JULIA_NUM_THREADS` environment variable is set to `auto`, then the number of threads will be set to the number of CPU threads ([#38952])
+
 
 Build system changes
 --------------------
@@ -32,83 +32,74 @@ Build system changes
 New library functions
 ---------------------
 
-* Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
-* `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
-* New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
-* New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)` ([#38438])
+* `hardlink(src, dst)` can be used to create hard links. ([#41639])
 
 New library features
 --------------------
 
-* The optional keyword argument `context` of `sprint` can now be set to a tuple of `:key => value` pairs to specify multiple attributes. ([#39381])
+* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
+  contains "some message" regardless of the specific exception type.
+  Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
 
 Standard library changes
 ------------------------
 
-* `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
-* `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).
-* `range` now supports `start` as an optional keyword argument ([#38041]).
-* `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
-* `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
-* `escape_string` can now receive a collection of characters in the keyword
-  `keep` that are to be kept as they are. ([#38597]).
-* `getindex` can now be used on `NamedTuple`s with multiple values ([#38878])
-* Subtypes of `AbstractRange` now correctly follow the general array indexing
-  behavior when indexed by `Bool`s, erroring for scalar `Bool`s and treating
-  arrays (including ranges) of `Bool` as an logical index ([#31829])
-* `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
-* `keys(::Generator)` is now defined to return the iterator's keys ([#34678])
-* `RegexMatch` now iterate to give their captures. ([#34355]).
+* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
+* The `length` function on certain ranges of certain specific element types no longer checks for integer
+  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
+  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
+  constructing the range. ([#40382])
+* TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+
+#### InteractiveUtils
+* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
 
 #### Package Manager
 
-
 #### LinearAlgebra
-
-* Use [Libblastrampoline](https://github.com/staticfloat/libblastrampoline/) to pick a BLAS and LAPACK at runtime. By default it forwards to OpenBLAS in the Julia distribution. The forwarding mechanism can be used by packages to replace the BLAS and LAPACK with user preferences. ([#39455])
-* On aarch64, OpenBLAS now uses an ILP64 BLAS like all other 64-bit platforms. ([#39436])
-* OpenBLAS is updated to 0.3.13. ([#39216])
-* SuiteSparse is updated to 5.8.1. ([#39455])
 
 #### Markdown
 
-
 #### Printf
-
+* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
 #### Random
 
-
 #### REPL
 
+* ` ?(x, y` followed by TAB displays all methods that can be called
+  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
+  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
+  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
+  to allow any compatible methods.
 
 #### SparseArrays
 
-
 #### Dates
 
-* The `Dates.periods` function can be used to get the `Vector` of `Period`s that comprise a `CompoundPeriod` ([#39169]).
+#### Downloads
 
 #### Statistics
 
-
 #### Sockets
 
+#### Tar
 
 #### Distributed
 
-
 #### UUIDs
-
 
 #### Mmap
 
-* `mmap` is now exported ([#39816]).
+#### DelimitedFiles
+
+#### Logging
+* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
+  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
 
 
 Deprecated or removed
 ---------------------
-- Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in a future release.
 
 
 External dependencies

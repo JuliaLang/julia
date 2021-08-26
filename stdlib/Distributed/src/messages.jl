@@ -8,7 +8,7 @@ abstract type AbstractMsg end
 # Each message has three parts, which are written in order to the worker's stream.
 #  1) A header of type MsgHeader is serialized to the stream (via `serialize`).
 #  2) A message of type AbstractMsg is then serialized.
-#  3) Finally, a fixed bounday of 10 bytes is written.
+#  3) Finally, a fixed boundary of 10 bytes is written.
 
 # Message header stored separately from body to be able to send back errors if
 # a deserialization error occurs when reading the message body.
@@ -80,18 +80,18 @@ for (idx, tname) in enumerate(msgtypes)
     end
 end
 
-let msg_cases = :(@assert false)
+let msg_cases = :(@assert false "Message type index ($idx) expected to be between 1:$($(length(msgtypes)))")
     for i = length(msgtypes):-1:1
         mti = msgtypes[i]
         msg_cases = :(if idx == $i
-                          return $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), fieldcount(mti))...))
+                          $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), fieldcount(mti))...))
                       else
                           $msg_cases
                       end)
     end
     @eval function deserialize_msg(s::AbstractSerializer)
         idx = read(s.io, UInt8)
-        $msg_cases
+        return $msg_cases
     end
 end
 

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if isempty(Base.ARGS) || Base.ARGS[1] !== "0"
+if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 Sys.__init_build()
 # Prevent this from being put into the Main namespace
 @eval Module() begin
@@ -141,7 +141,10 @@ if Artifacts !== nothing
     precompile_script *= """
     using Artifacts, Base.BinaryPlatforms, Libdl
     artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
-    # cd(() -> (name = "HelloWorldC"; @artifact_str(name)), dirname(artifacts_toml))
+    artifact_hash("HelloWorldC", artifacts_toml)
+    oldpwd = pwd(); cd(dirname(artifacts_toml))
+    macroexpand(Main, :(@artifact_str("HelloWorldC")))
+    cd(oldpwd)
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
     platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
@@ -247,16 +250,20 @@ function generate_precompile_statements()
               module $pkgname
               end
               """)
-        tmp = tempname()
+        tmp_prec = tempname()
+        tmp_proc = tempname()
         s = """
             pushfirst!(DEPOT_PATH, $(repr(prec_path)));
-            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
+            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             $precompile_script
             """
-        run(`$(julia_exepath()) -O0 --sysimage $sysimg --startup-file=no -Cnative -e $s`)
-        for statement in split(read(tmp, String), '\n')
-            push!(statements, statement)
+        run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
+        for f in (tmp_prec, tmp_proc)
+            for statement in split(read(f, String), '\n')
+                occursin("Main.", statement) && continue
+                push!(statements, statement)
+            end
         end
     end
 
@@ -370,7 +377,7 @@ function generate_precompile_statements()
                 # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
                 # Replacing N with a large number works around it.
                 l = l.args[end]
-                if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] == :Vararg # Vararg{T}
+                if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
                     push!(l.args, 100) # form Vararg{T, 100} instead
                 end
             end

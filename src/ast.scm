@@ -61,6 +61,12 @@
         (else
          (string e))))
 
+(define (deparse-semicolons n)
+  ; concatenate n semicolons
+  (if (<= n 0)
+      ""
+      (string ";" (deparse-semicolons (1- n)))))
+
 (define (deparse e (ilvl 0))
   (cond ((or (symbol? e) (number? e)) (string e))
         ((string? e) (print-to-string e))
@@ -134,7 +140,14 @@
            ((hcat)        (string #\[ (deparse-arglist (cdr e) " ") #\]))
            ((typed_hcat)  (string (deparse (cadr e))
                                   (deparse (cons 'hcat (cddr e)))))
+           ((ncat)        (string #\[ (deparse-arglist (cddr e) (string (deparse-semicolons (cadr e)) " "))
+                                      (if (= (length (cddr e)) 1)
+                                          (deparse-semicolons (cadr e))
+                                          "") #\]))
+           ((typed_ncat)  (string (deparse (cadr e))
+                                  (deparse (cons 'ncat (cddr e)))))
            ((row)        (deparse-arglist (cdr e) " "))
+           ((nrow)       (deparse-arglist (cddr e) (string (deparse-semicolons (cadr e)) " ")))
            ((braces)     (string #\{ (deparse-arglist (cdr e) ", ") #\}))
            ((bracescat)  (string #\{ (deparse-arglist (cdr e) "; ") #\}))
            ((string)
@@ -306,7 +319,7 @@
          (bad-formal-argument v))
         (else
          (case (car v)
-           ((... kw)
+           ((...)
 	    (arg-name (cadr v)) ;; to check for errors
 	    (decl-var (cadr v)))
            ((|::|)
@@ -317,6 +330,8 @@
             (if (nospecialize-meta? v #t)
                 (arg-name (caddr v))
                 (bad-formal-argument v)))
+           ((kw)
+            (arg-name (cadr v)))
            (else (bad-formal-argument v))))))
 
 (define (arg-type v)
@@ -336,6 +351,8 @@
             (if (nospecialize-meta? v #t)
                 (arg-type (caddr v))
                 (bad-formal-argument v)))
+           ((kw)
+            (arg-type (cadr v)))
            (else (bad-formal-argument v))))))
 
 ;; convert a lambda list into a list of just symbols
@@ -349,6 +366,12 @@
 
 (define (decl? e)
   (and (pair? e) (eq? (car e) '|::|)))
+
+(define (symdecl? e)
+  (or (symbol? e) (decl? e)))
+
+(define (eventually-decl? e)
+  (or (decl? e) (and (pair? e) (eq? (car e) 'atomic) (symdecl? (cadr e)))))
 
 (define (make-decl n t) `(|::| ,n ,t))
 

@@ -6,7 +6,7 @@ Base.Experimental.@optlevel 1
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native, clipboard
+    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard
 
 import Base.Docs.apropos
 
@@ -81,6 +81,8 @@ Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
+
+See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
@@ -165,7 +167,7 @@ The optional second argument restricts the search to a particular module or func
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
 """
-function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=false)
+function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
@@ -187,7 +189,7 @@ function _methodswith(t::Type, m::Module, supertypes::Bool)
     for nm in names(m)
         if isdefined(m, nm)
             f = getfield(m, nm)
-            if isa(f, Function)
+            if isa(f, Base.Callable)
                 methodswith(t, f, meths; supertypes = supertypes)
             end
         end
@@ -261,6 +263,8 @@ subtypes(m::Module, x::Type) = _subtypes_in([m], x)
 Return a list of immediate subtypes of DataType `T`. Note that all currently loaded subtypes
 are included, including those not visible in the current module.
 
+See also [`supertype`](@ref), [`supertypes`](@ref), [`methodswith`](@ref).
+
 # Examples
 ```jldoctest
 julia> subtypes(Integer)
@@ -278,6 +282,8 @@ subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
 Return a tuple `(T, ..., Any)` of `T` and all its supertypes, as determined by
 successive calls to the [`supertype`](@ref) function, listed in order of `<:`
 and terminated by `Any`.
+
+See also [`subtypes`](@ref).
 
 # Examples
 ```jldoctest
@@ -297,7 +303,7 @@ end
 function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested
-    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
+    isa(x, DataType) && x.name.abstract && dumpsubtypes(io, x, Main, n, indent)
     nothing
 end
 
@@ -396,9 +402,12 @@ function report_bug(kind)
             mktempdir() do tmp
                 old_load_path = copy(LOAD_PATH)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
+                old_active_project = Base.ACTIVE_PROJECT[]
+                Base.ACTIVE_PROJECT[] = nothing
                 Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
                 BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
+                Base.ACTIVE_PROJECT[] = old_active_project
             end
         end
     else

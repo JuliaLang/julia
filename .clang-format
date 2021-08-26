@@ -109,7 +109,6 @@ StatementMacros:
   - checked_intrinsic_ctype
   - cvt_iintrinsic
   - fpiseq_n
-  - fpislt_n
   - ter_fintrinsic
   - ter_intrinsic_ctype
   - un_fintrinsic

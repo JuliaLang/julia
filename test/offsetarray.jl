@@ -2,6 +2,7 @@
 
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
+import .Main.OffsetArrays: IdOffsetRange
 using DelimitedFiles
 using Random
 using LinearAlgebra
@@ -231,11 +232,11 @@ targets1 = ["0-dimensional OffsetArray(::Array{Float64, 0}) with eltype Float64:
             "1×1×1×1 OffsetArray(::Array{Float64, 4}, 2:2, 3:3, 4:4, 5:5) with eltype Float64 with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
-            "([1.0], [1.0])",
-            "([1.0], [1.0])",
-            "([1.0], [1.0])"]
+            "([1.0;;], [1.0;;])",
+            "([1.0;;;], [1.0;;;])",
+            "([1.0;;;;], [1.0;;;;])"]
 @testset "printing of OffsetArray with n=$n" for n = 0:4
-    a = OffsetArray(fill(1.,ntuple(d->1,n)), ntuple(identity,n))
+    a = OffsetArray(fill(1.,ntuple(Returns(1),n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
     show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))
@@ -775,4 +776,49 @@ end
     show(io_limit, Y)
     strY = String(take!(io))
     @test strX == strY
+end
+
+@testset "vector indexing (issue #39896)" begin
+    a = collect(1:10)
+    r = Base.IdentityUnitRange(2:3)
+    b = a[r]
+    @test axes(b) == axes(r)
+    for i in r
+        @test b[i] == a[r[i]]
+    end
+end
+
+@testset "proper patition for non-1-indexed vector" begin
+    @test Iterators.partition(OffsetArray(1:10,10), 5) |> collect == [1:5,6:10] # OffsetVector
+    @test Iterators.partition(OffsetArray(collect(1:10),10), 5) |> collect == [1:5,6:10] # OffsetVector
+    @test Iterators.partition(OffsetArray(reshape(1:9,3,3), (3,3)), 5) |> collect == [1:5,6:9] #OffsetMatrix
+    @test Iterators.partition(OffsetArray(reshape(collect(1:9),3,3), (3,3)), 5) |> collect == [1:5,6:9] #OffsetMatrix
+    @test Iterators.partition(IdOffsetRange(2:7,10), 5) |> collect == [12:16,17:17] # IdOffsetRange
+end
+
+@testset "reshape" begin
+    a = OffsetArray(4:5, 5:6)
+    @test reshape(a, :) === a
+    @test reshape(a, (:,)) === a
+end
+
+@testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin
+    x = OffsetArray([1 2; 3 4], -10:-9, 9:10)  # 2×2 OffsetArray{...} with indices -10:-9×9:10
+
+    # begin/end with offset indices
+    @test (@view x[begin, 9])[] == 1
+    @test (@view x[-10, end])[] == 2
+    @test (@view x[-9, begin])[] == 3
+    @test (@view x[end, 10])[] == 4
+    @test (@view x[begin, begin])[] == 1
+    @test (@view x[begin, end])[] == 2
+    @test (@view x[end, begin])[] == 3
+    @test (@view x[end, end])[] == 4
+
+    # nested usages of begin/end
+    y = OffsetArray([-10, -9], (5,))
+    @test (@view x[begin, -y[end]])[] == 1
+    @test (@view x[y[begin], end])[] == 2
+    @test (@view x[end, -y[end]])[] == 3
+    @test (@view x[y[end], end])[] == 4
 end

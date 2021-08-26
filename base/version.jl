@@ -107,10 +107,10 @@ end
 
 function tryparse(::Type{VersionNumber}, v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
-    m = match(VERSION_REGEX, v)
+    m = match(VERSION_REGEX, String(v)::String)
     m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = parse(VInt, major)
+    major = parse(VInt, major::AbstractString)
     minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
     patch = patch !== nothing ? parse(VInt, patch) : VInt(0)
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'

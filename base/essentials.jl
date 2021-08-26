@@ -26,7 +26,7 @@ abstract type AbstractDict{K,V} end
 """
     Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
 
-Transforms an indexable container into an Dictionary-view of the same data.
+Transforms an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
 """
 struct Pairs{K, V, I, A} <: AbstractDict{K, V}
@@ -41,16 +41,6 @@ pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names
 ## optional pretty printer:
 #const NamedTuplePair{N, V, names, T<:NTuple{N, Any}} = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}}
 #export NamedTuplePair
-
-
-# The real @inline macro is not available until after array.jl, so this
-# internal macro splices the meta Expr directly into the function body.
-macro _inline_meta()
-    Expr(:meta, :inline)
-end
-macro _noinline_meta()
-    Expr(:meta, :noinline)
-end
 
 macro _gc_preserve_begin(arg1)
     Expr(:gc_preserve_begin, esc(arg1))
@@ -131,7 +121,8 @@ end
 
 Tests whether variable `s` is defined in the current scope.
 
-See also [`isdefined`](@ref).
+See also [`isdefined`](@ref) for field properties and [`isassigned`](@ref) for
+array indexes or [`haskey`](@ref) for other mappings.
 
 # Examples
 ```jldoctest
@@ -217,6 +208,8 @@ julia> y = convert(Vector{Int}, x);
 julia> y === x
 true
 ```
+
+See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@ref).
 """
 function convert end
 
@@ -248,6 +241,8 @@ argtail(x, rest...) = rest
     tail(x::Tuple)::Tuple
 
 Return a `Tuple` consisting of all but the first component of `x`.
+
+See also: [`front`](@ref Base.front), [`rest`](@ref Base.rest), [`first`](@ref), [`Iterators.peel`](@ref).
 
 # Examples
 ```jldoctest
@@ -336,7 +331,7 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-_tuple_error(T::Type, x) = (@_noinline_meta; throw(MethodError(convert, (T, x))))
+_tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
 convert(::Type{T}, x::T) where {T<:Tuple} = x
 function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
@@ -345,7 +340,7 @@ function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
     if typeintersect(NTuple{N,Any}, T) === Union{}
         _tuple_error(T, x)
     end
-    cvt1(n) = (@_inline_meta; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
+    cvt1(n) = (@inline; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
     return ntuple(cvt1, Val(N))::NTuple{N,Any}
 end
 
@@ -452,7 +447,9 @@ reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
     sizeof(obj)
 
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
-Size, in bytes, of object `obj` if it is not `DataType`.
+Or the size, in bytes, of object `obj` if it is not a `DataType`.
+
+See also [`summarysize`](@ref).
 
 # Examples
 ```jldoctest
@@ -465,7 +462,7 @@ julia> sizeof(ComplexF64)
 julia> sizeof(1.0)
 8
 
-julia> sizeof([1.0:10.0;])
+julia> sizeof(collect(1.0:10.0))
 80
 ```
 
@@ -532,7 +529,7 @@ julia> f2()
     As noted there, the caller must verify—using information they can access—that
     their accesses are valid before using `@inbounds`. For indexing into your
     [`AbstractArray`](@ref) subclasses, for example, this involves checking the
-    indices against its [`size`](@ref). Therefore, `@boundscheck` annotations
+    indices against its [`axes`](@ref). Therefore, `@boundscheck` annotations
     should only be added to a [`getindex`](@ref) or [`setindex!`](@ref)
     implementation after you are certain its behavior is correct.
 """
@@ -716,7 +713,7 @@ call obsolete versions of a function `f`.
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
-    kwargs = Base.merge(NamedTuple(), kwargs)
+    kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
     end
@@ -809,6 +806,8 @@ values(itr) = itr
 
 A type with no fields whose singleton instance [`missing`](@ref) is used
 to represent missing values.
+
+See also: [`skipmissing`](@ref), [`nonmissingtype`](@ref), [`Nothing`](@ref).
 """
 struct Missing end
 
@@ -816,6 +815,8 @@ struct Missing end
     missing
 
 The singleton instance of type [`Missing`](@ref) representing a missing value.
+
+See also: [`NaN`](@ref), [`skipmissing`](@ref), [`nonmissingtype`](@ref).
 """
 const missing = Missing()
 
@@ -823,6 +824,8 @@ const missing = Missing()
     ismissing(x)
 
 Indicate whether `x` is [`missing`](@ref).
+
+See also: [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
 """
 ismissing(x) = x === missing
 

@@ -21,6 +21,20 @@ g = Float16(1.)
     @test isequal(Float16(0.0), Float16(0.0))
     @test !isequal(Float16(-0.0), Float16(0.0))
     @test !isequal(Float16(0.0), Float16(-0.0))
+
+    for T = Base.BitInteger_types
+        @test -Inf16 < typemin(T)
+        @test -Inf16 <= typemin(T)
+        @test typemin(T) > -Inf16
+        @test typemin(T) >= -Inf16
+        @test typemin(T) != -Inf16
+
+        @test Inf16 > typemax(T)
+        @test Inf16 >= typemax(T)
+        @test typemax(T) < Inf16
+        @test typemax(T) <= Inf16
+        @test typemax(T) != Inf16
+    end
 end
 
 @testset "convert" begin
@@ -80,6 +94,9 @@ end
 
     # no domain error is thrown for negative values
     @test cbrt(Float16(-1.0)) == -1.0
+    # test zero and Inf
+    @test cbrt(Float16(0.0)) == Float16(0.0)
+    @test cbrt(Inf16) == Inf16
 end
 @testset "binary ops" begin
     @test f+g === Float16(3f0)
@@ -157,6 +174,10 @@ end
     # halfway between and last bit is 0
     ff = reinterpret(Float32,                           0b00111110101010100001000000000000)
     @test Float32(Float16(ff)) === reinterpret(Float32, 0b00111110101010100000000000000000)
+
+    for x = (typemin(Int64), typemin(Int128)), R = (RoundUp, RoundToZero)
+        @test Float16(x, R) == nextfloat(-Inf16)
+    end
 end
 
 # issue #5948

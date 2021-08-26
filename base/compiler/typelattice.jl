@@ -19,7 +19,7 @@
 import Core: Const, PartialStruct
 
 # The type of this value might be Bool.
-# However, to enable a limited amount of back-propagagation,
+# However, to enable a limited amount of back-propagation,
 # we also keep some information about how this Bool value was created.
 # In particular, if you branch on this value, then may assume that in
 # the true branch, the type of `var` will be limited by `vtype` and in
@@ -33,7 +33,7 @@ import Core: Const, PartialStruct
 # end
 # ```
 struct Conditional
-    var::Slot
+    var::SlotNumber
     vtype
     elsetype
     function Conditional(
@@ -84,14 +84,14 @@ end
 const VarTable = Array{Any,1}
 
 struct StateUpdate
-    var::Union{Slot,SSAValue}
+    var::SlotNumber
     vtype::VarState
     state::VarTable
     conditional::Bool
 end
 
 # Represent that the type estimate has been approximated, due to "causes"
-# (only used in abstractinterpret, doesn't appear in optimize)
+# (only used in abstract interpretion, doesn't appear in optimization)
 # N.B. in the lattice, this is epsilon smaller than `typ` (except Union{})
 struct LimitedAccuracy
     typ
@@ -299,7 +299,7 @@ function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
 end
 
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
-@inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n, o)))
+@inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n::VarState, o::VarState)))
 
 widenconditional(@nospecialize typ) = typ
 function widenconditional(typ::AnyConditional)
@@ -313,28 +313,26 @@ function widenconditional(typ::AnyConditional)
 end
 widenconditional(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
+widenwrappedconditional(@nospecialize(typ))   = widenconditional(typ)
+widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
+
 ignorelimited(@nospecialize typ) = typ
 ignorelimited(typ::LimitedAccuracy) = typ.typ
 
 function stupdate!(state::Nothing, changes::StateUpdate)
     newst = copy(changes.state)
-    if isa(changes.var, Slot)
-        changeid = slot_id(changes.var::Slot)
-        newst[changeid] = changes.vtype
-        # remove any Conditional for this Slot from the vtable
-        # (unless this change is came from the conditional)
-        if !changes.conditional
-            for i = 1:length(newst)
-                newtype = newst[i]
-                if isa(newtype, VarState)
-                    newtypetyp = ignorelimited(newtype.typ)
-                    if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                        newtypetyp = widenconditional(newtypetyp)
-                        if newtype.typ isa LimitedAccuracy
-                            newtypetyp = LimitedAccuracy(newtypetyp, newtype.typ.causes)
-                        end
-                        newst[i] = VarState(newtypetyp, newtype.undef)
-                    end
+    changeid = slot_id(changes.var)
+    newst[changeid] = changes.vtype
+    # remove any Conditional for this slot from the vtable
+    # (unless this change is came from the conditional)
+    if !changes.conditional
+        for i = 1:length(newst)
+            newtype = newst[i]
+            if isa(newtype, VarState)
+                newtypetyp = ignorelimited(newtype.typ)
+                if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
+                    newtypetyp = widenwrappedconditional(newtype.typ)
+                    newst[i] = VarState(newtypetyp, newtype.undef)
                 end
             end
         end
@@ -343,11 +341,8 @@ function stupdate!(state::Nothing, changes::StateUpdate)
 end
 
 function stupdate!(state::VarTable, changes::StateUpdate)
-    if !isa(changes.var, Slot)
-        return stupdate!(state, changes.state)
-    end
     newstate = nothing
-    changeid = slot_id(changes.var::Slot)
+    changeid = slot_id(changes.var)
     for i = 1:length(state)
         if i == changeid
             newtype = changes.vtype
@@ -355,15 +350,12 @@ function stupdate!(state::VarTable, changes::StateUpdate)
             newtype = changes.state[i]
         end
         oldtype = state[i]
-        # remove any Conditional for this Slot from the vtable
+        # remove any Conditional for this slot from the vtable
         # (unless this change is came from the conditional)
         if !changes.conditional && isa(newtype, VarState)
             newtypetyp = ignorelimited(newtype.typ)
             if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                newtypetyp = widenconditional(newtypetyp)
-                if newtype.typ isa LimitedAccuracy
-                    newtypetyp = LimitedAccuracy(newtypetyp, newtype.typ.causes)
-                end
+                newtypetyp = widenwrappedconditional(newtype.typ)
                 newtype = VarState(newtypetyp, newtype.undef)
             end
         end
@@ -393,11 +385,8 @@ stupdate!(state::Nothing, changes::VarTable) = copy(changes)
 stupdate!(state::Nothing, changes::Nothing) = nothing
 
 function stupdate1!(state::VarTable, change::StateUpdate)
-    if !isa(change.var, Slot)
-        return false
-    end
-    changeid = slot_id(change.var::Slot)
-    # remove any Conditional for this Slot from the catch block vtable
+    changeid = slot_id(change.var)
+    # remove any Conditional for this slot from the catch block vtable
     # (unless this change is came from the conditional)
     if !change.conditional
         for i = 1:length(state)
@@ -407,7 +396,7 @@ function stupdate1!(state::VarTable, change::StateUpdate)
                 if isa(oldtypetyp, Conditional) && slot_id(oldtypetyp.var) == changeid
                     oldtypetyp = widenconditional(oldtypetyp)
                     if oldtype.typ isa LimitedAccuracy
-                        oldtypetyp = LimitedAccuracy(oldtypetyp, oldtype.typ.causes)
+                        oldtypetyp = LimitedAccuracy(oldtypetyp, (oldtype.typ::LimitedAccuracy).causes)
                     end
                     state[i] = VarState(oldtypetyp, oldtype.undef)
                 end

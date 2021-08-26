@@ -572,4 +572,14 @@ end
     end
 end
 
+@testset "inference with dynamic dateformat string" begin
+    datetime = DateTime(2020, 4, 7)
+    f1() = DateTime("2020-04-07", "yyyy-mm-dd")
+    f2() = DateTime("2020-04-07", DateFormat("yyyy-mm-dd"))
+    f3() = parse(DateTime, "2020-04-07", DateFormat("yyyy-mm-dd"))
+    @test (@inferred f1()) == (@inferred f2()) == (@inferred f3()) == datetime
+    g() = tryparse(DateTime, "2020-04-07", DateFormat("yyyy-mm-dd"))
+    @test (@inferred Nothing g()) == datetime
+end
+
 end

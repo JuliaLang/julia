@@ -853,6 +853,13 @@ end
         return :OK
     end, id_other, rc_unbuffered) == :OK
 
+# github issue 33972
+rc_unbuffered_other = RemoteChannel(()->Channel{Int}(0), id_other)
+close(rc_unbuffered_other)
+try; take!(rc_unbuffered_other); catch; end
+@test !remotecall_fetch(rc -> islocked(Distributed.lookup_ref(remoteref_id(rc)).synctake),
+                        id_other, rc_unbuffered_other)
+
 # github PR #14456
 n = DoFullTest ? 6 : 5
 for i = 1:10^n
@@ -1675,7 +1682,7 @@ let e = @test_throws RemoteException pmap(1) do _
     es = sprint(showerror, e.value)
     @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
     @test contains(es, "\n\n    nested task error:")
-    @test_broken contains(es, "\n\n    nested task error: 42\n")
+    @test contains(es, "\n\n    nested task error: 42\n")
 end
 
 # issue #27429, propagate relative `include` path to workers

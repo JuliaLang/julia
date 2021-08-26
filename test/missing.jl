@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "MissingException" begin
     @test sprint(showerror, MissingException("test")) == "MissingException: test"
 end
@@ -83,7 +86,7 @@ end
     arithmetic_operators = [+, -, *, /, ^, Base.div, Base.mod, Base.fld, Base.rem]
 
     # All unary operators return missing when evaluating missing
-    for f in [!, ~, +, -, *, &, |, xor]
+    for f in [!, ~, +, -, *, &, |, xor, nand, nor]
         @test ismissing(f(missing))
     end
 
@@ -128,6 +131,22 @@ end
     @test ismissing(xor(true, missing))
     @test ismissing(xor(missing, false))
     @test ismissing(xor(false, missing))
+    @test ismissing(nand(missing, true))
+    @test ismissing(nand(true, missing))
+    @test nand(missing, false) == true
+    @test nand(false, missing) == true
+    @test ismissing(⊼(missing, true))
+    @test ismissing(⊼(true, missing))
+    @test ⊼(missing, false) == true
+    @test ⊼(false, missing) == true
+    @test nor(missing, true) == false
+    @test nor(true, missing) == false
+    @test ismissing(nor(missing, false))
+    @test ismissing(nor(false, missing))
+    @test ⊽(missing, true) == false
+    @test ⊽(true, missing) == false
+    @test ismissing(⊽(missing, false))
+    @test ismissing(⊽(false, missing))
 
     @test ismissing(missing & 1)
     @test ismissing(1 & missing)
@@ -135,11 +154,21 @@ end
     @test ismissing(1 | missing)
     @test ismissing(xor(missing, 1))
     @test ismissing(xor(1, missing))
+    @test ismissing(nand(missing, 1))
+    @test ismissing(nand(1, missing))
+    @test ismissing(⊼(missing, 1))
+    @test ismissing(⊼(1, missing))
+    @test ismissing(nor(missing, 1))
+    @test ismissing(nor(1, missing))
+    @test ismissing(⊽(missing, 1))
+    @test ismissing(⊽(1, missing))
 end
 
-@testset "* string concatenation" begin
+@testset "* string/char concatenation" begin
     @test ismissing("a" * missing)
+    @test ismissing('a' * missing)
     @test ismissing(missing * "a")
+    @test ismissing(missing * 'a')
 end
 
 # Emulate a unitful type such as Dates.Minute
@@ -436,10 +465,10 @@ end
             @test_throws BoundsError x[3, 1]
             @test findfirst(==(2), x) === nothing
             @test isempty(findall(==(2), x))
-            @test_throws ArgumentError argmin(x)
-            @test_throws ArgumentError findmin(x)
-            @test_throws ArgumentError argmax(x)
-            @test_throws ArgumentError findmax(x)
+            @test_throws "reducing over an empty collection is not allowed" argmin(x)
+            @test_throws "reducing over an empty collection is not allowed" findmin(x)
+            @test_throws "reducing over an empty collection is not allowed" argmax(x)
+            @test_throws "reducing over an empty collection is not allowed" findmax(x)
         end
     end
 
@@ -496,14 +525,27 @@ end
         for n in 0:3
             itr = skipmissing(Vector{Union{Int,Missing}}(fill(missing, n)))
             @test sum(itr) == reduce(+, itr) == mapreduce(identity, +, itr) === 0
-            @test_throws ArgumentError reduce(x -> x/2, itr)
-            @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
+            @test_throws "reducing over an empty collection is not allowed" reduce(x -> x/2, itr)
+            @test_throws "reducing over an empty collection is not allowed" mapreduce(x -> x/2, +, itr)
         end
 
         # issue #35504
         nt = NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
             (missing, missing))
         @test sum(skipmissing(nt)) === 0
+
+        # issues #38627 and #124
+        @testset for len in [1, 2, 15, 16, 1024, 1025]
+            v = repeat(Union{Int,Missing}[1], len)
+            oa = OffsetArray(v, typemax(Int)-length(v))
+            sm = skipmissing(oa)
+            @test sum(sm) == len
+
+            v = repeat(Union{Int,Missing}[missing], len)
+            oa = OffsetArray(v, typemax(Int)-length(v))
+            sm = skipmissing(oa)
+            @test sum(sm) == 0
+        end
     end
 
     @testset "filter" begin
@@ -531,6 +573,16 @@ end
 
     @test coalesce(nothing, missing) === nothing
     @test coalesce(missing, nothing) === nothing
+end
+
+@testset "@coalesce" begin
+    @test @coalesce() === missing
+    @test @coalesce(1) === 1
+    @test @coalesce(nothing) === nothing
+    @test @coalesce(missing) === missing
+
+    @test @coalesce(1, error("failed")) === 1
+    @test_throws ErrorException @coalesce(missing, error("failed"))
 end
 
 mutable struct Obj; x; end

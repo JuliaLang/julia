@@ -17,6 +17,7 @@ const LBT_INTERFACE_MAP = Dict(
     LBT_INTERFACE_ILP64   => :ilp64,
     LBT_INTERFACE_UNKNOWN => :unknown,
 )
+const LBT_INV_INTERFACE_MAP = Dict(v => k for (k, v) in LBT_INTERFACE_MAP)
 
 const LBT_F2C_PLAIN         =  0
 const LBT_F2C_REQUIRED      =  1
@@ -26,6 +27,7 @@ const LBT_F2C_MAP = Dict(
     LBT_F2C_REQUIRED => :required,
     LBT_F2C_UNKNOWN  => :unknown,
 )
+const LBT_INV_F2C_MAP = Dict(v => k for (k, v) in LBT_F2C_MAP)
 
 struct LBTLibraryInfo
     libname::String
@@ -103,6 +105,42 @@ struct LBTConfig
     end
 end
 
+Base.show(io::IO, lbt::LBTLibraryInfo) = print(io, "LBTLibraryInfo(", basename(lbt.libname), ", ", lbt.interface, ")")
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTLibraryInfo)
+    summary(io, lbt); println(io)
+    println(io, "├ Library: ", basename(lbt.libname))
+    println(io, "├ Interface: ", lbt.interface)
+      print(io, "└ F2C: ", lbt.f2c)
+end
+
+function Base.show(io::IO, lbt::LBTConfig)
+    if length(lbt.loaded_libs) <= 3
+        print(io, "LBTConfig(")
+        gen = (string("[", uppercase(string(l.interface)), "] ",
+            basename(l.libname)) for l in lbt.loaded_libs)
+        print(io, join(gen, ", "))
+        print(io, ")")
+    else
+        print(io, "LBTConfig(...)")
+    end
+end
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
+    summary(io, lbt); println(io)
+    println(io, "Libraries: ")
+    for (i,l) in enumerate(lbt.loaded_libs)
+        char = i == length(lbt.loaded_libs) ? "└" : "├"
+        interface_str = if l.interface == :ilp64
+            "ILP64"
+        elseif l.interface == :lp64
+            " LP64"
+        else
+            "UNKWN"
+        end
+        print(io, char, " [", interface_str,"] ", basename(l.libname))
+        i !== length(lbt.loaded_libs) && println()
+    end
+end
+
 function lbt_get_config()
     config_ptr = ccall((:lbt_get_config, libblastrampoline), Ptr{lbt_config_t}, ())
     return LBTConfig(unsafe_load(config_ptr))
@@ -128,14 +166,74 @@ function lbt_get_default_func()
     return ccall((:lbt_get_default_func, libblastrampoline), Ptr{Cvoid}, ())
 end
 
-#=
-Don't define footgun API (yet)
+"""
+    lbt_find_backing_library(symbol_name, interface; config::LBTConfig = lbt_get_config())
+
+Return the `LBTLibraryInfo` that represents the backing library for the given symbol
+exported from libblastrampoline.  This allows us to discover which library will service
+a particular BLAS call from Julia code.  This method returns `nothing` if either of the
+following conditions are met:
+
+ * No loaded library exports the desired symbol (the default function will be called)
+ * The symbol was set via `lbt_set_forward()`, which does not track library provenance.
+
+If the given `symbol_name` is not contained within the list of exported symbols, an
+`ArgumentError` will be thrown.
+"""
+function lbt_find_backing_library(symbol_name, interface::Symbol;
+                                  config::LBTConfig = lbt_get_config())
+    if interface ∉ (:ilp64, :lp64)
+        throw(Argument("Invalid interface specification: '$(interface)'"))
+    end
+    symbol_idx = findfirst(s -> s == symbol_name, config.exported_symbols)
+    if symbol_idx === nothing
+        throw(ArgumentError("Invalid exported symbol name '$(symbol_name)'"))
+    end
+    # Convert to zero-indexed
+    symbol_idx -= 1
+
+    forward_byte_offset = div(symbol_idx, 8)
+    forward_byte_mask = 1 << mod(symbol_idx, 8)
+    for lib in filter(l -> l.interface == interface, config.loaded_libs)
+        if lib.active_forwards[forward_byte_offset+1] & forward_byte_mask != 0x00
+            return lib
+        end
+    end
+
+    # No backing library was found
+    return nothing
+end
+
+
+## NOTE: Manually setting forwards is referred to as the 'footgun API'.  It allows truly
+## bizarre and complex setups to be created.  If you run into strange errors while using
+## it, the first thing you should ask yourself is whether you've set things up properly.
+function lbt_set_forward(symbol_name, addr, interface, f2c = LBT_F2C_PLAIN; verbose::Bool = false)
+    return ccall(
+        (:lbt_set_forward, libblastrampoline),
+        Int32,
+        (Cstring, Ptr{Cvoid}, Int32, Int32, Int32),
+        string(symbol_name),
+        addr,
+        Int32(interface),
+        Int32(f2c),
+        verbose ? Int32(1) : Int32(0),
+    )
+end
+function lbt_set_forward(symbol_name, addr, interface::Symbol, f2c::Symbol = :plain; kwargs...)
+    return lbt_set_forward(symbol_name, addr, LBT_INV_INTERFACE_MAP[interface], LBT_INV_F2C_MAP[f2c]; kwargs...)
+end
 
 function lbt_get_forward(symbol_name, interface, f2c = LBT_F2C_PLAIN)
-    return ccall((:lbt_get_forward, libblastrampoline), Ptr{Cvoid}, (Cstring, Int32, Int32), symbol_name, interface, f2c)
+    return ccall(
+        (:lbt_get_forward, libblastrampoline),
+        Ptr{Cvoid},
+        (Cstring, Int32, Int32),
+        string(symbol_name),
+        Int32(interface),
+        Int32(f2c),
+    )
 end
-
-function lbt_set_forward(symbol_name, addr, interface, f2c = LBT_F2C_PLAIN; verbose::Bool = false)
-    return ccall((:lbt_set_forward, libblastrampoline), Int32, (Cstring, Ptr{Cvoid}, Int32, Int32, Int32), symbol_name, addr, interface, f2c, verbose ? 1 : 0)
+function lbt_get_forward(symbol_name, interface::Symbol, f2c::Symbol = :plain)
+    return lbt_get_forward(symbol_name, LBT_INV_INTERFACE_MAP[interface], LBT_INV_F2C_MAP[f2c])
 end
-=#

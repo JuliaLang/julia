@@ -279,9 +279,10 @@ function preduce(reducer, f, R)
 end
 
 function pfor(f, R)
-    @async @sync for c in splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
+    t = @async @sync for c in splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
         @spawnat :any f(R, first(c), last(c))
     end
+    errormonitor(t)
 end
 
 function make_preduce_body(var, body)
@@ -346,6 +347,9 @@ macro distributed(args...)
     var = loop.args[1].args[1]
     r = loop.args[1].args[2]
     body = loop.args[2]
+    if Meta.isexpr(body, :block) && body.args[end] isa LineNumberNode
+        resize!(body.args, length(body.args) - 1)
+    end
     if na==1
         syncvar = esc(Base.sync_varname)
         return quote

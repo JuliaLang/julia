@@ -221,10 +221,10 @@ function lookup_doc(ex)
         str = string(ex)
         isdotted = startswith(str, ".")
         if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment && ex !== :(:=)
-            op = str[1:end-1]
+            op = chop(str)
             eq = isdotted ? ".=" : "="
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
-        elseif isdotted
+        elseif isdotted && ex !== :(..)
             op = str[2:end]
             return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
         end
@@ -243,10 +243,12 @@ end
 
 function summarize(binding::Binding, sig)
     io = IOBuffer()
-    println(io, "No documentation found.\n")
     if defined(binding)
-        summarize(io, resolve(binding), binding)
+        binding_res = resolve(binding)
+        !isa(binding_res, Module) && println(io, "No documentation found.\n")
+        summarize(io, binding_res, binding)
     else
+        println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
         println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
     end
@@ -270,14 +272,14 @@ function summarize(io::IO, TT::Type, binding::Binding)
     if T isa DataType
         println(io, "```")
         print(io,
-            T.abstract ? "abstract type " :
-            T.mutable  ? "mutable struct " :
+            Base.isabstracttype(T) ? "abstract type " :
+            Base.ismutabletype(T)  ? "mutable struct " :
             Base.isstructtype(T) ? "struct " :
             "primitive type ")
         supert = supertype(T)
         println(io, T)
         println(io, "```")
-        if !T.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
+        if !Base.isabstracttype(T) && T.name !== Tuple.name && !isempty(fieldnames(T))
             println(io, "# Fields")
             println(io, "```")
             pad = maximum(length(string(f)) for f in fieldnames(T))
@@ -291,7 +293,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
             println(io, "# Subtypes")
             println(io, "```")
             for t in subt
-                println(io, t)
+                println(io, Base.unwrap_unionall(t))
             end
             println(io, "```")
         end
@@ -313,16 +315,46 @@ function summarize(io::IO, TT::Type, binding::Binding)
     end
 end
 
-function summarize(io::IO, m::Module, binding::Binding)
-    println(io, "No docstring found for module `", m, "`.\n")
+function find_readme(m::Module)::Union{String, Nothing}
+    mpath = pathof(m)
+    isnothing(mpath) && return nothing
+    !isfile(mpath) && return nothing # modules in sysimage, where src files are omitted
+    path = dirname(mpath)
+    top_path = pkgdir(m)
+    while true
+        for file in readdir(path; join=true, sort=true)
+            isfile(file) && (basename(lowercase(file)) in ["readme.md", "readme"]) || continue
+            return file
+        end
+        path == top_path && break # go no further than pkgdir
+        path = dirname(path) # work up through nested modules
+    end
+    return nothing
+end
+function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
+    readme_path = find_readme(m)
+    if isnothing(readme_path)
+        println(io, "No docstring or readme file found for module `$m`.\n")
+    else
+        println(io, "No docstring found for module `$m`.")
+    end
     exports = filter!(!=(nameof(m)), names(m))
     if isempty(exports)
         println(io, "Module does not export any names.")
     else
-        println(io, "# Exported names:")
+        println(io, "# Exported names")
         print(io, "  `")
         join(io, exports, "`, `")
-        println(io, "`")
+        println(io, "`\n")
+    end
+    if !isnothing(readme_path)
+        readme_lines = readlines(readme_path)
+        isempty(readme_lines) && return  # don't say we are going to print empty file
+        println(io, "# Displaying contents of readme found at `$(readme_path)`")
+        for line in first(readme_lines, nlines)
+            println(io, line)
+        end
+        length(readme_lines) > nlines && println(io, "\n[output truncated to first $nlines lines]")
     end
 end
 
@@ -370,10 +402,18 @@ function symbol_latex(s::String)
 
     return get(symbols_latex, s, "")
 end
-function repl_latex(io::IO, s::String)
-    # decompose NFC-normalized identifier to match tab-completion input
-    s = normalize(s, :NFD)
-    latex = symbol_latex(s)
+function repl_latex(io::IO, s0::String)
+    # This has rampant `Core.Box` problems (#15276). Use the tricks of
+    # https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
+    # We're changing some of the values so the `let` trick isn't applicable.
+    s::String = s0
+    latex::String = symbol_latex(s)
+    if isempty(latex)
+        # Decompose NFC-normalized identifier to match tab-completion
+        # input if the first search came up empty.
+        s = normalize(s, :NFD)
+        latex = symbol_latex(s)
+    end
     if !isempty(latex)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
@@ -384,7 +424,7 @@ function repl_latex(io::IO, s::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
-        state = '\0'
+        state::Char = '\0'
         with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
@@ -550,8 +590,10 @@ function matchinds(needle, haystack; acronym::Bool = false)
     is = Int[]
     lastc = '\0'
     for (i, char) in enumerate(haystack)
+        while !isempty(chars) && isspace(first(chars))
+            popfirst!(chars) # skip spaces
+        end
         isempty(chars) && break
-        while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if lowercase(char) == lowercase(chars[1]) &&
            (!acronym || !isletter(lastc))
             push!(is, i)

@@ -53,13 +53,13 @@ number generator, see [Random Numbers](@ref).
 # Examples
 ```jldoctest
 julia> Random.seed!(3); randstring()
-"Y7m62wOj"
+"vZmAMp3z"
 
 julia> randstring(MersenneTwister(3), 'a':'z', 6)
 "ocucay"
 
 julia> randstring("ACGT")
-"ATTTGCGT"
+"CAAACACC"
 ```
 
 !!! note
@@ -71,7 +71,12 @@ function randstring end
 
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
-    randstring(r::AbstractRNG, chars=b, n::Integer=8) = String(rand(r, chars, n))
+    function randstring(r::AbstractRNG, chars=b, n::Integer=8)
+        T = eltype(chars)
+        v = T === UInt8 ? Base.StringVector(n) : Vector{T}(undef, n)
+        rand!(r, v, chars)
+        return String(v)
+    end
     randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
     randstring(chars=b, n::Integer=8) = randstring(default_rng(), chars, n)
     randstring(n::Integer) = randstring(default_rng(), b, n)

@@ -235,6 +235,6 @@ endif
 
 ## phony targets ##
 
-.PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall \
+.PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall version-check \
 	get-* extract-* configure-* compile-* fastcheck-* check-* install-* uninstall-* reinstall-* clean-* distclean-* \
 	update-llvm

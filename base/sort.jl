@@ -68,7 +68,7 @@ function issorted(itr, order::Ordering)
 end
 
 """
-    issorted(v, lt=isless, by=identity, rev:Bool=false, order::Ordering=Forward)
+    issorted(v, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
 order is considered to be sorted just as they do for [`sort`](@ref).
@@ -231,89 +231,59 @@ end
 
 function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    if step(a) == 0
-        lt(o, x, first(a)) ? 0 : length(a)
+    f, h, l = first(a), step(a), last(a)
+    if lt(o, x, f)
+        0
+    elseif h == 0 || !lt(o, x, l)
+        length(a)
     else
-        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
+        n = round(Integer, (x - f) / h + 1)
         lt(o, x, a[n]) ? n - 1 : n
     end
 end
 
 function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    if step(a) == 0
-        lt(o, first(a), x) ? length(a) + 1 : 1
+    f, h, l = first(a), step(a), last(a)
+    if !lt(o, f, x)
+        1
+    elseif h == 0 || lt(o, l, x)
+        length(a) + 1
     else
-        n = round(Integer, clamp((x - first(a)) / step(a) + 1, 1, length(a)))
+        n = round(Integer, (x - f) / h + 1)
         lt(o, a[n], x) ? n + 1 : n
     end
 end
 
 function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    h = step(a)
-    if h == 0
-        lt(o, x, first(a)) ? 0 : length(a)
-    elseif h > 0 && x < first(a)
-        firstindex(a) - 1
-    elseif h > 0 && x >= last(a)
-        lastindex(a)
-    elseif h < 0 && x > first(a)
-        firstindex(a) - 1
-    elseif h < 0 && x <= last(a)
-        lastindex(a)
+    f, h, l = first(a), step(a), last(a)
+    if lt(o, x, f)
+        0
+    elseif h == 0 || !lt(o, x, l)
+        length(a)
     else
         if o isa ForwardOrdering
-            fld(floor(Integer, x) - first(a), h) + 1
+            fld(floor(Integer, x) - f, h) + 1
         else
-            fld(ceil(Integer, x) - first(a), h) + 1
+            fld(ceil(Integer, x) - f, h) + 1
         end
     end
 end
 
 function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
     require_one_based_indexing(a)
-    h = step(a)
-    if h == 0
-        lt(o, first(a), x) ? length(a)+1 : 1
-    elseif h > 0 && x <= first(a)
-        firstindex(a)
-    elseif h > 0 && x > last(a)
-        lastindex(a) + 1
-    elseif h < 0 && x >= first(a)
-        firstindex(a)
-    elseif h < 0 && x < last(a)
-        lastindex(a) + 1
+    f, h, l = first(a), step(a), last(a)
+    if !lt(o, f, x)
+        1
+    elseif h == 0 || lt(o, l, x)
+        length(a) + 1
     else
         if o isa ForwardOrdering
-            -fld(floor(Integer, -x) + Signed(first(a)), h) + 1
+            cld(ceil(Integer, x) - f, h) + 1
         else
-            -fld(ceil(Integer, -x) + Signed(first(a)), h) + 1
+            cld(floor(Integer, x) - f, h) + 1
         end
-    end
-end
-
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
-    if lt(o, first(a), x)
-        if step(a) == 0
-            length(a) + 1
-        else
-            min(cld(x - first(a), step(a)), length(a)) + 1
-        end
-    else
-        1
-    end
-end
-
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)::keytype(a)
-    require_one_based_indexing(a)
-    if lt(o, x, first(a))
-        0
-    elseif step(a) == 0
-        length(a)
-    else
-        min(fld(x - first(a), step(a)) + 1, length(a))
     end
 end
 
@@ -336,6 +306,8 @@ Return the range of indices of `a` which compare as equal to `x` (using binary s
 according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
 is already sorted in that order. Return an empty range located at the insertion point
 if `a` does not contain values equal to `x`.
+
+See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -362,6 +334,8 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 Return the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
+
+See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -409,13 +383,14 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsortedlast
 
 """
-    insorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+    insorted(a, x; by=<transform>, lt=<comparison>, rev=false) -> Bool
 
 Determine whether an item is in the given sorted collection, in the sense that
 it is [`==`](@ref) to one of the values of the collection according to the order
 specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
-sorted in that order, see [`sort`](@ref) for the keywords. See also
-[`in`](@ref). Returns a `Bool` value.
+sorted in that order, see [`sort`](@ref) for the keywords.
+
+See also [`in`](@ref).
 
 # Examples
 ```jldoctest
@@ -694,7 +669,8 @@ Sort the vector `v` in place. [`QuickSort`](@ref) is used by default for numeric
 [`MergeSort`](@ref) is used for other arrays. You can specify an algorithm to use via the `alg`
 keyword (see [Sorting Algorithms](@ref) for available algorithms). The `by` keyword lets you provide
 a function that will be applied to each element before comparison; the `lt` keyword allows
-providing a custom "less than" function; use `rev=true` to reverse the sorting order. These
+providing a custom "less than" function (note that for every `x` and `y`, only one of `lt(x,y)`
+and `lt(y,x)` can return `true`); use `rev=true` to reverse the sorting order. These
 options are independent and can be used together in all possible combinations: if both `by`
 and `lt` are specified, the `lt` function is applied to the result of the `by` function;
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
@@ -907,7 +883,7 @@ using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be 
 if the sorting algorithm is unstable, meaning that indices of equal elements appear in
 ascending order.
 
-See also [`sortperm!`](@ref).
+See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref), [`indexin`](@ref).
 
 # Examples
 ```jldoctest

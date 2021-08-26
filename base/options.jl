@@ -21,6 +21,7 @@ struct JLOptions
     code_coverage::Int8
     malloc_log::Int8
     opt_level::Int8
+    opt_level_min::Int8
     debug_level::Int8
     check_bounds::Int8
     depwarn::Int8

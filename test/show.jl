@@ -728,11 +728,18 @@ Base.zero(x::T12960) = T12960()
 let
     A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
-    @test sprint(show, B)  == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
-    @test sprint(print, B) == "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test repr(B) == "sparse([1, 2, 3], [1, 2, 3], $T12960[#undef, #undef, #undef], 3, 3)"
+    @test occursin(
+        "\n #undef             ⋅            ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
+        repr(MIME("text/plain"), B),
+    )
+
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
-    @test sprint(print, B) == "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef"
+    @test repr(B)  == "sparse([1, 1, 2, 3], [1, 2, 2, 3], $T12960[#undef, $T12960(), #undef, #undef], 3, 3)"
+    @test occursin(
+        "\n #undef          T12960()        ⋅    \n       ⋅      #undef             ⋅    \n       ⋅            ⋅      #undef",
+        repr(MIME("text/plain"), B),
+    )
 end
 
 # issue #13127
@@ -808,13 +815,20 @@ Base.methodloc_callback[] = nothing
     # test that no spurious visual lines are added when one element spans multiple lines
     v = fill!(Array{Any}(undef, 9), 0)
     v[1] = "look I'm wide! --- " ^ 9
-    @test replstr(v) == "9-element Vector{Any}:\n  \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0"
-    @test replstr([fill(0, 9) v]) == "9×2 Matrix{Any}:\n 0  …   \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0"
+    r = replstr(v)
+    @test startswith(r, "9-element Vector{Any}:\n  \"look I'm wide! ---")
+    @test endswith(r, "look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0")
+
     # test vertical/diagonal ellipsis
     v = fill!(Array{Any}(undef, 50), 0)
     v[1] = "look I'm wide! --- " ^ 9
-    @test replstr(v) == "50-element Vector{Any}:\n  \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n ⋮\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0"
-    @test replstr([fill(0, 50) v]) == "50×2 Matrix{Any}:\n 0  …   \"look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0\n ⋮  ⋱  \n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0"
+    r = replstr(v)
+    @test startswith(r, "50-element Vector{Any}:\n  \"look I'm wide! ---")
+    @test endswith(r, "look I'm wide! --- \"\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n ⋮\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0\n 0")
+
+    r = replstr([fill(0, 50) v])
+    @test startswith(r, "50×2 Matrix{Any}:\n 0  …   \"look I'm wide! ---")
+    @test endswith(r, "look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0\n ⋮  ⋱  \n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0")
 
     # issue #34659
     @test replstr(Int32[]) == "Int32[]"
@@ -823,6 +837,45 @@ Base.methodloc_callback[] = nothing
     @test replstr(permutedims([Dict(),Dict()])) == "1×2 Matrix{Dict{Any, Any}}:\n Dict()  Dict()"
     @test replstr(permutedims([undef,undef])) == "1×2 Matrix{UndefInitializer}:\n UndefInitializer()  UndefInitializer()"
     @test replstr([zeros(3,0),zeros(2,0)]) == "2-element Vector{Matrix{Float64}}:\n 3×0 Matrix{Float64}\n 2×0 Matrix{Float64}"
+end
+
+# string show with elision
+@testset "string show with elision" begin
+    @testset "elision logic" begin
+        strs = ["A", "∀", "∀A", "A∀", "😃"]
+        for limit = 0:100, len = 0:100, str in strs
+            str = str^len
+            str = str[1:nextind(str, 0, len)]
+            out = sprint() do io
+                show(io, MIME"text/plain"(), str; limit)
+            end
+            lower = length("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
+            limit = max(limit, lower)
+            if length(str) + 2 ≤ limit
+                @test eval(Meta.parse(out)) == str
+            else
+                @test limit-!isascii(str) <= length(out) <= limit
+                re = r"(\"[^\"]*\") ⋯ (\d+) bytes ⋯ (\"[^\"]*\")"
+                m = match(re, out)
+                head = eval(Meta.parse(m.captures[1]))
+                tail = eval(Meta.parse(m.captures[3]))
+                skip = parse(Int, m.captures[2])
+                @test startswith(str, head)
+                @test endswith(str, tail)
+                @test ncodeunits(str) ==
+                    ncodeunits(head) + skip + ncodeunits(tail)
+            end
+        end
+    end
+
+    @testset "default elision limit" begin
+        r = replstr("x"^1000)
+        @test length(r) == 7*80
+        @test r == repr("x"^271) * " ⋯ 459 bytes ⋯ " * repr("x"^270)
+        r = replstr(["x"^1000])
+        @test length(r) < 120
+        @test r == "1-element Vector{String}:\n " * repr("x"^31) * " ⋯ 939 bytes ⋯ " * repr("x"^30)
+    end
 end
 
 # Issue 14121
@@ -1148,7 +1201,7 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
         """
     dz = sprint(dump, z)
     @test 10 < countlines(IOBuffer(dz)) < 40
-    @test sum(x -> 1, eachmatch(r"circular reference", dz)) == 4
+    @test sum(Returns(1), eachmatch(r"circular reference", dz)) == 4
 end
 
 # PR 16221
@@ -1324,6 +1377,11 @@ let m = which(T20332{Int}(), (Int,)),
     mi = Core.Compiler.specialize_method(m, Tuple{T20332{T}, Int} where T, Core.svec())
     # test that this doesn't throw an error
     @test occursin("MethodInstance for", repr(mi))
+    # issue #41928
+    str = sprint(mi; context=:color=>true) do io, mi
+        printstyled(io, mi; color=:light_cyan)
+    end
+    @test !occursin("\U1b[0m", str)
 end
 
 @test sprint(show, Main) == "Main"
@@ -1569,12 +1627,77 @@ end
 end
 
 let x = TypeVar(:_), y = TypeVar(:_)
-    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where {_1, _2}"
-    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1, _1} where _1"
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair"
+    @test repr(UnionAll(y, UnionAll(x, Pair{x,y}))) == "Pair{_2, _1} where {_1, _2}"
+    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref}"
+    @test repr(UnionAll(y, UnionAll(x, Pair{UnionAll(y,Ref{x}),y}))) == "Pair{Ref{_2}, _1} where {_1, _2}"
+end
+
+let x, y, x
     x = TypeVar(:a)
     y = TypeVar(:a)
     z = TypeVar(:a)
     @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1, a2, a} where {a, a1, a2}"
+    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{z,y,x})))) == "Tuple{a, a2, a1} where {a, a1, a2}"
+end
+
+let x = TypeVar(:_, Number), y = TypeVar(:_, Number)
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1, _2} where {_1<:Number, _2<:Number}"
+    @test repr(UnionAll(y, UnionAll(x, Pair{x,y}))) == "Pair{_2, _1} where {_1<:Number, _2<:Number}"
+    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1<:Number, _1} where _1<:Number"
+    @test repr(UnionAll(y, UnionAll(x, Pair{UnionAll(y,Ref{x}),y}))) == "Pair{Ref{_2}, _1} where {_1<:Number, _2<:Number}"
+end
+
+
+is_juliarepr(x) = eval(Meta.parse(repr(x))) == x
+@testset "unionall types" begin
+    X = TypeVar(gensym())
+    Y = TypeVar(gensym(), Ref, Ref)
+    x, y, z = TypeVar(:a), TypeVar(:a), TypeVar(:a)
+    struct TestTVUpper{A<:Integer} end
+
+    # named typevars
+    @test is_juliarepr(Ref{A} where A)
+    @test is_juliarepr(Ref{A} where A>:Ref)
+    @test is_juliarepr(Ref{A} where A<:Ref)
+    @test is_juliarepr(Ref{A} where Ref<:A<:Ref)
+    @test is_juliarepr(TestTVUpper{<:Real})
+    @test is_juliarepr(TestTVUpper{<:Integer})
+    @test is_juliarepr(TestTVUpper{<:Signed})
+
+    # typearg order
+    @test is_juliarepr(UnionAll(X, Pair{X,<:Any}))
+    @test is_juliarepr(UnionAll(X, Pair{<:Any,X}))
+
+    # duplicates
+    @test is_juliarepr(UnionAll(X, Pair{X,X}))
+
+    # nesting
+    @test is_juliarepr(UnionAll(X, Ref{Ref{X}}))
+    @test is_juliarepr(Union{T, Int} where T)
+    @test is_juliarepr(Pair{A, <:A} where A)
+
+    # renumbered typevars with same names
+    @test is_juliarepr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z}))))
+
+    # shortened typevar printing
+    @test repr(Ref{<:Any}) == "Ref"
+    @test repr(Pair{1, <:Any}) == "Pair{1}"
+    @test repr(Ref{<:Number}) == "Ref{<:Number}"
+    @test repr(Pair{1, <:Number}) == "Pair{1, <:Number}"
+    @test repr(Ref{<:Ref}) == "Ref{<:Ref}"
+    @test repr(Ref{>:Ref}) == "Ref{>:Ref}"
+    @test repr(Pair{<:Any, 1}) == "Pair{<:Any, 1}"
+    yname = sprint(Base.show_unquoted, Y.name)
+    @test repr(UnionAll(Y, Ref{Y})) == "Ref{$yname} where Ref<:$yname<:Ref"
+    @test endswith(repr(TestTVUpper{<:Real}), "TestTVUpper{<:Real}")
+    @test endswith(repr(TestTVUpper), "TestTVUpper")
+    @test endswith(repr(TestTVUpper{<:Signed}), "TestTVUpper{<:Signed}")
+
+    # exception for tuples
+    @test is_juliarepr(Tuple)
+    @test is_juliarepr(Tuple{})
+    @test is_juliarepr(Tuple{<:Any})
 end
 
 @testset "showarg" begin
@@ -1602,6 +1725,11 @@ end
     @test summary(p) == "2-element reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32}) with eltype Tuple{Float32, Float32}"
     @test Base.showarg(io, p, false) === nothing
     @test String(take!(io)) == "reinterpret(reshape, Tuple{Float32, Float32}, ::Matrix{Float32})"
+
+    r = Base.IdentityUnitRange(2:2)
+    B = @view ones(2)[r]
+    Base.showarg(io, B, false)
+    @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
 end
 
 @testset "Methods" begin
@@ -1646,7 +1774,7 @@ end
     # spurious binding resolutions
     show(IOContext(b, :module => TestShowType), Base.Pair)
     @test !Base.isbindingresolved(TestShowType, :Pair)
-    @test String(take!(b)) == "Base.Pair"
+    @test String(take!(b)) == "Core.Pair"
     show(IOContext(b, :module => TestShowType), Base.Complex)
     @test Base.isbindingresolved(TestShowType, :Complex)
     @test String(take!(b)) == "Complex"
@@ -1659,7 +1787,7 @@ end
     @test showstr([Float16(1)]) == "Float16[1.0]"
     @test showstr([[Float16(1)]]) == "Vector{Float16}[[1.0]]"
     @test replstr(Real[Float16(1)]) == "1-element Vector{Real}:\n Float16(1.0)"
-    @test replstr(Array{Real}[Real[1]]) == "1-element Vector{Array{Real, N} where N}:\n [1]"
+    @test replstr(Array{Real}[Real[1]]) == "1-element Vector{Array{Real}}:\n [1]"
     # printing tuples (Issue #25042)
     @test replstr(fill((Int64(1), zeros(Float16, 3)), 1)) ==
                  "1-element Vector{Tuple{Int64, Vector{Float16}}}:\n (1, [0.0, 0.0, 0.0])"
@@ -1702,13 +1830,13 @@ end
     @test showstr(Dict(true=>false)) == "Dict{Bool, Bool}(1 => 0)"
     @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
 
-    # issue #27979 (dislaying arrays of pairs containing arrays as first member)
+    # issue #27979 (displaying arrays of pairs containing arrays as first member)
     @test replstr([[1.0]=>1.0]) == "1-element Vector{Pair{Vector{Float64}, Float64}}:\n [1.0] => 1.0"
 
     # issue #28159
     @test replstr([(a=1, b=2), (a=3,c=4)]) == "2-element Vector{NamedTuple{names, Tuple{$Int, $Int}} where names}:\n (a = 1, b = 2)\n (a = 3, c = 4)"
 
-    @test replstr(Vector[Any[1]]) == "1-element Vector{Vector{T} where T}:\n Any[1]"
+    @test replstr(Vector[Any[1]]) == "1-element Vector{Vector}:\n Any[1]"
     @test replstr(AbstractDict{Integer,Integer}[Dict{Integer,Integer}(1=>2)]) ==
         "1-element Vector{AbstractDict{Integer, Integer}}:\n Dict(1 => 2)"
 
@@ -1839,7 +1967,7 @@ h_line() = f_line()
 @test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
 
 
-eval(Meta.parse("""function my_fun28173(x)
+eval(Meta._parse_string("""function my_fun28173(x)
     y = if x == 1
             "HI"
         elseif x == 2
@@ -1856,7 +1984,7 @@ eval(Meta.parse("""function my_fun28173(x)
             "three"
         end
     return y
-end""")) # use parse to control the line numbers
+end""", "a"^80, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
@@ -1866,13 +1994,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
         @test repr(src) == repr_ir
     end
     lines1 = split(repr(ir), '\n')
-    @test isempty(pop!(lines1))
+    @test all(isspace, pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(1), Val{1}), false)
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(2), Val{2}), true)
     Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
     Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
     lines2 = split(repr(ir), '\n')
-    @test isempty(pop!(lines2))
+    @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
     @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
     let line1 = popfirst!(lines1)
@@ -1890,6 +2018,12 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test pop!(lines2) == "   │          \$(QuoteNode(4))"
     @test pop!(lines2) == "17 │          \$(QuoteNode(3))" # TODO: this should print after the next statement
     @test lines1 == lines2
+
+    # verbose linetable
+    io = IOBuffer()
+    Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
+    seekstart(io)
+    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
 end
 
 # Verify that extra instructions at the end of the IR
@@ -1899,8 +2033,8 @@ let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     push!(ir.stmts.inst, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
-    @test isempty(pop!(lines))
-    @test pop!(lines) == "   ! ──       unreachable::#UNDEF"
+    @test all(isspace, pop!(lines))
+    @test pop!(lines) == "   !!! ──       unreachable::#UNDEF"
 end
 
 @testset "printing and interpolating nothing" begin
@@ -1929,7 +2063,7 @@ end
 
 @testset """printing "Any" is not skipped with nested arrays""" begin
     @test replstr(Union{X28004,Vector}[X28004(Any[X28004(1)])], :compact => true) ==
-        "1-element Vector{Union{X28004, Vector{T} where T}}:\n X(Any[X(1)])"
+        "1-element Vector{Union{X28004, Vector}}:\n X(Any[X(1)])"
 end
 
 # Issue 25589 - Underlines in cmd printing
@@ -2096,15 +2230,17 @@ end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
 @test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
-@test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector{T} where T}"
-@test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat{T} where T}"
+@test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector}"
+@test string(Union{Nothing, Number, Vector{<:Integer}}) == "Union{Nothing, Number, Vector{<:Integer}}"
+@test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat}"
+@test string(Union{Nothing, AbstractVecOrMat{<:Integer}}) == "Union{Nothing, AbstractVecOrMat{<:Integer}}"
 @test string(M37012.BStruct{T, T} where T) == "$(curmod_prefix)M37012.B2{T, T} where T"
 @test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Unsigned, S<:Signed}"
 @test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Signed, S<:T}"
 @test string(Union{M37012.SimpleU, Nothing}) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU}"
 @test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
-@test string(Union{AbstractVector, T} where T) == "Union{AbstractVector{T} where T, T} where T"
+@test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
@@ -2161,4 +2297,31 @@ end
     @test s == "UnionAll"
     s = sprint(show, MIME("text/plain"), Function)
     @test s == "Function"
+end
+
+@testset "printing inline n-dimensional arrays and one-column matrices" begin
+    @test replstr([Int[1 2 3 ;;; 4 5 6]]) == "1-element Vector{Array{$Int, 3}}:\n [1 2 3;;; 4 5 6]"
+    @test replstr([Int[1 2 3 ;;; 4 5 6;;;;]]) == "1-element Vector{Array{$Int, 4}}:\n [1 2 3;;; 4 5 6;;;;]"
+    @test replstr([fill(1, (20,20,20))]) == "1-element Vector{Array{$Int, 3}}:\n [1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; … ;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1;;; 1 1 … 1 1; 1 1 … 1 1; … ; 1 1 … 1 1; 1 1 … 1 1]"
+    @test replstr([fill(1, 5, 1)]) == "1-element Vector{Matrix{$Int}}:\n [1; 1; … ; 1; 1;;]"
+    @test replstr([fill(1, 5, 2)]) == "1-element Vector{Matrix{$Int}}:\n [1 1; 1 1; … ; 1 1; 1 1]"
+    @test replstr([[1;]]) == "1-element Vector{Vector{$Int}}:\n [1]"
+    @test replstr([[1;;]]) == "1-element Vector{Matrix{$Int}}:\n [1;;]"
+    @test replstr([[1;;;]]) == "1-element Vector{Array{$Int, 3}}:\n [1;;;]"
+end
+
+@testset "ncat and nrow" begin
+    @test_repr "[1;;]"
+    @test_repr "[1;;;]"
+    @test_repr "[1;; 2]"
+    @test_repr "[1;;; 2]"
+    @test_repr "[1;;; 2 3;;; 4]"
+    @test_repr "[1;;; 2;;;; 3;;; 4]"
+
+    @test_repr "T[1;;]"
+    @test_repr "T[1;;;]"
+    @test_repr "T[1;; 2]"
+    @test_repr "T[1;;; 2]"
+    @test_repr "T[1;;; 2 3;;; 4]"
+    @test_repr "T[1;;; 2;;;; 3;;; 4]"
 end

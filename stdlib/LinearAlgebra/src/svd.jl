@@ -72,6 +72,11 @@ function SVD{T}(U::AbstractArray, S::AbstractVector{Tr}, Vt::AbstractArray) wher
         convert(AbstractArray{T}, Vt))
 end
 
+SVD{T}(F::SVD) where {T} = SVD(
+    convert(AbstractMatrix{T}, F.U),
+    convert(AbstractVector{real(T)}, F.S),
+    convert(AbstractMatrix{T}, F.Vt))
+Factorization{T}(F::SVD) where {T} = SVD{T}(F)
 
 # iteration for destructuring into components
 Base.iterate(S::SVD) = (S.U, Val(:S))
@@ -170,6 +175,10 @@ true
 function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
     svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
 end
+function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T <: Union{Float16,Complex{Float16}}}
+    A = svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
+    return SVD{T}(A)
+end
 function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
     SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 end
@@ -235,10 +244,12 @@ svdvals(A::AbstractVector{<:BlasFloat}) = [norm(A)]
 svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S.S)::Vector{T}
 
-# SVD least squares
+### SVD least squares ###
 function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
+    m, n = size(A)
     k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
-    view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
+    mul!(view(B, 1:n, :), view(A.Vt, 1:k, :)', view(A.S, 1:k) .\ (view(A.U, :, 1:k)' * _cut_B(B, 1:m)))
+    return B
 end
 
 function inv(F::SVD{T}) where T
@@ -251,6 +262,10 @@ end
 
 size(A::SVD, dim::Integer) = dim == 1 ? size(A.U, dim) : size(A.Vt, dim)
 size(A::SVD) = (size(A, 1), size(A, 2))
+
+function adjoint(F::SVD)
+    return SVD(F.Vt', F.S, F.U')
+end
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:AbstractArray})
     summary(io, F); println(io)

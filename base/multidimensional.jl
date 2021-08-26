@@ -104,9 +104,9 @@ module IteratorsMD
 
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
-    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 0, Val(N)))
+    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(Returns(0), Val(N)))
     oneunit(::CartesianIndex{N}) where {N} = oneunit(CartesianIndex{N})
-    oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
+    oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(Returns(1), Val(N)))
 
     # arithmetic, min/max
     @inline (-)(index::CartesianIndex{N}) where {N} =
@@ -125,9 +125,11 @@ module IteratorsMD
 
     # comparison
     @inline isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = _isless(0, I1.I, I2.I)
-    @inline function _isless(ret, I1::NTuple{N,Int}, I2::NTuple{N,Int}) where N
-        newret = ifelse(ret==0, icmp(I1[N], I2[N]), ret)
-        _isless(newret, Base.front(I1), Base.front(I2))
+    @inline function _isless(ret, I1::Tuple{Int,Vararg{Int,N}}, I2::Tuple{Int,Vararg{Int,N}}) where {N}
+        newret = ifelse(ret==0, icmp(last(I1), last(I2)), ret)
+        t1, t2 = Base.front(I1), Base.front(I2)
+        # avoid dynamic dispatch by telling the compiler relational invariants
+        return isa(t1, Tuple{}) ? _isless(newret, (), ()) : _isless(newret, t1, t2::Tuple{Int,Vararg{Int}})
     end
     _isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
@@ -168,6 +170,7 @@ module IteratorsMD
         error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
 
     # Iteration
+    const OrdinalRangeInt = OrdinalRange{Int, Int}
     """
         CartesianIndices(sz::Dims) -> R
         CartesianIndices((istart:[istep:]istop, jstart:[jstep:]jstop, ...)) -> R
@@ -262,13 +265,13 @@ module IteratorsMD
 
     For cartesian to linear index conversion, see [`LinearIndices`](@ref).
     """
-    struct CartesianIndices{N,R<:NTuple{N,OrdinalRange{Int, Int}}} <: AbstractArray{CartesianIndex{N},N}
+    struct CartesianIndices{N,R<:NTuple{N,OrdinalRangeInt}} <: AbstractArray{CartesianIndex{N},N}
         indices::R
     end
 
     CartesianIndices(::Tuple{}) = CartesianIndices{0,typeof(())}(())
     function CartesianIndices(inds::NTuple{N,OrdinalRange{<:Integer, <:Integer}}) where {N}
-        indices = map(r->convert(OrdinalRange{Int, Int}, r), inds)
+        indices = map(r->convert(OrdinalRangeInt, r), inds)
         CartesianIndices{N, typeof(indices)}(indices)
     end
 
@@ -278,7 +281,7 @@ module IteratorsMD
 
     CartesianIndices(A::AbstractArray) = CartesianIndices(axes(A))
 
-    _convert2ind(sz::Bool) = Base.OneTo(Int(sz))
+    _convert2ind(sz::Bool) = Base.OneTo(Int8(sz))
     _convert2ind(sz::Integer) = Base.OneTo(sz)
     _convert2ind(sz::AbstractUnitRange) = first(sz):last(sz)
     _convert2ind(sz::OrdinalRange) = first(sz):step(sz):last(sz)
@@ -350,8 +353,32 @@ module IteratorsMD
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
+    # getindex for a 0D CartesianIndices is necessary for disambiguation
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{0,R}) where {R}
+        CartesianIndex()
+    end
     @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
         CartesianIndex(getindex.(iter.indices, I))
+    end
+
+    # CartesianIndices act as a multidimensional range, so cartesian indexing of CartesianIndices
+    # with compatible dimensions may be seen as indexing into the component ranges.
+    # This may use the special indexing behavior implemented for ranges to return another CartesianIndices
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R},
+        I::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon}, N}) where {N,R}
+        CartesianIndices(getindex.(iter.indices, I))
+    end
+    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N},
+        C::CartesianIndices{N}) where {N}
+        CartesianIndices(getindex.(iter.indices, C.indices))
+    end
+
+    # If dimensions permit, we may index into a CartesianIndices directly instead of constructing a SubArray wrapper
+    @propagate_inbounds function Base.view(c::CartesianIndices{N}, r::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon},N}) where {N}
+        getindex(c, r...)
+    end
+    @propagate_inbounds function Base.view(c::CartesianIndices{N}, C::CartesianIndices{N}) where {N}
+        getindex(c, C)
     end
 
     ndims(R::CartesianIndices) = ndims(typeof(R))
@@ -394,19 +421,21 @@ module IteratorsMD
     # `iterate` returns `Union{Nothing, Tuple}`, we explicitly pass a `valid` flag to eliminate
     # the type instability inside the core `__inc` logic, and this gives better runtime performance.
     __inc(::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __inc(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
+    @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] + step(rng)
         valid = __is_valid_range(I, rng) && state[1] != last(rng)
         return valid, (I, )
     end
-    @inline function __inc(state, indices)
+    @inline function __inc(state::Tuple{Int,Int,Vararg{Int,N}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt,N}}) where {N}
         rng = indices[1]
         I = state[1] + step(rng)
         if __is_valid_range(I, rng) && state[1] != last(rng)
             return true, (I, tail(state)...)
         end
-        valid, I = __inc(tail(state), tail(indices))
+        t1, t2 = tail(state), tail(indices)
+        # avoid dynamic dispatch by telling the compiler relational invariants
+        valid, I = isa(t1, Tuple{Int}) ? __inc(t1, t2::Tuple{OrdinalRangeInt}) : __inc(t1, t2::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         return valid, (first(rng), I...)
     end
 
@@ -458,7 +487,7 @@ module IteratorsMD
 
     # Split out the first N elements of a tuple
     @inline function split(t, V::Val)
-        ref = ntuple(d->true, V)  # create a reference tuple of length N
+        ref = ntuple(Returns(true), V)  # create a reference tuple of length N
         _split1(t, ref), _splitrest(t, ref)
     end
     @inline _split1(t, ref) = (t[1], _split1(tail(t), tail(ref))...)
@@ -505,20 +534,21 @@ module IteratorsMD
 
     # decrement post check to avoid integer overflow
     @inline __dec(::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __dec(state::Tuple{Int}, indices::Tuple{<:OrdinalRange})
+    @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] - step(rng)
         valid = __is_valid_range(I, rng) && state[1] != first(rng)
         return valid, (I,)
     end
-
-    @inline function __dec(state, indices)
+    @inline function __dec(state::Tuple{Int,Int,Vararg{Int,N}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt,N}}) where {N}
         rng = indices[1]
         I = state[1] - step(rng)
         if __is_valid_range(I, rng) && state[1] != first(rng)
             return true, (I, tail(state)...)
         end
-        valid, I = __dec(tail(state), tail(indices))
+        t1, t2 = tail(state), tail(indices)
+        # avoid dynamic dispatch by telling the compiler relational invariants
+        valid, I = isa(t1, Tuple{Int}) ? __dec(t1, t2::Tuple{OrdinalRangeInt}) : __dec(t1, t2::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         return valid, (last(rng), I...)
     end
 
@@ -621,7 +651,7 @@ using .IteratorsMD
 ## Bounds-checking with CartesianIndex
 # Disallow linear indexing with CartesianIndex
 function checkbounds(::Type{Bool}, A::AbstractArray, i::Union{CartesianIndex, AbstractArray{<:CartesianIndex}})
-    @_inline_meta
+    @inline
     checkbounds_indices(Bool, axes(A), (i,))
 end
 
@@ -685,10 +715,10 @@ checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) = all(checkindex.(Boo
 # rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
 @inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
 @inline function index_ndims(i1::CartesianIndex, I...)
-    (map(x->true, i1.I)..., index_ndims(I...)...)
+    (map(Returns(true), i1.I)..., index_ndims(I...)...)
 end
 @inline function index_ndims(i1::AbstractArray{CartesianIndex{N}}, I...) where N
-    (ntuple(x->true, Val(N))..., index_ndims(I...)...)
+    (ntuple(Returns(true), Val(N))..., index_ndims(I...)...)
 end
 index_ndims() = ()
 
@@ -698,7 +728,7 @@ index_ndims() = ()
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
 @inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N
-    (ntuple(x->true, Val(N))..., index_dimsum(I...)...)
+    (ntuple(Returns(true), Val(N))..., index_dimsum(I...)...)
 end
 index_dimsum() = ()
 
@@ -822,7 +852,7 @@ uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{Any}}) = Slice(OneTo(1))
 uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{Any}}) = Slice(inds[1])
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
-getindex(x::Number, i::CartesianIndex{0}) = x
+getindex(x::Union{Number,AbstractChar}, ::CartesianIndex{0}) = x
 getindex(t::Tuple,  i::CartesianIndex{1}) = getindex(t, i.I[1])
 
 # These are not defined on directly on getindex to avoid
@@ -843,14 +873,14 @@ function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, 
     # This is specifically not inlined to prevent excessive allocations in type unstable code
     shape = index_shape(I...)
     dest = similar(A, shape)
-    map(unsafe_length, axes(dest)) == map(unsafe_length, shape) || throw_checksize_error(dest, shape)
+    map(length, axes(dest)) == map(length, shape) || throw_checksize_error(dest, shape)
     _unsafe_getindex!(dest, A, I...) # usually a generated function, don't allow it to impact inference result
     return dest
 end
 
 function _generate_unsafe_getindex!_body(N::Int)
     quote
-        @_inline_meta
+        @inline
         D = eachindex(dest)
         Dy = iterate(D)
         @inbounds @nloops $N j d->I[d] begin
@@ -883,7 +913,7 @@ end
 
 ## setindex! ##
 function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(A, I...)
     _unsafe_setindex!(l, _maybe_reshape(l, A, I...), x, I...)
     A
@@ -964,7 +994,7 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
 end
 function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
-    return T[@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
+    return [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
 end
 
 ### from abstractarray.jl
@@ -1160,6 +1190,8 @@ their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
 
+See also: [`circshift`](@ref).
+
 # Examples
 ```julia-repl
 julia> src = reshape(Vector(1:16), (4,4))
@@ -1219,14 +1251,14 @@ end
 
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
-@inline function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{UnitRange{Int},Slice})
+@inline function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{AbstractUnitRange{Int},Slice})
     copy_chunks!(X.chunks, 1, B.chunks, indexoffset(I0)+1, length(I0))
     return X
 end
 
 # Optimization where the inner dimension is contiguous improves perf dramatically
 @generated function _unsafe_getindex!(X::BitArray, B::BitArray,
-        I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)
+        I0::Union{Slice,UnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Slice}...)
     N = length(I)
     quote
         $(Expr(:meta, :inline))
@@ -1361,7 +1393,7 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::Union{Colon,UnitRange{Int}})
+@inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray}, J0::Union{Colon,AbstractUnitRange{Int}})
     I0 = to_indices(B, (J0,))[1]
     @boundscheck checkbounds(B, I0)
     l0 = length(I0)
@@ -1373,13 +1405,13 @@ end
 end
 
 @inline function setindex!(B::BitArray, X::Union{StridedArray,BitArray},
-        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
     J = to_indices(B, (I0, I...))
     @boundscheck checkbounds(B, J...)
     _unsafe_setindex!(B, X, J...)
 end
 @generated function _unsafe_setindex!(B::BitArray, X::Union{StridedArray,BitArray},
-        I0::Union{Slice,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Slice}...)
+        I0::Union{Slice,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Slice}...)
     N = length(I)
     quote
         idxlens = @ncall $N index_lengths I0 d->I[d]
@@ -1414,7 +1446,7 @@ end
 end
 
 @propagate_inbounds function setindex!(B::BitArray, X::AbstractArray,
-        I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+        I0::Union{Colon,AbstractUnitRange{Int}}, I::Union{Int,AbstractUnitRange{Int},Colon}...)
     _setindex!(IndexStyle(B), B, X, to_indices(B, (I0, I...))...)
 end
 

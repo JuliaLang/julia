@@ -103,7 +103,8 @@ Name: "addtopath"; Description: "Add {#AppName} to PATH"; GroupDescription: "{cm
 
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; Excludes: "{#AppMainExeName}"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs;
+Source: "{#SourceDir}\{#AppMainExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion sign;
 
 
 [Icons]

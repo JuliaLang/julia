@@ -60,7 +60,7 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = "ARRAY{FLOAT64, N}"
+tag = "ARRAY"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
@@ -331,7 +331,7 @@ let err = tempname(),
         redirect_stderr(new_stderr)
         println(new_stderr, "start")
         flush(new_stderr)
-        @eval @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
@@ -341,10 +341,11 @@ let err = tempname(),
         close(new_stderr)
         let errstr = read(err, String)
             @test startswith(errstr, """start
+                end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
                 """) || errstr
-            @test endswith(errstr, "\nend\n") || errstr
+            @test !endswith(errstr, "\nend\n") || errstr
         end
         rm(err)
     end
@@ -442,23 +443,36 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
 
     rgx = r"%"
     buf = IOBuffer()
-    output = ""
     #test that the string output is at&t syntax by checking for occurrences of '%'s
     code_native(buf, linear_foo, (), syntax = :att, debuginfo = :none)
-    output = String(take!(buf))
-
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
     code_native(buf, linear_foo, (), syntax = :intel, debuginfo = :none)
-    output = String(take!(buf))
-
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test !occursin(rgx, output)
 
     code_native(buf, linear_foo, ())
     output = String(take!(buf))
-
     @test occursin(rgx, output)
+
+    @testset "binary" begin
+        # check the RET instruction (opcode: C3)
+        ret = r"^; [0-9a-f]{4}: c3$"m
+
+        # without binary flag (default)
+        code_native(buf, linear_foo, (), dump_module=false)
+        output = String(take!(buf))
+        @test !occursin(ret, output)
+
+        # with binary flag
+        for binary in false:true
+            code_native(buf, linear_foo, (); binary, dump_module=false)
+            output = String(take!(buf))
+            @test occursin(ret, output) == binary
+        end
+    end
 end
 
 @testset "error message" begin
@@ -554,4 +568,55 @@ file, ln = functionloc(versioninfo, Tuple{})
     io = IOBuffer()
     code_native(io, eltype, Tuple{Int})
     @test occursin("eltype", String(take!(io)))
+end
+
+@testset "Issue #41010" begin
+    struct A41010 end
+
+    struct B41010
+        a::A41010
+    end
+    export B41010
+
+    ms = methodswith(A41010, @__MODULE__) |> collect
+    @test ms[1].name == :B41010
+end
+
+# macro options should accept both literals and variables
+let
+    opt = false
+    @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
+end
+
+@testset "@time_imports" begin
+    mktempdir() do dir
+        cd(dir) do
+            try
+                pushfirst!(LOAD_PATH, dir)
+                foo_file = joinpath(dir, "Foo3242.jl")
+                write(foo_file,
+                    """
+                    module Foo3242
+                    foo() = 1
+                    end
+                    """)
+
+                Base.compilecache(Base.PkgId("Foo3242"))
+
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stdout(f) do
+                    @eval @time_imports using Foo3242
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("ms  Foo3242\n", String(buf))
+
+            finally
+                filter!((≠)(dir), LOAD_PATH)
+            end
+        end
+    end
 end

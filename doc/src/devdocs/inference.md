@@ -6,8 +6,8 @@
 to the process of deducing the types of later values from the types of
 input values. Julia's approach to inference has been described in blog
 posts
-([1](https://juliacomputing.com/blog/2016/04/04/inference-convergence.html),
-[2](https://juliacomputing.com/blog/2017/05/15/inference-converage2.html)).
+([1](https://juliacomputing.com/blog/2016/04/inference-convergence/),
+[2](https://juliacomputing.com/blog/2017/05/inference-converage2/)).
 
 ## Debugging compiler.jl
 
@@ -37,9 +37,8 @@ m = first(mths)
 interp = Core.Compiler.NativeInterpreter()
 sparams = Core.svec()      # this particular method doesn't have type-parameters
 optimize = true            # run all inference optimizations
-cached = false             # force inference to happen (do not use cached results)
 types = Tuple{typeof(convert), atypes.parameters...} # Tuple{typeof(convert), Type{Int}, UInt}
-Core.Compiler.typeinf_code(interp, types, sparams, optimize, cached)
+Core.Compiler.typeinf_code(interp, m, types, sparams, optimize)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by

@@ -410,6 +410,7 @@ LinearAlgebra.nullspace
 Base.kron
 Base.kron!
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
+Base.cis(::AbstractMatrix)
 Base.:^(::AbstractMatrix, ::Number)
 Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)
@@ -576,6 +577,7 @@ LinearAlgebra.BLAS.trmv
 LinearAlgebra.BLAS.trsv!
 LinearAlgebra.BLAS.trsv
 LinearAlgebra.BLAS.set_num_threads
+LinearAlgebra.BLAS.get_num_threads
 ```
 
 ## LAPACK functions

@@ -15,17 +15,17 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(1234321)
+Random.seed!(1234323)
 
 @testset "Matrix condition number" begin
     ainit = rand(n,n)
     @testset "for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         ainit = convert(Matrix{elty}, ainit)
         for a in (copy(ainit), view(ainit, 1:n, 1:n))
-            @test cond(a,1) ≈ 4.837320054554436e+02 atol=0.01
-            @test cond(a,2) ≈ 1.960057871514615e+02 atol=0.01
-            @test cond(a,Inf) ≈ 3.757017682707787e+02 atol=0.01
-            @test cond(a[:,1:5]) ≈ 10.233059337453463 atol=0.01
+            @test cond(a,1) ≈ 50.60863783272028 atol=0.5
+            @test cond(a,2) ≈ 23.059634761613314 atol=0.5
+            @test cond(a,Inf) ≈ 45.12503933120795 atol=0.4
+            @test cond(a[:,1:5]) ≈ 5.719500544258695 atol=0.01
             @test_throws ArgumentError cond(a,3)
         end
     end
@@ -88,8 +88,19 @@ bimg  = randn(n,2)/2
                 @test nullspace(zeros(eltya,n)) == Matrix(I, 1, 1)
                 @test nullspace(zeros(eltya,n), 0.1) == Matrix(I, 1, 1)
                 # test empty cases
-                @test nullspace(zeros(n, 0)) == Matrix(I, 0, 0)
-                @test nullspace(zeros(0, n)) == Matrix(I, n, n)
+                @test @inferred(nullspace(zeros(n, 0))) == Matrix(I, 0, 0)
+                @test @inferred(nullspace(zeros(0, n))) == Matrix(I, n, n)
+                # test vector cases
+                @test size(@inferred nullspace(a[:, 1])) == (1, 0)
+                @test size(@inferred nullspace(zero(a[:, 1]))) == (1, 1)
+                @test nullspace(zero(a[:, 1]))[1,1] == 1
+                # test adjortrans vectors, including empty ones
+                @test size(@inferred nullspace(a[:, 1]')) == (n, n - 1)
+                @test @inferred(nullspace(a[1:0, 1]')) == Matrix(I, 0, 0)
+                @test size(@inferred nullspace(b[1, :]')) == (2, 1)
+                @test @inferred(nullspace(b[1, 1:0]')) == Matrix(I, 0, 0)
+                @test size(@inferred nullspace(transpose(a[:, 1]))) == (n, n - 1)
+                @test size(@inferred nullspace(transpose(b[1, :]))) == (2, 1)
             end
         end
     end # for eltyb
@@ -145,9 +156,13 @@ end
         @testset "Matrix square root" begin
             asq = sqrt(a)
             @test asq*asq ≈ a
+            @test sqrt(transpose(a))*sqrt(transpose(a)) ≈ transpose(a)
+            @test sqrt(adjoint(a))*sqrt(adjoint(a)) ≈ adjoint(a)
             asym = a + a' # symmetric indefinite
             asymsq = sqrt(asym)
             @test asymsq*asymsq ≈ asym
+            @test sqrt(transpose(asym))*sqrt(transpose(asym)) ≈ transpose(asym)
+            @test sqrt(adjoint(asym))*sqrt(adjoint(asym)) ≈ adjoint(asym)
             if eltype(a) <: Real  # real square root
                 apos = a * a
                 @test sqrt(apos)^2 ≈ apos
@@ -447,6 +462,11 @@ end
                                      183.765138646367 183.765138646366  163.679601723179;
                                       71.797032399996  91.8825693231832 111.968106246371]')
         @test exp(A1) ≈ eA1
+        @test exp(adjoint(A1)) ≈ adjoint(eA1)
+        @test exp(transpose(A1)) ≈ transpose(eA1)
+        for f in (sin, cos, sinh, cosh, tanh, tan)
+            @test f(adjoint(A1)) ≈ f(copy(adjoint(A1)))
+        end
 
         A2  = convert(Matrix{elty},
                       [29.87942128909879    0.7815750847907159 -2.289519314033932;
@@ -457,26 +477,45 @@ end
                        -18231880972009252.0  60605228702221920.0 101291842930249760.0;
                        -30475770808580480.0 101291842930249728.0 169294411240851968.0])
         @test exp(A2) ≈ eA2
+        @test exp(adjoint(A2)) ≈ adjoint(eA2)
+        @test exp(transpose(A2)) ≈ transpose(eA2)
 
         A3  = convert(Matrix{elty}, [-131 19 18;-390 56 54;-387 57 52])
         eA3 = convert(Matrix{elty}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
                                       0.367879439109187 1.47151775849686  1.10363831732856;
                                       0.135335281175235 0.406005843524598 0.541341126763207]')
         @test exp(A3) ≈ eA3
+        @test exp(adjoint(A3)) ≈ adjoint(eA3)
+        @test exp(transpose(A3)) ≈ transpose(eA3)
 
         A4 = convert(Matrix{elty}, [0.25 0.25; 0 0])
         eA4 = convert(Matrix{elty}, [1.2840254166877416 0.2840254166877415; 0 1])
         @test exp(A4) ≈ eA4
+        @test exp(adjoint(A4)) ≈ adjoint(eA4)
+        @test exp(transpose(A4)) ≈ transpose(eA4)
 
         A5 = convert(Matrix{elty}, [0 0.02; 0 0])
         eA5 = convert(Matrix{elty}, [1 0.02; 0 1])
         @test exp(A5) ≈ eA5
+        @test exp(adjoint(A5)) ≈ adjoint(eA5)
+        @test exp(transpose(A5)) ≈ transpose(eA5)
 
         # Hessenberg
         @test hessenberg(A1).H ≈ convert(Matrix{elty},
                                                  [4.000000000000000  -1.414213562373094  -1.414213562373095
                                                   -1.414213562373095   4.999999999999996  -0.000000000000000
                                                   0  -0.000000000000002   3.000000000000000])
+
+        # cis always returns a complex matrix
+        if elty <: Real
+            eltyim = Complex{elty}
+        else
+            eltyim = elty
+        end
+
+        @test cis(A1) ≈ convert(Matrix{eltyim}, [-0.339938 + 0.000941506im   0.772659  - 0.8469im     0.52745  + 0.566543im;
+                                                  0.650054 - 0.140179im     -0.0762135 + 0.284213im   0.38633  - 0.42345im ;
+                                                  0.650054 - 0.140179im      0.913779  + 0.143093im  -0.603663 - 0.28233im ]) rtol=7e-7
     end
 
     @testset "Additional tests for $elty" for elty in (Float64, ComplexF64)
@@ -485,15 +524,23 @@ end
                                      1/4 1/5 1/6 1/7;
                                      1/5 1/6 1/7 1/8])
         @test exp(log(A4)) ≈ A4
+        @test exp(log(transpose(A4))) ≈ transpose(A4)
+        @test exp(log(adjoint(A4))) ≈ adjoint(A4)
 
         A5  = convert(Matrix{elty}, [1 1 0 1; 0 1 1 0; 0 0 1 1; 1 0 0 1])
         @test exp(log(A5)) ≈ A5
+        @test exp(log(transpose(A5))) ≈ transpose(A5)
+        @test exp(log(adjoint(A5))) ≈ adjoint(A5)
 
         A6  = convert(Matrix{elty}, [-5 2 0 0 ; 1/2 -7 3 0; 0 1/3 -9 4; 0 0 1/4 -11])
         @test exp(log(A6)) ≈ A6
+        @test exp(log(transpose(A6))) ≈ transpose(A6)
+        @test exp(log(adjoint(A6))) ≈ adjoint(A6)
 
         A7  = convert(Matrix{elty}, [1 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1])
         @test exp(log(A7)) ≈ A7
+        @test exp(log(transpose(A7))) ≈ transpose(A7)
+        @test exp(log(adjoint(A7))) ≈ adjoint(A7)
     end
 
     @testset "Integer promotion tests" begin
@@ -560,8 +607,13 @@ end
             @test cos(A) ≈ cos(-A)
             @test sin(A) ≈ -sin(-A)
             @test tan(A) ≈ sin(A) / cos(A)
+
             @test cos(A) ≈ real(exp(im*A))
             @test sin(A) ≈ imag(exp(im*A))
+            @test cos(A) ≈ real(cis(A))
+            @test sin(A) ≈ imag(cis(A))
+            @test cis(A) ≈ cos(A) + im * sin(A)
+
             @test cosh(A) ≈ 0.5 * (exp(A) + exp(-A))
             @test sinh(A) ≈ 0.5 * (exp(A) - exp(-A))
             @test cosh(A) ≈ cosh(-A)
@@ -605,6 +657,9 @@ end
 
         @test cos(A5) ≈ 0.5 * (exp(im*A5) + exp(-im*A5))
         @test sin(A5) ≈ -0.5im * (exp(im*A5) - exp(-im*A5))
+        @test cos(A5) ≈ 0.5 * (cis(A5) + cis(-A5))
+        @test sin(A5) ≈ -0.5im * (cis(A5) - cis(-A5))
+
         @test cosh(A5) ≈ 0.5 * (exp(A5) + exp(-A5))
         @test sinh(A5) ≈ 0.5 * (exp(A5) - exp(-A5))
     end
@@ -868,6 +923,38 @@ end
         @test sqrt(A8)^2 ≈ A8
         @test typeof(sqrt(A8)) == Matrix{elty}
     end
+end
+
+@testset "issue #40141" begin
+    x = [-1 -eps() 0 0; eps() -1 0 0; 0 0 -1 -eps(); 0 0 eps() -1]
+    @test sqrt(x)^2 ≈ x
+
+    x2 =  [-1 -eps() 0 0; 3eps() -1 0 0; 0 0 -1 -3eps(); 0 0 eps() -1]
+    @test sqrt(x2)^2 ≈ x2
+
+    x3 = [-1 -eps() 0 0; eps() -1 0 0; 0 0 -1 -eps(); 0 0 eps() Inf]
+    @test all(isnan, sqrt(x3))
+
+    # test overflow/underflow handled
+    x4 = [0 -1e200; 1e200 0]
+    @test sqrt(x4)^2 ≈ x4
+
+    x5 = [0 -1e-200; 1e-200 0]
+    @test sqrt(x5)^2 ≈ x5
+
+    x6 = [1.0 1e200; -1e-200 1.0]
+    @test sqrt(x6)^2 ≈ x6
+end
+
+@testset "matrix logarithm block diagonal underflow/overflow" begin
+    x1 = [0 -1e200; 1e200 0]
+    @test exp(log(x1)) ≈ x1
+
+    x2 = [0 -1e-200; 1e-200 0]
+    @test exp(log(x2)) ≈ x2
+
+    x3 = [1.0 1e200; -1e-200 1.0]
+    @test exp(log(x3)) ≈ x3
 end
 
 @testset "issue #7181" begin

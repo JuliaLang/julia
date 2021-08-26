@@ -16,7 +16,7 @@ typedef struct {
         size_t ss_size;
     } uc_stack;
     jmp_buf uc_mcontext;
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
     void *tsan_state;
 #endif
 } win32_ucontext_t;

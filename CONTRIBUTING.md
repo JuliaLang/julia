@@ -6,7 +6,7 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 ## Learning Julia
 
-[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org) covers the language and core library features, and is searchable.
+[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike.
 
 ## Before filing an issue
 
@@ -286,6 +286,11 @@ runtest harness).
      `git rebase --whitespace=fix HEAD~1`.
    - To remove whitespace relative to the `master` branch, run
      `git rebase --whitespace=fix master`.
+
+#### Git Recommendations For Pull Request Reviewers
+
+- When merging, we generally like `squash+merge`. Unless it is the rare case of a PR with carefully staged individual commits that you want in the history separately, in which case `merge` is acceptable, but usually prefer `squash+merge`.
+
 
 ## Resources
 

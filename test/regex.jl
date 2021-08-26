@@ -101,6 +101,17 @@
         @test keys(m) == ["a", 2, "b"]
     end
 
+    # Unicode named subpatterns and property mixes of scripts and classes (issues #35322/#35459 and #40231)
+    let m = match(r"(?<numéro>\d)[\pZs]*(?<文本>[\p{Han}\p{P}]+)", "1 孔生雪笠，聖裔也。為人蘊藉，工詩。")
+        @test haskey(m, :numéro)
+        @test haskey(m, "文本")
+        @test !haskey(m, "ゑ")
+        @test (m[:numéro], m[:文本]) == ("1", "孔生雪笠，聖裔也。為人蘊藉，工詩。")
+        @test (m[1], m[2]) == (m[:numéro], m[:文本])
+        @test sprint(show, m) == "RegexMatch(\"1 孔生雪笠，聖裔也。為人蘊藉，工詩。\", numéro=\"1\", 文本=\"孔生雪笠，聖裔也。為人蘊藉，工詩。\")"
+        @test keys(m) == ["numéro", "文本"]
+    end
+
     # Backcapture reference in substitution string
     @test replace("abcde", r"(..)(?P<byname>d)" => s"\g<byname>xy\\\1") == "adxy\\bce"
     @test_throws ErrorException replace("a", r"(?P<x>)" => s"\g<y>")

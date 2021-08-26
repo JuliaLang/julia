@@ -131,7 +131,7 @@ Suspends execution for `s` seconds.
 This function does not yield to Julia's scheduler and therefore blocks
 the Julia thread that it is running on for the duration of the sleep time.
 
-See also: [`sleep`](@ref)
+See also [`sleep`](@ref).
 """
 systemsleep
 
@@ -401,6 +401,79 @@ rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
 Interface to the C `srand(seed)` function.
 """
 srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
+
+struct Cpasswd
+   username::Cstring
+   uid::Clong
+   gid::Clong
+   shell::Cstring
+   homedir::Cstring
+   gecos::Cstring
+   Cpasswd() = new(C_NULL, -1, -1, C_NULL, C_NULL, C_NULL)
+end
+mutable struct Cgroup
+    groupname::Cstring     # group name
+    gid::Clong        # group ID
+    mem::Ptr{Cstring} # group members
+    Cgroup() = new(C_NULL, -1, C_NULL)
+end
+struct Passwd
+    username::String
+    uid::Int
+    gid::Int
+    shell::String
+    homedir::String
+    gecos::String
+end
+struct Group
+    groupname::String
+    gid::Int
+    mem::Vector{String}
+end
+
+function getpwuid(uid::Unsigned, throw_error::Bool=true)
+    ref_pd = Ref(Cpasswd())
+    ret = ccall(:jl_os_get_passwd, Cint, (Ref{Cpasswd}, UInt), ref_pd, uid)
+    if ret != 0
+        throw_error && Base.uv_error("getpwuid", ret)
+        return
+    end
+    pd = ref_pd[]
+    pd = Passwd(
+        pd.username == C_NULL ? "" : unsafe_string(pd.username),
+        pd.uid,
+        pd.gid,
+        pd.shell == C_NULL ? "" : unsafe_string(pd.shell),
+        pd.homedir == C_NULL ? "" : unsafe_string(pd.homedir),
+        pd.gecos == C_NULL ? "" : unsafe_string(pd.gecos),
+    )
+    ccall(:uv_os_free_passwd, Cvoid, (Ref{Cpasswd},), ref_pd)
+    return pd
+end
+function getgrgid(gid::Unsigned, throw_error::Bool=true)
+    ref_gp = Ref(Cgroup())
+    ret = ccall(:jl_os_get_group, Cint, (Ref{Cgroup}, UInt), ref_gp, gid)
+    if ret != 0
+        throw_error && Base.uv_error("getgrgid", ret)
+        return
+    end
+    gp = ref_gp[]
+    members = String[]
+    if gp.mem != C_NULL
+        while true
+            mem = unsafe_load(gp.mem, length(members) + 1)
+            mem == C_NULL && break
+            push!(members, unsafe_string(mem))
+        end
+    end
+    gp = Group(
+         gp.groupname == C_NULL ? "" : unsafe_string(gp.groupname),
+         gp.gid,
+         members,
+    )
+    ccall(:jl_os_free_group, Cvoid, (Ref{Cgroup},), ref_gp)
+    return gp
+end
 
 # Include dlopen()/dlpath() code
 include("libdl.jl")

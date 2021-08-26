@@ -10,6 +10,7 @@
 module Experimental
 
 using Base: Threads, sync_varname
+using Base.Meta
 
 """
     Const(A::Array)
@@ -28,9 +29,9 @@ Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
 @eval Base.getindex(A::Const, i1::Int) =
-    (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
+    (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
 @eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =
-  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+  (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 """
     @aliasscope expr
@@ -114,7 +115,8 @@ parent module.
 Supported values are 0, 1, 2, and 3.
 
 The effective optimization level is the minimum of that specified on the
-command line and in per-module settings.
+command line and in per-module settings. If a `--min-optlevel` value is
+set on the command line, that is enforced as a lower bound.
 """
 macro optlevel(n::Int)
     return Expr(:meta, :optlevel, n)
@@ -254,5 +256,47 @@ end
 
 # OpaqueClosure
 include("opaque_closure.jl")
+
+"""
+    Experimental.@overlay mt [function def]
+
+Define a method and add it to the method table `mt` instead of to the global method table.
+This can be used to implement a method override mechanism. Regular compilation will not
+consider these methods, and you should customize the compilation flow to look in these
+method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+
+"""
+macro overlay(mt, def)
+    def = macroexpand(__module__, def) # to expand @inline, @generated, etc
+    if !isexpr(def, [:function, :(=)])
+        error("@overlay requires a function Expr")
+    end
+    if isexpr(def.args[1], :call)
+        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
+    elseif isexpr(def.args[1], :where)
+        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    else
+        error("@overlay requires a function Expr")
+    end
+    esc(def)
+end
+
+let new_mt(name::Symbol, mod::Module) = begin
+        ccall(:jl_check_top_level_effect, Cvoid, (Any, Cstring), mod, "@MethodTable")
+        ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
+    end
+    @eval macro MethodTable(name::Symbol)
+        esc(:(const $name = $$new_mt($(quot(name)), $(__module__))))
+    end
+end
+
+"""
+    Experimental.@MethodTable(name)
+
+Create a new MethodTable in the current module, bound to `name`. This method table can be
+used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
+adding them to the global method table.
+"""
+:@MethodTable
 
 end

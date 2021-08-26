@@ -488,6 +488,8 @@ end
         @test gcd(b, a) === T(2)//T(105)
         @test lcm(a, b) === T(30)//T(7)
         if T <: Signed
+            @test gcd(-a) === a
+            @test lcm(-b) === b
             @test gcdx(a, b) === (T(2)//T(105), T(-11), T(4))
             @test gcd(-a, b) === T(2)//T(105)
             @test gcd(a, -b) === T(2)//T(105)
@@ -615,4 +617,16 @@ end
 
 @testset "checked_den with different integer types" begin
     @test Base.checked_den(Int8(4), Int32(8)) == Base.checked_den(Int32(4), Int32(8))
+end
+
+@testset "Rational{T} with non-concrete T (issue #41222)" begin
+    @test @inferred(Rational{Integer}(2,3)) isa Rational{Integer}
+end
+
+@testset "issue #41489" begin
+    @test Core.Compiler.return_type(+, NTuple{2, Rational}) == Rational
+    @test Core.Compiler.return_type(-, NTuple{2, Rational}) == Rational
+
+    A=Rational[1 1 1; 2 2 2; 3 3 3]
+    @test @inferred(A*A) isa Matrix{Rational}
 end

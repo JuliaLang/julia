@@ -204,6 +204,8 @@ Cumulative product of an iterator. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
+See also [`cumprod!`](@ref), [`accumulate`](@ref), [`cumsum`](@ref).
+
 !!! compat "Julia 1.5"
     `cumprod` on a non-array iterator requires at least Julia 1.5.
 
@@ -291,10 +293,10 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
         # This branch takes care of the cases not handled by `_accumulate!`.
         return collect(Iterators.accumulate(op, A; kw...))
     end
-    nt = kw.data
-    if nt isa NamedTuple{()}
+    nt = values(kw)
+    if isempty(kw)
         out = similar(A, promote_op(op, eltype(A), eltype(A)))
-    elseif nt isa NamedTuple{(:init,)}
+    elseif keys(nt) === (:init,)
         out = similar(A, promote_op(op, typeof(nt.init), eltype(A)))
     else
         throw(ArgumentError("acccumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
@@ -354,10 +356,10 @@ julia> B
 ```
 """
 function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
-    nt = kw.data
-    if nt isa NamedTuple{()}
+    nt = values(kw)
+    if isempty(kw)
         _accumulate!(op, B, A, dims, nothing)
-    elseif nt isa NamedTuple{(:init,)}
+    elseif keys(kw) === (:init,)
         _accumulate!(op, B, A, dims, Some(nt.init))
     else
         throw(ArgumentError("acccumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))

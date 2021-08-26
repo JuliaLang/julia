@@ -2,6 +2,7 @@
 
 using Base.Iterators
 using Random
+using Base: IdentityUnitRange
 
 @test Base.IteratorSize(Any) isa Base.SizeUnknown
 
@@ -198,7 +199,7 @@ end
     @test collect(takewhile(<(4),1:10)) == [1,2,3]
     @test collect(takewhile(<(4),Iterators.countfrom(1))) == [1,2,3]
     @test collect(takewhile(<(4),5:10)) == []
-    @test collect(takewhile(_->true,5:10)) == 5:10
+    @test collect(takewhile(Returns(true),5:10)) == 5:10
     @test collect(takewhile(isodd,[1,1,2,3])) == [1,1]
     @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
 end
@@ -209,8 +210,8 @@ end
     @test collect(dropwhile(<(4), 1:10)) == 4:10
     @test collect(dropwhile(<(4), 1:10)) isa Vector{Int}
     @test isempty(dropwhile(<(4), []))
-    @test collect(dropwhile(_->false,1:3)) == 1:3
-    @test isempty(dropwhile(_->true, 1:3))
+    @test collect(dropwhile(Returns(false),1:3)) == 1:3
+    @test isempty(dropwhile(Returns(true), 1:3))
     @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
     @test collect(dropwhile(iseven,dropwhile(isodd,[1,1,2,3]))) == [3]
 end
@@ -289,6 +290,15 @@ let (a, b) = (1:3, [4 6;
         @test cp[i, :, :] == [(i, 4) (i, 6);
                               (i, 5) (i, 7)]
     end
+end
+
+# collect stateful iterator
+let
+    itr = (i+1 for i in Base.Stateful([1,2,3]))
+    @test collect(itr) == [2, 3, 4]
+    A = zeros(Int, 0, 0)
+    itr = (i-1 for i in Base.Stateful(A))
+    @test collect(itr) == Int[] # Stateful do not preserve shape
 end
 
 # with 1D inputs
@@ -381,7 +391,7 @@ let a = 1:2,
     end
 
     # size infinite or unknown raises an error
-    for itr in Any[countfrom(1), Iterators.filter(i->0, 1:10)]
+    for itr in Any[countfrom(1), Iterators.filter(Returns(0), 1:10)]
         @test_throws ArgumentError length(product(itr))
         @test_throws ArgumentError   size(product(itr))
         @test_throws ArgumentError  ndims(product(itr))
@@ -592,7 +602,7 @@ end
 end
 
 @testset "filter empty iterable #16704" begin
-    arr = filter(n -> true, 1:0)
+    arr = filter(Returns(true), 1:0)
     @test length(arr) == 0
     @test eltype(arr) == Int
 end
@@ -847,4 +857,16 @@ end
     @test cumsum(x^2 for x in 1:3) == [1, 5, 14]
     @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
+end
+
+@testset "proper patition for non-1-indexed vector" begin
+    @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
+end
+
+@testset "Iterators.peel" begin
+    @test Iterators.peel([]) == nothing
+    @test Iterators.peel(1:10)[1] == 1
+    @test Iterators.peel(1:10)[2] |> collect == 2:10
+    @test Iterators.peel(x^2 for x in 2:4)[1] == 4
+    @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
 end
