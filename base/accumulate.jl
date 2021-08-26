@@ -191,9 +191,7 @@ end
 """
     cumprod(itr)
 
-Cumulative product of an iterator. See also
-[`cumprod!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow).
+Cumulative product of an iterator.
 
 See also [`cumprod!`](@ref), [`accumulate`](@ref), [`cumsum`](@ref).
 
@@ -230,8 +228,11 @@ cumprod(itr) = accumulate(mul_prod, itr)
 Cumulative operation `op` along the dimension `dims` of `A` (providing `dims` is optional
 for vectors). An initial value `init` may optionally be provided by a keyword argument. See
 also [`accumulate!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow). For common operations
-there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod`](@ref)
+to control the precision of the output (e.g. to avoid overflow). 
+
+For common operations there are specialized variants of `accumulate`, 
+see [`cumsum`](@ref), [`cumprod`](@ref). For a lazy version, see 
+[`Iterators.accumulate`](@ref).
 
 !!! compat "Julia 1.5"
     `accumulate` on a non-array iterator requires at least Julia 1.5.
@@ -244,11 +245,11 @@ julia> accumulate(+, Int8[1,2,3])
  3
  6
 
-julia> accumulate(*, (1,2,3,4))
-(1, 2, 6, 24)
-
 julia> accumulate(min, (1, -2, 3, -4, 5), init=0)
 (0, -2, -2, -4, -4)
+
+julia> accumulate(/, (1, 2, 4, 8))
+(1, 0.5, 0.125, 0.015625)
 
 julia> accumulate(+, i^2 for i in 1:3; init=100.0)
 3-element Vector{Float64}:
