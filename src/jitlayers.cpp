@@ -74,19 +74,38 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
 }
 
 extern "C" JL_DLLEXPORT
+void jl_track_compile_time_permanently()
+{
+    jl_always_measure_compile_time = 1;
+    jl_atomic_fetch_add(&jl_measure_compile_time_enabled, 1);
+}
+
+extern "C" JL_DLLEXPORT
 uint64_t jl_cumulative_compile_time_ns_before()
 {
-    // Increment the flag to allow reentrant callers to `@time`.
-    jl_atomic_fetch_add(&jl_measure_compile_time_enabled, 1);
+    if (!jl_always_measure_compile_time) {
+        // Increment the flag to allow reentrant callers to `@time`.
+        jl_atomic_fetch_add(&jl_measure_compile_time_enabled, 1);
+    }
     return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
 }
+
 extern "C" JL_DLLEXPORT
 uint64_t jl_cumulative_compile_time_ns_after()
 {
-    // Decrement the flag when done measuring, allowing other callers to continue measuring.
-    jl_atomic_fetch_add(&jl_measure_compile_time_enabled, -1);
+    if (!jl_always_measure_compile_time) {
+        // Decrement the flag when done measuring, allowing other callers to continue measuring.
+        jl_atomic_fetch_add(&jl_measure_compile_time_enabled, -1);
+    }
     return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
 }
+
+extern "C" JL_DLLEXPORT
+uint64_t jl_cumulative_compile_time_ns_total()
+{
+    return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
+}
+
 
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
