@@ -599,7 +599,8 @@ end
 
 
 # test error handling code paths of running --sysimage
-let exename = Base.julia_cmd()
+@testset for exename in [`$(Base.julia_cmd().exec[1])`, Base.julia_cmd()]
+# @testset for exename in [`$(Base.julia_cmd().exec[1])`, Base.julia_cmd(), `$(Base.julia_cmd().exec[1]) -t 2`]
     sysname = unsafe_string(Base.JLOptions().image_file)
     for nonexist_image in (
             joinpath(@__DIR__, "nonexistent"),
@@ -627,6 +628,39 @@ let exename = Base.julia_cmd()
         @test !success(p)
         @test !Base.process_signaled(p)
         @test p.exitcode == 1
+    end
+end
+# the following tests are broken: see issue #41977
+# TODO: once these tests are fixed, please delete the testset below and instead simply
+# update the `for` line in the previous testset
+@testset for exename in [`$(Base.julia_cmd().exec[1]) -t 2`]
+    sysname = unsafe_string(Base.JLOptions().image_file)
+    for nonexist_image in (
+            joinpath(@__DIR__, "nonexistent"),
+            "$sysname.nonexistent",
+            )
+        let err = Pipe(),
+            p = run(pipeline(`$exename --sysimage=$nonexist_image`, stderr=err), wait=false)
+            close(err.in)
+            let s = read(err, String)
+                @test occursin("ERROR: could not load library \"$nonexist_image\"\n", s)
+                @test !occursin("Segmentation fault", s)
+                @test !occursin("EXCEPTION_ACCESS_VIOLATION", s)
+            end
+            @test !success(p)
+            @test_broken !Base.process_signaled(p)
+            @test_broken p.exitcode == 1
+        end
+    end
+    let err = Pipe(),
+        p = run(pipeline(`$exename --sysimage=$libjulia`, stderr=err), wait=false)
+        close(err.in)
+        let s = read(err, String)
+            @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
+        end
+        @test !success(p)
+        @test_broken !Base.process_signaled(p)
+        @test_broken p.exitcode == 1
     end
 end
 
