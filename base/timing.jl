@@ -59,6 +59,9 @@ end
 cumulative_compile_time_ns_before() = ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
 cumulative_compile_time_ns_after() = ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
 
+track_compile_time_permanently() = ccall(:jl_track_compile_time_permanently, UInt64, ())
+cumulative_compile_time_ns_total() = ccall(:jl_cumulative_compile_time_ns_total, UInt64, ())
+
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 

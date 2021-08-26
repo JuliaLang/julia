@@ -264,6 +264,7 @@ end
 @test timev_macro_scope() == 1
 
 before = Base.cumulative_compile_time_ns_before();
+@test Base.cumulative_compile_time_ns_total() >= before;
 
 # exercise concurrent calls to `@time` for reentrant compilation time measurement.
 t1 = @async @time begin
@@ -278,6 +279,28 @@ end
 
 after = Base.cumulative_compile_time_ns_after();
 @test after >= before;
+
+@test Base.cumulative_compile_time_ns_total() >= after;
+
+@testset "cumulative_compile_time_ns_total()" begin
+    # Global compilation tracking is disabled, so total time doesn't increment
+    ct1 = Base.cumulative_compile_time_ns_total()
+    @eval module M ; f(x,y) = x+y ; end
+    @eval M.f(2,3)
+    ct2 = Base.cumulative_compile_time_ns_total()
+    @test ct2 == ct1
+
+    # !!! Note that this cannot be undone !!!
+    Base.track_compile_time_permanently()
+
+    # With global compilation tracking *enabled*, total time does increment
+    ct1 = Base.cumulative_compile_time_ns_total()
+    @eval module M ; f(x,y) = x+y ; end
+    @eval M.f(2,3)
+    ct2 = Base.cumulative_compile_time_ns_total()
+    @test ct2 > ct1
+end
+
 
 # interactive utilities
 
