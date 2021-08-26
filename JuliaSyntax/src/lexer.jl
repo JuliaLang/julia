@@ -224,7 +224,6 @@ function readon(l::Lexer{I,Token}) where {I <: IO}
     end
     write(l.charstore, l.chars[1])
     l.doread = true
-    return l.chars[1]
 end
 
 readoff(l::Lexer{I,RawToken}) where {I <: IO} = l.chars[1]
@@ -336,7 +335,6 @@ function next_token(l::Lexer, start = true)
     if eof(c)
         return emit(l, Tokens.ENDMARKER)
     elseif iswhitespace(c)
-        readon(l)
         return lex_whitespace(l)
     elseif c == '['
         return emit(l, Tokens.LSQUARE)
@@ -369,7 +367,6 @@ function next_token(l::Lexer, start = true)
     elseif c == '~'
         return emit(l, Tokens.APPROX)
     elseif c == '#'
-        readon(l)
         return lex_comment(l)
     elseif c == '='
         return lex_equal(l)
@@ -390,7 +387,6 @@ function next_token(l::Lexer, start = true)
     elseif c == '÷'
         return lex_division(l)
     elseif c == '"'
-        readon(l)
         return lex_quote(l);
     elseif c == '%'
         return lex_percent(l);
@@ -405,13 +401,10 @@ function next_token(l::Lexer, start = true)
     elseif c == '-'
         return lex_minus(l);
     elseif c == '`'
-        readon(l)
         return lex_cmd(l);
     elseif is_identifier_start_char(c)
-        readon(l)
         return lex_identifier(l, c)
     elseif isdigit(c)
-        readon(l)
         return lex_digit(l, Tokens.INTEGER)
     elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR
         return emit(l, k)
@@ -423,11 +416,13 @@ end
 
 # Lex whitespace, a whitespace char has been consumed
 function lex_whitespace(l::Lexer)
+    readon(l)
     accept_batch(l, iswhitespace)
     return emit(l, Tokens.WHITESPACE)
 end
 
 function lex_comment(l::Lexer, doemit=true)
+    readon(l)
     if peekchar(l) != '='
         while true
             pc = peekchar(l)
@@ -643,6 +638,7 @@ end
 
 # A digit has been consumed
 function lex_digit(l::Lexer, kind)
+    readon(l)
     accept_number(l, isdigit)
     pc,ppc = dpeekchar(l)
     if pc == '.'
@@ -796,6 +792,7 @@ end
 # Parse a token starting with a quote.
 # A '"' has been consumed
 function lex_quote(l::Lexer, doemit=true)
+    readon(l)
     if accept(l, '"') # ""
         if accept(l, '"') # """
             if read_string(l, Tokens.TRIPLE_STRING)
@@ -908,7 +905,6 @@ function lex_dot(l::Lexer)
             return emit(l, Tokens.DDOT)
         end
     elseif Base.isdigit(peekchar(l))
-        readon(l)
         return lex_digit(l, Tokens.FLOAT)
     else
         pc, dpc = dpeekchar(l)
@@ -1005,6 +1001,7 @@ end
 
 # A ` has been consumed
 function lex_cmd(l::Lexer, doemit=true)
+    readon(l)
     if accept(l, '`') #
         if accept(l, '`') # """
             if read_string(l, Tokens.TRIPLE_CMD)
@@ -1024,305 +1021,87 @@ function lex_cmd(l::Lexer, doemit=true)
     end
 end
 
-function tryread(l, str, k, c)
-    for s in str
-        c = peekchar(l)
-        if c != s
-            if !is_identifier_char(c)
-                return emit(l, IDENTIFIER)
-            end
-            return readrest(l, c)
-        else
-            readchar(l)
-        end
+function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
+    if T == Token
+        readon(l)
     end
-    if is_identifier_char(peekchar(l))
-        return readrest(l, c)
-    end
-    return emit(l, k)
-end
-
-function readrest(l, c)
+    h = simple_hash(c, 0)
     while true
         pc, ppc = dpeekchar(l)
         if !is_identifier_char(pc) || (pc == '!' && ppc == '=')
             break
         end
         c = readchar(l)
+        h = simple_hash(c, h)
     end
 
-    return emit(l, IDENTIFIER)
+    return emit(l, get(kw_hash, h, IDENTIFIER))
 end
 
+# This creates a hash using 5 bit per lower case ASCII char.
+# It checks its input to be between 'a' and 'z' (because only those chars)
+# are valid in keywords, and returns a sentinel value for invalid inputs
+# or when the hash is about to overflow.
+function simple_hash(c, h)
+    h == UInt64(0xff) && return h
+    # only 'a' - 'z' actually need to be hashed
+    'a' <= c <= 'z' || return UInt64(0xff)
+    # catch possible overflow by checking the 10 high bits
+    (h & (UInt64(0x3ff) << (64 - 10))) > 0 && return UInt64(0xff)
+    UInt64(h) << 5 + UInt8(c - 'a' + 1)
+end
 
-function _doret(l, c)
-    if !is_identifier_char(c)
-        return emit(l, IDENTIFIER)
-    else
-        return readrest(l, c)
+function simple_hash(str)
+    ind = 1
+    h = 0
+    while ind <= length(str)
+        h = simple_hash(str[ind], h)
+        ind = nextind(str, ind)
     end
+    h
 end
 
-function lex_identifier(l, c)
-    if c == 'a'
-        return tryread(l, ('b', 's', 't', 'r', 'a', 'c', 't'), ABSTRACT, c)
-    elseif c == 'b'
-        c = peekchar(l)
-        if c == 'a'
-            c = readchar(l)
-            return tryread(l, ('r', 'e', 'm', 'o', 'd', 'u', 'l', 'e'), BAREMODULE, c)
-        elseif c == 'e'
-            c = readchar(l)
-            return tryread(l, ('g', 'i', 'n'), BEGIN, c)
-        elseif c == 'r'
-            c = readchar(l)
-            return tryread(l, ('e', 'a', 'k'), BREAK, c)
-        else
-            return _doret(l, c)
-        end
-    elseif c == 'c'
-        c = peekchar(l)
-        if c == 'a'
-            c = readchar(l)
-            return tryread(l, ('t', 'c', 'h'), CATCH, c)
-        elseif c == 'o'
-            readchar(l)
-            c = peekchar(l)
-            if c == 'n'
-                readchar(l)
-                c = peekchar(l)
-                if c == 's'
-                    readchar(l)
-                    c = peekchar(l)
-                    return tryread(l, ('t',), CONST, c)
-                elseif c == 't'
-                    readchar(l)
-                    c = peekchar(l)
-                    return tryread(l, ('i', 'n', 'u', 'e'), CONTINUE, c)
-                else
-                    return _doret(l, c)
-                end
-            else
-                return _doret(l, c)
-            end
-        else
-            return _doret(l, c)
-        end
-    elseif c == 'd'
-        return tryread(l, ('o'), DO, c)
-    elseif c == 'e'
-        c = peekchar(l)
-        if c == 'l'
-            readchar(l)
-            c = peekchar(l)
-            if c == 's'
-                readchar(l)
-                c = peekchar(l)
-                if c == 'e'
-                    readchar(l)
-                    c = peekchar(l)
-                    if !is_identifier_char(c)
-                        return emit(l, ELSE)
-                    elseif c == 'i'
-                        c = readchar(l)
-                        return tryread(l, ('f'), ELSEIF ,c)
-                    else
-                        return _doret(l, c)
-                    end
-                else
-                    return _doret(l, c)
-                end
-            else
-                return _doret(l, c)
-            end
-        elseif c == 'n'
-            c = readchar(l)
-            return tryread(l, ('d'), END, c)
-        elseif c == 'x'
-            c = readchar(l)
-            return tryread(l, ('p', 'o', 'r', 't'), EXPORT, c)
-        else
-            return _doret(l, c)
-        end
-    elseif c == 'f'
-        c = peekchar(l)
-        if c == 'a'
-            c = readchar(l)
-            return tryread(l, ('l', 's', 'e'), FALSE, c)
-        elseif c == 'i'
-            c = readchar(l)
-            return tryread(l, ('n', 'a', 'l', 'l', 'y'), FINALLY, c)
-        elseif c == 'o'
-            c = readchar(l)
-            return tryread(l, ('r'), FOR, c)
-        elseif c == 'u'
-            c = readchar(l)
-            return tryread(l, ('n', 'c', 't', 'i', 'o', 'n'), FUNCTION, c)
-        else
-            return _doret(l, c)
-        end
-    elseif c == 'g'
-        return tryread(l, ('l', 'o', 'b', 'a', 'l'), GLOBAL, c)
-    elseif c == 'i'
-        c = peekchar(l)
-        if c == 'f'
-            readchar(l)
-            c = peekchar(l)
-            if !is_identifier_char(c)
-                return emit(l, IF)
-            else
-                return readrest(l, c)
-            end
-        elseif c == 'm'
-            readchar(l)
-            c = peekchar(l)
-            if c == 'p'
-                readchar(l)
-                c = peekchar(l)
-                if c == 'o'
-                    readchar(l)
-                    c = peekchar(l)
-                    if c == 'r'
-                        readchar(l)
-                        c = peekchar(l)
-                        if c == 't'
-                            readchar(l)
-                            c = peekchar(l)
-                            if !is_identifier_char(c)
-                                return emit(l, IMPORT)
-                            elseif c == 'a'
-                                c = readchar(l)
-                                return tryread(l, ('l','l'), IMPORTALL, c)
-                            else
-                                return _doret(l, c)
-                            end
-                        else
-                            return _doret(l, c)
-                        end
-                    else
-                        return _doret(l, c)
-                    end
-                else
-                    return _doret(l, c)
-                end
-            else
-                return _doret(l, c)
-            end
-        elseif c == 'n'
-            readchar(l)
-            c = peekchar(l)
-            if !is_identifier_char(c)
-                return emit(l, IN)
-            else
-                return readrest(l, c)
-            end
-        elseif (@static VERSION >= v"0.6.0-dev.1471" ? true : false) && c == 's'
-            c = readchar(l)
-            return tryread(l, ('a'), ISA, c)
-        else
-            return _doret(l, c)
-        end
-    elseif c == 'l'
-        c = peekchar(l)
-        if c == 'e'
-            readchar(l)
-            return tryread(l, ('t'), LET, c)
-        elseif c == 'o'
-            readchar(l)
-            return tryread(l, ('c', 'a', 'l'), LOCAL, c)
-        else
-            return _doret(l, c)
-        end
-    elseif c == 'm'
-        c = peekchar(l)
-        if c == 'a'
-            c = readchar(l)
-            return tryread(l, ('c', 'r', 'o'), MACRO, c)
-        elseif c == 'o'
-            c = readchar(l)
-            return tryread(l, ('d', 'u', 'l', 'e'), MODULE, c)
-        elseif c == 'u'
-            c = readchar(l)
-            return tryread(l, ('t', 'a', 'b', 'l', 'e'), MUTABLE, c)
-        else
-            return _doret(l, c)
-        end
-    elseif c == 'o'
-        return tryread(l, ('u', 't', 'e', 'r'), OUTER, c)
-    elseif c == 'p'
-        return tryread(l, ('r', 'i', 'm', 'i', 't', 'i', 'v', 'e'), PRIMITIVE, c)
-    elseif c == 'q'
-        return tryread(l, ('u', 'o', 't', 'e'), QUOTE, c)
-    elseif c == 'r'
-        return tryread(l, ('e', 't', 'u', 'r', 'n'), RETURN, c)
-    elseif c == 's'
-        return tryread(l, ('t', 'r', 'u', 'c', 't'), STRUCT, c)
-    elseif c == 't'
-        c = peekchar(l)
-        if c == 'r'
-            readchar(l)
-            c = peekchar(l)
-            if c == 'u'
-                c = readchar(l)
-                return tryread(l, ('e'), TRUE, c)
-            elseif c == 'y'
-                readchar(l)
-                c = peekchar(l)
-                if !is_identifier_char(c)
-                    return emit(l, TRY)
-                else
-                    c = readchar(l)
-                    return _doret(l, c)
-                end
-            else
-                return _doret(l, c)
-            end
-        elseif c == 'y'
-            readchar(l)
-            c = peekchar(l)
-            if c == 'p'
-                readchar(l)
-                c = peekchar(l)
-                if c == 'e'
-                    readchar(l)
-                    c = peekchar(l)
-                    if !is_identifier_char(c)
-                        return emit(l, TYPE)
-                    else
-                        c = readchar(l)
-                        return _doret(l, c)
-                    end
-                else
-                    return _doret(l, c)
-                end
-            else
-                return _doret(l, c)
-            end
-        else
-            return _doret(l, c)
-        end
-    elseif c == 'u'
-        return tryread(l, ('s', 'i', 'n', 'g'), USING, c)
-    elseif c == 'w'
-        c = peekchar(l)
-        if c == 'h'
-            readchar(l)
-            c = peekchar(l)
-            if c == 'e'
-                c = readchar(l)
-                return tryread(l, ('r', 'e'), WHERE, c)
-            elseif c == 'i'
-                c = readchar(l)
-                return tryread(l, ('l', 'e'), WHILE, c)
-            else
-                return _doret(l, c)
-            end
-        else
-            return _doret(l, c)
-        end
-    else
-        return _doret(l, c)
-    end
-end
+kws = [
+Tokens.ABSTRACT,
+Tokens.BAREMODULE,
+Tokens.BEGIN,
+Tokens.BREAK,
+Tokens.CATCH,
+Tokens.CONST,
+Tokens.CONTINUE,
+Tokens.DO,
+Tokens.ELSE,
+Tokens.ELSEIF,
+Tokens.END,
+Tokens.EXPORT,
+Tokens.FINALLY,
+Tokens.FOR,
+Tokens.FUNCTION,
+Tokens.GLOBAL,
+Tokens.IF,
+Tokens.IMPORT,
+Tokens.IMPORTALL,
+Tokens.LET,
+Tokens.LOCAL,
+Tokens.MACRO,
+Tokens.MODULE,
+Tokens.MUTABLE,
+Tokens.OUTER,
+Tokens.PRIMITIVE,
+Tokens.QUOTE,
+Tokens.RETURN,
+Tokens.STRUCT,
+Tokens.TRY,
+Tokens.TYPE,
+Tokens.USING,
+Tokens.WHILE,
+Tokens.IN,
+Tokens.ISA,
+Tokens.WHERE,
+Tokens.TRUE,
+Tokens.FALSE,
+]
+
+const kw_hash = Dict(simple_hash(lowercase(string(kw))) => kw for kw in kws)
 
 end # module
