@@ -8,6 +8,7 @@ New language features
 * `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
 * `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
+* Empty n-dimensional arrays can now be created using multiple semicolons inside square brackets, i.e. `[;;;]` creates a 0×0×0 `Array`. ([#41618])
 
 Language changes
 ----------------
