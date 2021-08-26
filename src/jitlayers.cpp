@@ -106,6 +106,12 @@ uint64_t jl_cumulative_compile_time_ns_total()
     return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
 }
 
+extern "C" JL_DLLEXPORT
+uint64_t jl_cumulative_compile_time_ns_for_current_thread()
+{
+    return jl_cumulative_compile_time_per_thread[jl_threadid()];
+}
+
 
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers

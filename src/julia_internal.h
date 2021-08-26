@@ -158,6 +158,7 @@ static inline uint64_t cycleclock(void)
 extern uint8_t jl_always_measure_compile_time;
 extern uint8_t jl_measure_compile_time_enabled; // *atomic*
 extern uint64_t jl_cumulative_compile_time;     // *atomic*
+extern uint64_t *jl_cumulative_compile_time_per_thread;
 
 #ifdef _COMPILER_MICROSOFT_
 #  define jl_return_address() ((uintptr_t)_ReturnAddress())
