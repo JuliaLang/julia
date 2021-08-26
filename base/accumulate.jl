@@ -116,35 +116,29 @@ end
 """
     cumsum(itr)
 
-Cumulative sum an iterator. See also [`cumsum!`](@ref)
-to use a preallocated output array, both for performance and to control the precision of the
-output (e.g. to avoid overflow).
+Cumulative sum an iterator.
+
+See also [`accumulate`](@ref) to apply functions other than `+`
 
 !!! compat "Julia 1.5"
     `cumsum` on a non-array iterator requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
-julia> cumsum([1, 1, 1])
+julia> cumsum(1:3)
 3-element Vector{Int64}:
  1
- 2
  3
+ 6
 
-julia> cumsum([fill(1, 2) for i in 1:3])
+julia> cumsum((true, false, true, false, true))
+(1, 1, 2, 2, 3)
+
+julia> cumsum(fill(1, 2) for i in 1:3)
 3-element Vector{Vector{Int64}}:
  [1, 1]
  [2, 2]
  [3, 3]
-
-julia> cumsum((1, 1, 1))
-(1, 2, 3)
-
-julia> cumsum(x^2 for x in 1:3)
-3-element Vector{Int64}:
-  1
-  5
- 14
 ```
 """
 cumsum(x::AbstractVector) = cumsum(x, dims=1)
@@ -177,10 +171,7 @@ to control the precision of the output (e.g. to avoid overflow).
 
 # Examples
 ```jldoctest
-julia> a = [1 2 3; 4 5 6]
-2×3 Matrix{Int64}:
- 1  2  3
- 4  5  6
+julia> a = Int8[1 2 3; 4 5 6];
 
 julia> cumprod(a, dims=1)
 2×3 Matrix{Int64}:
@@ -217,20 +208,16 @@ julia> cumprod(fill(1//2, 3))
  1//4
  1//8
 
-julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
-3-element Vector{Matrix{Rational{Int64}}}:
- [1//3 1//3; 1//3 1//3]
- [2//9 2//9; 2//9 2//9]
- [4//27 4//27; 4//27 4//27]
+julia> cumprod((1, 2, 1, 3, 1))
+(1, 2, 2, 6, 6)
 
-julia> cumprod((1, 2, 1))
-(1, 2, 2)
-
-julia> cumprod(x^2 for x in 1:3)
-3-element Vector{Int64}:
-  1
-  4
- 36
+julia> cumprod("julia")
+5-element Vector{String}:
+ "j"
+ "ju"
+ "jul"
+ "juli"
+ "julia"
 ```
 """
 cumprod(x::AbstractVector) = cumprod(x, dims=1)
