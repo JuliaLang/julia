@@ -404,6 +404,9 @@ Random.seed!(100)
                 @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2:3, 1:2), view(v, 1:2))
                 @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2, 2:-1:1), view(v, 1:2))
             end
+            # Cases that should work despite stride(A,2) < 1
+            @test BLAS.gemv!('N', elty(1), zeros(elty, 0, 5), zeros(elty, 5), elty(1), zeros(elty, 0)) == elty[] # stride(A,2) == 0
+            @test BLAS.gemv!('N', elty(1), view(A, :, 2:-1:2), elty[3], elty(2), elty[1,2,3]) == 3.0*A[:,2] + elty[2,4,6] # stride(A,2) == -3
         end
     end
     @testset "gemm" begin

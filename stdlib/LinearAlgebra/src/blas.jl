@@ -664,8 +664,8 @@ for (fname, elty) in ((:dgemv_,:Float64),
                 throw(DimensionMismatch("the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             end
             chkstride1(A)
-            lda = stride(A,2)
-            lda >= max(1, size(A,1)) || error("`stride(A,2)` must be at least `max(1, size(A,1))`")
+            stride(A,2) >= size(A,1) || size(A,1) == 0 || size(A,2) <= 1 || error("`lda` must be at least `max(1, size(A,1))`")
+            lda = max(1, size(A,1), stride(A,2))
             sX = stride(X,1)
             pX = pointer(X, sX > 0 ? firstindex(X) : lastindex(X))
             sY = stride(Y,1)
