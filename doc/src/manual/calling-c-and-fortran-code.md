@@ -721,7 +721,8 @@ For translating a C return type to Julia:
           * `Ptr{T}`, where `T` is the Julia type corresponding to `T`
   * `T (*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Cvoid}` (you may need to use [`@cfunction`](@ref) explicitly to create this pointer)
+      * `Ptr{Cvoid}` to call this directly from Julia you will need to pass this as the first argument to [`ccall`](@ref).
+        See [Indirect Calls](@ref).
 
 ### Passing Pointers for Modifying Inputs
 
