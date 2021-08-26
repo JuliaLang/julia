@@ -38,9 +38,9 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
     else
         # maybe we want to make inference keep the source in a local cache if a statement is going to inlined
         # and re-optimize it here with disabling further inlining to avoid infinite optimization loop
-        # (we can even natively try to re-infer it entirely)
+        # (we can even naively try to re-infer it entirely)
         # but it seems like that "single-level-inlining" is more trouble and complex than it's worth
-        # see https://github.com/JuliaLang/julia/pull/41328/commits/5557c2fe70d9672089a17c0f6a9f30fafcf0cb7c
+        # see https://github.com/JuliaLang/julia/pull/41328/commits/0fc0f71a42b8c9d04b0dafabf3f1f17703abf2e7
         return nothing
     end
 end
@@ -393,16 +393,10 @@ function remove_meta!(@nospecialize(stmt), meta::Vector{Any})
                 push!(meta, stmt)
             end
             return nothing
-        elseif is_preprocessed_flag(head)
-            return nothing
         end
     end
     return stmt
 end
-
-# check if this expression is preprocessed in `jl_code_info_set_ir`
-is_preprocessed_flag(head::Symbol) =
-    head === :inbounds || head === :inline || head === :noinline
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code

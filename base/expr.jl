@@ -252,9 +252,6 @@ Give a hint to the compiler that calls within `block` are worth inlining.
 macro inline(x)
     return annotate_meta_def_or_block(x, :inline)
 end
-macro inline()
-    return Expr(:meta, :inline)
-end
 
 """
     @noinline
@@ -331,9 +328,6 @@ Give a hint to the compiler that it should not inline the calls within `block`.
 """
 macro noinline(x)
     return annotate_meta_def_or_block(x, :noinline)
-end
-macro noinline()
-    return Expr(:meta, :noinline)
 end
 
 """

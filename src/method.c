@@ -322,6 +322,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 inbounds_depth = 0;
             else if (inbounds_depth > 0)            // pop
                 inbounds_depth -= 1;
+            bd[j] = jl_nothing;
         }
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == inline_sym) {
             is_flag_stmt = 1;
@@ -332,6 +333,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 assert(arg1 == (jl_value_t*)jl_false);
                 arraylist_pop(inline_flags);
             }
+            bd[j] = jl_nothing;
         }
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == noinline_sym) {
             is_flag_stmt = 1;
@@ -342,6 +344,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 assert(arg1 == (jl_value_t*)jl_false);
                 arraylist_pop(inline_flags);
             }
+            bd[j] = jl_nothing;
         }
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == return_sym) {
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));

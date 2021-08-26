@@ -60,8 +60,10 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) =
-    head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo ||
-    head === :inline || head === :noinline
+    head === :boundscheck || head === :meta || head === :loopinfo ||
+    # usually we process and remove these expressions in `jl_code_info_set_ir`,
+    # but we may still see them when inferring toplevel thunks, so let's keep these checks here as well
+    head === :inbounds || head === :inline || head === :noinline
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
