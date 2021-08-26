@@ -491,6 +491,8 @@ reverse(t::Tuple) = revargs(t...)
 prod(x::Tuple{}) = 1
 # This is consistent with the regular prod because there is no need for size promotion
 # if all elements in the tuple are of system size.
+# It is defined here separately in order to support bootstrap, because it's needed earlier
+# than the general prod definition is available.
 prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
 
 all(x::Tuple{}) = true

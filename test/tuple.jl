@@ -367,7 +367,8 @@ end
     @test sum((UInt8(3),)) === UInt(3)
     @test sum((3,)) === Int(3)
     @test sum((3.0,)) === 3.0
-    @test sum(["a"]) == sum(("a",))
+    @test sum(("a",)) == sum(["a"])
+    @test sum((0xe1, 0x1f), init=0x0) == sum([0xe1, 0x1f], init=0x0)
 
     # issue 39183
     @test prod((Int8(100), Int8(100))) === 10000
@@ -375,6 +376,8 @@ end
     @test prod((UInt8(3),)) === UInt(3)
     @test prod((3,)) === Int(3)
     @test prod((3.0,)) === 3.0
+    @test prod(("a",)) == prod(["a"])
+    @test prod((0xe1, 0x1f), init=0x1) == prod([0xe1, 0x1f], init=0x1)
 
     @testset "all" begin
         @test all(()) === true
