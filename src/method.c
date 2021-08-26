@@ -254,7 +254,7 @@ JL_DLLEXPORT void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl
     }
 }
 
-jl_value_t* expr_arg1(jl_value_t* expr) {
+jl_value_t *expr_arg1(jl_value_t *expr) {
     jl_array_t *args = ((jl_expr_t*)expr)->args;
     return jl_array_ptr_ref(args, 0);
 }
