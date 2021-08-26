@@ -251,41 +251,34 @@ there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod
 
 # Examples
 ```jldoctest
-julia> accumulate(+, [1,2,3])
-3-element Vector{Int64}:
+julia> accumulate(+, Int8[1,2,3])
+3-element Vector{Int8}:
  1
  3
  6
 
-julia> accumulate(*, [1,2,3])
-3-element Vector{Int64}:
- 1
- 2
- 6
+julia> accumulate(*, (1,2,3,4))
+(1, 2, 6, 24)
 
-julia> accumulate(+, [1,2,3]; init=100)
-3-element Vector{Int64}:
- 101
- 103
- 106
+julia> accumulate(min, (1, -2, 3, -4, 5), init=0)
+(0, -2, -2, -4, -4)
 
-julia> accumulate(min, [1,2,-1]; init=0)
-3-element Vector{Int64}:
-  0
-  0
- -1
+julia> accumulate(+, i^2 for i in 1:3; init=100.0)
+3-element Vector{Float64}:
+ 101.0
+ 105.0
+ 114.0
 
-julia> accumulate(+, fill(1, 3, 3), dims=1)
-3×3 Matrix{Int64}:
- 1  1  1
- 2  2  2
- 3  3  3
+julia> accumulate(+, fill(1, 3, 4))
+3×4 Matrix{Int64}:
+ 1  4  7  10
+ 2  5  8  11
+ 3  6  9  12
 
-julia> accumulate(+, fill(1, 3, 3), dims=2)
-3×3 Matrix{Int64}:
- 1  2  3
- 1  2  3
- 1  2  3
+julia> accumulate(+, fill(1, 2, 5), dims=2, init=100)
+2×5 Matrix{Int64}:
+ 101  102  103  104  105
+ 101  102  103  104  105
 ```
 """
 function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
@@ -318,41 +311,39 @@ end
 
 Cumulative operation `op` on `A` along the dimension `dims`, storing the result in `B`.
 Providing `dims` is optional for vectors.  If the keyword argument `init` is given, its
-value is used to instantiate the accumulation. See also [`accumulate`](@ref).
+value is used to instantiate the accumulation. 
+
+See also [`accumulate`](@ref), [`cumsum!`](@ref), [`cumprod!`](@ref).
 
 # Examples
 ```jldoctest
 julia> x = [1, 0, 2, 0, 3];
 
-julia> y = [0, 0, 0, 0, 0];
+julia> y = rand(5);
 
 julia> accumulate!(+, y, x);
 
 julia> y
-5-element Vector{Int64}:
- 1
- 1
- 3
- 3
- 6
+5-element Vector{Float64}:
+ 1.0
+ 1.0
+ 3.0
+ 3.0
+ 6.0
 
-julia> A = [1 2; 3 4];
+julia> A = [1 2 3; 4 5 6];
 
-julia> B = [0 0; 0 0];
+julia> B = similar(A);
 
-julia> accumulate!(-, B, A, dims=1);
+julia> accumulate!(-, B, A, dims=1)
+2×3 Matrix{Int64}:
+  1   2   3
+ -3  -3  -3
 
-julia> B
-2×2 Matrix{Int64}:
-  1   2
- -2  -2
-
-julia> accumulate!(-, B, A, dims=2);
-
-julia> B
-2×2 Matrix{Int64}:
- 1  -1
- 3  -1
+julia> accumulate!(*, B, A, dims=2, init=10)
+2×3 Matrix{Int64}:
+ 10   20    60
+ 40  200  1200
 ```
 """
 function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
