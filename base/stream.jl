@@ -433,7 +433,7 @@ function wait_readnb(x::LibuvStream, nb::Int)
     nothing
 end
 
-function shutdown(s::LibuvStream)
+function closewrite(s::LibuvStream)
     iolock_begin()
     check_open(s)
     req = Libc.malloc(_sizeof_uv_shutdown)
@@ -1478,7 +1478,7 @@ end
 
 isopen(s::BufferStream) = s.status != StatusClosed
 
-shutdown(s::BufferStream) = close(s)
+closewrite(s::BufferStream) = close(s)
 
 function close(s::BufferStream)
     lock(s.cond) do
