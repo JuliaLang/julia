@@ -59,7 +59,32 @@ end
 cumulative_compile_time_ns_before() = ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
 cumulative_compile_time_ns_after() = ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
 
+"""
+    Base.track_compile_time_permanently()
+
+Permanently enable tracking of time spent in compilation by Julia.
+
+Julia has the ability to measure the amount of time spent during compilation (including
+type-inference, optimization, llvm optimizaiton, codegen, etc). However, on some systems
+(FreeBSD-based systems are the known problems), this measurment can be too expensive, so
+it is not enabled by default.
+
+Calling this function will globally enable tracking the cumulative compilation time.
+
+You can fetch the current total cumulative time spent in compilation by calling:
+- [`Base.cumulative_compile_time_ns_total()`](@ref)
+"""
 track_compile_time_permanently() = ccall(:jl_track_compile_time_permanently, UInt64, ())
+"""
+    Base.cumulative_compile_time_ns_total()
+
+The current total cumulative time Julia has spent in compilation, in nanoseconds.
+
+To enable this global measurement, you must call
+[`Base.track_compile_time_permanently()`](@ref) after starting this julia process.
+Otherwise, this function will only return the total time spent in compilation during calls
+to [`Base.@time`](@ref).
+"""
 cumulative_compile_time_ns_total() = ccall(:jl_cumulative_compile_time_ns_total, UInt64, ())
 
 # total time spend in garbage collection, in nanoseconds
