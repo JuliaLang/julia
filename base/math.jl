@@ -928,7 +928,7 @@ end
 
 # compensated power by squaring
 @inline function ^(x::Float64, y::Integer)
-    n < 0 && return inv(myintpow(x,-n))
+    n < 0 && return inv(x^(-n))
     y = 1.0
     xnlo = ynlo = 0.0
     while n > 1
@@ -946,7 +946,7 @@ end
     return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
 @inline function ^(x::Float32, y::Integer)
-    y < 0 && return inv(myintpow(x,-y))
+    y < 0 && return inv(x^(-y))
     Float32(Base.power_by_squaring(Float64(x),y))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
