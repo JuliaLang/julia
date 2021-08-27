@@ -927,7 +927,7 @@ end
 @inline ^(x::Float16, y::Float16) = Float16(Float32(x)^Float32(y))  # TODO: optimize
 
 # compensated power by squaring
-@inline function ^(x::Float64, y::Integer)
+@inline function ^(x::Float64, n::Integer)
     n < 0 && return inv(x^(-n))
     y = 1.0
     xnlo = ynlo = 0.0
