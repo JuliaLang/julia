@@ -2010,8 +2010,8 @@ These atomically perform the operations to simultaneously get and set a field:
 swapfield!
 
 """
-    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair{<:Any,:<Any}
-    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair{<:Any,:<Any}
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
 
 These atomically perform the operations to get and set a field after applying
 the function `op`.
