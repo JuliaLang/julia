@@ -488,13 +488,14 @@ julia> foreach(println, a)
 6
 10
 
-julia> b = Iterators.accumulate(/, (1,2,4); init = 100);
+julia> b = Iterators.accumulate(/, (2, 5, 2, 5); init = 100);
 
 julia> collect(b)
-3-element Vector{Float64}:
- 100.0
-  50.0
-  12.5
+4-element Vector{Float64}:
+ 50.0
+ 10.0
+  5.0
+  1.0
 ```
 """
 accumulate(f, itr; init = Base._InitialValue()) = Accumulate(f, itr, init)
