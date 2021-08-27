@@ -116,7 +116,7 @@ end
 """
     cumsum(itr)
 
-Cumulative sum an iterator.
+Cumulative sum of an iterator.
 
 See also [`accumulate`](@ref) to apply functions other than `+`
 
