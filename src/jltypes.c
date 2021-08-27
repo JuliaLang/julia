@@ -1547,9 +1547,8 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     // leading to incorrect layouts and data races (#40050: the A{T} should be
     // an isbitstype singleton of size 0)
     if (cacheable) {
-        if (dt->layout == NULL && !jl_is_primitivetype(dt) && ndt->types != NULL && ndt->isconcretetype) {
+        if (ndt->layout == NULL && ndt->types != NULL && ndt->isconcretetype)
             jl_compute_field_offsets(ndt);
-        }
         jl_cache_type_(ndt);
         JL_UNLOCK(&typecache_lock); // Might GC
     }
