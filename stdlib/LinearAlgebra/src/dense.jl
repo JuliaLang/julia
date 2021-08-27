@@ -674,7 +674,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         tmp2 .= CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2
         mul!(tmp2, true,CC[2]*I, true, true) # tmp2 .+= CC[2]*I
         U = mul!(tmp2, A6, tmp1, true, true)
-        U = A*U
+        U, tmp1 = mul!(tmp1, A, U), A # U = A * U0
 
         # Allocation economical version of:
         # V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
