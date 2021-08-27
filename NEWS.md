@@ -40,6 +40,8 @@ New library features
 * `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
   contains "some message" regardless of the specific exception type.
   Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
+* A new `CheckIndexStyle` trait allows one to dispatch to efficient
+  forms of bounds-checking without overloading `Base.checkindex`. ([#?????])
 
 Standard library changes
 ------------------------

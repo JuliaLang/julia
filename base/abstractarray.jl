@@ -715,13 +715,18 @@ checkindex(::Type{Bool}, inds::AbstractUnitRange, i) =
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
-function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
+checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray{Bool}) = false
+checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractVector{Bool}) =
+    _checkindex(Bool, inds, CheckIndexStyle(typeof(I)), I)
+checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray) =
+    _checkindex(Bool, inds, CheckIndexStyle(typeof(I)), I)
+
+function _checkindex(::Type{Bool}, inds::AbstractUnitRange, ::CheckIndexFirstLast, r)
     @_propagate_inbounds_meta
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
 end
-checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractVector{Bool}) = indx == axes1(I)
-checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractArray{Bool}) = false
-function checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray)
+_checkindex(::Type{Bool}, inds::AbstractUnitRange, ::CheckIndexAxes, I) = inds == axes1(I)  # TODO: comparison should be values-only
+function _checkindex(::Type{Bool}, inds::AbstractUnitRange, ::CheckIndexAll, I)
     @inline
     b = true
     for i in I

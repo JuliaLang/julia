@@ -364,6 +364,8 @@ Broadcast.broadcast_unalias(dest::OffsetArray, src::OffsetArray) = parent(dest) 
 const OffsetRange{T} = OffsetArray{T,1,<:AbstractRange{T}}
 const IIUR = IdentityUnitRange{S} where S<:AbstractUnitRange{T} where T<:Integer
 
+Base.CheckIndexStyle(::Type{<:OffsetRange{T}}) where T = T === Bool ? Base.CheckIndexAxes() : Base.CheckIndexFirstLast()
+
 Base.step(a::OffsetRange) = step(parent(a))
 
 @propagate_inbounds Base.getindex(a::OffsetRange, r::OffsetRange) = OffsetArray(a[parent(r)], r.offsets)

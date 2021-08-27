@@ -57,6 +57,10 @@ Base.eachindex
 Base.IndexStyle
 Base.IndexLinear
 Base.IndexCartesian
+Base.CheckIndexStyle
+Base.CheckIndexAll
+Base.CheckIndexFirstLast
+Base.CheckIndexAxes
 Base.conj!
 Base.stride
 Base.strides

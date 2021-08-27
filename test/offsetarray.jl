@@ -277,6 +277,13 @@ v = view(A0, i1, 1)
 v = view(A0, 1:1, i1)
 @test axes(v) === (Base.OneTo(1), OffsetArrays.IdOffsetRange(Base.OneTo(2), -5))
 
+@test  checkindex(Bool, 1:2, OffsetArray(1:2, (0,)))
+@test  checkindex(Bool, 1:2, OffsetArray([1,2], (0,)))
+@test  checkindex(Bool, 1:2, OffsetArray(false:true, (0,)))
+@test !checkindex(Bool, 1:2, OffsetArray(1:3, (0,)))
+@test !checkindex(Bool, 1:2, OffsetArray([1,3], (0,)))
+@test !checkindex(Bool, 1:3, OffsetArray(false:true, (0,)))
+
 # copyto! and fill!
 a = OffsetArray{Int}(undef, (-3:-1,))
 fill!(a, -1)

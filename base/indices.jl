@@ -102,6 +102,88 @@ IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), In
 IndexStyle(::IndexLinear, ::IndexLinear) = IndexLinear()
 IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
+
+abstract type CheckIndexStyle end
+"""
+    Base.CheckIndexFirstLast()
+
+A [`Base.CheckIndexStyle`](@ref) trait-value indicating that bounds-checking
+only need test the first and last elements in an index vector.
+
+# Examples
+```jldoctest
+julia> r = 3:7; Base.CheckIndexStyle(r)
+Base.CheckIndexFirstLast()
+```
+
+Ranges are declared `CheckIndexFirstLast` because `x[r]` can be tested
+for out-of-bounds indexing using just the first and last elements of `r`.
+
+See also [`Base.CheckIndexAll`](@ref) and [`Base.CheckIndexAxes`](@ref).
+"""
+struct CheckIndexFirstLast <: CheckIndexStyle end
+
+"""
+    Base.CheckIndexAll()
+
+A [`Base.CheckIndexStyle`](@ref) trait-value indicating that bounds-checking
+must test all elements in an index vector.
+
+# Examples
+```jldoctest
+julia> idx = [3,4,5,6,7]; Base.CheckIndexStyle(idx)
+Base.CheckIndexAll()
+```
+
+Since the entries in `idx` could be arbitrary, we have to check each
+entry for bounds violations.
+
+See also [`Base.CheckIndexFirstLast`](@ref) and [`Base.CheckIndexAxes`](@ref).
+"""
+struct CheckIndexAll <: CheckIndexStyle end
+
+"""
+    Base.CheckIndexAxes()
+
+A [`CheckIndexStyle`](@ref) trait-value indicating that bounds-checking
+should consider the axes of the index rather than the values of the
+index. This is used in cases where the index acts as a filter to
+select elements.
+
+# Examples
+```jldoctest
+julia> idx = [true, false, true]; Base.CheckIndexStyle(idx)
+Base.CheckIndexAxes()
+```
+
+When `idx` is used in `x[idx]`, it returns the entries in `x`
+corresponding to `true` entries in `idx`. Consequently, indexing
+should insist on `idx` and `x` having identical axes.
+
+See also [`Base.CheckIndexFirstLast`](@ref) and [`Base.CheckIndexAll`](@ref).
+"""
+struct CheckIndexAxes <: CheckIndexStyle end
+
+"""
+    CheckIndexStyle(idx)
+    CheckIndexStyle(typeof(idx))
+
+`CheckIndexStyle` specifies how bounds-checking of `x[idx]` should be performed.
+Certain types of `idx`, such as ranges, may have particularly efficient ways
+to perform the bounds-checking. When you define a new [`AbstractArray`](@ref) type,
+you can choose to define a specific value for this trait:
+
+    Base.CheckIndexStyle(::Type{<:MyRange}) = CheckIndexFirstLast()
+
+The default is [`CheckIndexAll()`](@ref), except for `AbstractVector`s with `Bool`
+`eltype` (which default to [`Base.CheckIndexAxes()`](@ref)) and subtypes of `AbstractRange`
+(which default to [`Base.CheckIndexFirstLast()`](@ref).)
+"""
+CheckIndexStyle(A::AbstractArray) = CheckIndexStyle(typeof(A))
+CheckIndexStyle(::Type{Union{}}) = CheckIndexAll()
+CheckIndexStyle(::Type{<:AbstractArray{T}}) where T = T === Bool ? CheckIndexAxes() : CheckIndexAll()
+CheckIndexStyle(::Type{<:AbstractRange{T}}) where T = T === Bool ? CheckIndexAxes() : CheckIndexFirstLast()
+
 # array shape rules
 
 promote_shape(::Tuple{}, ::Tuple{}) = ()
