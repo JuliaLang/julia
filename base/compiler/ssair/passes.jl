@@ -19,8 +19,9 @@ struct SSADefUse
 end
 SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
-function try_compute_fieldidx_expr(@nospecialize(typ), @nospecialize(use_expr))
-    field = use_expr.args[3]
+try_compute_fieldidx_expr(typ::DataType, expr::Expr) = try_compute_fieldidx_args(typ, expr.args)
+function try_compute_fieldidx_args(typ::DataType, args::Vector{Any})
+    field = args[3]
     isa(field, QuoteNode) && (field = field.value)
     isa(field, Union{Int, Symbol}) || return nothing
     return try_compute_fieldidx(typ, field)
@@ -792,6 +793,7 @@ function getfield_elim_pass!(ir::IRCode)
         # Could still end up here if we tried to setfield! and immutable, which would
         # error at runtime, but is not illegal to have in the IR.
         ismutabletype(typ) || continue
+        typ = typ::DataType
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
         ok = true
