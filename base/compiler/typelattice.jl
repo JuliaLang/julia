@@ -96,8 +96,18 @@ end
 struct LimitedAccuracy
     typ
     causes::IdSet{InferenceState}
-    LimitedAccuracy(@nospecialize(typ), causes::IdSet{InferenceState}) =
-        new(typ, causes)
+    function LimitedAccuracy(@nospecialize(typ), causes::IdSet{InferenceState})
+        @assert !isa(typ, LimitedAccuracy) "malformed LimitedAccuracy"
+        return new(typ, causes)
+    end
+end
+
+@inline function collect_limitations!(@nospecialize(typ), sv::InferenceState)
+    if isa(typ, LimitedAccuracy)
+        union!(sv.pclimitations, typ.causes)
+        return typ.typ
+    end
+    return typ
 end
 
 struct NotFound end

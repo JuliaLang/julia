@@ -159,10 +159,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         info = ConstCallInfo(info, const_results)
     end
 
-    if rettype isa LimitedAccuracy
-        union!(sv.pclimitations, rettype.causes)
-        rettype = rettype.typ
-    end
+    rettype = collect_limitations!(rettype, sv)
     # if we have argument refinement information, apply that now to get the result
     if is_lattice_bool(rettype) && conditionals !== nothing && fargs !== nothing
         slot = 0
@@ -1216,10 +1213,10 @@ function abstract_invoke(interp::AbstractInterpreter, argtypes::Vector{Any}, sv:
     if const_result !== nothing
         const_rt, const_result = const_result
         if const_rt !== rt && const_rt ⊑ rt
-            return CallMeta(const_rt, InvokeCallInfo(match, const_result))
+            return CallMeta(collect_limitations!(const_rt, sv), InvokeCallInfo(match, const_result))
         end
     end
-    return CallMeta(rt, InvokeCallInfo(match, nothing))
+    return CallMeta(collect_limitations!(rt, sv), InvokeCallInfo(match, nothing))
 end
 
 # call where the function is known exactly
@@ -1336,7 +1333,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
             info = ConstCallInfo(info, Union{Nothing,InferenceResult}[const_result])
         end
     end
-    return CallMeta(rt, info)
+    return CallMeta(collect_limitations!(rt, sv), info)
 end
 
 function most_general_argtypes(closure::PartialOpaque)
