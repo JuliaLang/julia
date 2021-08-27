@@ -41,7 +41,7 @@ New library features
   contains "some message" regardless of the specific exception type.
   Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
 * A new `CheckIndexStyle` trait allows one to dispatch to efficient
-  forms of bounds-checking without overloading `Base.checkindex`. ([#?????])
+  forms of bounds-checking without overloading `Base.checkindex`. ([#42029])
 
 Standard library changes
 ------------------------
