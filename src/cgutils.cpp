@@ -2757,8 +2757,14 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     size_t nargs;
     if (const auto *CC = dyn_cast<ConstantAggregate>(constant))
         nargs = CC->getNumOperands();
-    else if (const auto *CAZ = dyn_cast<ConstantAggregateZero>(constant))
+    else if (const auto *CAZ = dyn_cast<ConstantAggregateZero>(constant)) {
+#if JL_LLVM_VERSION >= 130000
+        // SVE: Elsewhere we use `getMinKownValue`
+        nargs = CAZ->getElementCount().getFixedValue();
+#else
         nargs = CAZ->getNumElements();
+#endif
+    }
     else if (const auto *CDS = dyn_cast<ConstantDataSequential>(constant))
         nargs = CDS->getNumElements();
     else

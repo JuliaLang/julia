@@ -345,7 +345,11 @@ bool RemoveAddrspacesPass::runOnModule(Module &M)
         for (auto MD : MDs)
             NGV->addMetadata(
                     MD.first,
+#if JL_LLVM_VERSION >= 130000
+                    *MapMetadata(MD.second, VMap));
+#else
                     *MapMetadata(MD.second, VMap, RF_MoveDistinctMDs));
+#endif
 
         copyComdat(NGV, GV);
 
@@ -372,7 +376,11 @@ bool RemoveAddrspacesPass::runOnModule(Module &M)
                 NF,
                 F,
                 VMap,
+#if JL_LLVM_VERSION >= 130000
+                CloneFunctionChangeType::GlobalChanges,
+#else
                 /*ModuleLevelChanges=*/true,
+#endif
                 Returns,
                 "",
                 nullptr,
