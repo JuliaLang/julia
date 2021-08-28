@@ -2028,9 +2028,9 @@ modifyfield!
 
 """
     replacefield!(value, name::Symbol, expected, desired,
-                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> NamedTuple{(:old, :success), Tuple{<:Any, Bool}}
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
     replacefield!(value, i::Int, expected, desired,
-                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> NamedTuple{(:old, :success), Tuple{<:Any, Bool}}
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
 These atomically perform the operations to get and conditionally set a field to
 a given value.
