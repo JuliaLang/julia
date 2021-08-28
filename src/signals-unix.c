@@ -83,8 +83,11 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
     const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
     return ctx->uc_mcontext64->__ss.__sp;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.mc_rsp;
 #else
-    // TODO Add support for FreeBSD and PowerPC(64)?
+    // TODO Add support for PowerPC(64)?
     return 0;
 #endif
 }
