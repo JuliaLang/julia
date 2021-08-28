@@ -1899,6 +1899,40 @@ end
     @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3, 2))) === Int8
 end
 
+@testset "LinRange eltype for element types that wrap integers" begin
+    struct RealWrapper{T <: Real} <: Real
+        x :: T
+    end
+    Base.promote_rule(::Type{S}, ::Type{RealWrapper{T}}) where {T,S<:Real} = RealWrapper{promote_type(S, T)}
+    Base.:(-)(w::RealWrapper) = RealWrapper(-w.x)
+    for f in [:(+), :(-), :(*), :(/)]
+        @eval Base.$f(w::RealWrapper, y::RealWrapper) = RealWrapper($f(w.x, y.x))
+    end
+    for f in [:(<), :(==), :(<=)]
+        @eval Base.$f(w::RealWrapper, y::RealWrapper) = $f(w.x, y.x)
+    end
+    for T in [:Float32, :Float64]
+        @eval Base.$T(w::RealWrapper) = $T(w.x)
+    end
+    (::Type{RealWrapper{T}})(w::RealWrapper) where {T<:Real} = RealWrapper{T}(T(w.x))
+    (::Type{T})(w::RealWrapper{T}) where {T<:Real} = T(w.x)
+    Base.:(==)(w::RealWrapper, y::RealWrapper) = w.x == y.x
+    Base.isfinite(w::RealWrapper) = isfinite(w.x)
+    Base.signbit(w::RealWrapper) = signbit(w.x)
+
+    x = RealWrapper(2)
+    r1 = range(x, stop = 2x, length = 10)
+    r2 = range(Int(x), stop = Int(2x), length = 10)
+    for i in eachindex(r1, r2)
+        @test r1[i] ≈ r2[i]
+    end
+    r3 = LinRange(x, 2x, 10)
+    r4 = LinRange(x, 2x, 10)
+    for i in eachindex(r3, r4)
+        @test r3[i] ≈ r4[i]
+    end
+end
+
 @testset "Bool indexing of ranges" begin
     @test_throws ArgumentError Base.OneTo(true)
     @test_throws ArgumentError Base.OneTo(true:true:true)

@@ -562,7 +562,7 @@ end
 
 range_start_stop_length(start, stop, len::Integer) =
     range_start_stop_length(promote(start, stop)..., len)
-range_start_stop_length(start::T, stop::T, len::Integer) where {T} = LinRange{T}(start, stop, len)
+range_start_stop_length(start::T, stop::T, len::Integer) where {T} = LinRange(start, stop, len)
 range_start_stop_length(start::T, stop::T, len::Integer) where {T<:Integer} =
     _linspace(float(T), start, stop, len)
 ## for Float16, Float32, and Float64 we hit twiceprecision.jl to lift to higher precision StepRangeLen
