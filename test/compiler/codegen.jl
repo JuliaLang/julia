@@ -600,7 +600,7 @@ get_llvm(g41438, ()); # cause allocation of layout
 @test S41438.body.layout != C_NULL
 @test !Base.datatype_pointerfree(S41438.body)
 @test S41438{Int}.layout != C_NULL
-@test !Base.datatype_pointerfree(S41438.body)
+@test !Base.datatype_pointerfree(S41438{Int}.body)
 
 # issue #41157
 f41157(a, b) = a[1] = b[1]
