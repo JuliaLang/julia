@@ -1,0 +1,237 @@
+From 3adadbab531e0d7dc17499a6570b129e87f00c77 Mon Sep 17 00:00:00 2001
+From: Keno Fischer <keno@juliacomputing.com>
+Date: Wed, 21 Apr 2021 12:38:40 -0400
+Subject: [PATCH] [Aarch64] Correct register class for pseudo instructions
+
+This constrains the Mov* and similar pseudo instruction to take
+GPR64common register classes rather than GPR64. GPR64 includs XZR
+which is invalid here, because this pseudo instructions expands
+into an adrp/add pair sharing a destination register. XZR is invalid
+on add and attempting to encode it will instead increment the stack
+pointer causing crashes (downstream report at [1]). The test case
+there reproduces on LLVM11, but I do not have a test case that
+reaches this code path on main, since it is being masked by
+improved dead code elimination introduced in D91513. Nevertheless,
+this seems like a good thing to fix in case there are other cases
+that dead code elimination doesn't clean up (e.g. if `optnone` is
+used and the optimization is skipped).
+
+I think it would be worth auditing uses of GPR64 in pseudo
+instructions to see if there are any similar issues, but I do not
+have a high enough view of the backend or knowledge of the
+Aarch64 architecture to do this quickly.
+
+[1] https://github.com/JuliaLang/julia/issues/39818
+
+Reviewed By: t.p.northover
+
+Differential Revision: https://reviews.llvm.org/D97435
+
+diff --git llvm/lib/Target/AArch64/AArch64ExpandPseudoInsts.cpp llvm/lib/Target/AArch64/AArch64ExpandPseudoInsts.cpp
+index b2eee2845ba9..5bbf4f97c54a 100644
+--- llvm/lib/Target/AArch64/AArch64ExpandPseudoInsts.cpp
++++ llvm/lib/Target/AArch64/AArch64ExpandPseudoInsts.cpp
+@@ -1049,6 +1049,7 @@ bool AArch64ExpandPseudo::expandMI(MachineBasicBlock &MBB,
+   case AArch64::MOVaddrEXT: {
+     // Expand into ADRP + ADD.
+     Register DstReg = MI.getOperand(0).getReg();
++    assert(DstReg != AArch64::XZR);
+     MachineInstrBuilder MIB1 =
+         BuildMI(MBB, MBBI, MI.getDebugLoc(), TII->get(AArch64::ADRP), DstReg)
+             .add(MI.getOperand(1));
+diff --git llvm/lib/Target/AArch64/AArch64InstrInfo.td llvm/lib/Target/AArch64/AArch64InstrInfo.td
+index 12744e4de09b..f3da6bf057c2 100644
+--- llvm/lib/Target/AArch64/AArch64InstrInfo.td
++++ llvm/lib/Target/AArch64/AArch64InstrInfo.td
+@@ -673,40 +673,40 @@ let isReMaterializable = 1, isCodeGenOnly = 1 in {
+ // removed, along with the AArch64Wrapper node.
+ 
+ let AddedComplexity = 10 in
+-def LOADgot : Pseudo<(outs GPR64:$dst), (ins i64imm:$addr),
+-                     [(set GPR64:$dst, (AArch64LOADgot tglobaladdr:$addr))]>,
++def LOADgot : Pseudo<(outs GPR64common:$dst), (ins i64imm:$addr),
++                     [(set GPR64common:$dst, (AArch64LOADgot tglobaladdr:$addr))]>,
+               Sched<[WriteLDAdr]>;
+ 
+ // The MOVaddr instruction should match only when the add is not folded
+ // into a load or store address.
+ def MOVaddr
+-    : Pseudo<(outs GPR64:$dst), (ins i64imm:$hi, i64imm:$low),
+-             [(set GPR64:$dst, (AArch64addlow (AArch64adrp tglobaladdr:$hi),
++    : Pseudo<(outs GPR64common:$dst), (ins i64imm:$hi, i64imm:$low),
++             [(set GPR64common:$dst, (AArch64addlow (AArch64adrp tglobaladdr:$hi),
+                                             tglobaladdr:$low))]>,
+       Sched<[WriteAdrAdr]>;
+ def MOVaddrJT
+-    : Pseudo<(outs GPR64:$dst), (ins i64imm:$hi, i64imm:$low),
+-             [(set GPR64:$dst, (AArch64addlow (AArch64adrp tjumptable:$hi),
++    : Pseudo<(outs GPR64common:$dst), (ins i64imm:$hi, i64imm:$low),
++             [(set GPR64common:$dst, (AArch64addlow (AArch64adrp tjumptable:$hi),
+                                              tjumptable:$low))]>,
+       Sched<[WriteAdrAdr]>;
+ def MOVaddrCP
+-    : Pseudo<(outs GPR64:$dst), (ins i64imm:$hi, i64imm:$low),
+-             [(set GPR64:$dst, (AArch64addlow (AArch64adrp tconstpool:$hi),
++    : Pseudo<(outs GPR64common:$dst), (ins i64imm:$hi, i64imm:$low),
++             [(set GPR64common:$dst, (AArch64addlow (AArch64adrp tconstpool:$hi),
+                                              tconstpool:$low))]>,
+       Sched<[WriteAdrAdr]>;
+ def MOVaddrBA
+-    : Pseudo<(outs GPR64:$dst), (ins i64imm:$hi, i64imm:$low),
+-             [(set GPR64:$dst, (AArch64addlow (AArch64adrp tblockaddress:$hi),
++    : Pseudo<(outs GPR64common:$dst), (ins i64imm:$hi, i64imm:$low),
++             [(set GPR64common:$dst, (AArch64addlow (AArch64adrp tblockaddress:$hi),
+                                              tblockaddress:$low))]>,
+       Sched<[WriteAdrAdr]>;
+ def MOVaddrTLS
+-    : Pseudo<(outs GPR64:$dst), (ins i64imm:$hi, i64imm:$low),
+-             [(set GPR64:$dst, (AArch64addlow (AArch64adrp tglobaltlsaddr:$hi),
++    : Pseudo<(outs GPR64common:$dst), (ins i64imm:$hi, i64imm:$low),
++             [(set GPR64common:$dst, (AArch64addlow (AArch64adrp tglobaltlsaddr:$hi),
+                                             tglobaltlsaddr:$low))]>,
+       Sched<[WriteAdrAdr]>;
+ def MOVaddrEXT
+-    : Pseudo<(outs GPR64:$dst), (ins i64imm:$hi, i64imm:$low),
+-             [(set GPR64:$dst, (AArch64addlow (AArch64adrp texternalsym:$hi),
++    : Pseudo<(outs GPR64common:$dst), (ins i64imm:$hi, i64imm:$low),
++             [(set GPR64common:$dst, (AArch64addlow (AArch64adrp texternalsym:$hi),
+                                             texternalsym:$low))]>,
+       Sched<[WriteAdrAdr]>;
+ // Normally AArch64addlow either gets folded into a following ldr/str,
+@@ -714,8 +714,8 @@ def MOVaddrEXT
+ // might appear without either of them, so allow lowering it into a plain
+ // add.
+ def ADDlowTLS
+-    : Pseudo<(outs GPR64:$dst), (ins GPR64:$src, i64imm:$low),
+-             [(set GPR64:$dst, (AArch64addlow GPR64:$src,
++    : Pseudo<(outs GPR64sp:$dst), (ins GPR64sp:$src, i64imm:$low),
++             [(set GPR64sp:$dst, (AArch64addlow GPR64sp:$src,
+                                             tglobaltlsaddr:$low))]>,
+       Sched<[WriteAdr]>;
+ 
+diff --git llvm/test/CodeGen/AArch64/GlobalISel/select-add-low.mir llvm/test/CodeGen/AArch64/GlobalISel/select-add-low.mir
+index 2272aaf28673..e29568698f8b 100644
+--- llvm/test/CodeGen/AArch64/GlobalISel/select-add-low.mir
++++ llvm/test/CodeGen/AArch64/GlobalISel/select-add-low.mir
+@@ -20,7 +20,7 @@ body:             |
+     liveins: $x0
+     ; CHECK-LABEL: name: select_add_low_without_offset
+     ; CHECK: liveins: $x0
+-    ; CHECK: %add_low:gpr64 = MOVaddr target-flags(aarch64-page) @x, target-flags(aarch64-pageoff, aarch64-nc) @x
++    ; CHECK: %add_low:gpr64common = MOVaddr target-flags(aarch64-page) @x, target-flags(aarch64-pageoff, aarch64-nc) @x
+     ; CHECK: $x0 = COPY %add_low
+     ; CHECK: RET_ReallyLR implicit $x0
+     %copy:gpr(p0) = COPY $x0
+@@ -40,7 +40,7 @@ body:             |
+     liveins: $x0
+     ; CHECK-LABEL: name: select_add_low_with_offset
+     ; CHECK: liveins: $x0
+-    ; CHECK: %add_low:gpr64 = MOVaddr target-flags(aarch64-page) @x + 1, target-flags(aarch64-pageoff, aarch64-nc) @x + 1
++    ; CHECK: %add_low:gpr64common = MOVaddr target-flags(aarch64-page) @x + 1, target-flags(aarch64-pageoff, aarch64-nc) @x + 1
+     ; CHECK: $x0 = COPY %add_low
+     ; CHECK: RET_ReallyLR implicit $x0
+     %copy:gpr(p0) = COPY $x0
+diff --git llvm/test/CodeGen/AArch64/GlobalISel/select-blockaddress.mir llvm/test/CodeGen/AArch64/GlobalISel/select-blockaddress.mir
+index 1f63da4d12c5..0737a8ed871f 100644
+--- llvm/test/CodeGen/AArch64/GlobalISel/select-blockaddress.mir
++++ llvm/test/CodeGen/AArch64/GlobalISel/select-blockaddress.mir
+@@ -30,9 +30,10 @@ registers:
+ body:             |
+   ; CHECK-LABEL: name: test_blockaddress
+   ; CHECK: bb.0 (%ir-block.0):
+-  ; CHECK:   [[MOVaddrBA:%[0-9]+]]:gpr64 = MOVaddrBA target-flags(aarch64-page) blockaddress(@test_blockaddress, %ir-block.block), target-flags(aarch64-pageoff, aarch64-nc) blockaddress(@test_blockaddress, %ir-block.block)
++  ; CHECK:   [[MOVaddrBA:%[0-9]+]]:gpr64common = MOVaddrBA target-flags(aarch64-page) blockaddress(@test_blockaddress, %ir-block.block), target-flags(aarch64-pageoff, aarch64-nc) blockaddress(@test_blockaddress, %ir-block.block)
+   ; CHECK:   [[MOVaddr:%[0-9]+]]:gpr64common = MOVaddr target-flags(aarch64-page) @addr, target-flags(aarch64-pageoff, aarch64-nc) @addr
+-  ; CHECK:   STRXui [[MOVaddrBA]], [[MOVaddr]], 0 :: (store (p0) into @addr)
++  ; CHECK:   [[COPY:%[0-9]+]]:gpr64 = COPY [[MOVaddrBA]]
++  ; CHECK:   STRXui [[COPY]], [[MOVaddr]], 0 :: (store (p0) into @addr)
+   ; CHECK:   BR [[MOVaddrBA]]
+   ; CHECK: bb.1.block (address-taken):
+   ; CHECK:   RET_ReallyLR
+diff --git llvm/test/CodeGen/AArch64/GlobalISel/select-gv-with-offset.mir llvm/test/CodeGen/AArch64/GlobalISel/select-gv-with-offset.mir
+index 7533731b2bd8..8b4ae941eb4d 100644
+--- llvm/test/CodeGen/AArch64/GlobalISel/select-gv-with-offset.mir
++++ llvm/test/CodeGen/AArch64/GlobalISel/select-gv-with-offset.mir
+@@ -25,7 +25,7 @@ body:             |
+     ; LARGE: RET_ReallyLR implicit $x0
+     ; SMALL-LABEL: name: select_gv_with_offset
+     ; SMALL: liveins: $x0
+-    ; SMALL: %g:gpr64 = MOVaddr target-flags(aarch64-page) @g + 1, target-flags(aarch64-pageoff, aarch64-nc) @g + 1
++    ; SMALL: %g:gpr64common = MOVaddr target-flags(aarch64-page) @g + 1, target-flags(aarch64-pageoff, aarch64-nc) @g + 1
+     ; SMALL: $x0 = COPY %g
+     ; SMALL: RET_ReallyLR implicit $x0
+     ; TINY-LABEL: name: select_gv_with_offset
+diff --git llvm/test/CodeGen/AArch64/GlobalISel/select-jump-table-brjt-constrain.mir llvm/test/CodeGen/AArch64/GlobalISel/select-jump-table-brjt-constrain.mir
+index affaef15856e..1aec09b69680 100644
+--- llvm/test/CodeGen/AArch64/GlobalISel/select-jump-table-brjt-constrain.mir
++++ llvm/test/CodeGen/AArch64/GlobalISel/select-jump-table-brjt-constrain.mir
+@@ -30,7 +30,7 @@ body:             |
+   ; CHECK:   Bcc 8, %bb.3, implicit $nzcv
+   ; CHECK: bb.1:
+   ; CHECK:   successors: %bb.2(0x40000000), %bb.3(0x40000000)
+-  ; CHECK:   [[MOVaddrJT:%[0-9]+]]:gpr64 = MOVaddrJT target-flags(aarch64-page) %jump-table.0, target-flags(aarch64-pageoff, aarch64-nc) %jump-table.0
++  ; CHECK:   [[MOVaddrJT:%[0-9]+]]:gpr64common = MOVaddrJT target-flags(aarch64-page) %jump-table.0, target-flags(aarch64-pageoff, aarch64-nc) %jump-table.0
+   ; CHECK:   early-clobber %6:gpr64, early-clobber %7:gpr64sp = JumpTableDest32 [[MOVaddrJT]], [[SUBREG_TO_REG]], %jump-table.0
+   ; CHECK:   BR %6
+   ; CHECK: bb.2:
+diff --git llvm/test/CodeGen/AArch64/GlobalISel/select-jump-table-brjt.mir llvm/test/CodeGen/AArch64/GlobalISel/select-jump-table-brjt.mir
+index 6b84c6d10843..b8c9a6c881da 100644
+--- llvm/test/CodeGen/AArch64/GlobalISel/select-jump-table-brjt.mir
++++ llvm/test/CodeGen/AArch64/GlobalISel/select-jump-table-brjt.mir
+@@ -65,7 +65,7 @@ body:             |
+   ; CHECK: bb.1.entry:
+   ; CHECK:   successors: %bb.3(0x2aaaaaab), %bb.4(0x2aaaaaab), %bb.2(0x2aaaaaab)
+   ; CHECK:   [[COPY2:%[0-9]+]]:gpr32 = COPY $wzr
+-  ; CHECK:   [[MOVaddrJT:%[0-9]+]]:gpr64 = MOVaddrJT target-flags(aarch64-page) %jump-table.0, target-flags(aarch64-pageoff, aarch64-nc) %jump-table.0
++  ; CHECK:   [[MOVaddrJT:%[0-9]+]]:gpr64common = MOVaddrJT target-flags(aarch64-page) %jump-table.0, target-flags(aarch64-pageoff, aarch64-nc) %jump-table.0
+   ; CHECK:   early-clobber %18:gpr64, early-clobber %19:gpr64sp = JumpTableDest32 [[MOVaddrJT]], [[SUBREG_TO_REG]], %jump-table.0
+   ; CHECK:   BR %18
+   ; CHECK: bb.2.sw.bb:
+diff --git llvm/test/CodeGen/AArch64/GlobalISel/select-static.mir llvm/test/CodeGen/AArch64/GlobalISel/select-static.mir
+index 0151b1f62303..dff2f093a9a4 100644
+--- llvm/test/CodeGen/AArch64/GlobalISel/select-static.mir
++++ llvm/test/CodeGen/AArch64/GlobalISel/select-static.mir
+@@ -75,7 +75,7 @@ registers:
+   - { id: 0, class: gpr }
+ 
+ # CHECK:  body:
+-# LINUX-DEFAULT: %0:gpr64 = MOVaddr target-flags(aarch64-page) @var_local, target-flags(aarch64-pageoff, aarch64-nc) @var_local
++# LINUX-DEFAULT: %0:gpr64common = MOVaddr target-flags(aarch64-page) @var_local, target-flags(aarch64-pageoff, aarch64-nc) @var_local
+ body:             |
+   bb.0:
+     %0(p0) = G_GLOBAL_VALUE @var_local
+@@ -91,7 +91,7 @@ registers:
+   - { id: 0, class: gpr }
+ 
+ # CHECK:  body:
+-# LINUX-DEFAULT: %0:gpr64 = MOVaddr target-flags(aarch64-page) @var_got, target-flags(aarch64-pageoff, aarch64-nc) @var_got
++# LINUX-DEFAULT: %0:gpr64common = MOVaddr target-flags(aarch64-page) @var_got, target-flags(aarch64-pageoff, aarch64-nc) @var_got
+ body:             |
+   bb.0:
+     %0(p0) = G_GLOBAL_VALUE @var_got
+diff --git llvm/test/CodeGen/AArch64/GlobalISel/select.mir llvm/test/CodeGen/AArch64/GlobalISel/select.mir
+index f8e65c76568b..0cc52852378f 100644
+--- llvm/test/CodeGen/AArch64/GlobalISel/select.mir
++++ llvm/test/CodeGen/AArch64/GlobalISel/select.mir
+@@ -76,8 +76,8 @@ registers:
+   - { id: 0, class: gpr }
+ 
+ # CHECK:  body:
+-# IOS: %0:gpr64 = MOVaddr target-flags(aarch64-page) @var_local, target-flags(aarch64-pageoff, aarch64-nc) @var_local
+-# LINUX-PIC: %0:gpr64 = LOADgot target-flags(aarch64-got) @var_local
++# IOS: %0:gpr64common = MOVaddr target-flags(aarch64-page) @var_local, target-flags(aarch64-pageoff, aarch64-nc) @var_local
++# LINUX-PIC: %0:gpr64common = LOADgot target-flags(aarch64-got) @var_local
+ body:             |
+   bb.0:
+     %0(p0) = G_GLOBAL_VALUE @var_local
+@@ -93,8 +93,8 @@ registers:
+   - { id: 0, class: gpr }
+ 
+ # CHECK:  body:
+-# IOS: %0:gpr64 = LOADgot target-flags(aarch64-got) @var_got
+-# LINUX-PIC: %0:gpr64 = LOADgot target-flags(aarch64-got) @var_got
++# IOS: %0:gpr64common = LOADgot target-flags(aarch64-got) @var_got
++# LINUX-PIC: %0:gpr64common = LOADgot target-flags(aarch64-got) @var_got
+ body:             |
+   bb.0:
+     %0(p0) = G_GLOBAL_VALUE @var_got
