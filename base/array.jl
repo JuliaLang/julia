@@ -2603,19 +2603,27 @@ function _shrink!(shrinker!, v::AbstractVector, itrs)
     seen = Set{eltype(v)}()
     filter!(_grow_filter!(seen), v)
     shrinker!(seen, itrs...)
-    filter!(_in(seen), v)
+    filter!(in(seen), v)
 end
 
 intersect!(v::AbstractVector, itrs...) = _shrink!(intersect!, v, itrs)
 setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
-vectorfilter(f, v::AbstractVector) = filter(f, v) # TODO: do we want this special case?
-vectorfilter(f, v) = [x for x in v if f(x)]
+vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
 function _shrink(shrinker!, itr, itrs)
-    keep = shrinker!(Set(itr), itrs...)
-    vectorfilter(_shrink_filter!(keep), itr)
+    T = promote_eltype(itr, itrs...)
+    keep = shrinker!(Set{T}(itr), itrs...)
+    vectorfilter(T, _shrink_filter!(keep), itr)
 end
 
 intersect(itr, itrs...) = _shrink(intersect!, itr, itrs)
 setdiff(  itr, itrs...) = _shrink(setdiff!, itr, itrs)
+
+function intersect(v::AbstractVector, r::AbstractRange)
+    T = promote_eltype(v, r)
+    common = Iterators.filter(in(r), v)
+    seen = Set{T}(common)
+    return vectorfilter(T, _shrink_filter!(seen), common)
+end
+intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)

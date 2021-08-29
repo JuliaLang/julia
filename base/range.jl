@@ -1181,6 +1181,16 @@ function intersect(r::StepRange, s::StepRange)
     step(r) < zero(step(r)) ? StepRange{T,S}(n, -a, m) : StepRange{T,S}(m, a, n)
 end
 
+function intersect(r1::AbstractRange, r2::AbstractRange)
+    # To iterate over the shorter range
+    length(r1) > length(r2) && return intersect(r2, r1)
+
+    r1 = unique(r1)
+    T = promote_eltype(r1, r2)
+
+    return T[x for x in r1 if x ∈ r2]
+end
+
 function intersect(r1::AbstractRange, r2::AbstractRange, r3::AbstractRange, r::AbstractRange...)
     i = intersect(intersect(r1, r2), r3)
     for t in r

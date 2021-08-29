@@ -1106,6 +1106,11 @@ end
     @test isequal(intersect([1,2,3], Float64[]), Float64[])
     @test isequal(intersect(Int64[], [1,2,3]), Int64[])
     @test isequal(intersect(Int64[]), Int64[])
+    @test isequal(intersect([1, 3], 1:typemax(Int)), [1, 3])
+    @test isequal(intersect(1:typemax(Int), [1, 3]), [1, 3])
+    @test isequal(intersect([1, 2, 3], 2:0.1:5), [2., 3.])
+    @test isequal(intersect([1.0, 2.0, 3.0], 2:5), [2., 3.])
+
     @test isequal(setdiff([1,2,3,4], [2,5,4]), [1,3])
     @test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
     @test isequal(setdiff([1,2,3,4], Int64[]), Int64[1,2,3,4])

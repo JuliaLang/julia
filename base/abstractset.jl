@@ -45,8 +45,6 @@ Set{Int64} with 3 elements:
 """
 function union end
 
-_in(itr) = x -> x in itr
-
 union(s, sets...) = union!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
 union(s::AbstractSet) = copy(s)
 
@@ -109,6 +107,10 @@ Maintain order with arrays.
 
 See also: [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref Base.issubset), [`issetequal`](@ref).
 
+!!! compat "Julia 1.8"
+    As of Julia 1.8 intersect returns a result with the eltype of the
+    type-promoted eltypes of the two inputs
+
 # Examples
 ```jldoctest
 julia> intersect([1, 2, 3], [3, 4, 5])
@@ -125,9 +127,12 @@ Set{Int64} with 1 element:
   2
 ```
 """
-intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
+function intersect(s::AbstractSet, itr, itrs...)
+    T = promote_eltype(s, itr, itrs...)
+    return intersect!(Set{T}(s), itr, itrs...)
+end
 intersect(s) = union(s)
-intersect(s::AbstractSet, itr) = mapfilter(_in(s), push!, itr, emptymutable(s))
+intersect(s::AbstractSet, itr) = mapfilter(in(s), push!, itr, emptymutable(s, promote_eltype(s, itr)))
 
 const ∩ = intersect
 
@@ -143,7 +148,7 @@ function intersect!(s::AbstractSet, itrs...)
     end
     return s
 end
-intersect!(s::AbstractSet, s2::AbstractSet) = filter!(_in(s2), s)
+intersect!(s::AbstractSet, s2::AbstractSet) = filter!(in(s2), s)
 intersect!(s::AbstractSet, itr) =
     intersect!(s, union!(emptymutable(s, eltype(itr)), itr))
 
