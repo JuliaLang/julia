@@ -650,7 +650,7 @@ end
 psep = if Sys.iswindows() ";" else ":" end
 withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
     julia_exe = joinpath(Sys.BINDIR, Base.julia_exename())
-    @test Sys.which("julia") == abspath(julia_exe)
+    @test Sys.which(Base.julia_exename()) == abspath(julia_exe)
     @test Sys.which(julia_exe) == abspath(julia_exe)
 end
 
