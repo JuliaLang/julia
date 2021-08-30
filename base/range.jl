@@ -1382,11 +1382,13 @@ in(x::T, r::AbstractRange{T}) where {T} = _in_range(x, r)
 in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r))
 
 in(x::Real, r::AbstractRange{T}) where {T<:Integer} =
-    isinteger(x) && !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
-        (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
+    isinteger(x) && !isempty(r) &&
+    (iszero(step(r)) ? x == first(r) : (x >= minimum(r) && x <= maximum(r) &&
+        (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)))
 in(x::AbstractChar, r::AbstractRange{<:AbstractChar}) =
-    !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
-        (mod(Int(x) - Int(first(r)), step(r)) == 0)
+    !isempty(r) &&
+    (iszero(step(r)) ? x == first(r) : (x >= minimum(r) && x <= maximum(r) &&
+        (mod(Int(x) - Int(first(r)), step(r)) == 0)))
 
 # Addition/subtraction of ranges
 

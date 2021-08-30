@@ -2164,3 +2164,20 @@ end
 @test length(range(1, 100, length=big(100)^100)) == big(100)^100
 @test length(range(big(1), big(100)^100, length=big(100)^100)) == big(100)^100
 @test length(0 * (1:big(100)^100)) == big(100)^100
+
+@testset "issue #41784" begin
+    # tests `in` when step equals 0
+    # test for Int
+    x = 41784
+    @test (x in StepRangeLen(x, 0, 0)) == false
+    @test (x in StepRangeLen(x, 0, rand(1:100))) == true
+    @test ((x - 1) in StepRangeLen(x, 0, rand(1:100))) == false
+    @test ((x + 1) in StepRangeLen(x, 0, rand(1:100))) == false
+
+    # test for Char
+    x = 'z'
+    @test (x in StepRangeLen(x, 0, 0)) == false
+    @test (x in StepRangeLen(x, 0, rand(1:100))) == true
+    @test ((x - 1) in StepRangeLen(x, 0, rand(1:100))) == false
+    @test ((x + 1) in StepRangeLen(x, 0, rand(1:100))) == false
+end
