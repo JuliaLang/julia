@@ -2740,9 +2740,24 @@ partial_return_2(x) = Val{partial_return_1(x)[2]}
 
 @test Base.return_types(partial_return_2, (Int,)) == Any[Type{Val{1}}]
 
-# Precision of abstract_iteration
+# Soundness and precision of abstract_iteration
+f41839() = (1:100...,)
+@test NTuple{100,Int} <: only(Base.return_types(f41839, ())) <: Tuple{Vararg{Int}}
 f_splat(x) = (x...,)
 @test Base.return_types(f_splat, (Pair{Int,Int},)) == Any[Tuple{Int, Int}]
+@test Base.return_types(f_splat, (UnitRange{Int},)) == Any[Tuple{Vararg{Int}}]
+struct Itr41839_1 end # empty or infinite
+Base.iterate(::Itr41839_1) = rand(Bool) ? (nothing, nothing) : nothing
+Base.iterate(::Itr41839_1, ::Nothing) = (nothing, nothing)
+@test Base.return_types(f_splat, (Itr41839_1,)) == Any[Tuple{}]
+struct Itr41839_2 end # empty or failing
+Base.iterate(::Itr41839_2) = rand(Bool) ? (nothing, nothing) : nothing
+Base.iterate(::Itr41839_2, ::Nothing) = error()
+@test Base.return_types(f_splat, (Itr41839_2,)) == Any[Tuple{}]
+struct Itr41839_3 end
+Base.iterate(::Itr41839_3 ) = rand(Bool) ? nothing : (nothing, 1)
+Base.iterate(::Itr41839_3 , i) = i < 16 ? (i, i + 1) : nothing
+@test only(Base.return_types(f_splat, (Itr41839_3,))) <: Tuple{Vararg{Union{Nothing, Int}}}
 
 # issue #32699
 f32699(a) = (id = a[1],).id
