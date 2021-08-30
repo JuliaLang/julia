@@ -214,10 +214,14 @@ function retrieve()
 end
 
 function getdict(data::Vector{UInt})
-    # Lookup is expensive, so do it only once per ip.
-    udata = unique(data)
     dict = LineInfoDict()
+    return getdict!(dict, data)
+end
+
+function getdict!(dict::LineInfoDict(), data::Vector{UInt})
     for ip in udata
+        # Lookup is expensive, so do it only once per ip.
+        haskey(dict, UInt64(ip)) && continue
         st = lookup(convert(Ptr{Cvoid}, ip))
         # To correct line numbers for moving code, put it in the form expected by
         # Base.update_stackframes_callback[]
