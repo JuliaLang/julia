@@ -22,6 +22,7 @@ using Dates
         @test isa(Set(sin(x) for x = 1:3), Set{Float64})
         @test isa(Set(f17741(x) for x = 1:3), Set{Int})
         @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
+        @test isa(Set(f17741(x) for x = 1:0), Set{Integer})
     end
     let s1 = Set(["foo", "bar"]), s2 = Set(s1)
         @test s1 == s2

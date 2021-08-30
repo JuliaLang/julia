@@ -74,6 +74,7 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
     @test map(typeof, [iszero, iszero]) == [typeof(iszero), typeof(iszero)]
     @test isequal(map(identity, Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
                   [[1, 2],[missing, 1]])
+    @test map(x -> x < 0 ? false : x, Int[]) isa Vector{Integer}
 end
 
 function testmap_equivalence(mapf, f, c...)
