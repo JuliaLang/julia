@@ -418,31 +418,31 @@ Random.seed!(100)
             x = rand(elty, 5)
             for y = (view(ones(elty, 5), 1:2:5), view(ones(elty, 7), 6:-2:2))
                 ycopy = copy(y)
-                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(x, 1:3:4), elty(3), y) == 2*A[:,2:2:4]*x[1:3:4] + 3*ycopy
+                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(x, 1:3:4), elty(3), y) ≈ 2*A[:,2:2:4]*x[1:3:4] + 3*ycopy
                 ycopy = copy(y)
-                @test BLAS.gemv!('N', elty(2), view(A, :, 4:-2:2), view(x, 1:3:4), elty(3), y) == 2*A[:,4:-2:2]*x[1:3:4] + 3*ycopy
+                @test BLAS.gemv!('N', elty(2), view(A, :, 4:-2:2), view(x, 1:3:4), elty(3), y) ≈ 2*A[:,4:-2:2]*x[1:3:4] + 3*ycopy
                 ycopy = copy(y)
-                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(x, 4:-3:1), elty(3), y) == 2*A[:,2:2:4]*x[4:-3:1] + 3*ycopy
+                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(x, 4:-3:1), elty(3), y) ≈ 2*A[:,2:2:4]*x[4:-3:1] + 3*ycopy
                 ycopy = copy(y)
-                @test BLAS.gemv!('N', elty(2), view(A, :, 4:-2:2), view(x, 4:-3:1), elty(3), y) == 2*A[:,4:-2:2]*x[4:-3:1] + 3*ycopy
+                @test BLAS.gemv!('N', elty(2), view(A, :, 4:-2:2), view(x, 4:-3:1), elty(3), y) ≈ 2*A[:,4:-2:2]*x[4:-3:1] + 3*ycopy
                 ycopy = copy(y)
-                @test BLAS.gemv!('N', elty(2), view(A, :, StepRangeLen(1,0,1)), view(x, 1:1), elty(3), y) == 2*A[:,1:1]*x[1:1] + 3*ycopy # stride(A,2) == 0
+                @test BLAS.gemv!('N', elty(2), view(A, :, StepRangeLen(1,0,1)), view(x, 1:1), elty(3), y) ≈ 2*A[:,1:1]*x[1:1] + 3*ycopy # stride(A,2) == 0
             end
             @test BLAS.gemv!('N', elty(1), zeros(elty, 0, 5), zeros(elty, 5), elty(1), zeros(elty, 0)) == elty[] # empty matrix, stride(A,2) == 0
-            @test BLAS.gemv('N', elty(-1), view(A, 2:3, 1:2:3), view(x, 2:-1:1)) == -1*A[2:3,1:2:3]*x[2:-1:1]
-            @test BLAS.gemv('N', view(A, 2:3, 3:-2:1), view(x, 1:2:3)) == A[2:3,3:-2:1]*x[1:2:3]
+            @test BLAS.gemv('N', elty(-1), view(A, 2:3, 1:2:3), view(x, 2:-1:1)) ≈ -1*A[2:3,1:2:3]*x[2:-1:1]
+            @test BLAS.gemv('N', view(A, 2:3, 3:-2:1), view(x, 1:2:3)) ≈ A[2:3,3:-2:1]*x[1:2:3]
             for (trans, f) = (('T',transpose), ('C',adjoint))
                 for y = (view(ones(elty, 3), 1:2:3), view(ones(elty, 5), 4:-2:2))
                     ycopy = copy(y)
-                    @test BLAS.gemv!(trans, elty(2), view(A, :, 2:2:4), view(x, 1:2:5), elty(3), y) == 2*f(A[:,2:2:4])*x[1:2:5] + 3*ycopy
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 2:2:4), view(x, 1:2:5), elty(3), y) ≈ 2*f(A[:,2:2:4])*x[1:2:5] + 3*ycopy
                     ycopy = copy(y)
-                    @test BLAS.gemv!(trans, elty(2), view(A, :, 4:-2:2), view(x, 1:2:5), elty(3), y) == 2*f(A[:,4:-2:2])*x[1:2:5] + 3*ycopy
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 4:-2:2), view(x, 1:2:5), elty(3), y) ≈ 2*f(A[:,4:-2:2])*x[1:2:5] + 3*ycopy
                     ycopy = copy(y)
-                    @test BLAS.gemv!(trans, elty(2), view(A, :, 2:2:4), view(x, 5:-2:1), elty(3), y) == 2*f(A[:,2:2:4])*x[5:-2:1] + 3*ycopy
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 2:2:4), view(x, 5:-2:1), elty(3), y) ≈ 2*f(A[:,2:2:4])*x[5:-2:1] + 3*ycopy
                     ycopy = copy(y)
-                    @test BLAS.gemv!(trans, elty(2), view(A, :, 4:-2:2), view(x, 5:-2:1), elty(3), y) == 2*f(A[:,4:-2:2])*x[5:-2:1] + 3*ycopy
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 4:-2:2), view(x, 5:-2:1), elty(3), y) ≈ 2*f(A[:,4:-2:2])*x[5:-2:1] + 3*ycopy
                 end
-                @test BLAS.gemv!(trans, elty(2), view(A, :, StepRangeLen(1,0,1)), view(x, 1:2:5), elty(3), elty[1]) == 2*f(A[:,1:1])*x[1:2:5] + elty[3] # stride(A,2) == 0
+                @test BLAS.gemv!(trans, elty(2), view(A, :, StepRangeLen(1,0,1)), view(x, 1:2:5), elty(3), elty[1]) ≈ 2*f(A[:,1:1])*x[1:2:5] + elty[3] # stride(A,2) == 0
             end
             for trans = ('N', 'T', 'C')
                 @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2:3, 1:2), view(x, 1:2)) # stride(A,1) must be 1
