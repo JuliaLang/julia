@@ -673,17 +673,26 @@ for (fname, elty) in ((:dgemv_,:Float64),
             end
             chkstride1(A)
             lda = stride(A,2)
-            lda >= max(1, size(A,1)) || error("`stride(A,2)` must be at least `max(1, size(A,1))`")
             sX = stride(X,1)
-            pX = pointer(X, sX > 0 ? firstindex(X) : lastindex(X))
             sY = stride(Y,1)
-            pY = pointer(Y, sY > 0 ? firstindex(Y) : lastindex(Y))
-            GC.@preserve X Y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            if lda < 0
+                colindex = lastindex(A, 2)
+                lda = -lda
+                trans == 'N' ? (sX = -sX) : (sY = -sY)
+            else
+                colindex = firstindex(A, 2)
+            end
+            lda >= size(A,1) || size(A,2) <= 1 || error("when `size(A,2) > 1`, `abs(stride(A,2))` must be at least `size(A,1)`")
+            lda = max(1, size(A,1), lda)
+            pA = pointer(A, Base._sub2ind(A, 1, colindex))
+            pX = pointer(X, stride(X,1) > 0 ? firstindex(X) : lastindex(X))
+            pY = pointer(Y, stride(Y,1) > 0 ? firstindex(Y) : lastindex(Y))
+            GC.@preserve A X Y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Clong),
                  trans, size(A,1), size(A,2), alpha,
-                 A, lda, pX, sX,
+                 pA, lda, pX, sX,
                  beta, pY, sY, 1)
             Y
         end
