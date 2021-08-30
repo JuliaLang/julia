@@ -1711,8 +1711,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             Compare = Current;
             needloop = !isswapfield || Order != AtomicOrdering::NotAtomic;
         }
-        BasicBlock *BB;
-        PHINode *CmpPhi;
+        BasicBlock *BB = NULL;
+        PHINode *CmpPhi = NULL;
         if (needloop) {
             BasicBlock *From = ctx.builder.GetInsertBlock();
             BB = BasicBlock::Create(jl_LLVMContext, "xchg", ctx.f);
@@ -3303,8 +3303,8 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         jl_cgval_t oldval = rhs;
         if (!issetfield)
             oldval = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, strct.tbaa, true);
-        Value *Success;
-        BasicBlock *DoneBB;
+        Value *Success = NULL;
+        BasicBlock *DoneBB = NULL;
         if (isreplacefield || ismodifyfield) {
             if (ismodifyfield) {
                 if (needlock)
