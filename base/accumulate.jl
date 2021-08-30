@@ -118,7 +118,7 @@ end
 
 Cumulative sum of an iterator.
 
-See also [`accumulate`](@ref) to apply functions other than `+`
+See also [`accumulate`](@ref) to apply functions other than `+`.
 
 !!! compat "Julia 1.5"
     `cumsum` on a non-array iterator requires at least Julia 1.5.
