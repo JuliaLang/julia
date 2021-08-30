@@ -218,7 +218,7 @@ function getdict(data::Vector{UInt})
     return getdict!(dict, data)
 end
 
-function getdict!(dict::LineInfoDict(), data::Vector{UInt})
+function getdict!(dict::LineInfoDict, data::Vector{UInt})
     for ip in udata
         # Lookup is expensive, so do it only once per ip.
         haskey(dict, UInt64(ip)) && continue
