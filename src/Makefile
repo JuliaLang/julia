@@ -47,6 +47,9 @@ RUNTIME_SRCS := \
 	jlapi signal-handling safepoint timing subtype \
 	crc32c APInt-C processor ircode opaque_closure codegen-stubs
 SRCS := jloptions runtime_ccall rtutils
+ifeq ($(OS),WINNT)
+SRCS += win32_ucontext
+endif
 
 RT_LLVMLINK :=
 CG_LLVMLINK :=

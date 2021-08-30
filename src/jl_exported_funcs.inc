@@ -576,7 +576,7 @@
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
     XX(jl_dlfind_win32) \
     XX(jl_refresh_dbg_module_list) \
-    XX(jl_exception_handler)
+    XX(__julia_personality)
 
 #define JL_RUNTIME_EXPORTED_FUNC_ADDRS(XX) \
     XX(jl_f_is) \
