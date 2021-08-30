@@ -1149,6 +1149,7 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
 {
     auto tag = orig_inst->getArgOperand(2);
     // `julia.typeof` is only legal on the original pointer, no need to scan recursively
+    size_t last_deleted = removed.size();
     for (auto user: orig_inst->users()) {
         if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
@@ -1161,6 +1162,8 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             }
         }
     }
+    while (last_deleted < removed.size())
+        removed[last_deleted++]->replaceUsesOfWith(orig_inst, UndefValue::get(orig_inst->getType()));
 }
 
 void Optimizer::splitOnStack(CallInst *orig_inst)
