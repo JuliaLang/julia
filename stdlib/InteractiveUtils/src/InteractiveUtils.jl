@@ -34,40 +34,40 @@ The memory consumption estimate is an approximate lower bound on the size of the
 - `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
 """
 function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false)
-    @assert sortby in [:name, :size, :summary] "Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"
-    function _populate_rows(m2::Module, allrows, include_self::Bool, prep::String)
-        newrows = Any[
-            let
-                value = getfield(m2, v)
-                ssize_str, ssize = if value===Base || value===Main || value===Core
+    sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
+    rows = Vector{Any}[]
+    workqueue = [(m, ""),]
+    while !isempty(workqueue)
+        m2, prep = popfirst!(workqueue)
+        for v in names(m2; all, imported)
+            if !isdefined(m2, v) || !occursin(pattern, string(v))
+                continue
+            end
+            value = getfield(m2, v)
+            isbuiltin = value === Base || value === Main || value === Core
+            if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
+                push!(workqueue, (value, "$prep$v."))
+            end
+            ssize_str, ssize = if isbuiltin
                     ("", typemax(Int))
                 else
                     ss = summarysize(value)
                     (format_bytes(ss), ss)
                 end
-                Any[string(prep, v), ssize_str, summary(value), ssize]
-            end
-            for v in names(m2; all, imported)
-            if (string(v) != split(string(m2), ".")[end] || include_self) && isdefined(m2, v) && occursin(pattern, string(v)) ]
-        append!(allrows, newrows)
-        if recursive
-            for row in newrows
-                if row[3] == "Module" && !in(split(row[1], ".")[end], [split(string(m2), ".")[end], "Base", "Main", "Core"])
-                    _populate_rows(getfield(m2, Symbol(split(row[1], ".")[end])), allrows, false, prep * "$(row[1]).")
-                end
-            end
+            push!(rows, Any[string(prep, v), ssize_str, summary(value), ssize])
         end
-        return allrows
     end
-    rows = _populate_rows(m, Vector{Any}[], true, "")
-    if sortby == :name
-        col, reverse = 1, false
-    elseif sortby == :size
-        col, reverse = 4, true
-    elseif sortby == :summary
-        col, reverse = 3, false
+    let (col, rev) = if sortby == :name
+            1, false
+        elseif sortby == :size
+            4, true
+        elseif sortby == :summary
+            3, false
+        else
+            @assert "unreachable"
+        end
+        sort!(rows; by=r->r[col], rev)
     end
-    rows = sort!(rows, by=r->r[col], rev=reverse)
     pushfirst!(rows, Any["name", "size", "summary"])
 
     return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
@@ -208,54 +208,42 @@ function methodswith(t::Type; supertypes::Bool=false)
 end
 
 # subtypes
-function _subtypes(m::Module, x::Type, sts=Base.IdSet{Any}(), visited=Base.IdSet{Module}())
-    push!(visited, m)
+function _subtypes_in!(mods::Array, x::Type)
     xt = unwrap_unionall(x)
-    if !isa(xt, DataType)
-        return sts
-    end
-    xt = xt::DataType
-    for s in names(m, all = true)
-        if isdefined(m, s) && !isdeprecated(m, s)
-            t = getfield(m, s)
-            if isa(t, DataType)
-                t = t::DataType
-                if t.name.name === s && supertype(t).name == xt.name
-                    ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
-                end
-            elseif isa(t, UnionAll)
-                t = t::UnionAll
-                tt = unwrap_unionall(t)
-                isa(tt, DataType) || continue
-                tt = tt::DataType
-                if tt.name.name === s && supertype(tt).name == xt.name
-                    ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
-                end
-            elseif isa(t, Module)
-                t = t::Module
-                in(t, visited) || _subtypes(t, x, sts, visited)
-            end
-        end
-    end
-    return sts
-end
-
-function _subtypes_in(mods::Array, x::Type)
-    if !isabstracttype(x)
+    if !isabstracttype(x) || !isa(xt, DataType)
         # Fast path
         return Type[]
     end
-    sts = Base.IdSet{Any}()
-    visited = Base.IdSet{Module}()
-    for m in mods
-        _subtypes(m, x, sts, visited)
+    sts = Vector{Any}()
+    while !isempty(mods)
+        m = pop!(mods)
+        xt = xt::DataType
+        for s in names(m, all = true)
+            if isdefined(m, s) && !isdeprecated(m, s)
+                t = getfield(m, s)
+                if isa(t, DataType)
+                    if t.name.name === s && supertype(t).name == xt.name
+                        ti = typeintersect(t, x)
+                        ti != Bottom && push!(sts, ti)
+                    end
+                elseif isa(t, UnionAll)
+                    tt = unwrap_unionall(t)
+                    isa(tt, DataType) || continue
+                    tt = tt::DataType
+                    if tt.name.name === s && supertype(tt).name == xt.name
+                        ti = typeintersect(t, x)
+                        ti != Bottom && push!(sts, ti)
+                    end
+                elseif isa(t, Module) && nameof(t) === s && parentmodule(t) === m && t !== m
+                    push!(mods, t)
+                end
+            end
+        end
     end
-    return sort!(collect(sts), by=string)
+    return permute!(sts, sortperm(map(string, sts)))
 end
 
-subtypes(m::Module, x::Type) = _subtypes_in([m], x)
+subtypes(m::Module, x::Type) = _subtypes_in!([m], x)
 
 """
     subtypes(T::DataType)
@@ -274,7 +262,7 @@ julia> subtypes(Integer)
  Unsigned
 ```
 """
-subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
+subtypes(x::Type) = _subtypes_in!(Base.loaded_modules_array(), x)
 
 """
     supertypes(T::Type)
