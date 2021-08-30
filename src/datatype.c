@@ -1712,7 +1712,7 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
         }
         else {
             jl_task_t *ct = jl_current_task;
-            uint8_t *psel;
+            uint8_t *psel = NULL;
             if (isunion) {
                 psel = &((uint8_t*)v)[offs + fsz - 1];
                 rty = jl_nth_union_component(rty, *psel);

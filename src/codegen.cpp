@@ -6012,8 +6012,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
 {
     jl_returninfo_t props = {};
     SmallVector<Type*, 8> fsig;
-    Type *rt;
-    Type *srt;
+    Type *rt = NULL;
+    Type *srt = NULL;
     if (jl_is_structtype(jlrettype) && jl_is_datatype_singleton((jl_datatype_t*)jlrettype)) {
         rt = T_void;
         props.cc = jl_returninfo_t::Register;
