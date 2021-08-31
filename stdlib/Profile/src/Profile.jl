@@ -508,7 +508,7 @@ function fetch(;include_meta = false)
         data_stripped = Vector{UInt}(undef, length(data) - (nblocks * nmeta))
         j = length(data_stripped)
         i = length(data)
-        while i > 0
+        while i > 0 && j > 0
             data_stripped[j] = data[i]
             if data[i] == 0
                 i -= nmeta
@@ -516,6 +516,7 @@ function fetch(;include_meta = false)
             i -= 1
             j -= 1
         end
+        @assert i == j == 0 "metadata stripping failed i=$i j=$j"
         return data_stripped
     end
 end
