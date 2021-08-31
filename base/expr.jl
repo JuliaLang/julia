@@ -246,6 +246,11 @@ Give a hint to the compiler that calls within `block` are worth inlining.
     end
     ```
 
+!!! warning
+    Although a callsite annotation will try to force inlining in regardless of the cost model,
+    there are still chances it can't succeed in it. Especially, recursive calls can not be
+    inlined even if they are annotated as `@inline`d.
+
 !!! compat "Julia 1.8"
     The callsite annotation requires at least Julia 1.8.
 """
