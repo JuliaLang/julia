@@ -212,7 +212,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
     // jl_options must be initialized very early, in case an embedder sets some
     // values there before calling jl_init
-    jl_init_options();
+    ((void (*)())jl_init_options_addr)();
 
     for (unsigned int symbol_idx=0; jl_codegen_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_codegen, jl_codegen_exported_func_names[symbol_idx]);

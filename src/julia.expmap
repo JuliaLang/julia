@@ -4,6 +4,7 @@
     __tsan*;
     pthread*;
     __stack_chk_guard;
+    __julia_personality;
     asprintf;
     bitvector_*;
     ev_break;
