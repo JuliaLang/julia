@@ -22,6 +22,10 @@ A = rand(5,4,3)
     @test checkbounds(Bool, A, 5, 12) == false
     @test checkbounds(Bool, A, 1, 13) == false
     @test checkbounds(Bool, A, 6, 12) == false
+
+    x = [1.0, 2.0]
+    @test x[false:true] == [2.0]
+    @test checkindex(Bool, axes(x, 1), false:true) == true
 end
 
 @testset "single CartesianIndex" begin
