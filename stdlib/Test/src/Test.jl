@@ -735,7 +735,7 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         if isa(extype, Type)
             success =
                 if from_macroexpand && extype == LoadError && exc isa Exception
-                    Base.depwarn("macroexpand no longer throw a LoadError so `@test_throws LoadError ...` is deprecated and passed without checking the error type!", :do_test_throws)
+                    Base.depwarn("macroexpand no longer throws a LoadError so `@test_throws LoadError ...` is deprecated and passed without checking the error type!", :do_test_throws)
                     true
                 else
                     isa(exc, extype)
