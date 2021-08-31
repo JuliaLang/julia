@@ -840,6 +840,19 @@ fib34666(x) =
     end
 @test fib34666(25) == 75025
 
+# issue #41324
+@testset "Co-schedule" begin
+    parent = Threads.@spawn begin
+        @test current_task().sticky == false
+        child = @async begin end
+        @test current_task().sticky == true
+        @test Threads.threadid() == Threads.threadid(child)
+        wait(child)
+    end
+    wait(parent)
+    @test parent.sticky == true
+end
+
 function jitter_channel(f, k, delay, ntasks, schedule)
     x = Channel(ch -> foreach(i -> put!(ch, i), 1:k), 1)
     y = Channel(k) do ch
@@ -873,4 +886,29 @@ end
         Threads.foreach(x -> put!(ys, x), inner)
     end
     @test sort!(collect(ys)) == 1:3
+end
+
+# reproducible multi-threaded rand()
+
+using Random
+
+function reproducible_rand(r, i)
+    if i == 0
+        return UInt64(0)
+    end
+    r1 = rand(r, UInt64)*hash(i)
+    t1 = Threads.@spawn reproducible_rand(r, i-1)
+    t2 = Threads.@spawn reproducible_rand(r, i-1)
+    r2 = rand(r, UInt64)
+    return r1 + r2 + fetch(t1) + fetch(t2)
+end
+
+@testset "Task-local random" begin
+    r = Random.TaskLocalRNG()
+    Random.seed!(r, 23)
+    val = reproducible_rand(r, 10)
+    for i = 1:4
+        Random.seed!(r, 23)
+        @test reproducible_rand(r, 10) == val
+    end
 end

@@ -69,7 +69,7 @@ The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#
 | `x && y`   | [short-circuiting and](@ref man-conditional-evaluation) |
 | `x \|\| y` | [short-circuiting or](@ref man-conditional-evaluation)  |
 
-Negation changes `true` to `false` and vice versa. The short-circuiting opeations are explained on the linked page.
+Negation changes `true` to `false` and vice versa. The short-circuiting operations are explained on the linked page.
 
 Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
 

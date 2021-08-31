@@ -220,6 +220,16 @@ end
     s2 = Set([nothing])
     union!(s2, [nothing])
     @test s2 == Set([nothing])
+
+    @testset "promotion" begin
+        ints = [1:5, [1, 2], Set([1, 2])]
+        floats = [2:0.1:3, [2.0, 3.5], Set([2.0, 3.5])]
+
+        for a in ints, b in floats
+            @test eltype(union(a, b)) == Float64
+            @test eltype(union(b, a)) == Float64
+        end
+    end
 end
 
 @testset "intersect" begin
@@ -238,7 +248,7 @@ end
         end
     end
     @test intersect(Set([1]), BitSet()) isa Set{Int}
-    @test intersect(BitSet([1]), Set()) isa BitSet
+    @test intersect(BitSet([1]), Set()) isa Set{Any}
     @test intersect([1], BitSet()) isa Vector{Int}
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
@@ -249,7 +259,18 @@ end
     y = () ∩ (42,)
     @test isempty(x)
     @test isempty(y)
-    @test eltype(x) == eltype(y) == Union{}
+
+    # Discussed in PR#41769
+    @testset "promotion" begin
+        ints = [1:5, [1, 2], Set([1, 2])]
+        floats = [2:0.1:3, [2.0, 3.5], Set([2.0, 3.5])]
+
+        for a in ints, b in floats
+            @test eltype(intersect(a, b)) == Float64
+            @test eltype(intersect(b, a)) == Float64
+            @test eltype(intersect(a, a, b)) == Float64
+        end
+    end
 end
 
 @testset "setdiff" begin
@@ -755,4 +776,25 @@ Base.IteratorSize(::Type{<:OpenInterval}) = Base.SizeUnknown()
     i = OpenInterval(2, 4)
     @test 3 ∈ i
     @test issubset(3, i)
+end
+
+@testset "IdSet" begin
+    a = [1]
+    b = [2]
+    c = [3]
+    d = [4]
+    A = Base.IdSet{Vector{Int}}([a, b, c, d])
+    @test !isempty(A)
+    B = copy(A)
+    @test A ⊆ B
+    @test B ⊆ A
+    A = filter!(x->isodd(x[1]), A)
+    @test A ⊆ B
+    @test !(B ⊆ A)
+    @test !isempty(A)
+    a_ = pop!(A, a)
+    @test a_ === a
+    @test !isempty(A)
+    A = empty!(A)
+    @test isempty(A)
 end

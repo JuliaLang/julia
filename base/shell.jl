@@ -87,15 +87,25 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
                 i = consume_upto!(arg, s, i, j)
-            elseif c == '\\'
-                if in_double_quotes
+            elseif !in_single_quotes && c == '\\'
+                if !isempty(st) && peek(st)[2] in ('\n', '\r')
+                    i = consume_upto!(arg, s, i, j) + 1
+                    if popfirst!(st)[2] == '\r' && peek(st)[2] == '\n'
+                        i += 1
+                        popfirst!(st)
+                    end
+                    while !isempty(st) && peek(st)[2] in (' ', '\t')
+                        i = nextind(str, i)
+                        _ = popfirst!(st)
+                    end
+                elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
                     k, c′ = peek(st)
                     if c′ == '"' || c′ == '$' || c′ == '\\'
                         i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)
                     end
-                elseif !in_single_quotes
+                else
                     isempty(st) && error("dangling backslash")
                     i = consume_upto!(arg, s, i, j)
                     _ = popfirst!(st)
@@ -251,6 +261,53 @@ julia> Base.shell_escape_posixly("echo", "this", "&&", "that")
 shell_escape_posixly(args::AbstractString...) =
     sprint(print_shell_escaped_posixly, args...)
 
+"""
+    shell_escape_csh(args::Union{Cmd,AbstractString...})
+    shell_escape_csh(io::IO, args::Union{Cmd,AbstractString...})
+
+This function quotes any metacharacters in the string arguments such
+that the string returned can be inserted into a command-line for
+interpretation by the Unix C shell (csh, tcsh), where each string
+argument will form one word.
+
+In contrast to a POSIX shell, csh does not support the use of the
+backslash as a general escape character in double-quoted strings.
+Therefore, this function wraps strings that might contain
+metacharacters in single quotes, except for parts that contain single
+quotes, which it wraps in double quotes instead. It switches between
+these types of quotes as needed. Linefeed characters are escaped with
+a backslash.
+
+This function should also work for a POSIX shell, except if the input
+string contains a linefeed (`"\\n"`) character.
+
+See also: [`shell_escape_posixly`](@ref)
+"""
+function shell_escape_csh(io::IO, args::AbstractString...)
+    first = true
+    for arg in args
+        first || write(io, ' ')
+        first = false
+        i = 1
+        while true
+            for (r,e) = (r"^[A-Za-z0-9/\._-]+\z" => "",
+                         r"^[^']*\z" => "'", r"^[^\$\`\"]*\z" => "\"",
+                         r"^[^']+"  => "'", r"^[^\$\`\"]+"  => "\"")
+                if ((m = match(r, SubString(arg, i))) !== nothing)
+                    write(io, e)
+                    write(io, replace(m.match, '\n' => "\\\n"))
+                    write(io, e)
+                    i += ncodeunits(m.match)
+                    break
+                end
+            end
+            i <= lastindex(arg) || break
+        end
+    end
+end
+shell_escape_csh(args::AbstractString...) =
+    sprint(shell_escape_csh, args...;
+           sizehint = sum(sizeof.(args)) + length(args) * 3)
 
 """
     shell_escape_wincmd(s::AbstractString)
@@ -285,11 +342,11 @@ This function may be useful in concert with the `windows_verbatim` flag to
 
 ```julia
 wincmd(c::String) =
-   run(Cmd(Cmd(["cmd.exe", "/s /c \" \$c \""]);
+   run(Cmd(Cmd(["cmd.exe", "/s /c \\" \$c \\""]);
            windows_verbatim=true))
 wincmd_echo(s::String) =
    wincmd("echo " * Base.shell_escape_wincmd(s))
-wincmd_echo("hello \$(ENV["USERNAME"]) & the \"whole\" world! (=^I^=)")
+wincmd_echo("hello \$(ENV["USERNAME"]) & the \\"whole\\" world! (=^I^=)")
 ```
 
 But take note that if the input string `s` contains a `%`, the argument list
@@ -316,13 +373,13 @@ run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
     ```julia
     to_print = "All for 1 & 1 for all!"
     to_print_esc = Base.shell_escape_wincmd(Base.shell_escape_wincmd(to_print))
-    run(Cmd(Cmd(["cmd", "/S /C \" break | echo \$(to_print_esc) \""]), windows_verbatim=true))
+    run(Cmd(Cmd(["cmd", "/S /C \\" break | echo \$(to_print_esc) \\""]), windows_verbatim=true))
     ```
 
 With an I/O stream parameter `io`, the result will be written there,
 rather than returned as a string.
 
-See also: [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref)
+See also [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref).
 
 # Example
 ```jldoctest
@@ -376,7 +433,7 @@ It joins command-line arguments to be passed to a Windows
 C/C++/Julia application into a command line, escaping or quoting the
 meta characters space, TAB, double quote and backslash where needed.
 
-See also: [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref)
+See also [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref).
 """
 function escape_microsoft_c_args(io::IO, args::AbstractString...)
     # http://daviddeley.com/autohotkey/parameters/parameters.htm#WINCRULES

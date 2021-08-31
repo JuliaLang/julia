@@ -92,4 +92,4 @@ the last argument).
 
 ## Emit bounds checks
 
-Julia can be launched with `--check-bounds={yes|no}` to emit bounds checks always or never (ignoring declarations).
+Julia can be launched with `--check-bounds={yes|no|auto}` to emit bounds checks always, never, or respect @inbounds declarations.

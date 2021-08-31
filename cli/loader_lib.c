@@ -161,7 +161,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     // Once we have libjulia-internal loaded, re-export its symbols:
     for (unsigned int symbol_idx=0; jl_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_internal, jl_exported_func_names[symbol_idx]);
-        if (addr == NULL) {
+        if (addr == NULL || addr == *jl_exported_func_addrs[symbol_idx]) {
             jl_loader_print_stderr3("ERROR: Unable to load ", jl_exported_func_names[symbol_idx], " from libjulia-internal");
             exit(1);
         }
@@ -182,17 +182,18 @@ JL_DLLEXPORT int jl_load_repl(int argc, char * argv[]) {
     }
     // Next, if we're on Linux/FreeBSD, set up fast TLS.
 #if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_)
-    void (*jl_set_ptls_states_getter)(void *) = lookup_symbol(libjulia_internal, "jl_set_ptls_states_getter");
-    if (jl_set_ptls_states_getter == NULL) {
-        jl_loader_print_stderr("ERROR: Cannot find jl_set_ptls_states_getter() function within libjulia-internal!\n");
+    void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
+    if (jl_pgcstack_setkey == NULL) {
+        jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");
         exit(1);
     }
-    void * (*fptr)(void) = lookup_symbol(RTLD_DEFAULT, "jl_get_ptls_states_static");
-    if (fptr == NULL) {
-        jl_loader_print_stderr("ERROR: Cannot find jl_get_ptls_states_static(), must define this symbol within calling executable!\n");
+    void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
+    void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
+    if (fptr == NULL || key == NULL) {
+        jl_loader_print_stderr("ERROR: Cannot find jl_get_pgcstack_static(), must define this symbol within calling executable!\n");
         exit(1);
     }
-    jl_set_ptls_states_getter((void *)fptr);
+    jl_pgcstack_setkey(fptr, key);
 #endif
 
     // Load the repl entrypoint symbol and jump into it!

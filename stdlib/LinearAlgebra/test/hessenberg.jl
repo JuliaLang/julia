@@ -185,4 +185,27 @@ end
     @test Base.propertynames(F, true) == (:Q, :H, :μ, :τ, :factors, :uplo)
 end
 
+@testset "adjoint of Hessenberg" begin
+    Ar = randn(5, 5)
+    Ac = complex.(randn(5, 5), randn(5, 5))
+    b = ones(size(Ar, 1))
+
+    for A in (Ar, Ac)
+        F = hessenberg(A)
+        @test A'\b ≈ F'\b
+    end
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    A = ImmutableArray([1 2 3; 4 5 6; 7 8 9])
+    H = UpperHessenberg(A)
+
+    @test convert(AbstractArray{Float64}, H)::UpperHessenberg{Float64,ImmutableArray{Float64,2,Array{Float64,2}}} == H
+    @test convert(AbstractMatrix{Float64}, H)::UpperHessenberg{Float64,ImmutableArray{Float64,2,Array{Float64,2}}} == H
+end
+
 end # module TestHessenberg

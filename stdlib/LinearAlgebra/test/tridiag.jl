@@ -198,10 +198,8 @@ end
         @testset "similar, size, and copyto!" begin
             B = similar(A)
             @test size(B) == size(A)
-            if mat_type == Tridiagonal # doesn't work for SymTridiagonal yet
-                copyto!(B, A)
-                @test B == A
-            end
+            copyto!(B, A)
+            @test B == A
             @test isa(similar(A), mat_type{elty})
             @test isa(similar(A, Int), mat_type{Int})
             @test isa(similar(A, (3, 2)), SparseMatrixCSC)
@@ -602,6 +600,79 @@ end
         @test A / c ≈ Matrix(A) / c
         @test c * A ≈ c * Matrix(A)
         @test c \ A ≈ c \ Matrix(A)
+    end
+end
+
+@testset "adjoint of LDLt" begin
+    Sr = SymTridiagonal(randn(5), randn(4))
+    Sc = SymTridiagonal(complex.(randn(5)) .+ 1im, complex.(randn(4), randn(4)))
+    b = ones(size(Sr, 1))
+
+    F = ldlt(Sr)
+    @test F\b == F'\b
+
+    F = ldlt(Sc)
+    @test copy(Sc')\b == F'\b
+end
+
+@testset "symmetric and hermitian tridiagonals" begin
+    A = [im 0; 0 -im]
+    @test issymmetric(A)
+    @test !ishermitian(A)
+
+    # real
+    A = SymTridiagonal(randn(5), randn(4))
+    @test issymmetric(A)
+    @test ishermitian(A)
+
+    A = Tridiagonal(A.ev, A.dv, A.ev .+ 1)
+    @test !issymmetric(A)
+    @test !ishermitian(A)
+
+    # complex
+    # https://github.com/JuliaLang/julia/pull/41037#discussion_r645524081
+    S = SymTridiagonal(randn(5) .+ 0im, randn(5) .+ 0im)
+    S.ev[end] = im
+    @test issymmetric(S)
+    @test ishermitian(S)
+
+    S = SymTridiagonal(randn(5) .+ 1im, randn(4) .+ 1im)
+    @test issymmetric(S)
+    @test !ishermitian(S)
+
+    S = Tridiagonal(S.ev, S.dv, adjoint.(S.ev))
+    @test !issymmetric(S)
+    @test !ishermitian(S)
+
+    S = Tridiagonal(S.dl, real.(S.d) .+ 0im, S.du)
+    @test !issymmetric(S)
+    @test ishermitian(S)
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    v1 = ImmutableArray([1, 2])
+    v2 = ImmutableArray([3, 4, 5])
+    v3 = ImmutableArray([6, 7])
+    T = Tridiagonal(v1, v2, v3)
+    Tsym = SymTridiagonal(v2, v1)
+
+    @test convert(AbstractArray{Float64}, T)::Tridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == T
+    @test convert(AbstractMatrix{Float64}, T)::Tridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == T
+    @test convert(AbstractArray{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
+    @test convert(AbstractMatrix{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
+end
+
+@testset "dot(x,A,y) for A::Tridiagonal or SymTridiagonal" begin
+    for elty in (Float32, Float64, ComplexF32, ComplexF64, Int)
+        x = fill(convert(elty, 1), 0)
+        T = Tridiagonal(x, x, x)
+        Tsym = SymTridiagonal(x, x)
+        @test dot(x, T, x) == 0.0
+        @test dot(x, Tsym, x) == 0.0
     end
 end
 

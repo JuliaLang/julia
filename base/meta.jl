@@ -19,6 +19,7 @@ export quot,
        @dump
 
 using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
+import Base: isexpr
 
 """
     Meta.quot(ex)::Expr
@@ -73,9 +74,7 @@ julia> Meta.isexpr(ex, :call, 2)
 true
 ```
 """
-isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
 isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), head::Symbol, n::Int) = isa(ex, Expr) && ex.head === head && length(ex.args) == n
 isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
 
 """
@@ -203,21 +202,32 @@ end
 """
     parse(str, start; greedy=true, raise=true, depwarn=true)
 
-Parse the expression string and return an expression (which could later be passed to eval
-for execution). `start` is the index of the first character to start parsing. If `greedy` is
-`true` (default), `parse` will try to consume as much input as it can; otherwise, it will
-stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically
-valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is `true`
-(default), syntax errors other than incomplete expressions will raise an error. If `raise`
-is `false`, `parse` will return an expression that will raise an error upon evaluation. If
-`depwarn` is `false`, deprecation warnings will be suppressed.
+Parse the expression string and return an expression (which could later be
+passed to eval for execution). `start` is the code unit index into `str` of the
+first character to start parsing at (as with all string indexing, these are not
+character indices). If `greedy` is `true` (default), `parse` will try to consume
+as much input as it can; otherwise, it will stop as soon as it has parsed a
+valid expression. Incomplete but otherwise syntactically valid expressions will
+return `Expr(:incomplete, "(error message)")`. If `raise` is `true` (default),
+syntax errors other than incomplete expressions will raise an error. If `raise`
+is `false`, `parse` will return an expression that will raise an error upon
+evaluation. If `depwarn` is `false`, deprecation warnings will be suppressed.
 
 ```jldoctest
-julia> Meta.parse("x = 3, y = 5", 7)
-(:(y = 5), 13)
+julia> Meta.parse("(α, β) = 3, 5", 1) # start of string
+(:((α, β) = (3, 5)), 16)
 
-julia> Meta.parse("x = 3, y = 5", 5)
-(:((3, y) = 5), 13)
+julia> Meta.parse("(α, β) = 3, 5", 1, greedy=false)
+(:((α, β)), 9)
+
+julia> Meta.parse("(α, β) = 3, 5", 16) # end of string
+(nothing, 16)
+
+julia> Meta.parse("(α, β) = 3, 5", 11) # index of 3
+(:((3, 5)), 16)
+
+julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
+(3, 13)
 ```
 """
 function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
@@ -360,7 +370,10 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
     if isa(x, Expr)
         head = x.head
         if head === :static_parameter
-            return QuoteNode(static_param_values[x.args[1]])
+            if isassigned(static_param_values, x.args[1])
+                return QuoteNode(static_param_values[x.args[1]])
+            end
+            return x
         elseif head === :cfunction
             @assert !isa(type_signature, UnionAll) || !isempty(spvals)
             if !isa(x.args[2], QuoteNode) # very common no-op
@@ -403,6 +416,30 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
             x.args[2] += statement_offset
         elseif head === :enter
             x.args[1] += statement_offset
+        elseif head === :isdefined
+            arg = x.args[1]
+            # inlining a QuoteNode or literal into `Expr(:isdefined, x)` is invalid, replace with true
+            if isa(arg, Core.SlotNumber)
+                id = arg.id
+                if 1 <= id <= length(slot_replacements)
+                    replacement = slot_replacements[id]
+                    if isa(replacement, Union{Core.SlotNumber, GlobalRef, Symbol})
+                        return Expr(:isdefined, replacement)
+                    else
+                        @assert !isa(replacement, Expr)
+                        return true
+                    end
+                end
+                return Expr(:isdefined, Core.SlotNumber(id + slot_offset))
+            elseif isexpr(arg, :static_parameter)
+                if isassigned(static_param_values, arg.args[1])
+                    return true
+                end
+                return x
+            else
+                @assert isa(arg, Union{GlobalRef, Symbol})
+                return x
+            end
         elseif !is_meta_expr_head(head)
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)

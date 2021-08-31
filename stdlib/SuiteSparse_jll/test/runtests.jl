@@ -3,5 +3,5 @@
 using Test, SuiteSparse_jll
 
 @testset "SuiteSparse_jll" begin
-    @test ccall((:SuiteSparse_version, libsuitesparseconfig), Cint, (Ptr{Cint},), C_NULL) == 5008
+    @test ccall((:SuiteSparse_version, libsuitesparseconfig), Cint, (Ptr{Cint},), C_NULL) == 5010
 end

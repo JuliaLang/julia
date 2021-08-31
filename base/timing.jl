@@ -55,7 +55,7 @@ function gc_alloc_count(diff::GC_Diff)
     diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
 end
 
-# cumulative total time spent on compilation
+# cumulative total time spent on compilation, in nanoseconds
 cumulative_compile_time_ns_before() = ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
 cumulative_compile_time_ns_after() = ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
 
@@ -205,11 +205,11 @@ macro time(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
-        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+        elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
         time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
         val
@@ -251,11 +251,11 @@ macro timev(ex)
     quote
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
-        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local elapsedtime = time_ns()
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
         compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
+        elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
         timev_print(elapsedtime, diff, compile_elapsedtime)
         val

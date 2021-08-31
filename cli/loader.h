@@ -3,6 +3,7 @@
 /* Bring in definitions for `_OS_X_`, `PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
 #include "../src/support/platform.h"
 #include "../src/support/dirpath.h"
+#include "../src/julia_fasttls.h"
 
 #ifdef _OS_WINDOWS_
 /* We need to reimplement a bunch of standard library stuff on windows,
@@ -43,15 +44,6 @@
 #include <dlfcn.h>
 #endif
 
-// Borrow definitions from `julia.h`
-#if defined(__GNUC__)
-#  define JL_CONST_FUNC __attribute__((const))
-#elif defined(_COMPILER_MICROSOFT_)
-#  define JL_CONST_FUNC __declspec(noalias)
-#else
-#  define JL_CONST_FUNC
-#endif
-
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_
 # ifdef LIBRARY_EXPORTS
@@ -68,12 +60,6 @@
 # endif
 #define JL_HIDDEN    __attribute__ ((visibility("hidden")))
 #endif
-#ifdef JL_DEBUG_BUILD
-#define JL_NAKED     __attribute__ ((naked,no_stack_protector))
-#else
-#define JL_NAKED     __attribute__ ((naked))
-#endif
-
 /*
  * DEP_LIBS is our list of dependent libraries that must be loaded before `libjulia`.
  * Note that order matters, as each entry will be opened in-order.  We define here a

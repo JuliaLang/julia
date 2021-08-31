@@ -51,7 +51,7 @@ function finalizer(@nospecialize(f), @nospecialize(o))
 end
 
 function finalizer(f::Ptr{Cvoid}, o::T) where T
-    @_inline_meta
+    @inline
     if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
@@ -65,8 +65,8 @@ end
 
 Immediately run finalizers registered for object `x`.
 """
-finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Cvoid, (Ptr{Cvoid}, Any,),
-                                   Core.getptls(), o)
+finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Cvoid, (Any, Any,),
+                                   current_task(), o)
 
 """
     Base.GC
@@ -117,7 +117,7 @@ another Task or thread.
 enable_finalizers(on::Bool) = on ? enable_finalizers() : disable_finalizers()
 
 function enable_finalizers()
-    Base.@_inline_meta
+    Base.@inline
     ccall(:jl_gc_enable_finalizers_internal, Cvoid, ())
     if unsafe_load(cglobal(:jl_gc_have_pending_finalizers, Cint)) != 0
         ccall(:jl_gc_run_pending_finalizers, Cvoid, (Ptr{Cvoid},), C_NULL)
@@ -125,7 +125,7 @@ function enable_finalizers()
 end
 
 function disable_finalizers()
-    Base.@_inline_meta
+    Base.@inline
     ccall(:jl_gc_disable_finalizers_internal, Cvoid, ())
 end
 

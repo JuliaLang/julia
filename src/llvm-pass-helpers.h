@@ -49,6 +49,7 @@ struct JuliaPassContext {
     // Types derived from 'jl_value_t'.
     llvm::Type *T_jlvalue;
     llvm::PointerType *T_prjlvalue;
+    llvm::PointerType *T_pppjlvalue;
     llvm::PointerType *T_ppjlvalue;
     llvm::PointerType *T_pjlvalue;
     llvm::PointerType *T_pjlvalue_der;
@@ -59,7 +60,7 @@ struct JuliaPassContext {
     llvm::MDNode *tbaa_tag;
 
     // Intrinsics.
-    llvm::Function *ptls_getter;
+    llvm::Function *pgcstack_getter;
     llvm::Function *gc_flush_func;
     llvm::Function *gc_preserve_begin_func;
     llvm::Function *gc_preserve_end_func;
@@ -86,10 +87,10 @@ struct JuliaPassContext {
         return module->getContext();
     }
 
-    // Gets a call to the `julia.ptls_states` intrinisc in the entry
+    // Gets a call to the `julia.get_pgcstack' intrinsic in the entry
     // point of the given function, if there exists such a call.
     // Otherwise, `nullptr` is returned.
-    llvm::CallInst *getPtls(llvm::Function &F) const;
+    llvm::CallInst *getPGCstack(llvm::Function &F) const;
 
     // Gets the intrinsic or well-known function that conforms to
     // the given description if it exists in the module. If not,

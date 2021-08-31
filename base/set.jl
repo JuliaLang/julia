@@ -548,6 +548,9 @@ replaced.
 
 See also [`replace!`](@ref), [`splice!`](@ref), [`delete!`](@ref), [`insert!`](@ref).
 
+!!! compat "Julia 1.7"
+    Version 1.7 is required to replace elements of a `Tuple`.
+
 # Examples
 ```jldoctest
 julia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)
@@ -596,6 +599,9 @@ Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 
+!!! compat "Julia 1.7"
+    Version 1.7 is required to replace elements of a `Tuple`.
+
 # Examples
 ```jldoctest
 julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
@@ -621,7 +627,6 @@ replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, 
 replace!(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b, c)))
 replace(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b)))
 replace(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b, c)))
-replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b, c)))
 
 ### replace! for AbstractDict/AbstractSet
 
@@ -756,7 +761,7 @@ replace(f::Callable, t::Tuple; count::Integer=typemax(Int)) =
 
 function _replace(t::Tuple, count::Int, old_new::Tuple{Vararg{Pair}})
     _replace(t, count) do x
-        @_inline_meta
+        @inline
         for o_n in old_new
             isequal(first(o_n), x) && return last(o_n)
         end

@@ -180,7 +180,7 @@ end
 ```
 
 This is a *convention* in the sense that `nothing` is not a Julia keyword
-but a only singleton object of type `Nothing`.
+but only a singleton object of type `Nothing`.
 Also, you may notice that the `printx` function example above is contrived,
 because `println` already returns `nothing`, so that the `return` line is redundant.
 
@@ -475,6 +475,23 @@ Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.
 
 See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
 
+## Property destructuring
+
+Instead of destructuring based on iteration, the right side of assignments can also be destructured using property names.
+This follows the syntax for NamedTuples, and works by assigning to each variable on the left a
+property of the right side of the assignment with the same name using `getproperty`:
+
+```julia
+julia> (; b, a) = (a=1, b=2, c=3)
+(a = 1, b = 2, c = 3)
+
+julia> a
+1
+
+julia> b
+2
+```
+
 ## Argument destructuring
 
 The destructuring feature can also be used within a function argument.
@@ -493,7 +510,25 @@ julia> gap(minmax(10, 2))
 Notice the extra set of parentheses in the definition of `gap`. Without those, `gap`
 would be a two-argument function, and this example would not work.
 
-For anonymous functions, destructuring a single tuple requires an extra comma:
+Similarly, property destructuring can also be used for function arguments:
+
+```julia
+julia> foo((; x, y)) = x + y
+foo (generic function with 1 method)
+
+julia> foo((x=1, y=2))
+3
+
+julia> struct A
+           x
+           y
+       end
+
+julia> foo(A(3, 4))
+7
+```
+
+For anonymous functions, destructuring a single argument requires an extra comma:
 
 ```
 julia> map(((x,y),) -> x + y, [(1,2), (3,4)])

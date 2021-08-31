@@ -77,12 +77,12 @@ julia> function sum_global()
        end;
 
 julia> @time sum_global()
-  0.009639 seconds (7.36 k allocations: 300.310 KiB, 98.32% compilation time)
-496.84883432553846
+  0.026328 seconds (9.30 k allocations: 416.747 KiB, 36.50% gc time, 99.48% compilation time)
+508.39048990953665
 
 julia> @time sum_global()
-  0.000140 seconds (3.49 k allocations: 70.313 KiB)
-496.84883432553846
+  0.000075 seconds (3.49 k allocations: 70.156 KiB)
+508.39048990953665
 ```
 
 On the first call (`@time sum_global()`) the function gets compiled. (If you've not yet used [`@time`](@ref)
@@ -113,12 +113,12 @@ julia> function sum_arg(x)
        end;
 
 julia> @time sum_arg(x)
-  0.006202 seconds (4.18 k allocations: 217.860 KiB, 99.72% compilation time)
-496.84883432553846
+  0.010298 seconds (4.23 k allocations: 226.021 KiB, 99.81% compilation time)
+508.39048990953665
 
 julia> @time sum_arg(x)
   0.000005 seconds (1 allocation: 16 bytes)
-496.84883432553846
+508.39048990953665
 ```
 
 The 1 allocation seen is from running the `@time` macro itself in global scope. If we instead run
@@ -129,7 +129,7 @@ julia> time_sum(x) = @time sum_arg(x);
 
 julia> time_sum(x)
   0.000001 seconds
-496.84883432553846
+508.39048990953665
 ```
 
 In some situations, your function may need to allocate memory as part of its operation, and this
@@ -342,6 +342,14 @@ For reasons of length the results are not shown here, but you may wish to try th
 the type is fully-specified in the first case, the compiler doesn't need to generate any code
 to resolve the type at run-time. This results in shorter and faster code.
 
+One should also keep in mind that not-fully-parameterized types behave like abstract types. For example, even though a fully specified `Array{T,n}` is concrete, `Array` itself with no parameters given is not concrete:
+
+```jldoctest myambig3
+julia> !isconcretetype(Array), !isabstracttype(Array), isstructtype(Array), !isconcretetype(Array{Int}), isconcretetype(Array{Int,1})
+(true, true, true, true, true)
+```
+In this case, it would be better to avoid declaring `MyType` with a field `a::Array` and instead declare the field as `a::Array{T,N}` or as `a::A`, where `{T,N}` or `A` are parameters of `MyType`.
+
 ### Avoid fields with abstract containers
 
 The same best practices also work for container types:
@@ -353,6 +361,10 @@ julia> struct MySimpleContainer{A<:AbstractVector}
 
 julia> struct MyAmbiguousContainer{T}
            a::AbstractVector{T}
+       end
+
+julia> struct MyAlsoAmbiguousContainer
+           a::Array
        end
 ```
 
@@ -378,6 +390,17 @@ julia> b = MyAmbiguousContainer([1:3;]);
 
 julia> typeof(b)
 MyAmbiguousContainer{Int64}
+
+julia> d = MyAlsoAmbiguousContainer(1:3);
+
+julia> typeof(d), typeof(d.a)
+(MyAlsoAmbiguousContainer, Vector{Int64})
+
+julia> d = MyAlsoAmbiguousContainer(1:1.0:3);
+
+julia> typeof(d), typeof(d.a)
+(MyAlsoAmbiguousContainer, Vector{Float64})
+
 ```
 
 For `MySimpleContainer`, the object is fully-specified by its type and parameters, so the compiler

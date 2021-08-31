@@ -495,7 +495,7 @@ log(x::Number)
 Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
-See also: [`exp2`](@ref), [`ldexp`](@ref).
+See also: [`exp2`](@ref), [`ldexp`](@ref), [`ispow2`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -812,17 +812,24 @@ end
 """
     significand(x)
 
-Extract the `significand(s)` (a.k.a. mantissa), in binary representation, of a
-floating-point number. If `x` is a non-zero finite number, then the result will be
-a number of the same type on the interval ``[1,2)``. Otherwise `x` is returned.
+Extract the significand (a.k.a. mantissa) of a floating-point number. If `x` is
+a non-zero finite number, then the result will be a number of the same type and
+sign as `x`, and whose absolute value is on the interval ``[1,2)``. Otherwise
+`x` is returned.
 
 # Examples
 ```jldoctest
-julia> significand(15.2)/15.2
-0.125
+julia> significand(15.2)
+1.9
 
-julia> significand(15.2)*8
-15.2
+julia> significand(-15.2)
+-1.9
+
+julia> significand(-15.2) * 2^3
+-15.2
+
+julia> significand(-Inf), significand(Inf), significand(NaN)
+(-Inf, Inf, NaN)
 ```
 """
 function significand(x::T) where T<:IEEEFloat

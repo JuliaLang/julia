@@ -81,8 +81,7 @@ Here is an overview of some of the subdirectories that may exist in a depot:
 * `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
 * `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
 
-See also:
-[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
+See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 [Code Loading](@ref code-loading).
 """
 const DEPOT_PATH = String[]
@@ -161,7 +160,7 @@ have special meanings:
 The fully expanded value of `LOAD_PATH` that is searched for projects and packages
 can be seen by calling the `Base.load_path()` function.
 
-See also:
+See also
 [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
 [`JULIA_PROJECT`](@ref JULIA_PROJECT),
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
@@ -314,6 +313,8 @@ Return the fully expanded value of [`LOAD_PATH`](@ref) that is searched for proj
 packages.
 """
 function load_path()
+    cache = LOADING_CACHE[]
+    cache !== nothing && return cache.load_path
     paths = String[]
     for env in LOAD_PATH
         path = load_path_expand(env)

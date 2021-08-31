@@ -401,12 +401,12 @@ function filter(f, itr::SkipMissing{<:AbstractArray})
 end
 
 """
-    coalesce(x, y...)
+    coalesce(x...)
 
 Return the first value in the arguments which is not equal to [`missing`](@ref),
 if any. Otherwise return `missing`.
 
-See also [`skipmissing`](@ref), [`something`](@ref).
+See also [`skipmissing`](@ref), [`something`](@ref), [`@coalesce`](@ref).
 
 # Examples
 
@@ -428,3 +428,39 @@ function coalesce end
 coalesce() = missing
 coalesce(x::Missing, y...) = coalesce(y...)
 coalesce(x::Any, y...) = x
+
+
+"""
+    @coalesce(x...)
+
+Short-circuiting version of [`coalesce`](@ref).
+
+# Examples
+```jldoctest
+julia> f(x) = (println("f(\$x)"); missing);
+
+julia> a = 1;
+
+julia> a = @coalesce a f(2) f(3) error("`a` is still missing")
+1
+
+julia> b = missing;
+
+julia> b = @coalesce b f(2) f(3) error("`b` is still missing")
+f(2)
+f(3)
+ERROR: `b` is still missing
+[...]
+```
+
+!!! compat "Julia 1.7"
+    This macro is available as of Julia 1.7.
+"""
+macro coalesce(args...)
+    expr = :(missing)
+    for arg in reverse(args)
+        expr = :((val = $arg) !== missing ? val : $expr)
+    end
+    return esc(:(let val; $expr; end))
+end
+

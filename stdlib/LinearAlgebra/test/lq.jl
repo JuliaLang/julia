@@ -40,7 +40,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                 lqa   = lq(a)
                 x = lqa\b
                 l,q   = lqa.L, lqa.Q
-                qra   = qr(a, Val(true))
+                qra   = qr(a, ColumnNorm())
                 @testset "Basic ops" begin
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1
@@ -56,9 +56,6 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     @test l*q ≈ a
                     @test Array(lqa) ≈ a
                     @test Array(copy(lqa)) ≈ a
-                    lstring = sprint(show, l, context = :compact=>true)
-                    qstring = sprint(show, q, context = :compact=>true)
-                    @test sprint(show,MIME"text/plain"(),lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
                     @test LinearAlgebra.Factorization{eltya}(lqa) === lqa
                     @test Matrix{eltya}(q) isa Matrix{eltya}
                     # test Array{T}(LQPackedQ{T})
@@ -201,6 +198,44 @@ end
             @test abs(det(Q)) ≈ 1
         end
     end
+end
+
+@testset "REPL printing" begin
+    bf = IOBuffer()
+    show(bf, "text/plain", lq(Matrix(I, 4, 4)))
+    seekstart(bf)
+    @test String(take!(bf)) == """
+LinearAlgebra.LQ{Float64, Matrix{Float64}}
+L factor:
+4×4 Matrix{Float64}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+ 0.0  0.0  0.0  1.0
+Q factor:
+4×4 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+ 0.0  0.0  0.0  1.0"""
+end
+
+@testset "adjoint of LQ" begin
+    n = 5
+
+    for b in (ones(n), ones(n, 2), ones(Complex{Float64}, n, 2))
+        for A in (
+            randn(n, n),
+            # Tall problems become least squares problems similarly to QR
+            randn(n - 2, n),
+            complex.(randn(n, n), randn(n, n)))
+
+            F = lq(A)
+            @test A'\b ≈ F'\b
+        end
+        @test_throws DimensionMismatch lq(randn(n, n + 2))'\b
+    end
+
 end
 
 end # module TestLQ

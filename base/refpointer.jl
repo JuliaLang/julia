@@ -117,7 +117,7 @@ convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefArray{T})::P where T
     if allocatedinline(T)
         p = pointer(b.x, b.i)
-    elseif isconcretetype(T) && T.mutable
+    elseif isconcretetype(T) && ismutabletype(T)
         p = pointer_from_objref(b.x[b.i])
     else
         # see comment on equivalent branch for RefValue

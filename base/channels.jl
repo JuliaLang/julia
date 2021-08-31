@@ -298,6 +298,7 @@ struct InvalidStateException <: Exception
     msg::String
     state::Symbol
 end
+showerror(io::IO, ex::InvalidStateException) = print(io, "InvalidStateException: ", ex.msg)
 
 """
     put!(c::Channel, v)

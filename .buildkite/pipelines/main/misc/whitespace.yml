@@ -1,0 +1,23 @@
+agents:
+  queue: "julia"
+  # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
+  sandbox.jl: "true"
+  os: "linux"
+
+steps:
+  - label: "whitespace"
+    key: "whitespace"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: 1.6
+      - staticfloat/sandbox#v1:
+          rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v3.1/package_linux.x86_64.tar.gz
+          rootfs_treehash: "8c33c341a864852629b8aac01a6eb6a79b73570e"
+          workspaces:
+            - "/cache/repos:/cache/repos"
+    commands: |
+      make -j$${JULIA_NUM_CORES} check-whitespace
+    timeout_in_minutes: 10
+    notify:
+      - github_commit_status:
+          context: "whitespace"

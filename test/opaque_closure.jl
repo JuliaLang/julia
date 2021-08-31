@@ -192,7 +192,7 @@ end
 
 # OpaqueClosure ABI
 f_oc_noinline(x) = @opaque function (y)
-    @Base._noinline_meta
+    @noinline
     x + y
 end
 
@@ -204,3 +204,5 @@ function f_oc_noinline_call(x, y)
     return f_oc_noinline(x)(y)
 end
 @test f_oc_noinline_call(1, 2) == 3
+
+@test_throws MethodError (@opaque x->x+1)(1, 2)

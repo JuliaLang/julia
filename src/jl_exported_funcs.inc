@@ -11,6 +11,7 @@
     XX(jl_alloc_svec_uninit) \
     XX(jl_alloc_vec_any) \
     XX(jl_apply_array_type) \
+    XX(jl_apply_cmpswap_type) \
     XX(jl_apply_generic) \
     XX(jl_apply_tuple_type) \
     XX(jl_apply_tuple_type_v) \
@@ -45,6 +46,12 @@
     XX(jl_arrayunset) \
     XX(jl_astaggedvalue) \
     XX(jl_atexit_hook) \
+    XX(jl_atomic_bool_cmpswap_bits) \
+    XX(jl_atomic_cmpswap_bits) \
+    XX(jl_atomic_error) \
+    XX(jl_atomic_new_bits) \
+    XX(jl_atomic_store_bits) \
+    XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_binding_owner) \
@@ -114,9 +121,9 @@
     XX(jl_dlsym) \
     XX(jl_dump_compiles) \
     XX(jl_dump_fptr_asm) \
+    XX(jl_dump_function_asm) \
     XX(jl_dump_function_ir) \
     XX(jl_dump_host_cpu) \
-    XX(jl_dump_llvm_asm) \
     XX(jl_dump_method_asm) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
@@ -143,12 +150,14 @@
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
     XX(jl_expand) \
+    XX(jl_resolve_globals_in_ir) \
     XX(jl_expand_and_resolve) \
     XX(jl_expand_stmt) \
     XX(jl_expand_stmt_with_loc) \
     XX(jl_expand_with_loc) \
     XX(jl_expand_with_loc_warn) \
     XX(jl_extern_c) \
+    XX(jl_field_index) \
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
@@ -246,6 +255,7 @@
     XX(jl_get_nth_field_checked) \
     XX(jl_get_nth_field_noalloc) \
     XX(jl_getpagesize) \
+    XX(jl_get_pgcstack) \
     XX(jl_getpid) \
     XX(jl_get_ptls_states) \
     XX(jl_get_root_symbol) \
@@ -272,9 +282,11 @@
     XX(jl_id_start_char) \
     XX(jl_idtable_rehash) \
     XX(jl_infer_thunk) \
-    XX(jl_init_restored_modules) \
     XX(jl_init) \
+    XX(jl_init__threading) \
+    XX(jl_init_restored_modules) \
     XX(jl_init_with_image) \
+    XX(jl_init_with_image__threading) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -388,6 +400,7 @@
     XX(jl_pop_handler) \
     XX(jl_preload_sysimg_so) \
     XX(jl_prepend_cwd) \
+    XX(jl_print_backtrace) \
     XX(jl_printf) \
     XX(jl_process_events) \
     XX(jl_profile_clear_data) \
@@ -434,7 +447,6 @@
     XX(jl_set_module_uuid) \
     XX(jl_set_next_task) \
     XX(jl_set_nth_field) \
-    XX(jl_set_ptls_states_getter) \
     XX(jl_set_safe_restore) \
     XX(jl_set_sysimg_so) \
     XX(jl_set_task_tid) \
@@ -539,4 +551,3 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_yield) \
-    XX(jl_print_backtrace)

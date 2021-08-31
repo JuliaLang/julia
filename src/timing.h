@@ -116,8 +116,8 @@ STATIC_INLINE uint64_t _jl_timing_block_init(jl_timing_block_t *block, int owner
 
 STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) {
     uint64_t t = _jl_timing_block_init(block, owner);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_timing_block_t **prevp = &ptls->timing_stack;
+    jl_task_t *ct = jl_current_task;
+    jl_timing_block_t **prevp = &ct->ptls->timing_stack;
     block->prev = *prevp;
     if (block->prev)
         _jl_timing_block_stop(block->prev, t);
@@ -126,10 +126,10 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) {
 
 STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) {
     uint64_t t = cycleclock();
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     _jl_timing_block_stop(block, t);
     jl_timing_data[block->owner] += block->total;
-    jl_timing_block_t **pcur = &ptls->timing_stack;
+    jl_timing_block_t **pcur = &ct->ptls->timing_stack;
     assert(*pcur == block);
     *pcur = block->prev;
     if (block->prev)

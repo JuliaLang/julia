@@ -3,7 +3,7 @@
 ## hashing a single value ##
 
 """
-    hash(x[, h::UInt])
+    hash(x[, h::UInt]) -> UInt
 
 Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The
 optional second argument `h` is a hash code to be mixed with the result.
@@ -23,6 +23,8 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 ## hashing general objects ##
 
 hash(@nospecialize(x), h::UInt) = hash_uint(3h - objectid(x))
+
+hash(x::Symbol) = objectid(x)
 
 ## core data hashing functions ##
 
