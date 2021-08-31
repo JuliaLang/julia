@@ -1054,6 +1054,6 @@ end
 end
 
 @testset "#42063" begin
-    A = println.(IOBuffer, [1,2,3,4])
+    A = println.(stdout, [1,2,3,4])
     @test A isa Vector{Nothing}
 end
