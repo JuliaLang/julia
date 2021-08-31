@@ -1052,3 +1052,8 @@ end
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) == 4:2:6
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) isa AbstractRange
 end
+
+@testset "#42063" begin
+    A = println.(stdout, [1,2,3,4])
+    @test A isa Vector{Nothing}
+end
