@@ -239,8 +239,8 @@ see [`cumsum`](@ref), [`cumprod`](@ref). For a lazy version, see
 
 # Examples
 ```jldoctest
-julia> accumulate(+, Int8[1,2,3])
-3-element Vector{Int8}:
+julia> accumulate(+, [1,2,3])
+3-element Vector{Int64}:
  1
  3
  6
