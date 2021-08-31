@@ -219,7 +219,7 @@ function getdict(data::Vector{UInt})
 end
 
 function getdict!(dict::LineInfoDict, data::Vector{UInt})
-    for ip in udata
+    for ip in data
         # Lookup is expensive, so do it only once per ip.
         haskey(dict, UInt64(ip)) && continue
         st = lookup(convert(Ptr{Cvoid}, ip))
