@@ -19,8 +19,9 @@ struct SSADefUse
 end
 SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
-function try_compute_fieldidx_expr(@nospecialize(typ), @nospecialize(use_expr))
-    field = use_expr.args[3]
+try_compute_fieldidx_expr(typ::DataType, expr::Expr) = try_compute_fieldidx_args(typ, expr.args)
+function try_compute_fieldidx_args(typ::DataType, args::Vector{Any})
+    field = args[3]
     isa(field, QuoteNode) && (field = field.value)
     isa(field, Union{Int, Symbol}) || return nothing
     return try_compute_fieldidx(typ, field)
@@ -55,17 +56,19 @@ function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
     while !(curblock in allblocks)
-        curblock = domtree.idoms[curblock]
+        curblock = domtree.idoms_bb[curblock]
     end
     return curblock
 end
 
 function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
-    if isexpr(ir[SSAValue(def)], :new)
-        return ir[SSAValue(def)].args[1+fidx]
+    ex = ir[SSAValue(def)]
+    if isexpr(ex, :new)
+        return ex.args[1+fidx]
     else
+        @assert isa(ex, Expr)
         # The use is whatever the setfield was
-        return ir[SSAValue(def)].args[4]
+        return ex.args[4]
     end
 end
 
@@ -170,11 +173,10 @@ Starting at `val` walk use-def chains to get all the leaves feeding into
 this val (pruning those leaves rules out by path conditions).
 """
 function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), visited_phinodes::Vector{Any}=Any[])
-    if !isa(defssa, AnySSAValue) || !isa(compact[defssa], PhiNode)
-        return Any[defssa]
-    end
-    # Step 2: Figure out what the struct is defined as
+    isa(defssa, AnySSAValue) || return Any[defssa]
     def = compact[defssa]
+    isa(def, PhiNode) || return Any[defssa]
+    # Step 2: Figure out what the struct is defined as
     ## Track definitions through PiNode/PhiNode
     found_def = false
     ## Track which PhiNodes, SSAValue intermediaries
@@ -258,7 +260,7 @@ function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
     end
     id -= length(compact.ir.stmts)
     if id < length(compact.ir.new_nodes)
-        error()
+        error("")
     end
     id -= length(compact.ir.new_nodes)
     @assert id <= length(compact.pending_nodes)
@@ -269,6 +271,17 @@ function is_pending(compact::IncrementalCompact, old::OldSSAValue)
     return old.id > length(compact.ir.stmts) + length(compact.ir.new_nodes)
 end
 
+function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
+    isa(def, Expr) || return false
+    length(def.args) >= 3 || return false
+    is_known_call(def, getfield, compact) || return false
+    which = compact_exprtype(compact, def.args[3])
+    isa(which, Const) || return false
+    which.val === :captures || return false
+    oc = compact_exprtype(compact, def.args[2])
+    return oc ⊑ Core.OpaqueClosure
+end
+
 function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
         @nospecialize(result_t), field::Int, leaves::Vector{Any})
     # For every leaf, the lifted value
@@ -277,41 +290,52 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
     for leaf in leaves
         leaf_key = leaf
         if isa(leaf, AnySSAValue)
-            if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
-                leaf = compact.ssa_rename[leaf.id]
-                if isa(leaf, AnySSAValue)
-                    leaf = simple_walk(compact, leaf)
-                end
-                if isa(leaf, AnySSAValue)
-                    def = compact[leaf]
-                else
-                    def = leaf
-                end
-            else
-                def = compact[leaf]
-            end
-            if is_tuple_call(compact, def) && isa(field, Int) && 1 <= field < length(def.args)
-                lifted = def.args[1+field]
+            function lift_arg(ref::Core.Compiler.UseRef)
+                lifted = ref[]
                 if is_old(compact, leaf) && isa(lifted, SSAValue)
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
-                    def.args[1+field] = lifted
+                    lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
+                    ref[] = lifted
                     (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
                 end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
+                nothing
+            end
+            function walk_leaf(@nospecialize(leaf))
+                if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
+                    leaf = compact.ssa_rename[leaf.id]
+                    if isa(leaf, AnySSAValue)
+                        leaf = simple_walk(compact, leaf)
+                    end
+                    if isa(leaf, AnySSAValue)
+                        def = compact[leaf]
+                    else
+                        def = leaf
+                    end
+                elseif isa(leaf, AnySSAValue)
+                    def = compact[leaf]
+                else
+                    def = leaf
+                end
+                return Pair{Any, Any}(def, leaf)
+            end
+            (def, leaf) = walk_leaf(leaf)
+            if is_tuple_call(compact, def) && 1 <= field < length(def.args)
+                lift_arg(UseRef(def, 1 + field))
                 continue
             elseif isexpr(def, :new)
                 typ = widenconst(types(compact)[leaf])
                 if isa(typ, UnionAll)
                     typ = unwrap_unionall(typ)
                 end
-                (isa(typ, DataType) && (!typ.abstract)) || return nothing
-                @assert !typ.mutable
-                field = try_compute_fieldidx_expr(typ, stmt)
-                field === nothing && return nothing
+                (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
+                @assert !ismutabletype(typ)
                 if length(def.args) < 1 + field
+                    if field > fieldcount(typ)
+                        return nothing
+                    end
                     ftyp = fieldtype(typ, field)
                     if !isbitstype(ftyp)
                         # On this branch, this will be a guaranteed UndefRefError.
@@ -325,8 +349,9 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     compact[leaf] = nothing
                     for i = (length(def.args) + 1):(1+field)
                         ftyp = fieldtype(typ, i - 1)
-                        isbits(ftyp) || return nothing
-                        push!(def.args, insert_node!(compact, leaf, result_t, Expr(:new, ftyp)))
+                        isbitstype(ftyp) || return nothing
+                        ninst = effect_free(NewInstruction(Expr(:new, ftyp), result_t))
+                        push!(def.args, insert_node!(compact, leaf, ninst))
                     end
                     compact[leaf] = def
                 end
@@ -335,35 +360,34 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(stmt),
                     lifted = OldSSAValue(lifted.id)
                 end
                 if isa(lifted, GlobalRef) || isa(lifted, Expr)
-                    lifted = insert_node!(compact, leaf, compact_exprtype(compact, lifted), lifted)
+                    lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, compact_exprtype(compact, lifted))))
                     def.args[1+field] = lifted
                     (isa(leaf, SSAValue) && (leaf.id < compact.result_idx)) && push!(compact.late_fixup, leaf.id)
                 end
                 lifted_leaves[leaf_key] = RefValue{Any}(lifted)
                 continue
+            elseif is_getfield_captures(def, compact)
+                # Walk to new_opaque_closure
+                ocleaf = def.args[2]
+                if isa(ocleaf, AnySSAValue)
+                    ocleaf = simple_walk(compact, ocleaf)
+                end
+                ocdef, _ = walk_leaf(ocleaf)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 <= field <= length(ocdef.args)-5
+                    lift_arg(UseRef(ocdef, 5 + field))
+                    continue
+                end
+                return nothing
             else
                 typ = compact_exprtype(compact, leaf)
                 if !isa(typ, Const)
+                    # TODO: (disabled since #27126)
                     # If the leaf is an old ssa value, insert a getfield here
                     # We will revisit this getfield later when compaction gets
                     # to the appropriate point.
                     # N.B.: This can be a bit dangerous because it can lead to
                     # infinite loops if we accidentally insert a node just ahead
                     # of where we are
-                    if is_old(compact, leaf) && (isa(field, Int) || isa(field, Symbol))
-                        (isa(typ, DataType) && (!typ.abstract)) || return nothing
-                        @assert !typ.mutable
-                        # If there's the potential for an undefref error on access, we cannot insert a getfield
-                        if field > typ.ninitialized && !isbits(fieldtype(typ, field))
-                            return nothing
-                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, make_MaybeUndef(result_t), Expr(:call, :unchecked_getfield, SSAValue(leaf.id), field), true))
-                            maybe_undef = true
-                        else
-                            return nothing
-                            lifted_leaves[leaf] = RefValue{Any}(insert_node!(compact, leaf, result_t, Expr(:call, getfield, SSAValue(leaf.id), field), true))
-                        end
-                        continue
-                    end
                     return nothing
                 end
                 leaf = typ.val
@@ -439,7 +463,7 @@ end
 
 struct LiftedPhi
     ssa::AnySSAValue
-    node::Any
+    node::PhiNode
     need_argupdate::Bool
 end
 
@@ -460,18 +484,18 @@ function perform_lifting!(compact::IncrementalCompact,
     for item in visited_phinodes
         if (item, cache_key) in keys(lifting_cache)
             ssa = lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)]
-            push!(lifted_phis, LiftedPhi(ssa, compact[ssa], false))
+            push!(lifted_phis, LiftedPhi(ssa, compact[ssa]::PhiNode, false))
             continue
         end
         n = PhiNode()
-        ssa = insert_node!(compact, item, result_t, n)
+        ssa = insert_node!(compact, item, effect_free(NewInstruction(n, result_t)))
         lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)] = ssa
         push!(lifted_phis, LiftedPhi(ssa, n, true))
     end
 
     # Fix up arguments
     for (old_node_ssa, lf) in zip(visited_phinodes, lifted_phis)
-        old_node = compact[old_node_ssa]
+        old_node = compact[old_node_ssa]::PhiNode
         new_node = lf.node
         lf.need_argupdate || continue
         for i = 1:length(old_node.edges)
@@ -517,8 +541,7 @@ function perform_lifting!(compact::IncrementalCompact,
 
     if stmt_val in keys(lifted_leaves)
         stmt_val = lifted_leaves[stmt_val]
-    else
-        isa(stmt_val, Union{SSAValue, OldSSAValue}) && stmt_val in keys(reverse_mapping)
+    elseif isa(stmt_val, Union{NewSSAValue, SSAValue, OldSSAValue}) && stmt_val in keys(reverse_mapping)
         stmt_val = RefValue{Any}(lifted_phis[reverse_mapping[stmt_val]].ssa)
     end
 
@@ -539,19 +562,28 @@ function getfield_elim_pass!(ir::IRCode)
         #ndone += 1
         result_t = compact_exprtype(compact, SSAValue(idx))
         is_getfield = is_setfield = false
+        field_ordering = :unspecified
         is_ccall = false
-        is_unchecked = false
         # Step 1: Check whether the statement we're looking at is a getfield/setfield!
         if is_known_call(stmt, setfield!, compact)
             is_setfield = true
             4 <= length(stmt.args) <= 5 || continue
+            if length(stmt.args) == 5
+                field_ordering = compact_exprtype(compact, stmt.args[5])
+            end
         elseif is_known_call(stmt, getfield, compact)
             is_getfield = true
-            3 <= length(stmt.args) <= 4 || continue
+            3 <= length(stmt.args) <= 5 || continue
+            if length(stmt.args) == 5
+                field_ordering = compact_exprtype(compact, stmt.args[5])
+            elseif length(stmt.args) == 4
+                field_ordering = compact_exprtype(compact, stmt.args[4])
+                widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
+            end
         elseif is_known_call(stmt, isa, compact)
             # TODO
             continue
-        elseif is_known_call(stmt, typeassert, compact)
+        elseif is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
             # Canonicalize
             #   X = typeassert(Y, T)::S
             # into
@@ -566,12 +598,13 @@ function getfield_elim_pass!(ir::IRCode)
             # that's defined not to return its value to make life easier
             # for the backend.
             pi = insert_node_here!(compact,
-                PiNode(stmt.args[2], compact.result[idx][:type]),
-                compact.result[idx][:type],
-                compact.result[idx][:line], true)
+                NewInstruction(
+                    PiNode(stmt.args[2], compact.result[idx][:type]),
+                    compact.result[idx][:type],
+                    compact.result[idx][:line]), true)
             compact.ssa_rename[compact.idx-1] = pi
             continue
-        elseif is_known_call(stmt, (===), compact)
+        elseif is_known_call(stmt, (===), compact) && length(stmt.args) == 3
             c1 = compact_exprtype(compact, stmt.args[2])
             c2 = compact_exprtype(compact, stmt.args[3])
             if !(isa(c1, Const) || isa(c2, Const))
@@ -580,9 +613,6 @@ function getfield_elim_pass!(ir::IRCode)
             (isa(c1, Const) && isa(c2, Const)) && continue
             lift_comparison!(compact, idx, c1, c2, stmt, lifting_cache)
             continue
-        elseif isexpr(stmt, :call) && stmt.args[1] === :unchecked_getfield
-            is_getfield = true
-            is_unchecked = true
         elseif isexpr(stmt, :foreigncall)
             nccallargs = length(stmt.args[3]::SimpleVector)
             new_preserves = Any[]
@@ -607,7 +637,7 @@ function getfield_elim_pass!(ir::IRCode)
                         if isa(typ, UnionAll)
                             typ = unwrap_unionall(typ)
                         end
-                        if typ isa DataType && !typ.mutable
+                        if typ isa DataType && !ismutabletype(typ)
                             process_immutable_preserve(new_preserves, compact, def)
                             old_preserves[pidx] = nothing
                             continue
@@ -637,11 +667,19 @@ function getfield_elim_pass!(ir::IRCode)
         isa(field, Union{Int, Symbol}) || continue
 
         struct_typ = unwrap_unionall(widenconst(compact_exprtype(compact, stmt.args[2])))
+        if isa(struct_typ, Union) && struct_typ <: Tuple
+            struct_typ = unswitchtupleunion(struct_typ)
+        end
         isa(struct_typ, DataType) || continue
+
+        struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
+        if !(field_ordering === :unspecified || (field_ordering isa Const && field_ordering.val === :not_atomic))
+            continue
+        end
 
         def, typeconstraint = stmt.args[2], struct_typ
 
-        if struct_typ.mutable
+        if ismutabletype(struct_typ)
             isa(def, SSAValue) || continue
             let intermediaries = IdSet()
                 callback = function(@nospecialize(pi), ssa::AnySSAValue)
@@ -673,7 +711,7 @@ function getfield_elim_pass!(ir::IRCode)
 
         isempty(leaves) && continue
 
-        field = try_compute_fieldidx_expr(struct_typ, stmt)
+        field = try_compute_fieldidx(struct_typ, field)
         field === nothing && continue
 
         r = lift_leaves(compact, stmt, result_t, field, leaves)
@@ -698,11 +736,12 @@ function getfield_elim_pass!(ir::IRCode)
         val = perform_lifting!(compact, visited_phinodes, field, lifting_cache, result_t, lifted_leaves, stmt.args[2])
 
         # Insert the undef check if necessary
-        if any_undef && !is_unchecked
+        if any_undef
             if val === nothing
-                insert_node!(compact, SSAValue(idx), Nothing, Expr(:throw_undef_if_not, Symbol("##getfield##"), false))
+                insert_node!(compact, SSAValue(idx),
+                    non_effect_free(NewInstruction(Expr(:throw_undef_if_not, Symbol("##getfield##"), false), Nothing)))
             else
-                insert_node!(compact, SSAValue(idx), Nothing, Expr(:undefcheck, Symbol("##getfield##"), val.x))
+                # val must be defined
             end
         else
             @assert val !== nothing
@@ -728,7 +767,7 @@ function getfield_elim_pass!(ir::IRCode)
     # IR. This needs to be after we iterate through the IR with
     # `IncrementalCompact` because removing dead blocks can invalidate the
     # domtree.
-    @timeit "domtree 2" domtree = construct_domtree(ir.cfg)
+    @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
 
     # Now go through any mutable structs and see which ones we can eliminate
     for (idx, (intermediaries, defuse)) in defuses
@@ -753,7 +792,8 @@ function getfield_elim_pass!(ir::IRCode)
         end
         # Could still end up here if we tried to setfield! and immutable, which would
         # error at runtime, but is not illegal to have in the IR.
-        typ.mutable || continue
+        ismutabletype(typ) || continue
+        typ = typ::DataType
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
         ok = true
@@ -801,21 +841,22 @@ function getfield_elim_pass!(ir::IRCode)
                 phinodes = IdDict{Int, SSAValue}()
                 for b in phiblocks
                     n = PhiNode()
-                    phinodes[b] = insert_node!(ir, first(ir.cfg.blocks[b].stmts), ftyp, n)
+                    phinodes[b] = insert_node!(ir, first(ir.cfg.blocks[b].stmts),
+                        NewInstruction(n, ftyp))
                 end
                 # Now go through all uses and rewrite them
                 allblocks = sort(vcat(phiblocks, ldu.def_bbs))
                 for stmt in du.uses
                     ir[SSAValue(stmt)] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
                 end
-                if !isbitstype(fieldtype(typ, fidx))
+                if !isbitstype(ftyp)
                     for (use, list) in preserve_uses
                         push!(list, compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use))
                     end
                 end
                 for b in phiblocks
                     for p in ir.cfg.blocks[b].preds
-                        n = ir[phinodes[b]]
+                        n = ir[phinodes[b]]::PhiNode
                         push!(n.edges, p)
                         push!(n.values, compute_value_for_block(ir, domtree,
                             allblocks, du, phinodes, fidx, p))
@@ -832,7 +873,7 @@ function getfield_elim_pass!(ir::IRCode)
         push!(intermediaries, idx)
         # Insert the new preserves
         for (use, new_preserves) in preserve_uses
-            useexpr = ir[SSAValue(use)]
+            useexpr = ir[SSAValue(use)]::Expr
             nccallargs = length(useexpr.args[3]::SimpleVector)
             old_preserves = let intermediaries = intermediaries
                 filter(ssa->!isa(ssa, SSAValue) || !(ssa.id in intermediaries), useexpr.args[(6+nccallargs):end])
@@ -936,16 +977,30 @@ function type_lift_pass!(ir::IRCode)
         stmt = insts[idx][:inst]
         stmt isa Expr || continue
         if (stmt.head === :isdefined || stmt.head === :undefcheck)
-            val = (stmt.head === :isdefined) ? stmt.args[1] : stmt.args[2]
-            # undef can only show up by being introduced in a phi
-            # node (or an UpsilonNode() argument to a PhiC node),
-            # so lift all these nodes that have maybe undef values
-            processed = IdDict{Int, Union{SSAValue, Bool}}()
-            while isa(val, SSAValue) && isa(insts[val.id][:inst], PiNode)
-                val = (insts[val.id][:inst]::PiNode).val
+            # after optimization, undef can only show up by being introduced in
+            # a phi node (or an UpsilonNode() argument to a PhiC node), so lift
+            # all these nodes that have maybe undef values
+            val = stmt.args[(stmt.head === :isdefined) ? 1 : 2]
+            if stmt.head === :isdefined && (val isa Slot || val isa GlobalRef ||
+                    isexpr(val, :static_parameter) || val isa Argument || val isa Symbol)
+                # this is a legal node, so assume it was not introduced by
+                # slot2ssa (at worst, we might leave in a runtime check that
+                # shouldn't have been there)
+                continue
             end
-            if !isa(val, SSAValue) || (!isa(insts[val.id][:inst], PhiNode) && !isa(insts[val.id][:inst], PhiCNode))
-                (isa(val, GlobalRef) || isexpr(val, :static_parameter)) && continue
+            # otherwise, we definitely have a corrupt node from slot2ssa, and
+            # must fix or delete that now
+            processed = IdDict{Int, Union{SSAValue, Bool}}()
+            def = val
+            while true
+                # peek through PiNodes
+                isa(val, SSAValue) || break
+                def = insts[val.id][:inst]
+                isa(def, PiNode) || break
+                val = def.val
+            end
+            if !isa(val, SSAValue) || (!isa(def, PhiNode) && !isa(def, PhiCNode))
+                # in most cases, reaching this statement implies we had a value
                 if stmt.head === :undefcheck
                     insts[idx][:inst] = nothing
                 else
@@ -955,7 +1010,6 @@ function type_lift_pass!(ir::IRCode)
             end
             stmt_id = val.id
             worklist = Tuple{Int, Int, SSAValue, Int}[(stmt_id, 0, SSAValue(0), 0)]
-            def = insts[stmt_id][:inst]
             if !haskey(lifted_undef, stmt_id)
                 first = true
                 while !isempty(worklist)
@@ -964,10 +1018,19 @@ function type_lift_pass!(ir::IRCode)
                     if isa(def, PhiNode)
                         edges = copy(def.edges)
                         values = Vector{Any}(undef, length(edges))
-                        new_phi = length(values) == 0 ? false : insert_node!(ir, item, Bool, PhiNode(edges, values))
+                        new_phi = if length(values) == 0
+                            false
+                        else
+                            insert_node!(ir, item, NewInstruction(PhiNode(edges, values), Bool))
+                        end
                     else
+                        def = def::PhiCNode
                         values = Vector{Any}(undef, length(def.values))
-                        new_phi = length(values) == 0 ? false : insert_node!(ir, item, Bool, PhiCNode(values))
+                        new_phi = if length(values) == 0
+                            false
+                        else
+                            insert_node!(ir, item, NewInstruction(PhiCNode(values), Bool))
+                        end
                     end
                     processed[item] = new_phi
                     if first
@@ -981,7 +1044,7 @@ function type_lift_pass!(ir::IRCode)
                         elseif !isa(def.values[i], SSAValue)
                             val = true
                         else
-                            up_id = id = def.values[i].id
+                            up_id = id = (def.values[i]::SSAValue).id
                             @label restart
                             if !isa(ir.stmts[id][:type], MaybeUndef)
                                 val = true
@@ -993,7 +1056,7 @@ function type_lift_pass!(ir::IRCode)
                                     elseif !isa(node.val, SSAValue)
                                         val = true
                                     else
-                                        id = node.val.id
+                                        id = (node.val::SSAValue).id
                                         @goto restart
                                     end
                                 else
@@ -1005,7 +1068,7 @@ function type_lift_pass!(ir::IRCode)
                                         if haskey(processed, id)
                                             val = processed[id]
                                         else
-                                            push!(worklist, (id, up_id, new_phi, i))
+                                            push!(worklist, (id, up_id, new_phi::SSAValue, i))
                                             continue
                                         end
                                     else
@@ -1017,7 +1080,7 @@ function type_lift_pass!(ir::IRCode)
                         if isa(def, PhiNode)
                             values[i] = val
                         else
-                            values[i] = insert_node!(ir, up_id, Bool, UpsilonNode(val))
+                            values[i] = insert_node!(ir, up_id, NewInstruction(UpsilonNode(val), Bool))
                         end
                     end
                     if which !== SSAValue(0)
@@ -1026,16 +1089,16 @@ function type_lift_pass!(ir::IRCode)
                             phi.values[use] = new_phi
                         else
                             phi = phi::PhiCNode
-                            phi.values[use] = insert_node!(ir, w_up_id, Bool, UpsilonNode(new_phi))
+                            phi.values[use] = insert_node!(ir, w_up_id, NewInstruction(UpsilonNode(new_phi), Bool))
                         end
                     end
                 end
             end
-            if stmt.head === :isdefined
-                insts[idx][:inst] = lifted_undef[stmt_id]
-            else
-                insts[idx][:inst] = Expr(:throw_undef_if_not, stmt.args[1], lifted_undef[stmt_id])
+            inst = lifted_undef[stmt_id]
+            if stmt.head === :undefcheck
+                inst = Expr(:throw_undef_if_not, stmt.args[1], inst)
             end
+            insts[idx][:inst] = inst
         end
     end
     ir

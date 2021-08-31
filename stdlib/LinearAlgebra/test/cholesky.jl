@@ -39,7 +39,7 @@ end
     n1 = div(n, 2)
     n2 = 2*n1
 
-    Random.seed!(12343)
+    Random.seed!(12344)
 
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
@@ -287,20 +287,30 @@ end
     @test sum(sum(norm, U'*U - XX)) < eps()
 end
 
+struct WrappedVector{T} <: AbstractVector{T}
+    data::Vector{T}
+end
+Base.copy(v::WrappedVector) = WrappedVector(copy(v.data))
+Base.size(v::WrappedVector) = size(v.data)
+Base.getindex(v::WrappedVector, i::Integer) = getindex(v.data, i)
+Base.setindex!(v::WrappedVector, val, i::Integer) = setindex!(v.data, val, i)
 
 @testset "cholesky up- and downdates" begin
     A = complex.(randn(10,5), randn(10, 5))
     v = complex.(randn(5), randn(5))
+    w = WrappedVector(v)
     for uplo in (:U, :L)
         AcA = A'*A
         BcB = AcA + v*v'
         BcB = (BcB + BcB')/2
         F = cholesky(Hermitian(AcA, uplo))
         G = cholesky(Hermitian(BcB, uplo))
-        @test Base.getproperty(LinearAlgebra.lowrankupdate(F, v), uplo) ≈ Base.getproperty(G, uplo)
-        @test_throws DimensionMismatch LinearAlgebra.lowrankupdate(F, Vector{eltype(v)}(undef,length(v)+1))
-        @test Base.getproperty(LinearAlgebra.lowrankdowndate(G, v), uplo) ≈ Base.getproperty(F, uplo)
-        @test_throws DimensionMismatch LinearAlgebra.lowrankdowndate(G, Vector{eltype(v)}(undef,length(v)+1))
+        @test getproperty(lowrankupdate(F, v), uplo) ≈ getproperty(G, uplo)
+        @test getproperty(lowrankupdate(F, w), uplo) ≈ getproperty(G, uplo)
+        @test_throws DimensionMismatch lowrankupdate(F, Vector{eltype(v)}(undef,length(v)+1))
+        @test getproperty(lowrankdowndate(G, v), uplo) ≈ getproperty(F, uplo)
+        @test getproperty(lowrankdowndate(G, w), uplo) ≈ getproperty(F, uplo)
+        @test_throws DimensionMismatch lowrankdowndate(G, Vector{eltype(v)}(undef,length(v)+1))
     end
 end
 
@@ -446,5 +456,57 @@ end
     C = Hermitian(hcat([one(BigFloat) + im]), :L)
     @test Matrix(cholesky(C)) ≈ C
 end
+
+@testset "constructing a Cholesky factor from a triangular matrix" begin
+    A = [1.0 2.0; 3.0 4.0]
+    let
+        U = UpperTriangular(A)
+        C = Cholesky(U)
+        @test C isa Cholesky{Float64}
+        @test C.U == U
+        @test C.L == U'
+    end
+    let
+        L = LowerTriangular(A)
+        C = Cholesky(L)
+        @test C isa Cholesky{Float64}
+        @test C.L == L
+        @test C.U == L'
+    end
+end
+
+@testset "adjoint of Cholesky" begin
+    A = randn(5, 5)
+    A = A'A
+    F = cholesky(A)
+    b = ones(size(A, 1))
+    @test F\b == F'\b
+end
+
+@testset "Float16" begin
+    A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    B = cholesky(A)
+    B32 = cholesky(Float32.(A))
+    @test B isa Cholesky{Float16, Matrix{Float16}}
+    @test B.U isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.L isa LowerTriangular{Float16, Matrix{Float16}}
+    @test B.UL isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.U ≈ B32.U
+    @test B.L ≈ B32.L
+    @test B.UL ≈ B32.UL
+end
+
+@testset "det and logdet" begin
+    A = [4083 3825 5876 2048 4470 5490;
+         3825 3575 5520 1920 4200 5140;
+         5876 5520 8427 2940 6410 7903;
+         2048 1920 2940 1008 2240 2740;
+         4470 4200 6410 2240 4875 6015;
+         5490 5140 7903 2740 6015 7370]
+    B = cholesky(A, Val(true), check=false)
+    @test det(B)  ==  0.0
+    @test det(B)  ≈  det(A) atol=eps()
+    @test logdet(B)  ==  -Inf
+ end
 
 end # module TestCholesky

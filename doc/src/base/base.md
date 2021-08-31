@@ -15,6 +15,11 @@ Some general notes:
   * By convention, function names ending with an exclamation point (`!`) modify their arguments.
     Some functions have both modifying (e.g., `sort!`) and non-modifying (`sort`) versions.
 
+The behaviors of `Base` and standard libraries are stable as defined in
+[SemVer](https://semver.org/) only if they are documented; i.e., included in the
+[Julia documentation](https://docs.julialang.org/) and not marked as unstable.
+See [API FAQ](@ref man-api) for more information.
+
 ## Getting Around
 
 ```@docs
@@ -33,6 +38,7 @@ Base.which(::Any, ::Any)
 Base.methods
 Base.@show
 ans
+Base.active_project
 ```
 
 ## Keywords
@@ -49,9 +55,11 @@ The following two-word sequences are reserved:
 However, you can create variables with names:
 `abstract`, `mutable`, `primitive` and `type`.
 
-Finally, `where` is parsed as an infix operator for writing parametric method
-and type definitions. Also `in` and `isa` are parsed as infix operators.
-Creation of a variable named `where`, `in` or `isa` is allowed though.
+Finally:
+`where` is parsed as an infix operator for writing parametric method and type definitions;
+`in` and `isa` are parsed as infix operators;
+and `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop or `generator` expression.
+Creation of variables named `where`, `in`, `isa` or `outer` is allowed though.
 
 ```@docs
 module
@@ -155,6 +163,7 @@ Base.typejoin
 Base.typeintersect
 Base.promote_type
 Base.promote_rule
+Base.promote_typejoin
 Base.isdispatchtuple
 ```
 
@@ -210,14 +219,17 @@ Core.Union
 Union{}
 Core.UnionAll
 Core.Tuple
+Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
 Base.Val
 Core.Vararg
 Core.Nothing
 Base.isnothing
+Base.notnothing
 Base.Some
 Base.something
+Base.@something
 Base.Enums.Enum
 Base.Enums.@enum
 Core.Expr
@@ -232,12 +244,18 @@ Core.Module
 Core.Function
 Base.hasmethod
 Core.applicable
+Base.isambiguous
 Core.invoke
+Base.@invoke
 Base.invokelatest
+Base.@invokelatest
 new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
+Base.splat
+Base.Fix1
+Base.Fix2
 ```
 
 ## Syntax
@@ -272,6 +290,7 @@ Base.@deprecate
 Base.Missing
 Base.missing
 Base.coalesce
+Base.@coalesce
 Base.ismissing
 Base.skipmissing
 Base.nonmissingtype
@@ -292,6 +311,7 @@ Base.ignorestatus
 Base.detach
 Base.Cmd
 Base.setenv
+Base.addenv
 Base.withenv
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
@@ -336,7 +356,7 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
-Base.catch_stack
+Base.current_exceptions
 Base.@assert
 Base.Experimental.register_error_hint
 Base.Experimental.show_error_hints
@@ -386,8 +406,14 @@ Base.AsyncCondition(::Function)
 Base.nameof(::Module)
 Base.parentmodule
 Base.pathof(::Module)
+Base.pkgdir(::Module)
 Base.moduleroot
+__module__
+__source__
 Base.@__MODULE__
+Base.@__FILE__
+Base.@__DIR__
+Base.@__LINE__
 Base.fullname
 Base.names
 Core.nfields
@@ -395,6 +421,7 @@ Base.isconst
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
+Base.@locals
 ```
 
 ## Internals
@@ -422,5 +449,9 @@ Base.precompile
 ```@docs
 Meta.quot
 Meta.isexpr
+Meta.isidentifier
+Meta.isoperator
+Meta.isunaryoperator
+Meta.isbinaryoperator
 Meta.show_sexpr
 ```

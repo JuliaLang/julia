@@ -4,7 +4,7 @@
 # generic #
 ###########
 
-if !isdefined(@__MODULE__, Symbol("@timeit"))
+if !@isdefined(var"@timeit")
     # This is designed to allow inserting timers when loading a second copy
     # of inference for performing performance experiments.
     macro timeit(args...)
@@ -72,11 +72,28 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
-function is_inlineable_constant(@nospecialize(x))
-    if x isa Type || x isa Symbol
-        return true
+function count_const_size(@nospecialize(x), count_self::Bool = true)
+    (x isa Type || x isa Symbol) && return 0
+    ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
+    isbits(x) && return Core.sizeof(x)
+    dt = typeof(x)
+    sz = count_self ? sizeof(dt) : 0
+    sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
+    dtfd = DataTypeFieldDesc(dt)
+    for i = 1:nfields(x)
+        isdefined(x, i) || continue
+        f = getfield(x, i)
+        if !dtfd[i].isptr && datatype_pointerfree(typeof(f))
+            continue
+        end
+        sz += count_const_size(f, dtfd[i].isptr)
+        sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     end
-    return isbits(x) && Core.sizeof(x) <= MAX_INLINE_CONST_SIZE
+    return sz
+end
+
+function is_inlineable_constant(@nospecialize(x))
+    return count_const_size(x) <= MAX_INLINE_CONST_SIZE
 end
 
 ###########################
@@ -87,11 +104,12 @@ function invoke_api(li::CodeInstance)
     return ccall(:jl_invoke_api, Cint, (Any,), li)
 end
 
-function get_staged(li::MethodInstance)
-    may_invoke_generator(li) || return nothing
+function get_staged(mi::MethodInstance)
+    may_invoke_generator(mi) || return nothing
     try
         # user code might throw errors – ignore them
-        return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
+        ci = ccall(:jl_code_for_staged, Any, (Any,), mi)::CodeInfo
+        return ci
     catch
         return nothing
     end
@@ -116,21 +134,60 @@ function retrieve_code_info(linfo::MethodInstance)
         c.parent = linfo
         return c
     end
+    return nothing
 end
 
 # Get at the nonfunction_mt, which happens to be the mt of SimpleVector
 const nonfunction_mt = typename(SimpleVector).mt
 
 function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::SimpleVector)
-    isa(atypes, DataType) || return Nothing
+    isa(atypes, DataType) || return nothing
     mt = ccall(:jl_method_table_for, Any, (Any,), atypes)
     mt === nothing && return nothing
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
         mt, atypes, sparams, method)
 end
 
+# eliminate UnionAll vars that might be degenerate due to having identical bounds,
+# or a concrete upper bound and appearing covariantly.
+function subst_trivial_bounds(@nospecialize(atypes))
+    if !isa(atypes, UnionAll)
+        return atypes
+    end
+    v = atypes.var
+    if isconcretetype(v.ub) || v.lb === v.ub
+        subst = try
+            atypes{v.ub}
+        catch
+            # Note in rare cases a var bound might not be valid to substitute.
+            nothing
+        end
+        if subst !== nothing
+            return subst_trivial_bounds(subst)
+        end
+    end
+    return UnionAll(v, subst_trivial_bounds(atypes.body))
+end
+
+# If removing trivial vars from atypes results in an equivalent type, use that
+# instead. Otherwise we can get a case like issue #38888, where a signature like
+#   f(x::S) where S<:Int
+# gets cached and matches a concrete dispatch case.
+function normalize_typevars(method::Method, @nospecialize(atypes), sparams::SimpleVector)
+    at2 = subst_trivial_bounds(atypes)
+    if at2 !== atypes && at2 == atypes
+        atypes = at2
+        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
+        sparams = sp_[2]::SimpleVector
+    end
+    return atypes, sparams
+end
+
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector, preexisting::Bool=false, compilesig::Bool=false)
+function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
+    if isa(atypes, UnionAll)
+        atypes, sparams = normalize_typevars(method, atypes, sparams)
+    end
     if compilesig
         new_atypes = get_compileable_sig(method, atypes, sparams)
         new_atypes === nothing && return nothing
@@ -144,14 +201,14 @@ function specialize_method(method::Method, @nospecialize(atypes), sparams::Simpl
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
 end
 
-function specialize_method(match::MethodMatch, preexisting::Bool=false, compilesig::Bool=false)
-    return specialize_method(match.method, match.spec_types, match.sparams, preexisting, compilesig)
+function specialize_method(match::MethodMatch; kwargs...)
+    return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
 # This function is used for computing alternate limit heuristics
 function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
     if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams, false)
+        method_instance = specialize_method(method, sig, sparams)
         if isa(method_instance, MethodInstance)
             cinfo = get_staged(method_instance)
             if isa(cinfo, CodeInfo)
@@ -172,7 +229,7 @@ const empty_slottypes = Any[]
 function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]]
+            return sptypes[x.args[1]::Int]
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
@@ -219,6 +276,8 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
             find_ssavalue_uses(e, uses, line)
+        elseif isa(e, PhiNode)
+            find_ssavalue_uses(e, uses, line)
         end
     end
     return uses
@@ -235,6 +294,14 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
             push!(uses[a.id], line)
         elseif isa(a, Expr)
             find_ssavalue_uses(a, uses, line)
+        end
+    end
+end
+
+function find_ssavalue_uses(e::PhiNode, uses::Vector{BitSet}, line::Int)
+    for val in e.values
+        if isa(val, SSAValue)
+            push!(uses[val.id], line)
         end
     end
 end

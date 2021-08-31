@@ -19,11 +19,17 @@ using Test, Printf
         @test (@sprintf "%-20p" C_NULL) == "0x00000000          "
     end
 
+    #40318
+    @test @sprintf("%p", 0xfffffffffffe0000) == "0xfffffffffffe0000"
+
 end
 
 @testset "%a" begin
 
     # hex float
+    @test (Printf.@sprintf "%a" 0.0) == "0x0p+0"
+    @test (Printf.@sprintf "%a" -0.0) == "-0x0p+0"
+    @test (Printf.@sprintf "%.3a" 0.0) == "0x0.000p+0"
     @test (Printf.@sprintf "%a" 1.5) == "0x1.8p+0"
     @test (Printf.@sprintf "%a" 1.5f0) == "0x1.8p+0"
     @test (Printf.@sprintf "%a" big"1.5") == "0x1.8p+0"
@@ -88,6 +94,15 @@ end
     @test Printf.@sprintf("%g", 123456.7) == "123457"
     @test Printf.@sprintf("%g", 1234567.8) == "1.23457e+06"
 
+    # %g regression gh #41631
+    for (val, res) in ((Inf, "Inf"),
+                       (-Inf, "-Inf"),
+                       (NaN, "NaN"),
+                       (-NaN, "NaN"))
+        @test Printf.@sprintf("%g", val) == res
+        @test Printf.@sprintf("%G", val) == res
+    end
+
     # zeros
     @test Printf.@sprintf("%.15g", 0) == "0"
     @test Printf.@sprintf("%#.15g", 0) == "0.00000000000000"
@@ -104,9 +119,9 @@ end
     @test (Printf.@sprintf "%f" -Inf) == "-Inf"
     @test (Printf.@sprintf "%+f" -Inf) == "-Inf"
     @test (Printf.@sprintf "%f" NaN) == "NaN"
-    @test (Printf.@sprintf "%+f" NaN) == "NaN"
-    @test (Printf.@sprintf "% f" NaN) == "NaN"
-    @test (Printf.@sprintf "% #f" NaN) == "NaN"
+    @test (Printf.@sprintf "%+f" NaN) == "+NaN"
+    @test (Printf.@sprintf "% f" NaN) == " NaN"
+    @test (Printf.@sprintf "% #f" NaN) == " NaN"
     @test (Printf.@sprintf "%e" big"Inf") == "Inf"
     @test (Printf.@sprintf "%e" big"NaN") == "NaN"
 
@@ -141,6 +156,10 @@ end
     @test Printf.@sprintf("%+ 09.1f", 1.234) == "+000001.2"
     @test Printf.@sprintf("%+ 09.0f", 1.234) == "+00000001"
     @test Printf.@sprintf("%+ #09.0f", 1.234) == "+0000001."
+
+    #40303
+    @test Printf.@sprintf("%+7.1f", 9.96) == "  +10.0"
+    @test Printf.@sprintf("% 7.1f", 9.96) == "   10.0"
 end
 
 @testset "%e" begin
@@ -153,9 +172,9 @@ end
     @test (Printf.@sprintf "%e" -Inf) == "-Inf"
     @test (Printf.@sprintf "%+e" -Inf) == "-Inf"
     @test (Printf.@sprintf "%e" NaN) == "NaN"
-    @test (Printf.@sprintf "%+e" NaN) == "NaN"
-    @test (Printf.@sprintf "% e" NaN) == "NaN"
-    @test (Printf.@sprintf "% #e" NaN) == "NaN"
+    @test (Printf.@sprintf "%+e" NaN) == "+NaN"
+    @test (Printf.@sprintf "% e" NaN) == " NaN"
+    @test (Printf.@sprintf "% #e" NaN) == " NaN"
     @test (Printf.@sprintf "%e" big"Inf") == "Inf"
     @test (Printf.@sprintf "%e" big"NaN") == "NaN"
 
@@ -202,6 +221,10 @@ end
     @test Printf.@sprintf("%+ 09.1e", 1.234) == "+01.2e+00"
     @test Printf.@sprintf("%+ 09.0e", 1.234) == "+0001e+00"
     @test Printf.@sprintf("%+ #09.0e", 1.234) == "+001.e+00"
+
+    #40303
+    @test Printf.@sprintf("%+9.1e", 9.96) == " +1.0e+01"
+    @test Printf.@sprintf("% 9.1e", 9.96) == "  1.0e+01"
 end
 
 @testset "strings" begin
@@ -247,6 +270,12 @@ end
     @test (Printf.@sprintf "%-.3s" "test") == "tes"
     @test (Printf.@sprintf "%#-.3s" "test") == "\"te"
 
+    # issue #41068
+    @test Printf.@sprintf("%.2s", "föó") == "fö"
+    @test Printf.@sprintf("%5s", "föó") == "  föó"
+    @test Printf.@sprintf("%6s", "😍🍕") == "  😍🍕"
+    @test Printf.@sprintf("%2c", '🍕') == "🍕"
+    @test Printf.@sprintf("%3c", '🍕') == " 🍕"
 end
 
 @testset "chars" begin
@@ -303,6 +332,12 @@ end
 @testset "basics" begin
 
     @test Printf.@sprintf("%%") == "%"
+    @test Printf.@sprintf("1%%") == "1%"
+    @test Printf.@sprintf("%%1") == "%1"
+    @test Printf.@sprintf("1%%2") == "1%2"
+    @test Printf.@sprintf("1%%%d", 2) == "1%2"
+    @test Printf.@sprintf("1%%2%%3") == "1%2%3"
+    @test Printf.@sprintf("GAP[%%]") == "GAP[%]"
     @test Printf.@sprintf("hey there") == "hey there"
     @test_throws ArgumentError Printf.Format("")
     @test_throws ArgumentError Printf.Format("%+")
@@ -405,6 +440,16 @@ end
     # Check bug with trailing nul printing BigFloat
     @test (Printf.@sprintf("%.330f", BigFloat(1)))[end] != '\0'
 
+    # Check bugs with truncated output printing BigFloat
+    @test (Printf.@sprintf("%f", parse(BigFloat, "1e400"))) ==
+           "10000000000000000000000000000000000000000000000000000000000000000000000000000025262527574416492004687051900140830217136998040684679611623086405387447100385714565637522507383770691831689647535911648520404034824470543643098638520633064715221151920028135130764414460468236314621044034960475540018328999334468948008954289495190631358190153259681118693204411689043999084305348398480210026863210192871358464.000000"
+
+    # Check that does not attempt to output incredibly large amounts of digits
+    @test_throws ErrorException Printf.@sprintf("%f", parse(BigFloat, "1e99999"))
+
+    # Check bug with precision > length of string
+    @test Printf.@sprintf("%4.2s", "a") == "   a"
+
     # issue #29662
     @test (Printf.@sprintf "%12.3e" pi*1e100) == "  3.142e+100"
 
@@ -419,9 +464,17 @@ end
     @test Printf.@sprintf("%e", 1) == "1.000000e+00"
     @test Printf.@sprintf("%g", 1) == "1"
 
+    # issue #39748
+    @test Printf.@sprintf("%.16g", 194.4778127560983) == "194.4778127560983"
+    @test Printf.@sprintf("%.17g", 194.4778127560983) == "194.4778127560983"
+    @test Printf.@sprintf("%.18g", 194.4778127560983) == "194.477812756098302"
+    @test Printf.@sprintf("%.1g", 1.7976931348623157e308) == "2e+308"
+    @test Printf.@sprintf("%.2g", 1.7976931348623157e308) == "1.8e+308"
+    @test Printf.@sprintf("%.3g", 1.7976931348623157e308) == "1.8e+308"
+
     # escaped '%'
     @test_throws ArgumentError @sprintf("%s%%%s", "a")
-    @test @sprintf("%s%%%s", "a", "b") == "a%%b"
+    @test @sprintf("%s%%%s", "a", "b") == "a%b"
 
     # print float as %d uses round(x)
     @test @sprintf("%d", 25.5) == "26"
@@ -709,6 +762,13 @@ end
     @test Printf.@sprintf("%20.0X",  UInt(3989525555)) == "            EDCB5433"
     @test Printf.@sprintf("%20.X",  UInt(0)) == "                   0"
 
+end
+
+@testset "%n" begin
+    x = Ref{Int}()
+    @test (Printf.@sprintf("%d4%n", 123, x); x[] == 4)
+    @test (Printf.@sprintf("%s%n", "😉", x); x[] == 4)
+    @test (Printf.@sprintf("%s%n", "1234", x); x[] == 4)
 end
 
 end # @testset "Printf"

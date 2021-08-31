@@ -26,12 +26,7 @@
 #define USED_FUNC
 #endif
 
-#if LLVM_VERSION_MAJOR >= 10
 using std::make_unique;
-#else
-using llvm::make_unique;
-#define PathSensitiveBugReport BugReport
-#endif
 
 namespace {
 using namespace clang;
@@ -42,11 +37,7 @@ using namespace ento;
 
 static const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
 {
-#if LLVM_VERSION_MAJOR >= 10
     return N->getStmtForDiagnostics();
-#else
-    return PathDiagnosticLocation::getStmt(N);
-#endif
 }
 
 
@@ -235,11 +226,7 @@ private:
 public:
   void checkBeginFunction(CheckerContext &Ctx) const;
   void checkEndFunction(const clang::ReturnStmt *RS, CheckerContext &Ctx) const;
-#if LLVM_VERSION_MAJOR >= 9
   bool evalCall(const CallEvent &Call, CheckerContext &C) const;
-#else
-  bool evalCall(const CallExpr *CE, CheckerContext &C) const;
-#endif
   void checkPreCall(const CallEvent &Call, CheckerContext &C) const;
   void checkPostCall(const CallEvent &Call, CheckerContext &C) const;
   void checkPostStmt(const CStyleCastExpr *CE, CheckerContext &C) const;
@@ -741,7 +728,6 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_module_t") ||
                    Name.endswith_lower("jl_tupletype_t") ||
                    Name.endswith_lower("jl_gc_tracked_buffer_t") ||
-                   Name.endswith_lower("jl_tls_states_t") ||
                    Name.endswith_lower("jl_binding_t") ||
                    Name.endswith_lower("jl_ordereddict_t") ||
                    Name.endswith_lower("jl_tvar_t") ||
@@ -756,6 +742,8 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_task_t") ||
                    Name.endswith_lower("jl_uniontype_t") ||
                    Name.endswith_lower("jl_method_match_t") ||
+                   Name.endswith_lower("jl_vararg_t") ||
+                   Name.endswith_lower("jl_opaque_closure_t") ||
                    // Probably not technically true for these, but let's allow
                    // it
                    Name.endswith_lower("typemap_intersection_env") ||
@@ -1030,15 +1018,15 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
                                         const ValueState *OldValS,
                                         ProgramStateRef &State,
                                         CheckerContext &C) const {
+  QualType QT = Result->getType();
+  if (!QT->isPointerType() || QT->getPointeeType()->isVoidType())
+    return nullptr;
   auto ValLoc = State->getSVal(Result, C.getLocationContext()).getAs<Loc>();
   if (!ValLoc) {
     return nullptr;
   }
   SVal Loaded = State->getSVal(*ValLoc);
   if (Loaded.isUnknown() || !Loaded.getAsSymbol()) {
-    QualType QT = Result->getType();
-    if (!QT->isPointerType())
-      return nullptr;
     if (OldValS || GCChecker::isGCTracked(Result)) {
       Loaded = C.getSValBuilder().conjureSymbolVal(
           nullptr, Result, C.getLocationContext(), Result->getType(),
@@ -1296,17 +1284,12 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
   }
 }
 
-#if LLVM_VERSION_MAJOR >= 9
-bool GCChecker::evalCall(const CallEvent &Call,
-#else
-bool GCChecker::evalCall(const CallExpr *CE,
-#endif
-                         CheckerContext &C) const {
+bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   // These checks should have no effect on the surrounding environment
   // (globals should not be invalidated, etc), hence the use of evalCall.
-#if LLVM_VERSION_MAJOR >= 9
   const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
-#endif
+  if (!CE)
+    return false;
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
   auto name = C.getCalleeName(CE);
   if (name == "JL_GC_POP") {

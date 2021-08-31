@@ -191,11 +191,11 @@
        (= (call include ,x)
           (block
            ,@loc
-           (call (core _apply_latest) (top include) (call (core svec) ,name ,x))))
+           (call (core _call_latest) (top include) ,name ,x)))
        (= (call include (:: ,mex (top Function)) ,x)
           (block
            ,@loc
-           (call (core _apply_latest) (top include) (call (core svec) ,mex ,name ,x))))))
+           (call (core _call_latest) (top include) ,mex ,name ,x)))))
    'none 0))
 
 ; run whole frontend on a string. useful for testing.

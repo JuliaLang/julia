@@ -8,6 +8,26 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
 @testset "Simple svdvals / svd tests" begin
     ≊(x,y) = isapprox(x,y,rtol=1e-15)
 
+    m = [2, 0]
+    @test @inferred(svdvals(m)) ≊ [2]
+    @test @inferred(svdvals!(float(m))) ≊ [2]
+    for sf in (@inferred(svd(m)), @inferred(svd!(float(m))))
+        @test sf.S ≊ [2]
+        @test sf.U'sf.U ≊ [1]
+        @test sf.Vt'sf.Vt ≊ [1]
+        @test sf.U*Diagonal(sf.S)*sf.Vt' ≊ m
+    end
+    F = @inferred svd(m, full=true)
+    @test size(F.U) == (2, 2)
+    @test F.S ≊ [2]
+    @test F.U'F.U ≊ Matrix(I, 2, 2)
+    @test F.Vt'*F.Vt ≊ [1]
+    @test @inferred(svdvals(3:4)) ≊ [5]
+    A = Matrix(1.0I, 2, 2)
+    Z = svd(Hermitian(A); full=true)
+    @test Z.S ≈ ones(2)
+    @test Z.U'Z.U ≈ I(2)
+
     m1 = [2 0; 0 0]
     m2 = [2 -2; 1 1]/sqrt(2)
     m2c = Complex.([2 -2; 1 1]/sqrt(2))
@@ -15,8 +35,8 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
     @test @inferred(svdvals(m2))  ≊ [2, 1]
     @test @inferred(svdvals(m2c)) ≊ [2, 1]
 
-    sf1 = svd(m1)
-    sf2 = svd(m2)
+    sf1 = @inferred svd(m1)
+    sf2 = @inferred svd(m2)
     @test sf1.S ≊ [2, 0]
     @test sf2.S ≊ [2, 1]
     # U & Vt are unitary
@@ -199,6 +219,46 @@ end
     @test svdc isa SVD{ComplexF32}
     Uc, Sc, Vc = svdc
     @test Uc * diagm(0=>Sc) * transpose(V) ≈ complex.(A) rtol=1e-3
+end
+
+@testset "Issue 40944. ldiV!(SVD) should update rhs" begin
+    F = svd(randn(2, 2))
+    b = randn(2)
+    x = ldiv!(F, b)
+    @test x === b
+end
+
+@testset "adjoint of SVD" begin
+    n = 5
+    B = randn(5, 2)
+
+    @testset "size(b)=$(size(b))" for b in (B[:, 1], B)
+        @testset "size(A)=$(size(A))" for A in (
+            randn(n, n),
+            # Wide problems become minimum norm (in x) problems similarly to LQ
+            randn(n + 2, n),
+            randn(n - 2, n),
+            complex.(randn(n, n), randn(n, n)))
+
+            F = svd(A)
+            x = F'\b
+            @test x ≈ A'\b
+            @test length(size(x)) == length(size(b))
+        end
+    end
+end
+
+@testset "Float16" begin
+    A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    B = svd(A)
+    B32 = svd(Float32.(A))
+    @test B isa SVD{Float16, Float16, Matrix{Float16}}
+    @test B.U isa Matrix{Float16}
+    @test B.Vt isa Matrix{Float16}
+    @test B.S isa Vector{Float16}
+    @test B.U ≈ B32.U
+    @test B.Vt ≈ B32.Vt
+    @test B.S ≈ B32.S
 end
 
 end # module TestSVD

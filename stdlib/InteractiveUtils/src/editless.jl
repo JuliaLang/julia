@@ -62,6 +62,8 @@ already work:
 - vim
 - nvim
 - nano
+- micro
+- kak
 - textmate
 - mate
 - kate
@@ -119,9 +121,10 @@ function define_default_editors()
     end
     # Must check that emacs not running in -t/-nw before regex match for general emacs
     define_editor(Any[
-        "vim", "vi", "nvim", "mvim", "nano", "micro",
+        "vim", "vi", "nvim", "mvim", "nano", "micro", "kak",
         r"\bemacs\b.*\s(-nw|--no-window-system)\b",
-        r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b"], wait=true) do cmd, path, line
+        r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b",
+    ], wait=true) do cmd, path, line
         `$cmd +$line $path`
     end
     define_editor(["textmate", "mate", "kate"]) do cmd, path, line
@@ -159,6 +162,7 @@ function define_default_editors()
         end
     end
 end
+define_default_editors()
 
 """
     editor()
@@ -188,10 +192,9 @@ Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
-See also: [`define_editor`](@ref)
+See also [`define_editor`](@ref).
 """
 function edit(path::AbstractString, line::Integer=0)
-    isempty(EDITOR_CALLBACKS) && define_default_editors()
     path isa String || (path = convert(String, path))
     if endswith(path, ".jl")
         p = find_source_file(path)
@@ -219,9 +222,17 @@ method to edit. For modules, open the main source file. The module needs to be l
 To ensure that the file can be opened at the given line, you may need to call
 `define_editor` first.
 """
-edit(f)                   = edit(functionloc(f)...)
-edit(f, @nospecialize t)  = edit(functionloc(f,t)...)
-edit(file, line::Integer) = error("could not find source file for function")
+function edit(@nospecialize f)
+    ms = methods(f).ms
+    length(ms) == 1 && edit(functionloc(ms[1])...)
+    length(ms) > 1 && return ms
+    length(ms) == 0 && functionloc(f) # throws
+    nothing
+end
+edit(m::Method) = edit(functionloc(m)...)
+edit(@nospecialize(f), idx::Integer) = edit(methods(f).ms[idx])
+edit(f, t)  = (@nospecialize; edit(functionloc(f, t)...))
+edit(file::Nothing, line::Integer) = error("could not find source file for function")
 edit(m::Module) = edit(pathof(m))
 
 # terminal pager

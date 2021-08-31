@@ -341,15 +341,29 @@ end
         String(take!(io))
     end
 
+    function genmsg_err(level, message, _module, filepath, line; kws...)
+        fname = tempname()
+        f = open(fname, "w")
+        logger = SimpleLogger()
+        redirect_stderr(f) do
+            handle_message(logger, level, message, _module, :group, :id,
+                           filepath, line; kws...)
+        end
+        close(f)
+        buf = read(fname)
+        rm(fname)
+        String(buf)
+    end
+
     # Simple
-    @test genmsg(Info, "msg", Main, "some/path.jl", 101) ==
+    @test genmsg_err(Info, "msg", Main, "some/path.jl", 101) ==
     """
     ┌ Info: msg
     └ @ Main some/path.jl:101
     """
 
     # Multiline message
-    @test genmsg(Warn, "line1\nline2", Main, "some/path.jl", 101) ==
+    @test genmsg_err(Warn, "line1\nline2", Main, "some/path.jl", 101) ==
     """
     ┌ Warning: line1
     │ line2
@@ -407,6 +421,10 @@ end
         @info "test"
     end
     @test record.group == :corelogging  # name of this file
+end
+
+@testset "complicated kwargs logging macro" begin
+    @test_logs (:warn, "foo")  @warn "foo" argvals=:((DoNotCare{$(Expr(:escape, :Any))}(),))
 end
 
 end

@@ -335,7 +335,7 @@ const llvmtypes = IdDict{Any,String}(
     Int32 => "i32", UInt32 => "i32",
     Int64 => "i64", UInt64 => "i64",
     Int128 => "i128", UInt128 => "i128",
-    Float16 => "i16", # half
+    Float16 => "half",
     Float32 => "float",
     Float64 => "double",
 )

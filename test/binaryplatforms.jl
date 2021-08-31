@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Test, Base.BinaryPlatforms, Base.BinaryPlatforms.CPUID
 
 @testset "CPUID" begin
@@ -136,6 +138,16 @@ end
 
     # Test that trying to set illegal tags fails
     @test_throws ArgumentError p["os"] = "a+b"
+
+    # Test that our `hash()` is stable
+    @test hash(HostPlatform()) == hash(HostPlatform())
+
+    # Test that round-tripping through `triplet` for a does not
+    # maintain equality, as we end up losing the `compare_strategies`:
+    p = Platform("x86_64", "linux"; cuda = v"11")
+    Base.BinaryPlatforms.set_compare_strategy!(p, "cuda", Base.BinaryPlatforms.compare_version_cap)
+    q = parse(Platform, triplet(p))
+    @test q != p
 end
 
 @testset "Triplet parsing" begin
@@ -186,13 +198,12 @@ end
     # Round-trip our little homie through `triplet()`, with some bending
     # of the rules for MacOS and FreeBSD, who have incomplete `os_version`
     # numbers embedded within their triplets.
-    p = HostPlatform()
-    if !Sys.isbsd(p)
-        @test parse(Platform, triplet(p)) == p
-    end
+    p = Platform("x86_64", "linux")
+    @test parse(Platform, triplet(p)) == p
 
     # Also test round-tripping through `repr()`:
-    @test eval(Meta.parse(repr(HostPlatform()))) == HostPlatform()
+    p = Platform("aarch64", "macos"; os_version=v"20", march="armv8_4_crypto_sve")
+    @test eval(Meta.parse(repr(p))) == p
 end
 
 @testset "platforms_match()" begin
@@ -252,21 +263,25 @@ end
     @test parse_dl_name_version("libgfortran.so.3.4", "linux") == ("libgfortran", v"3.4")
     @test_throws ArgumentError parse_dl_name_version("libgfortran.so.3.4a", "linux")
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "linux")
+    @test_throws ArgumentError parse_dl_name_version("libgfortranso", "linux")
     @test parse_dl_name_version("libgfortran.so", "freebsd") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.so.3", "freebsd") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.so.3.4", "freebsd") == ("libgfortran", v"3.4")
     @test_throws ArgumentError parse_dl_name_version("libgfortran.so.3.4a", "freebsd")
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "freebsd")
+    @test_throws ArgumentError parse_dl_name_version("libgfortranso", "freebsd")
     @test parse_dl_name_version("libgfortran.dylib", "macos") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.3.dylib", "macos") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.3.4.dylib", "macos") == ("libgfortran", v"3.4")
     @test parse_dl_name_version("libgfortran.3.4a.dylib", "macos") == ("libgfortran.3.4a", nothing)
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "macos")
+    @test_throws ArgumentError parse_dl_name_version("libgfortrandylib", "macos")
     @test parse_dl_name_version("libgfortran.dll", "windows") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran-3.dll", "windows") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran-3.4.dll", "windows") == ("libgfortran", v"3.4")
     @test parse_dl_name_version("libgfortran-3.4a.dll", "windows") == ("libgfortran-3.4a", nothing)
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "windows")
+    @test_throws ArgumentError parse_dl_name_version("libgfortrandll", "windows")
 end
 
 @testset "Sys.is* overloading" begin
@@ -353,7 +368,7 @@ end
 
 
     # Next, an asymmetric comparison strategy.  We'll create a "less than or equal to" constraint
-    # that uses the `{a,b}_requested` paramters to determine which number represents the limit.
+    # that uses the `{a,b}_requested` parameters to determine which number represents the limit.
     function less_than_constraint(a::String, b::String, a_requested::Bool, b_requested::Bool)
         a = parse(Int, a)
         b = parse(Int, b)

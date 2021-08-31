@@ -83,6 +83,28 @@ import Base.<
 
 @test isless('a','b')
 
+@testset "isgreater" begin
+    # isgreater should be compatible with min.
+    min1(a, b) = Base.isgreater(a, b) ? b : a
+    # min promotes numerical arguments to the same type, but our quick min1
+    # doesn't, so use float test values instead of ints.
+    values = (1.0, 5.0, NaN, missing, Inf)
+    for a in values, b in values
+        @test min(a, b) === min1(a, b)
+        @test min((a,), (b,)) === min1((a,), (b,))
+        @test all(min([a], [b]) .=== min1([a], [b]))
+    end
+end
+
+@testset "isunordered" begin
+    @test  isunordered(NaN)
+    @test  isunordered(NaN32)
+    @test  isunordered(missing)
+    @test !isunordered(1)
+    @test !isunordered([NaN, 1])
+    @test !isunordered([1.0, missing])
+end
+
 @testset "vectorized comparisons between numbers" begin
     @test 1 .!= 2
     @test 1 .== 1
@@ -138,6 +160,11 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
+
+    # test keyword ags in composition
+    function kwf(a;b,c); a + b + c; end
+    @test (abs2 ∘ kwf)(1,b=2,c=3) == 36
+
 end
 
 @testset "function negation" begin
@@ -242,4 +269,29 @@ end
     @test lte5(5) && lte5(4)
     @test gt5(6) && !gt5(5)
     @test lt5(4) && !lt5(5)
+end
+
+@testset "ni" begin
+    @test ∋([1,5,10,11], 5)
+    @test !∋([1,10,11], 5)
+    @test ∋(5)([5,1])
+    @test !∋(42)([0,1,100])
+    @test ∌(0)(1:10)
+    @test ∋(0)(-2:2)
+end
+
+@test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
+
+@testset "Returns" begin
+    @test @inferred(Returns(1)()   ) === 1
+    @test @inferred(Returns(1)(23) ) === 1
+    @test @inferred(Returns("a")(2,3)) == "a"
+    @test @inferred(Returns(1)(x=1, y=2)) === 1
+    @test @inferred(Returns(Int)()) === Int
+    @test @inferred(Returns(Returns(1))()) === Returns(1)
+    f = @inferred Returns(Int)
+    @inferred f(1,2)
+    val = [1,2,3]
+    @test Returns(val)(1) === val
+    @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
 end

@@ -14,11 +14,11 @@
 // returning from the callee function will invalidate the context
 #ifdef _OS_WINDOWS_
 jl_mutex_t jl_in_stackwalk;
-#define jl_unw_get(context) RtlCaptureContext(context)
+#define jl_unw_get(context) (RtlCaptureContext(context), 0)
 #elif !defined(JL_DISABLE_LIBUNWIND)
 #define jl_unw_get(context) unw_getcontext(context)
 #else
-void jl_unw_get(void *context) {};
+int jl_unw_get(void *context) { return -1; }
 #endif
 
 #ifdef __cplusplus
@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
 
 static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintptr_t sp) JL_NOTSAFEPOINT
 {
@@ -54,7 +54,7 @@ static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintpt
 // the call instruction. The first `skip` frames are not included in `bt_data`.
 //
 // `maxsize` is the size of the buffer `bt_data` (and `sp` if non-NULL). It
-// must be at least JL_BT_MAX_ENTRY_SIZE to accommodate extended backtrace
+// must be at least `JL_BT_MAX_ENTRY_SIZE + 1` to accommodate extended backtrace
 // entries.  If `sp != NULL`, the stack pointer corresponding `bt_data[i]` is
 // stored in `sp[i]`.
 //
@@ -83,11 +83,10 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     }
 #endif
 #if !defined(_OS_WINDOWS_)
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
+    jl_set_safe_restore(&buf);
     if (!jl_setjmp(buf, 0)) {
-        ptls->safe_restore = &buf;
 #endif
         int have_more_frames = 1;
         while (have_more_frames) {
@@ -96,9 +95,16 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 need_more_space = 1;
                 break;
             }
-            have_more_frames = jl_unw_step(cursor, &return_ip, &thesp);
+            uintptr_t oldsp = thesp;
+            have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
+            if (oldsp >= thesp && !jl_running_under_rr(0)) {
+                // The stack pointer is clearly bad, as it must grow downwards.
+                // But sometimes the external unwinder doesn't check that.
+                have_more_frames = 0;
+            }
             if (skip > 0) {
                 skip--;
+                from_signal_handler = 0;
                 continue;
             }
             if (sp)
@@ -132,10 +138,9 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             //   which we can get from the return address via `call_ip = return_ip - 1`.
             // * Code which was interrupted asynchronously (eg, via a signal)
             //   is expected to have `call_ip == return_ip`.
-            if (n != 0 || !from_signal_handler) {
-                // normal frame
-                call_ip -= 1;
-            }
+            if (!from_signal_handler)
+                call_ip -= 1; // normal frame
+            from_signal_handler = 0;
             if (call_ip == JL_BT_NON_PTR_ENTRY) {
                 // Never leave special marker in the bt data as it can corrupt the GC.
                 call_ip = 0;
@@ -169,7 +174,7 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         // reader happy.
         if (n > 0) n -= 1;
     }
-    ptls->safe_restore = old_buf;
+    jl_set_safe_restore(old_buf);
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     JL_UNLOCK_NOGC(&jl_in_stackwalk);
@@ -198,7 +203,9 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
 {
     bt_context_t context;
     memset(&context, 0, sizeof(context));
-    jl_unw_get(&context);
+    int r = jl_unw_get(&context);
+    if (r < 0)
+        return 0;
     jl_gcframe_t *pgcstack = jl_pgcstack;
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, &context))
@@ -233,9 +240,9 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     bt_context_t context;
     bt_cursor_t cursor;
     memset(&context, 0, sizeof(context));
-    jl_unw_get(&context);
+    int r = jl_unw_get(&context);
     jl_gcframe_t *pgcstack = jl_pgcstack;
-    if (jl_unw_init(&cursor, &context)) {
+    if (r == 0 && jl_unw_init(&cursor, &context)) {
         // Skip frame for jl_backtrace_from_here itself
         skip += 1;
         size_t offset = 0;
@@ -306,7 +313,7 @@ static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
 
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
-    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
+    jl_excstack_t *s = jl_current_task->excstack;
     jl_bt_element_t *bt_data = NULL;
     size_t bt_size = 0;
     if (s && s->top) {
@@ -327,9 +334,9 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 // interleaved.
 JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
 {
-    JL_TYPECHK(catch_stack, task, (jl_value_t*)task);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (task != ptls->current_task && task->_state == JL_TASK_STATE_RUNNABLE) {
+    JL_TYPECHK(current_exceptions, task, (jl_value_t*)task);
+    jl_task_t *ct = jl_current_task;
+    if (task != ct && task->_state == JL_TASK_STATE_RUNNABLE) {
         jl_error("Inspecting the exception stack of a task which might "
                  "be running concurrently isn't allowed.");
     }
@@ -462,7 +469,7 @@ static int readable_pointer(LPCVOID pointer)
     return 1;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
     // Might be called from unmanaged thread.
 #ifndef _CPU_X86_64_
@@ -482,7 +489,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 #else
     *ip = (uintptr_t)cursor->Rip;
     *sp = (uintptr_t)cursor->Rsp;
-    if (*ip == 0) {
+    if (*ip == 0 && from_signal_handler) {
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
         cursor->Rip = *(DWORD64*)*sp;      // POP RIP (aka RET)
@@ -490,12 +497,12 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
         return cursor->Rip != 0;
     }
 
-    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip);
+    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
     if (!ImageBase)
         return 0;
 
     PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
-        GetCurrentProcess(), cursor->Rip);
+        GetCurrentProcess(), cursor->Rip - !from_signal_handler);
     if (!FunctionEntry) {
         // Not code or bad unwind?
         return 0;
@@ -525,8 +532,9 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return unw_init_local(cursor, context) == 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
+    (void)from_signal_handler; // libunwind also tracks this
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
         return 0;
@@ -537,7 +545,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
     return unw_step(cursor) > 0;
 }
 
-#ifdef LIBOSXUNWIND
+#ifdef LLVMLIBUNWIND
 NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize,
                                         bt_context_t *context, jl_gcframe_t *pgcstack)
 {
@@ -557,7 +565,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
     return 0;
 }
@@ -565,11 +573,11 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 
 JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_frame_t *frames = NULL;
-    int8_t gc_state = jl_gc_safe_enter(ptls);
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
     int n = jl_getFunctionInfo(&frames, (uintptr_t)ip, skipC, 0);
-    jl_gc_safe_leave(ptls, gc_state);
+    jl_gc_safe_leave(ct->ptls, gc_state);
     jl_value_t *rs = (jl_value_t*)jl_alloc_svec(n);
     JL_GC_PUSH1(&rs);
     for (int i = 0; i < n; i++) {
@@ -681,8 +689,60 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
     }
 }
 
+extern bt_context_t *jl_to_bt_context(void *sigctx);
+
+void jl_rec_backtrace(jl_task_t *t)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    ptls->bt_size = 0;
+    if (t == ct) {
+        ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
+        return;
+    }
+    if (t->copy_stack || !t->started || t->stkbuf == NULL)
+        return;
+    int16_t old = -1;
+    if (!jl_atomic_cmpswap(&t->tid, &old, ptls->tid) && old != ptls->tid)
+        return;
+    bt_context_t *context = NULL;
+#if defined(_OS_WINDOWS_)
+    bt_context_t c;
+    memset(&c, 0, sizeof(c));
+    _JUMP_BUFFER *mctx = (_JUMP_BUFFER*)&t->ctx.uc_mcontext;
+#if defined(_CPU_X86_64_)
+    c.Rbx = mctx->Rbx;
+    c.Rsp = mctx->Rsp;
+    c.Rbp = mctx->Rbp;
+    c.Rsi = mctx->Rsi;
+    c.Rdi = mctx->Rdi;
+    c.R12 = mctx->R12;
+    c.R13 = mctx->R13;
+    c.R14 = mctx->R14;
+    c.R15 = mctx->R15;
+    c.Rip = mctx->Rip;
+    memcpy(&c.Xmm6, &mctx->Xmm6, 10 * sizeof(mctx->Xmm6)); // Xmm6-Xmm15
+#else
+    c.Eip = mctx->Eip;
+    c.Esp = mctx->Esp;
+    c.Ebp = mctx->Ebp;
+#endif
+    context = &c;
+#elif defined(JL_HAVE_UNW_CONTEXT)
+    context = &t->ctx;
+#elif defined(JL_HAVE_UCONTEXT)
+    context = jl_to_bt_context(&t->ctx);
+#else
+#endif
+    if (context)
+        ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, context, t->gcstack);
+    if (old == -1)
+        jl_atomic_store_relaxed(&t->tid, old);
+}
+
 //--------------------------------------------------
 // Tools for interactive debugging in gdb
+
 JL_DLLEXPORT void jl_gdblookup(void* ip)
 {
     jl_print_native_codeloc((uintptr_t)ip);
@@ -691,14 +751,33 @@ JL_DLLEXPORT void jl_gdblookup(void* ip)
 // Print backtrace for current exception in catch block
 JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
 {
-    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
+    jl_task_t *ct = jl_current_task;
+    if (ct->ptls == NULL)
+        return;
+    jl_excstack_t *s = ct->excstack;
     if (!s)
         return;
-    size_t bt_size = jl_excstack_bt_size(s, s->top);
+    size_t i, bt_size = jl_excstack_bt_size(s, s->top);
     jl_bt_element_t *bt_data = jl_excstack_bt_data(s, s->top);
-    for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
+    for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
         jl_print_bt_entry_codeloc(bt_data + i);
     }
+}
+JL_DLLEXPORT void jlbacktracet(jl_task_t *t)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    jl_rec_backtrace(t);
+    size_t i, bt_size = ptls->bt_size;
+    jl_bt_element_t *bt_data = ptls->bt_data;
+    for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
+        jl_print_bt_entry_codeloc(bt_data + i);
+    }
+}
+
+JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
+{
+    jlbacktrace();
 }
 
 #ifdef __cplusplus

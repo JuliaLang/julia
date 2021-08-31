@@ -31,6 +31,9 @@ end
 
 ## expressions ##
 
+isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
+isexpr(@nospecialize(ex), head::Symbol, n::Int) = isa(ex, Expr) && ex.head === head && length(ex.args) == n
+
 copy(e::Expr) = exprarray(e.head, copy_exprargs(e.args))
 
 # copy parts of an AST that the compiler mutates
@@ -185,15 +188,27 @@ Give a hint to the compiler that this function is worth inlining.
 Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
 an extra nudge can be given to the compiler to inline it.
-This is shown in the following example:
+
+`@inline` can be applied immediately before the definition or in its function body.
 
 ```julia
-@inline function bigfunction(x)
-    #=
-        Function Definition
-    =#
+# annotate long-form definition
+@inline function longdef(x)
+    ...
+end
+
+# annotate short-form definition
+@inline shortdef(x) = ...
+
+# annotate anonymous function that a `do` block creates
+f() do
+    @inline
+    ...
 end
 ```
+
+!!! compat "Julia 1.8"
+    The usage within a function body requires at least Julia 1.8.
 """
 macro inline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
@@ -206,15 +221,28 @@ Give a hint to the compiler that it should not inline a function.
 
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
-prevented. This is shown in the following example:
+prevented.
+
+`@noinline` can be applied immediately before the definition or in its function body.
 
 ```julia
-@noinline function smallfunction(x)
-    #=
-        Function Definition
-    =#
+# annotate long-form definition
+@noinline function longdef(x)
+    ...
+end
+
+# annotate short-form definition
+@noinline shortdef(x) = ...
+
+# annotate anonymous function that a `do` block creates
+f() do
+    @noinline
+    ...
 end
 ```
+
+!!! compat "Julia 1.8"
+    The usage within a function body requires at least Julia 1.8.
 
 !!! note
     If the function is trivial (for example returning a constant) it might get inlined anyway.
@@ -230,16 +258,23 @@ end
 `@pure` gives the compiler a hint for the definition of a pure function,
 helping for type inference.
 
-A pure function can only depend on immutable information.
-This also means a `@pure` function cannot use any global mutable state, including
-generic functions. Calls to generic functions depend on method tables which are
-mutable global state.
-Use with caution, incorrect `@pure` annotation of a function may introduce
-hard to identify bugs. Double check for calls to generic functions.
 This macro is intended for internal compiler use and may be subject to changes.
 """
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
+end
+
+"""
+    @aggressive_constprop ex
+    @aggressive_constprop(ex)
+
+`@aggressive_constprop` requests more aggressive interprocedural constant
+propagation for the annotated function. For a method where the return type
+depends on the value of the arguments, this can yield improved inference results
+at the cost of additional compile time.
+"""
+macro aggressive_constprop(ex)
+    esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
 end
 
 """
@@ -401,7 +436,7 @@ the global scope or depending on mutable elements.
 See [Metaprogramming](@ref) for further details.
 
 ## Example:
-```julia
+```jldoctest
 julia> @generated function bar(x)
            if x <: Integer
                return :(x ^ 2)
@@ -427,11 +462,245 @@ macro generated(f)
                          Expr(:block,
                               lno,
                               Expr(:if, Expr(:generated),
-                                   body,
+                                   # https://github.com/JuliaLang/julia/issues/25678
+                                   Expr(:block,
+                                        :(local tmp = $body),
+                                        :(if tmp isa Core.CodeInfo; return tmp; else tmp; end)),
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))
     else
         error("invalid syntax; @generated must be used with a function definition")
+    end
+end
+
+
+"""
+    @atomic var
+    @atomic order ex
+
+Mark `var` or `ex` as being performed atomically, if `ex` is a supported expression.
+
+    @atomic a.b.x = new
+    @atomic a.b.x += addend
+    @atomic :acquire_release a.b.x = new
+    @atomic :acquire_release a.b.x += addend
+
+Perform the store operation expressed on the right atomically and return the
+new value.
+
+With `=`, this operation translates to a `setproperty!(a.b, :x, new)` call.
+With any operator also, this operation translates to a `modifyproperty!(a.b,
+:x, +, addend)[2]` call.
+
+    @atomic a.b.x max arg2
+    @atomic a.b.x + arg2
+    @atomic max(a.b.x, arg2)
+    @atomic :acquire_release max(a.b.x, arg2)
+    @atomic :acquire_release a.b.x + arg2
+    @atomic :acquire_release a.b.x max arg2
+
+Perform the binary operation expressed on the right atomically. Store the
+result into the field in the first argument and return the values `(old, new)`.
+
+This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
+
+
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
+
+```jldoctest
+julia> mutable struct Atomic{T}; @atomic x::T; end
+
+julia> a = Atomic(1)
+Atomic{Int64}(1)
+
+julia> @atomic a.x # fetch field x of a, with sequential consistency
+1
+
+julia> @atomic :sequentially_consistent a.x = 2 # set field x of a, with sequential consistency
+2
+
+julia> @atomic a.x += 1 # increment field x of a, with sequential consistency
+3
+
+julia> @atomic a.x + 1 # increment field x of a, with sequential consistency
+3 => 4
+
+julia> @atomic a.x # fetch field x of a, with sequential consistency
+4
+
+julia> @atomic max(a.x, 10) # change field x of a to the max value, with sequential consistency
+4 => 10
+
+julia> @atomic a.x max 5 # again change field x of a to the max value, with sequential consistency
+10 => 10
+```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
+"""
+macro atomic(ex)
+    if !isa(ex, Symbol) && !is_expr(ex, :(::))
+        return make_atomic(QuoteNode(:sequentially_consistent), ex)
+    end
+    return esc(Expr(:atomic, ex))
+end
+macro atomic(order, ex)
+    order isa QuoteNode || (order = esc(order))
+    return make_atomic(order, ex)
+end
+macro atomic(a1, op, a2)
+    return make_atomic(QuoteNode(:sequentially_consistent), a1, op, a2)
+end
+macro atomic(order, a1, op, a2)
+    order isa QuoteNode || (order = esc(order))
+    return make_atomic(order, a1, op, a2)
+end
+function make_atomic(order, ex)
+    @nospecialize
+    if ex isa Expr
+        if isexpr(ex, :., 2)
+            l, r = esc(ex.args[1]), esc(ex.args[2])
+            return :(getproperty($l, $r, $order))
+        elseif isexpr(ex, :call, 3)
+            return make_atomic(order, ex.args[2], ex.args[1], ex.args[3])
+        elseif ex.head === :(=)
+            l, r = ex.args[1], esc(ex.args[2])
+            if is_expr(l, :., 2)
+                ll, lr = esc(l.args[1]), esc(l.args[2])
+                return :(setproperty!($ll, $lr, $r, $order))
+            end
+        end
+        if length(ex.args) == 2
+            if ex.head === :(+=)
+                op = :+
+            elseif ex.head === :(-=)
+                op = :-
+            elseif @isdefined string
+                shead = string(ex.head)
+                if endswith(shead, '=')
+                    op = Symbol(shead[1:prevind(shead, end)])
+                end
+            end
+            if @isdefined(op)
+                return Expr(:ref, make_atomic(order, ex.args[1], op, ex.args[2]), 2)
+            end
+        end
+    end
+    error("could not parse @atomic expression $ex")
+end
+function make_atomic(order, a1, op, a2)
+    @nospecialize
+    is_expr(a1, :., 2) || error("@atomic modify expression missing field access")
+    a1l, a1r, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
+    return :(modifyproperty!($a1l, $a1r, $op, $a2, $order))
+end
+
+
+"""
+    @atomicswap a.b.x = new
+    @atomicswap :sequentially_consistent a.b.x = new
+
+Stores `new` into `a.b.x` and returns the old value of `a.b.x`.
+
+This operation translates to a `swapproperty!(a.b, :x, new)` call.
+
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
+
+```jldoctest
+julia> mutable struct Atomic{T}; @atomic x::T; end
+
+julia> a = Atomic(1)
+Atomic{Int64}(1)
+
+julia> @atomicswap a.x = 2+2 # replace field x of a with 4, with sequential consistency
+1
+
+julia> @atomic a.x # fetch field x of a, with sequential consistency
+4
+```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
+"""
+macro atomicswap(order, ex)
+    order isa QuoteNode || (order = esc(order))
+    return make_atomicswap(order, ex)
+end
+macro atomicswap(ex)
+    return make_atomicswap(QuoteNode(:sequentially_consistent), ex)
+end
+function make_atomicswap(order, ex)
+    @nospecialize
+    is_expr(ex, :(=), 2) || error("@atomicswap expression missing assignment")
+    l, val = ex.args[1], esc(ex.args[2])
+    is_expr(l, :., 2) || error("@atomicswap expression missing field access")
+    ll, lr = esc(l.args[1]), esc(l.args[2])
+    return :(swapproperty!($ll, $lr, $val, $order))
+end
+
+
+"""
+    @atomicreplace a.b.x expected => desired
+    @atomicreplace :sequentially_consistent a.b.x expected => desired
+    @atomicreplace :sequentially_consistent :monotonic a.b.x expected => desired
+
+Perform the conditional replacement expressed by the pair atomically, returning
+the values `(old, success::Bool)`. Where `success` indicates whether the
+replacement was completed.
+
+This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` call.
+
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
+
+```jldoctest
+julia> mutable struct Atomic{T}; @atomic x::T; end
+
+julia> a = Atomic(1)
+Atomic{Int64}(1)
+
+julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
+(old = 1, success = true)
+
+julia> @atomic a.x # fetch field x of a, with sequential consistency
+2
+
+julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
+(old = 2, success = false)
+
+julia> xchg = 2 => 0; # replace field x of a with 0 if it was 1, with sequential consistency
+
+julia> @atomicreplace a.x xchg
+(old = 2, success = true)
+
+julia> @atomic a.x # fetch field x of a, with sequential consistency
+0
+```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
+"""
+macro atomicreplace(success_order, fail_order, ex, old_new)
+    fail_order isa QuoteNode || (fail_order = esc(fail_order))
+    success_order isa QuoteNode || (success_order = esc(success_order))
+    return make_atomicreplace(success_order, fail_order, ex, old_new)
+end
+macro atomicreplace(order, ex, old_new)
+    order isa QuoteNode || (order = esc(order))
+    return make_atomicreplace(order, order, ex, old_new)
+end
+macro atomicreplace(ex, old_new)
+    return make_atomicreplace(QuoteNode(:sequentially_consistent), QuoteNode(:sequentially_consistent), ex, old_new)
+end
+function make_atomicreplace(success_order, fail_order, ex, old_new)
+    @nospecialize
+    is_expr(ex, :., 2) || error("@atomicreplace expression missing field access")
+    ll, lr = esc(ex.args[1]), esc(ex.args[2])
+    if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
+        exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
+        return :(replaceproperty!($ll, $lr, $exp, $rep, $success_order, $fail_order))
+    else
+        old_new = esc(old_new)
+        return :(replaceproperty!($ll, $lr, $old_new::Pair..., $success_order, $fail_order))
     end
 end

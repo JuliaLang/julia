@@ -124,7 +124,7 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
         end
         function $g(key::Vector{UInt8}, io::IO, chunk_size=4*1024)
             ctx = HMAC_CTX($ctx(), key)
-            buff = Vector{UInt8}(chunk_size)
+            buff = Vector{UInt8}(undef, chunk_size)
             while !eof(io)
                 num_read = readbytes!(io, buff)
                 update!(ctx, buff, num_read)

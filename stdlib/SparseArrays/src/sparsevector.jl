@@ -15,7 +15,7 @@ import LinearAlgebra: promote_to_array_type, promote_to_arrays_
 Vector type for storing sparse vectors.
 """
 struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
-    n::Int              # Length of the sparse vector
+    n::Ti              # Length of the sparse vector
     nzind::Vector{Ti}   # Indices of stored values
     nzval::Vector{Tv}   # Stored values, typically nonzeros
 
@@ -23,7 +23,7 @@ struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
         length(nzind) == length(nzval) ||
             throw(ArgumentError("index and value vectors must be the same length"))
-        new(convert(Int, n), nzind, nzval)
+        new(convert(Ti, n), nzind, nzval)
     end
 end
 
@@ -84,30 +84,37 @@ rowvals(x::SparseVectorUnion) = nonzeroinds(x)
 indtype(x::SparseColumnView) = indtype(parent(x))
 indtype(x::SparseVectorView) = indtype(parent(x))
 
+
+function Base.sizehint!(v::SparseVector, newlen::Integer)
+    sizehint!(nonzeroinds(v), newlen)
+    sizehint!(nonzeros(v), newlen)
+    return v
+end
+
 ## similar
 #
 # parent method for similar that preserves stored-entry structure (for when new and old dims match)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew} =
     SparseVector(length(S), copyto!(similar(nonzeroinds(S), TiNew), nonzeroinds(S)), similar(nonzeros(S), TvNew))
-# parent method for similar that preserves nothing (for when old and new dims differ, and new is 1d)
+# parent method for similar that preserves nothing (for when new dims are 1-d)
 _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
     SparseVector(dims..., similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
 # parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
-_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
-    SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew), similar(nonzeros(S), TvNew))
+function _sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew}
+    S1 = SparseMatrixCSC(dims..., fill(one(TiNew), last(dims)+1), similar(nonzeroinds(S), TiNew, 0), similar(nonzeros(S), TvNew, 0))
+    return sizehint!(S1, min(widelength(S1), length(nonzeroinds(S))))
+end
 # The following methods hook into the AbstractArray similar hierarchy. The first method
 # covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
 # methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
-# specify a SparseVector result and storage space if the dims specify a SparseMatrixCSC result.
+# specify a SparseVector or a SparseMatrixCSC result.
 similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}) where {Ti,TvNew} =
     _sparsesimilar(S, TvNew, Ti)
 similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}, dims::Union{Dims{1},Dims{2}}) where {Ti,TvNew} =
     _sparsesimilar(S, TvNew, Ti, dims)
 # The following methods cover similar(A, Tv, Ti[, shape...]) calls, which specify the
 # result's index type in addition to its entry type, and aren't covered by the hooks above.
-# The calls without shape again preserve stored-entry structure, whereas those with
-# one-dimensional shape preserve nothing, and those with two-dimensional shape
-# preserve storage space.
+# The calls without shape again preserve stored-entry structure but no storage space.
 similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where{TvNew,TiNew} =
     _sparsesimilar(S, TvNew, TiNew)
 similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Union{Dims{1},Dims{2}}) where {TvNew,TiNew} =
@@ -125,8 +132,11 @@ Base.unaliascopy(S::SparseVector) = typeof(S)(length(S), unaliascopy(nonzeroinds
 ### Construct empty sparse vector
 
 spzeros(len::Integer) = spzeros(Float64, len)
+spzeros(dims::Tuple{<:Integer}) = spzeros(Float64, dims[1])
 spzeros(::Type{T}, len::Integer) where {T} = SparseVector(len, Int[], T[])
+spzeros(::Type{T}, dims::Tuple{<:Integer}) where {T} = spzeros(T, dims[1])
 spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} = SparseVector(len, Ti[], Tv[])
+spzeros(::Type{Tv}, ::Type{Ti}, dims::Tuple{<:Integer}) where {Tv,Ti<:Integer} = spzeros(Tv, Ti, dims[1])
 
 LinearAlgebra.fillstored!(x::SparseVector, y) = (fill!(nonzeros(x), y); x)
 
@@ -405,15 +415,14 @@ sparse(a::AbstractVector) = sparsevec(a)
 
 function _dense2indval!(nzind::Vector{Ti}, nzval::Vector{Tv}, s::AbstractArray{Tv}) where {Tv,Ti}
     require_one_based_indexing(s)
-    cap = length(nzind);
+    cap = length(nzind)
     @assert cap == length(nzval)
     n = length(s)
     c = 0
-    @inbounds for i = 1:n
-        v = s[i]
+    @inbounds for (i, v) in enumerate(s)
         if !iszero(v)
             if c >= cap
-                cap *= 2
+                cap = (cap == 0) ? 1 : 2*cap
                 resize!(nzind, cap)
                 resize!(nzval, cap)
             end
@@ -1074,35 +1083,43 @@ const _Triangular_DenseArrays{T,A<:Matrix} = LinearAlgebra.AbstractTriangular{T,
 const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
 const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
 
-const _SparseConcatGroup = Union{Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
-const _DenseConcatGroup = Union{Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _Annotated_DenseArrays}
+const _SparseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
+const _DenseConcatGroup = Union{Number, Vector, Adjoint{<:Any,<:Vector}, Transpose{<:Any,<:Vector}, Matrix, _Annotated_DenseArrays}
 const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpose{T,Vector{T}}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
+_makesparse(x::Number) = x
+_makesparse(x::AbstractArray) = SparseMatrixCSC(issparse(x) ? x : sparse(x))
+
 function Base._cat(dims, Xin::_SparseConcatGroup...)
-    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
+    X = map(_makesparse, Xin)
     T = promote_eltype(Xin...)
     Base.cat_t(T, X...; dims=dims)
 end
 function hcat(Xin::_SparseConcatGroup...)
-    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
-    hcat(X...)
+    X = map(_makesparse, Xin)
+    return cat(X..., dims=Val(2))
 end
 function vcat(Xin::_SparseConcatGroup...)
-    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
-    vcat(X...)
+    X = map(_makesparse, Xin)
+    return cat(X..., dims=Val(1))
 end
-function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
-    nbr = length(rows)  # number of block rows
-
-    tmp_rows = Vector{SparseMatrixCSC}(undef, nbr)
-    k = 0
-    @inbounds for i = 1 : nbr
-        tmp_rows[i] = hcat(X[(1 : rows[i]) .+ k]...)
-        k += rows[i]
+hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...) =
+    vcat(_hvcat_rows(rows, X...)...)
+function _hvcat_rows((row1, rows...)::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
+    if row1 ≤ 0
+        throw(ArgumentError("length of block row must be positive, got $row1"))
     end
-    vcat(tmp_rows...)
+    # assert `X` is non-empty so that inference of `eltype` won't include `Type{Union{}}`
+    T = eltype(X::Tuple{Any,Vararg{Any}})
+    # inference of `getindex` may be imprecise in case `row1` is not const-propagated up
+    # to here, so help inference with the following type-assertions
+    return (
+        hcat(X[1 : row1]::Tuple{typeof(X[1]),Vararg{T}}...),
+        _hvcat_rows(rows, X[row1+1:end]::Tuple{Vararg{T}}...)...
+    )
 end
+_hvcat_rows(::Tuple{}, X::_SparseConcatGroup...) = ()
 
 # make sure UniformScaling objects are converted to sparse matrices for concatenation
 promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = SparseMatrixCSC
@@ -1355,34 +1372,50 @@ end
 
 ### Reduction
 
+function _sum(f, x::AbstractSparseVector)
+    n = length(x)
+    n > 0 || return sum(f, nonzeros(x)) # return zero() of proper type
+    m = nnz(x)
+    (m == 0 ? n * f(zero(eltype(x))) :
+     m == n ? sum(f, nonzeros(x)) :
+     Base.add_sum((n - m) * f(zero(eltype(x))), sum(f, nonzeros(x))))
+end
+
+sum(f::Union{Function, Type}, x::AbstractSparseVector) = _sum(f, x) # resolve ambiguity
+sum(f, x::AbstractSparseVector) = _sum(f, x)
 sum(x::AbstractSparseVector) = sum(nonzeros(x))
 
-function maximum(x::AbstractSparseVector{T}) where T<:Real
+function _maximum(f, x::AbstractSparseVector)
     n = length(x)
-    n > 0 || throw(ArgumentError("maximum over empty array is not allowed."))
-    m = nnz(x)
-    (m == 0 ? zero(T) :
-     m == n ? maximum(nonzeros(x)) :
-     max(zero(T), maximum(nonzeros(x))))::T
-end
-
-function minimum(x::AbstractSparseVector{T}) where T<:Real
-    n = length(x)
-    n > 0 || throw(ArgumentError("minimum over empty array is not allowed."))
-    m = nnz(x)
-    (m == 0 ? zero(T) :
-     m == n ? minimum(nonzeros(x)) :
-     min(zero(T), minimum(nonzeros(x))))::T
-end
-
-for f in [:sum, :maximum, :minimum], op in [:abs, :abs2]
-    SV = :AbstractSparseVector
-    if f === :minimum
-        @eval ($f)(::typeof($op), x::$SV{T}) where {T<:Number} = nnz(x) < length(x) ? ($op)(zero(T)) : ($f)($op, nonzeros(x))
-    else
-        @eval ($f)(::typeof($op), x::$SV) = ($f)($op, nonzeros(x))
+    if n == 0
+        if f === abs || f === abs2
+            return zero(eltype(x)) # preserving maximum(abs/abs2, x) behaviour in 1.0.x
+        else
+            throw(ArgumentError("maximum over an empty array is not allowed."))
+        end
     end
+    m = nnz(x)
+    (m == 0 ? f(zero(eltype(x))) :
+     m == n ? maximum(f, nonzeros(x)) :
+     max(f(zero(eltype(x))), maximum(f, nonzeros(x))))
 end
+
+maximum(f::Union{Function, Type}, x::AbstractSparseVector) = _maximum(f, x) # resolve ambiguity
+maximum(f, x::AbstractSparseVector) = _maximum(f, x)
+maximum(x::AbstractSparseVector) = maximum(identity, x)
+
+function _minimum(f, x::AbstractSparseVector)
+    n = length(x)
+    n > 0 || throw(ArgumentError("minimum over an empty array is not allowed."))
+    m = nnz(x)
+    (m == 0 ? f(zero(eltype(x))) :
+     m == n ? minimum(f, nonzeros(x)) :
+     min(f(zero(eltype(x))), minimum(f, nonzeros(x))))
+end
+
+minimum(f::Union{Function, Type}, x::AbstractSparseVector) = _minimum(f, x) # resolve ambiguity
+minimum(f, x::AbstractSparseVector) = _minimum(f, x)
+minimum(x::AbstractSparseVector) = minimum(identity, x)
 
 norm(x::SparseVectorUnion, p::Real=2) = norm(nonzeros(x), p)
 
@@ -1543,9 +1576,6 @@ function (*)(A::_StridedOrTriangularMatrix{Ta}, x::AbstractSparseVector{Tx}) whe
     mul!(y, A, x)
 end
 
-mul!(y::AbstractVector{Ty}, A::_StridedOrTriangularMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, true, false)
-
 function mul!(y::AbstractVector, A::_StridedOrTriangularMatrix, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
     m, n = size(A)
@@ -1573,21 +1603,18 @@ end
 
 # * and mul!(C, transpose(A), B)
 
-function *(transA::Transpose{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
-    require_one_based_indexing(transA, x)
-    m, n = size(transA)
+function *(tA::Transpose{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
+    require_one_based_indexing(tA, x)
+    m, n = size(tA)
     length(x) == n || throw(DimensionMismatch())
-    Ty = promote_op(matprod, eltype(transA), eltype(x))
+    Ty = promote_op(matprod, eltype(tA), eltype(x))
     y = Vector{Ty}(undef, m)
-    mul!(y, transA, x)
+    mul!(y, tA, x)
 end
 
-mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, transA, x, true, false)
-
-function mul!(y::AbstractVector, transA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
-    require_one_based_indexing(y, transA, x)
-    m, n = size(transA)
+function mul!(y::AbstractVector, tA::Transpose{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
+    require_one_based_indexing(y, tA, x)
+    m, n = size(tA)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
     if β != one(β)
@@ -1600,7 +1627,7 @@ function mul!(y::AbstractVector, transA::Transpose{<:Any,<:_StridedOrTriangularM
     _nnz = length(xnzind)
     _nnz == 0 && return y
 
-    A = transA.parent
+    A = tA.parent
     Ty = promote_op(matprod, eltype(A), eltype(x))
     @inbounds for j = 1:m
         s = zero(Ty)
@@ -1622,9 +1649,6 @@ function *(adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix{Ta}}, x::AbstractSpa
     y = Vector{Ty}(undef, m)
     mul!(y, adjA, x)
 end
-
-mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, adjA, x, true, false)
 
 function mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:_StridedOrTriangularMatrix}, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, adjA, x)
@@ -1674,18 +1698,13 @@ function densemv(A::AbstractSparseMatrixCSC, x::AbstractSparseVector; trans::Abs
         mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
         mul!(y, transpose(A), x)
-    elseif trans == 'C' || trans == 'c'
+    else # trans == 'C' || trans == 'c'
         mul!(y, adjoint(A), x)
-    else
-        throw(ArgumentError("Invalid trans character $trans"))
     end
     y
 end
 
 # * and mul!
-
-mul!(y::AbstractVector{Ty}, A::AbstractSparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    mul!(y, A, x, true, false)
 
 function mul!(y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVector, α::Number, β::Number)
     require_one_based_indexing(y, A, x)
@@ -1717,18 +1736,11 @@ function mul!(y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVe
 end
 
 # * and *(Tranpose(A), B)
-
-mul!(y::AbstractVector{Ty}, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = transA.parent; mul!(y, transpose(A), x, true, false))
-
-mul!(y::AbstractVector, transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
-    (A = transA.parent; _At_or_Ac_mul_B!((a,b) -> transpose(a) * b, y, A, x, α, β))
-
-mul!(y::AbstractVector{Ty}, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
-    (A = adjA.parent; mul!(y, adjoint(A), x, true, false))
+mul!(y::AbstractVector, tA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
+    _At_or_Ac_mul_B!((a,b) -> transpose(a) * b, y, tA.parent, x, α, β)
 
 mul!(y::AbstractVector, adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector, α::Number, β::Number) =
-    (A = adjA.parent; _At_or_Ac_mul_B!((a,b) -> adjoint(a) * b, y, A, x, α, β))
+    _At_or_Ac_mul_B!((a,b) -> adjoint(a) * b, y, adjA.parent, x, α, β)
 
 function _At_or_Ac_mul_B!(tfun::Function,
                           y::AbstractVector, A::AbstractSparseMatrixCSC, x::AbstractSparseVector,
@@ -1768,11 +1780,11 @@ function *(A::AbstractSparseMatrixCSC, x::AbstractSparseVector)
     _dense2sparsevec(y, initcap)
 end
 
-*(transA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
-    (A = transA.parent; _At_or_Ac_mul_B((a,b) -> transpose(a) * b, A, x, promote_op(matprod, eltype(transA), eltype(x))))
+*(tA::Transpose{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
+    _At_or_Ac_mul_B((a,b) -> transpose(a) * b, tA.parent, x, promote_op(matprod, eltype(tA), eltype(x)))
 
 *(adjA::Adjoint{<:Any,<:AbstractSparseMatrixCSC}, x::AbstractSparseVector) =
-    (A = adjA.parent; _At_or_Ac_mul_B((a,b) -> adjoint(a) * b, A, x, promote_op(matprod, eltype(adjA), eltype(x))))
+    _At_or_Ac_mul_B((a,b) -> adjoint(a) * b, adjA.parent, x, promote_op(matprod, eltype(adjA), eltype(x)))
 
 function _At_or_Ac_mul_B(tfun::Function, A::AbstractSparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX},
                          Tv = promote_op(matprod, TvA, TvX)) where {TvA,TiA,TvX,TiX}
@@ -1819,85 +1831,74 @@ for isunittri in (true, false), islowertri in (true, false)
     tritype = :(LinearAlgebra.$(Symbol(unitstr, halfstr, "Triangular")))
 
     # build out-of-place left-division operations
+    # broad method where elements are Numbers
+    @eval function \(A::$tritype{<:TA,<:AbstractMatrix}, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
+        TAb = $(isunittri ?
+            :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
+            :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
+        LinearAlgebra.ldiv!(convert(AbstractArray{TAb}, A), convert(Array{TAb}, b))
+    end
+    # fallback where elements are not Numbers
+    @eval function \(A::$tritype, b::SparseVector)
+        LinearAlgebra.ldiv!(A, copy(b))
+    end
+
+    # faster method requiring good view support of the
+    # triangular matrix type. hence the StridedMatrix restriction.
     for (istrans, applyxform, xformtype, xformop) in (
             (false, false, :identity,  :identity),
             (true,  true,  :Transpose, :transpose),
             (true,  true,  :Adjoint,   :adjoint) )
 
-        # broad method where elements are Numbers
-        xformtritype = applyxform ? :($xformtype{<:TA,<:$tritype{<:Any,<:AbstractMatrix}}) :
-                                    :($tritype{<:TA,<:AbstractMatrix})
-        @eval function \(xformA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
-            A = $(applyxform ? :(xformA.parent) : :(xformA) )
-            TAb = $(isunittri ?
-                :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
-                :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
-            LinearAlgebra.ldiv!($xformop(convert(AbstractArray{TAb}, A)), convert(Array{TAb}, b))
-        end
-
-        # faster method requiring good view support of the
-        # triangular matrix type. hence the StridedMatrix restriction.
-        xformtritype = applyxform ? :($xformtype{<:TA,<:$tritype{<:Any,<:StridedMatrix}}) :
+        xformtritype = applyxform ? :($tritype{<:TA,<:$xformtype{<:Any,<:StridedMatrix}}) :
                                     :($tritype{<:TA,<:StridedMatrix})
-        @eval function \(xformA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
-            A = $(applyxform ? :(xformA.parent) : :(xformA) )
-            TAb = $(isunittri ?
+        @eval function \(xA::$xformtritype, b::SparseVector{Tb}) where {TA<:Number,Tb<:Number}
+            TAb = $( isunittri ?
                 :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
                 :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
             r = convert(Array{TAb}, b)
             # If b has no nonzero entries, then r is necessarily zero. If b has nonzero
             # entries, then the operation involves only b[nzrange], so we extract and
             # operate on solely b[nzrange] for efficiency.
+            A = $( applyxform ? :(parent(parent(xA))) : :(parent(xA)) )
             if nnz(b) != 0
-                nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
+                nzrange = $( islowertri ?
                     :(nonzeroinds(b)[1]:length(b::SparseVector)) :
                     :(1:nonzeroinds(b)[end]) )
                 nzrangeviewr = view(r, nzrange)
-                nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
-                LinearAlgebra.ldiv!($xformop(convert(AbstractArray{TAb}, nzrangeviewA)), nzrangeviewr)
+                nzrangeviewA = $tritype($xformop(view(A, nzrange, nzrange)))
+                LinearAlgebra.ldiv!(convert(AbstractArray{TAb}, nzrangeviewA), nzrangeviewr)
             end
             r
         end
 
-        # fallback where elements are not Numbers
-        xformtritype = applyxform ? :($xformtype{<:Any,<:$tritype}) : :($tritype)
-        @eval function \(xformA::$xformtritype, b::SparseVector)
-            A = $(applyxform ? :(xformA.parent) : :(xformA) )
-            LinearAlgebra.ldiv!($xformop(A), copy(b))
-        end
-    end
-
-    # build in-place left-division operations
-    for (istrans, applyxform, xformtype, xformop) in (
-            (false, false, :identity,  :identity),
-            (true,  true,  :Transpose, :transpose),
-            (true,  true,  :Adjoint,   :adjoint) )
-        xformtritype = applyxform ? :($xformtype{<:Any,<:$tritype{<:Any,<:StridedMatrix}}) :
+        # build in-place left-division operations
+        xformtritype = applyxform ? :($tritype{<:Any,<:$xformtype{<:Any,<:StridedMatrix}}) :
                                     :($tritype{<:Any,<:StridedMatrix})
 
         # the generic in-place left-division methods handle these cases, but
         # we can achieve greater efficiency where the triangular matrix provides
-        # good view support. hence the StridedMatrix restriction.
-        @eval function ldiv!(xformA::$xformtritype, b::SparseVector)
-            A = $(applyxform ? :(xformA.parent) : :(xformA) )
+        # good view support, hence the StridedMatrix restriction.
+        @eval function ldiv!(xA::$xformtritype, b::SparseVector)
+            A = $( applyxform ? :(parent(parent(xA))) : :(parent(xA)) )
             # If b has no nonzero entries, the result is necessarily zero and this call
             # reduces to a no-op. If b has nonzero entries, then...
             if nnz(b) != 0
                 # densify the relevant part of b in one shot rather
                 # than potentially repeatedly reallocating during the solve
-                $( (islowertri && !istrans) || (!islowertri && istrans) ?
+                $( islowertri ?
                     :(_densifyfirstnztoend!(b)) :
                     :(_densifystarttolastnz!(b)) )
                 # this operation involves only the densified section, so
                 # for efficiency we extract and operate on solely that section
                 # furthermore we operate on that section as a dense vector
                 # such that dispatch has a chance to exploit, e.g., tuned BLAS
-                nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
-                    :(nonzeroinds(b)[1]:length(b::SparseVector)) :
+                nzrange = $( islowertri ?
+                    :(nonzeroinds(b)[1]:length(b)) :
                     :(1:nonzeroinds(b)[end]) )
                 nzrangeviewbnz = view(nonzeros(b), nzrange .- (nonzeroinds(b)[1] - 1))
-                nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
-                LinearAlgebra.ldiv!($xformop(nzrangeviewA), nzrangeviewbnz)
+                nzrangeviewA = $tritype($xformop(view(A, nzrange, nzrange)))
+                LinearAlgebra.ldiv!(nzrangeviewA, nzrangeviewbnz)
             end
             b
         end

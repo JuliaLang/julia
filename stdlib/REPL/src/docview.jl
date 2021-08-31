@@ -69,10 +69,11 @@ end
 _helpmode(line::AbstractString) = _helpmode(stdout, line)
 
 # Print vertical lines along each docstring if there are multiple docs
-function insert_hlines(io::IO, docs::Markdown.MD)
+function insert_hlines(io::IO, docs)
     if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
         return docs
     end
+    docs = docs::Markdown.MD
     v = Any[]
     for (n, doc) in enumerate(docs.content)
         push!(v, doc)
@@ -128,13 +129,15 @@ end
 function _trimdocs(md::Markdown.MD, brief::Bool)
     content, trimmed = [], false
     for c in md.content
-        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) &&
-            !isempty(c.text) && isa(c.text[1], AbstractString) &&
-            lowercase(c.text[1]) ∈ ("extended help",
-                                    "extended documentation",
-                                    "extended docs")
-            trimmed = true
-            break
+        if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) && !isempty(c.text)
+            item = c.text[1]
+            if isa(item, AbstractString) &&
+                lowercase(item) ∈ ("extended help",
+                                   "extended documentation",
+                                   "extended docs")
+                trimmed = true
+                break
+            end
         end
         c, trm = _trimdocs(c, brief)
         trimmed |= trm
@@ -216,12 +219,14 @@ function lookup_doc(ex)
     end
     if isa(ex, Symbol) && Base.isoperator(ex)
         str = string(ex)
-        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment
-            op = str[1:end-1]
-            return Markdown.parse("`x $op= y` is a synonym for `x = x $op y`")
-        elseif startswith(str, ".")
+        isdotted = startswith(str, ".")
+        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment && ex !== :(:=)
+            op = chop(str)
+            eq = isdotted ? ".=" : "="
+            return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
+        elseif isdotted && ex !== :(..)
             op = str[2:end]
-            return Markdown.parse("`x $ex y` is equivalent to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+            return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
         end
     end
     binding = esc(bindingexpr(namify(ex)))
@@ -238,11 +243,14 @@ end
 
 function summarize(binding::Binding, sig)
     io = IOBuffer()
-    println(io, "No documentation found.\n")
     if defined(binding)
-        summarize(io, resolve(binding), binding)
+        binding_res = resolve(binding)
+        !isa(binding_res, Module) && println(io, "No documentation found.\n")
+        summarize(io, binding_res, binding)
     else
-        println(io, "Binding `", binding, "` does not exist.")
+        println(io, "No documentation found.\n")
+        quot = any(isspace, sprint(print, binding)) ? "'" : ""
+        println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
     end
     md = Markdown.parse(seekstart(io))
     # Save metadata in the generated markdown.
@@ -258,44 +266,96 @@ function summarize(io::IO, λ::Function, binding::Binding)
     println(io, "```\n", methods(λ), "\n```")
 end
 
-function summarize(io::IO, T::DataType, binding::Binding)
+function summarize(io::IO, TT::Type, binding::Binding)
     println(io, "# Summary")
-    println(io, "```")
-    println(io,
-            T.abstract ? "abstract type" :
-            T.mutable  ? "mutable struct" :
-            Base.isstructtype(T) ? "struct" : "primitive type",
-            " ", T, " <: ", supertype(T)
-            )
-    println(io, "```")
-    if !T.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
-        println(io, "# Fields")
+    T = Base.unwrap_unionall(TT)
+    if T isa DataType
         println(io, "```")
-        pad = maximum(length(string(f)) for f in fieldnames(T))
-        for (f, t) in zip(fieldnames(T), T.types)
-            println(io, rpad(f, pad), " :: ", t)
+        print(io,
+            Base.isabstracttype(T) ? "abstract type " :
+            Base.ismutabletype(T)  ? "mutable struct " :
+            Base.isstructtype(T) ? "struct " :
+            "primitive type ")
+        supert = supertype(T)
+        println(io, T)
+        println(io, "```")
+        if !Base.isabstracttype(T) && T.name !== Tuple.name && !isempty(fieldnames(T))
+            println(io, "# Fields")
+            println(io, "```")
+            pad = maximum(length(string(f)) for f in fieldnames(T))
+            for (f, t) in zip(fieldnames(T), T.types)
+                println(io, rpad(f, pad), " :: ", t)
+            end
+            println(io, "```")
         end
-        println(io, "```")
-    end
-    if !isempty(subtypes(T))
-        println(io, "# Subtypes")
-        println(io, "```")
-        for t in subtypes(T)
-            println(io, t)
+        subt = subtypes(TT)
+        if !isempty(subt)
+            println(io, "# Subtypes")
+            println(io, "```")
+            for t in subt
+                println(io, Base.unwrap_unionall(t))
+            end
+            println(io, "```")
         end
-        println(io, "```")
-    end
-    if supertype(T) != Any
-        println(io, "# Supertype Hierarchy")
-        println(io, "```")
-        Base.show_supertypes(io, T)
-        println(io)
-        println(io, "```")
+        if supert != Any
+            println(io, "# Supertype Hierarchy")
+            println(io, "```")
+            Base.show_supertypes(io, T)
+            println(io)
+            println(io, "```")
+        end
+    elseif T isa Union
+        println(io, "`", binding, "` is of type `", typeof(TT), "`.\n")
+        println(io, "# Union Composed of Types")
+        for T1 in Base.uniontypes(T)
+            println(io, " - `", Base.rewrap_unionall(T1, TT), "`")
+        end
+    else # unreachable?
+        println(io, "`", binding, "` is of type `", typeof(TT), "`.\n")
     end
 end
 
-function summarize(io::IO, m::Module, binding::Binding)
-    println(io, "No docstring found for module `", m, "`.\n")
+function find_readme(m::Module)::Union{String, Nothing}
+    mpath = pathof(m)
+    isnothing(mpath) && return nothing
+    !isfile(mpath) && return nothing # modules in sysimage, where src files are omitted
+    path = dirname(mpath)
+    top_path = pkgdir(m)
+    while true
+        for file in readdir(path; join=true, sort=true)
+            isfile(file) && (basename(lowercase(file)) in ["readme.md", "readme"]) || continue
+            return file
+        end
+        path == top_path && break # go no further than pkgdir
+        path = dirname(path) # work up through nested modules
+    end
+    return nothing
+end
+function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
+    readme_path = find_readme(m)
+    if isnothing(readme_path)
+        println(io, "No docstring or readme file found for module `$m`.\n")
+    else
+        println(io, "No docstring found for module `$m`.")
+    end
+    exports = filter!(!=(nameof(m)), names(m))
+    if isempty(exports)
+        println(io, "Module does not export any names.")
+    else
+        println(io, "# Exported names")
+        print(io, "  `")
+        join(io, exports, "`, `")
+        println(io, "`\n")
+    end
+    if !isnothing(readme_path)
+        readme_lines = readlines(readme_path)
+        isempty(readme_lines) && return  # don't say we are going to print empty file
+        println(io, "# Displaying contents of readme found at `$(readme_path)`")
+        for line in first(readme_lines, nlines)
+            println(io, line)
+        end
+        length(readme_lines) > nlines && println(io, "\n[output truncated to first $nlines lines]")
+    end
 end
 
 function summarize(io::IO, @nospecialize(T), binding::Binding)
@@ -306,17 +366,23 @@ end
 
 # repl search and completions for help
 
+
+quote_spaces(x) = any(isspace, x) ? "'" * x * "'" : x
+
 function repl_search(io::IO, s::Union{Symbol,String})
     pre = "search:"
     print(io, pre)
-    printmatches(io, s, doc_completions(s), cols = _displaysize(io)[2] - length(pre))
+    printmatches(io, s, map(quote_spaces, doc_completions(s)), cols = _displaysize(io)[2] - length(pre))
     println(io, "\n")
 end
 repl_search(s) = repl_search(stdout, s)
 
 function repl_corrections(io::IO, s)
     print(io, "Couldn't find ")
-    printstyled(io, s, '\n', color=:cyan)
+    quot = any(isspace, s) ? "'" : ""
+    print(io, quot)
+    printstyled(io, s, color=:cyan)
+    print(io, quot, '\n')
     print_correction(io, s)
 end
 repl_corrections(s) = repl_corrections(stdout, s)
@@ -329,13 +395,25 @@ function symbol_latex(s::String)
                                         REPLCompletions.emoji_symbols))
             symbols_latex[v] = k
         end
+
+        # Overwrite with canonical mapping when a symbol has several completions (#39148)
+        merge!(symbols_latex, REPLCompletions.symbols_latex_canonical)
     end
+
     return get(symbols_latex, s, "")
 end
-function repl_latex(io::IO, s::String)
-    # decompose NFC-normalized identifier to match tab-completion input
-    s = normalize(s, :NFD)
-    latex = symbol_latex(s)
+function repl_latex(io::IO, s0::String)
+    # This has rampant `Core.Box` problems (#15276). Use the tricks of
+    # https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
+    # We're changing some of the values so the `let` trick isn't applicable.
+    s::String = s0
+    latex::String = symbol_latex(s)
+    if isempty(latex)
+        # Decompose NFC-normalized identifier to match tab-completion
+        # input if the first search came up empty.
+        s = normalize(s, :NFD)
+        latex = symbol_latex(s)
+    end
     if !isempty(latex)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
@@ -346,15 +424,36 @@ function repl_latex(io::IO, s::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
+        state::Char = '\0'
         with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
-                    print(io, symbols_latex[cstr], "<tab>")
+                    latex = symbols_latex[cstr]
+                    if length(latex) == 3 && latex[2] in ('^','_')
+                        # coalesce runs of sub/superscripts
+                        if state != latex[2]
+                            '\0' != state && print(io, "<tab>")
+                            print(io, latex[1:2])
+                            state = latex[2]
+                        end
+                        print(io, latex[3])
+                    else
+                        if '\0' != state
+                            print(io, "<tab>")
+                            state = '\0'
+                        end
+                        print(io, latex, "<tab>")
+                    end
                 else
+                    if '\0' != state
+                        print(io, "<tab>")
+                        state = '\0'
+                    end
                     print(io, c)
                 end
             end
+            '\0' != state && print(io, "<tab>")
         end
         println(io, '\n')
     end
@@ -491,8 +590,10 @@ function matchinds(needle, haystack; acronym::Bool = false)
     is = Int[]
     lastc = '\0'
     for (i, char) in enumerate(haystack)
+        while !isempty(chars) && isspace(first(chars))
+            popfirst!(chars) # skip spaces
+        end
         isempty(chars) && break
-        while chars[1] == ' ' popfirst!(chars) end # skip spaces
         if lowercase(char) == lowercase(chars[1]) &&
            (!acronym || !isletter(lastc))
             push!(is, i)
@@ -571,8 +672,6 @@ function printmatch(io::IO, word, match)
     end
 end
 
-printmatch(args...) = printfuzzy(stdout, args...)
-
 function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
@@ -599,7 +698,7 @@ end
 print_joined_cols(args...; cols::Int = _displaysize(stdout)[2]) = print_joined_cols(stdout, args...; cols=cols)
 
 function print_correction(io::IO, word::String)
-    cors = levsort(word, accessible(Main))
+    cors = map(quote_spaces, levsort(word, accessible(Main)))
     pre = "Perhaps you meant "
     print(io, pre)
     print_joined_cols(io, cors, ", ", " or "; cols = _displaysize(io)[2] - length(pre))
@@ -628,7 +727,7 @@ doc_completions(name::Symbol) = doc_completions(string(name))
 # Searching and apropos
 
 # Docsearch simply returns true or false if an object contains the given needle
-docsearch(haystack::AbstractString, needle) = findfirst(needle, haystack) !== nothing
+docsearch(haystack::AbstractString, needle) = occursin(needle, haystack)
 docsearch(haystack::Symbol, needle) = docsearch(string(haystack), needle)
 docsearch(::Nothing, needle) = false
 function docsearch(haystack::Array, needle)

@@ -35,7 +35,25 @@ julia> randn(rng, ComplexF32, (2, 3))
   0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
 ```
 """
-@inline randn(rng::AbstractRNG=default_rng()) = _randn(rng, rand(rng, UInt52Raw()))
+@inline function randn(rng::AbstractRNG=default_rng())
+    #=
+    When defining
+    `@inline randn(rng::AbstractRNG=default_rng()) = _randn(rng, rand(rng, UInt52Raw()))`
+    the function call to `_randn` is currently not inlined, resulting in slightly worse
+    performance for scalar random normal numbers than repeating the code of `_randn`
+    inside the following function.
+    =#
+    @inbounds begin
+        r = rand(rng, UInt52())
+
+        # the following code is identical to the one in `_randn(rng::AbstractRNG, r::UInt64)`
+        rabs = Int64(r>>1) # One bit for the sign
+        idx = rabs & 0xFF
+        x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
+        rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
+        return randn_unlikely(rng, idx, rabs, x)
+    end
+end
 
 @inline function _randn(rng::AbstractRNG, r::UInt64)
     @inbounds begin
@@ -190,6 +208,22 @@ for randfun in [:randn, :randexp]
                 rand!(rng, A, CloseOpen12())
                 for i in eachindex(A)
                     @inbounds A[i] = $_randfun(rng, reinterpret(UInt64, A[i]))
+                end
+            end
+            A
+        end
+
+        # optimization for Xoshiro, which randomizes natively Array{UInt64}
+        function $randfun!(rng::Union{Xoshiro, TaskLocalRNG}, A::Array{Float64})
+            if length(A) < 7
+                for i in eachindex(A)
+                    @inbounds A[i] = $randfun(rng, Float64)
+                end
+            else
+                GC.@preserve A rand!(rng, UnsafeView{UInt64}(pointer(A), length(A)))
+
+                for i in eachindex(A)
+                    @inbounds A[i] = $_randfun(rng, reinterpret(UInt64, A[i]) >>> 12)
                 end
             end
             A

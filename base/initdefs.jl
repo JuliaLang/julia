@@ -81,18 +81,17 @@ Here is an overview of some of the subdirectories that may exist in a depot:
 * `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
 * `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
 
-See also:
-[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
-[Code Loading](@ref Code-Loading).
+See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
+[Code Loading](@ref code-loading).
 """
 const DEPOT_PATH = String[]
 
 function append_default_depot_path!(DEPOT_PATH)
     path = joinpath(homedir(), ".julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
+    path = abspath(Sys.BINDIR::String, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path = abspath(Sys.BINDIR::String, "..", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
 end
 
@@ -161,11 +160,11 @@ have special meanings:
 The fully expanded value of `LOAD_PATH` that is searched for projects and packages
 can be seen by calling the `Base.load_path()` function.
 
-See also:
+See also
 [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
 [`JULIA_PROJECT`](@ref JULIA_PROJECT),
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
-[Code Loading](@ref Code-Loading).
+[Code Loading](@ref code-loading).
 """
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
 # HOME_PROJECT is no longer used, here just to avoid breaking things
@@ -235,7 +234,7 @@ function init_active_project()
     ACTIVE_PROJECT[] =
         project === nothing ? nothing :
         project == "" ? nothing :
-        project == "@." ? current_project() : abspath(expanduser(project))
+        startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
@@ -278,6 +277,11 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
 end
 load_path_expand(::Nothing) = nothing
 
+"""
+    active_project()
+
+Return the path of the active `Project.toml` file.
+"""
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[],)
         project == "@" && continue
@@ -302,7 +306,15 @@ function active_project(search_load_path::Bool=true)
     end
 end
 
+"""
+    load_path()
+
+Return the fully expanded value of [`LOAD_PATH`](@ref) that is searched for projects and
+packages.
+"""
 function load_path()
+    cache = LOADING_CACHE[]
+    cache !== nothing && return cache.load_path
     paths = String[]
     for env in LOAD_PATH
         path = load_path_expand(env)

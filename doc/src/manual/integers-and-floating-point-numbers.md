@@ -257,7 +257,7 @@ second argument is zero.
 ## Floating-Point Numbers
 
 Literal floating-point numbers are represented in the standard formats, using
-[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E-notation) when necessary:
+[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E_notation) when necessary:
 
 ```jldoctest
 julia> 1.0
@@ -369,6 +369,7 @@ the real number line:
 | `-Inf16`  | `-Inf32`  | `-Inf`    | negative infinity | a value less than all finite floating-point values              |
 | `NaN16`   | `NaN32`   | `NaN`     | not a number      | a value not `==` to any floating-point value (including itself) |
 
+
 For further discussion of how these non-finite floating-point values are ordered with respect
 to each other and other floats, see [Numeric Comparisons](@ref). By the [IEEE 754 standard](https://en.wikipedia.org/wiki/IEEE_754-2008),
 these floating-point values are the results of certain arithmetic operations:
@@ -409,6 +410,18 @@ NaN
 
 julia> 0 * Inf
 NaN
+
+julia> NaN == NaN
+false
+
+julia> NaN != NaN
+true
+
+julia> NaN < NaN
+false
+
+julia> NaN > NaN
+false
 ```
 
 The [`typemin`](@ref) and [`typemax`](@ref) functions also apply to floating-point types:
@@ -534,9 +547,18 @@ the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and th
 respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in Julia for arbitrary
 precision integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, and the [string literal](@ref non-standard-string-literals) [`@big_str`](@ref) or [`parse`](@ref)
-can be used to construct them from `AbstractString`s.  Once created, they participate in arithmetic
-with all other numeric types thanks to Julia's [type promotion and conversion mechanism](@ref conversion-and-promotion):
+Constructors exist to create these types from primitive numerical types, and the
+[string literal](@ref non-standard-string-literals) [`@big_str`](@ref) or [`parse`](@ref)
+can be used to construct them from `AbstractString`s.
+`BigInt`s can also be input as integer literals when
+they are too big for other built-in integer types. Note that as there
+is no unsigned arbitrary-precision integer type in `Base` (`BigInt` is
+sufficient in most cases), hexadecimal, octal and binary literals can
+be used (in addition to decimal literals).
+
+Once created, they participate in arithmetic
+with all other numeric types thanks to Julia's
+[type promotion and conversion mechanism](@ref conversion-and-promotion):
 
 ```jldoctest
 julia> BigInt(typemax(Int64)) + 1
@@ -547,6 +569,18 @@ julia> big"123456789012345678901234567890" + 1
 
 julia> parse(BigInt, "123456789012345678901234567890") + 1
 123456789012345678901234567891
+
+julia> string(big"2"^200, base=16)
+"100000000000000000000000000000000000000000000000000"
+
+julia> 0x100000000000000000000000000000000-1 == typemax(UInt128)
+true
+
+julia> 0x000000000000000000000000000000000
+0
+
+julia> typeof(ans)
+BigInt
 
 julia> big"1.23456789012345678901"
 1.234567890123456789010000000000000000000000000000000000000000000000000000000004

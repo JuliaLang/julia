@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 struct BitPerm_19352
     p::NTuple{8,UInt8}
     function BitPerm(p::NTuple{8,UInt8})
@@ -96,11 +99,13 @@ end
         @test BitPerm_19352(0,2,4,6,1,3,5,7).p[2] == 0x02
     end
 
-    @testset "ninitialized" begin
-        @test Tuple{Int,Any}.ninitialized == 2
-        @test Tuple.ninitialized == 0
-        @test Tuple{Int,Vararg{Any}}.ninitialized == 1
-        @test Tuple{Any,Any,Vararg{Any}}.ninitialized == 2
+    @testset "n_uninitialized" begin
+        @test Tuple.name.n_uninitialized == 0
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Int,Any}) == 2
+        @test Core.Compiler.datatype_min_ninitialized(Tuple) == 0
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Int,Vararg{Any}}) == 1
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Any,Any,Vararg{Any}}) == 2
+        @test Core.Compiler.datatype_min_ninitialized(Tuple{Any,Any,Vararg{Any,3}}) == 5
     end
 
     @test empty((1, 2.0, "c")) === ()
@@ -175,6 +180,15 @@ end
     @testset "Multidimensional indexing (issue #20453)" begin
         @test_throws MethodError (1,)[]
         @test_throws MethodError (1,1,1)[1,1]
+    end
+
+    @testset "get() method for Tuple (Issue #40809)" begin
+        @test get((5, 6, 7), 1, 0) == 5
+        @test get((), 5, 0) == 0
+        @test get((1,), 3, 0) == 0
+        @test get(()->0, (5, 6, 7), 1) == 5
+        @test get(()->0, (), 4) == 0
+        @test get(()->0, (1,), 3) == 0
     end
 end
 
@@ -269,13 +283,13 @@ end
     @test mapfoldl(abs, =>, (-1,-2,-3,-4), init=-10) == ((((-10=>1)=>2)=>3)=>4)
     @test mapfoldl(abs, =>, (), init=-10) == -10
     @test mapfoldl(abs, Pair{Any,Any}, (-30:-1...,)) == mapfoldl(abs, Pair{Any,Any}, [-30:-1...,])
-    @test_throws ArgumentError mapfoldl(abs, =>, ())
+    @test_throws "reducing over an empty collection" mapfoldl(abs, =>, ())
 end
 
 @testset "filter" begin
     @test filter(isodd, (1,2,3)) == (1, 3)
     @test filter(isequal(2), (true, 2.0, 3)) === (2.0,)
-    @test filter(i -> true, ()) == ()
+    @test filter(Returns(true), ()) == ()
     @test filter(identity, (true,)) === (true,)
     longtuple = ntuple(identity, 20)
     @test filter(iseven, longtuple) == ntuple(i->2i, 10)
@@ -504,6 +518,7 @@ end
 
 # tuple_type_tail on non-normalized vararg tuple
 @test Base.tuple_type_tail(Tuple{Vararg{T, 3}} where T<:Real) == Tuple{Vararg{T, 2}} where T<:Real
+@test Base.tuple_type_tail(Tuple{Vararg{Int}}) == Tuple{Vararg{Int}}
 
 @testset "setindex" begin
     @test Base.setindex((1, ), 2, 1) === (2, )
@@ -518,6 +533,9 @@ end
 
     @test Base.setindex((1, 2, 4), 4, true) === (4, 2, 4)
     @test_throws BoundsError Base.setindex((1, 2), 2, false)
+
+    f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
+    @test @inferred(f()) == (9, 2:2, 3:3)
 end
 
 @testset "inferrable range indexing with constant values" begin
@@ -575,3 +593,49 @@ end
     @test_throws BoundsError (1,2.0)[0:1]
     @test_throws BoundsError (1,2.0)[0:0]
 end
+
+@testset "Base.rest" begin
+    t = (1, 2.0, 0x03, 4f0)
+    @test Base.rest(t) === t
+    @test Base.rest(t, 2) === (2.0, 0x03, 4f0)
+
+    a = [1 2; 3 4]
+    @test Base.rest(a) == a[:]
+    @test pointer(Base.rest(a)) != pointer(a)
+    @test Base.rest(a, 3) == [2, 4]
+
+    itr = (-i for i in a)
+    @test Base.rest(itr) == itr
+    _, st = iterate(itr)
+    r = Base.rest(itr, st)
+    @test r isa Iterators.Rest
+    @test collect(r) == -[3, 2, 4]
+end
+
+# issue #38837
+f38837(xs) = map((F,x)->F(x), (Float32, Float64), xs)
+@test @inferred(f38837((1,2))) === (1.0f0, 2.0)
+
+@testset "indexing with UnitRanges" begin
+    f(t) = t[3:end-2]
+    @test @inferred(f(Tuple(1:10))) === Tuple(3:8)
+    @test @inferred(f((true, 2., 3, 4f0, 0x05, 6, 7.))) === (3, 4f0, 0x05)
+
+    f2(t) = t[Base.OneTo(5)]
+    @test @inferred(f2(Tuple(1:10))) === Tuple(1:5)
+    @test @inferred(f2((true, 2., 3, 4f0, 0x05, 6, 7.))) === (true, 2., 3, 4f0, 0x05)
+
+    @test @inferred((t -> t[1:end])(Tuple(1:15))) === Tuple(1:15)
+    @test @inferred((t -> t[2:end])(Tuple(1:15))) === Tuple(2:15)
+    @test @inferred((t -> t[3:end])(Tuple(1:15))) === Tuple(3:15)
+    @test @inferred((t -> t[1:end-1])(Tuple(1:15))) === Tuple(1:14)
+    @test @inferred((t -> t[1:end-2])(Tuple(1:15))) === Tuple(1:13)
+    @test @inferred((t -> t[3:2])(Tuple(1:15))) === ()
+
+    @test_throws BoundsError (1, 2)[1:4]
+    @test_throws BoundsError (1, 2)[0:2]
+    @test_throws ArgumentError (1, 2)[OffsetArrays.IdOffsetRange(1:2, -1)]
+end
+
+# https://github.com/JuliaLang/julia/issues/40814
+@test Base.return_types(NTuple{3,Int}, (Vector{Int},)) == Any[NTuple{3,Int}]

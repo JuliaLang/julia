@@ -8,6 +8,7 @@ Base.Filesystem.readdir
 Base.Filesystem.walkdir
 Base.Filesystem.mkdir
 Base.Filesystem.mkpath
+Base.Filesystem.hardlink
 Base.Filesystem.symlink
 Base.Filesystem.readlink
 Base.Filesystem.chmod
@@ -48,9 +49,6 @@ Base.Filesystem.issticky
 Base.Filesystem.homedir
 Base.Filesystem.dirname
 Base.Filesystem.basename
-Base.@__FILE__
-Base.@__DIR__
-Base.@__LINE__
 Base.Filesystem.isabspath
 Base.Filesystem.isdirpath
 Base.Filesystem.joinpath

@@ -43,10 +43,13 @@ the async condition object itself.
 """
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
-    @async while _trywait(async)
-            cb(async)
-            isopen(async) || return
-        end
+    t = @task while _trywait(async)
+        cb(async)
+        isopen(async) || return
+    end
+    lock(async.cond)
+    _wait2(async.cond, t)
+    unlock(async.cond)
     return async
 end
 
@@ -72,7 +75,7 @@ mutable struct Timer
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
         interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
         timeout = UInt64(round(timeout * 1000)) + 1
-        interval = UInt64(round(interval * 1000))
+        interval = UInt64(ceil(interval * 1000))
         loop = eventloop()
 
         this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false)
@@ -248,10 +251,19 @@ julia> begin
 """
 function Timer(cb::Function, timeout::Real; interval::Real=0.0)
     timer = Timer(timeout, interval=interval)
-    @async while _trywait(timer)
+    t = @task while _trywait(timer)
+        try
             cb(timer)
-            isopen(timer) || return
+        catch err
+            write(stderr, "Error in Timer:\n")
+            showerror(stderr, err, catch_backtrace())
+            return
         end
+        isopen(timer) || return
+    end
+    lock(timer.cond)
+    _wait2(timer.cond, t)
+    unlock(timer.cond)
     return timer
 end
 

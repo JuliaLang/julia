@@ -97,12 +97,19 @@ mutable struct PromptState <: ModeState
     # indentation of lines which do not include the prompt
     # if negative, the width of the prompt is used
     indent::Int
-    refresh_lock::Threads.AbstractLock
+    refresh_lock::Threads.SpinLock
     # this would better be Threads.Atomic{Float64}, but not supported on some platforms
     beeping::Float64
     # this option is to detect when code is pasted in non-"bracketed paste mode" :
     last_newline::Float64 # register when last newline was entered
+    # this option is to speed up output
+    refresh_wait::Union{Timer,Nothing}
 end
+
+struct Modifiers
+    shift::Bool
+end
+Modifiers() = Modifiers(false)
 
 options(s::PromptState) =
     if isdefined(s.p, :repl) && isdefined(s.p.repl, :options)
@@ -180,7 +187,7 @@ function beep(s::PromptState, duration::Real=options(s).beep_duration,
     isinteractive() || return # some tests fail on some platforms
     s.beeping = min(s.beeping + duration, maxduration)
     let colors = Base.copymutable(colors)
-        @async begin
+        errormonitor(@async begin
             trylock(s.refresh_lock) || return
             try
                 orig_prefix = s.p.prompt_prefix
@@ -196,12 +203,10 @@ function beep(s::PromptState, duration::Real=options(s).beep_duration,
                 s.p.prompt_prefix = orig_prefix
                 refresh_multi_line(s, beeping=true)
                 s.beeping = 0.0
-            catch e
-                Base.showerror(stdout, e, catch_backtrace())
             finally
                 unlock(s.refresh_lock)
             end
-        end
+        end)
     end
     nothing
 end
@@ -371,8 +376,17 @@ function complete_line(s::PromptState, repeats::Int)
     return true
 end
 
+function clear_input_area(terminal::AbstractTerminal, s::PromptState)
+    if s.refresh_wait !== nothing
+        close(s.refresh_wait)
+        s.refresh_wait = nothing
+    end
+    _clear_input_area(terminal, s.ias)
+    s.ias = InputAreaState(0, 0)
+end
 clear_input_area(terminal::AbstractTerminal, s::ModeState) = (_clear_input_area(terminal, s.ias); s.ias = InputAreaState(0, 0))
 clear_input_area(s::ModeState) = clear_input_area(s.terminal, s)
+
 function _clear_input_area(terminal::AbstractTerminal, state::InputAreaState)
     # Go to the last line
     if state.curs_row < state.num_rows
@@ -395,6 +409,13 @@ prompt_string(p::Prompt) = prompt_string(p.prompt)
 prompt_string(s::AbstractString) = s
 prompt_string(f::Function) = Base.invokelatest(f)
 
+function refresh_multi_line(s::PromptState; kw...)
+    if s.refresh_wait !== nothing
+        close(s.refresh_wait)
+        s.refresh_wait = nothing
+    end
+    refresh_multi_line(terminal(s), s; kw...)
+end
 refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
 refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term === terminal(s); refresh_multi_line(termbuf,s; kw...))
@@ -738,7 +759,7 @@ function edit_insert(s::PromptState, c::StringLike)
     buf = s.input_buffer
 
     if ! options(s).auto_indent_bracketed_paste
-        pos=position(buf)
+        pos = position(buf)
         if pos > 0
             if buf.data[pos] != _space && string(c) != " "
                 options(s).auto_indent_tmp_off = false
@@ -757,20 +778,55 @@ function edit_insert(s::PromptState, c::StringLike)
         end
     end
 
+    old_wait = s.refresh_wait !== nothing
+    if old_wait
+        close(s.refresh_wait)
+        s.refresh_wait = nothing
+    end
     str = string(c)
     edit_insert(buf, str)
-    offset = s.ias.curs_row == 1 || s.indent < 0 ?
-        sizeof(prompt_string(s.p.prompt)::String) : s.indent
-    if !('\n' in str) && eof(buf) &&
-        ((position(buf) - beginofline(buf) + # size of current line
-          offset + sizeof(str) - 1) < width(terminal(s)))
-        # Avoid full update when appending characters to the end
-        # and an update of curs_row isn't necessary (conservatively estimated)
-        write(terminal(s), str)
-    else
+    if '\n' in str
         refresh_line(s)
+    else
+        after = options(s).auto_refresh_time_delay
+        termbuf = terminal(s)
+        w = width(termbuf)
+        offset = s.ias.curs_row == 1 || s.indent < 0 ?
+            sizeof(prompt_string(s.p.prompt)::String) : s.indent
+        offset += position(buf) - beginofline(buf) # size of current line
+        spinner = '\0'
+        delayup = !eof(buf) || old_wait
+        if offset + textwidth(str) <= w && !(after == 0 && delayup)
+            # Avoid full update when appending characters to the end
+            # and an update of curs_row isn't necessary (conservatively estimated)
+            write(termbuf, str)
+            spinner = ' ' # temporarily clear under the cursor
+        elseif after == 0
+            refresh_line(s)
+            delayup = false
+        else # render a spinner for each key press
+            if old_wait || length(str) != 1
+                spinner = spin_seq[mod1(position(buf) - w, length(spin_seq))]
+            else
+                spinner = str[end]
+            end
+            delayup = true
+        end
+        if delayup
+            if spinner != '\0'
+                write(termbuf, spinner)
+                cmove_left(termbuf)
+            end
+            s.refresh_wait = Timer(after) do t
+                s.refresh_wait === t || return
+                s.refresh_wait = nothing
+                refresh_line(s)
+            end
+        end
     end
+    nothing
 end
+const spin_seq = ("⋯", "⋱", "⋮", "⋰")
 
 function edit_insert(buf::IOBuffer, c::StringLike)
     if eof(buf)
@@ -804,6 +860,7 @@ function edit_insert_newline(s::PromptState, align::Int = 0 - options(s).auto_in
     if ! options(s).auto_indent_bracketed_paste
         s.last_newline = time()
     end
+    nothing
 end
 
 # align: delete up to 4 spaces to align to a multiple of 4 chars
@@ -1380,7 +1437,7 @@ function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
     return ret
 end
 
-function add_nested_key!(keymap::Dict, key, value; override = false)
+function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override = false)
     y = iterate(key)
     while y !== nothing
         c, i = y
@@ -1559,13 +1616,14 @@ function keymap_merge(target::Dict{Char,Any}, source::Union{Dict{Char,Any},AnyDi
     end
     # then redirected entries
     for key in setdiff(keys(source), keys(direct_keys))
+        key::Union{String, Char}
         # We first resolve redirects in the source
         value = source[key]
         visited = Vector{Any}()
         while isa(value, Union{Char,String})
             value = normalize_key(value)
             if value in visited
-                error("Eager redirection cycle detected for key " * escape_string(key))
+                throw_eager_redirection_cycle(key)
             end
             push!(visited,value)
             if !haskey(source,value)
@@ -1577,13 +1635,18 @@ function keymap_merge(target::Dict{Char,Any}, source::Union{Dict{Char,Any},AnyDi
         if isa(value, Union{Char,String})
             value = getEntry(ret, value)
             if value === nothing
-                error("Could not find redirected value " * escape_string(source[key]))
+                throw_could_not_find_redirected_value(key)
             end
         end
         add_nested_key!(ret, key, value; override = true)
     end
     return ret
 end
+
+throw_eager_redirection_cycle(key::Union{Char, String}) =
+    error("Eager redirection cycle detected for key ", repr(key))
+throw_could_not_find_redirected_value(key::Union{Char, String}) =
+    error("Could not find redirected value ", repl(key))
 
 function keymap_unify(keymaps)
     ret = Dict{Char,Any}()
@@ -1848,6 +1911,10 @@ mode(s::MIState) = s.current_mode   # ::TextInterface, and might be a Prompt
 mode(s::PromptState) = s.p          # ::Prompt
 mode(s::SearchState) = @assert false
 mode(s::PrefixSearchState) = s.histprompt.parent_prompt   # ::Prompt
+
+setmodifiers!(s::MIState, m::Modifiers) = setmodifiers!(mode(s), m)
+setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
+setmodifiers!(c) = nothing
 
 # Search Mode completions
 function complete_line(s::SearchState, repeats)
@@ -2116,6 +2183,11 @@ function edit_tab(s::MIState, jump_spaces::Bool=false, delete_trailing::Bool=jum
     return refresh_line(s)
 end
 
+function shift_tab_completion(s::MIState)
+    setmodifiers!(s, Modifiers(true))
+    return complete_line(s)
+end
+
 # return true iff the content of the buffer is modified
 # return false when only the position changed
 function edit_insert_tab(buf::IOBuffer, jump_spaces::Bool=false, delete_trailing::Bool=jump_spaces)
@@ -2151,6 +2223,8 @@ const default_keymap =
 AnyDict(
     # Tab
     '\t' => (s::MIState,o...)->edit_tab(s, true),
+    # Shift-tab
+    "\e[Z" => (s::MIState,o...)->shift_tab_completion(s),
     # Enter
     '\r' => (s::MIState,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
@@ -2414,7 +2488,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), :off, IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, IdDict{Any,Any}())

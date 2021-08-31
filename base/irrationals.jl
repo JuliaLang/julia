@@ -22,7 +22,9 @@ abstract type AbstractIrrational <: Real end
     Irrational{sym} <: AbstractIrrational
 
 Number type representing an exact irrational value denoted by the
-symbol `sym`.
+symbol `sym`, such as [`π`](@ref pi), [`ℯ`](@ref) and [`γ`](@ref Base.MathConstants.eulergamma).
+
+See also [`@irrational`], [`AbstractIrrational`](@ref).
 """
 struct Irrational{sym} <: AbstractIrrational end
 
@@ -160,8 +162,8 @@ end
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 """
-	@irrational sym val def
-	@irrational(sym, val, def)
+    @irrational sym val def
+    @irrational(sym, val, def)
 
 Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
 and arbitrary-precision definition in terms of `BigFloat`s given by the expression `def`.
@@ -201,7 +203,7 @@ big(::Type{<:AbstractIrrational}) = BigFloat
 function alignment(io::IO, x::AbstractIrrational)
     m = match(r"^(.*?)(=.*)$", sprint(show, x, context=io, sizehint=0))
     m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-    (length(m.captures[1]), length(m.captures[2]))
+    (length(something(m.captures[1])), length(something(m.captures[2])))
 end
 
 # inv

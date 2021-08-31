@@ -171,7 +171,7 @@ export
     # key types
     Any, DataType, Vararg, NTuple,
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
-    AbstractArray, DenseArray, NamedTuple,
+    AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
     Function, Method,
     Module, Symbol, Task, Array, UndefInitializer, undef, WeakRef, VecElement,
@@ -187,11 +187,12 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError,
+    UndefKeywordError, ConcurrencyViolationError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
-    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval, ifelse,
+    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
+    nfields, throw, tuple, ===, isdefined, eval, ifelse,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     <:, typeof, isa, typeassert,
@@ -242,13 +243,22 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
-# let the compiler assume that calling Union{} as a constructor does not need
-# to be considered ever (which comes up often as Type{<:T})
-Union{}(a...) = throw(MethodError(Union{}, a))
 
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
+
+TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
+TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
+TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
+
+UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
+
+const Vararg = ccall(:jl_toplevel_eval_in, Any, (Any, Any), Core, _expr(:new, TypeofVararg))
+
+# let the compiler assume that calling Union{} as a constructor does not need
+# to be considered ever (which comes up often as Type{<:T})
+Union{}(a...) = throw(MethodError(Union{}, a))
 
 Expr(@nospecialize args...) = _expr(args...)
 
@@ -257,20 +267,15 @@ struct ErrorException <: Exception
     msg::AbstractString
 end
 
-macro _inline_meta()
-    Expr(:meta, :inline)
-end
-
-macro _noinline_meta()
-    Expr(:meta, :noinline)
-end
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
 
 struct BoundsError <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    BoundsError(@nospecialize(a)) = (@_noinline_meta; new(a))
-    BoundsError(@nospecialize(a), i) = (@_noinline_meta; new(a,i))
+    BoundsError(@nospecialize(a)) = (@noinline; new(a))
+    BoundsError(@nospecialize(a), i) = (@noinline; new(a,i))
 end
 struct DivideError         <: Exception end
 struct OutOfMemoryError    <: Exception end
@@ -281,12 +286,15 @@ struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
 end
+struct ConcurrencyViolationError <: Exception
+    msg::AbstractString
+end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
     val
     msg::AbstractString
-    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val, ""))
-    DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
+    DomainError(@nospecialize(val)) = (@noinline; new(val, ""))
+    DomainError(@nospecialize(val), @nospecialize(msg)) = (@noinline; new(val, msg))
 end
 struct TypeError <: Exception
     # `func` is the name of the builtin function that encountered a type error,
@@ -307,7 +315,7 @@ struct InexactError <: Exception
     func::Symbol
     T  # Type
     val
-    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
+    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@noinline; new(f, T, val))
 end
 struct OverflowError <: Exception
     msg::AbstractString
@@ -378,12 +386,6 @@ mutable struct WeakRef
                                       (Ptr{Cvoid}, Any), getptls(), v)
 end
 
-TypeVar(n::Symbol) = _typevar(n, Union{}, Any)
-TypeVar(n::Symbol, @nospecialize(ub)) = _typevar(n, Union{}, ub)
-TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
-
-UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
-
 Tuple{}() = ()
 
 struct VecElement{T}
@@ -421,10 +423,12 @@ eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecial
                     mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
 eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))))
 eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
+eval(Core, :(PartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :isva, :parent, :source))))
+eval(Core, :(InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :vtype, :elsetype))))
 eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
     $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
 
-Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
+Module(name::Symbol=:anonymous, std_imports::Bool=true, using_core::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, using_core)
 
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
     return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
@@ -579,10 +583,11 @@ function (g::GeneratedFunctionStub)(@nospecialize args...)
                          Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
                          Expr(:return, body),
                          Expr(:meta, :pop_loc))))
-    if g.spnames === nothing
+    spnames = g.spnames
+    if spnames === nothing
         return lam
     else
-        return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+        return Expr(Symbol("with-static-parameters"), lam, spnames...)
     end
 end
 
@@ -599,26 +604,26 @@ eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
 
 import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
 
-throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@_noinline_meta; throw(InexactError(f, T, val)))
+throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@noinline; throw(InexactError(f, T, val)))
 
 function is_top_bit_set(x)
-    @_inline_meta
+    @inline
     eq_int(trunc_int(UInt8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(UInt8, 1))
 end
 
 function is_top_bit_set(x::Union{Int8,UInt8})
-    @_inline_meta
+    @inline
     eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
 end
 
 function check_top_bit(::Type{To}, x) where {To}
-    @_inline_meta
+    @inline
     is_top_bit_set(x) && throw_inexacterror(:check_top_bit, To, x)
     x
 end
 
 function checked_trunc_sint(::Type{To}, x::From) where {To,From}
-    @_inline_meta
+    @inline
     y = trunc_int(To, x)
     back = sext_int(From, y)
     eq_int(x, back) || throw_inexacterror(:trunc, To, x)
@@ -626,7 +631,7 @@ function checked_trunc_sint(::Type{To}, x::From) where {To,From}
 end
 
 function checked_trunc_uint(::Type{To}, x::From) where {To,From}
-    @_inline_meta
+    @inline
     y = trunc_int(To, x)
     back = zext_int(From, y)
     eq_int(x, back) || throw_inexacterror(:trunc, To, x)
@@ -779,11 +784,11 @@ Unsigned(x::Int64)  = UInt64(x)
 Signed(x::UInt128)  = Int128(x)
 Unsigned(x::Int128) = UInt128(x)
 
-Signed(x::Union{Float32, Float64, Bool})   = Int(x)
-Unsigned(x::Union{Float32, Float64, Bool}) = UInt(x)
+Signed(x::Union{Float16, Float32, Float64, Bool})   = Int(x)
+Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
-Integer(x::Union{Float32, Float64}) = Int(x)
+Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
 # Binding for the julia parser, called as
 #
@@ -799,5 +804,20 @@ Integer(x::Union{Float32, Float64}) = Int(x)
 #
 # The internal jl_parse which will call into Core._parse if not `nothing`.
 _parse = nothing
+
+# support for deprecated uses of internal _apply function
+_apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
+
+struct Pair{A, B}
+    first::A
+    second::B
+    # if we didn't inline this, it's probably because the callsite was actually dynamic
+    # to avoid potentially compiling many copies of this, we mark the arguments with `@nospecialize`
+    # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
+    # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
+    Pair(a, b) = new{typeof(a), typeof(b)}(a, b)
+    Pair{A, B}(a::A, b::B) where {A, B} = new(a, b)
+    Pair{Any, Any}(@nospecialize(a::Any), @nospecialize(b::Any)) = new(a, b)
+end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

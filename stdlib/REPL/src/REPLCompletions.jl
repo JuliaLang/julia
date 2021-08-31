@@ -40,6 +40,7 @@ struct MethodCompletion <: Completion
     func
     input_types::Type
     method::Method
+    orig_method::Union{Nothing,Method} # if `method` is a keyword method, keep the original method for sensible printing
 end
 
 struct BslashCompletion <: Completion
@@ -89,7 +90,7 @@ _completion_text(c::ModuleCompletion) = c.mod
 _completion_text(c::PackageCompletion) = c.package
 _completion_text(c::PropertyCompletion) = string(c.property)
 _completion_text(c::FieldCompletion) = string(c.field)
-_completion_text(c::MethodCompletion) = sprint(io -> show(io, c.method))
+_completion_text(c::MethodCompletion) = sprint(io -> show(io, isnothing(c.orig_method) ? c.method : c.orig_method::Method))
 _completion_text(c::BslashCompletion) = c.bslash
 _completion_text(c::ShellCompletion) = c.text
 _completion_text(c::DictCompletion) = c.key
@@ -143,7 +144,7 @@ function complete_symbol(sym::String, ffunc, context_module::Module=Main)
             if isa(b, Module)
                 mod = b
                 lookup_module = true
-            elseif Base.isstructtype(typeof(b))
+            else
                 lookup_module = false
                 t = typeof(b)
             end
@@ -314,7 +315,7 @@ end
 function should_method_complete(s::AbstractString)
     method_complete = false
     for c in reverse(s)
-        if c in [',', '(']
+        if c in [',', '(', ';']
             method_complete = true
             break
         elseif !(c in whitespace_chars)
@@ -383,16 +384,27 @@ function get_value(sym::Expr, fn)
 end
 get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (getfield(fn, sym), true) : (nothing, false)
 get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.value), true) : (nothing, false)
+get_value(sym::GlobalRef, fn) = get_value(sym.name, sym.mod)
 get_value(sym, fn) = (sym, true)
 
-# Return the value of a getfield call expression
-function get_value_getfield(ex::Expr, fn)
-    # Example :((top(getfield))(Base,:max))
-    val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
-    (found && length(ex.args) >= 3) || return (nothing, false)
-    return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
+# Return the type of a getfield call expression
+function get_type_getfield(ex::Expr, fn::Module)
+    length(ex.args) == 3 || return Any, false # should never happen, but just for safety
+    obj, x = ex.args[2:3]
+    objt, found = get_type(obj, fn)
+    objt isa DataType || return Any, false
+    found || return Any, false
+    if x isa QuoteNode
+        fld = x.value
+    elseif isexpr(x, :quote) || isexpr(x, :inert)
+        fld = x.args[1]
+    else
+        fld = nothing # we don't know how to get the value of variable `x` here
+    end
+    fld isa Symbol || return Any, false
+    hasfield(objt, fld) || return Any, false
+    return fieldtype(objt, fld), true
 end
-get_value_getfield(sym, fn) = get_value(sym, fn)
 
 # Determines the return type with Base.return_types of a function call using the type information of the arguments.
 function get_type_call(expr::Expr)
@@ -412,9 +424,9 @@ function get_type_call(expr::Expr)
     end
     # use _methods_by_ftype as the function is supplied as a type
     world = Base.get_world_counter()
-    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
+    matches = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)::Vector
     length(matches) == 1 || return (Any, false)
-    match = first(matches)
+    match = first(matches)::Core.MethodMatch
     # Typeinference
     interp = Core.Compiler.NativeInterpreter()
     return_type = Core.Compiler.typeinf_type(interp, match.method, match.spec_types, match.sparams)
@@ -422,7 +434,7 @@ function get_type_call(expr::Expr)
     return (return_type, true)
 end
 
-# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
+# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (SubString{String}, true)
 function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
     found && return Core.Typeof(val), found
@@ -430,10 +442,8 @@ function try_get_type(sym::Expr, fn::Module)
         # getfield call is special cased as the evaluation of getfield provides good type information,
         # is inexpensive and it is also performed in the complete_symbol function.
         a1 = sym.args[1]
-        if isa(a1,GlobalRef) && isconst(a1.mod,a1.name) && isdefined(a1.mod,a1.name) &&
-            eval(a1) === Core.getfield
-            val, found = get_value_getfield(sym, Main)
-            return found ? Core.Typeof(val) : Any, found
+        if a1 === :getfield || a1 === GlobalRef(Core, :getfield)
+            return get_type_getfield(sym, fn)
         end
         return get_type_call(sym)
     elseif sym.head === :thunk
@@ -455,6 +465,11 @@ function get_type(sym::Expr, fn::Module)
     # try to analyze nests of calls. if this fails, try using the expanded form.
     val, found = try_get_type(sym, fn)
     found && return val, found
+    # https://github.com/JuliaLang/julia/issues/27184
+    if isexpr(sym, :macrocall)
+        _, found = get_type(first(sym.args), fn)
+        found || return Any, false
+    end
     return try_get_type(Meta.lower(fn, sym), fn)
 end
 
@@ -463,39 +478,109 @@ function get_type(sym, fn::Module)
     return found ? Core.Typeof(val) : Any, found
 end
 
+function get_type(T, found::Bool, default_any::Bool)
+    return found ? T :
+           default_any ? Any : throw(ArgumentError("argument not found"))
+end
+
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr, context_module::Module=Main)
-    args_ex = Any[]
     func, found = get_value(ex_org.args[1], context_module)::Tuple{Any,Bool}
     !found && return Completion[]
 
-    funargs = ex_org.args[2:end]
-    # handle broadcasting, but only handle number of arguments instead of
-    # argument types
-    if ex_org.head === :. && ex_org.args[2] isa Expr
+    args_ex, kwargs_ex = complete_methods_args(ex_org.args[2:end], ex_org, context_module, true, true)
+
+    out = Completion[]
+    complete_methods!(out, func, args_ex, kwargs_ex)
+    return out
+end
+
+function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool)
+    out = Completion[]
+    args_ex, kwargs_ex = try
+        complete_methods_args(ex_org.args[2:end], ex_org, context_module, false, false)
+    catch
+        return out
+    end
+
+    for name in names(callee_module; all=true)
+        if !Base.isdeprecated(callee_module, name) && isdefined(callee_module, name)
+            func = getfield(callee_module, name)
+            if !isa(func, Module)
+                complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
+            elseif callee_module === Main::Module && isa(func, Module)
+                callee_module2 = func
+                for name in names(callee_module2)
+                    if isdefined(callee_module2, name)
+                        func = getfield(callee_module, name)
+                        if !isa(func, Module)
+                            complete_methods!(out, func, args_ex, kwargs_ex, moreargs)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return out
+end
+
+function complete_methods_args(funargs::Vector{Any}, ex_org::Expr, context_module::Module, default_any::Bool, allow_broadcasting::Bool)
+    args_ex = Any[]
+    kwargs_ex = Pair{Symbol,Any}[]
+    if allow_broadcasting && ex_org.head === :. && ex_org.args[2] isa Expr
+        # handle broadcasting, but only handle number of arguments instead of
+        # argument types
         for _ in (ex_org.args[2]::Expr).args
             push!(args_ex, Any)
         end
     else
         for ex in funargs
-            val, found = get_type(ex, context_module)
-            push!(args_ex, val)
+            if isexpr(ex, :parameters)
+                for x in ex.args
+                    n, v = isexpr(x, :kw) ? (x.args...,) : (x, x)
+                    push!(kwargs_ex, n => get_type(get_type(v, context_module)..., default_any))
+                end
+            elseif isexpr(ex, :kw)
+                n, v = (ex.args...,)
+                push!(kwargs_ex, n => get_type(get_type(v, context_module)..., default_any))
+            else
+                push!(args_ex, get_type(get_type(ex, context_module)..., default_any))
+            end
         end
     end
+    return args_ex, kwargs_ex
+end
 
-    out = Completion[]
-    t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
-    na = length(args_ex)+1
+function complete_methods!(out::Vector{Completion}, @nospecialize(func), args_ex::Vector{Any}, kwargs_ex::Vector{Pair{Symbol,Any}}, moreargs::Bool=true)
     ml = methods(func)
-    for method in ml
+    # Input types and number of arguments
+    if isempty(kwargs_ex)
+        t_in = Tuple{Core.Typeof(func), args_ex...}
+        na = length(t_in.parameters)::Int
+        orig_ml = fill(nothing, length(ml))
+    else
+        isdefined(ml.mt, :kwsorter) || return out
+        kwfunc = ml.mt.kwsorter
+        kwargt = NamedTuple{(first.(kwargs_ex)...,), Tuple{last.(kwargs_ex)...}}
+        t_in = Tuple{Core.Typeof(kwfunc), kwargt, Core.Typeof(func), args_ex...}
+        na = length(t_in.parameters)::Int
+        orig_ml = ml # this method is supposed to be used for printing
+        ml = methods(kwfunc)
+        func = kwfunc
+    end
+    if !moreargs
+        na = typemax(Int)
+    end
+
+    for (method::Method, orig_method) in zip(ml, orig_ml)
         ms = method.sig
 
         # Check if the method's type signature intersects the input types
-        if typeintersect(Base.rewrap_unionall(Tuple{(Base.unwrap_unionall(ms)::DataType).parameters[1 : min(na, end)]...}, ms), t_in) !== Union{}
-            push!(out, MethodCompletion(func, t_in, method))
+        if typeintersect(Base.rewrap_unionall(Tuple{(Base.unwrap_unionall(ms)::DataType).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
+            push!(out, MethodCompletion(func, t_in, method, orig_method))
         end
     end
-    return out
 end
 
 include("latex_symbols.jl")
@@ -507,6 +592,11 @@ const whitespace_chars = [" \t\n\r"...]
 # characters contain any of these characters. It prohibits the
 # bslash_completions function to try and complete on escaped characters in strings
 const bslash_separators = [whitespace_chars..., "\"'`"...]
+
+const subscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k, "\\_") && length(k)==3)
+const subscript_regex = Regex("^\\\\_[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(subscripts)) * "]+\\z")
+const superscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k, "\\^") && length(k)==3)
+const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(superscripts)) * "]+\\z")
 
 # Aux function to detect whether we're right after a
 # using or import keyword
@@ -530,6 +620,12 @@ function bslash_completions(string::String, pos::Int)
         latex = get(latex_symbols, s, "")
         if !isempty(latex) # complete an exact match
             return (true, (Completion[BslashCompletion(latex)], slashpos:pos, true))
+        elseif occursin(subscript_regex, s)
+            sub = map(c -> subscripts[c], s[3:end])
+            return (true, (Completion[BslashCompletion(sub)], slashpos:pos, true))
+        elseif occursin(superscript_regex, s)
+            sup = map(c -> superscripts[c], s[3:end])
+            return (true, (Completion[BslashCompletion(sup)], slashpos:pos, true))
         end
         emoji = get(emoji_symbols, s, "")
         if !isempty(emoji)
@@ -583,15 +679,16 @@ end
 
 function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)
     loading_candidates = String[]
-    p = Base.TOML.Parser()
-    Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
-    d = Base.TOML.parse(p)
-    pkg = get(d, "name", nothing)
+    d = Base.parsed_toml(project_file)
+    pkg = get(d, "name", nothing)::Union{String, Nothing}
     if pkg !== nothing && startswith(pkg, pkgstarts)
         push!(loading_candidates, pkg)
     end
-    for (pkg, _) in get(d, "deps", [])
-        startswith(pkg, pkgstarts) && push!(loading_candidates, pkg)
+    deps = get(d, "deps", nothing)::Union{Dict{String, Any}, Nothing}
+    if deps !== nothing
+        for (pkg, _) in deps
+            startswith(pkg, pkgstarts) && push!(loading_candidates, pkg)
+        end
     end
     return Completion[PackageCompletion(name) for name in loading_candidates]
 end
@@ -600,6 +697,36 @@ function completions(string::String, pos::Int, context_module::Module=Main)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
+
+    # ?(x, y)TAB lists methods you can call with these objects
+    # ?(x, y TAB lists methods that take these objects as the first two arguments
+    # MyModule.?(x, y)TAB restricts the search to names in MyModule
+    rexm = match(r"(\w+\.|)\?\((.*)$", partial)
+    if rexm !== nothing
+        # Get the module scope
+        if isempty(rexm.captures[1])
+            callee_module = context_module
+        else
+            modname = Symbol(rexm.captures[1][1:end-1])
+            if isdefined(context_module, modname)
+                callee_module = getfield(context_module, modname)
+                if !isa(callee_module, Module)
+                    callee_module = context_module
+                end
+            else
+                callee_module = context_module
+            end
+        end
+        moreargs = !endswith(rexm.captures[2], ')')
+        callstr = "_(" * rexm.captures[2]
+        if moreargs
+            callstr *= ')'
+        end
+        ex_org = Meta.parse(callstr, raise=false, depwarn=false)
+        if isa(ex_org, Expr)
+            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+        end
+    end
 
     # if completing a key in a Dict
     identifier, partial_key, loc = dict_identifier_key(partial, inc_tag, context_module)
@@ -772,6 +899,24 @@ function shell_completions(string, pos)
         return ret, range, true
     end
     return Completion[], 0:-1, false
+end
+
+function UndefVarError_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    if var === :or
+        print(io, "\nsuggestion: Use `||` for short-circuiting boolean OR.")
+    elseif var === :and
+        print(io, "\nsuggestion: Use `&&` for short-circuiting boolean AND.")
+    elseif var === :help
+        println(io)
+        # Show friendly help message when user types help or help() and help is undefined
+        show(io, MIME("text/plain"), Base.Docs.parsedoc(Base.Docs.keywords[:help]))
+    end
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
+    nothing
 end
 
 end # module

@@ -49,7 +49,7 @@ function showerror(io::IO, ex::CompositeException)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
-            print(io, string("\n\n...and ", remaining, " more exception(s).\n"))
+            print(io, "\n\n...and ", remaining, " more exception", remaining > 1 ? "s" : "", ".\n")
         end
     else
         print(io, "CompositeException()\n")
@@ -77,9 +77,14 @@ function showerror(io::IO, ex::TaskFailedException, bt = nothing; backtrace=true
 end
 
 function show_task_exception(io::IO, t::Task; indent = true)
-    stack = catch_stack(t)
+    stack = current_exceptions(t)
     b = IOBuffer()
-    show_exception_stack(IOContext(b, io), stack)
+    if isempty(stack)
+        # exception stack buffer not available; probably a serialized task
+        showerror(IOContext(b, io), t.result)
+    else
+        show_exception_stack(IOContext(b, io), stack)
+    end
     str = String(take!(b))
     if indent
         str = replace(str, "\n" => "\n    ")
@@ -131,10 +136,21 @@ const task_state_runnable = UInt8(0)
 const task_state_done     = UInt8(1)
 const task_state_failed   = UInt8(2)
 
+const _state_index = findfirst(==(:_state), fieldnames(Task))
+@eval function load_state_acquire(t)
+    # TODO: Replace this by proper atomic operations when available
+    @GC.preserve t llvmcall($("""
+        %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i8*
+        %rv = load atomic i8, i8* %ptr acquire, align 8
+        ret i8 %rv
+        """), UInt8, Tuple{Ptr{UInt8}},
+        Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
+end
+
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
         # TODO: this field name should be deprecated in 2.0
-        st = getfield(t, :_state)
+        st = load_state_acquire(t)
         if st === task_state_runnable
             return :runnable
         elseif st === task_state_done
@@ -146,7 +162,10 @@ const task_state_failed   = UInt8(2)
         end
     elseif field === :backtrace
         # TODO: this field name should be deprecated in 2.0
-        return catch_stack(t)[end][2]
+        return current_exceptions(t)[end][2]
+    elseif field === :exception
+        # TODO: this field name should be deprecated in 2.0
+        return t._isexception ? t.result : nothing
     else
         return getfield(t, field)
     end
@@ -174,7 +193,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = t._state !== task_state_runnable
+istaskdone(t::Task) = load_state_acquire(t) !== task_state_runnable
 
 """
     istaskstarted(t::Task) -> Bool
@@ -218,7 +237,7 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = (t._state === task_state_failed)
+istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 
@@ -403,6 +422,43 @@ macro async(expr)
     end
 end
 
+"""
+    errormonitor(t::Task)
+
+Print an error log to `stderr` if task `t` fails.
+"""
+function errormonitor(t::Task)
+    t2 = Task() do
+        if istaskfailed(t)
+            local errs = stderr
+            try # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Unhandled Task ")
+                display_error(errio, current_exceptions(t))
+                write(errs, errio)
+            catch
+                try # try to display the secondary error atomically
+                    errio = IOContext(PipeBuffer(), errs::IO)
+                    print(errio, "\nSYSTEM: caught exception while trying to print a failed Task notice: ")
+                    display_error(errio, current_exceptions())
+                    write(errs, errio)
+                    flush(errs)
+                    # and then the actual error, as best we can
+                    Core.print(Core.stderr, "while handling: ")
+                    Core.println(Core.stderr, current_exceptions(t)[end][1])
+                catch e
+                    # give up
+                    Core.print(Core.stderr, "\nSYSTEM: caught exception of type ", typeof(e).name.name,
+                            " while trying to print a failed Task notice; giving up\n")
+                end
+            end
+        end
+        nothing
+    end
+    _wait2(t, t2)
+    return t
+end
+
 # Capture interpolated variables in $() and move them to let-block
 function _lift_one_interp!(e)
     letargs = Any[]  # store the new gensymed arguments
@@ -563,19 +619,28 @@ function enq_work(t::Task)
     # 1. The Task's stack is currently being used by the scheduler for a certain thread.
     # 2. There is only 1 thread.
     # 3. The multiq is full (can be fixed by making it growable).
-    if t.sticky || tid != 0 || Threads.nthreads() == 1
+    if t.sticky || Threads.nthreads() == 1
         if tid == 0
+            # Issue #41324
+            # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+            # the parent task. If the parent (current_task) is not sticky we must
+            # set it to be sticky.
+            # XXX: Ideally we would be able to unset this
+            current_task().sticky = true
             tid = Threads.threadid()
             ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
         end
         push!(Workqueues[tid], t)
     else
-        tid = 0
         if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
             # if multiq is full, give to a random thread (TODO fix)
-            tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-            ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            if tid == 0
+                tid = mod(time_ns() % Int, Threads.nthreads()) + 1
+                ccall(:jl_set_task_tid, Cvoid, (Any, Cint), t, tid-1)
+            end
             push!(Workqueues[tid], t)
+        else
+            tid = 0
         end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
@@ -619,7 +684,8 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
         t.queue === nothing || Base.list_deletefirst!(t.queue, t)
-        setfield!(t, :exception, arg)
+        setfield!(t, :result, arg)
+        setfield!(t, :_isexception, true)
     else
         t.queue === nothing || Base.error("schedule: Task not runnable")
         setfield!(t, :result, arg)
@@ -655,6 +721,7 @@ A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
 """
 function yield(t::Task, @nospecialize(x=nothing))
+    (t._state === task_state_runnable && t.queue === nothing) || error("yield: Task not runnable")
     t.result = x
     enq_work(current_task())
     set_next_task(t)
@@ -670,6 +737,13 @@ call to `yieldto`. This is a low-level call that only switches tasks, not consid
 or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
+    # TODO: these are legacy behaviors; these should perhaps be a scheduler
+    # state error instead.
+    if t._state === task_state_done
+        return x
+    elseif t._state === task_state_failed
+        throw(t.result)
+    end
     t.result = x
     set_next_task(t)
     return try_yieldto(identity)
@@ -683,9 +757,10 @@ function try_yieldto(undo)
         rethrow()
     end
     ct = current_task()
-    exc = ct.exception
-    if exc !== nothing
-        ct.exception = nothing
+    if ct._isexception
+        exc = ct.result
+        ct.result = nothing
+        ct._isexception = false
         throw(exc)
     end
     result = ct.result
@@ -695,8 +770,10 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
-    t.exception = exc
-    return yieldto(t)
+    t.result = exc
+    t._isexception = true
+    set_next_task(t)
+    return try_yieldto(identity)
 end
 
 function ensure_rescheduled(othertask::Task)
@@ -741,6 +818,7 @@ end
 end
 
 function wait()
+    GC.safepoint()
     W = Workqueues[Threads.threadid()]
     poptask(W)
     result = try_yieldto(ensure_rescheduled)

@@ -283,7 +283,7 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
     lock(c)
     try
         isopen(c) || return
-        if istaskfailed(t) && task_result(t) isa Exception
+        if istaskfailed(t)
             close(c, TaskFailedException(t))
             return
         end
@@ -295,9 +295,10 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
 end
 
 struct InvalidStateException <: Exception
-    msg::AbstractString
+    msg::String
     state::Symbol
 end
+showerror(io::IO, ex::InvalidStateException) = print(io, "InvalidStateException: ", ex.msg)
 
 """
     put!(c::Channel, v)
@@ -422,6 +423,7 @@ n_avail(c::Channel) = isbuffered(c) ? length(c.data) : length(c.cond_put.waitq)
 isempty(c::Channel) = isbuffered(c) ? isempty(c.data) : isempty(c.cond_put.waitq)
 
 lock(c::Channel) = lock(c.cond_take)
+lock(f, c::Channel) = lock(f, c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
 trylock(c::Channel) = trylock(c.cond_take)
 

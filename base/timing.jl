@@ -55,6 +55,9 @@ function gc_alloc_count(diff::GC_Diff)
     diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
 end
 
+# cumulative total time spent on compilation, in nanoseconds
+cumulative_compile_time_ns_before() = ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
+cumulative_compile_time_ns_after() = ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
 
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
@@ -70,6 +73,16 @@ since then.
 function gc_live_bytes()
     num = gc_num()
     Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
+end
+
+"""
+    Base.jit_total_bytes()
+
+Return the total amount (in bytes) allocated by the just-in-time compiler
+for e.g. native code and data.
+"""
+function jit_total_bytes()
+    return Int(ccall(:jl_jit_total_bytes, Csize_t, ()))
 end
 
 # print elapsed time, return expression value
@@ -102,32 +115,44 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
-    length(timestr) < 10 && print(" "^(10 - length(timestr)))
-    print(timestr, " seconds")
-    if bytes != 0 || allocs != 0
-        allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
-        if ma == 1
-            print(" (", Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
-        else
-            print(" (", Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
+    str = sprint() do io
+        print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        print(io, timestr, " seconds")
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+        parens && print(io, " (")
+        if bytes != 0 || allocs != 0
+            allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
+            if ma == 1
+                print(io, Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
+            else
+                print(io, Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
+            end
+            print(io, format_bytes(bytes))
         end
-        print(format_bytes(bytes))
+        if gctime > 0
+            if bytes != 0 || allocs != 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
+        end
+        if compile_time > 0
+            if bytes != 0 || allocs != 0 || gctime > 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+        end
+        parens && print(io, ")")
     end
-    if gctime > 0
-        print(", ", Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
-    end
-    if bytes != 0 || allocs != 0
-        print(")")
-    end
+    newline ? println(str) : print(str)
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff)
+function timev_print(elapsedtime, diff::GC_Diff, compile_time)
     allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs)
-    print("\nelapsed time (ns): $elapsedtime\n")
+    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true)
+    print("elapsed time (ns): $elapsedtime\n")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
@@ -144,7 +169,12 @@ end
 
 A macro to execute an expression, printing the time it took to execute, the number of
 allocations, and the total number of bytes its execution caused to be allocated, before
-returning the value of the expression.
+returning the value of the expression. Any time spent garbage collecting (gc) or
+compiling is shown as a percentage.
+
+In some cases the system will look inside the `@time` expression and compile some of the
+called code before execution of the top-level expression begins. When that happens, some
+compilation time will not be counted. To include this time you can run `@time @eval ...`.
 
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
@@ -155,8 +185,13 @@ See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
     reduce noise.
 
 ```julia-repl
-julia> @time rand(10^6);
-  0.001525 seconds (7 allocations: 7.630 MiB)
+julia> x = rand(10,10);
+
+julia> @time x * x;
+  0.606588 seconds (2.19 M allocations: 116.555 MiB, 3.75% gc time, 99.94% compilation time)
+
+julia> @time x * x;
+  0.000009 seconds (1 allocation: 896 bytes)
 
 julia> @time begin
            sleep(0.3)
@@ -171,12 +206,12 @@ macro time(ex)
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local val = $(esc(ex))
+        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
-        time_print(elapsedtime, diff.allocd, diff.total_time,
-                   gc_alloc_count(diff))
-        println()
+        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true)
         val
     end
 end
@@ -192,12 +227,24 @@ See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
 ```julia-repl
-julia> @timev rand(10^6);
-  0.001006 seconds (7 allocations: 7.630 MiB)
-elapsed time (ns): 1005567
-bytes allocated:   8000256
-pool allocs:       6
-malloc() calls:    1
+julia> x = rand(10,10);
+
+julia> @timev x * x;
+  0.546770 seconds (2.20 M allocations: 116.632 MiB, 4.23% gc time, 99.94% compilation time)
+elapsed time (ns): 546769547
+gc time (ns):      23115606
+bytes allocated:   122297811
+pool allocs:       2197930
+non-pool GC allocs:1327
+malloc() calls:    36
+realloc() calls:   5
+GC pauses:         3
+
+julia> @timev x * x;
+  0.000010 seconds (1 allocation: 896 bytes)
+elapsed time (ns): 9848
+bytes allocated:   896
+pool allocs:       1
 ```
 """
 macro timev(ex)
@@ -205,9 +252,12 @@ macro timev(ex)
         while false; end # compiler heuristic: compile this block (alter this if the heuristic changes)
         local stats = gc_num()
         local elapsedtime = time_ns()
+        local compile_elapsedtime = cumulative_compile_time_ns_before()
         local val = $(esc(ex))
+        compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime
         elapsedtime = time_ns() - elapsedtime
-        timev_print(elapsedtime, GC_Diff(gc_num(), stats))
+        local diff = GC_Diff(gc_num(), stats)
+        timev_print(elapsedtime, diff, compile_elapsedtime)
         val
     end
 end
@@ -217,6 +267,10 @@ end
 
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 number of seconds it took to execute as a floating-point number.
+
+In some cases the system will look inside the `@elapsed` expression and compile some of the
+called code before execution of the top-level expression begins. When that happens, some
+compilation time will not be counted. To include this time you can run `@elapsed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@allocated`](@ref).
@@ -276,6 +330,10 @@ end
 A macro to execute an expression, and return the value of the expression, elapsed time,
 total bytes allocated, garbage collection time, and an object with various memory allocation
 counters.
+
+In some cases the system will look inside the `@timed` expression and compile some of the
+called code before execution of the top-level expression begins. When that happens, some
+compilation time will not be counted. To include this time you can run `@timed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).

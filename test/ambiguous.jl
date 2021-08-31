@@ -66,7 +66,7 @@ end
 ## Other ways of accessing functions
 # Test that non-ambiguous cases work
 let io = IOBuffer()
-    @test precompile(ambig, (Int, Int)) == true
+    @test @test_logs precompile(ambig, (Int, Int))
     cf = @eval @cfunction(ambig, Int, (Int, Int))
     @test ccall(cf, Int, (Int, Int), 1, 2) == 4
     @test length(code_lowered(ambig, (Int, Int))) == 1
@@ -75,7 +75,7 @@ end
 
 # Test that ambiguous cases fail appropriately
 let io = IOBuffer()
-    @test precompile(ambig, (UInt8, Int)) == false
+    @test @test_logs (:warn,) precompile(ambig, (UInt8, Int))
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
     @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
@@ -321,6 +321,8 @@ end
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
+        pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{Type{Union{Missing, T}} where T}))
+        pop!(need_to_handle_undef_sparam, which(Base.complex, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
@@ -346,7 +348,7 @@ f35983(::Type, ::Type) = 2
 @test length(Base.methods(f35983, (Any, Any))) == 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
     @test length(ms) == 1
     @test ambig[1] == 0
 end
@@ -354,9 +356,34 @@ f35983(::Type{Int16}, ::Any) = 3
 @test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
 @test length(Base.methods(f35983, (Type, Type))) == 2
 let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
     @test length(ms) == 2
     @test ambig[1] == 1
 end
+
+struct B38280 <: Real; val; end
+let ambig = Int32[0]
+    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, nothing, 1, typemax(UInt), false, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+    @test ms isa Vector
+    @test length(ms) == 1
+    @test ambig[1] == 1
+end
+
+# issue #11407
+f11407(::Dict{K,V}, ::Dict{Any,V}) where {K,V} = 1
+f11407(::Dict{K,V}, ::Dict{K,Any}) where {K,V} = 2
+@test_throws MethodError f11407(Dict{Any,Any}(), Dict{Any,Any}()) # ambiguous
+@test f11407(Dict{Any,Int}(), Dict{Any,Int}()) == 1
+f11407(::Dict{Any,Any}, ::Dict{Any,Any}) where {K,V} = 3
+@test f11407(Dict{Any,Any}(), Dict{Any,Any}()) == 3
+
+# issue #12814
+abstract type A12814{N, T} end
+struct B12814{N, T} <: A12814{N, T}
+    x::NTuple{N, T}
+end
+(::Type{T})(x::X) where {T <: A12814, X <: Array} = 1
+@test_throws MethodError B12814{3, Float64}([1, 2, 3]) # ambiguous
+@test B12814{3,Float64}((1, 2, 3)).x === (1.0, 2.0, 3.0)
 
 nothing

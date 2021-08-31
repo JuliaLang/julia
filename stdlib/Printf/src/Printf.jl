@@ -13,6 +13,7 @@ const Chars = Union{Val{'c'}, Val{'C'}}
 const Strings = Union{Val{'s'}, Val{'S'}}
 const Pointer = Val{'p'}
 const HexBases = Union{Val{'x'}, Val{'X'}, Val{'a'}, Val{'A'}}
+const PositionCounter = Val{'n'}
 
 """
 Typed representation of a format specifier.
@@ -56,6 +57,9 @@ formatted string directly to `io`.
 
 For convenience, the `Printf.format"..."` string macro form can be used for building
 a `Printf.Format` object at macro-expansion-time.
+
+!!! compat "Julia 1.6"
+    `Printf.Format` requires Julia 1.6 or later.
 """
 struct Format{S, T}
     str::S # original full format string as CodeUnits
@@ -80,10 +84,19 @@ function Format(f::AbstractString)
     len = length(bytes)
     pos = 1
     b = 0x00
-    while true
+    while pos <= len
         b = bytes[pos]
         pos += 1
-        (pos > len || (b == UInt8('%') && pos <= len && bytes[pos] != UInt8('%'))) && break
+        if b == UInt8('%')
+            pos > len && throw(ArgumentError("invalid format string: '$f'"))
+            if bytes[pos] == UInt8('%')
+                # escaped '%'
+                b = bytes[pos]
+                pos += 1
+            else
+                break
+            end
+        end
     end
     strs = [1:pos - 1 - (b == UInt8('%'))]
     fmts = []
@@ -207,15 +220,17 @@ end
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
     leftalign, width = spec.leftalign, spec.width
-    if !leftalign && width > 1
-        for _ = 1:(width - 1)
+    c = Char(first(arg))
+    w = textwidth(c)
+    if !leftalign && width > w
+        for _ = 1:(width - w)
             buf[pos] = UInt8(' ')
             pos += 1
         end
     end
-    pos = writechar(buf, pos, arg isa String ? arg[1] : Char(arg))
-    if leftalign && width > 1
-        for _ = 1:(width - 1)
+    pos = writechar(buf, pos, c)
+    if leftalign && width > w
+        for _ = 1:(width - w)
             buf[pos] = UInt8(' ')
             pos += 1
         end
@@ -227,7 +242,8 @@ end
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
     leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
     str = string(arg)
-    op = p = prec == -1 ? (length(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)) : prec
+    slen = textwidth(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
+    op = p = prec == -1 ? slen : min(slen, prec)
     if !leftalign && width > p
         for _ = 1:(width - p)
             buf[pos] = UInt8(' ')
@@ -246,9 +262,9 @@ end
         end
     end
     for c in str
-        p == 0 && break
+        p -= textwidth(c)
+        p < 0 && break
         pos = writechar(buf, pos, c)
-        p -= 1
     end
     if hash && arg isa AbstractString && p > 0
         buf[pos] = UInt8('"')
@@ -365,21 +381,42 @@ For arbitrary precision numerics, you might extend the method like:
 ```julia
 Printf.tofloat(x::MyArbitraryPrecisionType) = BigFloat(x)
 ```
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 tofloat(x) = Float64(x)
 tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
+_snprintf(ptr, siz, str, arg) =
+    @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+                                   arg::Ref{BigFloat})::Cint
+
+const __BIG_FLOAT_MAX__ = 8192
+
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     x = tofloat(arg)
-    if x isa BigFloat && isfinite(x)
-        ptr = pointer(buf, pos)
-        newpos = @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, (length(buf) - pos + 1)::Csize_t, string(spec; modifier="R")::Ptr{UInt8}; arg::Ref{BigFloat})::Cint
-        newpos > 0 || error("invalid printf formatting for BigFloat")
-        return pos + newpos
-    elseif x isa BigFloat
+    if x isa BigFloat
+        if isfinite(x)
+            GC.@preserve buf begin
+                siz = length(buf) - pos + 1
+                str = string(spec; modifier="R")
+                len = _snprintf(pointer(buf, pos), siz, str, x)
+                if len > siz
+                    maxout = max(__BIG_FLOAT_MAX__,
+                                 ceil(Int, precision(x) * log(2) / log(10)) + 25)
+                    len > maxout &&
+                        error("Over $maxout bytes $len needed to output BigFloat $x")
+                    resize!(buf, len + 1)
+                    len = _snprintf(pointer(buf, pos), len + 1, str, x)
+                end
+                len > 0 || throw(ArgumentError("invalid printf formatting $str for BigFloat"))
+                return pos + len
+            end
+        end
         x = Float64(x)
     end
     if T == Val{'e'} || T == Val{'E'}
@@ -387,11 +424,34 @@ tofloat(x::BigFloat) = x
     elseif T == Val{'f'} || T == Val{'F'}
         newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
     elseif T == Val{'g'} || T == Val{'G'}
-        prec = prec == 0 ? 1 : prec
-        x = round(x, sigdigits=prec)
-        newpos = Ryu.writeshortest(buf, pos, x, plus, space, hash, prec, T == Val{'g'} ? UInt8('e') : UInt8('E'), true, UInt8('.'))
+        if isinf(x) || isnan(x)
+            newpos = Ryu.writeshortest(buf, pos, x, plus, space)
+        else
+            # C11-compliant general format
+            prec = prec == 0 ? 1 : prec
+            # format the value in scientific notation and parse the exponent part
+            exp = let p = Ryu.writeexp(buf, pos, x, prec)
+                b1, b2, b3, b4 = buf[p-4], buf[p-3], buf[p-2], buf[p-1]
+                Z = UInt8('0')
+                if b1 == UInt8('e')
+                    # two-digit exponent
+                    sign = b2 == UInt8('+') ? 1 : -1
+                    exp = 10 * (b3 - Z) + (b4 - Z)
+                else
+                    # three-digit exponent
+                    sign = b1 == UInt8('+') ? 1 : -1
+                    exp = 100 * (b2 - Z) + 10 * (b3 - Z) + (b4 - Z)
+                end
+                flipsign(exp, sign)
+            end
+            if -4 ≤ exp < prec
+                newpos = Ryu.writefixed(buf, pos, x, prec - (exp + 1), plus, space, hash, UInt8('.'), !hash)
+            else
+                newpos = Ryu.writeexp(buf, pos, x, prec - 1, plus, space, hash, T == Val{'g'} ? UInt8('e') : UInt8('E'), UInt8('.'), !hash)
+            end
+        end
     elseif T == Val{'a'} || T == Val{'A'}
-        x, neg = x < 0 ? (-x, true) : (x, false)
+        x, neg = x < 0 || x === -Base.zero(x) ? (-x, true) : (x, false)
         newpos = pos
         if neg
             buf[newpos] = UInt8('-')
@@ -422,6 +482,8 @@ tofloat(x::BigFloat) = x
                 buf[newpos] = UInt8('0')
                 newpos += 1
                 if prec > 0
+                    buf[newpos] = UInt8('.')
+                    newpos += 1
                     while prec > 0
                         buf[newpos] = UInt8('0')
                         newpos += 1
@@ -431,6 +493,7 @@ tofloat(x::BigFloat) = x
                 buf[newpos] = T <: Val{'a'} ? UInt8('p') : UInt8('P')
                 buf[newpos + 1] = UInt8('+')
                 buf[newpos + 2] = UInt8('0')
+                newpos += 3
             else
                 if prec > -1
                     s, p = frexp(x)
@@ -513,7 +576,13 @@ tofloat(x::BigFloat) = x
 end
 
 # pointers
-fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, Int(arg), ptrfmt(spec, arg))
+fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
+
+# position counters
+function fmt(buf, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
+    arg[] = pos - 1
+    pos
+end
 
 # old Printf compat
 function fix_dec end
@@ -645,9 +714,16 @@ const UNROLL_UPTO = 16
 # if you have your own buffer + pos, write formatted args directly to it
 @inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
     # write out first substring
+    escapechar = false
     for i in f.substringranges[1]
-        buf[pos] = f.str[i]
-        pos += 1
+        b = f.str[i]
+        if !escapechar
+            buf[pos] = b
+            pos += 1
+            escapechar = b === UInt8('%')
+        else
+            escapechar = false
+        end
     end
     # for each format, write out arg and next substring
     # unroll up to 16 formats
@@ -656,8 +732,14 @@ const UNROLL_UPTO = 16
         if N >= i
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
-                buf[pos] = f.str[j]
-                pos += 1
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
+                end
             end
         end
     end
@@ -665,21 +747,32 @@ const UNROLL_UPTO = 16
         for i = 17:length(f.formats)
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
-                buf[pos] = f.str[j]
-                pos += 1
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
+                end
             end
         end
     end
     return pos
 end
 
-plength(f::Spec{T}, x) where {T <: Chars} = max(f.width, 1) + (ncodeunits(x isa AbstractString ? x[1] : Char(x)) - 1)
+function plength(f::Spec{T}, x) where {T <: Chars}
+    c = Char(first(x))
+    w = textwidth(c)
+    return max(f.width, w) + (ncodeunits(c) - w)
+end
 plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
 
 function plength(f::Spec{T}, x) where {T <: Strings}
     str = string(x)
-    p = f.precision == -1 ? (length(str) + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - length(str))
+    sw = textwidth(str)
+    p = f.precision == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
+    return max(f.width, p) + (sizeof(str) - sw)
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
@@ -691,6 +784,7 @@ plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
     max(f.width, 0 + 309 + 17 + f.hash + 5)
 plength(f::Spec{T}, x) where {T <: Floats} =
     max(f.width, f.precision + 309 + 17 + f.hash + 5)
+plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
     len = sum(length, substringranges)
@@ -740,27 +834,61 @@ end
 """
     @printf([io::IO], "%Fmt", args...)
 
-Print `args` using C `printf` style format specification string, with some caveats:
+Print `args` using C `printf` style format specification string.
+Optionally, an `IO` may be passed as the first argument to redirect output.
+
+# Examples
+```jldoctest
+julia> @printf "Hello %s" "world"
+Hello world
+
+julia> @printf "Scientific notation %e" 1.234
+Scientific notation 1.234000e+00
+
+julia> @printf "Scientific notation three digits %.3e" 1.23456
+Scientific notation three digits 1.235e+00
+
+julia> @printf "Decimal two digits %.2f" 1.23456
+Decimal two digits 1.23
+
+julia> @printf "Padded to length 5 %5i" 123
+Padded to length 5   123
+
+julia> @printf "Padded with zeros to length 6 %06i" 123
+Padded with zeros to length 6 000123
+
+julia> @printf "Use shorter of decimal or scientific %g %g" 1.23 12300000.0
+Use shorter of decimal or scientific 1.23 1.23e+07
+```
+
+For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
+See also [`@sprintf`](@ref).
+
+# Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
 equally close to the numeric values of two possible output strings, the output
 string further away from zero is chosen.
-Optionally, an `IO`
-may be passed as the first argument to redirect output.
-See also: [`@sprintf`](@ref)
+
 # Examples
 ```jldoctest
-julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
-Inf Inf NaN NaN\n
-julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
+julia> @printf("%f %F %f %F", Inf, Inf, NaN, NaN)
+Inf Inf NaN NaN
+
+julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
 0 0.0 -0.007812
 ```
+
+!!! compat "Julia 1.7"
+    Starting in Julia 1.7, `%s` (string) and `%c` (character) widths are computed
+    using [`textwidth`](@ref), which e.g. ignores zero-width characters
+    (such as combining characters for diacritical marks) and treats certain
+    "wide" characters (e.g. emoji) as width `2`.
 """
 macro printf(io_or_fmt, args...)
     if io_or_fmt isa String
-        io = stdout
         fmt = Format(io_or_fmt)
-        return esc(:($Printf.format($io, $fmt, $(args...))))
+        return esc(:($Printf.format(stdout, $fmt, $(args...))))
     else
         io = io_or_fmt
         isempty(args) && throw(ArgumentError("must provide required format string"))
@@ -772,7 +900,8 @@ end
 """
     @sprintf("%Fmt", args...)
 
-Return `@printf` formatted output as string.
+Return [`@printf`](@ref) formatted output as string.
+
 # Examples
 ```jldoctest
 julia> @sprintf "this is a %s %15.1f" "test" 34.567

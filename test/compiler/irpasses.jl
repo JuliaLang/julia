@@ -34,7 +34,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.inst[3]
@@ -62,7 +62,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src)
     Core.Compiler.verify_ir(ir)
-    domtree = Core.Compiler.construct_domtree(ir.cfg)
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end
@@ -128,7 +128,7 @@ let nt = (a=1, b=2)
     @test_throws ArgumentError blah31139(nt)
 end
 
-# Expr(:new) annoted as PartialStruct
+# Expr(:new) annotated as PartialStruct
 struct FooPartial
     x
     y
@@ -315,6 +315,16 @@ let K = rand(2,2)
     @test test_29253(K) == 2
 end
 
+function no_op_refint(r)
+    r[]
+    return
+end
+let code = code_typed(no_op_refint,Tuple{Base.RefValue{Int}})[1].first.code
+    @test length(code) == 1
+    @test isa(code[1], Core.ReturnNode)
+    @test code[1].val === nothing
+end
+
 # check getfield elim handling of GlobalRef
 const _some_coeffs = (1,[2],3,4)
 splat_from_globalref(x) = (x, _some_coeffs...,)
@@ -342,3 +352,34 @@ let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
     @test nisa == 1
     @test found_pi
 end
+
+# issue #38936
+# check that getfield elim can handle unions of tuple types
+mutable struct S38936{T} content::T end
+struct PrintAll{T} <: Function
+    parts::T
+end
+function (f::PrintAll)(io::IO)
+    for x in f.parts
+        print(io, x)
+    end
+end
+let f = PrintAll((S38936("<span>"), "data", S38936("</span")))
+    @test !any(code_typed(f, (IOBuffer,))[1][1].code) do stmt
+        stmt isa Expr && stmt.head === :call && stmt.args[1] === GlobalRef(Core, :tuple)
+    end
+end
+
+exc39508 = ErrorException("expected")
+@noinline function test39508()
+    local err
+    try
+        err = exc39508::Exception
+        throw(err)
+        false
+    catch ex
+        @test ex === err
+    end
+    return err
+end
+@test test39508() === exc39508

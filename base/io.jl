@@ -15,7 +15,7 @@ struct EOFError <: Exception end
 A system call failed with an error code (in the `errno` global variable).
 """
 struct SystemError <: Exception
-    prefix::AbstractString
+    prefix::String
     errnum::Int32
     extrainfo
     SystemError(p::AbstractString, e::Integer, extrainfo) = new(p, e, extrainfo)
@@ -60,9 +60,49 @@ function isopen end
 Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
+
+"""
+    closewrite(stream)
+
+Shutdown the write half of a full-duplex I/O stream. Performs a [`flush`](@ref)
+first. Notify the other end that no more data will be written to the underlying
+file. This is not supported by all IO types.
+
+# Examples
+```jldoctest
+julia> io = Base.BufferStream(); # this never blocks, so we can read and write on the same Task
+
+julia> write(io, "request");
+
+julia> # calling `read(io)` here would block forever
+
+julia> closewrite(io);
+
+julia> read(io, String)
+"request"
+"""
+function closewrite end
+
+"""
+    flush(stream)
+
+Commit all currently buffered writes to the given stream.
+"""
 function flush end
-function wait_readnb end
-function wait_close end
+
+"""
+    bytesavailable(io)
+
+Return the number of bytes available for reading before a read from this stream or buffer will block.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> bytesavailable(io)
+34
+```
+"""
 function bytesavailable end
 
 """
@@ -73,15 +113,15 @@ data has already been buffered. The result is a `Vector{UInt8}`.
 
 !!! warning
     The amount of data returned is implementation-dependent; for example it can
-depend on the internal choice of buffer size. Other functions such as [`read`](@ref)
-should generally be used instead.
+    depend on the internal choice of buffer size. Other functions such as [`read`](@ref)
+    should generally be used instead.
 """
 function readavailable end
 
 """
     isreadable(io) -> Bool
 
-Return `true` if the specified IO object is readable (if that can be determined).
+Return `false` if the specified IO object is not readable.
 
 # Examples
 ```jldoctest
@@ -99,12 +139,12 @@ true
 julia> rm("myfile.txt")
 ```
 """
-function isreadable end
+isreadable(io::IO) = isopen(io)
 
 """
     iswritable(io) -> Bool
 
-Return `true` if the specified IO object is writable (if that can be determined).
+Return `false` if the specified IO object is not writable.
 
 # Examples
 ```jldoctest
@@ -122,9 +162,22 @@ false
 julia> rm("myfile.txt")
 ```
 """
-function iswritable end
-function copy end
+iswritable(io::IO) = isopen(io)
+
+"""
+    eof(stream) -> Bool
+
+Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
+function will block to wait for more data if necessary, and then return `false`. Therefore
+it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
+`false` as long as buffered data is still available, even if the remote end of a connection
+is closed.
+"""
 function eof end
+
+function copy end
+function wait_readnb end
+function wait_close end
 
 """
     read(io::IO, T)
@@ -136,7 +189,7 @@ Note that Julia does not convert the endianness for you. Use [`ntoh`](@ref) or
 
     read(io::IO, String)
 
-Read the entirety of `io`, as a `String`.
+Read the entirety of `io`, as a `String` (see also [`readchomp`](@ref)).
 
 # Examples
 ```jldoctest
@@ -307,7 +360,7 @@ function open_flags(;
 end
 
 """
-    open(f::Function, args...; kwargs....)
+    open(f::Function, args...; kwargs...)
 
 Apply the function `f` to the result of `open(args...; kwargs...)` and close the resulting file
 descriptor upon completion.
@@ -357,62 +410,36 @@ end
 function pipe_reader end
 function pipe_writer end
 
+for f in (:flush, :closewrite, :iswritable)
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_writer(io)::IO)
+end
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
+write(to::IO, from::AbstractPipe) = write(to, pipe_reader(from))
 unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)::Union{Int,UInt}
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
-flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
 
+for f in (
+        # peek/mark interface
+        :mark, :unmark, :reset, :ismarked,
+        # Simple reader functions
+        :read, :readavailable, :bytesavailable, :reseteof, :isreadable)
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
+end
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)::UInt8
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
-read(io::AbstractPipe) = read(pipe_reader(io)::IO)
 readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
 readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
-
-for f in (
-        # peek/mark interface
-        :mark, :unmark, :reset, :ismarked,
-        # Simple reader functions
-        :readavailable, :isreadable)
-    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
-end
 peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
+wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
+eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
 
-iswritable(io::AbstractPipe) = iswritable(pipe_writer(io)::IO)
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)::IO) || isopen(pipe_reader(io)::IO)
 close(io::AbstractPipe) = (close(pipe_writer(io)::IO); close(pipe_reader(io)::IO))
-wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe_reader(io)::IO))
-
-"""
-    bytesavailable(io)
-
-Return the number of bytes available for reading before a read from this stream or buffer will block.
-
-# Examples
-```jldoctest
-julia> io = IOBuffer("JuliaLang is a GitHub organization");
-
-julia> bytesavailable(io)
-34
-```
-"""
-bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io)::IO)
-
-"""
-    eof(stream) -> Bool
-
-Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
-function will block to wait for more data if necessary, and then return `false`. Therefore
-it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
-`false` as long as buffered data is still available, even if the remote end of a connection
-is closed.
-"""
-eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
-reseteof(io::AbstractPipe) = reseteof(pipe_reader(io)::IO)
 
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
@@ -883,8 +910,9 @@ end
 
 function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
-    isempty(target) && return ""
-    c, rest = Iterators.peel(target)
+    x = Iterators.peel(target)
+    isnothing(x) && return ""
+    c, rest = x
     if isempty(rest) && c <= '\x7f'
         return readuntil_string(io, c % UInt8, keep)
     end
@@ -987,6 +1015,8 @@ retained. When called with a file name, the file is opened once at the beginning
 iteration and closed at the end. If iteration is interrupted, the file will be
 closed when the `EachLine` object is garbage collected.
 
+To iterate over each line of a `String`, `eachline(IOBuffer(str))` can be used.
+
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
@@ -1019,6 +1049,8 @@ eltype(::Type{<:EachLine}) = String
 
 IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
+isdone(itr::EachLine, state...) = eof(itr.stream)
+
 struct ReadEachIterator{T, IOT <: IO}
     stream::IOT
 end
@@ -1028,7 +1060,7 @@ end
 
 Return an iterable object yielding [`read(io, T)`](@ref).
 
-See also: [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref)
+See also [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref).
 
 !!! compat "Julia 1.6"
     `readeach` requires Julia 1.6 or later.
@@ -1052,6 +1084,8 @@ iterate(itr::ReadEachIterator{T}, state=nothing) where T =
 eltype(::Type{ReadEachIterator{T}}) where T = T
 
 IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
+
+isdone(itr::ReadEachIterator, state...) = eof(itr.stream)
 
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
@@ -1110,11 +1144,6 @@ ismarked(io::IO) = io.mark >= 0
 # Make sure all IO streams support flush, even if only as a no-op,
 # to make it easier to write generic I/O code.
 
-"""
-    flush(stream)
-
-Commit all currently buffered writes to the given stream.
-"""
 flush(io::IO) = nothing
 
 """
@@ -1156,6 +1185,8 @@ pass the filename as the first argument. EOL markers other than `'\\n'` are supp
 passing them as the second argument.  The last non-empty line of `io` is counted even if it does not
 end with the EOL, matching the length returned by [`eachline`](@ref) and [`readlines`](@ref).
 
+To count lines of a `String`, `countlines(IOBuffer(str))` can be used.
+
 # Examples
 ```jldoctest
 julia> io = IOBuffer("JuliaLang is a GitHub organization.\\n");
@@ -1168,8 +1199,13 @@ julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 julia> countlines(io)
 1
 
+julia> eof(io) # counting lines moves the file pointer
+true
+
+julia> io = IOBuffer("JuliaLang is a GitHub organization.");
+
 julia> countlines(io, eol = '.')
-0
+1
 ```
 """
 function countlines(io::IO; eol::AbstractChar='\n')

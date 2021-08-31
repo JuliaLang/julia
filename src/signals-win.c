@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Windows
+// Note that this file is `#include`d by "signal-handling.c"
 
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
 
@@ -42,11 +43,11 @@ static char *strsignal(int sig)
 
 static void jl_try_throw_sigint(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     int force = jl_check_force_sigint();
-    if (force || (!ptls->defer_signal && ptls->io_wait)) {
+    if (force || (!ct->ptls->defer_signal && ct->ptls->io_wait)) {
         jl_safepoint_consume_sigint();
         if (force)
             jl_safe_printf("WARNING: Force throwing a SIGINT\n");
@@ -58,7 +59,7 @@ static void jl_try_throw_sigint(void)
 
 void __cdecl crt_sig_handler(int sig, int num)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     CONTEXT Context;
     switch (sig) {
     case SIGFPE:
@@ -85,13 +86,13 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         break;
     default: // SIGSEGV, (SSIGTERM, IGILL)
-        if (ptls->safe_restore)
+        if (jl_get_safe_restore())
             jl_rethrow();
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
         if (sig == SIGILL)
             jl_show_sigill(&Context);
-        jl_critical_error(sig, &Context, ptls->bt_data, &ptls->bt_size);
+        jl_critical_error(sig, &Context);
         raise(sig);
     }
 }
@@ -107,7 +108,9 @@ static int have_backtrace_fiber;
 static void JL_NORETURN start_backtrace_fiber(void)
 {
     // collect the backtrace
-    stkerror_ptls->bt_size = rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx, stkerror_ptls->pgcstack);
+    stkerror_ptls->bt_size =
+        rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx,
+                          NULL /*current_task?*/);
     // switch back to the execution fiber
     jl_setcontext(&error_return_fiber);
     abort();
@@ -121,7 +124,8 @@ void restore_signals(void)
 
 void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
 #if defined(_CPU_X86_64_)
     DWORD64 Rsp = (ctxThread->Rsp & (DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
@@ -129,14 +133,15 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 #else
 #error WIN16 not supported :P
 #endif
-    if (!ptls->safe_restore) {
+    if (!jl_get_safe_restore()) {
         assert(excpt != NULL);
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
-            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, ptls->pgcstack);
+            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread,
+                                              ct->gcstack);
         }
         else if (have_backtrace_fiber) {
-            JL_LOCK(&backtrace_lock);
+            JL_LOCK_NOGC(&backtrace_lock);
             stkerror_ctx = ctxThread;
             stkerror_ptls = ptls;
             jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
@@ -221,7 +226,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
 
 LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_current_task->ptls;
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
@@ -247,7 +252,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                     }
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
-                if (ptls->safe_restore) {
+                if (jl_get_safe_restore()) {
                     jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
@@ -308,8 +313,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
-        jl_critical_error(0, ExceptionInfo->ContextRecord,
-                          ptls->bt_data, &ptls->bt_size);
+        jl_critical_error(0, ExceptionInfo->ContextRecord);
         static int recursion = 0;
         if (recursion++)
             exit(1);
@@ -324,72 +328,72 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
-volatile HANDLE hBtThread = 0;
+static volatile HANDLE hBtThread = 0;
+
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
-    // Note: illegal to use jl_* functions from this thread
-
-    TIMECAPS tc;
-    if (MMSYSERR_NOERROR != timeGetDevCaps(&tc, sizeof(tc))) {
-        fputs("failed to get timer resolution", stderr);
-        hBtThread = 0;
-        return 0;
-    }
-    timeBeginPeriod(tc.wPeriodMin);
+    // Note: illegal to use jl_* functions from this thread except for profiling-specific functions
     while (1) {
-        DWORD timeout = nsecprof / GIGA;
-        timeout += tc.wPeriodMin;
-        Sleep(timeout);
-        if (bt_size_cur < bt_size_max && running) {
-            JL_LOCK_NOGC(&jl_in_stackwalk);
-            jl_lock_profile();
-            if ((DWORD)-1 == SuspendThread(hMainThread)) {
-                fputs("failed to suspend main thread. aborting profiling.", stderr);
-                break;
+        DWORD timeout_ms = nsecprof / (GIGA / 1000);
+        Sleep(timeout_ms > 0 ? timeout_ms : 1);
+        if (running) {
+            if (jl_profile_is_buffer_full()) {
+                jl_profile_stop_timer(); // does not change the thread state
+                SuspendThread(GetCurrentThread());
+                continue;
             }
-            if (running) {
+            else {
+                JL_LOCK_NOGC(&jl_in_stackwalk);
+                jl_lock_profile();
+                if ((DWORD)-1 == SuspendThread(hMainThread)) {
+                    fputs("failed to suspend main thread. aborting profiling.", stderr);
+                    break;
+                }
                 CONTEXT ctxThread;
                 memset(&ctxThread, 0, sizeof(CONTEXT));
                 ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
                 if (!GetThreadContext(hMainThread, &ctxThread)) {
                     fputs("failed to get context from main thread. aborting profiling.", stderr);
-                    running = 0;
+                    jl_profile_stop_timer();
                 }
                 else {
                     // Get backtrace data
                     bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
                             bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
                     // Mark the end of this block with 0
-                    if (bt_size_cur < bt_size_max)
-                        bt_data_prof[bt_size_cur++].uintptr = 0;
+                    bt_data_prof[bt_size_cur++].uintptr = 0;
+                }
+                jl_unlock_profile();
+                JL_UNLOCK_NOGC(&jl_in_stackwalk);
+                if ((DWORD)-1 == ResumeThread(hMainThread)) {
+                    jl_profile_stop_timer();
+                    fputs("failed to resume main thread! aborting.", stderr);
+                    gc_debug_critical_error();
+                    abort();
                 }
             }
-            jl_unlock_profile();
-            JL_UNLOCK_NOGC(&jl_in_stackwalk);
-            if ((DWORD)-1 == ResumeThread(hMainThread)) {
-                timeEndPeriod(tc.wPeriodMin);
-                fputs("failed to resume main thread! aborting.", stderr);
-                gc_debug_critical_error();
-                abort();
-            }
-        }
-        else {
-            timeEndPeriod(tc.wPeriodMin);
-            SuspendThread(GetCurrentThread());
-            timeBeginPeriod(tc.wPeriodMin);
         }
     }
     jl_unlock_profile();
     JL_UNLOCK_NOGC(&jl_in_stackwalk);
-    timeEndPeriod(tc.wPeriodMin);
+    jl_profile_stop_timer();
     hBtThread = 0;
     return 0;
 }
 
+static volatile TIMECAPS timecaps;
+
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
-    running = 1;
-    if (hBtThread == 0) {
+    if (hBtThread == NULL) {
+
+        TIMECAPS _timecaps;
+        if (MMSYSERR_NOERROR != timeGetDevCaps(&_timecaps, sizeof(_timecaps))) {
+            fputs("failed to get timer resolution", stderr);
+            return -2;
+        }
+        timecaps = _timecaps;
+
         hBtThread = CreateThread(
             NULL,                   // default security attributes
             0,                      // use default stack size
@@ -397,6 +401,8 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
             0,                      // argument to thread function
             0,                      // use default creation flags
             0);                     // returns the thread identifier
+        if (hBtThread == NULL)
+            return -1;
         (void)SetThreadPriority(hBtThread, THREAD_PRIORITY_ABOVE_NORMAL);
     }
     else {
@@ -405,10 +411,19 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
             return -2;
         }
     }
-    return (hBtThread != NULL ? 0 : -1);
+    if (running == 0) {
+        // Failure to change the timer resolution is not fatal. However, it is important to
+        // ensure that the timeBeginPeriod/timeEndPeriod is paired.
+        if (TIMERR_NOERROR != timeBeginPeriod(timecaps.wPeriodMin))
+            timecaps.wPeriodMin = 0;
+    }
+    running = 1; // set `running` finally
+    return 0;
 }
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
+    if (running && timecaps.wPeriodMin)
+        timeEndPeriod(timecaps.wPeriodMin);
     running = 0;
 }
 

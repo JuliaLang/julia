@@ -116,6 +116,14 @@ using Test
     @test abs(one(Rational{UInt})) === one(Rational{UInt})
     @test abs(one(Rational{Int})) === one(Rational{Int})
     @test abs(-one(Rational{Int})) === one(Rational{Int})
+
+    # inf addition
+    @test 1//0 + 1//0 == 1//0
+    @test -1//0 - 1//0 == -1//0
+    @test_throws DivideError 1//0 - 1//0
+    @test_throws DivideError -1//0 + 1//0
+    @test Int128(1)//0 + 1//0 isa Rational{Int128}
+    @test 1//0 + Int128(1)//0 isa Rational{Int128}
 end
 
 @testset "Rational methods" begin
@@ -480,6 +488,8 @@ end
         @test gcd(b, a) === T(2)//T(105)
         @test lcm(a, b) === T(30)//T(7)
         if T <: Signed
+            @test gcd(-a) === a
+            @test lcm(-b) === b
             @test gcdx(a, b) === (T(2)//T(105), T(-11), T(4))
             @test gcd(-a, b) === T(2)//T(105)
             @test gcd(a, -b) === T(2)//T(105)
@@ -595,9 +605,28 @@ end
     @test -2//3 * 0x1 == 0x1 * -2//3 == -2//3
 end
 
-@testset "ispow2" begin
+@testset "ispow2 and iseven/isodd" begin
     @test ispow2(4//1)
     @test ispow2(1//8)
     @test !ispow2(3//8)
     @test !ispow2(0//1)
+    @test iseven(4//1) && !isodd(4//1)
+    @test !iseven(3//1) && isodd(3//1)
+    @test !iseven(3//8) && !isodd(3//8)
+end
+
+@testset "checked_den with different integer types" begin
+    @test Base.checked_den(Int8(4), Int32(8)) == Base.checked_den(Int32(4), Int32(8))
+end
+
+@testset "Rational{T} with non-concrete T (issue #41222)" begin
+    @test @inferred(Rational{Integer}(2,3)) isa Rational{Integer}
+end
+
+@testset "issue #41489" begin
+    @test Core.Compiler.return_type(+, NTuple{2, Rational}) == Rational
+    @test Core.Compiler.return_type(-, NTuple{2, Rational}) == Rational
+
+    A=Rational[1 1 1; 2 2 2; 3 3 3]
+    @test @inferred(A*A) isa Matrix{Rational}
 end

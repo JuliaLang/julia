@@ -73,11 +73,13 @@ function test_jl_dump_compiles_toplevel_thunks()
     # Make sure to cause compilation of the eval function
     # before calling it below.
     Core.eval(Main, Any[:(nothing)][1])
+    GC.enable(false)  # avoid finalizers to be compiled
     topthunk = Meta.lower(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
     Core.eval(Main, topthunk)
     ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
     close(io)
+    GC.enable(true)
     tstats = stat(tfile)
     tempty = tstats.size == 0
     rm(tfile)
@@ -348,7 +350,7 @@ struct Const{T<:Array}
 end
 
 @eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 function foo31018!(a, b)
     @aliasscope for i in eachindex(a, b)
@@ -473,3 +475,165 @@ end
     @test contains(llvmstr, str) || llvmstr
     @test f37262(Base.inferencebarrier(true)) === nothing
 end
+
+# issue #37671
+let d = Dict((:a,) => 1, (:a, :b) => 2)
+    @test d[(:a,)] == 1
+    @test d[(:a, :b)] == 2
+end
+
+# issue #37880
+primitive type Has256Bits 256 end
+let x = reinterpret(Has256Bits, [0xfcdac822cac89d82de4f9b3326da8294, 0x6ebac4d5982880ca703c57e37657f1ee])[]
+    shifted = [0xeefcdac822cac89d82de4f9b3326da82, 0x006ebac4d5982880ca703c57e37657f1]
+    f(x) = Base.lshr_int(x, 0x8)
+    @test reinterpret(UInt128, [f(x)]) == shifted
+    @test reinterpret(UInt128, [Base.lshr_int(x, 0x8)]) == shifted
+    g(x) = Base.ashr_int(x, 0x8)
+    @test reinterpret(UInt128, [g(x)]) == shifted
+    @test reinterpret(UInt128, [Base.ashr_int(x, 0x8)]) == shifted
+    lshifted = [0xdac822cac89d82de4f9b3326da829400, 0xbac4d5982880ca703c57e37657f1eefc]
+    h(x) = Base.shl_int(x, 0x8)
+    @test reinterpret(UInt128, [h(x)]) == lshifted
+    @test reinterpret(UInt128, [Base.shl_int(x, 0x8)]) == lshifted
+end
+
+# issue #37872
+let f(@nospecialize(x)) = x===Base.ImmutableDict(Int128=>:big)
+    @test !f(Dict(Int=>Int))
+end
+
+# issue #37974
+primitive type UInt24 24 end
+let a = Core.Intrinsics.trunc_int(UInt24, 3),
+    f(t) = t[2]
+    @test f((a, true)) === true
+    @test f((a, false)) === false
+    @test sizeof(Tuple{UInt24,Bool}) == 8
+    @test sizeof(UInt24) == 3
+    @test sizeof(Union{UInt8,UInt24}) == 3
+    @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
+end
+
+# issue #39232
+function f39232(a)
+    z = Any[]
+    for (i, ai) in enumerate(a)
+        push!(z, ai)
+    end
+    return z
+end
+@test f39232((+, -)) == Any[+, -]
+
+@testset "GC.@preserve" begin
+    # main use case
+    function f1(cond)
+        val = [1]
+        GC.@preserve val begin end
+    end
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f1, Tuple{Bool}, true, false, false))
+
+    # stack allocated objects (JuliaLang/julia#34241)
+    function f3(cond)
+        val = ([1],)
+        GC.@preserve val begin end
+    end
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f3, Tuple{Bool}, true, false, false))
+
+    # unions of immutables (JuliaLang/julia#39501)
+    function f2(cond)
+        val = cond ? 1 : 1f0
+        GC.@preserve val begin end
+    end
+    @test !occursin("llvm.julia.gc_preserve_begin", get_llvm(f2, Tuple{Bool}, true, false, false))
+    # make sure the fix for the above doesn't regress #34241
+    function f4(cond)
+        val = cond ? ([1],) : ([1f0],)
+        GC.@preserve val begin end
+    end
+    @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
+end
+
+# issue #32843
+function f32843(vals0, v)
+    (length(vals0) > 1) && (vals = v[1])
+    (length(vals0) == 1 && vals0[1]==1) && (vals = 1:2)
+    vals
+end
+@test_throws UndefVarError f32843([6], Vector[[1]])
+
+# issue #40855, struct constants with union fields
+@enum T40855 X40855
+struct A40855
+    d::Union{Nothing, T40855}
+    b::Union{Nothing, Int}
+end
+g() = string(A40855(X40855, 1))
+@test g() == "$(@__MODULE__).A40855($(@__MODULE__).X40855, 1)"
+
+# issue #40612
+f40612(a, b) = a|b === a|b
+g40612(a, b) = a[]|a[] === b[]|b[]
+@test f40612(true, missing)
+@test !g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[true])
+@test !g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[missing])
+@test g40612(Union{Bool,Missing}[true], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[false])
+
+# issue #41438
+struct A41438{T}
+  x::Ptr{T}
+end
+struct B41438{T}
+  x::T
+end
+f41438(y) = y[].x
+@test A41438.body.layout != C_NULL
+@test B41438.body.layout === C_NULL
+@test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
+@test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL
+
+const S41438 = Pair{Any, Ptr{T}} where T
+g41438() = Array{S41438,1}(undef,1)[1].first
+get_llvm(g41438, ()); # cause allocation of layout
+@test S41438.body.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438.body)
+@test S41438{Int}.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438{Int})
+
+# issue #41157
+f41157(a, b) = a[1] = b[1]
+@test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
+
+# issue #41096
+struct Modulate41096{M<:Union{Function, Val{true}, Val{false}}, id}
+    modulate::M
+    Modulate41096(id::Symbol, modulate::Function) = new{typeof(modulate), id}(modulate)
+    Modulate41096(id::Symbol, modulate::Bool=true) = new{Val{modulate}, id}(modulate|>Val)
+end
+@inline ismodulatable41096(modulate::Modulate41096) = ismodulatable41096(typeof(modulate))
+@inline ismodulatable41096(::Type{<:Modulate41096{Val{B}}}) where B = B
+@inline ismodulatable41096(::Type{<:Modulate41096{<:Function}}) = true
+
+mutable struct Term41096{I, M<:Modulate41096}
+    modulate::M
+    Term41096{I}(modulate::Modulate41096) where I = new{I, typeof(modulate)}(modulate)
+end
+@inline ismodulatable41096(term::Term41096) = ismodulatable41096(typeof(term))
+@inline ismodulatable41096(::Type{<:Term41096{I, M} where I}) where M = ismodulatable41096(M)
+
+function newexpand41096(gen, name::Symbol)
+    flag = ismodulatable41096(getfield(gen, name))
+    if flag
+        return true
+    else
+        return false
+    end
+end
+
+t41096 = Term41096{:t}(Modulate41096(:t, false))
+μ41096 = Term41096{:μ}(Modulate41096(:μ, false))
+U41096 = Term41096{:U}(Modulate41096(:U, false))
+
+@test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)

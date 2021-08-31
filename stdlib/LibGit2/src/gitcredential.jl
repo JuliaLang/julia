@@ -30,7 +30,12 @@ function GitCredential(cfg::GitConfig, url::AbstractString)
     fill!(cfg, parse(GitCredential, url))
 end
 
-GitCredential(cred::UserPasswordCredential, url::AbstractString) = parse(GitCredential, url)
+function GitCredential(user_pass_cred::UserPasswordCredential, url::AbstractString)
+    cred = parse(GitCredential, url)
+    cred.username = user_pass_cred.user
+    cred.password = deepcopy(user_pass_cred.pass)
+    return cred
+end
 
 Base.:(==)(c1::GitCredential, c2::GitCredential) = (c1.protocol, c1.host, c1.path, c1.username, c1.password, c1.use_http_path) ==
                                                    (c2.protocol, c2.host, c2.path, c2.username, c2.password, c2.use_http_path)

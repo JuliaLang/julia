@@ -13,7 +13,7 @@ const NRM2_CUTOFF = 32
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
 
-function isone(A::StridedMatrix)
+function isone(A::AbstractMatrix)
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -23,7 +23,7 @@ function isone(A::StridedMatrix)
     end
 end
 
-@inline function _isone_triacheck(A::StridedMatrix, m::Int)
+@inline function _isone_triacheck(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in i:m
         if i == j
             isone(A[i,i]) || return false
@@ -35,7 +35,7 @@ end
 end
 
 # Inner loop over rows to be friendly to the CPU cache
-@inline function _isone_cachefriendly(A::StridedMatrix, m::Int)
+@inline function _isone_cachefriendly(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in 1:m
         if i == j
             isone(A[i,i]) || return false
@@ -75,7 +75,8 @@ isposdef!(A::AbstractMatrix) =
 
 Test whether a matrix is positive definite (and Hermitian) by trying to perform a
 Cholesky factorization of `A`.
-See also [`isposdef!`](@ref)
+
+See also [`isposdef!`](@ref), [`cholesky`](@ref).
 
 # Examples
 ```jldoctest
@@ -205,6 +206,8 @@ diagind(m::Integer, n::Integer, k::Integer=0) =
 
 An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 
+See also: [`diag`](@ref), [`diagm`](@ref), [`Diagonal`](@ref).
+
 # Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
@@ -227,7 +230,7 @@ end
 
 The `k`th diagonal of a matrix, as a vector.
 
-See also: [`diagm`](@ref)
+See also [`diagm`](@ref), [`diagind`](@ref), [`Diagonal`](@ref), [`isdiag`](@ref).
 
 # Examples
 ```jldoctest
@@ -347,6 +350,9 @@ overwriting the existing value of `C`.
 !!! tip
     Bounds checking can be disabled by [`@inbounds`](@ref), but you need to take care of the shape
     of `C`, `A`, `B` yourself.
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 @inline function kron!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix)
     require_one_based_indexing(A, B)
@@ -445,7 +451,7 @@ function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
 end
 function integerpow(A::AbstractMatrix{T}, p) where T
     TT = promote_op(^, T, typeof(p))
-    return (TT == T ? A : copyto!(similar(A, TT), A))^Integer(p)
+    return (TT == T ? A : convert(AbstractMatrix{TT}, A))^Integer(p)
 end
 function schurpow(A::AbstractMatrix, p)
     if istriu(A)
@@ -459,7 +465,7 @@ function schurpow(A::AbstractMatrix, p)
             retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
         end
     else
-        S,Q,d = schur(complex(A))
+        S,Q,d = Schur{Complex}(schur(A))
         # Integer part
         R = S ^ floor(p)
         # Real part
@@ -553,6 +559,28 @@ julia> exp(A)
 """
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
 exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
+exp(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(exp(parent(A)))
+exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
+
+"""
+    cis(A::AbstractMatrix)
+
+Compute ``\\exp(i A)`` for a square matrix ``A``.
+
+!!! compat "Julia 1.7"
+    Support for using `cis` with matrices was added in Julia 1.7.
+
+# Examples
+```jldoctest
+julia> cis([π 0; 0 π]) ≈ -I
+true
+```
+"""
+Base.cis(A::AbstractMatrix) = exp(im * A)  # fallback
+Base.cis(A::AbstractMatrix{<:Base.HWNumber}) = exp_maybe_inplace(float.(im .* A))
+
+exp_maybe_inplace(A::StridedMatrix{<:Union{ComplexF32, ComplexF64}}) = exp!(A)
+exp_maybe_inplace(A) = exp(A)
 
 """
     ^(b::Number, A::AbstractMatrix)
@@ -589,7 +617,6 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = opnorm(A, 1)
-    Inn    = Matrix{T}(I, n, n)
     ## For sufficiently small nA, use lower order Padé-Approximations
     if (nA <= 2.1)
         if nA > 0.95
@@ -606,23 +633,29 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
             C = T[120.,60.,12.,1.]
         end
         A2 = A * A
-        P  = copy(Inn)
-        U  = C[2] * P
-        V  = C[1] * P
-        for k in 1:(div(size(C, 1), 2) - 1)
-            k2 = 2 * k
+        # Compute U and V: Even/odd terms in Padé numerator & denom
+        # Expansion of k=1 in for loop
+        P = A2
+        U = mul!(C[4]*P, true, C[2]*I, true, true) #U = C[2]*I + C[4]*P
+        V = mul!(C[3]*P, true, C[1]*I, true, true) #V = C[1]*I + C[3]*P
+        for k in 2:(div(length(C), 2) - 1)
             P *= A2
-            U += C[k2 + 2] * P
-            V += C[k2 + 1] * P
+            mul!(U, C[2k + 2], P, true, true) # U += C[2k+2]*P
+            mul!(V, C[2k + 1], P, true, true) # V += C[2k+1]*P
         end
+
         U = A * U
-        X = V + U
-        LAPACK.gesv!(V-U, X)
+
+        # Padé approximant:  (V-U)\(V+U)
+        tmp1, tmp2 = A, A2 # Reuse already allocated arrays
+        tmp1 .= V .- U
+        tmp2 .= V .+ U
+        X = LAPACK.gesv!(tmp1, tmp2)[1]
     else
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
         if s > 0
             si = ceil(Int,s)
-            A /= convert(T,2^si)
+            A ./= convert(T,2^si)
         end
         CC = T[64764752532480000.,32382376266240000.,7771770303897600.,
                 1187353796428800.,  129060195264000.,  10559470521600.,
@@ -632,16 +665,35 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
-        U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
-                  CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2 .+ CC[2].*Inn)
-        V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
-                   CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2 .+ CC[1].*Inn
+        tmp1, tmp2 = similar(A6), similar(A6)
 
-        X = V + U
-        LAPACK.gesv!(V-U, X)
+        # Allocation economical version of:
+        # U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
+        #           CC[8].*A6 .+ CC[6].*A4 .+ CC[4]*A2+CC[2]*I)
+        tmp1 .= CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2
+        tmp2 .= CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2
+        mul!(tmp2, true,CC[2]*I, true, true) # tmp2 .+= CC[2]*I
+        U = mul!(tmp2, A6, tmp1, true, true)
+        U, tmp1 = mul!(tmp1, A, U), A # U = A * U0
 
-        if s > 0            # squaring to reverse dividing by power of 2
-            for t=1:si; X *= X end
+        # Allocation economical version of:
+        # V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
+        #           CC[7].*A6 .+ CC[5].*A4 .+ CC[3]*A2 .+ CC[1]*I
+        tmp1 .= CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2
+        tmp2 .= CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2
+        mul!(tmp2, true, CC[1]*I, true, true) # tmp2 .+= CC[1]*I
+        V = mul!(tmp2, A6, tmp1, true, true)
+
+        tmp1 .= V .+ U
+        tmp2 .= V .- U # tmp2 aleady contained V but this seems more readable
+        X = LAPACK.gesv!(tmp2, tmp1)[1] # X now contains r_13 in Higham 2008
+
+        if s > 0
+            # Repeated squaring to compute X = r_13^(2^si)
+            for t=1:si
+                mul!(tmp2, X, X)
+                X, tmp2 = tmp2, X
+            end
         end
     end
 
@@ -676,7 +728,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    log(A{T}::StridedMatrix{T})
+    log(A::StridedMatrix)
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -685,9 +737,10 @@ matrix function is returned whenever possible.
 
 If `A` is symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used, if `A` is triangular an improved version of the inverse scaling and squaring method is
-employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur form
-([`schur`](@ref)) is computed and the triangular algorithm is used on the
-triangular factor.
+employed (see [^AH12] and [^AHR13]). If `A` is real with no negative eigenvalues, then
+the real Schur form is computed. Otherwise, the complex Schur form is computed. Then
+the upper (quasi-)triangular algorithm in [^AHR13] is used on the upper (quasi-)triangular
+factor.
 
 [^AH12]: Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling and squaring algorithms for the matrix logarithm", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. [doi:10.1137/110852553](https://doi.org/10.1137/110852553)
 
@@ -710,29 +763,32 @@ function log(A::StridedMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
         logHermA = log(Hermitian(A))
-        return isa(logHermA, Hermitian) ? copytri!(parent(logHermA), 'U', true) : parent(logHermA)
-    end
-
-    # Use Schur decomposition
-    n = checksquare(A)
-    if istriu(A)
-        return triu!(parent(log(UpperTriangular(complex(A)))))
+        return ishermitian(logHermA) ? copytri!(parent(logHermA), 'U', true) : parent(logHermA)
+    elseif istriu(A)
+        return triu!(parent(log(UpperTriangular(A))))
+    elseif isreal(A)
+        SchurF = schur(real(A))
+        if istriu(SchurF.T)
+            logA = SchurF.Z * log(UpperTriangular(SchurF.T)) * SchurF.Z'
+        else
+            # real log exists whenever all eigenvalues are positive
+            is_log_real = !any(x -> isreal(x) && real(x) ≤ 0, SchurF.values)
+            if is_log_real
+                logA = SchurF.Z * log_quasitriu(SchurF.T) * SchurF.Z'
+            else
+                SchurS = Schur{Complex}(SchurF)
+                logA = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
+            end
+        end
+        return eltype(A) <: Complex ? complex(logA) : logA
     else
-        if isreal(A)
-            SchurF = schur(real(A))
-        else
-            SchurF = schur(A)
-        end
-        if !istriu(SchurF.T)
-            SchurS = schur(complex(SchurF.T))
-            logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
-            return SchurF.Z * logT * SchurF.Z'
-        else
-            R = log(UpperTriangular(complex(SchurF.T)))
-            return SchurF.Z * R * SchurF.Z'
-        end
+        SchurF = schur(A)
+        return SchurF.vectors * log(UpperTriangular(SchurF.T)) * SchurF.vectors'
     end
 end
+
+log(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(log(parent(A)))
+log(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(log(parent(A)))
 
 """
     sqrt(A::AbstractMatrix)
@@ -752,12 +808,20 @@ defaults to machine precision scaled by `size(A,1)`.
 Otherwise, the square root is determined by means of the
 Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schur`](@ref))
 and then the complex square root of the triangular factor.
+If a real square root exists, then an extension of this method [^H87] that computes the real
+Schur form and then the real square root of the quasi-triangular factor is instead used.
 
 [^BH83]:
 
     Åke Björck and Sven Hammarling, "A Schur method for the square root of a matrix",
     Linear Algebra and its Applications, 52-53, 1983, 127-140.
     [doi:10.1016/0024-3795(83)80010-X](https://doi.org/10.1016/0024-3795(83)80010-X)
+
+[^H87]:
+
+    Nicholas J. Higham, "Computing real square roots of a real matrix",
+    Linear Algebra and its Applications, 88-89, 1987, 405-430.
+    [doi:10.1016/0024-3795(87)90118-2](https://doi.org/10.1016/0024-3795(87)90118-2)
 
 # Examples
 ```jldoctest
@@ -772,33 +836,36 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
-function sqrt(A::StridedMatrix{<:Real})
-    if issymmetric(A)
-        return copytri!(parent(sqrt(Symmetric(A))), 'U')
-    end
-    n = checksquare(A)
-    if istriu(A)
-        return triu!(parent(sqrt(UpperTriangular(A))))
-    else
-        SchurF = schur(complex(A))
-        R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
-        return SchurF.vectors * R * SchurF.vectors'
-    end
-end
-function sqrt(A::StridedMatrix{<:Complex})
+function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     if ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
-        return isa(sqrtHermA, Hermitian) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
-    end
-    n = checksquare(A)
-    if istriu(A)
+        return ishermitian(sqrtHermA) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
+    elseif istriu(A)
         return triu!(parent(sqrt(UpperTriangular(A))))
+    elseif isreal(A)
+        SchurF = schur(real(A))
+        if istriu(SchurF.T)
+            sqrtA = SchurF.Z * sqrt(UpperTriangular(SchurF.T)) * SchurF.Z'
+        else
+            # real sqrt exists whenever no eigenvalues are negative
+            is_sqrt_real = !any(x -> isreal(x) && real(x) < 0, SchurF.values)
+            # sqrt_quasitriu uses LAPACK functions for non-triu inputs
+            if typeof(sqrt(zero(T))) <: BlasFloat && is_sqrt_real
+                sqrtA = SchurF.Z * sqrt_quasitriu(SchurF.T) * SchurF.Z'
+            else
+                SchurS = Schur{Complex}(SchurF)
+                sqrtA = SchurS.Z * sqrt(UpperTriangular(SchurS.T)) * SchurS.Z'
+            end
+        end
+        return eltype(A) <: Complex ? complex(sqrtA) : sqrtA
     else
         SchurF = schur(A)
-        R = triu!(parent(sqrt(UpperTriangular(SchurF.T)))) # unwrapping unnecessary?
-        return SchurF.vectors * R * SchurF.vectors'
+        return SchurF.vectors * sqrt(UpperTriangular(SchurF.T)) * SchurF.vectors'
     end
 end
+
+sqrt(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(sqrt(parent(A)))
+sqrt(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
@@ -1032,7 +1099,7 @@ function acos(A::AbstractMatrix)
         acosHermA = acos(Hermitian(A))
         return isa(acosHermA, Hermitian) ? copytri!(parent(acosHermA), 'U', true) : parent(acosHermA)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(-im * log(U + im * sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -1063,7 +1130,7 @@ function asin(A::AbstractMatrix)
         asinHermA = asin(Hermitian(A))
         return isa(asinHermA, Hermitian) ? copytri!(parent(asinHermA), 'U', true) : parent(asinHermA)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(-im * log(im * U + sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -1093,7 +1160,7 @@ function atan(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(atan(Hermitian(A))), 'U', true)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = im * UpperTriangular(SchurF.T)
     R = triu!(parent(log((I + U) / (I - U)) / 2im))
     return SchurF.Z * R * SchurF.Z'
@@ -1112,7 +1179,7 @@ function acosh(A::AbstractMatrix)
         acoshHermA = acosh(Hermitian(A))
         return isa(acoshHermA, Hermitian) ? copytri!(parent(acoshHermA), 'U', true) : parent(acoshHermA)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log(U + sqrt(U - I) * sqrt(U + I))))
     return SchurF.Z * R * SchurF.Z'
@@ -1130,7 +1197,7 @@ function asinh(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(asinh(Hermitian(A))), 'U', true)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log(U + sqrt(I + U^2))))
     return SchurF.Z * R * SchurF.Z'
@@ -1148,7 +1215,7 @@ function atanh(A::AbstractMatrix)
     if ishermitian(A)
         return copytri!(parent(atanh(Hermitian(A))), 'U', true)
     end
-    SchurF = schur(complex(A))
+    SchurF = Schur{Complex}(schur(A))
     U = UpperTriangular(SchurF.T)
     R = triu!(parent(log((I + U) / (I - U)) / 2))
     return SchurF.Z * R * SchurF.Z'
@@ -1284,12 +1351,10 @@ function factorize(A::StridedMatrix{T}) where T
                 return Bidiagonal(diag(A), diag(A, 1), :U)
             end
             if utri1
-                if (herm & (T <: Complex)) | sym
-                    try
-                        return ldlt!(SymTridiagonal(diag(A), diag(A, -1)))
-                    catch
-                    end
-                end
+                # TODO: enable once a specialized, non-dense bunchkaufman method exists
+                # if (herm & (T <: Complex)) | sym
+                    # return bunchkaufman(SymTridiagonal(diag(A), diag(A, -1)))
+                # end
                 return lu(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
             end
         end
@@ -1309,7 +1374,7 @@ function factorize(A::StridedMatrix{T}) where T
         end
         return lu(A)
     end
-    qr(A, Val(true))
+    qr(A, ColumnNorm())
 end
 factorize(A::Adjoint)   =   adjoint(factorize(parent(A)))
 factorize(A::Transpose) = transpose(factorize(parent(A)))
@@ -1366,31 +1431,23 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
-        return Matrix{Tout}(undef, n, m)
+        return similar(A, Tout, (n, m))
     end
-    if istril(A)
-        if istriu(A)
-            maxabsA = maximum(abs.(diag(A)))
-            tol = max(rtol*maxabsA, atol)
-            B = zeros(Tout, n, m)
-            for i = 1:min(m, n)
-                if abs(A[i,i]) > tol
-                    Aii = inv(A[i,i])
-                    if isfinite(Aii)
-                        B[i,i] = Aii
-                    end
-                end
-            end
-            return B
-        end
+    if isdiag(A)
+        ind = diagind(A)
+        dA = view(A, ind)
+        maxabsA = maximum(abs, dA)
+        tol = max(rtol * maxabsA, atol)
+        B = fill!(similar(A, Tout, (n, m)), 0)
+        B[ind] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
+        return B
     end
-    SVD         = svd(A, full = false)
+    SVD         = svd(A)
     tol         = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
-    Sinv        = zeros(Stype, length(SVD.S))
+    Sinv        = fill!(similar(A, Stype, length(SVD.S)), 0)
     index       = SVD.S .> tol
-    Sinv[index] = one(Stype) ./ SVD.S[index]
-    Sinv[findall(.!isfinite.(Sinv))] .= zero(Stype)
+    Sinv[index] .= pinv.(view(SVD.S, index))
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(x::Number)
@@ -1439,16 +1496,14 @@ julia> nullspace(M, atol=0.95)
  1.0
 ```
 """
-function nullspace(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol))
-    m, n = size(A)
-    (m == 0 || n == 0) && return Matrix{eltype(A)}(I, n, n)
-    SVD = svd(A, full=true)
+function nullspace(A::AbstractVecOrMat; atol::Real = 0.0, rtol::Real = (min(size(A, 1), size(A, 2))*eps(real(float(one(eltype(A))))))*iszero(atol))
+    m, n = size(A, 1), size(A, 2)
+    (m == 0 || n == 0) && return Matrix{eigtype(eltype(A))}(I, n, n)
+    SVD = svd(A; full=true)
     tol = max(atol, SVD.S[1]*rtol)
     indstart = sum(s -> s .> tol, SVD.S) + 1
     return copy(SVD.Vt[indstart:end,:]')
 end
-
-nullspace(A::AbstractVector; atol::Real = 0.0, rtol::Real = (min(size(A)...)*eps(real(float(one(eltype(A))))))*iszero(atol)) = nullspace(reshape(A, length(A), 1), rtol= rtol, atol= atol)
 
 """
     cond(M, p::Real=2)
@@ -1525,6 +1580,34 @@ function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) 
 end
 sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
+Base.@propagate_inbounds function _sylvester_2x1!(A, B, C)
+    b = B[1]
+    a21, a12 = A[2, 1], A[1, 2]
+    m11 = b + A[1, 1]
+    m22 = b + A[2, 2]
+    d = m11 * m22 - a12 * a21
+    c1, c2 = C
+    C[1] = (a12 * c2 - m22 * c1) / d
+    C[2] = (a21 * c1 - m11 * c2) / d
+    return C
+end
+Base.@propagate_inbounds function _sylvester_1x2!(A, B, C)
+    a = A[1]
+    b21, b12 = B[2, 1], B[1, 2]
+    m11 = a + B[1, 1]
+    m22 = a + B[2, 2]
+    d = m11 * m22 - b21 * b12
+    c1, c2 = C
+    C[1] = (b21 * c2 - m22 * c1) / d
+    C[2] = (b12 * c1 - m11 * c2) / d
+    return C
+end
+function _sylvester_2x2!(A, B, C)
+    _, scale = LAPACK.trsyl!('N', 'N', A, B, C)
+    rmul!(C, -inv(scale))
+    return C
+end
+
 sylvester(a::Union{Real,Complex}, b::Union{Real,Complex}, c::Union{Real,Complex}) = -c / (a + b)
 
 # AX + XA' + C = 0
@@ -1567,4 +1650,4 @@ function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
     rmul!(Q*(Y * adjoint(Q)), inv(scale))
 end
 lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
-lyap(a::T, c::T) where {T<:Number} = -c/(2a)
+lyap(a::Union{Real,Complex}, c::Union{Real,Complex}) = -c/(2real(a))

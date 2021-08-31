@@ -111,7 +111,7 @@ Windows
 The best supported method of creating a Julia distribution on Windows
 is to cross-compile from a Linux distribution such as Ubuntu. In-depth
 compilation instructions [are
-available](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
+available](https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md).
 However the important steps for redistribution are to ensure to `make
 win-extras` in between `make` and `make binary-dist`.  After that process is
 completed, the `.zip` file created in the head Julia directory will
@@ -156,16 +156,6 @@ Finally, OpenBLAS includes its own optimized version of LAPACK. If you
 set `USE_SYSTEM_BLAS=1` and `USE_SYSTEM_LAPACK=1`, you should also set
 `LIBLAPACK=-l$(YOURBLAS)` and `LIBLAPACKNAME=lib$(YOURBLAS)`. Else, the
 reference LAPACK will be used and performance will typically be much lower.
-
-Compilation scripts
-===================
-
-The [julia-nightly-packaging](https://github.com/staticfloat/julia-nightly-packaging)
-repository contains multiple example scripts to ease the creation of
-binary packages. It also includes miscellaneous tools to do things such as
-fetching the last good commit that passed the
-[Travis](https://travis-ci.org/JuliaLang/julia/builds) tests.
-
 
 # Point releasing 101
 

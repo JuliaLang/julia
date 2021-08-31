@@ -1,0 +1,24 @@
+# This file represents what is put into the webUI.
+# It is purely for keeping track of the changes we make to the webUI configuration; modifying this file has no effect.
+# We use the `cryptic` buildkite plugin to provide secrets management, which requires some integration into the WebUI's steps.
+agents:
+  queue: "julia"
+  sandbox.jl: "true"
+
+steps:
+  - label: ":unlock: Unlock secrets, launch pipelines"
+    plugins:
+      - staticfloat/cryptic:
+          # Our list of pipelines that should be launched (but don't require a signature)
+          # These pipelines can be modified by any contributor and CI will still run.
+          # Build secrets will not be available in these pipelines (or their children)
+          # but some of our signed pipelines can wait upon the completion of these unsigned
+          # pipelines.
+          unsigned_pipelines:
+            - .buildkite/pipelines/experimental/launch_unsigned_builders.yml
+
+          # Our signed pipelines must have a `signature` or `signature_file` parameter that
+          # verifies the treehash of the pipeline itself and the inputs listed in `inputs`
+          # signed_pipelines:
+          #   - pipeline: .buildkite/pipelines/experimental/misc/foo_bar_baz.yml
+          #     signature: "my_signature"

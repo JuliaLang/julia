@@ -40,10 +40,14 @@ end
     init(; n::Integer, delay::Real))
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of
-instruction pointers that may be stored. Each instruction pointer corresponds to a single
+instruction pointers that may be stored per thread. Each instruction pointer corresponds to a single
 line of code; backtraces generally consist of a long list of instruction pointers. Current
 settings can be obtained by calling this function with no arguments, and each can be set
 independently using keywords or in the order `(n, delay)`.
+
+!!! compat "Julia 1.8"
+    As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
+    Previously this was `n` total.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
@@ -57,18 +61,32 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real)
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
+    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
+    sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
+    buffer_samples = n * nthreads
+    buffer_size_bytes = buffer_samples * sample_size_bytes
+    if buffer_size_bytes > 2^29 && Sys.WORD_SIZE == 32
+        buffer_size_bytes_per_thread = floor(Int, 2^29 / nthreads)
+        buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
+        buffer_samples = buffer_samples_per_thread * nthreads
+        buffer_size_bytes = buffer_samples * sample_size_bytes
+        @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+    end
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
     if status == -1
-        error("could not allocate space for ", n, " instruction pointers")
+        error("could not allocate space for ", n, " instruction pointers per thread being profiled ($nthreads threads, $(Base.format_bytes(buffer_size_bytes)) total)")
     end
 end
 
 # init with default values
-# Use a max size of 1M profile samples, and fire timer every 1ms
-if Sys.iswindows()
+# Use a max size of 10M profile samples, and fire timer every 1ms
+# (that should typically give around 100 seconds of record)
+if Sys.iswindows() && Sys.WORD_SIZE == 32
+    # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
+    # so we don't want to slow the program down by quite that much
     __init__() = init(1_000_000, 0.01)
 else
-    __init__() = init(1_000_000, 0.001)
+    __init__() = init(10_000_000, 0.001)
 end
 
 """
@@ -271,7 +289,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                     for proj in Base.project_names
                         project_file = joinpath(root, proj)
                         if Base.isfile_casesensitive(project_file)
-                            pkgid = Base.project_file_name_uuid(project_file, "", Base.TOMLCache())
+                            pkgid = Base.project_file_name_uuid(project_file, "")
                             isempty(pkgid.name) && return path # bad Project file
                             # return the joined the module name prefix and path suffix
                             path = path[nextind(path, sizeof(root)):end]
@@ -350,6 +368,8 @@ stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
 is_running() = ccall(:jl_profile_is_running, Cint, ())!=0
 
+is_buffer_full() = ccall(:jl_profile_is_buffer_full, Cint, ())!=0
+
 get_data_pointer() = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, ()))
 
 len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
@@ -374,7 +394,7 @@ internal use; [`retrieve`](@ref) may be a better choice for most users.
 function fetch()
     maxlen = maxlen_data()
     len = len_data()
-    if (len == maxlen)
+    if is_buffer_full()
         @warn """The profile data buffer is full; profiling probably terminated
                  before your program finished. To profile for longer runs, call
                  `Profile.init()` with a larger buffer and/or larger delay."""

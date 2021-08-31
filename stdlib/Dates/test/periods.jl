@@ -366,6 +366,7 @@ end
     @test isequal(d - h, 2d - 2h - 1d + 1h)
     @test sprint(show, y + m) == string(y + m)
     @test convert(Dates.CompoundPeriod, y) + m == y + m
+    @test Dates.periods(convert(Dates.CompoundPeriod, y)) == convert(Dates.CompoundPeriod, y).periods
 end
 @testset "compound period simplification" begin
     # reduce compound periods into the most basic form
@@ -379,6 +380,18 @@ end
 
     @test Dates.Date(2009, 2, 1) - (Dates.Month(1) + Dates.Day(1)) == Dates.Date(2008, 12, 31)
     @test_throws MethodError (Dates.Month(1) + Dates.Day(1)) - Dates.Date(2009,2,1)
+end
+
+@testset "canonicalize Period" begin
+    # reduce individual Period into most basic CompoundPeriod
+    @test Dates.canonicalize(Dates.Nanosecond(1000000)) == Dates.canonicalize(Dates.Millisecond(1))
+    @test Dates.canonicalize(Dates.Millisecond(1000)) == Dates.canonicalize(Dates.Second(1))
+    @test Dates.canonicalize(Dates.Second(60)) == Dates.canonicalize(Dates.Minute(1))
+    @test Dates.canonicalize(Dates.Minute(60)) == Dates.canonicalize(Dates.Hour(1))
+    @test Dates.canonicalize(Dates.Hour(24)) == Dates.canonicalize(Dates.Day(1))
+    @test Dates.canonicalize(Dates.Day(7)) == Dates.canonicalize(Dates.Week(1))
+    @test Dates.canonicalize(Dates.Month(12)) == Dates.canonicalize(Dates.Year(1))
+    @test Dates.canonicalize(Dates.Minute(24*60*1 + 12*60)) == Dates.canonicalize(Dates.CompoundPeriod([Dates.Day(1),Dates.Hour(12)]))
 end
 @testset "unary ops and vectorized period arithmetic" begin
     pa = [1y 1m 1w 1d; 1h 1mi 1s 1ms]
@@ -477,6 +490,14 @@ end
         end
     end
 end
+@testset "Hashing for CompoundPeriod (#37447)" begin
+    periods = [Dates.Year(0), Dates.Minute(0), Dates.Second(0), Dates.CompoundPeriod(),
+               Dates.Minute(2), Dates.Second(120), Dates.CompoundPeriod(Dates.Minute(2)),
+               Dates.CompoundPeriod(Dates.Second(120)), Dates.CompoundPeriod(Dates.Minute(1), Dates.Second(60))]
+    for x = periods, y = periods
+        @test isequal(x,y) == (hash(x) == hash(y))
+    end
+end
 
 @testset "#30832" begin
     @test Dates.toms(Dates.Second(1) + Dates.Nanosecond(1)) == 1e3
@@ -484,4 +505,32 @@ end
     @test Dates.toms(Dates.Second(1) + Dates.Microsecond(1)) == 1e3
 end
 
+@testset "CompoundPeriod and Period isless()" begin
+    #tests for allowed comparisons
+    #FixedPeriod
+    @test (h - ms < h + ns) == true
+    @test (h + ns < h -ms) == false
+    @test (h  < h -ms) == false
+    @test (h-ms  < h) == true
+    #OtherPeriod
+    @test (2y-m < 25m+1y) == true
+    @test (2y < 25m+1y) == true
+    @test (25m+1y < 2y) == false
+    #Test combined Fixed and Other Periods
+    @test (1m + 1d < 1m + 1s) == false
 end
+
+@testset "Convert CompoundPeriod to Period" begin
+    @test convert(Month, Year(1) + Month(1)) === Month(13)
+    @test convert(Second, Minute(1) + Second(30)) === Second(90)
+    @test convert(Minute, Minute(1) + Second(60)) === Minute(2)
+    @test convert(Millisecond, Minute(1) + Second(30)) === Millisecond(90_000)
+    @test_throws InexactError convert(Minute, Minute(1) + Second(30))
+    @test_throws MethodError convert(Month, Minute(1) + Second(30))
+    @test_throws MethodError convert(Second, Month(1) + Second(30))
+    @test_throws MethodError convert(Period, Minute(1) + Second(30))
+    @test_throws MethodError convert(Dates.FixedPeriod, Minute(1) + Second(30))
+end
+
+end
+

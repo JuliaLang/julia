@@ -196,7 +196,7 @@ end
 
     @test intersect(BitSet([1,2,3])) == BitSet([1,2,3])
     @test intersect(BitSet(1:7), BitSet(3:10)) ==
-    	  intersect(BitSet(3:10), BitSet(1:7)) == BitSet(3:7)
+          intersect(BitSet(3:10), BitSet(1:7)) == BitSet(3:7)
     @test intersect(BitSet(1:10), BitSet(1:4), 1:5, [2,3,10]) == BitSet([2,3])
 end
 

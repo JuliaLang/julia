@@ -5,17 +5,17 @@
 
 A `GitRevWalker` *walks* through the *revisions* (i.e. commits) of
 a git repository `repo`. It is a collection of the commits
-in the repository, and supports iteration and calls to [`map`](@ref LibGit2.map)
-and [`count`](@ref LibGit2.count) (for instance, `count` could be used to determine
+in the repository, and supports iteration and calls to [`LibGit2.map`](@ref)
+and [`LibGit2.count`](@ref) (for instance, `LibGit2.count` could be used to determine
 what percentage of commits in a repository were made by a certain
 author).
 
 ```julia
 cnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-    count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
+    LibGit2.count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
 end
 ```
-Here, `count` finds the number of commits along the walk with a certain `GitHash`.
+Here, `LibGit2.count` finds the number of commits along the walk with a certain `GitHash`.
 Since the `GitHash` is unique to a commit, `cnt` will be `1`.
 """
 function GitRevWalker(repo::GitRepo)
@@ -60,7 +60,7 @@ end
 
 Start the [`GitRevWalker`](@ref) `walker` at commit `cid`. This function can be used
 to apply a function to all commits since a certain year, by passing the first commit
-of that year as `cid` and then passing the resulting `w` to [`map`](@ref LibGit2.map).
+of that year as `cid` and then passing the resulting `w` to [`LibGit2.map`](@ref).
 """
 function push!(w::GitRevWalker, cid::GitHash)
     ensure_initialized()
@@ -104,7 +104,7 @@ oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
     LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)
 end
 ```
-Here, `map` visits each commit using the `GitRevWalker` and finds its `GitHash`.
+Here, `LibGit2.map` visits each commit using the `GitRevWalker` and finds its `GitHash`.
 """
 function map(f::Function, walker::GitRevWalker;
                   oid::GitHash=GitHash(),
@@ -146,10 +146,10 @@ are:
 # Examples
 ```julia
 cnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
+    LibGit2.count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
 end
 ```
-`count` finds the number of commits along the walk with a certain `GitHash` `commit_oid1`, starting
+`LibGit2.count` finds the number of commits along the walk with a certain `GitHash` `commit_oid1`, starting
 the walk from that commit and moving forwards in time from it. Since the `GitHash` is unique to
 a commit, `cnt` will be `1`.
 """

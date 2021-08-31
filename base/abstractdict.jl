@@ -31,9 +31,13 @@ function in(p, a::AbstractDict)
 end
 
 function summary(io::IO, t::AbstractDict)
-    n = length(t)
     showarg(io, t, true)
-    print(io, " with ", n, (n==1 ? " entry" : " entries"))
+    if Base.IteratorSize(t) isa HasLength
+        n = length(t)
+        print(io, " with ", n, (n==1 ? " entry" : " entries"))
+    else
+        print(io, "(...)")
+    end
 end
 
 struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
@@ -230,12 +234,14 @@ Dict{Int64, Int64} with 3 entries:
 ```
 """
 function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
-    for other in others
-        for (k,v) in other
-            d[k] = haskey(d, k) ? combine(d[k], v) : v
-        end
+    foldl(mergewith!(combine), others; init = d)
+end
+
+function mergewith!(combine, d1::AbstractDict, d2::AbstractDict)
+    for (k, v) in d2
+        d1[k] = haskey(d1, k) ? combine(d1[k], v) : v
     end
-    return d
+    return d1
 end
 
 mergewith!(combine) = (args...) -> mergewith!(combine, args...)
@@ -245,7 +251,7 @@ merge!(combine::Callable, args...) = mergewith!(combine, args...)
 """
     keytype(type)
 
-Get the key type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the key type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -259,7 +265,7 @@ keytype(a::AbstractDict) = keytype(typeof(a))
 """
     valtype(type)
 
-Get the value type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the value type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -277,6 +283,7 @@ Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
 the merged collections. If the same key is present in another collection, the
 value for that key will be the value it has in the last collection listed.
+See also [`mergewith`](@ref) for custom handling of values with the same key.
 
 # Examples
 ```jldoctest

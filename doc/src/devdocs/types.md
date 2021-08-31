@@ -252,7 +252,7 @@ julia> Tuple
 Tuple
 
 julia> Tuple.parameters
-svec(Vararg{Any, N} where N)
+svec(Vararg{Any})
 ```
 
 Unlike other types, tuple types are covariant in their parameters, so this definition permits
@@ -367,7 +367,7 @@ Therefore in this case the diagonal rule is not really necessary, since
 the array determines `T` and we can then allow `x` and `y` to be of
 any subtypes of `T`.
 So variables that occur in invariant position are never considered diagonal.
-This choice of behavior is slightly controversial --- some feel this definition
+This choice of behavior is slightly controversial -- some feel this definition
 should be written as
 
 ```julia
@@ -418,15 +418,19 @@ whether that appearance of the variable is used or not.
 Otherwise types can behave differently depending on which other types
 they are compared to, making subtyping not transitive. For example, consider
 
+```julia
 Tuple{Int,Int8,Vector{Integer}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+```
 
-If the `T` inside the Union is ignored, then `T` is concrete and the answer is "false"
+If the `T` inside the `Union` is ignored, then `T` is concrete and the answer is "false"
 since the first two types aren't the same.
 But consider instead
 
+```julia
 Tuple{Int,Int8,Vector{Any}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+```
 
-Now we cannot ignore the `T` in the Union (we must have T == Any), so `T` is not
+Now we cannot ignore the `T` in the `Union` (we must have `T == Any`), so `T` is not
 concrete and the answer is "true".
 That would make the concreteness of `T` depend on the other type, which is not
 acceptable since a type must have a clear meaning on its own.
@@ -476,8 +480,8 @@ A good way to start is to watch subtyping in action.
 Build Julia with `make debug` and fire up Julia within a debugger.
 [gdb debugging tips](@ref) has some tips which may be useful.
 
-Because the subtyping code is used heavily in the REPL itself--and hence breakpoints in this
-code get triggered often--it will be easiest if you make the following definition:
+Because the subtyping code is used heavily in the REPL itself -- and hence breakpoints in this
+code get triggered often -- it will be easiest if you make the following definition:
 
 ```julia-repl
 julia> function mysubtype(a,b)

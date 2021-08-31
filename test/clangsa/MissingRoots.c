@@ -329,7 +329,7 @@ jl_module_t *propagation(jl_module_t *m JL_PROPAGATES_ROOT);
 void module_member(jl_module_t *m)
 {
     for(int i=(int)m->usings.len-1; i >= 0; --i) {
-      jl_module_t *imp = (jl_module_t*)m->usings.items[i];
+      jl_module_t *imp = propagation(m);
       jl_gc_safepoint();
       look_at_value((jl_value_t*)imp);
       jl_module_t *prop = propagation(imp);
@@ -407,14 +407,6 @@ void stack_rooted(jl_value_t *lb JL_MAYBE_UNROOTED, jl_value_t *ub JL_MAYBE_UNRO
     escape_vb(&vb);
     look_at_value(vb.lb);
     JL_GC_POP();
-}
-
-void JL_NORETURN throw_internal(jl_value_t *e JL_MAYBE_UNROOTED)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->sig_exception = e;
-    jl_gc_unsafe_enter(ptls);
-    look_at_value(e);
 }
 
 JL_DLLEXPORT jl_value_t *jl_totally_used_function(int i)

@@ -9,7 +9,7 @@ module Iterators
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
+    @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
     tail, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, AbstractRange,
     LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple
@@ -178,18 +178,6 @@ end
 end
 
 """
-    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
-
-Transforms an indexable container into an Dictionary-view of the same data.
-Modifying the key-space of the underlying data may invalidate this object.
-"""
-struct Pairs{K, V, I, A} <: AbstractDict{K, V}
-    data::A
-    itr::I
-    Pairs(data::A, itr::I) where {A, I} = new{eltype(I), eltype(A), I, A}(data, itr)
-end
-
-"""
     pairs(IndexLinear(), A)
     pairs(IndexCartesian(), A)
     pairs(IndexStyle(A), A)
@@ -233,44 +221,44 @@ CartesianIndex(1, 2) d
 CartesianIndex(2, 2) e
 ```
 
-See also: [`IndexStyle`](@ref), [`axes`](@ref).
+See also [`IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
 
 # preserve indexing capabilities for known indexable types
 # faster than zip(keys(a), values(a)) for arrays
+pairs(tuple::Tuple) = Pairs{Int}(tuple, keys(tuple))
+pairs(nt::NamedTuple) = Pairs{Symbol}(nt, keys(nt))
+pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
-pairs(tuple::Tuple) = Pairs(tuple, keys(tuple))
-pairs(nt::NamedTuple) = Pairs(nt, keys(nt))
-pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
-length(v::Pairs) = length(v.itr)
-axes(v::Pairs) = axes(v.itr)
-size(v::Pairs) = size(v.itr)
+length(v::Pairs) = length(getfield(v, :itr))
+axes(v::Pairs) = axes(getfield(v, :itr))
+size(v::Pairs) = size(getfield(v, :itr))
 @propagate_inbounds function iterate(v::Pairs{K, V}, state...) where {K, V}
-    x = iterate(v.itr, state...)
+    x = iterate(getfield(v, :itr), state...)
     x === nothing && return x
     indx, n = x
-    item = v.data[indx]
+    item = getfield(v, :data)[indx]
     return (Pair{K, V}(indx, item), n)
 end
-@inline isdone(v::Pairs, state...) = isdone(v.itr, state...)
+@inline isdone(v::Pairs, state...) = isdone(getfield(v, :itr), state...)
 
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:Base.AbstractUnitRange, <:Tuple}}) = HasLength()
 
-reverse(v::Pairs) = Pairs(v.data, reverse(v.itr))
+reverse(v::Pairs) = Pairs(getfield(v, :data), reverse(getfield(v, :itr)))
 
-haskey(v::Pairs, key) = (key in v.itr)
-keys(v::Pairs) = v.itr
-values(v::Pairs) = v.data
-getindex(v::Pairs, key) = v.data[key]
-setindex!(v::Pairs, value, key) = (v.data[key] = value; v)
-get(v::Pairs, key, default) = get(v.data, key, default)
-get(f::Base.Callable, v::Pairs, key) = get(f, v.data, key)
+haskey(v::Pairs, key) = (key in getfield(v, :itr))
+keys(v::Pairs) = getfield(v, :itr)
+values(v::Pairs) = getfield(v, :data) # TODO: this should be a view of data subset by itr
+getindex(v::Pairs, key) = getfield(v, :data)[key]
+setindex!(v::Pairs, value, key) = (getfield(v, :data)[key] = value; v)
+get(v::Pairs, key, default) = get(getfield(v, :data), key, default)
+get(f::Base.Callable, v::Pairs, key) = get(f, getfield(v, :data), key)
 
 # zip
 
@@ -287,6 +275,8 @@ the `zip` iterator is a tuple of values of its subiterators.
 !!! note
     `zip` orders the calls to its subiterators in such a way that stateful iterators will
     not advance when another iterator finishes in the current iteration.
+
+See also: [`enumerate`](@ref), [`splat`](@ref Base.splat).
 
 # Examples
 ```jldoctest
@@ -441,6 +431,12 @@ julia> foreach(println, f)
 1
 3
 5
+
+julia> [x for x in [1, 2, 3, 4, 5] if isodd(x)]  # collects a generator over Iterators.filter
+3-element Vector{Int64}:
+ 1
+ 3
+ 5
 ```
 """
 filter(flt, itr) = Filter(flt, itr)
@@ -538,6 +534,8 @@ end
 
 An iterator that yields the same elements as `iter`, but starting at the given `state`.
 
+See also: [`Iterators.drop`](@ref), [`Iterators.peel`](@ref), [`Base.rest`](@ref).
+
 # Examples
 ```jldoctest
 julia> collect(Iterators.rest([1,2,3,4], 2))
@@ -556,6 +554,13 @@ rest(itr) = itr
 
 Returns the first element and an iterator over the remaining elements.
 
+If the iterator is empty return `nothing` (like `iterate`).
+
+!!! compat "Julia 1.7"
+    Prior versions throw a BoundsError if the iterator is empty.
+
+See also: [`Iterators.drop`](@ref), [`Iterators.take`](@ref).
+
 # Examples
 ```jldoctest
 julia> (a, rest) = Iterators.peel("abc");
@@ -571,7 +576,7 @@ julia> collect(rest)
 """
 function peel(itr)
     y = iterate(itr)
-    y === nothing && throw(BoundsError())
+    y === nothing && return y
     val, s = y
     val, rest(itr, s)
 end
@@ -635,6 +640,8 @@ end
     take(iter, n)
 
 An iterator that generates at most the first `n` elements of `iter`.
+
+See also: [`drop`](@ref Iterators.drop), [`peel`](@ref Iterators.peel), [`first`](@ref), [`take!`](@ref).
 
 # Examples
 ```jldoctest
@@ -847,6 +854,8 @@ end
 An iterator that cycles through `iter` forever.
 If `iter` is empty, so is `cycle(iter)`.
 
+See also: [`Iterators.repeated`](@ref), [`repeat`](@ref).
+
 # Examples
 ```jldoctest
 julia> for (i, v) in enumerate(Iterators.cycle("hello"))
@@ -886,6 +895,8 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
+See also: [`Iterators.cycle`](@ref), [`repeat`](@ref).
+
 # Examples
 ```jldoctest
 julia> a = Iterators.repeated([1 2], 4);
@@ -921,12 +932,17 @@ Return an iterator over the product of several iterators. Each generated element
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
 changes the fastest.
 
+See also: [`zip`](@ref), [`Iterators.flatten`](@ref).
+
 # Examples
 ```jldoctest
 julia> collect(Iterators.product(1:2, 3:5))
 2×3 Matrix{Tuple{Int64, Int64}}:
  (1, 3)  (1, 4)  (1, 5)
  (2, 3)  (2, 4)  (2, 5)
+
+julia> ans == [(x,y) for x in 1:2, y in 3:5]  # collects a generator involving Iterators.product
+true
 ```
 """
 product(iters...) = ProductIterator(iters)
@@ -1056,6 +1072,15 @@ julia> collect(Iterators.flatten((1:2, 8:9)))
  2
  8
  9
+
+julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving Iterators.flatten
+6-element Vector{Tuple{Int64, Char}}:
+ (0, 'a')
+ (0, 'b')
+ (0, 'c')
+ (1, 'a')
+ (1, 'b')
+ (1, 'c')
 ```
 """
 flatten(itr) = Flatten(itr)
@@ -1150,29 +1175,29 @@ end
 
 function length(itr::PartitionIterator)
     l = length(itr.c)
-    return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
+    return cld(l, itr.n)
 end
 
-function iterate(itr::PartitionIterator{<:AbstractRange}, state=1)
-    state > length(itr.c) && return nothing
-    r = min(state + itr.n - 1, length(itr.c))
+function iterate(itr::PartitionIterator{<:AbstractRange}, state = firstindex(itr.c))
+    state > lastindex(itr.c) && return nothing
+    r = min(state + itr.n - 1, lastindex(itr.c))
     return @inbounds itr.c[state:r], r + 1
 end
 
-function iterate(itr::PartitionIterator{<:AbstractArray}, state=1)
-    state > length(itr.c) && return nothing
-    r = min(state + itr.n - 1, length(itr.c))
+function iterate(itr::PartitionIterator{<:AbstractArray}, state = firstindex(itr.c))
+    state > lastindex(itr.c) && return nothing
+    r = min(state + itr.n - 1, lastindex(itr.c))
     return @inbounds view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
 
 function iterate(itr::PartitionIterator, state...)
-    v = Vector{eltype(itr.c)}(undef, itr.n)
     # This is necessary to remember whether we cut the
     # last element short. In such cases, we do return that
     # element, but not the next one
     state === (IterationCutShort(),) && return nothing
+    v = Vector{eltype(itr.c)}(undef, itr.n)
     i = 0
     y = iterate(itr.c, state...)
     while y !== nothing
@@ -1225,6 +1250,12 @@ julia> collect(a)
 2-element Vector{Char}:
  'e': ASCII/Unicode U+0065 (category Ll: Letter, lowercase)
  'f': ASCII/Unicode U+0066 (category Ll: Letter, lowercase)
+
+julia> Iterators.reset!(a); popfirst!(a)
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+
+julia> Iterators.reset!(a, "hello"); popfirst!(a)
+'h': ASCII/Unicode U+0068 (category Ll: Letter, lowercase)
 ```
 
 ```jldoctest
@@ -1253,7 +1284,7 @@ mutable struct Stateful{T, VS}
     end
 end
 
-function reset!(s::Stateful{T,VS}, itr::T) where {T,VS}
+function reset!(s::Stateful{T,VS}, itr::T=s.itr) where {T,VS}
     s.itr = itr
     setfield!(s, :nextvalstate, iterate(itr))
     s.taken = 0
@@ -1298,7 +1329,10 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
     end
 end
 
-@inline peek(s::Stateful, sentinel=nothing) = s.nextvalstate !== nothing ? s.nextvalstate[1] : sentinel
+@inline function peek(s::Stateful, sentinel=nothing)
+    ns = s.nextvalstate
+    return ns !== nothing ? ns[1] : sentinel
+end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
 IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
 eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
@@ -1311,7 +1345,7 @@ length(s::Stateful) = length(s.itr) - s.taken
 Returns the one and only element of collection `x`, and throws an `ArgumentError` if the
 collection has zero or multiple elements.
 
-See also: [`first`](@ref), [`last`](@ref).
+See also [`first`](@ref), [`last`](@ref).
 
 !!! compat "Julia 1.4"
     This method requires at least Julia 1.4.
@@ -1321,7 +1355,7 @@ See also: [`first`](@ref), [`last`](@ref).
     @boundscheck if i === nothing
         throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
     end
-    (ret, state) = i
+    (ret, state) = i::NTuple{2,Any}
     @boundscheck if iterate(x, state) !== nothing
         throw(ArgumentError("Collection has multiple elements, must contain exactly 1 element"))
     end

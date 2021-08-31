@@ -7,6 +7,8 @@ Complex number type with real and imaginary part of type `T`.
 
 `ComplexF16`, `ComplexF32` and `ComplexF64` are aliases for
 `Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
+
+See also: [`Real`](@ref), [`complex`](@ref), [`real`](@ref).
 """
 struct Complex{T<:Real} <: Number
     re::T
@@ -20,10 +22,15 @@ Complex(x::Real) = Complex(x, zero(x))
 
 The imaginary unit.
 
+See also: [`imag`](@ref), [`angle`](@ref), [`complex`](@ref).
+
 # Examples
 ```jldoctest
 julia> im * im
 -1 + 0im
+
+julia> (2.0 + 3im)^2
+-5.0 + 12.0im
 ```
 """
 const im = Complex(false, true)
@@ -54,6 +61,8 @@ float(::Type{Complex{T}}) where {T} = Complex{float(T)}
 
 Return the real part of the complex number `z`.
 
+See also: [`imag`](@ref), [`reim`](@ref), [`complex`](@ref), [`isreal`](@ref), [`Real`](@ref).
+
 # Examples
 ```jldoctest
 julia> real(1 + 3im)
@@ -66,6 +75,8 @@ real(z::Complex) = z.re
     imag(z)
 
 Return the imaginary part of the complex number `z`.
+
+See also: [`conj`](@ref), [`reim`](@ref), [`adjoint`](@ref), [`angle`](@ref).
 
 # Examples
 ```jldoctest
@@ -254,6 +265,8 @@ end
 
 Compute the complex conjugate of a complex number `z`.
 
+See also: [`angle`](@ref), [`adjoint`](@ref).
+
 # Examples
 ```jldoctest
 julia> conj(1 + 3im)
@@ -439,29 +452,33 @@ end
 function inv(w::ComplexF64)
     c, d = reim(w)
     (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
-    half = 0.5
-    two = 2.0
-    cd = max(abs(c), abs(d))
-    ov = floatmax(c)
-    un = floatmin(c)
-    ϵ = eps(Float64)
-    bs = two/(ϵ*ϵ)
+    absc, absd = abs(c), abs(d)
+    cd = ifelse(absc>absd, absc, absd) # cheap `max`: don't need sign- and nan-checks here
+
+    ϵ  = eps(Float64)
+    bs = 2/(ϵ*ϵ)
+
+    # scaling
     s = 1.0
-    cd >= half*ov  && (c=half*c; d=half*d; s=s*half) # scale down c,d
-    cd <= un*two/ϵ && (c=c*bs; d=d*bs; s=s*bs      ) # scale up c,d
-    if abs(d)<=abs(c)
-        r = d/c
-        t = 1.0/(c+d*r)
-        p = t
-        q = -r * t
-    else
-        c, d = d, c
-        r = d/c
-        t = 1.0/(c+d*r)
-        p = r * t
-        q = -t
+    if cd >= floatmax(Float64)/2
+        c *= 0.5; d *= 0.5; s = 0.5 # scale down c, d
+    elseif cd <= 2floatmin(Float64)/ϵ
+        c *= bs;  d *= bs;  s = bs  # scale up c, d
     end
-    return ComplexF64(p*s,q*s) # undo scaling
+
+    # inversion operations
+    if absd <= absc
+        p, q = robust_cinv(c, d)
+    else
+        q, p = robust_cinv(-d, -c)
+    end
+    return ComplexF64(p*s, q*s) # undo scaling
+end
+function robust_cinv(c::Float64, d::Float64)
+    r = d/c
+    p = inv(muladd(d, r, c))
+    q = -r*p
+    return p, q
 end
 
 function ssqs(x::T, y::T) where T<:Real
@@ -529,6 +546,8 @@ end
 
 Return ``\\exp(iz)``.
 
+See also [`cispi`](@ref), [`angle`](@ref).
+
 # Examples
 ```jldoctest
 julia> cis(π) ≈ -1
@@ -541,10 +560,36 @@ function cis(z::Complex)
     Complex(v * c, v * s)
 end
 
+cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
+
+"""
+    cispi(z)
+
+Compute ``\\exp(i\\pi x)`` more accurately than `cis(pi*x)`, especially for large `x`.
+
+# Examples
+```jldoctest
+julia> cispi(1)
+-1.0 + 0.0im
+
+julia> cispi(0.25 + 1im)
+0.030556854645952924 + 0.030556854645952924im
+```
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
+"""
+function cispi(z::Complex)
+    sipi, copi = sincospi(z)
+    return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))
+end
+
 """
     angle(z)
 
 Compute the phase angle in radians of a complex number `z`.
+
+See also: [`atan`](@ref), [`cis`](@ref).
 
 # Examples
 ```jldoctest

@@ -77,6 +77,9 @@ function getproperty(F::LDLt, d::Symbol)
     end
 end
 
+adjoint(F::LDLt{<:Real,<:SymTridiagonal}) = F
+adjoint(F::LDLt) = LDLt(copy(adjoint(F.data)))
+
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LDLt)
     summary(io, F); println(io)
     println(io, "L factor:")
@@ -115,7 +118,8 @@ function ldlt!(S::SymTridiagonal{T,V}) where {T,V}
     n = size(S,1)
     d = S.dv
     e = S.ev
-    @inbounds @simd for i = 1:n-1
+    @inbounds for i in 1:n-1
+        iszero(d[i]) && throw(ZeroPivotException(i))
         e[i] /= d[i]
         d[i+1] -= e[i]^2*d[i]
     end
