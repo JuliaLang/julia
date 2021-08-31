@@ -1926,7 +1926,14 @@ function precompile(@nospecialize(f), args::Tuple)
     precompile(Tuple{Core.Typeof(f), args...})
 end
 
-precompile(argt::Type) = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
+const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
+function precompile(argt::Type)
+    ret = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
+    if !ret && ENABLE_PRECOMPILE_WARNINGS[]
+        @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
+    end
+    return ret
+end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String))
