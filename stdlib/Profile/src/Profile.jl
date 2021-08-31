@@ -189,8 +189,8 @@ function print(io::IO,
         println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
         println(io, "=========================================================")
         if groupby == [:task, :thread]
-            for taskid in _intersect(get_task_ids(data), tasks)
-                threadids = _intersect(get_thread_ids(data, taskid), threads)
+            for taskid in intersect(get_task_ids(data), tasks)
+                threadids = intersect(get_thread_ids(data, taskid), threads)
                 if length(threadids) == 0
                     any_nosamples = true
                 else
@@ -205,8 +205,8 @@ function print(io::IO,
                 end
             end
         elseif groupby == [:thread, :task]
-            for threadid in _intersect(get_thread_ids(data), threads)
-                taskids = _intersect(get_task_ids(data, threadid), tasks)
+            for threadid in intersect(get_thread_ids(data), threads)
+                taskids = intersect(get_task_ids(data, threadid), tasks)
                 if length(taskids) == 0
                     any_nosamples = true
                 else
@@ -222,7 +222,7 @@ function print(io::IO,
             end
         elseif groupby == :task
             threads = 1:typemax(Int)
-            for taskid in _intersect(get_task_ids(data), tasks)
+            for taskid in intersect(get_task_ids(data), tasks)
                 printstyled(io, "Task $(Base.repr(taskid))\n"; bold=true, color=Base.debug_color())
                 nosamples = print(io, data, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
@@ -230,7 +230,7 @@ function print(io::IO,
             end
         elseif groupby == :thread
             tasks = 1:typemax(UInt)
-            for threadid in _intersect(get_thread_ids(data), threads)
+            for threadid in intersect(get_thread_ids(data), threads)
                 printstyled(io, "Thread $threadid\n"; bold=true, color=Base.info_color())
                 nosamples = print(io, data, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
@@ -1072,27 +1072,5 @@ function warning_empty(;summary = false)
         or adjust the delay between samples with `Profile.init()`."""
     end
 end
-
-
-
-# Given Base.intersect isn't efficient for mixtures of UnitRange and Vectors
-# TODO: Replace once https://github.com/JuliaLang/julia/pull/41769 has merged
-function _intersect(v::AbstractVector, r::AbstractRange)
-    common = Iterators.filter(x -> x ∈ r, v)
-    seen = Set{eltype(v)}(common)
-    return Base.vectorfilter(Base._shrink_filter!(seen), common)
-end
-_intersect(r::AbstractRange, v::AbstractVector) = _intersect(v, r)
-function _intersect(r1::AbstractRange, r2::AbstractRange)
-    # To iterate over the shorter range
-    length(r1) > length(r2) && return _intersect(r2, r1)
-
-    r1 = Base.unique(r1)
-    T = Base.promote_eltype(r1, r2)
-
-    return T[x for x in r1 if x ∈ r2]
-end
-_intersect(a, b) = Base.intersect(a, b)
-
 
 end # module
