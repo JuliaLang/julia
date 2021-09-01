@@ -842,9 +842,8 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     mi = specialize_method(method, atypes, sparams)::MethodInstance
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = InferenceResult(mi)
-    frame = InferenceState(result, :no, interp)
+    frame = InferenceState(result, run_optimizer ? :global : :no, interp)
     frame === nothing && return (nothing, Any)
-    run_optimizer && (frame.cached = true)
     typeinf(interp, frame)
     ccall(:jl_typeinf_end, Cvoid, ())
     frame.inferred || return (nothing, Any)
