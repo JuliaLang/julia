@@ -296,3 +296,5 @@ function print_callstack(sv::InferenceState)
         sv = sv.parent
     end
 end
+
+get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]

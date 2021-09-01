@@ -6,7 +6,10 @@ New language features
 ---------------------
 
 * `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
-* `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
+* `@inline` and `@noinline` annotations can be used within a function body to give an extra
+  hint about the inlining cost to the compiler. ([#41312])
+* `@inline` and `@noinline` annotations can now be applied to a function callsite or block
+  to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 
 Language changes
@@ -39,7 +42,7 @@ New library features
 
 * `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
   contains "some message" regardless of the specific exception type.
-  Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
+  Regular expressions, lists of strings, and matching functions are also supported. ([#41888])
 
 Standard library changes
 ------------------------

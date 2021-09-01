@@ -255,7 +255,8 @@ typedef struct _jl_code_info_t {
     jl_value_t *ssavaluetypes; // types of ssa values (or count of them)
     jl_array_t *ssaflags; // flags associated with each statement:
         // 0 = inbounds
-        // 1,2 = <reserved> inlinehint,always-inline,noinline
+        // 1 = inline
+        // 2 = noinline
         // 3 = <reserved> strict-ieee (strictfp)
         // 4 = effect-free (may be deleted if unused)
         // 5-6 = <unused>

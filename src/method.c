@@ -84,7 +84,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             e->head == quote_sym || e->head == inert_sym ||
             e->head == meta_sym || e->head == inbounds_sym ||
             e->head == boundscheck_sym || e->head == loopinfo_sym ||
-            e->head == aliasscope_sym || e->head == popaliasscope_sym) {
+            e->head == aliasscope_sym || e->head == popaliasscope_sym ||
+            e->head == inline_sym || e->head == noinline_sym) {
             // ignore these
         }
         else {
@@ -253,6 +254,11 @@ JL_DLLEXPORT void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl
     }
 }
 
+jl_value_t *expr_arg1(jl_value_t *expr) {
+    jl_array_t *args = ((jl_expr_t*)expr)->args;
+    return jl_array_ptr_ref(args, 0);
+}
+
 // copy a :lambda Expr into its CodeInfo representation,
 // including popping of known meta nodes
 static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
@@ -274,8 +280,17 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
     jl_gc_wb(li, li->code);
     size_t n = jl_array_len(body);
     jl_value_t **bd = (jl_value_t**)jl_array_ptr_data((jl_array_t*)li->code);
+    li->ssaflags = jl_alloc_array_1d(jl_array_uint8_type, n);
+    jl_gc_wb(li, li->ssaflags);
+    int inbounds_depth = 0; // number of stacked inbounds
+    // isempty(inline_flags): no user annotation
+    // last(inline_flags) == 1: inline region
+    // last(inline_flags) == 0: noinline region
+    arraylist_t *inline_flags = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
     for (j = 0; j < n; j++) {
         jl_value_t *st = bd[j];
+        int is_flag_stmt = 0;
+        // check :meta expression
         if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym) {
             size_t k, ins = 0, na = jl_expr_nargs(st);
             jl_array_t *meta = ((jl_expr_t*)st)->args;
@@ -297,10 +312,60 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             else
                 jl_array_del_end(meta, na - ins);
         }
+        // check other flag expressions
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == inbounds_sym) {
+            is_flag_stmt = 1;
+            jl_value_t *arg1 = expr_arg1(st);
+            if (arg1 == (jl_value_t*)jl_true)       // push
+                inbounds_depth += 1;
+            else if (arg1 == (jl_value_t*)jl_false) // clear
+                inbounds_depth = 0;
+            else if (inbounds_depth > 0)            // pop
+                inbounds_depth -= 1;
+            bd[j] = jl_nothing;
+        }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == inline_sym) {
+            is_flag_stmt = 1;
+            jl_value_t *arg1 = expr_arg1(st);
+            if (arg1 == (jl_value_t*)jl_true) // enter inline region
+                arraylist_push(inline_flags, (void*)1);
+            else {                            // exit inline region
+                assert(arg1 == (jl_value_t*)jl_false);
+                arraylist_pop(inline_flags);
+            }
+            bd[j] = jl_nothing;
+        }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == noinline_sym) {
+            is_flag_stmt = 1;
+            jl_value_t *arg1 = expr_arg1(st);
+            if (arg1 == (jl_value_t*)jl_true) // enter noinline region
+                arraylist_push(inline_flags, (void*)0);
+            else {                             // exit noinline region
+                assert(arg1 == (jl_value_t*)jl_false);
+                arraylist_pop(inline_flags);
+            }
+            bd[j] = jl_nothing;
+        }
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == return_sym) {
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
         }
+
+        if (is_flag_stmt)
+            jl_array_uint8_set(li->ssaflags, j, 0);
+        else {
+            uint8_t flag = 0;
+            if (inbounds_depth > 0)
+                flag |= 1 << 0;
+            if (inline_flags->len > 0) {
+                void* inline_flag = inline_flags->items[inline_flags->len - 1];
+                flag |= 1 << (inline_flag ? 1 : 2);
+            }
+            jl_array_uint8_set(li->ssaflags, j, flag);
+        }
     }
+    assert(inline_flags->len == 0); // malformed otherwise
+    arraylist_free(inline_flags);
+    free(inline_flags);
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ir, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_len(vis);
@@ -313,7 +378,6 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
     jl_gc_wb(li, li->slotflags);
     li->ssavaluetypes = jl_box_long(nssavalue);
     jl_gc_wb(li, li->ssavaluetypes);
-    li->ssaflags = jl_alloc_array_1d(jl_array_uint8_type, 0);
 
     // Flags that need to be copied to slotflags
     const uint8_t vinfo_mask = 8 | 16 | 32 | 64;

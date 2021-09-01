@@ -592,7 +592,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         return nothing
     end
     mi = mi::MethodInstance
-    if !force && !const_prop_methodinstance_heuristic(interp, method, mi)
+    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, sv)
         add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
     end
@@ -696,7 +696,8 @@ end
 # This is a heuristic to avoid trying to const prop through complicated functions
 # where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
-function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, method::Method, mi::MethodInstance)
+function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, match::MethodMatch, mi::MethodInstance, sv::InferenceState)
+    method = match.method
     if method.is_for_opaque_closure
         # Not inlining an opaque closure can be very expensive, so be generous
         # with the const-prop-ability. It is quite possible that we can't infer
@@ -714,7 +715,8 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, method
     if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
-            cache_inlineable = inlining_policy(interp)(cache_inf) !== nothing
+            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv))
+            cache_inlineable = src !== nothing
         end
     end
     if !cache_inlineable
@@ -1908,7 +1910,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if isa(fname, SlotNumber)
                         changes = StateUpdate(fname, VarState(Any, false), changes, false)
                     end
-                elseif hd === :inbounds || hd === :meta || hd === :loopinfo || hd === :code_coverage_effect
+                elseif hd === :code_coverage_effect ||
+                       (hd !== :boundscheck && # :boundscheck can be narrowed to Bool
+                        hd !== nothing && is_meta_expr_head(hd))
                     # these do not generate code
                 else
                     t = abstract_eval_statement(interp, stmt, changes, frame)
