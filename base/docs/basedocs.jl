@@ -33,6 +33,15 @@ kw"help", kw"Julia", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
+
+!!! note
+    Doing `using Foo` in packages or code that you want to keep working with
+    updated dependencies is not recommended. The reason for this is if another
+    dependency starts to export one of the same names as `Foo` the code will
+    error due to an ambiguity in which package the name should be taken from.
+    Instead, explicitly list what names you want to use from Foo, for example:
+    `using Foo: Foo, parsefile, readfile` to get access bring `Foo` and two
+    functions `parsefile` and `readfile` into scope.
 """
 kw"using"
 
