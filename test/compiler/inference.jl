@@ -3428,3 +3428,48 @@ end
 f41908(x::Complex{T}) where {String<:T<:String} = 1
 g41908() = f41908(Any[1][1])
 @test only(Base.return_types(g41908, ())) <: Int
+
+# issue #42022
+let x = Any[
+        Expr(:(=), Core.SlotNumber(3), 1)
+        Expr(:enter, 18)
+        Expr(:(=), Core.SlotNumber(3), 2.0)
+        Expr(:enter, 12)
+        Expr(:(=), Core.SlotNumber(3), '3')
+        Core.GotoIfNot(Core.SlotNumber(2), 9)
+        Expr(:leave, 2)
+        Core.ReturnNode(1)
+        Expr(:call, GlobalRef(Main, :throw))
+        Expr(:leave, 1)
+        Core.GotoNode(16)
+        Expr(:leave, 1)
+        Expr(:(=), Core.SlotNumber(4), Expr(:the_exception))
+        Expr(:call, GlobalRef(Main, :rethrow))
+        Expr(:pop_exception, Core.SSAValue(4))
+        Expr(:leave, 1)
+        Core.GotoNode(22)
+        Expr(:leave, 1)
+        Expr(:(=), Core.SlotNumber(5), Expr(:the_exception))
+        nothing
+        Expr(:pop_exception, Core.SSAValue(2))
+        Core.ReturnNode(Core.SlotNumber(3))
+    ]
+    handler_at = Core.Compiler.compute_trycatch(x, Core.Compiler.BitSet())
+    @test handler_at == [0, 0, 2, 2, 4, 4, 4, 0, 4, 4, 2, 4, 2, 2, 2, 2, 0, 2, 0, 0, 0, 0]
+end
+
+@test only(Base.return_types((Bool,)) do y
+        x = 1
+        try
+            x = 2.0
+            try
+                x = '3'
+                y ? (return 1) : throw()
+            catch ex1
+                rethrow()
+            end
+        catch ex2
+            nothing
+        end
+        return x
+    end) === Union{Int64, Float64, Char}

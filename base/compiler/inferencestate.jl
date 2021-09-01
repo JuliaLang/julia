@@ -28,9 +28,7 @@ mutable struct InferenceState
     pc´´::LineNum
     nstmts::Int
     # current exception handler info
-    cur_hand #::Union{Nothing, Pair{LineNum, prev_handler}}
-    handler_at::Vector{Any}
-    n_handlers::Int
+    handler_at::Vector{LineNum}
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
     throw_blocks::BitSet
@@ -86,25 +84,21 @@ mutable struct InferenceState
         throw_blocks = find_throw_blocks(code)
 
         # exception handlers
-        cur_hand = nothing
-        handler_at = Any[ nothing for i=1:n ]
-        n_handlers = 0
-
-        W = BitSet()
-        push!(W, 1) #initial pc to visit
+        ip = BitSet()
+        handler_at = compute_trycatch(src.code, ip)
+        push!(ip, 1)
 
         mod = isa(def, Method) ? def.module : def
-
         valid_worlds = WorldRange(src.min_world,
             src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
+
         frame = new(
             InferenceParams(interp), result, linfo,
             sp, slottypes, mod, 0,
             IdSet{InferenceState}(), IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,
-            Union{}, W, 1, n,
-            cur_hand, handler_at, n_handlers,
+            Union{}, ip, 1, n, handler_at,
             ssavalue_uses, throw_blocks,
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
@@ -117,6 +111,91 @@ mutable struct InferenceState
         return frame
     end
 end
+
+function compute_trycatch(code::Vector{Any}, ip::BitSet)
+    # The goal initially is to record the frame like this for the state at exit:
+    # 1: (enter 3) # == 0
+    # 3: (expr)    # == 1
+    # 3: (leave 1) # == 1
+    # 4: (expr)    # == 0
+    # then we can find all trys by walking backwards from :enter statements,
+    # and all catches by looking at the statement after the :enter
+    n = length(code)
+    empty!(ip)
+    ip.offset = 0 # for _bits_findnext
+    push!(ip, n + 1)
+    handler_at = fill(0, n)
+
+    # start from all :enter statements and record the location of the try
+    for pc = 1:n
+        stmt = code[pc]
+        if isexpr(stmt, :enter)
+            l = stmt.args[1]::Int
+            handler_at[pc + 1] = pc
+            push!(ip, pc + 1)
+            handler_at[l] = pc
+            push!(ip, l)
+        end
+    end
+
+    # now forward those marks to all :leave statements
+    pc´´ = 0
+    while true
+        # make progress on the active ip set
+        pc = _bits_findnext(ip.bits, pc´´)::Int
+        pc > n && break
+        while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
+            pc´ = pc + 1 # next program-counter (after executing instruction)
+            if pc == pc´´
+                pc´´ = pc´
+            end
+            delete!(ip, pc)
+            cur_hand = handler_at[pc]
+            @assert cur_hand != 0 "unbalanced try/catch"
+            stmt = code[pc]
+            if isa(stmt, GotoNode)
+                pc´ = stmt.label
+            elseif isa(stmt, GotoIfNot)
+                l = stmt.dest::Int
+                if handler_at[l] != cur_hand
+                    @assert handler_at[l] == 0 "unbalanced try/catch"
+                    handler_at[l] = cur_hand
+                    if l < pc´´
+                        pc´´ = l
+                    end
+                    push!(ip, l)
+                end
+            elseif isa(stmt, ReturnNode)
+                @assert !isdefined(stmt, :val) "unbalanced try/catch"
+                break
+            elseif isa(stmt, Expr)
+                head = stmt.head
+                if head === :enter
+                    cur_hand = pc
+                elseif head === :leave
+                    l = stmt.args[1]::Int
+                    for i = 1:l
+                        cur_hand = handler_at[cur_hand]
+                    end
+                    cur_hand == 0 && break
+                end
+            end
+
+            pc´ > n && break # can't proceed with the fast-path fall-through
+            if handler_at[pc´] != cur_hand
+                @assert handler_at[pc´] == 0 "unbalanced try/catch"
+                handler_at[pc´] = cur_hand
+            elseif !in(pc´, ip)
+                break  # already visited
+            end
+            pc = pc´
+        end
+    end
+
+    @assert first(ip) == n + 1
+    return handler_at
+end
+
 
 """
     Iterate through all callers of the given InferenceState in the abstract
