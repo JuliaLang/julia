@@ -55,6 +55,9 @@ endif
 ifeq ($(USE_RV), 1)
 LLVM_EXTERNAL_PROJECTS := $(LLVM_EXTERNAL_PROJECTS);rv
 endif
+ifeq ($(BUILD_LLVM_LIBUNWIND), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);libcxx;libcxxabi;libunwind
+endif
 
 include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
@@ -516,6 +519,11 @@ $(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
 $(eval $(call LLVM_PROJ_PATCH,llvm-12-fde-symbols-aarch64)) # remove for LLVM 13
 $(eval $(call LLVM_PROJ_PATCH,llvm-12-force-eh_frame-aarch64)) # remove for LLVM 13
 endif # LLVM_VER 12.0
+
+ifeq ($(BUILD_LLVM_LIBUNWIND,1)
+$(eval $(call LLVM_PROJ_PATCH,llvm-libunwind-prologue-epilogue))
+$(eval $(call LLVM_PROJ_PATCH,llvm-libunwind-force-dwarf))
+endif
 
 # Add a JL prefix to the version map. DO NOT REMOVE
 ifneq ($(LLVM_VER), svn)
