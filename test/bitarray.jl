@@ -203,12 +203,8 @@ timesofar("utils")
         @test_throws DimensionMismatch BitMatrix((isodd(i) for i in 1:3))
     end
 
-    @testset "constructor from infinite iterable" begin
-        struct InfiniteIter; state::Bool; end
-        Base.iterate(i::InfiniteIter, state=1) = (state, !state)
-        Base.IteratorSize(i::InfiniteIter) = Base.IsInfinite()
-
-        inf_iter = InfiniteIter(1)
+    @testset "constructor from infinite iterator" begin
+        inf_iter = Base.Iterators.cycle([true])
         @test_throws ArgumentError BitArray(inf_iter)
     end
 
