@@ -7549,3 +7549,6 @@ const T35130 = Tuple{Vector{Int}, <:Any}
 end
 h35130(x) = A35130(Any[x][1]::Vector{T35130})
 @test h35130(T35130[([1],1)]) isa A35130
+
+# avoid impossible normalization (don't try to form Tuple{Complex{String}} here)
+@test Tuple{Complex{T} where String<:T<:String} == Tuple{Complex{T} where String<:T<:String}
