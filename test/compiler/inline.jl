@@ -172,7 +172,6 @@ function f_ifelse(x)
     b = ifelse(a, true, false)
     return b ? x + 1 : x
 end
-# 2 for now because the compiler leaves a GotoNode around
 @test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
 
 # Test that inlining of _apply_iterate properly hits the inference cache
