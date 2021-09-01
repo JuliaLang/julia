@@ -2338,7 +2338,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
         nrc = nr * nc
         na = prod(size(A)[3:end])
         k = 1
-        for d ∈ 1:na
+        @inbounds for d ∈ 1:na
             dd = nrc * (d - 1)
             for i ∈ 1:nr
                 Ai = dd + i
@@ -2350,7 +2350,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
             end
         end
     else
-        for k ∈ eachindex(xs)
+        @inbounds for k ∈ eachindex(xs)
             A[k] = xs[k]
         end
     end
@@ -2532,34 +2532,6 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     A = cat_similar(as[1], T, outdims)
     hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
     return A
-end
-
-function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
-    # putting these in separate functions leads to unnecessary allocations
-    lenxs = length(xs)
-    lena = length(A)
-    lenxs == lena || throw(ArgumentError("number of elements doesn't match specified shape"))
-    if row_first
-        nr, nc = size(A, 1), size(A, 2)
-        nrc = nr * nc
-        na = prod(size(A)[3:end])
-        k = 1
-        @inbounds for d ∈ 1:na
-            dd = nrc * (d - 1)
-            for i ∈ 1:nr
-                Ai = dd + i
-                for _ ∈ 1:nc
-                    A[Ai] = xs[k]
-                    k += 1
-                    Ai += nr
-                end
-            end
-        end
-    else
-        @inbounds for k ∈ eachindex(xs)
-            A[k] = xs[k]
-        end
-    end
 end
 
 function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int},
