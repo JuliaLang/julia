@@ -617,10 +617,10 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 
 # https://github.com/JuliaLang/julia/issues/42078
 # idempotency of callsite inling
-function getsource(mi::Core.MethodInstance)
+function getcache(mi::Core.MethodInstance)
     cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
     codeinf = Core.Compiler.get(cache, mi, nothing)
-    return isnothing(codeinf) ? nothing : codeinf.inferred
+    return isnothing(codeinf) ? nothing : codeinf
 end
 @noinline f42078(a) = sum(sincos(a))
 let
@@ -632,16 +632,16 @@ let
         length(code)
     end
 
-    mi = let
-        specs = collect(only(methods(f42078)).specializations)
-        specs[findfirst(!isnothing, specs)]::Core.MethodInstance
-    end
-
     let # codegen will discard the source because it's not supposed to be inlined in general context
         a = 42
         f42078(a)
     end
-    @assert getsource(mi) === nothing
+    let # make sure to discard the inferred source
+        specs = collect(only(methods(f42078)).specializations)
+        mi = specs[findfirst(!isnothing, specs)]::Core.MethodInstance
+        codeinf = getcache(mi)::Core.CodeInstance
+        codeinf.inferred = nothing
+    end
 
     let # inference should re-infer `f42078(::Int)` and we should get the same code
         code = code_typed1((Int,)) do a
