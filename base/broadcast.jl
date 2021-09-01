@@ -8,7 +8,7 @@ Module containing the broadcasting implementation.
 module Broadcast
 
 using .Base.Cartesian
-using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, @pure,
+using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, promote_typejoin_union, @pure,
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias
 import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, BroadcastFunction
@@ -712,50 +712,6 @@ eltypes(::Tuple{}) = Tuple{}
 eltypes(t::Tuple{Any}) = Tuple{_broadcast_getindex_eltype(t[1])}
 eltypes(t::Tuple{Any,Any}) = Tuple{_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2])}
 eltypes(t::Tuple) = Tuple{_broadcast_getindex_eltype(t[1]), eltypes(tail(t)).types...}
-
-function promote_typejoin_union(::Type{T}) where T
-    if T === Union{}
-        return Union{}
-    elseif T isa UnionAll
-        return Any # TODO: compute more precise bounds
-    elseif T isa Union
-        return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
-    elseif T <: Tuple
-        return typejoin_union_tuple(T)
-    else
-        return T
-    end
-end
-
-@pure function typejoin_union_tuple(T::Type)
-    u = Base.unwrap_unionall(T)
-    u isa Union && return typejoin(
-            typejoin_union_tuple(Base.rewrap_unionall(u.a, T)),
-            typejoin_union_tuple(Base.rewrap_unionall(u.b, T)))
-    p = (u::DataType).parameters
-    lr = length(p)::Int
-    if lr == 0
-        return Tuple{}
-    end
-    c = Vector{Any}(undef, lr)
-    for i = 1:lr
-        pi = p[i]
-        U = Core.Compiler.unwrapva(pi)
-        if U === Union{}
-            ci = Union{}
-        elseif U isa Union
-            ci = typejoin(U.a, U.b)
-        else
-            ci = U
-        end
-        if i == lr && Core.Compiler.isvarargtype(pi)
-            c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
-        else
-            c[i] = ci
-        end
-    end
-    return Base.rewrap_unionall(Tuple{c...}, T)
-end
 
 # Inferred eltype of result of broadcast(f, args...)
 combine_eltypes(f, args::Tuple) =

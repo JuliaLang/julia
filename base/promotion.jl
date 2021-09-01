@@ -161,6 +161,50 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
 end
 _promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
 
+function promote_typejoin_union(::Type{T}) where T
+    if T === Union{}
+        return Union{}
+    elseif T isa UnionAll
+        return Any # TODO: compute more precise bounds
+    elseif T isa Union
+        return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
+    elseif T <: Tuple
+        return typejoin_union_tuple(T)
+    else
+        return T
+    end
+end
+
+function typejoin_union_tuple(T::Type)
+    @_pure_meta
+    u = Base.unwrap_unionall(T)
+    u isa Union && return typejoin(
+            typejoin_union_tuple(Base.rewrap_unionall(u.a, T)),
+            typejoin_union_tuple(Base.rewrap_unionall(u.b, T)))
+    p = (u::DataType).parameters
+    lr = length(p)::Int
+    if lr == 0
+        return Tuple{}
+    end
+    c = Vector{Any}(undef, lr)
+    for i = 1:lr
+        pi = p[i]
+        U = Core.Compiler.unwrapva(pi)
+        if U === Union{}
+            ci = Union{}
+        elseif U isa Union
+            ci = typejoin(U.a, U.b)
+        else
+            ci = U
+        end
+        if i == lr && Core.Compiler.isvarargtype(pi)
+            c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
+        else
+            c[i] = ci
+        end
+    end
+    return Base.rewrap_unionall(Tuple{c...}, T)
+end
 
 # Returns length, isfixed
 function full_va_len(p)

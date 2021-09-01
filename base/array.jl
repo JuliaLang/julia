@@ -679,10 +679,11 @@ if isdefined(Core, :Compiler)
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
-                ($I).f
+                T = ($I).f
             else
-                Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
+                T = Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
             end
+            promote_typejoin_union(T)
         end
     end
 else
@@ -690,7 +691,7 @@ else
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
-                ($I).f
+                promote_typejoin_union($I.f)
             else
                 Any
             end
@@ -715,8 +716,12 @@ function collect(itr::Generator)
             return _array_for(et, itr.iter, isz)
         end
         v1, st = y
-        arr = _array_for(typeof(v1), itr.iter, isz, shape)
-        return collect_to_with_first!(arr, v1, itr, st)
+        dest = _array_for(typeof(v1), itr.iter, isz, shape)
+        # The typeassert gives inference a helping hand on the element type and dimensionality
+        # (work-around for #28382)
+        et′ = et <: Type ? Type : et
+        RT = dest isa AbstractArray ? AbstractArray{<:et′, ndims(dest)} : Any
+        collect_to_with_first!(dest, v1, itr, st)::RT
     end
 end
 
