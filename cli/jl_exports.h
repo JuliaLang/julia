@@ -31,6 +31,8 @@ typedef void (anonfunc)(void);
 JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_
 JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
+// needs to be special-cased due to name mangling
+JL_DLLEXPORT void NTAPI __julia_personality(void);
 #endif
 JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX
@@ -40,6 +42,7 @@ JL_CODEGEN_EXPORTED_FUNCS(XX)
 JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_
 JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
+JL_HIDDEN anonfunc * __julia_personality_addr = NULL;
 #endif
 JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX
@@ -54,6 +57,7 @@ static const char *const jl_runtime_exported_func_names[] = {
     JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_
     JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
+    "__julia_personality@16",
 #endif
     JL_RUNTIME_EXPORTED_FUNC_ADDRS(XX)
     NULL
@@ -71,6 +75,7 @@ static anonfunc **const jl_runtime_exported_func_addrs[] = {
     JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_
     JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
+    &__julia_personality_addr,
 #endif
     JL_RUNTIME_EXPORTED_FUNC_ADDRS(XX)
     NULL
