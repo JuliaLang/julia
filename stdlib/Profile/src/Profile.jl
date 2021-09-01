@@ -516,7 +516,7 @@ function fetch(;include_meta = false)
             i -= 1
             j -= 1
         end
-        @assert i == j == 0 "metadata stripping failed i=$i j=$j"
+        @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
         return data_stripped
     end
 end
