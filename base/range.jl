@@ -484,11 +484,11 @@ struct StepRangeLen{T,R,S,L<:Integer} <: AbstractRange{T}
 end
 
 StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
-    StepRangeLen{T,R,S,promote_type(Int,typeof(len))}(ref, step, len, offset)
+    StepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
 StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
-    StepRangeLen{typeof(ref+zero(step)),R,S,promote_type(Int,typeof(len))}(ref, step, len, offset)
+    StepRangeLen{typeof(ref+zero(step)),R,S,typeof(len)}(ref, step, len, offset)
 StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
-    StepRangeLen{T,R,S,promote_type(Int,typeof(len))}(ref, step, len, offset)
+    StepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
 
 ## range with computed step
 
@@ -552,7 +552,7 @@ function LinRange{T,L}(start, stop, len::Integer) where {T,L}
 end
 
 function LinRange{T}(start, stop, len::Integer) where T
-    LinRange{T,promote_type(Int,typeof(len))}(start, stop, len)
+    LinRange{T,typeof(len)}(start, stop, len)
 end
 
 function LinRange(start, stop, len::Integer)
