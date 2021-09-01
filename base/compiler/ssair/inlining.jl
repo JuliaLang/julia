@@ -722,7 +722,7 @@ end
 
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     mi = todo.mi
-    (; match) = todo.spec::DelayedInliningSpec
+    (; match, atypes) = todo.spec::DelayedInliningSpec
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     isconst, src = false, nothing
@@ -757,7 +757,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
         return ConstantCase(src)
     end
 
-    src = inlining_policy(state.interp, src, flag)
+    src = inlining_policy(state.interp, src, flag, mi, atypes)
 
     if src === nothing
         return compileable_specialization(et, match)

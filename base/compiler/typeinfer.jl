@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # build (and start inferring) the inference frame for the top-level MethodInstance
-function typeinf(interp::AbstractInterpreter, result::InferenceResult, cached::Bool)
-    frame = InferenceState(result, cached, interp)
+function typeinf(interp::AbstractInterpreter, result::InferenceResult, cache::Symbol)
+    frame = InferenceState(result, cache, interp)
     frame === nothing && return false
-    cached && lock_mi_inference(interp, result.linfo)
+    cache === :global && lock_mi_inference(interp, result.linfo)
     return typeinf(interp, frame)
 end
 
@@ -774,22 +774,30 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     mi = specialize_method(method, atypes, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
-        update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
-        rettype = code.rettype
-        if isdefined(code, :rettype_const)
-            rettype_const = code.rettype_const
-            if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-                return PartialStruct(rettype, rettype_const), mi
-            elseif rettype <: Core.OpaqueClosure && isa(rettype_const, PartialOpaque)
-                return rettype_const, mi
-            elseif isa(rettype_const, InterConditional)
-                return rettype_const, mi
-            else
-                return Const(rettype_const), mi
-            end
+        if code.inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
+            # we already inferred this edge previously and decided to discarded the inferred code
+            # but the inlinear will request to use it, we re-infer it here and keep it around in the local cache
+            cache = :local
         else
-            return rettype, mi
+            update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
+            rettype = code.rettype
+            if isdefined(code, :rettype_const)
+                rettype_const = code.rettype_const
+                if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+                    return PartialStruct(rettype, rettype_const), mi
+                elseif rettype <: Core.OpaqueClosure && isa(rettype_const, PartialOpaque)
+                    return rettype_const, mi
+                elseif isa(rettype_const, InterConditional)
+                    return rettype_const, mi
+                else
+                    return Const(rettype_const), mi
+                end
+            else
+                return rettype, mi
+            end
         end
+    else
+        cache = :global # cache edge targets by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
         return Any, nothing
@@ -805,7 +813,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # completely new
         lock_mi_inference(interp, mi)
         result = InferenceResult(mi)
-        frame = InferenceState(result, #=cached=#true, interp) # always use the cache for edge targets
+        frame = InferenceState(result, cache, interp) # always use the cache for edge targets
         if frame === nothing
             # can't get the source for this, so we know nothing
             unlock_mi_inference(interp, mi)
@@ -834,14 +842,10 @@ function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize
     mi = specialize_method(method, atypes, sparams)::MethodInstance
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = InferenceResult(mi)
-    frame = InferenceState(result, false, interp)
+    frame = InferenceState(result, :no, interp)
     frame === nothing && return (nothing, Any)
-    if typeinf(interp, frame) && run_optimizer
-        opt_params = OptimizationParams(interp)
-        result.src = src = OptimizationState(frame, opt_params, interp)
-        optimize(interp, src, opt_params, ignorelimited(result.result))
-        frame.src = finish!(interp, result)
-    end
+    run_optimizer && (frame.cached = true)
+    typeinf(interp, frame)
     ccall(:jl_typeinf_end, Cvoid, ())
     frame.inferred || return (nothing, Any)
     return (frame.src, widenconst(ignorelimited(result.result)))
@@ -898,7 +902,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         return retrieve_code_info(mi)
     end
     lock_mi_inference(interp, mi)
-    frame = InferenceState(InferenceResult(mi), #=cached=#true, interp)
+    frame = InferenceState(InferenceResult(mi), #=cache=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_end, Cvoid, ())
@@ -921,11 +925,11 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
             return code.rettype
         end
     end
-    frame = InferenceResult(mi)
-    typeinf(interp, frame, true)
+    result = InferenceResult(mi)
+    typeinf(interp, result, :global)
     ccall(:jl_typeinf_end, Cvoid, ())
-    frame.result isa InferenceState && return nothing
-    return widenconst(ignorelimited(frame.result))
+    result.result isa InferenceState && return nothing
+    return widenconst(ignorelimited(result.result))
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()`
@@ -941,7 +945,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
             ccall(:jl_typeinf_begin, Cvoid, ())
             if !src.inferred
                 result = InferenceResult(linfo)
-                frame = InferenceState(result, src, #=cached=#true, interp)
+                frame = InferenceState(result, src, #=cache=#:global, interp)
                 typeinf(interp, frame)
                 @assert frame.inferred # TODO: deal with this better
                 src = frame.src
