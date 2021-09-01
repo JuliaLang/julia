@@ -3472,4 +3472,4 @@ end
             nothing
         end
         return x
-    end) === Union{Int64, Float64, Char}
+    end) === Union{Int, Float64, Char}
