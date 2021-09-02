@@ -2260,3 +2260,40 @@ let s = "Issue53126()."
     @test res
     @test isempty(c)
 end
+
+@testset "complete names from `using`" begin
+    test_complete_context1(args...; kwargs...) = first(test_complete_context(args...; kwargs...))
+
+    let # should work for arbitrary module
+        M = Module()
+
+        use = @eval M module use end
+        @eval use module def; foo = 42; end
+
+        @test count(==("foo"), test_complete_context1("f", use)) == 0
+        @test count(==("foo"), test_complete_context1("use.f", M)) == 0
+        @eval use using .def: foo
+        @test count(==("foo"), test_complete_context1("f", use)) == 1
+        @test count(==("foo"), test_complete_context1("use.f", M)) == 1 # should work for even dot-accessed module context
+    end
+
+    let # should work for packages
+        M = Module()
+
+        @test count(==("fuzzyscore"), test_complete_context1("fuzzy", M)) == 0
+        @eval M using REPL: fuzzyscore
+        @test count(==("fuzzyscore"), test_complete_context1("fuzzy", M)) == 1
+
+        @test count(==("completions"), test_complete_context1("comp", M)) == 0
+        @eval M using REPL.REPLCompletions: completions
+        @test count(==("completions"), test_complete_context1("comp", M)) == 1
+    end
+
+    let # should for `Base` binding
+        M = Module()
+
+        @test count(==("@assume_effects"), test_complete_context1("@assume_", M)) ≠ 1
+        @eval M using Base: @assume_effects
+        @test count(==("@assume_effects"), test_complete_context1("@assume_", M)) == 1
+    end
+end
