@@ -221,21 +221,14 @@ function _subtypes_in!(mods::Array, x::Type)
         for s in names(m, all = true)
             if isdefined(m, s) && !isdeprecated(m, s)
                 t = getfield(m, s)
-                if isa(t, DataType)
-                    if t.name.name === s && supertype(t).name == xt.name
-                        ti = typeintersect(t, x)
-                        ti != Bottom && push!(sts, ti)
-                    end
-                elseif isa(t, UnionAll)
-                    tt = unwrap_unionall(t)
-                    isa(tt, DataType) || continue
-                    tt = tt::DataType
-                    if tt.name.name === s && supertype(tt).name == xt.name
+                dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
+                if isa(dt, DataType)
+                    if dt.name.name === s && dt.name.module == m && supertype(dt).name == xt.name
                         ti = typeintersect(t, x)
                         ti != Bottom && push!(sts, ti)
                     end
                 elseif isa(t, Module) && nameof(t) === s && parentmodule(t) === m && t !== m
-                    push!(mods, t)
+                    t === Base || push!(mods, t) # exclude Base, since it also parented by Main
                 end
             end
         end
