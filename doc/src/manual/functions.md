@@ -306,6 +306,20 @@ get(()->time(), dict, key)
 The call to [`time`](@ref) is delayed by wrapping it in a 0-argument anonymous function
 that is called only when the requested key is absent from `dict`.
 
+!!! note
+    Methods can be added to anonymous functions using the following syntax:
+    ```jldoctest
+    julia> f = x -> x^2
+    #16 (generic function with 1 method)
+    julia> (::typeof(f))(x::Int) = 10x
+    julia> f
+    #16 (generic function with 2 methods) # Note that f now has 2 methods
+    julia> f(2.)
+    4.0
+    julia> f(2)
+    20
+    ```
+
 ## Tuples
 
 Julia has a built-in data structure called a *tuple* that is closely related to function
