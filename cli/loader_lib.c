@@ -31,12 +31,27 @@ void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * 
 
 /* Wrapper around dlopen(), with extra relative pathing thrown in*/
 static void * load_library(const char * rel_path, const char * src_dir) {
+    void * handle = NULL;
+
+    // See if a handle is already open to the basename
+    const char *basename = rel_path + strlen(rel_path);
+    while (basename-- > rel_path)
+        if (*basename == PATHSEPSTRING[0] || *basename == '/')
+            break;
+    basename++;
+#if defined(_OS_WINDOWS_)
+    if ((handle = GetModuleHandleW(basename)))
+        return handle;
+#else
+    if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | RTLD_GLOBAL)))
+        return handle;
+#endif
+
     char path[2*PATH_MAX + 1] = {0};
     strncat(path, src_dir, sizeof(path) - 1);
     strncat(path, PATHSEPSTRING, sizeof(path) - 1);
     strncat(path, rel_path, sizeof(path) - 1);
 
-    void * handle = NULL;
 #if defined(_OS_WINDOWS_)
     wchar_t wpath[2*PATH_MAX + 1] = {0};
     if (!utf8_to_wchar(path, wpath, 2*PATH_MAX)) {
