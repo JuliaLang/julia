@@ -998,6 +998,12 @@ uint8_t _binding_is_from_explicit_using(jl_binding_t *b, jl_module_t *from) {
             b->owner != jl_base_module && b->owner != jl_core_module);
 }
 
+void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
+    jl_array_grow_end(a, 1);
+    //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
+    jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)name);
+}
+
 void _jl_module_names_into_array(jl_array_t* a, jl_module_t *m, int all, int imported, int usings)
 {
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
@@ -1008,14 +1014,13 @@ void _jl_module_names_into_array(jl_array_t* a, jl_module_t *m, int all, int imp
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        if ((b->publicp ||
+        if (b->value != (jl_value_t*)m &&
+            (b->publicp ||
              (imported && b->imported) ||
              (usings && _binding_is_from_explicit_using(b, m)) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || main_public))) &&
             (all || (!b->deprecated && !hidden))) {
-            jl_array_grow_end(a, 1);
-            // n.b. change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
-            jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)asname);
+            _append_symbol_to_bindings_array(a, asname);
         }
         table = jl_atomic_load_relaxed(&m->bindings);
     }
@@ -1025,13 +1030,21 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, 
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
     JL_GC_PUSH1(&a);
+    // First, encode the module's name
+    _append_symbol_to_bindings_array(a, m->name);
     _jl_module_names_into_array(a, m, all, imported, usings);
     if (usings) {
         for(int i=(int)m->usings.len-1; i >= 0; --i) {
             jl_module_t *imp = module_usings_getidx(m, i);
             if (imp != jl_base_module && imp != jl_core_module) {
-                // Add all the _exported_ names from imp (including imp itself) into a.
+                // Add all the _exported_ names from imp into a.
                 _jl_module_names_into_array(a, imp, 0, 0, 0);
+                // Add the name of imp itself, unless the user requested `all=true` and it's
+                // a submodule of `m`, since then its name would have already been added by
+                // `all=true`, since it's a binding in `m`.
+                if (!all || imp->parent != m) {
+                    _append_symbol_to_bindings_array(a, imp->name);
+                }
             }
         }
     }
