@@ -67,6 +67,13 @@ Standard library changes
 #### Printf
 * Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
+#### Profile
+* Profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
+  grouping by thread, task, or nested thread/task, task/thread, and `threads` and `tasks` kwargs to allow filtering.
+  Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
+  each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
+  profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
+
 #### Random
 
 #### REPL
