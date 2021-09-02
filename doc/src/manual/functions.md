@@ -310,10 +310,9 @@ that is called only when the requested key is absent from `dict`.
     Methods can be added to anonymous functions using the following syntax:
     ```jldoctest
     julia> f = x -> x^2
-    #16 (generic function with 1 method)
+    #1 (generic function with 1 method)
     julia> (::typeof(f))(x::Int) = 10x
-    julia> f
-    #16 (generic function with 2 methods) # Note that f now has 2 methods
+    #1 (generic function with 2 methods)
     julia> f(2.)
     4.0
     julia> f(2)
