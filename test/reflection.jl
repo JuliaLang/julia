@@ -177,6 +177,18 @@ let
                                                       :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
                                                       :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include"),
                                                       :convert, :curmod_name, :curmod])
+    @test Set(names(TestMod7648, usings = true)) == Set([:Test,  Symbol("@inferred"), Symbol("@test"), Symbol("@test_broken"),
+                                        Symbol("@test_deprecated"), Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"),
+                                        Symbol("@test_throws"), Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict,
+                                        :GenericOrder, :GenericSet, :GenericString, :Test, :TestSetException, :detect_ambiguities, :detect_unbound_args,
+                                        :TestMod7648, :TestModSub9475, :TestMod7648, :a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods, :Foo7648])
+    @test Set(names(TestMod7648, all = true, usings = true)) == Set([:Test,  Symbol("@inferred"), Symbol("@test"), Symbol("@test_broken"),
+                                        Symbol("@test_deprecated"), Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"),
+                                        Symbol("@test_throws"), Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict,
+                                        :GenericOrder, :GenericSet, :GenericString, :Test, :TestSetException, :detect_ambiguities, :detect_unbound_args,
+                                        :TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
+                                        :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
+                                        :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include")])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
