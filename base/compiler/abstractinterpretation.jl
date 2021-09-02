@@ -1919,10 +1919,11 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         ssavaluetypes[pc] = t
                     end
                 end
-                cur_hand = frame.handler_at[pc]
                 if isa(changes, StateUpdate)
-                    while cur_hand != 0
-                        let l = frame.handler_at[cur_hand + 1]
+                    let cur_hand = frame.handler_at[pc], l, enter
+                        while cur_hand != 0
+                            enter = frame.src.code[cur_hand]
+                            l = (enter::Expr).args[1]::Int
                             # propagate new type info to exception handler
                             # the handling for Expr(:enter) propagates all changes from before the try/catch
                             # so this only needs to propagate any changes
@@ -1932,8 +1933,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                                 end
                                 push!(W, l)
                             end
+                            cur_hand = frame.handler_at[cur_hand]
                         end
-                        cur_hand = frame.handler_at[cur_hand]
                     end
                 end
             end
