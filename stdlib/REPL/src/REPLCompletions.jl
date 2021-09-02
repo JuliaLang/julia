@@ -135,9 +135,10 @@ function appendmacro!(syms, macros, needle, endchar)
     end
 end
 
-function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
-    ssyms = names(mod, all = all, imported = imported)
-    all || filter!(Base.Fix1(Base.isexported, mod), ssyms)
+function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString;
+                            all::Bool=false, imported::Bool=false, usings::Bool=false)
+    ssyms = names(mod, all = all, imported = imported, usings = usings)
+    all || filter!(Base.Fix1(Base.isexported, mod), ssyms) # TODO revisit
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
@@ -184,11 +185,11 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
             # Also look in modules we got through `using`
             mods = ccall(:jl_module_usings, Any, (Any,), context_module)::Vector
             for m in mods
-                append!(suggestions, filtered_mod_names(p, m::Module, name))
+                append!(suggestions, filtered_mod_names(p, m::Module, name, imported=true, usings=true))
             end
-            append!(suggestions, filtered_mod_names(p, mod, name, true, true))
+            append!(suggestions, filtered_mod_names(p, mod, name, all=true, imported=true, usings=true))
         else
-            append!(suggestions, filtered_mod_names(p, mod, name, true, false))
+            append!(suggestions, filtered_mod_names(p, mod, name, all=true, usings=true))
         end
     elseif val !== nothing # looking for a property of an instance
         try
