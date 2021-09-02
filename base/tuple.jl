@@ -488,17 +488,12 @@ reverse(t::Tuple) = revargs(t...)
 
 ## specialized reduction ##
 
-# TODO: these definitions cannot yet be combined, since +(x...)
-# where x might be any tuple matches too many methods.
-# TODO: this is inconsistent with the regular sum in cases where the arguments
-# require size promotion to system size.
-sum(x::Tuple{Any, Vararg{Any}}) = +(x...)
-
-# NOTE: should remove, but often used on array sizes
-# TODO: this is inconsistent with the regular prod in cases where the arguments
-# require size promotion to system size.
 prod(x::Tuple{}) = 1
-prod(x::Tuple{Any, Vararg{Any}}) = *(x...)
+# This is consistent with the regular prod because there is no need for size promotion
+# if all elements in the tuple are of system size.
+# It is defined here separately in order to support bootstrap, because it's needed earlier
+# than the general prod definition is available.
+prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
 
 all(x::Tuple{}) = true
 all(x::Tuple{Bool}) = x[1]
