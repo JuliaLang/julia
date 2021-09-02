@@ -1014,6 +1014,14 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, 
         }
         table = jl_atomic_load_relaxed(&m->bindings);
     }
+    if (usings) {
+        for(int i=(int)m->usings.len-1; i >= 0; --i) {
+            jl_module_t *imp = module_usings_getidx(m, i);
+            jl_array_grow_end(a, 1);
+            //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
+            jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)imp->name);
+        }
+    }
     JL_GC_POP();
     return (jl_value_t*)a;
 }
