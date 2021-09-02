@@ -500,17 +500,26 @@ function fetch(;include_meta = false)
     end
     data = Vector{UInt}(undef, len)
     GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
-    if include_meta
+    if include_meta || isempty(data)
         return data
     else
-        nblocks = count(iszero, data)
+        nblocks = 0
+        for i = 2:length(data)
+            if data[i] == 0 && in(data[i - 1], [1,2])
+                # detect block ends and count them
+                # linux 32 has been seen to have rogue ips equal to 0 so also check for the previous entry looking like an idle
+                # state metadata entry which can only be 1 or 2
+                nblocks += 1
+            end
+        end
         nmeta = 4 # number of metadata fields (threadid, taskid, cpu_cycle_clock, thread_sleeping)
         data_stripped = Vector{UInt}(undef, length(data) - (nblocks * nmeta))
         j = length(data_stripped)
         i = length(data)
         while i > 0 && j > 0
             data_stripped[j] = data[i]
-            if data[i] == 0
+            if i > 1 && data[i] == 0 && in(data[i - 1], [1,2])
+                # detect block end (same approach as above)
                 i -= nmeta
             end
             i -= 1
@@ -540,7 +549,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     for i in startframe:-1:1
         startframe - 1 <= i <= startframe - 4 && continue # skip metadata (it's read ahead below)
         ip = data[i]
-        if ip == 0
+        if i > 1 && ip == 0 && in(data[i - 1], [1,2]) # check that the field next to the zero is the idle metadata entry
             # read metadata
             thread_sleeping = data[i - 1] - 1 # subtract 1 as state is incremented to avoid being equal to 0
             # cpu_cycle_clock = data[i - 2]
@@ -788,7 +797,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     for i in startframe:-1:1
         startframe - 1 <= i <= startframe - 4 && continue # skip metadata (its read ahead below)
         ip = all[i]
-        if ip == 0
+        if i > 1 && ip == 0 && in(all[i - 1], [1,2]) # check that the field next to the zero is the idle metadata entry
             # read metadata
             thread_sleeping = all[i - 1] - 1 # subtract 1 as state is incremented to avoid being equal to 0
             # cpu_cycle_clock = all[i - 2]
