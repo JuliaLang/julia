@@ -628,6 +628,21 @@ void Optimizer::checkInst(Instruction *I)
                 use_info.hasunknownmem = true;
             return true;
         }
+        if (isa<AtomicCmpXchgInst>(inst) || isa<AtomicRMWInst>(inst)) {
+            // Only store value count
+            if (use->getOperandNo() != isa<AtomicCmpXchgInst>(inst) ? AtomicCmpXchgInst::getPointerOperandIndex() : AtomicRMWInst::getPointerOperandIndex()) {
+                use_info.escaped = true;
+                return false;
+            }
+            use_info.hasload = true;
+            auto storev = isa<AtomicCmpXchgInst>(inst) ? cast<AtomicCmpXchgInst>(inst)->getNewValOperand() : cast<AtomicRMWInst>(inst)->getValOperand();
+            if (cur.offset == UINT32_MAX || !use_info.addMemOp(inst, use->getOperandNo(),
+                                                               cur.offset, storev->getType(),
+                                                               true, *pass.DL))
+                use_info.hasunknownmem = true;
+            use_info.refload = true;
+            return true;
+        }
         if (isa<AddrSpaceCastInst>(inst) || isa<BitCastInst>(inst)) {
             push_inst(inst);
             return true;
@@ -1330,6 +1345,22 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             newstore->setOrdering(AtomicOrdering::NotAtomic);
             store->eraseFromParent();
             return;
+        }
+        else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            auto slot_idx = find_slot(offset);
+            auto &slot = slots[slot_idx];
+            assert(slot.offset <= offset && slot.offset + slot.size >= offset);
+            IRBuilder<> builder(user);
+            Value *newptr;
+            if (slot.isref) {
+                assert(slot.offset == offset);
+                newptr = slot.slot;
+            }
+            else {
+                Value *Val = isa<AtomicCmpXchgInst>(user) ? cast<AtomicCmpXchgInst>(user)->getNewValOperand() : cast<AtomicRMWInst>(user)->getValOperand();
+                newptr = slot_gep(slot, offset, Val->getType(), builder);
+            }
+            *use = newptr;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
