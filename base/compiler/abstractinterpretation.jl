@@ -1476,7 +1476,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             anyconst = false
             allconst = true
             for i = 2:length(e.args)
-                at = abstract_eval_value(interp, e.args[i], vtypes, sv)
+                at = widenconditional(abstract_eval_value(interp, e.args[i], vtypes, sv))
                 if !anyconst
                     anyconst = has_nontrivial_const_info(at)
                 end

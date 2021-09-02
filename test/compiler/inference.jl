@@ -1828,14 +1828,37 @@ end
         return c, d # ::Tuple{Int,Int}
     end == Any[Tuple{Int,Int}]
 
-    # shouldn't use the old constraint when the subject of condition has changed
+    # should invalidate old constraint when the subject of condition has changed
     @test Base.return_types((Union{Nothing,Int},)) do a
-        b = a === nothing
-        c = b ? 0 : a # c::Int
+        cond = a === nothing
+        r1 = cond ? 0 : a # r1::Int
         a = 0
-        d = b ? a : 1 # d::Int, not d::Union{Nothing,Int}
-        return c, d # ::Tuple{Int,Int}
+        r2 = cond ? a : 1 # r2::Int, not r2::Union{Nothing,Int}
+        return r1, r2 # ::Tuple{Int,Int}
     end == Any[Tuple{Int,Int}]
+end
+
+# https://github.com/JuliaLang/julia/issues/42090#issuecomment-911824851
+# `PartialStruct` shoudln't wrap `Conditional`
+let M = Module()
+    @eval M begin
+        struct BePartialStruct
+            val::Int
+            cond
+        end
+    end
+
+    rt = @eval M begin
+        Base.return_types((Union{Nothing,Int},)) do a
+            cond = a === nothing
+            obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
+            r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
+            a = $(gensym(:anyvar))::Any
+            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constrait invalidation here)
+            return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
+        end |> only
+    end
+    @test rt == Tuple{Union{Nothing,Int},Any}
 end
 
 @testset "conditional constraint propagation from non-`Conditional` object" begin
