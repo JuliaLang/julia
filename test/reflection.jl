@@ -200,6 +200,44 @@ let
     @test !isconst(TestMod7648, :d7648)
 end
 
+module TestMod42092
+module M1
+    const m1_x = 1
+    export m1_x
+end
+module M2
+    const m2_x = 1
+    export m2_x
+end
+module A
+    module B
+        f(x) = 1
+        secret = 1
+        module Inner2 end
+    end
+    module C
+        x = 1
+        y = 2
+        export y
+    end
+    using .B: f
+    using .C
+    using ..M1
+    import ..M2
+end
+end # module TestMod42092
+
+let
+    @test Set(names(TestMod42092.A)) == Set([:A])
+    @test Set(names(TestMod42092.A, imported = true)) == Set([:A, :M2])
+    @test Set(names(TestMod42092.A, usings = true)) == Set([:A, :f, :C, :y, :M1, :m1_x])
+    @test Set(names(TestMod42092.A, all = true)) == Set([:A, :B, :C, :eval, :include, Symbol("#eval"), Symbol("#include")])
+    @test Set(names(TestMod42092.A, all = true, usings = true)) == Set([:A, :B, :C, :f, :y, :M1, :m1_x, :eval, :include, Symbol("#eval"), Symbol("#include")])
+    @test Set(names(TestMod42092.A, imported = true, usings = true)) == Set([:A, :M2, :f, :C, :y, :M1, :m1_x])
+    @test Set(names(TestMod42092.A, all=true, imported = true, usings = true)) == Set([:A, :B, :C, :M2, :f, :y, :M1, :m1_x, :eval, :include, Symbol("#eval"), Symbol("#include")])
+end
+
+
 let
     using .TestMod7648
     @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
