@@ -3696,7 +3696,7 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
     if (f.constant && f.constant == jl_builtin_modifyfield) {
         if (emit_f_opfield(ctx, &ret, jl_builtin_modifyfield, argv, nargs - 1, &lival))
             return ret;
-        auto it = builtin_func_map.find(&jl_f_modifyfield);
+        auto it = builtin_func_map.find(jl_f_modifyfield_addr);
         assert(it != builtin_func_map.end());
         Value *oldnew = emit_jlcall(ctx, it->second, V_rnull, &argv[1], nargs - 1, JLCALL_F_CC);
         return mark_julia_type(ctx, oldnew, true, rt);

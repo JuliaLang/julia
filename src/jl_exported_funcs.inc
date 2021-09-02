@@ -17,6 +17,7 @@
     XX(jl_apply_type) \
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
+    XX(jl_apply_modify_type) \
     XX(jl_argument_datatype) \
     XX(jl_argument_method_table) \
     XX(jl_array_cconvert_cstring) \
@@ -577,6 +578,7 @@
     XX(jl_dlfind_win32) \
     XX(jl_refresh_dbg_module_list)
 
+// exported functions whose addresses we need to use
 #define JL_RUNTIME_EXPORTED_FUNC_ADDRS(XX) \
     XX(jl_f_is) \
     XX(jl_f_typeof) \

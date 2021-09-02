@@ -42,7 +42,7 @@ JL_CODEGEN_EXPORTED_FUNCS(XX)
 JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_
 JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
-JL_HIDDEN anonfunc * __julia_personality_addr = NULL;
+JL_DLLEXPORT anonfunc * __julia_personality_addr = NULL;
 #endif
 JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX
@@ -57,7 +57,11 @@ static const char *const jl_runtime_exported_func_names[] = {
     JL_RUNTIME_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_
     JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
+#ifndef _WIN64
     "__julia_personality@16",
+#else
+    "__julia_personality",
+#endif
 #endif
     JL_RUNTIME_EXPORTED_FUNC_ADDRS(XX)
     NULL
