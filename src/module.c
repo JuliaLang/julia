@@ -992,7 +992,7 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 }
 
 uint8_t _binding_is_from_explicit_using(jl_binding_t *b, jl_module_t *from) {
-    return (b->owner != from &&
+    return (b->owner != from && !b->imported &&
             // Modules implicitly get all exported names from Base and Core as if they had
             // written `using Base`, but we don't show those via `names()`.
             b->owner != jl_base_module && b->owner != jl_core_module);
