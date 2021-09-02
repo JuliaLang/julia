@@ -176,8 +176,8 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     // Once we have libjulia-internal loaded, re-export its symbols:
     for (unsigned int symbol_idx=0; jl_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_internal, jl_exported_func_names[symbol_idx]);
-        if (addr == NULL || addr == *jl_exported_func_addrs[symbol_idx]) {
-            jl_loader_print_stderr3("ERROR: Unable to load ", jl_exported_func_names[symbol_idx], " from libjulia-internal");
+        if (addr == NULL) {
+            jl_loader_print_stderr3("ERROR: Unable to load ", jl_exported_func_names[symbol_idx], " from libjulia-internal\n");
             exit(1);
         }
         (*jl_exported_func_addrs[symbol_idx]) = addr;

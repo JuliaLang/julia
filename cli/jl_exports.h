@@ -24,8 +24,8 @@ JL_EXPORTED_FUNCS_WIN(XX)
 #endif
 #undef XX
 
-// Define holder locations for function addresses as `const void * $(name)_addr = & $(name);`
-#define XX(name)    JL_HIDDEN anonfunc * name##_addr = (anonfunc*)&name;
+// Define holder locations for function addresses as `const void * $(name)_addr = NULL;
+#define XX(name)    JL_HIDDEN anonfunc * name##_addr = NULL;
 JL_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_
 JL_EXPORTED_FUNCS_WIN(XX)
@@ -33,7 +33,7 @@ JL_EXPORTED_FUNCS_WIN(XX)
 #undef XX
 
 // Generate lists of function names and addresses
-#define XX(name)    #name,
+#define XX(name)    "i" #name,
 static const char *const jl_exported_func_names[] = {
     JL_EXPORTED_FUNCS(XX)
 #ifdef _OS_WINDOWS_

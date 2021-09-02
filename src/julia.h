@@ -3,6 +3,10 @@
 #ifndef JULIA_H
 #define JULIA_H
 
+#ifdef LIBRARY_EXPORTS
+#include "jl_internal_funcs.inc"
+#endif
+
 //** Configuration options that affect the Julia ABI **//
 // if this is not defined, only individual dimension sizes are
 // stored and not total length, to save space.
