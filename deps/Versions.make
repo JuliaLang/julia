@@ -26,7 +26,7 @@ GMP_VER := 6.2.1
 GMP_JLL_NAME := GMP
 
 # LibCURL
-CURL_VER := 7.73.0
+CURL_VER := 7.78.0
 CURL_JLL_NAME := LibCURL
 
 # LAPACK, source-only
