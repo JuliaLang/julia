@@ -263,7 +263,7 @@ end
 function get_task_ids(data::Vector{<:Unsigned}, threadid = nothing)
     taskids = UInt[]
     for i in length(data):-1:1
-        if data[i] == 0 # find start of block
+        if is_block_end(data, i)
             if isnothing(threadid) || data[i - 4] == threadid
                 taskid = data[i - 3]
                 !in(taskid, taskids) && push!(taskids, taskid)
@@ -276,7 +276,7 @@ end
 function get_thread_ids(data::Vector{<:Unsigned}, taskid = nothing)
     threadids = Int[]
     for i in length(data):-1:1
-        if data[i] == 0 # find start of block
+        if is_block_end(data, i)
             if isnothing(taskid) || data[i - 3] == taskid
                 threadid = data[i - 4]
                 !in(threadid, threadids) && push!(threadids, threadid)
@@ -284,6 +284,13 @@ function get_thread_ids(data::Vector{<:Unsigned}, taskid = nothing)
         end
     end
     return sort(threadids)
+end
+
+function is_block_end(data, i)
+    i < 2 && return false
+    # 32-bit linux has been seen to have rogue ips equal to 0 so we cannot just rely on zeros being the block end.
+    # Also check for the previous entry looking like an idle state metadata entry which can only be 1 or 2
+    return data[i] == 0 && in(data[i - 1], [1,2])
 end
 
 """
@@ -509,10 +516,7 @@ function fetch(;include_meta = false)
     else
         nblocks = 0
         for i = 2:length(data)
-            if data[i] == 0 && in(data[i - 1], [1,2])
-                # detect block ends and count them
-                # linux 32 has been seen to have rogue ips equal to 0 so also check for the previous entry looking like an idle
-                # state metadata entry which can only be 1 or 2
+            if is_block_end(data, i) # detect block ends and count them
                 nblocks += 1
             end
         end
@@ -522,8 +526,7 @@ function fetch(;include_meta = false)
         i = length(data)
         while i > 0 && j > 0
             data_stripped[j] = data[i]
-            if i > 1 && data[i] == 0 && in(data[i - 1], [1,2])
-                # detect block end (same approach as above)
+            if is_block_end(data, i)
                 i -= nmeta
             end
             i -= 1
@@ -553,7 +556,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     for i in startframe:-1:1
         startframe - 1 <= i <= startframe - 4 && continue # skip metadata (it's read ahead below)
         ip = data[i]
-        if i > 1 && ip == 0 && in(data[i - 1], [1,2]) # check that the field next to the zero is the idle metadata entry
+        if is_block_end(data, i)
             # read metadata
             thread_sleeping = data[i - 1] - 1 # subtract 1 as state is incremented to avoid being equal to 0
             # cpu_cycle_clock = data[i - 2]
@@ -801,7 +804,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     for i in startframe:-1:1
         startframe - 1 <= i <= startframe - 4 && continue # skip metadata (its read ahead below)
         ip = all[i]
-        if i > 1 && ip == 0 && in(all[i - 1], [1,2]) # check that the field next to the zero is the idle metadata entry
+        if is_block_end(all, i)
             # read metadata
             thread_sleeping = all[i - 1] - 1 # subtract 1 as state is incremented to avoid being equal to 0
             # cpu_cycle_clock = all[i - 2]
