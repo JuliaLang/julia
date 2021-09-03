@@ -1,0 +1,124 @@
+{
+    "spdxVersion": "SPDX-2.2",
+    "dataLicense": "CC0-1.0",
+    "SPDXID": "SPDXRef-DOCUMENT",
+    "name": "julia-spdx",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-26ce6dfe-7843-4342-9970-dda3d15f01e8",
+    "creationInfo": {
+        "creators": [
+            "Organization: julialang.org ()",
+            "Person: Simon Avery ()"
+        ],
+        "created": "2021-09-02T04:53:52Z"
+    },
+    "documentDescribes": [
+        "SPDXRef-JuliaMain"
+    ],
+    "packages": [
+        {
+            "name": "Julia",
+            "SPDXID": "SPDXRef-JuliaMain",
+            "versionInfo": "v1.8.0",
+            "packageFileName": "./",
+            "downloadLocation": "git+https://github.com/JuliaLang/julia.git@v1.8.0",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2009-2021: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
+            "summary": "Julia is a high-level, high-performance dynamic language for technical computing.",
+            "comment": "In addition to the source code described by this package, Julia pulls in code from many other respositories, which are also described in this document. See relationships for details."
+        },
+        {
+            "name": "Pkg",
+            "SPDXID": "SPDXRef-JuliaPkg",
+            "downloadLocation": "git+https://github.com/JuliaLang/Pkg.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/Pkg.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2017-2021: Stefan Karpinski, Kristoffer Carlsson, Fredrik Ekre, David Varela, Ian Butterworth, and contributors: https://github.com/JuliaLang/Pkg.jl/graphs/contributors",
+            "summary": "Julia's package manager, shipped with Julia v1.0 and above"
+        },
+        {
+            "name": "OpenBLAS",
+            "SPDXID": "SPDXRef-OpenBLAS",
+            "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
+            "filesAnalyzed": false,
+            "homepage": "https://www.openblas.net",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/openblas.version",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 2011-2014, The OpenBLAS Project",
+            "summary": "OpenBLAS is an optimized BLAS library based on GotoBLAS2 1.13 BSD version."
+        },
+        {
+            "name": "libuv",
+            "SPDXID": "SPDXRef-libuv",
+            "supplier": "Organization: julialang.org ()",
+            "originator": "Organization: libuv.org ()",
+            "downloadLocation": "git+https://github.com/JuliaLang/libuv.git",
+            "filesAnalyzed": false,
+            "homepage": "https://libuv.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/libuv.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2015-present libuv project contributors",
+            "summary": "libuv is a multi-platform support library with a focus on asynchronous I/O. It was primarily developed for use by Node.js, but it's also used by Luvit, Julia, pyuv, and others.",
+            "comment": "The Julia project has forked libuv and maintains their own repository of the code"
+        },
+        {
+            "name": "zlib",
+            "SPDXID": "SPDXRef-zlib",
+            "downloadLocation": "git+https://github.com/madler/zlib.git",
+            "filesAnalyzed": false,
+            "homepage": "https://zlib.net",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/zlib.version",
+            "licenseConcluded": "Zlib",
+            "licenseDeclared": "Zlib",
+            "copyrightText": "Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler",
+            "summary": "A massively spiffy yet delicately unobtrusive compression library."
+        },
+        {
+            "name": "patchelf",
+            "SPDXID": "SPDXRef-patchelf",
+            "downloadLocation": "git+https://github.com/NixOS/patchelf.git",
+            "filesAnalyzed": false,
+            "homepage": "https://nixos.org/patchelf.html",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "GPL-3.0-only",
+            "licenseDeclared": "GPL-3.0-only",
+            "copyrightText": "Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>",
+            "summary": "A small utility to modify the dynamic linker and RPATH of ELF executables.",
+            "comment": "PATCHELF is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+        }
+    ],
+    "relationships": [
+        {
+            "spdxElementId": "SPDXRef-JuliaPkg",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-OpenBLAS",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-libuv",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-zlib",
+            "relationshipType": "DISTRIBUTION_ARTIFACT",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-patchelf",
+            "relationshipType": "BUILD_TOOL_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        }
+    ]
+}
