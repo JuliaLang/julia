@@ -3496,3 +3496,10 @@ end
         end
         return x
     end) === Union{Int, Float64, Char}
+
+# issue #42097
+struct Foo42097{F} end
+Foo42097(f::F, args) where {F} = Foo42097{F}()
+Foo42097(A) = Foo42097(Base.inferencebarrier(+), Base.inferencebarrier(1)...)
+foo42097() = Foo42097([1]...)
+@test foo42097() isa Foo42097{typeof(+)}
