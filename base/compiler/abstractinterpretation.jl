@@ -1706,18 +1706,16 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     slottypes = frame.slottypes
     while frame.pc´´ <= n
         # make progress on the active ip set
-        local pc::Int = frame.pc´´ # current program-counter
+        local pc::Int = frame.pc´´
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
             #print(pc,": ",s[pc],"\n")
             local pc´::Int = pc + 1 # next program-counter (after executing instruction)
             if pc == frame.pc´´
-                # need to update pc´´ to point at the new lowest instruction in W
-                min_pc = _bits_findnext(W.bits, pc + 1)
-                frame.pc´´ = min_pc == -1 ? n + 1 : min_pc
+                # want to update pc´´ to point at the new lowest instruction in W
+                frame.pc´´ = pc´
             end
             delete!(W, pc)
             frame.currpc = pc
-            frame.cur_hand = frame.handler_at[pc]
             edges = frame.stmt_edges[pc]
             edges === nothing || empty!(edges)
             frame.stmt_info[pc] = nothing
@@ -1759,7 +1757,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     pc´ = l
                 else
                     # general case
-                    frame.handler_at[l] = frame.cur_hand
                     changes_else = changes
                     if isa(condt, Conditional)
                         changes_else = conditional_changes(changes_else, condt.elsetype, condt.var)
@@ -1818,7 +1815,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
             elseif hd === :enter
                 l = stmt.args[1]::Int
-                frame.cur_hand = Pair{Any,Any}(l, frame.cur_hand)
                 # propagate type info to exception handler
                 old = states[l]
                 newstate_catch = stupdate!(old, changes)
@@ -1830,11 +1826,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     states[l] = newstate_catch
                 end
                 typeassert(states[l], VarTable)
-                frame.handler_at[l] = frame.cur_hand
             elseif hd === :leave
-                for i = 1:((stmt.args[1])::Int)
-                    frame.cur_hand = (frame.cur_hand::Pair{Any,Any}).second
-                end
             else
                 if hd === :(=)
                     t = abstract_eval_statement(interp, stmt.args[2], changes, frame)
@@ -1864,16 +1856,22 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         frame.src.ssavaluetypes[pc] = t
                     end
                 end
-                if frame.cur_hand !== nothing && isa(changes, StateUpdate)
-                    # propagate new type info to exception handler
-                    # the handling for Expr(:enter) propagates all changes from before the try/catch
-                    # so this only needs to propagate any changes
-                    l = frame.cur_hand.first::Int
-                    if stupdate1!(states[l]::VarTable, changes::StateUpdate) !== false
-                        if l < frame.pc´´
-                            frame.pc´´ = l
+                if isa(changes, StateUpdate)
+                    let cur_hand = frame.handler_at[pc], l, enter
+                        while cur_hand != 0
+                            enter = frame.src.code[cur_hand]
+                            l = (enter::Expr).args[1]::Int
+                            # propagate new type info to exception handler
+                            # the handling for Expr(:enter) propagates all changes from before the try/catch
+                            # so this only needs to propagate any changes
+                            if stupdate1!(states[l]::VarTable, changes::StateUpdate) !== false
+                                if l < frame.pc´´
+                                    frame.pc´´ = l
+                                end
+                                push!(W, l)
+                            end
+                            cur_hand = frame.handler_at[cur_hand]
                         end
-                        push!(W, l)
                     end
                 end
             end
@@ -1886,7 +1884,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
 
             pc´ > n && break # can't proceed with the fast-path fall-through
-            frame.handler_at[pc´] = frame.cur_hand
             newstate = stupdate!(states[pc´], changes)
             if isa(stmt, GotoNode) && frame.pc´´ < pc´
                 # if we are processing a goto node anyways,
@@ -1897,7 +1894,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     states[pc´] = newstate
                 end
                 push!(W, pc´)
-                pc = frame.pc´´
+                break
             elseif newstate !== nothing
                 states[pc´] = newstate
                 pc = pc´
@@ -1907,6 +1904,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 break
             end
         end
+        frame.pc´´ = _bits_findnext(W.bits, frame.pc´´)::Int # next program-counter
     end
     frame.dont_work_on_me = false
     nothing

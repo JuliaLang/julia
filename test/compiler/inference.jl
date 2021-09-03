@@ -3454,3 +3454,48 @@ end
 f41908(x::Complex{T}) where {String<:T<:String} = 1
 g41908() = f41908(Any[1][1])
 @test only(Base.return_types(g41908, ())) <: Int
+
+# issue #42022
+let x = Tuple{Int,Any}[
+        #= 1=# (0, Expr(:(=), Core.SlotNumber(3), 1))
+        #= 2=# (0, Expr(:enter, 18))
+        #= 3=# (2, Expr(:(=), Core.SlotNumber(3), 2.0))
+        #= 4=# (2, Expr(:enter, 12))
+        #= 5=# (4, Expr(:(=), Core.SlotNumber(3), '3'))
+        #= 6=# (4, Core.GotoIfNot(Core.SlotNumber(2), 9))
+        #= 7=# (4, Expr(:leave, 2))
+        #= 8=# (0, Core.ReturnNode(1))
+        #= 9=# (4, Expr(:call, GlobalRef(Main, :throw)))
+        #=10=# (4, Expr(:leave, 1))
+        #=11=# (2, Core.GotoNode(16))
+        #=12=# (4, Expr(:leave, 1))
+        #=13=# (2, Expr(:(=), Core.SlotNumber(4), Expr(:the_exception)))
+        #=14=# (2, Expr(:call, GlobalRef(Main, :rethrow)))
+        #=15=# (2, Expr(:pop_exception, Core.SSAValue(4)))
+        #=16=# (2, Expr(:leave, 1))
+        #=17=# (0, Core.GotoNode(22))
+        #=18=# (2, Expr(:leave, 1))
+        #=19=# (0, Expr(:(=), Core.SlotNumber(5), Expr(:the_exception)))
+        #=20=# (0, nothing)
+        #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
+        #=22=# (0, Core.ReturnNode(Core.SlotNumber(3)))
+    ]
+    handler_at = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    @test handler_at == first.(x)
+end
+
+@test only(Base.return_types((Bool,)) do y
+        x = 1
+        try
+            x = 2.0
+            try
+                x = '3'
+                y ? (return 1) : throw()
+            catch ex1
+                rethrow()
+            end
+        catch ex2
+            nothing
+        end
+        return x
+    end) === Union{Int, Float64, Char}
