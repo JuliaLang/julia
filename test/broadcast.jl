@@ -1054,6 +1054,7 @@ end
 end
 
 @testset "#42063" begin
-    A = println.(IOBuffer(), [1,2,3,4])
-    @test A isa Vector{Nothing}
+    buf = IOBuffer()
+    @test println.(buf, [1,2,3]) == [nothing, nothing, nothing]
+    @test String(take!(buf)) == "1\n2\n3\n"
 end
