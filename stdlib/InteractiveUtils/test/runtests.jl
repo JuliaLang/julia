@@ -199,6 +199,10 @@ end
 let v = repr(varinfo(_test_varinfo_, all = true, recursive = true))
     @test occursin("inner_x", v)
 end
+let v = repr(varinfo(_test_varinfo_, all = true, minsize = 9))
+    @test !occursin("x_exported", v) # excluded: 8 bytes
+    @test occursin("a_smaller", v)
+end
 
 # Issue 14173
 module Tmp14173
