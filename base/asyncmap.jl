@@ -236,6 +236,7 @@ function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
             end
         catch e
             close(chnl)
+            display_error(stderr, catch_stack())
             retval = e
         end
         retval
