@@ -1089,6 +1089,22 @@ end
     @test @inferred(inv(π)) ≈ 0.3183098861837907
 end
 
+@testset "Irrationals exponentiated" begin
+    for T in (:pi, :ℯ, :γ, :catalan)
+        for m in -2:2
+            @eval (n = $m; @test (@inferred $T^$m) === (@inferred $T^n))
+            @eval (n = big($m); @test (@inferred $T^big($m)) == (@inferred $T^n))
+            @eval (n = Int8($m); @test (@inferred $T^Int8($m)) === (@inferred $T^n))
+        end
+    end
+    # We don't use ℯ in the general tests as it often gets lowered to exp
+    for T in (:pi, :γ, :catalan)
+        for n in Any[Float32(2), Float64(2), 2//3, im]
+            @eval @test (@inferred $T^n) == (@inferred Float64($T)^n)
+        end
+    end
+end
+
 @testset "Irrationals compared with Rationals and Floats" begin
     @test Float64(pi,RoundDown) < pi
     @test Float64(pi,RoundUp) > pi
