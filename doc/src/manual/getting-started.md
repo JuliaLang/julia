@@ -120,3 +120,7 @@ search: begin disable_sigint reenable_sigint
 ```
 
 If you already know Julia a bit, you might want to peek ahead at [Performance Tips](@ref man-performance-tips) and [Workflow Tips](@ref man-workflow-tips).
+
+## Important Terminology
+
+One of the potentially difficult parts of learning a new language and joining a new community is understanding the important terms people use. We have created a non-exhaustive list of important terms you might want to briefly glance over in case you see it used elsewhere. As always, we try to limit unnecessary acronyms but the ones in the forthcoming link are commonly used. Check out the [Julia Community Glossary](https://github.com/JuliaCommunity/StartHere.jl#glossary). 
