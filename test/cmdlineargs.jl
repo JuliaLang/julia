@@ -599,7 +599,7 @@ end
 
 
 # test error handling code paths of running --sysimage
-let exename = Base.julia_cmd()
+let exename = `$(Base.julia_cmd().exec[1]) -t 1`
     sysname = unsafe_string(Base.JLOptions().image_file)
     for nonexist_image in (
             joinpath(@__DIR__, "nonexistent"),
