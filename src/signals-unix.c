@@ -800,7 +800,8 @@ static void *signal_listener(void *arg)
                     // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
                     bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
 
-                    // Mark the end of this block with 0
+                    // Mark the end of this block with two 0's
+                    bt_data_prof[bt_size_cur++].uintptr = 0;
                     bt_data_prof[bt_size_cur++].uintptr = 0;
                 }
             }
