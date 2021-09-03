@@ -325,7 +325,7 @@ Float32
 
 For all practical purposes, such objects behave identically to those of `MyStillAmbiguousType`.
 
-It's quite instructive to compare the sheer amount code generated for a simple function
+It's quite instructive to compare the sheer amount of code generated for a simple function
 
 ```julia
 func(m::MyType) = m.a+1
