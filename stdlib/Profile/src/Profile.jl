@@ -7,6 +7,8 @@ module Profile
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
+const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
+
 # deprecated functions: use `getdict` instead
 lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
 
@@ -41,9 +43,9 @@ end
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of instruction pointers that may be
 stored per thread. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long
-list of instruction pointers. Note that 5 spaces for instruction pointers per backtrace are used to store metadata and a marker.
-Current settings can be obtained by calling this function with no arguments, and each can be set independently using keywords
-or in the order `(n, delay)`.
+list of instruction pointers. Note that 6 spaces for instruction pointers per backtrace are used to store metadata and two
+NULL end markers. Current settings can be obtained by calling this function with no arguments, and each can be set independently
+using keywords or in the order `(n, delay)`.
 
 !!! compat "Julia 1.8"
     As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
@@ -263,9 +265,9 @@ end
 function get_task_ids(data::Vector{<:Unsigned}, threadid = nothing)
     taskids = UInt[]
     for i in length(data):-1:1
-        if data[i] == 0 # find start of block
-            if isnothing(threadid) || data[i - 4] == threadid
-                taskid = data[i - 3]
+        if is_block_end(data, i)
+            if isnothing(threadid) || data[i - 5] == threadid
+                taskid = data[i - 4]
                 !in(taskid, taskids) && push!(taskids, taskid)
             end
         end
@@ -276,14 +278,21 @@ end
 function get_thread_ids(data::Vector{<:Unsigned}, taskid = nothing)
     threadids = Int[]
     for i in length(data):-1:1
-        if data[i] == 0 # find start of block
-            if isnothing(taskid) || data[i - 3] == taskid
-                threadid = data[i - 4]
+        if is_block_end(data, i)
+            if isnothing(taskid) || data[i - 4] == taskid
+                threadid = data[i - 5]
                 !in(threadid, threadids) && push!(threadids, threadid)
             end
         end
     end
     return sort(threadids)
+end
+
+function is_block_end(data, i)
+    i < nmeta + 1 && return false
+    # 32-bit linux has been seen to have rogue NULL ips, so we use two to indicate block end, where the 2nd is the
+    # actual end index
+    return data[i] == 0 && data[i - 1] == 0
 end
 
 """
@@ -509,22 +518,17 @@ function fetch(;include_meta = false)
     else
         nblocks = 0
         for i = 2:length(data)
-            if data[i] == 0 && in(data[i - 1], [1,2])
-                # detect block ends and count them
-                # linux 32 has been seen to have rogue ips equal to 0 so also check for the previous entry looking like an idle
-                # state metadata entry which can only be 1 or 2
+            if is_block_end(data, i) # detect block ends and count them
                 nblocks += 1
             end
         end
-        nmeta = 4 # number of metadata fields (threadid, taskid, cpu_cycle_clock, thread_sleeping)
-        data_stripped = Vector{UInt}(undef, length(data) - (nblocks * nmeta))
+        data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
         j = length(data_stripped)
         i = length(data)
         while i > 0 && j > 0
             data_stripped[j] = data[i]
-            if i > 1 && data[i] == 0 && in(data[i - 1], [1,2])
-                # detect block end (same approach as above)
-                i -= nmeta
+            if is_block_end(data, i)
+                i -= (nmeta + 1) # metadata fields and the extra NULL IP
             end
             i -= 1
             j -= 1
@@ -551,14 +555,14 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - 4 && continue # skip metadata (it's read ahead below)
+        startframe - 1 <= i <= startframe - (nmeta + 1) && continue # skip metadata (it's read ahead below) and extra block-end NULL IP
         ip = data[i]
-        if i > 1 && ip == 0 && in(data[i - 1], [1,2]) # check that the field next to the zero is the idle metadata entry
+        if is_block_end(data, i)
             # read metadata
-            thread_sleeping = data[i - 1] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            # cpu_cycle_clock = data[i - 2]
-            taskid = data[i - 3]
-            threadid = data[i - 4]
+            thread_sleeping = data[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = data[i - 3]
+            taskid = data[i - 4]
+            threadid = data[i - 5]
             if !in(threadid, threads) || !in(taskid, tasks)
                 skip = true
                 continue
@@ -799,14 +803,14 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - 4 && continue # skip metadata (its read ahead below)
+        startframe - 1 <= i <= startframe - (nmeta + 1) && continue # skip metadata (its read ahead below) and extra block end NULL IP
         ip = all[i]
-        if i > 1 && ip == 0 && in(all[i - 1], [1,2]) # check that the field next to the zero is the idle metadata entry
+        if is_block_end(all, i)
             # read metadata
-            thread_sleeping = all[i - 1] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            # cpu_cycle_clock = all[i - 2]
-            taskid = all[i - 3]
-            threadid = all[i - 4]
+            thread_sleeping = all[i - 2] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            # cpu_cycle_clock = all[i - 3]
+            taskid = all[i - 4]
+            threadid = all[i - 5]
             if !in(threadid, threads) || !in(taskid, tasks)
                 skip = true
                 continue

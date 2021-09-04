@@ -37,8 +37,8 @@ void jl_shuffle_int_array_inplace(volatile uint64_t *carray, size_t size, uint64
 
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)
 {
-    // the `+ 5` is for the block terminator `0` plus 4 metadata entries
-    return bt_size_cur + (JL_BT_MAX_ENTRY_SIZE + 1) + 5 > bt_size_max;
+    // the `+ 6` is for the two block terminators `0` plus 4 metadata entries
+    return bt_size_cur + (JL_BT_MAX_ENTRY_SIZE + 1) + 6 > bt_size_max;
 }
 
 static uint64_t jl_last_sigint_trigger = 0;
