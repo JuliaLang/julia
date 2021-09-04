@@ -358,8 +358,12 @@ module IteratorsMD
         CartesianIndex()
     end
     @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
-        CartesianIndex(getindex.(iter.indices, I))
+        CartesianIndex(_get_cartesianindex.(iter.indices, I))
     end
+    # specialize to gives better hint to compiler to enable SIMD (#42115)
+    @inline _get_cartesianindex(::OneTo, i::Int) = i
+    @inline _get_cartesianindex(::Base.IdentityUnitRange, i::Int) = i
+    @inline _get_cartesianindex(r, i) = getindex(r, i)
 
     # CartesianIndices act as a multidimensional range, so cartesian indexing of CartesianIndices
     # with compatible dimensions may be seen as indexing into the component ranges.
