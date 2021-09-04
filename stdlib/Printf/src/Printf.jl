@@ -412,11 +412,31 @@ _snprintf(ptr, siz, str, arg) =
 const __BIG_FLOAT_MAX__ = 8192
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+    leftalign, plus, space, zero, hash, apostrophe, width, prec =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.apostrophe, spec.width, spec.precision
     x = tofloat(arg)
+    numsep = countthousandsep(spec, x)
+    hassep = apostrophe && numsep > 0 && T in (Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'})
+    headpos = pos
     if x isa BigFloat
         if isfinite(x)
+            if hassep
+                # pad left for thousand separators
+                for _ = 1:numsep
+                    buf[pos] = UInt8(' ')
+                    pos += 1
+                end
+                spec = Spec{T}(
+                    spec.leftalign,
+                    spec.plus,
+                    spec.space,
+                    spec.zero,
+                    spec.hash,
+                    spec.apostrophe,
+                    spec.width - numsep,
+                    spec.precision,
+                )
+            end
             GC.@preserve buf begin
                 siz = length(buf) - pos + 1
                 str = string(spec; modifier="R")
@@ -430,6 +450,32 @@ const __BIG_FLOAT_MAX__ = 8192
                     len = _snprintf(pointer(buf, pos), len + 1, str, x)
                 end
                 len > 0 || throw(ArgumentError("invalid printf formatting $str for BigFloat"))
+                isexp = UInt8('e') in buf[pos:(pos + len - 1)] || UInt8('E') in buf[pos:(pos + len - 1)]
+                if hassep && isexp
+                    # fix left padding when scientific notation is used
+                    for _ = 1:numsep
+                        pos -= 1
+                    end
+                    spec = Spec{T}(
+                        spec.leftalign,
+                        spec.plus,
+                        spec.space,
+                        spec.zero,
+                        spec.hash,
+                        spec.apostrophe,
+                        spec.width + numsep,
+                        spec.precision,
+                    )
+                    siz = length(buf) - pos + 1
+                    str = string(spec; modifier="R")
+                    len = _snprintf(pointer(buf, pos), siz, str, x)
+                end
+                if hassep && !isexp
+                    neg = x < 0 || x === -Base.zero(x)
+                    lenleftpad = findfirst(!=(UInt(' ')), buf[headpos:(pos + len - 1)]) - numsep - 1
+                    onesplace = findonesplace(buf, headpos, pos + len - 1)
+                    insertsep(buf, headpos, numsep, onesplace, numskip=(neg ? 1 : 0) + lenleftpad)
+                end
                 return pos + len
             end
         end
@@ -438,7 +484,20 @@ const __BIG_FLOAT_MAX__ = 8192
     if T == Val{'e'} || T == Val{'E'}
         newpos = Ryu.writeexp(buf, pos, x, prec, plus, space, hash, char(T), UInt8('.'))
     elseif T == Val{'f'} || T == Val{'F'}
+        if hassep
+            # pad left for thousand separators
+            for _ = 1:numsep
+                buf[pos] = UInt8(' ')
+                pos += 1
+            end
+        end
         newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
+        if hassep
+            neg = x < 0 || x === -Base.zero(x)
+            onesplace = findonesplace(buf, headpos, newpos - 1)
+            insertsep(buf, headpos, numsep, onesplace, numskip=(neg ? 1 : 0))
+            pos -= numsep
+        end
     elseif T == Val{'g'} || T == Val{'G'}
         if isinf(x) || isnan(x)
             newpos = Ryu.writeshortest(buf, pos, x, plus, space)
@@ -461,7 +520,20 @@ const __BIG_FLOAT_MAX__ = 8192
                 flipsign(exp, sign)
             end
             if -4 ≤ exp < prec
+                if hassep
+                    # pad left for thousand separators
+                    for _ = 1:numsep
+                        buf[pos] = UInt8(' ')
+                        pos += 1
+                    end
+                end
                 newpos = Ryu.writefixed(buf, pos, x, prec - (exp + 1), plus, space, hash, UInt8('.'), !hash)
+                if hassep
+                    neg = x < 0 || x === -Base.zero(x)
+                    onesplace = findonesplace(buf, headpos, newpos - 1)
+                    insertsep(buf, headpos, numsep, onesplace, numskip=(neg ? 1 : 0))
+                    pos -= numsep
+                end
             else
                 newpos = Ryu.writeexp(buf, pos, x, prec - 1, plus, space, hash, T == Val{'g'} ? UInt8('e') : UInt8('E'), UInt8('.'), !hash)
             end
@@ -778,12 +850,27 @@ const UNROLL_UPTO = 16
 end
 
 
-function insertsep(buf, headpos, numsep, onesplace)
-    intlength = (onesplace - headpos + 1) - numsep
+@inline function findonesplace(buf, lbound, rbound)
+    decimalpoint = findlast(==(UInt8('.')), buf[lbound:rbound])
+    # find last digit of rounded float
+    if isnothing(decimalpoint)
+        for i in lbound:(rbound - 1)
+            if 0x30 <= buf[i] <= 0x39 && buf[i + 1] == UInt(' ')
+                decimalpoint = i + 1
+                break
+            end
+        end
+    end
+    onesplace = isnothing(decimalpoint) ? rbound : decimalpoint - 1
+    return onesplace
+end
 
-    headdivlength = mod1(intlength, 3)
+
+function insertsep(buf, headpos, numsep, onesplace; numskip=0)
+    intlength = (onesplace - headpos + 1) - numsep - numskip
+
+    headdivlength = mod1(intlength, 3) + numskip
     seconddiv = headpos + numsep + headdivlength
-
     separation = headpos + headdivlength
     buf[headpos:(separation - 1)] = buf[(headpos + numsep):(headpos + numsep + headdivlength - 1)]
 
@@ -797,10 +884,11 @@ end
 
 
 countthousandsep(::Spec, x) = 0
-function countthousandsep(::Spec{T}, x) where {T <: Union{Ints, Floats}}
-    (isnan(x) || isinf(x)) && return 0
-    x2 = trunc(BigInt, x)
-    return base(T) == 10 ? ((ndigits(x2) - 1) ÷ 3) : 0
+@inline function countthousandsep(f::Spec{T}, x) where {T <: Union{Ints, Floats}}
+    (isnan(x) || isinf(x) || base(T) != 10) && return 0
+    x2 = trunc(BigInt, round(x, digits=f.precision))
+    numsep = div((ndigits(x2) - 1), 3)
+    return numsep
 end
 
 function plength(f::Spec{T}, x) where {T <: Chars}
