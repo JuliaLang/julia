@@ -209,7 +209,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Python Lists—flexible but slow—correspond to the Julia `Vector{Any}` type or more generally `Vector{T}` where `T` is some non-concrete element type. "Fast" arrays like NumPy arrays that store elements in-place (i.e., `dtype` is `np.float64`, `[('f1', np.uint64), ('f2', np.int32)]`, etc.) can be represented by `Array{T}` where `T` is a concrete, immutable element type. This includes built-in types like `Float64`, `Int32`, `Int64` but also more complex types like `Tuple{UInt64,Float64}` and many user-defined types as well.
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
-    in Python (note that the the start and stop values are also shifted by one here because of the differences in 0-based and 1-based indexing in the two languages).
+    in Python (note that the the start and stop values are also shifted by one here because of the differences in 0-based and 1-based indexing in the two languages, so each result starts with the 2nd element of the input array a and ends with the 3rd element).
   * Julia does not support negative indices. In particular, the last element of a list or array is
     indexed with `end` in Julia, not `-1` as in Python.
   * Julia requires `end` for indexing until the last element. `x[1:]` in Python is equivalent to `x[2:end]` in Julia.
