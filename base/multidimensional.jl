@@ -355,14 +355,19 @@ module IteratorsMD
     # CartesianIndices act as a multidimensional range, so cartesian indexing of CartesianIndices
     # with compatible dimensions may be seen as indexing into the component ranges.
     # This may use the special indexing behavior implemented for ranges to return another CartesianIndices
-    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R},
+    @inline function Base.getindex(iter::CartesianIndices{N,R},
         I::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon}, N}) where {N,R}
-        CartesianIndices(getindex.(iter.indices, I))
+        @boundscheck checkbounds(iter, I...)
+        indices = map(iter.indices, I) do r, i
+            @inbounds getindex(r, i)
+        end
+        CartesianIndices(indices)
     end
     @propagate_inbounds function Base.getindex(iter::CartesianIndices{N},
         C::CartesianIndices{N}) where {N}
-        CartesianIndices(getindex.(iter.indices, C.indices))
+        getindex(iter, C.indices...)
     end
+    @inline Base.getindex(iter::CartesianIndices{0}, ::CartesianIndices{0}) = iter
 
     # If dimensions permit, we may index into a CartesianIndices directly instead of constructing a SubArray wrapper
     @propagate_inbounds function Base.view(c::CartesianIndices{N}, r::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon},N}) where {N}
