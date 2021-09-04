@@ -172,8 +172,7 @@ function f_ifelse(x)
     b = ifelse(a, true, false)
     return b ? x + 1 : x
 end
-# 2 for now because the compiler leaves a GotoNode around
-@test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
 
 # Test that inlining of _apply_iterate properly hits the inference cache
 @noinline cprop_inline_foo1() = (1, 1)
@@ -614,3 +613,40 @@ end
 # Issue #41299 - inlining deletes error check in :>
 g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 @test_throws TypeError g41299(>:, 1, 2)
+
+# https://github.com/JuliaLang/julia/issues/42078
+# idempotency of callsite inling
+function getcache(mi::Core.MethodInstance)
+    cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
+    codeinf = Core.Compiler.get(cache, mi, nothing)
+    return isnothing(codeinf) ? nothing : codeinf
+end
+@noinline f42078(a) = sum(sincos(a))
+let
+    ninlined = let
+        code = code_typed1((Int,)) do a
+            @inline f42078(a)
+        end
+        @test all(x->!isinvoke(x, :f42078), code)
+        length(code)
+    end
+
+    let # codegen will discard the source because it's not supposed to be inlined in general context
+        a = 42
+        f42078(a)
+    end
+    let # make sure to discard the inferred source
+        specs = collect(only(methods(f42078)).specializations)
+        mi = specs[findfirst(!isnothing, specs)]::Core.MethodInstance
+        codeinf = getcache(mi)::Core.CodeInstance
+        codeinf.inferred = nothing
+    end
+
+    let # inference should re-infer `f42078(::Int)` and we should get the same code
+        code = code_typed1((Int,)) do a
+            @inline f42078(a)
+        end
+        @test all(x->!isinvoke(x, :f42078), code)
+        @test ninlined == length(code)
+    end
+end

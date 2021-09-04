@@ -546,10 +546,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
             end
         end
         inf_result = InferenceResult(mi, argtypes, va_override)
-        frame = InferenceState(inf_result, #=cache=#false, interp)
+        frame = InferenceState(inf_result, #=cache=#:local, interp)
         frame === nothing && return nothing # this is probably a bad generated function (unsound), but just ignore it
         frame.parent = sv
-        push!(inf_cache, inf_result)
         typeinf(interp, frame) || return nothing
     end
     result = inf_result.result
@@ -592,7 +591,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         return nothing
     end
     mi = mi::MethodInstance
-    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, sv)
+    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, argtypes, sv)
         add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
     end
@@ -696,7 +695,9 @@ end
 # This is a heuristic to avoid trying to const prop through complicated functions
 # where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
-function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, match::MethodMatch, mi::MethodInstance, sv::InferenceState)
+function const_prop_methodinstance_heuristic(
+    interp::AbstractInterpreter, match::MethodMatch, mi::MethodInstance,
+    argtypes::Vector{Any}, sv::InferenceState)
     method = match.method
     if method.is_for_opaque_closure
         # Not inlining an opaque closure can be very expensive, so be generous
@@ -715,7 +716,7 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, match:
     if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
-            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv))
+            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv), mi, argtypes)
             cache_inlineable = src !== nothing
         end
     end

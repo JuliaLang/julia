@@ -28,20 +28,30 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, T, I<:AbstractInterpreter
     interp::I
 end
 
-function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8)
+function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
+                         mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
         src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
     elseif isa(src, OptimizationState) && isdefined(src, :ir)
         return (is_stmt_inline(stmt_flag) || src.src.inlineable) ? src.ir : nothing
-    else
-        # maybe we want to make inference keep the source in a local cache if a statement is going to inlined
-        # and re-optimize it here with disabling further inlining to avoid infinite optimization loop
-        # (we can even naively try to re-infer it entirely)
-        # but it seems like that "single-level-inlining" is more trouble and complex than it's worth
-        # see https://github.com/JuliaLang/julia/pull/41328/commits/0fc0f71a42b8c9d04b0dafabf3f1f17703abf2e7
-        return nothing
+    elseif src === nothing && is_stmt_inline(stmt_flag)
+        # if this statement is forced to be inlined, make an additional effort to find the
+        # inferred source in the local cache
+        # we still won't find a source for recursive call because the "single-level" inlining
+        # seems to be more trouble and complex than it's worth
+        inf_result = cache_lookup(mi, argtypes, get_inference_cache(interp))
+        inf_result === nothing && return nothing
+        src = inf_result.src
+        if isa(src, CodeInfo)
+            src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+            return src_inferred ? src : nothing
+        elseif isa(src, OptimizationState)
+            return isdefined(src, :ir) ? src.ir : nothing
+        else
+            return nothing
+        end
     end
 end
 

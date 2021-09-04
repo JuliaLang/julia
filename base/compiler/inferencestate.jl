@@ -53,9 +53,9 @@ mutable struct InferenceState
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
-                            cached::Bool, interp::AbstractInterpreter)
+                            cache::Symbol, interp::AbstractInterpreter)
         (; def) = linfo = result.linfo
-        code = src.code::Array{Any,1}
+        code = src.code::Vector{Any}
 
         sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
@@ -92,6 +92,7 @@ mutable struct InferenceState
         valid_worlds = WorldRange(src.min_world,
             src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
 
+        @assert cache === :no || cache === :local || cache === :global
         frame = new(
             InferenceParams(interp), result, linfo,
             sp, slottypes, mod, 0,
@@ -103,11 +104,11 @@ mutable struct InferenceState
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
-            cached, false, false,
+            cache === :global, false, false,
             CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame
-        cached && push!(get_inference_cache(interp), result)
+        cache !== :no && push!(get_inference_cache(interp), result)
         return frame
     end
 end
@@ -222,12 +223,12 @@ end
 
 method_table(interp::AbstractInterpreter, sv::InferenceState) = sv.method_table
 
-function InferenceState(result::InferenceResult, cached::Bool, interp::AbstractInterpreter)
+function InferenceState(result::InferenceResult, cache::Symbol, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     src = retrieve_code_info(result.linfo)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
-    return InferenceState(result, src, cached, interp)
+    return InferenceState(result, src, cache, interp)
 end
 
 function sptypes_from_meth_instance(linfo::MethodInstance)
