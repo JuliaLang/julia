@@ -358,16 +358,14 @@ module IteratorsMD
         CartesianIndex()
     end
     @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
-        # Eagerly do boundscheck before calculating each item of the CartesianIndex,
-        # this generates inlined codes for `_get_cartesianindex` and furthermore enables SIMD
+        # Eagerly do boundscheck before calculating each item of the CartesianIndex so that
+        # we can pass `@inbounds` hint to inside the map and generates more efficient SIMD codes
         @boundscheck checkbounds(iter, I...)
-        @inbounds CartesianIndex(_get_cartesianindex(iter.indices, I))
+        index = map(iter.indices, I) do r, i
+            @inbounds getindex(r, i)
+        end
+        CartesianIndex(index)
     end
-    @propagate_inbounds _get_cartesianindex(indices, I) = _get_cartesianindex(getindex(first(indices), first(I)), tail(indices), tail(I))
-    @propagate_inbounds function _get_cartesianindex(out, indices, I)
-        _get_cartesianindex((out..., getindex(first(indices), first(I))), tail(indices), tail(I))
-    end
-    @inline _get_cartesianindex(out, ::Tuple{}, ::Tuple{}) = out
 
     # CartesianIndices act as a multidimensional range, so cartesian indexing of CartesianIndices
     # with compatible dimensions may be seen as indexing into the component ranges.
