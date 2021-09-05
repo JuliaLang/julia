@@ -37,24 +37,31 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     rows = Vector{Any}[]
     workqueue = [(m, ""),]
-    while !isempty(workqueue)
+    pushlock = Base.ReentrantLock()
+    @sync while !isempty(workqueue)
         m2, prep = popfirst!(workqueue)
         for v in names(m2; all, imported)
-            if !isdefined(m2, v) || !occursin(pattern, string(v))
-                continue
-            end
-            value = getfield(m2, v)
-            isbuiltin = value === Base || value === Main || value === Core
-            if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
-                push!(workqueue, (value, "$prep$v."))
-            end
-            ssize_str, ssize = if isbuiltin
-                    ("", typemax(Int))
-                else
-                    ss = summarysize(value)
-                    (format_bytes(ss), ss)
+            Threads.@spawn begin
+                if !isdefined(m2, v) || !occursin(pattern, string(v))
+                    return
                 end
-            push!(rows, Any[string(prep, v), ssize_str, summary(value), ssize])
+                value = getfield(m2, v)
+                isbuiltin = value === Base || value === Main || value === Core
+                if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
+                    lock(pushlock) do
+                        push!(workqueue, (value, "$prep$v."))
+                    end
+                end
+                ssize_str, ssize = if isbuiltin
+                        ("", typemax(Int))
+                    else
+                        ss = summarysize(value)
+                        (format_bytes(ss), ss)
+                    end
+                lock(pushlock) do
+                    push!(rows, Any[string(prep, v), ssize_str, summary(value), ssize])
+                end
+            end
         end
     end
     let (col, rev) = if sortby == :name
