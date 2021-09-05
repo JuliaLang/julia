@@ -47,11 +47,22 @@ function gcd(a::T, b::T) where T<:Integer
     checked_abs(a)
 end
 
-# binary GCD (aka Stein's) algorithm
-# about 1.7x (2.1x) faster for random Int64s (Int128s)
 function gcd(a::T, b::T) where T<:BitInteger
     a == 0 && return checked_abs(b)
     b == 0 && return checked_abs(a)
+    r = _gcd(a, b)
+    signbit(r) && __throw_gcd_overflow(a, b)
+    return r
+end
+@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
+
+# binary GCD (aka Stein's) algorithm
+# about 1.7x (2.1x) faster for random Int64s (Int128s)
+# Unfortunately, we need to manually annotate this as `@pure` to work around #41694. Since
+# this is used in the Rational constructor, constant prop is something we do care about here.
+# This does call generic functions, so it might not be completely sound, but since `_gcd` is
+# restricted to BitIntegers, it is probably fine in practice.
+@pure function _gcd(a::T, b::T) where T<:BitInteger
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
@@ -65,11 +76,8 @@ function gcd(a::T, b::T) where T<:BitInteger
         v >>= trailing_zeros(v)
     end
     r = u << k
-    # T(r) would throw InexactError; we want OverflowError instead
-    r > typemax(T) && __throw_gcd_overflow(a, b)
-    r % T
+    return r % T
 end
-@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
 
 """
     lcm(x, y...)
@@ -117,8 +125,9 @@ function lcm(a::T, b::T) where T<:Integer
     end
 end
 
-gcd(a::Union{Integer,Rational}) = a
-lcm(a::Union{Integer,Rational}) = a
+gcd(a::Integer) = checked_abs(a)
+gcd(a::Rational) = checked_abs(a.num) // a.den
+lcm(a::Union{Integer,Rational}) = gcd(a)
 gcd(a::Unsigned, b::Signed) = gcd(promote(a, abs(b))...)
 gcd(a::Signed, b::Unsigned) = gcd(promote(abs(a), b)...)
 gcd(a::Real, b::Real) = gcd(promote(a,b)...)
@@ -387,6 +396,8 @@ _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) :
 
 Test whether `n` is an integer power of two.
 
+See also [`count_ones`](@ref), [`prevpow`](@ref), [`nextpow`](@ref).
+
 # Examples
 ```jldoctest
 julia> ispow2(4)
@@ -418,6 +429,8 @@ ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
 greater than 1, and `x` must be greater than 0.
 
+See also [`prevpow`](@ref).
+
 # Examples
 ```jldoctest
 julia> nextpow(2, 7)
@@ -432,8 +445,6 @@ julia> nextpow(5, 20)
 julia> nextpow(4, 16)
 16
 ```
-
-See also [`prevpow`](@ref).
 """
 function nextpow(a::Real, x::Real)
     x <= 0 && throw(DomainError(x, "`x` must be positive."))
@@ -455,6 +466,8 @@ end
 The largest `a^n` not greater than `x`, where `n` is a non-negative integer.
 `a` must be greater than 1, and `x` must not be less than 1.
 
+See also [`nextpow`](@ref), [`isqrt`](@ref).
+
 # Examples
 ```jldoctest
 julia> prevpow(2, 7)
@@ -469,7 +482,6 @@ julia> prevpow(5, 20)
 julia> prevpow(4, 16)
 16
 ```
-See also [`nextpow`](@ref).
 """
 function prevpow(a::Real, x::Real)
     x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
@@ -611,6 +623,8 @@ Compute the number of digits in integer `n` written in base `base`
 (`base` must not be in `[-1, 0, 1]`), optionally padded with zeros
 to a specified size (the result will never be less than `pad`).
 
+See also [`digits`](@ref), [`count_ones`](@ref).
+
 # Examples
 ```jldoctest
 julia> ndigits(12345)
@@ -624,6 +638,9 @@ julia> string(1022, base=16)
 
 julia> ndigits(123, pad=5)
 5
+
+julia> ndigits(-123)
+3
 ```
 """
 ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, base))
@@ -748,12 +765,15 @@ split_sign(n::Unsigned) = n, false
 Convert an integer `n` to a string in the given `base`,
 optionally specifying a number of digits to pad to.
 
+See also [`digits`](@ref), [`bitstring`](@ref), [`count_zeros`](@ref).
+
+# Examples
 ```jldoctest
 julia> string(5, base = 13, pad = 4)
 "0005"
 
-julia> string(13, base = 5, pad = 4)
-"0023"
+julia> string(-13, base = 5, pad = 4)
+"-0023"
 ```
 """
 function string(n::Integer; base::Integer = 10, pad::Integer = 1)
@@ -780,24 +800,36 @@ string(b::Bool) = b ? "true" : "false"
 """
     bitstring(n)
 
-A string giving the literal bit representation of a number.
+A string giving the literal bit representation of a primitive type.
+
+See also [`count_ones`](@ref), [`count_zeros`](@ref), [`digits`](@ref).
 
 # Examples
 ```jldoctest
-julia> bitstring(4)
-"0000000000000000000000000000000000000000000000000000000000000100"
+julia> bitstring(Int32(4))
+"00000000000000000000000000000100"
 
 julia> bitstring(2.2)
 "0100000000000001100110011001100110011001100110011001100110011010"
 ```
 """
-function bitstring end
-
-bitstring(x::Union{Bool,Int8,UInt8})           = string(reinterpret(UInt8,x), pad = 8, base = 2)
-bitstring(x::Union{Int16,UInt16,Float16})      = string(reinterpret(UInt16,x), pad = 16, base = 2)
-bitstring(x::Union{Char,Int32,UInt32,Float32}) = string(reinterpret(UInt32,x), pad = 32, base = 2)
-bitstring(x::Union{Int64,UInt64,Float64})      = string(reinterpret(UInt64,x), pad = 64, base = 2)
-bitstring(x::Union{Int128,UInt128})            = string(reinterpret(UInt128,x), pad = 128, base = 2)
+function bitstring(x::T) where {T}
+    isprimitivetype(T) || throw(ArgumentError("$T not a primitive type"))
+    sz = sizeof(T) * 8
+    str = StringVector(sz)
+    i = sz
+    @inbounds while i >= 4
+        b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
+        d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+        str[i-3] = (d >> 0x00) % UInt8
+        str[i-2] = (d >> 0x08) % UInt8
+        str[i-1] = (d >> 0x10) % UInt8
+        str[i]   = (d >> 0x18) % UInt8
+        x = lshr_int(x, 4)
+        i -= 4
+    end
+    return String(str)
+end
 
 """
     digits([T<:Integer], n::Integer; base::T = 10, pad::Integer = 1)
@@ -806,9 +838,12 @@ Return an array with element type `T` (default `Int`) of the digits of `n` in th
 base, optionally padded with zeros to a specified size. More significant digits are at
 higher indices, such that `n == sum(digits[k]*base^(k-1) for k=1:length(digits))`.
 
+See also [`ndigits`](@ref), [`digits!`](@ref),
+and for base 2 also [`bitstring`](@ref), [`count_ones`](@ref).
+
 # Examples
 ```jldoctest
-julia> digits(10, base = 10)
+julia> digits(10)
 2-element Vector{Int64}:
  0
  1
@@ -820,14 +855,18 @@ julia> digits(10, base = 2)
  0
  1
 
-julia> digits(10, base = 2, pad = 6)
-6-element Vector{Int64}:
- 0
- 1
- 0
- 1
- 0
- 0
+julia> digits(-256, base = 10, pad = 5)
+5-element Vector{Int64}:
+ -6
+ -5
+ -2
+  0
+  0
+
+julia> n = rand(-999:999);
+
+julia> n == evalpoly(13, digits(n, base = 13))
+true
 ```
 """
 digits(n::Integer; base::Integer = 10, pad::Integer = 1) =
@@ -933,6 +972,8 @@ Factorial of `n`. If `n` is an [`Integer`](@ref), the factorial is computed as a
 integer (promoted to at least 64 bits). Note that this may overflow if `n` is not small,
 but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
 
+See also [`binomial`](@ref).
+
 # Examples
 ```jldoctest
 julia> factorial(6)
@@ -946,9 +987,6 @@ Stacktrace:
 julia> factorial(big(21))
 51090942171709440000
 ```
-
-# See also
-* [`binomial`](@ref)
 
 # External links
 * [Factorial](https://en.wikipedia.org/wiki/Factorial) on Wikipedia.
@@ -979,6 +1017,8 @@ If ``n`` is negative, then it is defined in terms of the identity
 \\binom{n}{k} = (-1)^k \\binom{k-n-1}{k}
 ```
 
+See also [`factorial`](@ref).
+
 # Examples
 ```jldoctest
 julia> binomial(5, 3)
@@ -990,9 +1030,6 @@ julia> factorial(5) ÷ (factorial(5-3) * factorial(3))
 julia> binomial(-5, 3)
 -35
 ```
-
-# See also
-* [`factorial`](@ref)
 
 # External links
 * [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.

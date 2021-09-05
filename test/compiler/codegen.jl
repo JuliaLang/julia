@@ -350,7 +350,7 @@ struct Const{T<:Array}
 end
 
 @eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 function foo31018!(a, b)
     @aliasscope for i in eachindex(a, b)
@@ -561,3 +561,79 @@ function f32843(vals0, v)
     vals
 end
 @test_throws UndefVarError f32843([6], Vector[[1]])
+
+# issue #40855, struct constants with union fields
+@enum T40855 X40855
+struct A40855
+    d::Union{Nothing, T40855}
+    b::Union{Nothing, Int}
+end
+g() = string(A40855(X40855, 1))
+@test g() == "$(@__MODULE__).A40855($(@__MODULE__).X40855, 1)"
+
+# issue #40612
+f40612(a, b) = a|b === a|b
+g40612(a, b) = a[]|a[] === b[]|b[]
+@test f40612(true, missing)
+@test !g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[true])
+@test !g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[missing], Union{Bool,Missing}[missing])
+@test g40612(Union{Bool,Missing}[true], Union{Bool,Missing}[true])
+@test g40612(Union{Bool,Missing}[false], Union{Bool,Missing}[false])
+
+# issue #41438
+struct A41438{T}
+  x::Ptr{T}
+end
+struct B41438{T}
+  x::T
+end
+f41438(y) = y[].x
+@test A41438.body.layout != C_NULL
+@test B41438.body.layout === C_NULL
+@test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
+@test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL
+
+const S41438 = Pair{Any, Ptr{T}} where T
+g41438() = Array{S41438,1}(undef,1)[1].first
+get_llvm(g41438, ()); # cause allocation of layout
+@test S41438.body.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438.body)
+@test S41438{Int}.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438{Int})
+
+# issue #41157
+f41157(a, b) = a[1] = b[1]
+@test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
+
+# issue #41096
+struct Modulate41096{M<:Union{Function, Val{true}, Val{false}}, id}
+    modulate::M
+    Modulate41096(id::Symbol, modulate::Function) = new{typeof(modulate), id}(modulate)
+    Modulate41096(id::Symbol, modulate::Bool=true) = new{Val{modulate}, id}(modulate|>Val)
+end
+@inline ismodulatable41096(modulate::Modulate41096) = ismodulatable41096(typeof(modulate))
+@inline ismodulatable41096(::Type{<:Modulate41096{Val{B}}}) where B = B
+@inline ismodulatable41096(::Type{<:Modulate41096{<:Function}}) = true
+
+mutable struct Term41096{I, M<:Modulate41096}
+    modulate::M
+    Term41096{I}(modulate::Modulate41096) where I = new{I, typeof(modulate)}(modulate)
+end
+@inline ismodulatable41096(term::Term41096) = ismodulatable41096(typeof(term))
+@inline ismodulatable41096(::Type{<:Term41096{I, M} where I}) where M = ismodulatable41096(M)
+
+function newexpand41096(gen, name::Symbol)
+    flag = ismodulatable41096(getfield(gen, name))
+    if flag
+        return true
+    else
+        return false
+    end
+end
+
+t41096 = Term41096{:t}(Modulate41096(:t, false))
+μ41096 = Term41096{:μ}(Modulate41096(:μ, false))
+U41096 = Term41096{:U}(Modulate41096(:U, false))
+
+@test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)

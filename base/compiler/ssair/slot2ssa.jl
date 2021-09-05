@@ -47,7 +47,7 @@ function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     nslots = length(ci.slotflags)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
     # Set defs for arguments
-    for var in result[1:(1+nargs)]
+    for var in result[1:nargs]
         push!(var.defs, 0)
     end
     for idx in 1:length(code)
@@ -183,16 +183,17 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}, flags::Vector{UInt8})
+function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
+    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     for i = length(code):-1:1
         if code[i] !== nothing
             resize!(code, i)
-            resize!(ci.ssavaluetypes, i)
+            resize!(ssavaluetypes, i)
             resize!(ci.codelocs, i)
             resize!(info, i)
-            resize!(flags, i)
+            resize!(ci.ssaflags, i)
             break
         end
     end
@@ -201,10 +202,10 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
     term = code[end]
     if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
         push!(code, ReturnNode())
-        push!(ci.ssavaluetypes, Union{})
+        push!(ssavaluetypes, Union{})
         push!(ci.codelocs, 0)
         push!(info, nothing)
-        push!(flags, 0x00)
+        push!(ci.ssaflags, 0x00)
     end
     nothing
 end
@@ -585,7 +586,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, nargs::Int,
+function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
                         slottypes::Vector{Any})
     code = ir.stmts.inst
     cfg = ir.cfg
@@ -594,7 +595,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
     for idx in 1:length(code)
         stmt = code[idx]
         if isexpr(stmt, :enter)
-            push!(catch_entry_blocks, (block_for_inst(cfg, idx), block_for_inst(cfg, stmt.args[1])))
+            push!(catch_entry_blocks, (block_for_inst(cfg, idx), block_for_inst(cfg, stmt.args[1]::Int)))
         end
     end
 
@@ -809,9 +810,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         end
     end
     # Convert into IRCode form
+    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     nstmts = length(ir.stmts)
     new_code = Vector{Any}(undef, nstmts)
-    ssavalmap = fill(SSAValue(-1), length(ci.ssavaluetypes) + 1)
+    ssavalmap = fill(SSAValue(-1), length(ssavaluetypes) + 1)
     result_types = Any[Any for _ in 1:nstmts]
     # Detect statement positions for assignments and construct array
     for (bb, idx) in bbidxiter(ir)
@@ -823,19 +825,19 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1
                 # Drop this node - it's a noop
-                new_code[idx] = stmt.cond
+                new_code[idx] = Expr(:call, GlobalRef(Core, :typeassert), stmt.cond, GlobalRef(Core, :Bool))
             else
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
         elseif isexpr(stmt, :enter)
-            new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]))
+            new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)
             new_code[idx] = stmt
         else
             ssavalmap[idx] = SSAValue(idx)
-            result_types[idx] = ci.ssavaluetypes[idx]
+            result_types[idx] = ssavaluetypes[idx]
             if isa(stmt, PhiNode)
                 edges = Int32[edge == 0 ? 0 : block_for_inst(cfg, Int(edge)) for edge in stmt.edges]
                 new_code[idx] = PhiNode(edges, stmt.values)
@@ -871,7 +873,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse, narg
         changed = false
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
-            new_typ = recompute_type(node[:inst], ci, ir, ir.sptypes, slottypes)
+            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes)
             if !(node[:type] ⊑ new_typ) || !(new_typ ⊑ node[:type])
                 node[:type] = new_typ
                 changed = true

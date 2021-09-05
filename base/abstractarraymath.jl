@@ -88,13 +88,8 @@ function _dropdims(A::AbstractArray, dims::Dims)
             dims[j] == dims[i] && throw(ArgumentError("dropped dims must be unique"))
         end
     end
-    d = ()
-    for i = 1:ndims(A)
-        if !in(i, dims)
-            d = tuple(d..., axes(A, i))
-        end
-    end
-    reshape(A, d::typeof(_sub(axes(A), dims)))
+    ax = _foldoneto((ds, d) -> d in dims ? ds : (ds..., axes(A,d)), (), Val(ndims(A)))
+    reshape(A, ax::typeof(_sub(axes(A), dims)))
 end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 

@@ -65,7 +65,7 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
-        if ((invariant || !dt->abstract) && !jl_is_kind(t1))
+        if ((invariant || !dt->name->abstract) && !jl_is_kind(t1))
             return 1;
         return 0;
     }
@@ -1091,9 +1091,9 @@ static void jl_typemap_level_insert_(jl_typemap_t *map, jl_typemap_level_t *cach
 
 static jl_typemap_level_t *jl_new_typemap_level(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_typemap_level_t *cache =
-        (jl_typemap_level_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_level_t),
+        (jl_typemap_level_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typemap_level_t),
                                          jl_typemap_level_type);
     cache->arg1 = (jl_array_t*)jl_an_empty_vec_any;
     cache->targ = (jl_array_t*)jl_an_empty_vec_any;
@@ -1244,7 +1244,7 @@ jl_typemap_entry_t *jl_typemap_alloc(
         jl_tupletype_t *type, jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
         jl_value_t *newvalue, size_t min_world, size_t max_world)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     assert(min_world > 0 && max_world > 0);
     if (!simpletype)
         simpletype = (jl_tupletype_t*)jl_nothing;
@@ -1270,7 +1270,7 @@ jl_typemap_entry_t *jl_typemap_alloc(
     }
 
     jl_typemap_entry_t *newrec =
-        (jl_typemap_entry_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_entry_t),
+        (jl_typemap_entry_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typemap_entry_t),
                                          jl_typemap_entry_type);
     newrec->sig = type;
     newrec->simplesig = simpletype;

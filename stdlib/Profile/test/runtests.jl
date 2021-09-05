@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Profile, Serialization
+using Test, Profile, Serialization, Logging
 
 Profile.clear()
 Profile.init()
@@ -57,6 +57,28 @@ let iobuf = IOBuffer()
     str = String(take!(iobuf))
     @test !isempty(str)
     truncate(iobuf, 0)
+end
+
+@testset "Profile.print() groupby options" begin
+    iobuf = IOBuffer()
+    with_logger(NullLogger()) do
+        @testset for format in [:flat, :tree]
+            @testset for threads in [1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
+                @testset for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
+                    Profile.print(iobuf; groupby, threads, format)
+                    @test !isempty(String(take!(iobuf)))
+                end
+            end
+        end
+    end
+end
+
+@testset "Profile.fetch() with and without meta" begin
+    data_without = Profile.fetch()
+    data_with = Profile.fetch(include_meta = true)
+    @test data_without[1] == data_with[1]
+    @test data_without[end] == data_with[end]
+    @test length(data_without) < length(data_with)
 end
 
 Profile.clear()

@@ -48,7 +48,7 @@ void jl_init_timing(void)
 
 void jl_destroy_timing(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_current_task->ptls;
     jl_timing_block_t *stack = ptls->timing_stack;
     while (stack) {
         _jl_timing_block_destroy(stack);

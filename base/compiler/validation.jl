@@ -1,9 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Expr head => argument count bounds
-const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange}(
+const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :call => 1:typemax(Int),
     :invoke => 2:typemax(Int),
+    :invoke_modify => 3:typemax(Int),
     :static_parameter => 1:1,
     :(&) => 1:1,
     :(=) => 2:2,
@@ -16,6 +17,8 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange}(
     :leave => 1:1,
     :pop_exception => 1:1,
     :inbounds => 1:1,
+    :inline => 1:1,
+    :noinline => 1:1,
     :boundscheck => 0:0,
     :copyast => 1:1,
     :meta => 0:typemax(Int),
@@ -76,7 +79,7 @@ end
 
 function _validate_val!(@nospecialize(x), errors, ssavals::BitSet)
     if isa(x, Expr)
-        if x.head === :call || x.head === :invoke
+        if x.head === :call || x.head === :invoke || x.head === :invoke_modify
             f = x.args[1]
             if f isa GlobalRef && (f.name === :cglobal) && x.head === :call
                 # TODO: these are not yet linearized
@@ -136,12 +139,13 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 end
                 validate_val!(lhs)
                 validate_val!(rhs)
-            elseif head === :call || head === :invoke || head === :gc_preserve_end || head === :meta ||
+            elseif head === :call || head === :invoke || x.head === :invoke_modify ||
+                head === :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
                 head === :const || head === :enter || head === :leave || head === :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
-                head === :throw_undef_if_not || head === :code_coverage_effect
+                head === :throw_undef_if_not || head === :code_coverage_effect || head === :inline || head === :noinline
                 validate_val!(x)
             else
                 # TODO: nothing is actually in statement position anymore
@@ -180,10 +184,11 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     !is_top_level && nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
     nslotnames < nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
     if c.inferred
-        nssavaluetypes = length(c.ssavaluetypes)
+        nssavaluetypes = length(c.ssavaluetypes::Vector{Any})
         nssavaluetypes < nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes)))
     else
-        c.ssavaluetypes != nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, c.ssavaluetypes)))
+        ssavaluetypes = c.ssavaluetypes::Int
+        ssavaluetypes != nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, ssavaluetypes)))
     end
     return errors
 end
@@ -205,7 +210,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInsta
     else
         m = mi.def::Method
         mnargs = m.nargs
-        n_sig_params = length(Core.Compiler.unwrap_unionall(m.sig).parameters)
+        n_sig_params = length((unwrap_unionall(m.sig)::DataType).parameters)
         if (m.isva ? (n_sig_params < (mnargs - 1)) : (n_sig_params != mnargs))
             push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (m.isva, n_sig_params, mnargs)))
         end
@@ -235,7 +240,7 @@ end
 
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :foreigncall, :cfunction, :gc_preserve_begin, :copyast)
+    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :invoke_modify, :foreigncall, :cfunction, :gc_preserve_begin, :copyast)
         return true
     end
     return false

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if isempty(Base.ARGS) || Base.ARGS[1] !== "0"
+if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 Sys.__init_build()
 # Prevent this from being put into the Main namespace
 @eval Module() begin
@@ -222,7 +222,11 @@ Profile = get(Base.loaded_modules,
           nothing)
 if Profile !== nothing
     hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UInt})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UnitRange{UInt}})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, UnitRange{Int}, UInt})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, UnitRange{Int}, UnitRange{UInt}})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Vector{Int}, Vector{UInt}})
     """
 end
 
@@ -250,16 +254,20 @@ function generate_precompile_statements()
               module $pkgname
               end
               """)
-        tmp = tempname()
+        tmp_prec = tempname()
+        tmp_proc = tempname()
         s = """
             pushfirst!(DEPOT_PATH, $(repr(prec_path)));
-            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
+            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
             $precompile_script
             """
-        run(`$(julia_exepath()) -O0 --sysimage $sysimg --startup-file=no -Cnative -e $s`)
-        for statement in split(read(tmp, String), '\n')
-            push!(statements, statement)
+        run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
+        for f in (tmp_prec, tmp_proc)
+            for statement in split(read(f, String), '\n')
+                occursin("Main.", statement) && continue
+                push!(statements, statement)
+            end
         end
     end
 
@@ -373,7 +381,7 @@ function generate_precompile_statements()
                 # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
                 # Replacing N with a large number works around it.
                 l = l.args[end]
-                if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] == :Vararg # Vararg{T}
+                if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
                     push!(l.args, 100) # form Vararg{T, 100} instead
                 end
             end

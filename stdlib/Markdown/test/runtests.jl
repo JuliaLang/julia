@@ -1230,3 +1230,24 @@ end
     @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line"
 end
 
+@testset "pullrequest #41552: a code block has \\end{verbatim}" begin
+    s1 = md"""
+         ```tex
+         \begin{document}
+         \end{document}
+         ```
+         """
+    s2 = md"""
+         ```tex
+         \begin{verbatim}
+         \end{verbatim}
+         ```
+         """
+    @test Markdown.latex(s1) == """
+                                \\begin{verbatim}
+                                \\begin{document}
+                                \\end{document}
+                                \\end{verbatim}
+                                """
+    @test_throws ErrorException Markdown.latex(s2)
+end

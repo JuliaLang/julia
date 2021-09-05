@@ -209,6 +209,10 @@ Just as `^R` is a reverse search, `^S` is a forward search, with the prompt ```(
  The two may be used in conjunction with each other to move through the previous or next matching
 results, respectively.
 
+All executed commands in the Julia REPL are logged into `~/.julia/logs/repl_history.jl` along with a timestamp of when it was executed
+and the current REPL mode you were in. Search mode queries this log file in order to find the commands which you previously ran.
+This can be disabled at startup by passing the `--history-file=no` flag to Julia.
+
 ## Key bindings
 
 The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced
@@ -308,6 +312,27 @@ In both the Julian and help modes of the REPL, one can enter the first few chara
 or type and then press the tab key to get a list all matches:
 
 ```julia-repl
+julia> x[TAB]
+julia> xor
+```
+
+In some cases it only completes part of the name, up to the next ambiguity:
+
+```julia-repl
+julia> mapf[TAB]
+julia> mapfold
+```
+
+If you hit tab again, then you get the list of things that might complete this:
+
+```julia-repl
+julia> mapfold[TAB]
+mapfoldl mapfoldr
+```
+
+Like other components of the REPL, the search is case-sensitive:
+
+```julia-repl
 julia> stri[TAB]
 stride     strides     string      strip
 
@@ -365,6 +390,46 @@ shell> /[TAB]
 .dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/
 ```
 
+Dictionary keys can also be tab completed:
+
+```julia-repl
+julia> foo = Dict("qwer1"=>1, "qwer2"=>2, "asdf"=>3)
+Dict{String,Int64} with 3 entries:
+  "qwer2" => 2
+  "asdf"  => 3
+  "qwer1" => 1
+
+julia> foo["q[TAB]
+
+"qwer1" "qwer2"
+julia> foo["qwer
+```
+
+Tab completion can also help completing fields:
+
+```julia-repl
+julia> x = 3 + 4im;
+
+julia> julia> x.[TAB][TAB]
+im re
+
+julia> import UUIDs
+
+julia> UUIDs.uuid[TAB][TAB]
+uuid1        uuid4         uuid5        uuid_version
+```
+
+Fields for output from functions can also be completed:
+
+```julia-repl
+julia> split("","")[1].[TAB]
+lastindex  offset  string
+```
+
+The completion of fields for output from functions uses type inference, and it can only suggest
+fields if the function is type stable.
+
+
 Tab completion can help with investigation of the available methods matching the input arguments:
 
 ```julia-repl
@@ -392,38 +457,54 @@ The completion of the methods uses type inference and can therefore see if the a
 even if the arguments are output from functions. The function needs to be type stable for the
 completion to be able to remove non-matching methods.
 
-Tab completion can also help completing fields:
+If you wonder which methods can be used with particular argument types, use `?` as the function name.
+This shows an example of looking for functions in InteractiveUtils that accept a single string:
 
 ```julia-repl
-julia> import UUIDs
-
-julia> UUIDs.uuid[TAB]
-uuid1        uuid4         uuid_version
+julia> InteractiveUtils.?("somefile")[TAB]
+edit(path::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:197
+less(file::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:266
 ```
 
-Fields for output from functions can also be completed:
+This listed methods in the `InteractiveUtils` module that can be called on a string.
+By default, this excludes methods where all arguments are typed as `Any`,
+but you can see those too by holding down SHIFT-TAB instead of TAB:
 
 ```julia-repl
-julia> split("","")[1].[TAB]
-lastindex  offset  string
+julia> InteractiveUtils.?("somefile")[SHIFT-TAB]
+apropos(string) in REPL at REPL/src/docview.jl:796
+clipboard(x) in InteractiveUtils at InteractiveUtils/src/clipboard.jl:64
+code_llvm(f) in InteractiveUtils at InteractiveUtils/src/codeview.jl:221
+code_native(f) in InteractiveUtils at InteractiveUtils/src/codeview.jl:243
+edit(path::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:197
+edit(f) in InteractiveUtils at InteractiveUtils/src/editless.jl:225
+eval(x) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:3
+include(x) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:3
+less(file::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:266
+less(f) in InteractiveUtils at InteractiveUtils/src/editless.jl:274
+report_bug(kind) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:391
+separate_kwargs(args...; kwargs...) in InteractiveUtils at InteractiveUtils/src/macros.jl:7
 ```
 
-The completion of fields for output from functions uses type inference, and it can only suggest
-fields if the function is type stable.
+You can also use ` ?("somefile")[TAB]`  and look across all modules, but the method lists can be long.
 
-Dictionary keys can also be tab completed:
+By omitting the closing parenthesis, you can include functions that might require additional arguments:
 
 ```julia-repl
-julia> foo = Dict("qwer1"=>1, "qwer2"=>2, "asdf"=>3)
-Dict{String,Int64} with 3 entries:
-  "qwer2" => 2
-  "asdf"  => 3
-  "qwer1" => 1
+julia> using Mmap
 
-julia> foo["q[TAB]
-
-"qwer1" "qwer2"
-julia> foo["qwer
+help?> Mmap.?("file",[TAB]
+Mmap.Anonymous(name::String, readonly::Bool, create::Bool) in Mmap at Mmap/src/Mmap.jl:16
+mmap(file::AbstractString) in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}) where T<:Array in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}) where {T<:Array, N} in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}, offset::Integer; grow, shared) where {T<:Array, N} in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}, len::Integer) where T<:Array in Mmap at Mmap/src/Mmap.jl:251
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer; grow, shared) where T<:Array in Mmap at Mmap/src/Mmap.jl:251
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}) where {T<:BitArray, N} in Mmap at Mmap/src/Mmap.jl:316
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}, offset::Integer; grow, shared) where {T<:BitArray, N} in Mmap at Mmap/src/Mmap.jl:316
+mmap(file::AbstractString, ::Type{T}, len::Integer) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer; grow, shared) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
 ```
 
 ## Customizing Colors

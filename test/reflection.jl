@@ -883,6 +883,7 @@ _test_at_locals2(1,1,0.5f0)
     _dump_function(f31687_parent, Tuple{},
                    #=native=#false, #=wrapper=#false, #=strip=#false,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
+                   #=binary=#false,
                    params)
 end
 
@@ -934,4 +935,20 @@ end
     @test f !== Core._apply_iterate
     @test f !== Core._apply
     @test occursin("f2#", String(nameof(f)))
+end
+
+
+@testset "code_typed(; world)" begin
+    mod = @eval module $(gensym()) end
+
+    @eval mod foo() = 1
+    world1 = Base.get_world_counter()
+    @test only(code_typed(mod.foo, ())).second == Int
+    @test only(code_typed(mod.foo, (); world=world1)).second == Int
+
+    @eval mod foo() = 2.
+    world2 = Base.get_world_counter()
+    @test only(code_typed(mod.foo, ())).second == Float64
+    @test only(code_typed(mod.foo, (); world=world1)).second == Int
+    @test only(code_typed(mod.foo, (); world=world2)).second == Float64
 end

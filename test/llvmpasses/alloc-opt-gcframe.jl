@@ -16,6 +16,7 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 # CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define {} addrspace(10)* @return_obj() {
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
@@ -33,6 +34,7 @@ define {} addrspace(10)* @return_obj() {
 # CHECK-NOT: @llvm.lifetime.end
 println("""
 define i64 @return_load(i64 %i) {
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
@@ -47,12 +49,14 @@ define i64 @return_load(i64 %i) {
 # CHECK-LABEL: }{{$}}
 
 # CHECK-LABEL: @ccall_obj
+# CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: @jl_gc_pool_alloc
 # CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define void @ccall_obj(i8* %fptr) {
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
@@ -65,6 +69,7 @@ define void @ccall_obj(i8* %fptr) {
 
 # CHECK-LABEL: @ccall_ptr
 # CHECK: alloca i64
+# CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
@@ -75,6 +80,7 @@ define void @ccall_obj(i8* %fptr) {
 # CHECK-NEXT: ret void
 println("""
 define void @ccall_ptr(i8* %fptr) {
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
@@ -89,12 +95,14 @@ define void @ccall_ptr(i8* %fptr) {
 # CHECK-LABEL: }{{$}}
 
 # CHECK-LABEL: @ccall_unknown_bundle
+# CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: @jl_gc_pool_alloc
 # CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !0
 println("""
 define void @ccall_unknown_bundle(i8* %fptr) {
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
@@ -110,6 +118,7 @@ define void @ccall_unknown_bundle(i8* %fptr) {
 
 # CHECK-LABEL: @lifetime_branches
 # CHECK: alloca i64
+# CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK: L1:
 # CHECK-NEXT: call void @llvm.lifetime.start{{.*}}(i64 8,
@@ -126,6 +135,7 @@ define void @ccall_unknown_bundle(i8* %fptr) {
 # CHECK-NEXT: call void @llvm.lifetime.end{{.*}}(i64 8,
 println("""
 define void @lifetime_branches(i8* %fptr, i1 %b, i1 %b2) {
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
   br i1 %b, label %L1, label %L3
@@ -151,12 +161,14 @@ L3:
 # CHECK-LABEL: }{{$}}
 
 # CHECK-LABEL: @object_field
+# CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
 # CHECK-NOT: store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}}, align 8, !tbaa !0
 println("""
 define void @object_field({} addrspace(10)* %field) {
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
@@ -170,6 +182,7 @@ define void @object_field({} addrspace(10)* %field) {
 
 # CHECK-LABEL: @memcpy_opt
 # CHECK: alloca [16 x i8], align 16
+# CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
@@ -177,6 +190,7 @@ define void @object_field({} addrspace(10)* %field) {
 println("""
 define void @memcpy_opt(i8* %v22) {
 top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %v6 = call {}*** @julia.ptls_states()
   %v18 = bitcast {}*** %v6 to i8*
   %v19 = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %v18, $isz 16, {} addrspace(10)* @tag)
@@ -189,6 +203,7 @@ top:
 # CHECK-LABEL: }{{$}}
 
 # CHECK-LABEL: @preserve_opt
+# CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK-NOT: @jl_gc_pool_alloc
@@ -197,6 +212,7 @@ top:
 println("""
 define void @preserve_opt(i8* %v22) {
 top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %v6 = call {}*** @julia.ptls_states()
   %v18 = bitcast {}*** %v6 to i8*
   %v19 = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %v18, $isz 16, {} addrspace(10)* @tag)
@@ -212,6 +228,7 @@ top:
 # CHECK-LABEL: }{{$}}
 
 # CHECK-LABEL: @preserve_branches
+# CHECK: call {}*** @julia.get_pgcstack()
 # CHECK: call {}*** @julia.ptls_states()
 # CHECK: L1:
 # CHECK-NEXT: @external_function()
@@ -224,6 +241,7 @@ top:
 # CHECK: L3:
 println("""
 define void @preserve_branches(i8* %fptr, i1 %b, i1 %b2) {
+  %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
   br i1 %b, label %L1, label %L3
@@ -249,6 +267,7 @@ L3:
 println("""
 declare void @external_function()
 declare {}*** @julia.ptls_states()
+declare {}*** @julia.get_pgcstack()
 declare noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj(i8*, $isz, {} addrspace(10)*)
 declare {}* @julia.pointer_from_objref({} addrspace(11)*)
 declare void @llvm.memcpy.p11i8.p0i8.i64(i8 addrspace(11)* nocapture writeonly, i8* nocapture readonly, i64, i32, i1)

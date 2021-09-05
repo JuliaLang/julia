@@ -12,6 +12,7 @@ using Random
         @test gcd(T(0), T(15)) === T(15)
         @test gcd(T(15), T(0)) === T(15)
         if T <: Signed
+            @test gcd(T(-12)) === T(12)
             @test gcd(T(0), T(-15)) === T(15)
             @test gcd(T(-15), T(0)) === T(15)
             @test gcd(T(3), T(-15)) === T(3)
@@ -78,6 +79,7 @@ using Random
         @test lcm(T(0), T(3)) === T(0)
         @test lcm(T(0), T(0)) === T(0)
         if T <: Signed
+            @test lcm(T(-12)) === T(12)
             @test lcm(T(0), T(-4)) === T(0)
             @test lcm(T(-4), T(0)) === T(0)
             @test lcm(T(4), T(-6)) === T(12)
@@ -154,6 +156,7 @@ end
         @test gcd(T[3, 15]) === T(3)
         @test gcd(T[0, 15]) === T(15)
         if T <: Signed
+            @test gcd(T[-12]) === T(12)
             @test gcd(T[3,-15]) === T(3)
             @test gcd(T[-3,-15]) === T(3)
         end
@@ -163,12 +166,12 @@ end
         @test gcd(T[2, 4, 3, 5]) === T(1)
 
         @test lcm(T[]) === T(1)
-        @test lcm(T[2]) === T(2)
         @test lcm(T[2, 3]) === T(6)
         @test lcm(T[4, 6]) === T(12)
         @test lcm(T[3, 0]) === T(0)
         @test lcm(T[0, 0]) === T(0)
         if T <: Signed
+            @test lcm(T[-2]) === T(2)
             @test lcm(T[4, -6]) === T(12)
             @test lcm(T[-4, -6]) === T(12)
         end
@@ -322,6 +325,8 @@ end
 
 end
 
+primitive type BitString128 128 end
+
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"
     @test string(UInt32('3'), pad = 7, base = 2) == "0110011"
@@ -353,6 +358,7 @@ end
     @test bitstring(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
         "0000000000000000000000000000000000000000000000000000010000001011")
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
+    @test bitstring(reinterpret(BitString128, Int128(3))) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 
 @testset "digits/base" begin
@@ -472,4 +478,12 @@ end
 # issue #22837
 for b in [-100:-2; 2:100;]
     @test Base.ndigits0z(0, b) == 0
+end
+
+@testset "constant prop in gcd" begin
+    ci = code_typed(() -> gcd(14, 21))[][1]
+    @test ci.code == Any[Core.ReturnNode(7)]
+
+    ci = code_typed(() -> 14 // 21)[][1]
+    @test ci.code == Any[Core.ReturnNode(2 // 3)]
 end

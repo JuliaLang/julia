@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(1234321)
+Random.seed!(12343219)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -170,5 +170,37 @@ end
     @test eigmax(A') == eigmax(copy(A'))
 end
 
+@testset "equality of eigen factorizations" begin
+    A = randn(3, 3)
+    @test eigen(A) == eigen(A)
+    @test hash(eigen(A)) == hash(eigen(A))
+    @test isequal(eigen(A), eigen(A))
+end
+
+@testset "Float16" begin
+    A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    B = eigen(A)
+    B32 = eigen(Float32.(A))
+    C = Float16[3 -2; 4 -1]
+    D = eigen(C)
+    D32 = eigen(Float32.(C))
+    F = eigen(complex(C))
+    F32 = eigen(complex(Float32.(C)))
+    @test B isa Eigen{Float16, Float16, Matrix{Float16}, Vector{Float16}}
+    @test B.values isa Vector{Float16}
+    @test B.vectors isa Matrix{Float16}
+    @test B.values ≈ B32.values
+    @test B.vectors ≈ B32.vectors
+    @test D isa Eigen{ComplexF16, ComplexF16, Matrix{ComplexF16}, Vector{ComplexF16}}
+    @test D.values isa Vector{ComplexF16}
+    @test D.vectors isa Matrix{ComplexF16}
+    @test D.values ≈ D32.values
+    @test D.vectors ≈ D32.vectors
+    @test F isa Eigen{ComplexF16, ComplexF16, Matrix{ComplexF16}, Vector{ComplexF16}}
+    @test F.values isa Vector{ComplexF16}
+    @test F.vectors isa Matrix{ComplexF16}
+    @test F.values ≈ F32.values
+    @test F.vectors ≈ F32.vectors
+end
 
 end # module TestEigen

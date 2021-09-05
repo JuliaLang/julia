@@ -4,6 +4,22 @@
 
 module Filesystem
 
+const S_IFDIR  = 0o040000  # directory
+const S_IFCHR  = 0o020000  # character device
+const S_IFBLK  = 0o060000  # block device
+const S_IFREG  = 0o100000  # regular file
+const S_IFIFO  = 0o010000  # fifo (named pipe)
+const S_IFLNK  = 0o120000  # symbolic link
+const S_IFSOCK = 0o140000  # socket file
+const S_IFMT   = 0o170000
+
+const S_ISUID = 0o4000  # set UID bit
+const S_ISGID = 0o2000  # set GID bit
+const S_ENFMT = S_ISGID # file locking enforcement
+const S_ISVTX = 0o1000  # sticky bit
+const S_IRWXU = 0o0700  # mask for owner permissions
+const S_IRUSR = 0o0400  # read by owner
+
 const S_IRUSR = 0o400
 const S_IWUSR = 0o200
 const S_IXUSR = 0o100
@@ -42,7 +58,7 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
+    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
 
 import .Base.RefValue
 
@@ -76,6 +92,7 @@ if OS_HANDLE !== RawFD
 end
 
 rawhandle(file::File) = file.handle
+setup_stdio(file::File, ::Bool) = (file, false)
 
 # Filesystem.open, not Base.open
 function open(path::AbstractString, flags::Integer, mode::Integer=0)

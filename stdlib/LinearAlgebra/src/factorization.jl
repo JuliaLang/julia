@@ -16,9 +16,9 @@ size(F::Adjoint{<:Any,<:Factorization}) = reverse(size(parent(F)))
 size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
-checknonsingular(info, pivoted::Val{true}) = info == 0 || throw(SingularException(info))
-checknonsingular(info, pivoted::Val{false}) = info == 0 || throw(ZeroPivotException(info))
-checknonsingular(info) = checknonsingular(info, Val{true}())
+checknonsingular(info, ::RowMaximum) = info == 0 || throw(SingularException(info))
+checknonsingular(info, ::NoPivot) = info == 0 || throw(ZeroPivotException(info))
+checknonsingular(info) = checknonsingular(info, RowMaximum())
 
 """
     issuccess(F::Factorization)
@@ -59,6 +59,9 @@ convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)
 
 ### General promotion rules
 Factorization{T}(F::Factorization{T}) where {T} = F
+# This is a bit odd since the return is not a Factorization but it works well in generic code
+Factorization{T}(A::Adjoint{<:Any,<:Factorization}) where {T} =
+    adjoint(Factorization{T}(parent(A)))
 inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n)))
 
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, 1:nfields(F); init=h)
@@ -96,39 +99,20 @@ function (/)(B::VecOrMat{Complex{T}}, F::Factorization{T}) where T<:BlasReal
     return copy(reinterpret(Complex{T}, x))
 end
 
-function \(F::Factorization, B::AbstractVecOrMat)
+function \(F::Union{Factorization, Adjoint{<:Any,<:Factorization}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
-    ldiv!(F, BB)
-end
-function \(adjF::Adjoint{<:Any,<:Factorization}, B::AbstractVecOrMat)
-    require_one_based_indexing(B)
-    F = adjF.parent
-    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
-    ldiv!(adjoint(F), BB)
+    ldiv!(F, copy_similar(B, TFB))
 end
 
-function /(B::AbstractMatrix, F::Factorization)
+function /(B::AbstractMatrix, F::Union{Factorization, Adjoint{<:Any,<:Factorization}})
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
-    rdiv!(BB, F)
-end
-function /(B::AbstractMatrix, adjF::Adjoint{<:Any,<:Factorization})
-    require_one_based_indexing(B)
-    F = adjF.parent
-    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
-    rdiv!(BB, adjoint(F))
+    rdiv!(copy_similar(B, TFB), F)
 end
 /(adjB::AdjointAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjB.parent)
 /(B::TransposeAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjoint(B))
+
 
 # support the same 3-arg idiom as in our other in-place A_*_B functions:
 function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)

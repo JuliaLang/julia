@@ -455,7 +455,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     if frame.line != typemax(frame.line) && frame.line != 0
                         print(io, ":", frame.line)
                     end
-                    print(io, " within `", method_name(frame), "'")
+                    print(io, " within `", method_name(frame), "`")
                     if collapse
                         method = method_name(frame)
                         while nctx < nframes
@@ -628,7 +628,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
         if new_node_type === UNDEF # try to be robust against errors
             printstyled(io, "::#UNDEF", color=:red)
         elseif show_type
-            line_info_postprinter(io, new_node_type, node_idx in used)
+            line_info_postprinter(IOContext(io, :idx => node_idx), new_node_type, node_idx in used)
         end
         println(io)
         i += 1
@@ -643,7 +643,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
             # This is an error, but can happen if passes don't update their type information
             printstyled(io, "::#UNDEF", color=:red)
         elseif show_type
-            line_info_postprinter(io, type, idx in used)
+            line_info_postprinter(IOContext(io, :idx => idx), type, idx in used)
         end
     end
     println(io)
@@ -712,48 +712,6 @@ end
 
 _strip_color(s::String) = replace(s, r"\e\[\d+m" => "")
 
-# corresponds to `verbose_linetable=true`
-function ircode_verbose_linfo_printer(code::IRCode)
-    stmts = code.stmts
-    max_depth = maximum(compute_inlining_depth(code.linetable, stmts[i][:line]) for i in 1:length(stmts.line))
-    last_stack = Ref(Int[])
-    used = stmts_used(code, false)
-    maxlength_idx = if isempty(used)
-        0
-    else
-        maxused = maximum(used)
-        length(string(maxused))
-    end
-
-    function (io::IO, indent::String, idx::Int)
-        idx == 0 && return ""
-        cols = (displaysize(io)::Tuple{Int,Int})[2]
-        stmt = stmts[idx]
-
-        stack = compute_loc_stack(code.linetable, stmt[:line])
-        # We need to print any stack frames that did not exist in the last stack
-        ndepth = max(1, length(stack))
-        rail = string(" "^(max_depth+1-ndepth), "│"^ndepth)
-        start_column = cols - max_depth - 10
-        for (i, x) in enumerate(stack)
-            if i > length(last_stack[]) || last_stack[][i] != x
-                entry = code.linetable[x]
-                printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :light_black)
-                print(io, indent)
-                ssa_guard = " "^(maxlength_idx + 4 + i)
-                entry_label = "$(ssa_guard)$(method_name(entry)) at $(entry.file):$(entry.line) "
-                width_hline = start_column - length(entry_label) - length(_strip_color(indent)) + max_depth - i
-                width_hline = max(width_hline, 0) # don't error on overlong method/file names
-                hline = string("─"^width_hline, "┐")
-                printstyled(io, string(entry_label, hline), "\n"; color=:light_black)
-            end
-        end
-        last_stack[] = stack
-        printstyled(io, "\e[$(start_column)G$(rail)\e[1G", color = :light_black)
-        return ""
-    end
-end
-
 function statementidx_lineinfo_printer(f, code::IRCode)
     printer = f(code.linetable)
     function (io::IO, indent::String, idx::Int)
@@ -768,7 +726,7 @@ function statementidx_lineinfo_printer(f, code::CodeInfo)
 end
 statementidx_lineinfo_printer(code) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
 
-function stmts_used(code::IRCode, warn_unset_entry=true)
+function stmts_used(io::IO, code::IRCode, warn_unset_entry=true)
     stmts = code.stmts
     used = BitSet()
     for stmt in stmts
@@ -786,7 +744,7 @@ function stmts_used(code::IRCode, warn_unset_entry=true)
     return used
 end
 
-function stmts_used(code::CodeInfo)
+function stmts_used(::IO, code::CodeInfo)
     stmts = code.code
     used = BitSet()
     for stmt in stmts
@@ -796,7 +754,7 @@ function stmts_used(code::CodeInfo)
 end
 
 function default_config(code::IRCode; verbose_linetable=false)
-    return IRShowConfig(verbose_linetable ? ircode_verbose_linfo_printer(code)
+    return IRShowConfig(verbose_linetable ? statementidx_lineinfo_printer(code)
                                           : inline_linfo_printer(code);
                         bb_color=:normal)
 end
@@ -805,7 +763,7 @@ default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code
 function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=default_config(code);
                  pop_new_node! = code isa IRCode ? ircode_new_nodes_iter(code) : Returns(nothing))
     stmts = code isa IRCode ? code.stmts : code.code
-    used = stmts_used(code)
+    used = stmts_used(io, code)
     cfg = code isa IRCode ? code.cfg : compute_basic_blocks(stmts)
     bb_idx = 1
 

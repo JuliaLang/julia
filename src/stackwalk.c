@@ -83,11 +83,10 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     }
 #endif
 #if !defined(_OS_WINDOWS_)
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
+    jl_set_safe_restore(&buf);
     if (!jl_setjmp(buf, 0)) {
-        ptls->safe_restore = &buf;
 #endif
         int have_more_frames = 1;
         while (have_more_frames) {
@@ -175,7 +174,7 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         // reader happy.
         if (n > 0) n -= 1;
     }
-    ptls->safe_restore = old_buf;
+    jl_set_safe_restore(old_buf);
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     JL_UNLOCK_NOGC(&jl_in_stackwalk);
@@ -314,7 +313,7 @@ static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
 
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
-    jl_excstack_t *s = jl_get_ptls_states()->current_task->excstack;
+    jl_excstack_t *s = jl_current_task->excstack;
     jl_bt_element_t *bt_data = NULL;
     size_t bt_size = 0;
     if (s && s->top) {
@@ -335,9 +334,9 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 // interleaved.
 JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
 {
-    JL_TYPECHK(catch_stack, task, (jl_value_t*)task);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (task != ptls->current_task && task->_state == JL_TASK_STATE_RUNNABLE) {
+    JL_TYPECHK(current_exceptions, task, (jl_value_t*)task);
+    jl_task_t *ct = jl_current_task;
+    if (task != ct && task->_state == JL_TASK_STATE_RUNNABLE) {
         jl_error("Inspecting the exception stack of a task which might "
                  "be running concurrently isn't allowed.");
     }
@@ -574,11 +573,11 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 
 JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_frame_t *frames = NULL;
-    int8_t gc_state = jl_gc_safe_enter(ptls);
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
     int n = jl_getFunctionInfo(&frames, (uintptr_t)ip, skipC, 0);
-    jl_gc_safe_leave(ptls, gc_state);
+    jl_gc_safe_leave(ct->ptls, gc_state);
     jl_value_t *rs = (jl_value_t*)jl_alloc_svec(n);
     JL_GC_PUSH1(&rs);
     for (int i = 0; i < n; i++) {
@@ -694,16 +693,17 @@ extern bt_context_t *jl_to_bt_context(void *sigctx);
 
 void jl_rec_backtrace(jl_task_t *t)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
     ptls->bt_size = 0;
-    if (t == ptls->current_task) {
+    if (t == ct) {
         ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
         return;
     }
     if (t->copy_stack || !t->started || t->stkbuf == NULL)
         return;
-    int old = jl_atomic_compare_exchange(&t->tid, -1, ptls->tid);
-    if (old != -1 && old != ptls->tid)
+    int16_t old = -1;
+    if (!jl_atomic_cmpswap(&t->tid, &old, ptls->tid) && old != ptls->tid)
         return;
     bt_context_t *context = NULL;
 #if defined(_OS_WINDOWS_)
@@ -751,10 +751,10 @@ JL_DLLEXPORT void jl_gdblookup(void* ip)
 // Print backtrace for current exception in catch block
 JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->current_task == NULL)
+    jl_task_t *ct = jl_current_task;
+    if (ct->ptls == NULL)
         return;
-    jl_excstack_t *s = ptls->current_task->excstack;
+    jl_excstack_t *s = ct->excstack;
     if (!s)
         return;
     size_t i, bt_size = jl_excstack_bt_size(s, s->top);
@@ -765,7 +765,8 @@ JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
 }
 JL_DLLEXPORT void jlbacktracet(jl_task_t *t)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
     jl_rec_backtrace(t);
     size_t i, bt_size = ptls->bt_size;
     jl_bt_element_t *bt_data = ptls->bt_data;

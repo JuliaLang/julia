@@ -12,7 +12,7 @@ module Logging
 # Doing it this way (rather than with import) makes these symbols accessible to
 # tab completion.
 for sym in [
-    :LogLevel, :BelowMinLevel, :Debug, :Info, :Warn, :Error, :AboveMaxLevel,
+    :LogLevel, :BelowMinLevel, :AboveMaxLevel,
     :AbstractLogger,
     :NullLogger,
     :handle_message, :shouldlog, :min_enabled_level, :catch_exceptions,
@@ -28,6 +28,32 @@ for sym in [
     :SimpleLogger]
     @eval const $sym = Base.CoreLogging.$sym
 end
+
+# LogLevel aliases (re-)documented here (JuliaLang/julia#40978)
+"""
+    Debug
+
+Alias for [`LogLevel(-1000)`](@ref LogLevel).
+"""
+const Debug = Base.CoreLogging.Debug
+"""
+    Info
+
+Alias for [`LogLevel(0)`](@ref LogLevel).
+"""
+const Info = Base.CoreLogging.Info
+"""
+    Warn
+
+Alias for [`LogLevel(1000)`](@ref LogLevel).
+"""
+const Warn = Base.CoreLogging.Warn
+"""
+    Error
+
+Alias for [`LogLevel(2000)`](@ref LogLevel).
+"""
+const Error = Base.CoreLogging.Error
 
 using Base.CoreLogging:
     closed_stream
@@ -46,7 +72,13 @@ export
     global_logger,
     disable_logging,
     SimpleLogger,
-    ConsoleLogger
+    ConsoleLogger,
+    BelowMinLevel,
+    Debug,
+    Info,
+    Warn,
+    Error,
+    AboveMaxLevel
 
 include("ConsoleLogger.jl")
 
