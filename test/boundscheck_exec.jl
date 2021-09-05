@@ -259,4 +259,26 @@ if bc_opt == bc_default || bc_opt == bc_off
     @test !occursin("arrayref(true", typed_40281)
 end
 
+@testset "pass inbounds meta to getindex on CartesianIndices (#42115)" begin
+    @inline getindex_42115(r, i) = @inbounds getindex(r, i)
+    @inline getindex_42115(r, i, j) = @inbounds getindex(r, i, j)
+
+    R = CartesianIndices((5, 5))
+    if bc_opt == bc_on
+        @test_throws BoundsError getindex_42115(R, -1, -1)
+        @test_throws BoundsError getindex_42115(R, 1, -1)
+    else
+        @test getindex_42115(R, -1, -1) == CartesianIndex(-1, -1)
+        @test getindex_42115(R, 1, -1) == CartesianIndex(1, -1)
+    end
+
+    if bc_opt == bc_on
+        @test_throws BoundsError getindex_42115(R, CartesianIndices((6, 6)))
+        @test_throws BoundsError getindex_42115(R, -1:3, :)
+    else
+        @test getindex_42115(R, CartesianIndices((6, 6))) == CartesianIndices((6, 6))
+        @test getindex_42115(R, -1:3, :) == CartesianIndices((-1:3, 1:5))
+    end
+end
+
 end
