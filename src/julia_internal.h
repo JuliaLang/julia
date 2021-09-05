@@ -1376,7 +1376,7 @@ extern jl_sym_t *static_parameter_sym; extern jl_sym_t *inline_sym;
 extern jl_sym_t *noinline_sym; extern jl_sym_t *generated_sym;
 extern jl_sym_t *generated_only_sym; extern jl_sym_t *isdefined_sym;
 extern jl_sym_t *propagate_inbounds_sym; extern jl_sym_t *specialize_sym;
-extern jl_sym_t *aggressive_constprop_sym;
+extern jl_sym_t *aggressive_constprop_sym; extern jl_sym_t *no_constprop_sym;
 extern jl_sym_t *nospecialize_sym; extern jl_sym_t *macrocall_sym;
 extern jl_sym_t *colon_sym; extern jl_sym_t *hygienicscope_sym;
 extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;
