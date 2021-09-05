@@ -696,8 +696,14 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
-_hypot(x::Float32, y::Float32) = Float32(sqrt((Float64(x)^2 + Float64(y)^2)))
-_hypot(x::Float16, y::Float16) = Float16(sqrt((Float32(x)^2 + Float32(y)^2)))
+@inline function _hypot(x::Float32, y::Float32)
+    _x, _y = Float64(x), Float64(y)
+    return Float32(sqrt(@fastmath _x*_x + _y*_y))
+end
+@inline function _hypot(x::Float16, y::Float16)
+    _x, _y = Float32(x), Float32(y)
+    return Float16(sqrt(@fastmath _x*_x + _y*_y))
+end
 _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
 
 function _hypot(x...)
