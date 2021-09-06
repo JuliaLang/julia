@@ -233,7 +233,7 @@ whether or not NaN values are considered equal (defaults to false).
 
 For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to
 the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
-This corresponds to requiring equality of about half of the significand digits. Otherwise,
+This corresponds to requiring equality of about half of the significant digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
 The `norm` keyword defaults to `abs` for numeric `(x,y)` and to `LinearAlgebra.norm` for
