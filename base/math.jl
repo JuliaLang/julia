@@ -697,10 +697,16 @@ function _hypot(x, y)
     return h*scale*oneunit(axu)
 end
 @inline function _hypot(x::Float32, y::Float32)
+    if isinf(x) || isinf(y)
+        return Inf32
+    end
     _x, _y = Float64(x), Float64(y)
     return Float32(sqrt(muladd(_x, _x, _y*_y)))
 end
 @inline function _hypot(x::Float16, y::Float16)
+    if isinf(x) || isinf(y)
+        return Inf16
+    end
     _x, _y = Float32(x), Float32(y)
     return Float16(sqrt(muladd(_x, _x, _y*_y)))
 end
