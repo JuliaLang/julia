@@ -989,6 +989,9 @@ Padded with zeros to length 6 000123
 
 julia> @printf "Use shorter of decimal or scientific %g %g" 1.23 12300000.0
 Use shorter of decimal or scientific 1.23 1.23e+07
+
+julia> @printf "Use thousand separators %'d" 1234567
+Use thousand separators 1,234,567
 ```
 
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
