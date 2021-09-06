@@ -371,10 +371,10 @@ Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
 (-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
 (-)(y::Union{Period, CompoundPeriod}, x::CompoundPeriod) = (-x) + y
 
-(*)(x::CompoundPeriod, y::Real) = iszero(y) ? CompoundPeriod() : CompoundPeriod(x.periods * y)
+(*)(x::CompoundPeriod, y::Real) = CompoundPeriod(x.periods * y)
 (*)(y::Real, x::CompoundPeriod) = x * y
 
-(/)(x::CompoundPeriod, y::Real) = isinf(y) ? CompoundPeriod() : CompoundPeriod(x.periods / y)
+(/)(x::CompoundPeriod, y::Real) = CompoundPeriod(x.periods / y)
 
 GeneralPeriod = Union{Period, CompoundPeriod}
 (+)(x::GeneralPeriod) = x
