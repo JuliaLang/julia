@@ -196,7 +196,7 @@ function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
         arg isa Expr && modules_to_be_loaded(arg, mods)
     end
     filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
-    return mods
+    return unique(mods)
 end
 
 """
