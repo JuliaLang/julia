@@ -27,7 +27,7 @@ end
 
 # displaying type warnings
 
-function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
+function warntype_type_printer(io::IO, @nospecialize(ty), idx::Int, used::Bool)
     used || return
     str = "::$ty"
     if !highlighting[:warntype]
@@ -120,13 +120,13 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t);
                 end
                 print(io, "  ", slotnames[i])
                 if isa(slottypes, Vector{Any})
-                    warntype_type_printer(io, slottypes[i], true)
+                    warntype_type_printer(io, slottypes[i], 0, true)
                 end
                 println(io)
             end
         end
         print(io, "Body")
-        warntype_type_printer(io, rettype, true)
+        warntype_type_printer(io, rettype, 0, true)
         println(io)
         irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
         Base.IRShow.show_ir(lambda_io, src, irshow_config)
