@@ -294,9 +294,6 @@ include("secretbuffer.jl")
 
 # core math functions
 include("floatfuncs.jl")
-# Fast math
-include("fastmath.jl")
-using .FastMath
 include("math.jl")
 using .Math
 const (√)=sqrt
@@ -332,6 +329,10 @@ using .Order
 # Combinatorics
 include("sort.jl")
 using .Sort
+
+# Fast math
+include("fastmath.jl")
+using .FastMath
 
 function deepcopy_internal end
 
