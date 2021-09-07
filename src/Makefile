@@ -173,10 +173,17 @@ LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG))
 
 # Generate the DTrace header file, while also renaming the macros from
 # JULIA_ to JL_PROBE to clearly delinate them.
+ifeq ($(OS), Darwin)
+$(BUILDDIR)/%.h.gen : $(SRCDIR)/%-darwin.d
+	@$(call PRINT_DTRACE, $(DTRACE) -h -s $< -o $@)
+	sed 's/JULIA_/JL_PROBE_/' $@ > $@.tmp
+	mv $@.tmp $@
+else
 $(BUILDDIR)/%.h.gen : $(SRCDIR)/%.d
 	@$(call PRINT_DTRACE, $(DTRACE) -h -s $< -o $@)
 	sed 's/JULIA_/JL_PROBE_/' $@ > $@.tmp
 	mv $@.tmp $@
+endif
 
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
@@ -187,10 +194,17 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONF
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(SHIPFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+ifeq ($(OS), Darwin)
+$(BUILDDIR)/%.o : $(SRCDIR)/%-darwin.d
+	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
+$(BUILDDIR)/%.dbg.obj : $(SRCDIR)/%-darwin.d
+	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
+else
 $(BUILDDIR)/%.o : $(SRCDIR)/%.d
 	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
 $(BUILDDIR)/%.dbg.obj : $(SRCDIR)/%.d
 	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
+endif
 
 # public header rules
 $(eval $(call dir_target,$(build_includedir)/julia))
