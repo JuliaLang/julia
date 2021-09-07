@@ -31,7 +31,7 @@ end
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
-    if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
+    if sv.params.unoptimize_throw_blocks && is_stmt_throw_block(get_curr_ssaflag(sv))
         add_remark!(interp, sv, "Skipped call in throw block")
         return CallMeta(Any, false)
     end

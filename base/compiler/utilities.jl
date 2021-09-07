@@ -319,7 +319,14 @@ function is_throw_call(e::Expr)
     return false
 end
 
-function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
+function mark_throw_blocks!(src::CodeInfo)
+    for stmt in find_throw_blocks(src.code)
+        src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
+    end
+    return nothing
+end
+
+function find_throw_blocks(code::Vector{Any})
     stmts = BitSet()
     n = length(code)
     try_depth = 0
@@ -349,18 +356,12 @@ function find_throw_blocks(code::Vector{Any}, ir = RefValue{IRCode}())
             # worse codegen around the call site (issue #37558)
         elseif isa(s, GotoNode)
             tgt = s.label
-            if isassigned(ir)
-                tgt = first(ir[].cfg.blocks[tgt].stmts)
-            end
             if tgt in stmts
                 push!(stmts, i)
             end
         elseif isa(s, GotoIfNot)
             if i+1 in stmts
                 tgt = s.dest::Int
-                if isassigned(ir)
-                    tgt = first(ir[].cfg.blocks[tgt].stmts)
-                end
                 if tgt in stmts
                     push!(stmts, i)
                 end

@@ -31,7 +31,6 @@ mutable struct InferenceState
     handler_at::Vector{LineNum}
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
-    throw_blocks::BitSet
 
     cycle_backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
@@ -81,7 +80,8 @@ mutable struct InferenceState
         s_types[1] = s_argtypes
 
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-        throw_blocks = find_throw_blocks(code)
+        params = InferenceParams(interp)
+        params.unoptimize_throw_blocks && mark_throw_blocks!(src)
 
         # exception handlers
         ip = BitSet()
@@ -94,13 +94,13 @@ mutable struct InferenceState
 
         @assert cache === :no || cache === :local || cache === :global
         frame = new(
-            InferenceParams(interp), result, linfo,
+            params, result, linfo,
             sp, slottypes, mod, 0,
             IdSet{InferenceState}(), IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,
             Union{}, ip, 1, n, handler_at,
-            ssavalue_uses, throw_blocks,
+            ssavalue_uses,
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
