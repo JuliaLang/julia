@@ -1527,7 +1527,6 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
         y = iterate(inds, s)
         y === nothing && break
         (i,s) = y
-        i isa Bool && depawrn("passing Bool as an index is deprecated", deleteat!)
         if !(q <= i <= n)
             if i < q
                 throw(ArgumentError("indices must be unique and sorted"))
