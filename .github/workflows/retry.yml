@@ -1,0 +1,184 @@
+# Please ping @DilumAluthge when making any changes to this file.
+
+# Here are some steps that we take in this workflow file for security reasons:
+# 1. We do not checkout any code.
+# 2. We do not run any external actions.
+# 3. We do not give the `GITHUB_TOKEN` any permissions.
+# 4. We only give the Buildkite API token (`BUILDKITE_API_TOKEN_RETRY`) the minimum necessary
+#    set of permissions.
+
+# Important note to Buildkite maintainers:
+# In order to make this work, you need to tell Buildkite that it should NOT create a brand-new
+# build when someone closes and reopens a pull request. To do so:
+# 1. Go to the relevant pipeline (e.g. https://buildkite.com/julialang/julia-master).
+# 2. Click on the "Pipeline Settings" button.
+# 3. In the left sidebar, under "Pipeline Settings", click on "GitHub".
+# 4. In the "GitHub Settings", under "Build Pull Requests", make sure that the "Skip pull
+#    request builds for existing commits" checkbox is checked. This is the setting that tells
+#    Buildkite that it should NOT create a brand-new build when someone closes and reopens a
+#    pull request.
+# 5. At the bottom of the page, click the "Save GitHub Settings" button.
+
+name: Retry Failed Buildkite Jobs
+
+on:
+  # When using the `pull_request_target` event, all PRs will get access to secret environment
+  # variables (such as the `BUILDKITE_API_TOKEN_RETRY` secret environment variable), even if
+  # the PR is from a fork. Therefore, for security reasons, we do not checkout any code in
+  # this workflow.
+  # TODO: change `pull_request` to `pull_request_target`.
+  pull_request:
+
+    # TODO: delete the following line (once we have completely transitioned from Buildbot to Buildkite)
+    types: [ reopened, labeled ]
+
+    # TODO: uncomment the following line (once we have completely transitioned from Buildbot to Buildkite)
+    # types: [ reopened ]
+
+# We do not give the `GITHUB_TOKEN` any permissions.
+permissions:
+  statuses: none
+
+jobs:
+  retry:
+    name: retry
+    runs-on: ubuntu-latest
+
+    # TODO: delete the following line (once we have completely transitioned from Buildbot to Buildkite)
+    if: github.repository == 'JuliaLang/julia' && (github.event.label.name == 'Buildkite - retry failed jobs' || github.event.action == 'reopened')
+
+    # TODO: uncomment the following line (once we have completely transitioned from Buildbot to Buildkite)
+    # if: github.repository == 'JuliaLang/julia'
+
+    steps:
+      # For security reasons, we do not checkout any code in this workflow.
+      - run: echo The pull request number is ${{github.event.number}}
+      - run: |
+          function get_build_number(pr_number::AbstractString;
+                                    organization_slug::AbstractString,
+                                    pipeline_slug::AbstractString)
+              _pr_number = strip(pr_number)
+              isempty(_pr_number) && throw(ArgumentError("You must provide a valid pull request number"))
+              builds_per_page = 100
+              max_pages = 100
+              for page_number in 1:max_pages
+                  url = string(
+                      "https://api.buildkite.com/v2/",
+                      "organizations/$(organization_slug)/",
+                      "pipelines/$(pipeline_slug)/",
+                      "builds?per_page=$(builds_per_page)&page=$(page_number)",
+                  )
+                  cmd_string = string(
+                      "curl -X GET -H \"Authorization: Bearer $(ENV["BUILDKITE_API_TOKEN_RETRY"])\" \"$(url)\"",
+                      "| ",
+                      "jq '[.[] | {pr: .pull_request.id, id: .id, number: .number}]' ",
+                      "| ",
+                      "jq '.[] | select(.pr == \"$(_pr_number)\") | .number'",
+                  )
+                  cmd = `bash -c $(cmd_string)`
+                  sleep(0.1) # helps us stay under the Buildkite API rate limits
+                  str = read(cmd, String)
+                  lines = strip.(strip.(strip.(split(strip(str), '\n')), Ref('"')))
+                  filter!(x -> !isempty(x), lines)
+                  if !isempty(lines)
+                      build_number = convert(String, strip(lines[1]))::String
+                      return build_number
+                  end # if
+              end # for
+              msg = string(
+                  "I tried $(max_pages) pages ",
+                  "(with $(builds_per_page) builds per page), ",
+                  "but I could not find any Buildkite builds for ",
+                  "pull request $(pr_number).",
+              )
+              throw(ErrorException(msg))
+          end
+
+          function get_failed_job_ids(build_number::AbstractString;
+                                      organization_slug::AbstractString,
+                                      pipeline_slug::AbstractString)
+              url = string(
+                  "https://api.buildkite.com/v2/",
+                  "organizations/$(organization_slug)/",
+                  "pipelines/$(pipeline_slug)/",
+                  "builds/$(build_number)",
+              )
+              cmd_string_1 = string(
+                  "curl -X GET -H \"Authorization: Bearer $(ENV["BUILDKITE_API_TOKEN_RETRY"])\" \"$(url)\"",
+                  "| ",
+                  "jq '[.jobs | . | .[] | {id: .id, state: .state}]' ",
+                  "| ",
+                  "jq '[.[] | select((.state == \"failed\") or (.state == \"errored\"))]'",
+              )
+              cmd_string_2 = string(
+                  cmd_string_1,
+                  "| ",
+                  "jq '.[] .id'",
+              )
+              cmd_1 = `bash -c $(cmd_string_1)`
+              cmd_2 = `bash -c $(cmd_string_2)`
+              sleep(0.1) # helps us stay under the Buildkite API rate limits
+              run(cmd_1) # print the output to the log, for debugging purposes
+              sleep(0.1) # helps us stay under the Buildkite API rate limits
+              str = read(cmd_2, String)
+              lines = strip.(strip.(strip.(split(strip(str), '\n')), Ref('"')))
+              filter!(x -> !isempty(x), lines)
+              failed_job_ids = convert(Vector{String}, lines)
+              return failed_job_ids
+          end
+
+          function retry_job(build_number::AbstractString,
+                             job_id::AbstractString;
+                             organization_slug::AbstractString,
+                             pipeline_slug::AbstractString)
+              url = string(
+                  "https://api.buildkite.com/v2/",
+                  "organizations/$(organization_slug)/",
+                  "pipelines/$(pipeline_slug)/",
+                  "builds/$(build_number)/",
+                  "jobs/$(job_id)/retry",
+              )
+              cmd_string = string(
+                  "curl -X PUT -H \"Authorization: Bearer $(ENV["BUILDKITE_API_TOKEN_RETRY"])\" \"$(url)\"",
+              )
+              cmd = `bash -c $(cmd_string)`
+              sleep(0.1) # helps us stay under the Buildkite API rate limits
+              run(cmd)
+              return nothing
+          end
+
+          function retry_jobs(build_number::AbstractString,
+                              job_ids::AbstractVector{<:AbstractString};
+                              organization_slug::AbstractString,
+                              pipeline_slug::AbstractString)
+              if isempty(job_ids)
+                  @info "There are no jobs to retry."
+              end
+              num_jobs = length(job_ids)
+              for (i, job_id) in enumerate(job_ids)
+                  @info "$(i) of $(num_jobs). Attempting to retry job: $(job_id)"
+                  retry_job(build_number, job_id; organization_slug, pipeline_slug)
+              end
+              return nothing
+          end
+
+          function main(pr_number::AbstractString;
+                        organization_slug::AbstractString,
+                        pipeline_slug::AbstractString)
+              @info "The pull request number is $(pr_number)"
+              build_number = get_build_number(pr_number; organization_slug, pipeline_slug)
+              @info "The build number is $(build_number)"
+              failed_job_ids = get_failed_job_ids(build_number; organization_slug, pipeline_slug)
+              @info "There are $(length(failed_job_ids)) failed jobs." failed_job_ids
+              retry_jobs(build_number, failed_job_ids; organization_slug, pipeline_slug)
+              return nothing
+          end
+
+          const pr_number = "${{github.event.number}}"
+          const organization_slug = "julialang/"
+          const pipeline_slug = "julia-master/"
+
+          main(pr_number; organization_slug, pipeline_slug)
+        shell: julia --color=yes {0}
+        env:
+          BUILDKITE_API_TOKEN_RETRY: ${{ secrets.BUILDKITE_API_TOKEN_RETRY }}
