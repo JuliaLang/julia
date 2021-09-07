@@ -14,9 +14,14 @@ Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
 
-function Base.promote_rule(::Type{<:Diagonal{<:Any,V}}, ::Type{<:Diagonal{<:Any,W}}) where {V,W}
-    Z = promote_type(V, W)
-    Diagonal{eltype(Z), Z}
+function Base.promote_rule(A::Type{<:Diagonal{<:Any,V}}, B::Type{<:Diagonal{<:Any,W}}) where {V,W}
+    X = promote_type(V, W)
+    # We check if the promoted type has a well-defined eltype.
+    # if it does, use it to construct the Diagonal type
+    _promoted_type(::Type{T}, ::Type{Z}) where {T,Z<:AbstractVector{T}} = Diagonal{T,Z}
+    # If it doesn't, we fall back to the common ancestor
+    _promoted_type(::Type, ::Type) = typejoin(A, B)
+    _promoted_type(eltype(X), X)
 end
 
 """
@@ -94,7 +99,7 @@ similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
 
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
-size(D::Diagonal) = (length(D.diag),length(D.diag))
+size(D::Diagonal) = (n = length(D.diag); (n,n))
 
 function size(D::Diagonal,d::Integer)
     if d<1
