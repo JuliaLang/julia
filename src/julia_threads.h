@@ -97,7 +97,7 @@ typedef pthread_t jl_thread_t;
 
 // Recursive spin lock
 typedef struct {
-    volatile jl_thread_t owner;
+    _Atomic(jl_thread_t) owner;
     uint32_t count;
 } jl_mutex_t;
 
@@ -108,13 +108,13 @@ typedef struct {
 } jl_gc_pool_t;
 
 typedef struct {
-    int64_t     allocd;
-    int64_t     freed;
-    uint64_t    malloc;
-    uint64_t    realloc;
-    uint64_t    poolalloc;
-    uint64_t    bigalloc;
-    uint64_t    freecall;
+    _Atomic(int64_t) allocd;
+    _Atomic(int64_t) freed;
+    _Atomic(uint64_t) malloc;
+    _Atomic(uint64_t) realloc;
+    _Atomic(uint64_t) poolalloc;
+    _Atomic(uint64_t) bigalloc;
+    _Atomic(uint64_t) freecall;
 } jl_thread_gc_num_t;
 
 typedef struct {
@@ -202,7 +202,7 @@ typedef struct _jl_tls_states_t {
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
-    int8_t gc_state; // read from foreign threads
+    _Atomic(int8_t) gc_state; // read from foreign threads
     // execution of certain certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)

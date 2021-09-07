@@ -57,7 +57,7 @@ void jl_init_uv(void)
     JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
 }
 
-int jl_uv_n_waiters = 0;
+_Atomic(int) jl_uv_n_waiters = 0;
 
 void JL_UV_LOCK(void)
 {

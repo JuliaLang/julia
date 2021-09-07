@@ -1650,8 +1650,9 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
             break;
         jl_binding_t *b = jl_get_binding_wr(m, asname, 1);
         b->name = (jl_sym_t*)jl_deserialize_value(s, (jl_value_t**)&b->name);
-        b->value = jl_deserialize_value(s, &b->value);
-        if (b->value != NULL) jl_gc_wb(m, b->value);
+        jl_value_t *bvalue = jl_deserialize_value(s, (jl_value_t**)&b->value);
+        *(jl_value_t**)&b->value = bvalue;
+        if (bvalue != NULL) jl_gc_wb(m, bvalue);
         b->globalref = jl_deserialize_value(s, &b->globalref);
         if (b->globalref != NULL) jl_gc_wb(m, b->globalref);
         b->owner = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&b->owner);

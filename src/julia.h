@@ -127,7 +127,7 @@ static inline void jl_set_typeof(void *v, void *t) JL_NOTSAFEPOINT
 {
     // Do not call this on a value that is already initialized.
     jl_taggedvalue_t *tag = jl_astaggedvalue(v);
-    jl_atomic_store_relaxed(&tag->type, (jl_value_t*)t);
+    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)&tag->type, (jl_value_t*)t);
 }
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
@@ -135,8 +135,8 @@ static inline void jl_set_typeof(void *v, void *t) JL_NOTSAFEPOINT
 // The string data is nul-terminated and hangs off the end of the struct.
 typedef struct _jl_sym_t {
     JL_DATA_TYPE
-    struct _jl_sym_t *left;
-    struct _jl_sym_t *right;
+    _Atomic(struct _jl_sym_t*) left;
+    _Atomic(struct _jl_sym_t*) right;
     uintptr_t hash;    // precomputed hash value
     // JL_ATTRIBUTE_ALIGN_PTRSIZE(char name[]);
 } jl_sym_t;
@@ -228,14 +228,6 @@ JL_DLLEXPORT extern jl_call_t jl_fptr_sparam;
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
 JL_DLLEXPORT extern jl_call_t jl_fptr_interpret_call;
-
-JL_EXTENSION typedef union {
-    void* fptr;
-    jl_fptr_args_t fptr1;
-    // 2 constant
-    jl_fptr_sparam_t fptr3;
-    // 4 interpreter
-} jl_generic_specptr_t;
 
 typedef struct _jl_method_instance_t jl_method_instance_t;
 
@@ -385,8 +377,14 @@ typedef struct _jl_code_instance_t {
     // compilation state cache
     uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype
     uint8_t precompile;  // if set, this will be added to the output system image
-    jl_callptr_t invoke; // jlcall entry point
-    jl_generic_specptr_t specptr; // private data for `jlcall entry point`
+    _Atomic(jl_callptr_t) invoke; // jlcall entry point
+    union _jl_generic_specptr_t {
+        _Atomic(void*) fptr;
+        _Atomic(jl_fptr_args_t) fptr1;
+        // 2 constant
+        _Atomic(jl_fptr_sparam_t) fptr3;
+        // 4 interpreter
+    } specptr; // private data for `jlcall entry point
 } jl_code_instance_t;
 
 // all values are callable as Functions
@@ -510,10 +508,10 @@ typedef struct {
 typedef struct {
     // not first-class
     jl_sym_t *name;
-    jl_value_t *value;
-    jl_value_t *globalref;  // cached GlobalRef for this binding
-    struct _jl_module_t *owner;  // for individual imported bindings
-    uint8_t constp;
+    _Atomic(jl_value_t*) value;
+    jl_value_t* globalref;  // cached GlobalRef for this binding -- TODO: make _Atomic
+    struct _jl_module_t* owner;  // for individual imported bindings -- TODO: make _Atomic
+    uint8_t constp:1;
     uint8_t exportp:1;
     uint8_t imported:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
@@ -534,7 +532,7 @@ typedef struct _jl_module_t {
     uint64_t build_id;
     jl_uuid_t uuid;
     size_t primary_world;
-    uint32_t counter;
+    _Atomic(uint32_t) counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     int8_t optlevel;
     int8_t compile;
@@ -904,7 +902,7 @@ STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NO
     assert(i < jl_svec_len(t));
     // while svec is supposedly immutable, in practice we sometimes publish it first
     // and set the values lazily
-    return jl_atomic_load_relaxed(jl_svec_data(t) + i);
+    return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i);
 }
 STATIC_INLINE jl_value_t *jl_svecset(
     void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
@@ -948,7 +946,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i)
 {
     assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
-    return jl_atomic_load_relaxed(((jl_value_t**)(jl_array_data(a))) + i);
+    return jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)(jl_array_data(a))) + i);
 }
 STATIC_INLINE jl_value_t *jl_array_ptr_set(
     void *a JL_ROOTING_ARGUMENT, size_t i,
@@ -956,7 +954,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 {
     assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
-    jl_atomic_store_relaxed(((jl_value_t**)(jl_array_data(a))) + i, (jl_value_t*)x);
+    jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)(jl_array_data(a))) + i, (jl_value_t*)x);
     if (x) {
         if (((jl_array_t*)a)->flags.how == 3) {
             a = jl_array_data_owner(a);
@@ -1412,7 +1410,7 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len);
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
-                                                 jl_value_t **bp, jl_value_t *bp_owner,
+                                                 _Atomic(jl_value_t*) *bp, jl_value_t *bp_owner,
                                                  jl_binding_t *bnd);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);

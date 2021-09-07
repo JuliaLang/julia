@@ -105,7 +105,7 @@ void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
 
 extern jl_mutex_t jl_uv_mutex;
-extern int jl_uv_n_waiters;
+extern _Atomic(int) jl_uv_n_waiters;
 void JL_UV_LOCK(void);
 #define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
 
@@ -155,8 +155,8 @@ static inline uint64_t cycleclock(void)
 #include "timing.h"
 
 // Global *atomic* integers controlling *process-wide* measurement of compilation time.
-extern uint8_t jl_measure_compile_time_enabled;
-extern uint64_t jl_cumulative_compile_time;
+extern _Atomic(uint8_t) jl_measure_compile_time_enabled;
+extern _Atomic(uint64_t) jl_cumulative_compile_time;
 
 #ifdef _COMPILER_MICROSOFT_
 #  define jl_return_address() ((uintptr_t)_ReturnAddress())
@@ -184,14 +184,16 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOTSAFEPOINT
 {
     size_t i;
+    _Atomic(void*) *srcpa = (_Atomic(void*)*)srcp;
+    _Atomic(void*) *dstpa = (_Atomic(void*)*)dstp;
     if (dstp < srcp || dstp > srcp + n) {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstp + i, jl_atomic_load_relaxed(srcp + i));
+            jl_atomic_store_relaxed(dstpa + i, jl_atomic_load_relaxed(srcpa + i));
         }
     }
     else {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
+            jl_atomic_store_relaxed(dstpa + n - i - 1, jl_atomic_load_relaxed(srcpa + n - i - 1));
         }
     }
 }
@@ -805,7 +807,7 @@ static inline void jl_set_gc_and_wait(void)
     jl_task_t *ct = jl_current_task;
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
-    int8_t state = ct->ptls->gc_state;
+    int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
     jl_safepoint_wait_gc();
     jl_atomic_store_release(&ct->ptls->gc_state, state);
@@ -1114,7 +1116,7 @@ extern void *jl_winsock_handle;
 
 void *jl_get_library_(const char *f_lib, int throw_err);
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
-JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd);
+JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,

@@ -640,7 +640,8 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     if (bp->value == NULL) {
         uint8_t constp = 0;
-        if (jl_atomic_cmpswap(&bp->constp, &constp, 1)) {
+        // if (jl_atomic_cmpswap(&bp->constp, &constp, 1)) {
+        if (constp = bp->constp, bp->constp = 1, constp == 0) {
             jl_value_t *old = NULL;
             if (jl_atomic_cmpswap(&bp->value, &old, val)) {
                 jl_gc_wb_binding(bp, val);
