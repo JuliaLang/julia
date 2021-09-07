@@ -1462,12 +1462,22 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
  1
 ```
 """
-deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
+function deleteat!(a::Vector, i::Integer)
+    i isa Bool && depawrn("passing Bool as an index is deprecated", deleteat!)
+    _deleteat!(a, i, 1)
+    return a
+end
 
 function deleteat!(a::Vector, r::AbstractUnitRange{<:Integer})
-    n = length(a)
-    isempty(r) || _deleteat!(a, first(r), length(r))
-    return a
+    if eltype(r) isa Bool
+        return invoke(deleteat!, Tuple{Vector, AbstractVector{Bool}, a, r)
+    else
+        n = length(a)
+        f = first(r)
+        f isa Bool && depawrn("passing Bool as an index is deprecated", deleteat!)
+        isempty(r) || _deleteat!(a, f, length(r))
+        return a
+    end
 end
 
 """
@@ -1517,6 +1527,7 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
         y = iterate(inds, s)
         y === nothing && break
         (i,s) = y
+        i isa Bool && depawrn("passing Bool as an index is deprecated", deleteat!)
         if !(q <= i <= n)
             if i < q
                 throw(ArgumentError("indices must be unique and sorted"))
