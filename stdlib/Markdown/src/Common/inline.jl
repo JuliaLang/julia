@@ -146,12 +146,10 @@ function _is_link(s::AbstractString)
 end
 
 # non-normative regex from the HTML5 spec
-const _email_regex = r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+const _email_regex = r"^mailto\:[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
 
 function _is_mailto(s::AbstractString)
-    length(s) < 7 && return false
-    lowercase(first(s, 7)) == "mailto:" || return false
-    return occursin(_email_regex, s[nextind(s, 7):end])
+    return occursin(_email_regex, s)
 end
 
 # –––––––––––
