@@ -35,35 +35,7 @@ The memory consumption estimate is an approximate lower bound on the size of the
 """
 function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
-    rows = Vector{Any}[]
-    workqueue = [(m, ""),]
-    pushlock = Base.ReentrantLock()
-    @sync while !isempty(workqueue)
-        m2, prep = popfirst!(workqueue)
-        for v in names(m2; all, imported)
-            Threads.@spawn begin
-                if !isdefined(m2, v) || !occursin(pattern, string(v))
-                    return
-                end
-                value = getfield(m2, v)
-                isbuiltin = value === Base || value === Main || value === Core
-                if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
-                    lock(pushlock) do
-                        push!(workqueue, (value, "$prep$v."))
-                    end
-                end
-                ssize_str, ssize = if isbuiltin
-                        ("", typemax(Int))
-                    else
-                        ss = summarysize(value)
-                        (format_bytes(ss), ss)
-                    end
-                lock(pushlock) do
-                    push!(rows, Any[string(prep, v), ssize_str, summary(value), ssize])
-                end
-            end
-        end
-    end
+    rows = _varinfo(m, ""; all, imported, pattern, recursive)
     let (col, rev) = if sortby == :name
             1, false
         elseif sortby == :size
@@ -80,6 +52,33 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
     return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
 end
 varinfo(pat::Regex; kwargs...) = varinfo(Main, pat, kwargs...)
+
+function _varinfo(m2, prep; all, imported, pattern, recursive)
+    local_rows = Vector{Any}[]
+    local_tasks = []
+    @sync for v in names(m2; all, imported)
+        if !isdefined(m2, v) || !occursin(pattern, string(v))
+            continue
+        end
+        value = getfield(m2, v)
+        isbuiltin = value === Base || value === Main || value === Core
+        if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
+            task = Threads.@spawn _varinfo(value, "$prep$v."; all, imported, pattern, recursive)
+            push!(local_tasks, task)
+        end
+        ssize_str, ssize = if isbuiltin
+                ("", typemax(Int))
+            else
+                ss = summarysize(value)
+                (format_bytes(ss), ss)
+            end
+        push!(local_rows, Any[string(prep, v), ssize_str, summary(value), ssize])
+    end
+    foreach(local_tasks) do task
+        append!(local_rows, fetch(task))
+    end
+    return local_rows
+end
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)
