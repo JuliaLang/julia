@@ -149,9 +149,9 @@ end
 const _email_regex = r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
 
 function _is_mailto(s::AbstractString)
-    length(s) < 6 && return false
-    lowercase(first(s, 6)) == "mailto:" || return false
-    return occursin(_email_regex, s[nextind(s, 6):end])
+    length(s) < 7 && return false
+    lowercase(first(s, 7)) == "mailto:" || return false
+    return occursin(_email_regex, s[nextind(s, 7):end])
 end
 
 # –––––––––––
