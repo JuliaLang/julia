@@ -947,6 +947,7 @@ function _deleteat!(B::BitVector, i::Int)
 end
 
 function deleteat!(B::BitVector, i::Integer)
+    i isa Bool && depawrn("passing Bool as an index is deprecated", deleteat!)
     i = Int(i)
     n = length(B)
     1 <= i <= n || throw(BoundsError(B, i))
@@ -992,6 +993,7 @@ function deleteat!(B::BitVector, inds)
     y = iterate(inds, s)
     while y !== nothing
         (i, s) = y
+        i isa Bool && depawrn("passing Bool as an index is deprecated", deleteat!)
         if !(q <= i <= n)
             i < q && throw(ArgumentError("indices must be unique and sorted"))
             throw(BoundsError(B, i))
@@ -1017,6 +1019,13 @@ function deleteat!(B::BitVector, inds)
     end
 
     return B
+end
+
+function deleteat!(B::BitVector, inds::AbstractVector{Bool})
+    if length(B) != length(inds)
+        throw(ArgumentError("length of Bool indices inds must match the length of B"))
+    end
+    return deleteat!(B, findall(inds))
 end
 
 function splice!(B::BitVector, i::Integer)
