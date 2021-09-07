@@ -150,9 +150,8 @@ const _email_regex = r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-
 
 function _is_mailto(s::AbstractString)
     length(s) < 6 && return false
-    # slicing strings is a bit risky, but this equality check is safe
-    lowercase(s[1:6]) == "mailto:" || return false
-    return occursin(_email_regex, s[6:end])
+    lowercase(first(s, 6)) == "mailto:" || return false
+    return occursin(_email_regex, s[nextind(s, 6):end])
 end
 
 # –––––––––––
