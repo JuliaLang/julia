@@ -626,7 +626,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         expr = body[i]
         if isa(expr, GotoIfNot)
             if !isa(states[expr.dest], VarTable)
-                body[i] = expr.cond
+                body[i] = Expr(:call, GlobalRef(Core, :typeassert), expr.cond, GlobalRef(Core, :Bool))
             end
         end
     end

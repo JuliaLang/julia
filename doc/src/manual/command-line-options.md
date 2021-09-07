@@ -30,7 +30,7 @@ The following is a complete list of command-line switches available when launchi
 |`-O`, `--optimize={0,1,2,3}`           |Set the optimization level (default level is 2 if unspecified or 3 if used without a level)|
 |`-g`, `-g <level>`                     |Enable / Set the level of debug info generation (default level is 1 if unspecified or 2 if used without a level)|
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
-|`--check-bounds={yes\|no}`             |Emit bounds checks always or never (ignoring declarations)|
+|`--check-bounds={yes\|no\|auto}`       |Emit bounds checks always, never, or respect @inbounds declarations|
 |`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)|
 |`--code-coverage={none\|user\|all}`    |Count executions of source lines|
 |`--code-coverage`                      |equivalent to `--code-coverage=user`|

@@ -776,3 +776,24 @@ end
     strY = String(take!(io))
     @test strX == strY
 end
+
+@testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin
+    x = OffsetArray([1 2; 3 4], -10:-9, 9:10)  # 2×2 OffsetArray{...} with indices -10:-9×9:10
+
+    # begin/end with offset indices
+    @test (@view x[begin, 9])[] == 1
+    @test (@view x[-10, end])[] == 2
+    @test (@view x[-9, begin])[] == 3
+    @test (@view x[end, 10])[] == 4
+    @test (@view x[begin, begin])[] == 1
+    @test (@view x[begin, end])[] == 2
+    @test (@view x[end, begin])[] == 3
+    @test (@view x[end, end])[] == 4
+
+    # nested usages of begin/end
+    y = OffsetArray([-10, -9], (5,))
+    @test (@view x[begin, -y[end]])[] == 1
+    @test (@view x[y[begin], end])[] == 2
+    @test (@view x[end, -y[end]])[] == 3
+    @test (@view x[y[end], end])[] == 4
+end

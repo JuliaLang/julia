@@ -89,3 +89,7 @@ Note this hierarchy has been designed to reduce the likelihood of method ambigui
 to make `checkbounds` the place to specialize on array type, and try to avoid specializations
 on index types; conversely, `checkindex` is intended to be specialized only on index type (especially,
 the last argument).
+
+## Emit bounds checks
+
+Julia can be launched with `--check-bounds={yes|no|auto}` to emit bounds checks always, never, or respect @inbounds declarations.

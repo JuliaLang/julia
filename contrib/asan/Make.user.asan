@@ -1,0 +1,24 @@
+TOOLCHAIN=$(BUILDROOT)/../toolchain/usr/tools
+
+# use our new toolchain
+USECLANG=1
+override CC=$(TOOLCHAIN)/clang
+override CXX=$(TOOLCHAIN)/clang++
+export ASAN_SYMBOLIZER_PATH=$(TOOLCHAIN)/llvm-symbolizer
+
+USE_BINARYBUILDER_LLVM=1
+
+override SANITIZE=1
+override SANITIZE_ADDRESS=1
+
+# make the GC use regular malloc/frees, which are hooked by ASAN
+override WITH_GC_DEBUG_ENV=1
+
+# default to a debug build for better line number reporting
+override JULIA_BUILD_MODE=debug
+
+# make ASAN consume less memory
+export ASAN_OPTIONS=detect_leaks=0:fast_unwind_on_malloc=0:allow_user_segv_handler=1:malloc_context_size=2
+
+# tell libblastrampoline to not use RTLD_DEEPBIND
+export LBT_USE_RTLD_DEEPBIND=0

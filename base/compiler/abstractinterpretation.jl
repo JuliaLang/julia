@@ -615,9 +615,11 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
             return ret, AbstractIterationInfo(calls)
         end
         if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).MAX_TUPLE_SPLAT
+            stateordonet = stateordonet_widened
             break
         end
         if !isa(stateordonet_widened, DataType) || !(stateordonet_widened <: Tuple) || isvatuple(stateordonet_widened) || length(stateordonet_widened.parameters) != 2
+            stateordonet = stateordonet_widened
             break
         end
         nstatetype = getfield_tfunc(stateordonet, Const(2))
@@ -635,27 +637,40 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     end
     # From here on, we start asking for results on the widened types, rather than
     # the precise (potentially const) state type
-    statetype = widenconst(statetype)
-    valtype = widenconst(valtype)
+    # statetype and valtype are reinitialized in the first iteration below from the
+    # (widened) stateordonet, which has not yet been fully analyzed in the loop above
+    statetype = Bottom
+    valtype = Bottom
+    may_have_terminated = Nothing <: stateordonet
     while valtype !== Any
-        stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv).rt
-        stateordonet = widenconst(stateordonet)
-        nounion = typesubtract(stateordonet, Nothing, 0)
-        if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
+        nounion = typeintersect(stateordonet, Tuple{Any,Any})
+        if nounion !== Union{} && !isa(nounion, DataType)
+            # nounion is of a type we cannot handle
             valtype = Any
             break
         end
-        if nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype
+        if nounion === Union{} || (nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype)
+            # reached a fixpoint or iterator failed/gave invalid answer
             if typeintersect(stateordonet, Nothing) === Union{}
-                # Reached a fixpoint, but Nothing is not possible => iterator is infinite or failing
-                return Any[Bottom], nothing
+                # ... but cannot terminate
+                if !may_have_terminated
+                    #  ... and cannot have terminated prior to this loop
+                    return Any[Bottom], nothing
+                else
+                    # iterator may have terminated prior to this loop, but not during it
+                    valtype = Bottom
+                end
             end
             break
         end
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
+        stateordonet = abstract_call_known(interp, iteratef, nothing, Any[Const(iteratef), itertype, statetype], sv).rt
+        stateordonet = widenconst(stateordonet)
     end
-    push!(ret, Vararg{valtype})
+    if valtype !== Union{}
+        push!(ret, Vararg{valtype})
+    end
     return ret, nothing
 end
 
@@ -1175,7 +1190,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             anyconst = false
             allconst = true
             for i = 2:length(e.args)
-                at = abstract_eval_value(interp, e.args[i], vtypes, sv)
+                at = widenconditional(abstract_eval_value(interp, e.args[i], vtypes, sv))
                 if !anyconst
                     anyconst = has_nontrivial_const_info(at)
                 end
@@ -1331,19 +1346,18 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     n = frame.nstmts
     while frame.pc´´ <= n
         # make progress on the active ip set
-        local pc::Int = frame.pc´´ # current program-counter
+        local pc::Int = frame.pc´´
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
             #print(pc,": ",s[pc],"\n")
             local pc´::Int = pc + 1 # next program-counter (after executing instruction)
             if pc == frame.pc´´
-                # need to update pc´´ to point at the new lowest instruction in W
-                min_pc = _bits_findnext(W.bits, pc + 1)
-                frame.pc´´ = min_pc == -1 ? n + 1 : min_pc
+                # want to update pc´´ to point at the new lowest instruction in W
+                frame.pc´´ = pc´
             end
             delete!(W, pc)
             frame.currpc = pc
-            frame.cur_hand = frame.handler_at[pc]
-            frame.stmt_edges[pc] === nothing || empty!(frame.stmt_edges[pc])
+            edges = frame.stmt_edges[pc]
+            edges === nothing || empty!(edges)
             frame.stmt_info[pc] = nothing
             stmt = frame.src.code[pc]
             changes = s[pc]::VarTable
@@ -1377,7 +1391,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     pc´ = l
                 else
                     # general case
-                    frame.handler_at[l] = frame.cur_hand
                     changes_else = changes
                     if isa(condt, Conditional)
                         if condt.elsetype !== Any && condt.elsetype !== changes[slot_id(condt.var)]
@@ -1425,7 +1438,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
             elseif hd === :enter
                 l = stmt.args[1]::Int
-                frame.cur_hand = Pair{Any,Any}(l, frame.cur_hand)
                 # propagate type info to exception handler
                 old = s[l]
                 newstate_catch = stupdate!(old, changes)
@@ -1437,11 +1449,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     s[l] = newstate_catch
                 end
                 typeassert(s[l], VarTable)
-                frame.handler_at[l] = frame.cur_hand
             elseif hd === :leave
-                for i = 1:((stmt.args[1])::Int)
-                    frame.cur_hand = (frame.cur_hand::Pair{Any,Any}).second
-                end
             else
                 if hd === :(=)
                     t = abstract_eval_statement(interp, stmt.args[2], changes, frame)
@@ -1467,16 +1475,22 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         frame.src.ssavaluetypes[pc] = t
                     end
                 end
-                if frame.cur_hand !== nothing && isa(changes, StateUpdate)
-                    # propagate new type info to exception handler
-                    # the handling for Expr(:enter) propagates all changes from before the try/catch
-                    # so this only needs to propagate any changes
-                    l = frame.cur_hand.first::Int
-                    if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
-                        if l < frame.pc´´
-                            frame.pc´´ = l
+                if isa(changes, StateUpdate)
+                    let cur_hand = frame.handler_at[pc], l, enter
+                        while cur_hand != 0
+                            enter = frame.src.code[cur_hand]
+                            l = (enter::Expr).args[1]::Int
+                            # propagate new type info to exception handler
+                            # the handling for Expr(:enter) propagates all changes from before the try/catch
+                            # so this only needs to propagate any changes
+                            if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
+                                if l < frame.pc´´
+                                    frame.pc´´ = l
+                                end
+                                push!(W, l)
+                            end
+                            cur_hand = frame.handler_at[cur_hand]
                         end
-                        push!(W, l)
                     end
                 end
             end
@@ -1489,7 +1503,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
 
             pc´ > n && break # can't proceed with the fast-path fall-through
-            frame.handler_at[pc´] = frame.cur_hand
             newstate = stupdate!(s[pc´], changes)
             if isa(stmt, GotoNode) && frame.pc´´ < pc´
                 # if we are processing a goto node anyways,
@@ -1500,7 +1513,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     s[pc´] = newstate
                 end
                 push!(W, pc´)
-                pc = frame.pc´´
+                break
             elseif newstate !== nothing
                 s[pc´] = newstate
                 pc = pc´
@@ -1510,6 +1523,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 break
             end
         end
+        frame.pc´´ = _bits_findnext(W.bits, frame.pc´´)::Int # next program-counter
     end
     frame.dont_work_on_me = false
     nothing

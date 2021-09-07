@@ -516,7 +516,7 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
     @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
     @test isequal(a .+ [missing; 1:9], fadd3(aa))
-    @test_broken Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
+    @test Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
@@ -953,29 +953,20 @@ p0 = copy(p)
 
 @testset "Issue #28382: inferrability of broadcast with Union eltype" begin
     @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
-    @test_broken Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
-                                                            Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Union{Float64, Missing}}
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        AbstractVector{<:Union{Float64, Missing}}
+        Vector{<:Union{Float64, Missing}}
     @test isequal([1, 2] + [3.0, missing], [4.0, missing])
-    @test_broken Core.Compiler.return_type(+, Tuple{Vector{Int},
-                                                    Vector{Union{Float64, Missing}}}) ==
+    @test Core.Compiler.return_type(+, Tuple{Vector{Int},
+                                             Vector{Union{Float64, Missing}}}) ==
         Vector{<:Union{Float64, Missing}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
-        AbstractVector{<:Union{Float64, Missing}}
-    @test_broken Core.Compiler.return_type(+, Tuple{Vector{Int},
-                                                    Vector{Union{Float64, Missing}}}) ==
         Vector{<:Union{Float64, Missing}}
     @test isequal(tuple.([1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
-    @test_broken Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
-                                                            Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Tuple{Int, Any}}
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
-        AbstractVector{<:Tuple{Int, Any}}
+        Vector{<:Tuple{Int, Any}}
     # Check that corner cases do not throw an error
     @test isequal(broadcast(x -> x === 1 ? nothing : x, [1, 2, missing]),
                   [nothing, 2, missing])
