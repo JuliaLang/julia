@@ -826,4 +826,15 @@ end
     @test \(x, B) == /(B, x)
 end
 
+@testset "promotion" begin
+    for (v1, v2) in (([true], [1]), ([zeros(2,2)], [zeros(Int, 2,2)]))
+        T = promote_type(eltype(v1), eltype(v2))
+        V = promote_type(typeof(v1), typeof(v2))
+        d1 = Diagonal(v1)
+        d2 = Diagonal(v2)
+        v = [d1, d2]
+        @test (@inferred eltype(v)) == Diagonal{T, V}
+    end
+end
+
 end # module TestDiagonal

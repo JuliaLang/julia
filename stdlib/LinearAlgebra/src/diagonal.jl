@@ -10,8 +10,14 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(diag)
     end
 end
+Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag)
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
+
+function Base.promote_rule(::Type{<:Diagonal{<:Any,V}}, ::Type{<:Diagonal{<:Any,W}}) where {V,W}
+    Z = promote_type(V, W)
+    Diagonal{eltype(Z), Z}
+end
 
 """
     Diagonal(V::AbstractVector)
