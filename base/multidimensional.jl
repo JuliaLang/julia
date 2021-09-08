@@ -349,8 +349,14 @@ module IteratorsMD
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
-    @propagate_inbounds function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
-        CartesianIndex(getindex.(iter.indices, I))
+    @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
+        # Eagerly do boundscheck before calculating each item of the CartesianIndex so that
+        # we can pass `@inbounds` hint to inside the map and generates more efficient SIMD codes (#42115)
+        @boundscheck checkbounds(iter, I...)
+        index = map(iter.indices, I) do r, i
+            @inbounds getindex(r, i)
+        end
+        CartesianIndex(index)
     end
 
     ndims(R::CartesianIndices) = ndims(typeof(R))
