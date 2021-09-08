@@ -21,7 +21,7 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name)
+    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, minsize::Int = 0)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
@@ -32,8 +32,9 @@ The memory consumption estimate is an approximate lower bound on the size of the
 - `imported` : also list objects explicitly imported from other modules.
 - `recursive` : recursively include objects in sub-modules, observing the same settings in each.
 - `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
+- `minsize` : only includes objects with size at least `minsize` bytes. Defaults to `0`.
 """
-function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false)
+function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     workqueue = [(m, ""),]
     tasks = Task[]
@@ -60,7 +61,13 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
             push!(tasks, task)
         end
     end
-    rows = fetch.(tasks)
+    rows = Any[]
+    for task in tasks
+        row = fetch(task)
+        if row[4] >= minsize
+            push!(rows, row)
+        end
+    end
     let (col, rev) = if sortby == :name
             1, false
         elseif sortby == :size
