@@ -795,7 +795,7 @@ end
 
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
 function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol,
-                threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}) where {T}
+                threads::Union{Int,AbstractVector{Int},Nothing}=nothing, tasks::Union{UInt,AbstractVector{UInt},Nothing}=nothing) where {T}
     parent = root
     tops = Vector{StackFrameTree{T}}()
     build = Vector{StackFrameTree{T}}()
@@ -811,7 +811,8 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             # cpu_cycle_clock = all[i - 3]
             taskid = all[i - 4]
             threadid = all[i - 5]
-            if !in(threadid, threads) || !in(taskid, tasks)
+            if (threads !== nothing && !in(threadid, threads)) ||
+               (tasks !== nothing && !in(taskid, tasks))
                 skip = true
                 continue
             end
