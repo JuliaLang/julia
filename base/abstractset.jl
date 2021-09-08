@@ -338,8 +338,8 @@ false
 """
 ⊊, ⊋
 
-⊊(a::AbstractSet, b) = length(a) < length(b) && a ⊆ b
-⊊(a, b) = Set(a) ⊊ b
+⊊(a::AbstractSet, b::AbstractSet) = length(a) < length(b) && a ⊆ b
+⊊(a, b) = Set(a) ⊊ Set(b)
 ⊋(a, b) = b ⊊ a
 
 function ⊈ end
