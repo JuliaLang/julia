@@ -1463,7 +1463,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
 ```
 """
 function deleteat!(a::Vector, i::Integer)
-    i isa Bool && depawrn("passing Bool as an index is deprecated", deleteat!)
+    i isa Bool && depwarn("passing Bool as an index is deprecated", deleteat!)
     _deleteat!(a, i, 1)
     return a
 end
@@ -1474,7 +1474,7 @@ function deleteat!(a::Vector, r::AbstractUnitRange{<:Integer})
     else
         n = length(a)
         f = first(r)
-        f isa Bool && depawrn("passing Bool as an index is deprecated", deleteat!)
+        f isa Bool && depwarn("passing Bool as an index is deprecated", deleteat!)
         isempty(r) || _deleteat!(a, f, length(r))
         return a
     end
