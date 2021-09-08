@@ -37,11 +37,8 @@ The memory consumption estimate is an approximate lower bound on the size of the
 function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     workqueue = [(m, ""),]
-    rows_per_thread = Vector{Vector{Any}}(undef, Threads.nthreads())
-    Threads.@threads for i in 1:Threads.nthreads()
-        rows_per_thread[i] = Any[]
-    end
-    @sync while !isempty(workqueue)
+    tasks = Task[]
+    while !isempty(workqueue)
         m2, prep = popfirst!(workqueue)
         for v in names(m2; all, imported)
             if !isdefined(m2, v) || !occursin(pattern, string(v))
@@ -52,20 +49,25 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
             if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
                 push!(workqueue, (value, "$prep$v."))
             end
-            Threads.@spawn begin
+            task = Threads.@spawn begin
                 ssize_str, ssize = if isbuiltin
                         ("", typemax(Int))
                     else
                         ss = summarysize(value)
                         (format_bytes(ss), ss)
                     end
-                if ssize >= minsize
-                    push!(rows_per_thread[Threads.threadid()], Any[string(prep, v), ssize_str, summary(value), ssize])
-                end
+                return Any[string(prep, v), ssize_str, summary(value), ssize]
             end
+            push!(tasks, task)
         end
     end
-    rows = reduce(vcat, rows_per_thread)
+    rows = Any[]
+    for task in tasks
+        row = fetch(task)
+        if row[4] >= minsize
+            push!(rows, row)
+        end
+    end
     let (col, rev) = if sortby == :name
             1, false
         elseif sortby == :size
