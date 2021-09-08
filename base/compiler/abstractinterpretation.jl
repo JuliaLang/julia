@@ -546,6 +546,10 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
             end
         end
         inf_result = InferenceResult(mi, argtypes, va_override)
+        if !any(inf_result.overridden_by_const)
+            add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
+            return nothing
+        end
         frame = InferenceState(inf_result, #=cache=#false, interp)
         frame === nothing && return nothing # this is probably a bad generated function (unsound), but just ignore it
         frame.parent = sv
