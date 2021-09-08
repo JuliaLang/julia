@@ -776,8 +776,8 @@ static void *signal_listener(void *arg)
                     jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
                 } else {
                     // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                            bt_size_max - bt_size_cur - 1, signal_context, NULL);
+                    bt_size_cur = (bt_size_cur + rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
+                            bt_size_max - bt_size_cur - 1, signal_context, NULL)) % bt_size_max;
                 }
                 jl_set_safe_restore(old_buf);
 
