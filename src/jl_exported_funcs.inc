@@ -409,9 +409,11 @@
     XX(jl_profile_init) \
     XX(jl_profile_is_running) \
     XX(jl_profile_len_data) \
+    XX(jl_profile_lock) \
     XX(jl_profile_maxlen_data) \
     XX(jl_profile_start_timer) \
     XX(jl_profile_stop_timer) \
+    XX(jl_profile_unlock) \
     XX(jl_ptrarrayref) \
     XX(jl_ptr_to_array) \
     XX(jl_ptr_to_array_1d) \

@@ -747,7 +747,7 @@ static void *signal_listener(void *arg)
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
         if (critical || profile)
-            jl_lock_profile();
+            jl_profile_lock();
         jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
         for (int idx = jl_n_threads; idx-- > 0; ) {
             // Stop the threads in the random round-robin order.
@@ -766,51 +766,45 @@ static void *signal_listener(void *arg)
 
             // do backtrace for profiler
             if (profile && running) {
-                if (jl_profile_is_buffer_full()) {
-                    // Buffer full: Delete the timer
-                    jl_profile_stop_timer();
+                // unwinding can fail, so keep track of the current state
+                // and restore from the SEGV handler if anything happens.
+                jl_jmp_buf *old_buf = jl_get_safe_restore();
+                jl_jmp_buf buf;
+
+                jl_set_safe_restore(&buf);
+                if (jl_setjmp(buf, 0)) {
+                    jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+                } else {
+                    // Get backtrace data
+                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
+                            bt_size_max - bt_size_cur - 1, signal_context, NULL);
                 }
-                else {
-                    // unwinding can fail, so keep track of the current state
-                    // and restore from the SEGV handler if anything happens.
-                    jl_jmp_buf *old_buf = jl_get_safe_restore();
-                    jl_jmp_buf buf;
+                jl_set_safe_restore(old_buf);
 
-                    jl_set_safe_restore(&buf);
-                    if (jl_setjmp(buf, 0)) {
-                        jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
-                    } else {
-                        // Get backtrace data
-                        bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                                bt_size_max - bt_size_cur - 1, signal_context, NULL);
-                    }
-                    jl_set_safe_restore(old_buf);
+                jl_ptls_t ptls = jl_all_tls_states[i];
 
-                    jl_ptls_t ptls = jl_all_tls_states[i];
+                // store threadid but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = ptls->tid + 1;
 
-                    // store threadid but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+                // store task id
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = (uintptr_t)ptls->current_task;
 
-                    // store task id
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->current_task;
+                // store cpu cycle clock
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = cycleclock();
 
-                    // store cpu cycle clock
-                    bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+                // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = ptls->sleep_check_state + 1;
 
-                    // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
-
-                    // Mark the end of this block with two 0's
-                    bt_data_prof[bt_size_cur++].uintptr = 0;
-                    bt_data_prof[bt_size_cur++].uintptr = 0;
-                }
+                // Mark the end of this block with two 0's
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = 0;
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = 0;
             }
 
             // notify thread to resume
             jl_thread_resume(i, sig);
         }
         if (critical || profile)
-            jl_unlock_profile();
+            jl_profile_unlock();
 #ifndef HAVE_MACH
         if (profile && running) {
 #if defined(HAVE_TIMER)

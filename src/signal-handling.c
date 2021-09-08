@@ -31,15 +31,9 @@ static volatile uint64_t *profile_round_robin_thread_order = NULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
-void jl_lock_profile(void);
-void jl_unlock_profile(void);
+JL_DLLEXPORT void jl_profile_lock(void);
+JL_DLLEXPORT void jl_profile_unlock(void);
 void jl_shuffle_int_array_inplace(volatile uint64_t *carray, size_t size, uint64_t *seed);
-
-JL_DLLEXPORT int jl_profile_is_buffer_full(void)
-{
-    // the `+ 6` is for the two block terminators `0` plus 4 metadata entries
-    return bt_size_cur + (JL_BT_MAX_ENTRY_SIZE + 1) + 6 > bt_size_max;
-}
 
 static uint64_t jl_last_sigint_trigger = 0;
 static uint64_t jl_disable_sigint_time = 0;
@@ -343,6 +337,7 @@ JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
 
 JL_DLLEXPORT void jl_profile_clear_data(void)
 {
+    memset(bt_data_prof, 0, bt_size_max);
     bt_size_cur = 0;
 }
 

@@ -337,56 +337,49 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         DWORD timeout_ms = nsecprof / (GIGA / 1000);
         Sleep(timeout_ms > 0 ? timeout_ms : 1);
         if (running) {
-            if (jl_profile_is_buffer_full()) {
-                jl_profile_stop_timer(); // does not change the thread state
-                SuspendThread(GetCurrentThread());
-                continue;
+            JL_LOCK_NOGC(&jl_in_stackwalk);
+            jl_profile_lock();
+            if ((DWORD)-1 == SuspendThread(hMainThread)) {
+                fputs("failed to suspend main thread. aborting profiling.", stderr);
+                break;
+            }
+            CONTEXT ctxThread;
+            memset(&ctxThread, 0, sizeof(CONTEXT));
+            ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+            if (!GetThreadContext(hMainThread, &ctxThread)) {
+                fputs("failed to get context from main thread. aborting profiling.", stderr);
+                jl_profile_stop_timer();
             }
             else {
-                JL_LOCK_NOGC(&jl_in_stackwalk);
-                jl_lock_profile();
-                if ((DWORD)-1 == SuspendThread(hMainThread)) {
-                    fputs("failed to suspend main thread. aborting profiling.", stderr);
-                    break;
-                }
-                CONTEXT ctxThread;
-                memset(&ctxThread, 0, sizeof(CONTEXT));
-                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-                if (!GetThreadContext(hMainThread, &ctxThread)) {
-                    fputs("failed to get context from main thread. aborting profiling.", stderr);
-                    jl_profile_stop_timer();
-                }
-                else {
-                    // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                            bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
+                // Get backtrace data
+                bt_size_cur = (bt_size_cur + rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
+                        bt_size_max - bt_size_cur - 1, &ctxThread, NULL)) % bt_size_max;
 
-                    jl_ptls_t ptls = jl_all_tls_states[0]; // given only profiling hMainThread
+                jl_ptls_t ptls = jl_all_tls_states[0]; // given only profiling hMainThread
 
-                    // store threadid but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+                // store threadid but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = ptls->tid + 1;
 
-                    // store task id
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->current_task;
+                // store task id
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = (uintptr_t)ptls->current_task;
 
-                    // store cpu cycle clock
-                    bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+                // store cpu cycle clock
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = cycleclock();
 
-                    // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
+                // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = ptls->sleep_check_state + 1;
 
-                    // Mark the end of this block with two 0's
-                    bt_data_prof[bt_size_cur++].uintptr = 0;
-                    bt_data_prof[bt_size_cur++].uintptr = 0;
-                }
-                jl_unlock_profile();
-                JL_UNLOCK_NOGC(&jl_in_stackwalk);
-                if ((DWORD)-1 == ResumeThread(hMainThread)) {
-                    jl_profile_stop_timer();
-                    fputs("failed to resume main thread! aborting.", stderr);
-                    gc_debug_critical_error();
-                    abort();
-                }
+                // Mark the end of this block with two 0's
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = 0;
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = 0;
+            }
+            jl_profile_unlock();
+            JL_UNLOCK_NOGC(&jl_in_stackwalk);
+            if ((DWORD)-1 == ResumeThread(hMainThread)) {
+                jl_profile_stop_timer();
+                fputs("failed to resume main thread! aborting.", stderr);
+                gc_debug_critical_error();
+                abort();
             }
         }
     }

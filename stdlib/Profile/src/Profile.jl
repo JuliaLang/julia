@@ -479,8 +479,6 @@ stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
 is_running() = ccall(:jl_profile_is_running, Cint, ())!=0
 
-is_buffer_full() = ccall(:jl_profile_is_buffer_full, Cint, ())!=0
-
 get_data_pointer() = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, ()))
 
 len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
@@ -505,15 +503,26 @@ By default metadata such as threadid and taskid will be stripped. Set `include_m
 """
 function fetch(;include_meta = false)
     maxlen = maxlen_data()
+    data = Vector{UInt}(undef, maxlen)
+    ccall(:jl_profile_lock, Cvoid, ())
+    # N.B. GC allocations before unlock might cause a deadlock
     len = len_data()
-    if is_buffer_full()
-        @warn """The profile data buffer is full; profiling probably terminated
-                 before your program finished. To profile for longer runs, call
-                 `Profile.init()` with a larger buffer and/or larger delay."""
+    GC.@preserve data begin
+        data_ptr = get_data_pointer()
+        tail = maxlen - len
+        unsafe_copyto!(pointer(data), data_ptr+sizeof(UInt)*len, tail)
+        unsafe_copyto!(pointer(data)+sizeof(UInt)*tail, data_ptr, len)
     end
-    data = Vector{UInt}(undef, len)
-    GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
-    if include_meta || isempty(data)
+    ccall(:jl_profile_unlock, Cvoid, ())
+    if data[1] == 0
+        idx = findfirst(!iszero, data)
+        if idx !== nothing
+            data = data[idx:end]
+        else
+            data = Vector{UInt}(undef, 0)
+        end
+    end
+    if include_meta
         return data
     else
         nblocks = 0

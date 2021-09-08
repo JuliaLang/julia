@@ -537,18 +537,13 @@ void *mach_profile_listener(void *arg)
         HANDLE_MACH_ERROR("mach_msg", ret);
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
-        jl_lock_profile();
+        jl_profile_lock();
         void *unused = NULL;
         int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
         jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
         for (int idx = jl_n_threads; idx-- > 0; ) {
             // Stop the threads in the random round-robin order.
             int i = profile_round_robin_thread_order[idx];
-            // if there is no space left, break early
-            if (jl_profile_is_buffer_full()) {
-                jl_profile_stop_timer();
-                break;
-            }
 
             host_thread_state_t state;
             jl_thread_suspend_and_get_state2(i, &state);
@@ -575,10 +570,10 @@ void *mach_profile_listener(void *arg)
 
                 if (forceDwarf == 0) {
                     // Save the backtrace
-                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
+                    bt_size_cur = (bt_size_cur + rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL)) % bt_size_max;
                 }
                 else if (forceDwarf == 1) {
-                    bt_size_cur += rec_backtrace_ctx_dwarf((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
+                    bt_size_cur = (bt_size_cur + rec_backtrace_ctx_dwarf((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL)) % bt_size_max;
                 }
                 else if (forceDwarf == -1) {
                     jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
@@ -586,32 +581,32 @@ void *mach_profile_listener(void *arg)
 
                 forceDwarf = -2;
 #else
-                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
+                bt_size_cur = (bt_size_cur + rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL)) % bt_size_max;
 #endif
                 jl_ptls_t ptls = jl_all_tls_states[i];
 
                 // store threadid but add 1 as 0 is preserved to indicate end of block
-                bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = ptls->tid + 1;
 
                 // store task id
-                bt_data_prof[bt_size_cur++].uintptr = ptls->current_task;
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = (uintptr_t)ptls->current_task;
 
                 // store cpu cycle clock
-                bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = cycleclock();
 
                 // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = ptls->sleep_check_state + 1;
 
                 // Mark the end of this block with two 0's
-                bt_data_prof[bt_size_cur++].uintptr = 0;
-                bt_data_prof[bt_size_cur++].uintptr = 0;
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = 0;
+                bt_data_prof[(bt_size_cur++) % bt_size_max].uintptr = 0;
             }
             // We're done! Resume the thread.
             jl_thread_resume(i, 0);
         }
         if (keymgr_locked)
             _keymgr_unlock_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST);
-        jl_unlock_profile();
+        jl_profile_unlock();
         if (running) {
             // Reset the alarm
             kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);

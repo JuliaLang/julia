@@ -55,12 +55,12 @@ extern "C" void jl_init_debuginfo(void)
     uv_rwlock_init(&threadsafe);
 }
 
-extern "C" void jl_lock_profile(void)
+extern "C" JL_DLLEXPORT void jl_profile_lock(void)
 {
     uv_rwlock_rdlock(&threadsafe);
 }
 
-extern "C" void jl_unlock_profile(void)
+extern "C" JL_DLLEXPORT void jl_profile_unlock(void)
 {
     uv_rwlock_rdunlock(&threadsafe);
 }
