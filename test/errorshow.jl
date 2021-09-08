@@ -187,7 +187,7 @@ Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), 
 # Busted Vararg method definitions
 bad_vararg_decl(x::Int, y::Vararg) = 1   # don't do this, instead use (x::Int, y...)
 Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
-@test occursin("bad_vararg_decl(!Matched::Int64, ::Any...)", String(take!(buf)))
+@test occursin("bad_vararg_decl(!Matched::$Int, ::Any...)", String(take!(buf)))
 
 macro except_str(expr, err_type)
     return quote
