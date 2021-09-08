@@ -568,7 +568,10 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         return nothing
     end
     method = match.method
-    method.constprop == 0x02 && return nothing
+    if method.constprop == 0x02
+        add_remark!(interp, sv, "[constprop] Disabled by method parameter")
+        return nothing
+    end
     force = force_const_prop(interp, f, method)
     force || const_prop_entry_heuristic(interp, result, sv) || return nothing
     nargs::Int = method.nargs
