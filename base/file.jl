@@ -222,10 +222,10 @@ julia> readdir("test")
 1-element Array{String,1}:
  "dir"
 
-julia> mkpath("test/actually_a_directory.txt") # creates two directories
-"test/actually_a_directory.txt"
+julia> mkpath("intermediate_dir/actually_a_directory.txt") # creates two directories
+"intermediate_dir/actually_a_directory.txt"
 
-julia> isdir("test/actually_a_directory.txt")
+julia> isdir("intermediate_dir/actually_a_directory.txt")
 true
 
 ```
