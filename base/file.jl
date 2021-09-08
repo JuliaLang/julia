@@ -193,22 +193,16 @@ end
 """
     mkpath(path::AbstractString; mode::Unsigned = 0o777)
 
-Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
-`0o777`, modified by the current file creation mask. Unlike [`mkdir`](@ref), `mkpath`
-does not error if `path` (or parts of it) already exists.
-Return `path`.
+Creates a directory `path` along with any intermediate directories on the path,
+with permissions `mode`. `mode` defaults to `0o777`, modified by the current
+file creation mask. Unlike [`mkdir`](@ref), `mkpath` does not error if `path`
+(or parts of it) already exists. Return `path`.
 
 # Examples
 ```julia-repl
-julia> mkdir("testingdir")
-"testingdir"
+julia> cd(mktempdir())
 
-julia> cd("testingdir")
-
-julia> pwd()
-"/home/JuliaUser/testingdir"
-
-julia> mkpath("my/test/dir")
+julia> mkpath("my/test/dir") # creates three directories
 "my/test/dir"
 
 julia> readdir()
@@ -224,6 +218,13 @@ julia> readdir()
 julia> readdir("test")
 1-element Array{String,1}:
  "dir"
+
+julia> mkpath("test/actually_a_directory.txt") # creates two directories
+"test/actually_a_directory.txt"
+
+julia> isdir("test/actually_a_directory.txt")
+true
+
 ```
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
