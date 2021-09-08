@@ -183,6 +183,7 @@ CheckIndexStyle(A::AbstractArray) = CheckIndexStyle(typeof(A))
 CheckIndexStyle(::Type{Union{}}) = CheckIndexAll()
 CheckIndexStyle(::Type{<:AbstractArray{T}}) where T = T === Bool ? CheckIndexAxes() : CheckIndexAll()
 CheckIndexStyle(::Type{<:AbstractRange{T}}) where T = T === Bool ? CheckIndexAxes() : CheckIndexFirstLast()
+CheckIndexStyle(::Type{<:FastContiguousSubArray{T,N,P}} where {T, N, P} = CheckIndexStyle(P)
 
 # array shape rules
 
