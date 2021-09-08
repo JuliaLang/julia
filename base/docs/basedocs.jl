@@ -23,6 +23,9 @@ as well as many great tutorials and learning resources:
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
+
+To exit the interactive session, type `CTRL-D` (press the
+control key together with the `d` key), or type `exit()`.
 """
 kw"help", kw"Julia", kw"julia", kw""
 
