@@ -56,6 +56,8 @@ mutable struct InferenceState
         (; def) = linfo = result.linfo
         code = src.code::Vector{Any}
 
+        params = InferenceParams(interp)
+
         sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
         nssavalues = src.ssavaluetypes::Int
@@ -80,13 +82,14 @@ mutable struct InferenceState
         s_types[1] = s_argtypes
 
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-        params = InferenceParams(interp)
-        params.unoptimize_throw_blocks && mark_throw_blocks!(src)
 
         # exception handlers
         ip = BitSet()
         handler_at = compute_trycatch(src.code, ip)
         push!(ip, 1)
+
+        # `throw` block deoptimization
+        params.unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
 
         mod = isa(def, Method) ? def.module : def
         valid_worlds = WorldRange(src.min_world,
@@ -196,7 +199,6 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     @assert first(ip) == n + 1
     return handler_at
 end
-
 
 """
     Iterate through all callers of the given InferenceState in the abstract
