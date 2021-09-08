@@ -193,10 +193,13 @@ end
 """
     mkpath(path::AbstractString; mode::Unsigned = 0o777)
 
-Creates a directory `path` along with any intermediate directories on the path,
-with permissions `mode`. `mode` defaults to `0o777`, modified by the current
-file creation mask. Unlike [`mkdir`](@ref), `mkpath` does not error if `path`
-(or parts of it) already exists. Return `path`.
+Create all intermediate directories in the `path` as required. Directories are created with
+the permissions `mode` which defaults to `0o777` and is modified by the current file
+creation mask. Unlike [`mkdir`](@ref), `mkpath` does not error if `path` (or parts of it)
+already exists. Return `path`.
+
+If `path` includes a filename you will probably want to use `mkpath(dirname(path))` to
+avoid creating a directory using the filename.
 
 # Examples
 ```julia-repl
