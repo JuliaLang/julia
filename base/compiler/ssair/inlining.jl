@@ -109,7 +109,7 @@ function inline_into_block!(state::CFGInliningState, block::Int)
         new_range = state.first_bb+1:block
         l = length(state.new_cfg_blocks)
         state.bb_rename[new_range] = (l+1:l+length(new_range))
-        append!(state.new_cfg_blocks, map(copy, state.cfg.blocks[new_range]))
+        append!(state.new_cfg_blocks, (copy(block) for block in state.cfg.blocks[new_range]))
         push!(state.merged_orig_blocks, last(new_range))
     end
     state.first_bb = block

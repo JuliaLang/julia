@@ -493,14 +493,15 @@ static void reset_mt_caches(jl_methtable_t *mt, void *env)
 
 
 jl_function_t *jl_typeinf_func = NULL;
-size_t jl_typeinf_world = 0;
+size_t jl_typeinf_world = 1;
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
+    size_t newfunc = jl_typeinf_world == 1 && jl_typeinf_func == NULL;
     jl_typeinf_func = (jl_function_t*)f;
     jl_typeinf_world = jl_get_tls_world_age();
     ++jl_world_counter; // make type-inference the only thing in this world
-    if (jl_typeinf_world == 0) {
+    if (0 && newfunc) {
         // give type inference a chance to see all of these
         // TODO: also reinfer if max_world != ~(size_t)0
         jl_array_t *unspec = jl_alloc_vec_any(0);
