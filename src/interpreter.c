@@ -79,6 +79,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
 
+    // generic function definition
     if (jl_expr_nargs(ex) == 1) {
         jl_value_t **args = jl_array_ptr_data(ex->args);
         jl_sym_t *fname = (jl_sym_t*)args[0];
@@ -215,6 +216,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     else if (head == invoke_sym) {
         return do_invoke(args, nargs, s);
+    }
+    else if (head == invoke_modify_sym) {
+        return do_call(args + 1, nargs - 1, s);
     }
     else if (head == isdefined_sym) {
         jl_value_t *sym = args[0];

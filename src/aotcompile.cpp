@@ -286,8 +286,8 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     JL_GC_PUSH1(&src);
     JL_LOCK(&codegen_lock);
     uint64_t compiler_start_time = 0;
-    int tid = jl_threadid();
-    if (jl_measure_compile_time[tid])
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
     CompilationPolicy policy = (CompilationPolicy) _policy;
@@ -415,8 +415,8 @@ void *jl_create_native(jl_array_t *methods, const jl_cgparams_t cgparams, int _p
     }
 
     data->M = std::move(clone);
-    if (jl_measure_compile_time[tid])
-        jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+    if (measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     if (policy == CompilationPolicy::ImagingMode)
         imaging_mode = 0;
     JL_UNLOCK(&codegen_lock); // Might GC
@@ -916,8 +916,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
         jl_llvm_functions_t decls;
         JL_LOCK(&codegen_lock);
         uint64_t compiler_start_time = 0;
-        int tid = jl_threadid();
-        if (jl_measure_compile_time[tid])
+        uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+        if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
         std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output);
 
@@ -942,8 +942,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *mi, size_t world, char getwrapper,
             m.release(); // the return object `llvmf` will be the owning pointer
         }
         JL_GC_POP();
-        if (jl_measure_compile_time[tid])
-            jl_cumulative_compile_time[tid] += (jl_hrtime() - compiler_start_time);
+        if (measure_compile_time_enabled)
+            jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&codegen_lock); // Might GC
         if (F)
             return F;

@@ -1980,24 +1980,23 @@ setfield!
 
 These atomically perform the operations to simultaneously get and set a field:
 
-    y = getfield!(value, name)
+    y = getfield(value, name)
     setfield!(value, name, x)
     return y
-```
 """
 swapfield!
 
 """
-    modifyfield!(value, name::Symbol, op, x, [order::Symbol])
-    modifyfield!(value, i::Int, op, x, [order::Symbol])
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
 
 These atomically perform the operations to get and set a field after applying
 the function `op`.
 
-    y = getfield!(value, name)
+    y = getfield(value, name)
     z = op(y, x)
     setfield!(value, name, z)
-    return y, z
+    return y => z
 
 If supported by the hardware (for example, atomic increment), this may be
 optimized to the appropriate hardware instruction, otherwise it'll use a loop.
@@ -2006,18 +2005,19 @@ modifyfield!
 
 """
     replacefield!(value, name::Symbol, expected, desired,
-        [success_order::Symbol, [fail_order::Symbol=success_order]) =>
-        (old, Bool)
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+    replacefield!(value, i::Int, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
 These atomically perform the operations to get and conditionally set a field to
 a given value.
 
-    y = getfield!(value, name, fail_order)
+    y = getfield(value, name, fail_order)
     ok = y === expected
     if ok
         setfield!(value, name, desired, success_order)
     end
-    return y, ok
+    return (; old = y, success = ok)
 
 If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.

@@ -2719,7 +2719,7 @@ void jl_init_serializer(void)
     htable_new(&backref_table, 0);
 
     void *vals[] = { jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
-                     call_sym, invoke_sym, goto_ifnot_sym, return_sym, jl_symbol("tuple"),
+                     call_sym, invoke_sym, invoke_modify_sym, goto_ifnot_sym, return_sym, jl_symbol("tuple"),
                      jl_an_empty_string, jl_an_empty_vec_any,
 
                      // empirical list of very common symbols

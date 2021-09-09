@@ -44,6 +44,11 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
     @test t <: Core.Compiler.limit_type_size(t, c, Union{}, 1, 100)
 end
 
+# obtain Vararg with 2 undefined fields
+let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
+    @test Core.Compiler.limit_type_size(Tuple, va, Union{}, 2, 2) === Any
+end
+
 let # 40336
     t = Type{Type{Int}}
     c = Type{Int}
@@ -1823,14 +1828,37 @@ end
         return c, d # ::Tuple{Int,Int}
     end == Any[Tuple{Int,Int}]
 
-    # shouldn't use the old constraint when the subject of condition has changed
+    # should invalidate old constraint when the subject of condition has changed
     @test Base.return_types((Union{Nothing,Int},)) do a
-        b = a === nothing
-        c = b ? 0 : a # c::Int
+        cond = a === nothing
+        r1 = cond ? 0 : a # r1::Int
         a = 0
-        d = b ? a : 1 # d::Int, not d::Union{Nothing,Int}
-        return c, d # ::Tuple{Int,Int}
+        r2 = cond ? a : 1 # r2::Int, not r2::Union{Nothing,Int}
+        return r1, r2 # ::Tuple{Int,Int}
     end == Any[Tuple{Int,Int}]
+end
+
+# https://github.com/JuliaLang/julia/issues/42090#issuecomment-911824851
+# `PartialStruct` shoudln't wrap `Conditional`
+let M = Module()
+    @eval M begin
+        struct BePartialStruct
+            val::Int
+            cond
+        end
+    end
+
+    rt = @eval M begin
+        Base.return_types((Union{Nothing,Int},)) do a
+            cond = a === nothing
+            obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
+            r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
+            a = $(gensym(:anyvar))::Any
+            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constrait invalidation here)
+            return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
+        end |> only
+    end
+    @test rt == Tuple{Union{Nothing,Int},Any}
 end
 
 @testset "conditional constraint propagation from non-`Conditional` object" begin
@@ -2210,12 +2238,10 @@ code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
 ssachangemap = fill(0, length(code28279))
 labelchangemap = fill(0, length(code28279))
-worklist = Int[]
 let i
     for i in 1:length(code28279)
         stmt = code28279[i]
         if isa(stmt, GotoIfNot)
-            push!(worklist, i)
             ssachangemap[i] = 1
             if i < length(code28279)
                 labelchangemap[i + 1] = 1
@@ -2875,9 +2901,24 @@ partial_return_2(x) = Val{partial_return_1(x)[2]}
 
 @test Base.return_types(partial_return_2, (Int,)) == Any[Type{Val{1}}]
 
-# Precision of abstract_iteration
+# Soundness and precision of abstract_iteration
+f41839() = (1:100...,)
+@test NTuple{100,Int} <: only(Base.return_types(f41839, ())) <: Tuple{Vararg{Int}}
 f_splat(x) = (x...,)
 @test Base.return_types(f_splat, (Pair{Int,Int},)) == Any[Tuple{Int, Int}]
+@test Base.return_types(f_splat, (UnitRange{Int},)) == Any[Tuple{Vararg{Int}}]
+struct Itr41839_1 end # empty or infinite
+Base.iterate(::Itr41839_1) = rand(Bool) ? (nothing, nothing) : nothing
+Base.iterate(::Itr41839_1, ::Nothing) = (nothing, nothing)
+@test Base.return_types(f_splat, (Itr41839_1,)) == Any[Tuple{}]
+struct Itr41839_2 end # empty or failing
+Base.iterate(::Itr41839_2) = rand(Bool) ? (nothing, nothing) : nothing
+Base.iterate(::Itr41839_2, ::Nothing) = error()
+@test Base.return_types(f_splat, (Itr41839_2,)) == Any[Tuple{}]
+struct Itr41839_3 end
+Base.iterate(::Itr41839_3 ) = rand(Bool) ? nothing : (nothing, 1)
+Base.iterate(::Itr41839_3 , i) = i < 16 ? (i, i + 1) : nothing
+@test only(Base.return_types(f_splat, (Itr41839_3,))) <: Tuple{Vararg{Union{Nothing, Int}}}
 
 # issue #32699
 f32699(a) = (id = a[1],).id
@@ -3406,3 +3447,60 @@ end
         @test @inferred(f40177(T)) == fieldtype(T, 1)
     end
 end
+
+# issue #41908
+f41908(x::Complex{T}) where {String<:T<:String} = 1
+g41908() = f41908(Any[1][1])
+@test only(Base.return_types(g41908, ())) <: Int
+
+# issue #42022
+let x = Tuple{Int,Any}[
+        #= 1=# (0, Expr(:(=), Core.SlotNumber(3), 1))
+        #= 2=# (0, Expr(:enter, 18))
+        #= 3=# (2, Expr(:(=), Core.SlotNumber(3), 2.0))
+        #= 4=# (2, Expr(:enter, 12))
+        #= 5=# (4, Expr(:(=), Core.SlotNumber(3), '3'))
+        #= 6=# (4, Core.GotoIfNot(Core.SlotNumber(2), 9))
+        #= 7=# (4, Expr(:leave, 2))
+        #= 8=# (0, Core.ReturnNode(1))
+        #= 9=# (4, Expr(:call, GlobalRef(Main, :throw)))
+        #=10=# (4, Expr(:leave, 1))
+        #=11=# (2, Core.GotoNode(16))
+        #=12=# (4, Expr(:leave, 1))
+        #=13=# (2, Expr(:(=), Core.SlotNumber(4), Expr(:the_exception)))
+        #=14=# (2, Expr(:call, GlobalRef(Main, :rethrow)))
+        #=15=# (2, Expr(:pop_exception, Core.SSAValue(4)))
+        #=16=# (2, Expr(:leave, 1))
+        #=17=# (0, Core.GotoNode(22))
+        #=18=# (2, Expr(:leave, 1))
+        #=19=# (0, Expr(:(=), Core.SlotNumber(5), Expr(:the_exception)))
+        #=20=# (0, nothing)
+        #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
+        #=22=# (0, Core.ReturnNode(Core.SlotNumber(3)))
+    ]
+    handler_at = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    @test handler_at == first.(x)
+end
+
+@test only(Base.return_types((Bool,)) do y
+        x = 1
+        try
+            x = 2.0
+            try
+                x = '3'
+                y ? (return 1) : throw()
+            catch ex1
+                rethrow()
+            end
+        catch ex2
+            nothing
+        end
+        return x
+    end) === Union{Int, Float64, Char}
+
+# issue #42097
+struct Foo42097{F} end
+Foo42097(f::F, args) where {F} = Foo42097{F}()
+Foo42097(A) = Foo42097(Base.inferencebarrier(+), Base.inferencebarrier(1)...)
+foo42097() = Foo42097([1]...)
+@test foo42097() isa Foo42097{typeof(+)}

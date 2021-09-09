@@ -118,7 +118,12 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-Only-filter-out-mavx-on-Sandybridge.pat
 		patch -p1 -f < $(SRCDIR)/patches/openblas-Only-filter-out-mavx-on-Sandybridge.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-Only-filter-out-mavx-on-Sandybridge.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-armv8-volatile-detecion.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-Only-filter-out-mavx-on-Sandybridge.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-armv8-volatile-detecion.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-armv8-volatile-detecion.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured

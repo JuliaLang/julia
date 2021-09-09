@@ -11,6 +11,7 @@
     XX(jl_alloc_svec_uninit) \
     XX(jl_alloc_vec_any) \
     XX(jl_apply_array_type) \
+    XX(jl_apply_cmpswap_type) \
     XX(jl_apply_generic) \
     XX(jl_apply_tuple_type) \
     XX(jl_apply_tuple_type_v) \
@@ -542,4 +543,5 @@
     XX(jl_wakeup_thread) \
     XX(jl_yield) \
     XX(jl_print_backtrace) \
-    XX(jl_get_pgcstack)
+    XX(jl_get_pgcstack) \
+

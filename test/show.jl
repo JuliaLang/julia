@@ -1377,6 +1377,11 @@ let m = which(T20332{Int}(), (Int,)),
     mi = Core.Compiler.specialize_method(m, Tuple{T20332{T}, Int} where T, Core.svec())
     # test that this doesn't throw an error
     @test occursin("MethodInstance for", repr(mi))
+    # issue #41928
+    str = sprint(mi; context=:color=>true) do io, mi
+        printstyled(io, mi; color=:light_cyan)
+    end
+    @test !occursin("\U1b[0m", str)
 end
 
 @test sprint(show, Main) == "Main"
@@ -1769,7 +1774,7 @@ end
     # spurious binding resolutions
     show(IOContext(b, :module => TestShowType), Base.Pair)
     @test !Base.isbindingresolved(TestShowType, :Pair)
-    @test String(take!(b)) == "Base.Pair"
+    @test String(take!(b)) == "Core.Pair"
     show(IOContext(b, :module => TestShowType), Base.Complex)
     @test Base.isbindingresolved(TestShowType, :Complex)
     @test String(take!(b)) == "Complex"
