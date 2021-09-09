@@ -17,9 +17,6 @@ if !@isdefined(testenv_defined)
         push!(test_exeflags.exec, "--check-bounds=yes")
         push!(test_exeflags.exec, "--startup-file=no")
         push!(test_exeflags.exec, "--depwarn=error")
-        if Base.JLOptions().use_sysimage_native_code == 0
-            push!(test_exeflags.exec, "--sysimage-native-code=no")
-        end
     end
     if haskey(ENV, "JULIA_TEST_EXTRA_EXEFLAGS")
         append!(test_exeflags.exec, Base.shell_split(ENV["JULIA_TEST_EXTRA_EXEFLAGS"]))
