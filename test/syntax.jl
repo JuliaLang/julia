@@ -2977,3 +2977,84 @@ macro m42220()
 end
 @test @m42220()() isa Vector{Float64}
 @test @m42220()(Bool) isa Vector{Bool}
+
+@testset "try else" begin
+    fails(f) = try f() catch; true else false end
+    @test fails(error)
+    @test !fails(() -> 1 + 2)
+
+    err = try
+        try
+            1 + 2
+        else
+            error("foo")
+        end
+    catch e
+        e
+    end
+    @test err == ErrorException("foo")
+
+    x = 0
+    err = try
+        try
+            1 + 2
+        else
+            error("foo")
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == ErrorException("foo")
+    @test x == 1
+
+    x = 0
+    err = try
+        try
+            1 + 2
+        else
+            3 + 4
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == 3 + 4
+    @test x == 1
+
+    x = 0
+    err = try
+        try
+            1 + 2
+        catch
+            5 + 6
+        else
+            3 + 4
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == 3 + 4
+    @test x == 1
+
+    x = 0
+    err = try
+        try
+            error()
+        catch
+            5 + 6
+        else
+            3 + 4
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == 5 + 6
+    @test x == 1
+end
