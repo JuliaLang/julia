@@ -1135,7 +1135,13 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.ssavaluetypes = deserialize(s)
         ci.linetable = deserialize(s)
     end
-    ci.ssaflags = deserialize(s)
+    ssaflags = deserialize(s)
+    if length(ssaflags) ≠ length(code)
+        # make sure the length of `ssaflags` matches that of `code`
+        # so that the latest inference doesn't throw on IRs serialized from old versions
+        ssaflags = UInt8[0x00 for _ in 1:length(code)]
+    end
+    ci.ssaflags = ssaflags
     if pre_12
         ci.slotflags = deserialize(s)
     else
