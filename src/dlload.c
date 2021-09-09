@@ -309,7 +309,7 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
         char err[256];
         win32_formatmessage(GetLastError(), err, sizeof(err));
 #endif
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
         // Hide the error throwing from the analyser since there isn't a way to express
         // "safepoint only when throwing error" currently.
         jl_errorf("could not load symbol \"%s\":\n%s", symbol, err);

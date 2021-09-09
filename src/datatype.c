@@ -48,9 +48,9 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
                                      jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
-    mt->defs = jl_nothing;
-    mt->leafcache = (jl_array_t*)jl_an_empty_vec_any;
-    mt->cache = jl_nothing;
+    jl_atomic_store_relaxed(&mt->defs, jl_nothing);
+    jl_atomic_store_relaxed(&mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&mt->cache, jl_nothing);
     mt->max_args = 0;
     mt->kwsorter = NULL;
     mt->backedges = NULL;
@@ -69,8 +69,8 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->name = name;
     tn->module = module;
     tn->wrapper = NULL;
-    tn->cache = jl_emptysvec;
-    tn->linearcache = jl_emptysvec;
+    jl_atomic_store_relaxed(&tn->cache, jl_emptysvec);
+    jl_atomic_store_relaxed(&tn->linearcache, jl_emptysvec);
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
     tn->abstract = abstract;

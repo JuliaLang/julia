@@ -4,7 +4,7 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
-#include <atomics.h>
+#include "julia_atomics.h"
 // threading ------------------------------------------------------------------
 
 #ifdef __cplusplus
@@ -194,7 +194,7 @@ typedef struct _jl_tls_states_t {
     int16_t tid;
     uint64_t rngseed;
     volatile size_t *safepoint;
-    int8_t sleep_check_state; // read/write from foreign threads
+    _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to
@@ -239,7 +239,7 @@ typedef struct _jl_tls_states_t {
     struct _jl_bt_element_t *bt_data; // JL_MAX_BT_SIZE + 1 elements long
     size_t bt_size;    // Size for backtrace in transit in bt_data
     // Atomically set by the sender, reset by the handler.
-    volatile sig_atomic_t signal_request;
+    volatile _Atomic(sig_atomic_t) signal_request; // TODO: no actual reason for this to be _Atomic
     // Allow the sigint to be raised asynchronously
     // this is limited to the few places we do synchronous IO
     // we can make this more general (similar to defer_signal) if necessary
@@ -293,7 +293,7 @@ typedef jl_tls_states_t *jl_ptls_t;
 JL_DLLEXPORT void (jl_cpu_pause)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 // Note that the sigint safepoint can also trigger GC, albeit less likely
 void jl_gc_safepoint_(jl_ptls_t tls);
 void jl_sigint_safepoint(jl_ptls_t tls);
@@ -328,9 +328,9 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
 STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
                                               int8_t state)
 {
-    return jl_gc_state_set(ptls, state, ptls->gc_state);
+    return jl_gc_state_set(ptls, state, jl_atomic_load_relaxed(&ptls->gc_state));
 }
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 int8_t jl_gc_unsafe_enter(jl_ptls_t ptls); // Can be a safepoint
 int8_t jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT;
 int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT;

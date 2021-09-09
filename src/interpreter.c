@@ -37,7 +37,7 @@ typedef struct {
   JL_GCC_IGNORE_STOP
 #endif
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 
 extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 

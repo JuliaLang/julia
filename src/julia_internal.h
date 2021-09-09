@@ -4,7 +4,7 @@
 #define JL_INTERNAL_H
 
 #include "options.h"
-#include "locks.h"
+#include "julia_locks.h"
 #include <uv.h>
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -219,7 +219,7 @@ extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 extern size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func;
 extern size_t jl_typeinf_world;
-extern jl_typemap_entry_t *call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
+extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 extern jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
 JL_DLLEXPORT extern int jl_lineno;
@@ -754,7 +754,7 @@ STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
     uintptr_t safepoint_addr = (uintptr_t)jl_safepoint_pages;
     return addr >= safepoint_addr && addr < safepoint_addr + jl_page_size * 3;
 }
-extern uint32_t jl_gc_running;
+extern _Atomic(uint32_t) jl_gc_running;
 // All the functions are safe to be called from within a signal handler
 // provided that the thread will not be interrupted by another asynchronous
 // signal.
@@ -801,7 +801,7 @@ typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
 void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k);
 
-#if !defined(__clang_analyzer__)
+#if !defined(__clang_gcanalyzer__)
 static inline void jl_set_gc_and_wait(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -833,7 +833,7 @@ void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
-jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT;
+_Atomic(jl_value_t*) *jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*);
 
@@ -1264,11 +1264,11 @@ void jl_mach_gc_end(void);
 typedef uint_t (*smallintset_hash)(size_t val, jl_svec_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_svec_t *data, uint_t hv);
 ssize_t jl_smallintset_lookup(jl_array_t *cache, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv);
-void jl_smallintset_insert(jl_array_t **pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data);
+void jl_smallintset_insert(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data);
 
 // -- typemap.c -- //
 
-void jl_typemap_insert(jl_typemap_t **cache, jl_value_t *parent,
+void jl_typemap_insert(_Atomic(jl_typemap_t*) *cache, jl_value_t *parent,
         jl_typemap_entry_t *newrec, int8_t offs);
 jl_typemap_entry_t *jl_typemap_alloc(
         jl_tupletype_t *type, jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
@@ -1450,7 +1450,7 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #define JL_GCC_IGNORE_STOP
 #endif // _COMPILER_GCC_
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
   // Not a safepoint (so it dosn't free other values), but an artificial use.
   // Usually this is unnecessary because the analyzer can see all real uses,
   // but sometimes real uses are harder for the analyzer to see, or it may

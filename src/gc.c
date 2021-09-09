@@ -2404,8 +2404,8 @@ module_binding: {
             void *vb = jl_astaggedvalue(b);
             verify_parent1("module", binding->parent, &vb, "binding_buff");
             (void)vb;
-            jl_value_t *value = b->value;
-            jl_value_t *globalref = b->globalref;
+            jl_value_t *value = jl_atomic_load_relaxed(&b->value);
+            jl_value_t *globalref = jl_atomic_load_relaxed(&b->globalref);
             if (value) {
                 verify_parent2("module", binding->parent,
                                &b->value, "binding(%s)", jl_symbol_name(b->name));
@@ -2808,9 +2808,11 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
         }
     }
     gc_mark_queue_obj(gc_cache, sp, jl_anytuple_type_type);
-    for (size_t i = 0; i < N_CALL_CACHE; i++)
-        if (call_cache[i])
-            gc_mark_queue_obj(gc_cache, sp, call_cache[i]);
+    for (size_t i = 0; i < N_CALL_CACHE; i++) {
+        jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
+        if (v != NULL)
+            gc_mark_queue_obj(gc_cache, sp, v);
+    }
     if (jl_all_methods != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_all_methods);
     if (_jl_debug_method_invalidation != NULL)
@@ -2977,8 +2979,8 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
         jl_binding_t *ptr = (jl_binding_t*)items[i];
         // A null pointer can happen here when the binding is cleaned up
         // as an exception is thrown after it was already queued (#10221)
-        if (!ptr->value) continue;
-        if (gc_mark_queue_obj(gc_cache, sp, ptr->value)) {
+        jl_value_t *v = jl_atomic_load_relaxed(&ptr->value);
+        if (v != NULL && gc_mark_queue_obj(gc_cache, sp, v)) {
             items[n_bnd_refyoung] = ptr;
             n_bnd_refyoung++;
         }
@@ -3607,7 +3609,7 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
 #define GC_PERM_POOL_SIZE (2 * 1024 * 1024)
 // 20k limit for pool allocation. At most 1% fragmentation
 #define GC_PERM_POOL_LIMIT (20 * 1024)
-jl_mutex_t gc_perm_lock = {0, 0};
+jl_mutex_t gc_perm_lock;
 static uintptr_t gc_perm_pool = 0;
 static uintptr_t gc_perm_end = 0;
 

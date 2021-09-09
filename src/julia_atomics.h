@@ -221,9 +221,10 @@ extern "C" {
 #endif
 #endif
 
-#ifdef __clang_analyzer__
-// for the purposes of the analyzer, we can turn these into non-atomic expressions with similar properties
-// (for the sake of the analyzer, we don't care if it is an exact match for behavior)
+#ifdef __clang_gcanalyzer__
+// for the purposes of the GC analyzer, we can turn these into non-atomic
+// expressions with similar properties (for the sake of the analyzer, we don't
+// care if it is an exact match for behavior)
 
 #undef _Atomic
 #define _Atomic(T) T

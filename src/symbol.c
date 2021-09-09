@@ -77,7 +77,7 @@ static jl_sym_t *symtab_lookup(_Atomic(jl_sym_t*) *ptree, const char *str, size_
 
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT // (or throw)
 {
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     // Hide the error throwing from the analyser since there isn't a way to express
     // "safepoint only when throwing error" currently.
     if (len > MAX_SYM_LEN)
