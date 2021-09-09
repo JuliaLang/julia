@@ -265,7 +265,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
             while temp isa UnionAll
                 temp = temp.body
             end
-            sigtypes = temp.parameters
+            sigtypes = (temp::DataType).parameters
             for j = 1:length(sigtypes)
                 tj = sigtypes[j]
                 if isType(tj) && tj.parameters[1] === Pi

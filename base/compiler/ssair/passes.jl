@@ -1064,7 +1064,7 @@ function type_lift_pass!(ir::IRCode)
                                         if haskey(processed, id)
                                             val = processed[id]
                                         else
-                                            push!(worklist, (id, up_id, new_phi, i))
+                                            push!(worklist, (id, up_id, new_phi::SSAValue, i))
                                             continue
                                         end
                                     else

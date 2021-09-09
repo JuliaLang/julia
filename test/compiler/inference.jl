@@ -2238,12 +2238,10 @@ code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
 ssachangemap = fill(0, length(code28279))
 labelchangemap = fill(0, length(code28279))
-worklist = Int[]
 let i
     for i in 1:length(code28279)
         stmt = code28279[i]
         if isa(stmt, GotoIfNot)
-            push!(worklist, i)
             ssachangemap[i] = 1
             if i < length(code28279)
                 labelchangemap[i + 1] = 1
@@ -3499,3 +3497,10 @@ end
         end
         return x
     end) === Union{Int, Float64, Char}
+
+# issue #42097
+struct Foo42097{F} end
+Foo42097(f::F, args) where {F} = Foo42097{F}()
+Foo42097(A) = Foo42097(Base.inferencebarrier(+), Base.inferencebarrier(1)...)
+foo42097() = Foo42097([1]...)
+@test foo42097() isa Foo42097{typeof(+)}
