@@ -399,6 +399,9 @@ The default of `limit=0` implies no maximum.
 
 See also [`split`](@ref).
 
+!!! compat "Julia 1.8"
+    This function requires at least Julia 1.8.
+
 # Examples
 ```jldoctest
 julia> a = "Ma.rch"
