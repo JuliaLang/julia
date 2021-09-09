@@ -690,9 +690,9 @@ The length of `itr` must be even, and the returned array has half of the length 
 See also [`hex2bytes!`](@ref) for an in-place version, and [`bytes2hex`](@ref) for the inverse.
 
 !!! compat "Julia 1.7"
-    Calling hex2bytes with iterables producing UInt8 requires
-    version 1.7. In earlier versions, you can collect the iterable
-    before calling instead.
+    Calling `hex2bytes` with iterators producing `UInt8` values requires
+    Julia 1.7 or later. In earlier versions, you can `collect` the iterator
+    before calling `hex2bytes`.
 
 # Examples
 ```jldoctest
@@ -777,9 +777,9 @@ returning a `String` via `bytes2hex(itr)` or writing the string to an `io` strea
 via `bytes2hex(io, itr)`.  The hexadecimal characters are all lowercase.
 
 !!! compat "Julia 1.7"
-    Calling bytes2hex with iterators producing UInt8 requires
-    version 1.7. In earlier versions, you can collect the iterable
-    before calling instead.
+    Calling `bytes2hex` with arbitrary iterators producing `UInt8` values requires
+    Julia 1.7 or later. In earlier versions, you can `collect` the iterator
+    before calling `bytes2hex`.
 
 # Examples
 ```jldoctest
