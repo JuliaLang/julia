@@ -53,7 +53,7 @@ LLVMLINK :=
 ifeq ($(JULIACODEGEN),LLVM)
 SRCS += codegen llvm-ptls
 RUNTIME_SRCS += jitlayers aotcompile debuginfo disasm llvm-simdloop llvm-muladd \
-	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering \
+	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering llvm-replace \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16
