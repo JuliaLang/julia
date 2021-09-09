@@ -420,7 +420,7 @@ end
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::SymTridiagonal, i::Integer, j::Integer, s::AbstractString)
-    i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
+    return _replace_in_print_matrix(A, i, j, s)
 end
 
 # Implements the determinant using principal minors
@@ -667,8 +667,9 @@ function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
 end
 
 ## structured matrix methods ##
+nonzeroindex(::Union{SymTridiagonal, Tridiagonal}, i, j) = i==j-1||i==j||i==j+1
 function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::AbstractString)
-    i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
+    return _replace_in_print_matrix(A, i, j, s)
 end
 
 
