@@ -564,7 +564,11 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
+        cmd = Base.julia_cmd()
+        if Base.JLOptions().use_sysimage_native_code == 0
+            push!(cmd.exec, "--sysimage-native-code=no")
+        end
+        run(setenv(`$(cmd) $(joinpath(Sys.BINDIR::String,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch
