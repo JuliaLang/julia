@@ -1972,6 +1972,24 @@
                ,@(map expand-forms (cddr e))))
         (cons (car e) (map expand-forms (cdr e))))))
 
+(define (expand-while e)
+  `(break-block loop-exit (_while
+    ,(let* ((test (cadr e))
+            (blk? (and (pair? test) (eq? (car test) 'block)))
+            (stmts (if blk? (cdr (butlast test)) '()))
+            (test  (if blk? (last test) test)))
+       (if (and (pair? test) (memq (car test) '(&& |\|\||)))
+           (let* ((clauses `(,(car test) ,@(map expand-forms (cdr (flatten-ex (car test) test)))))
+                  (clauses (if (null? (cdr clauses))
+                               (if (eq? (car clauses) '&&) '(true) '(false))
+                               clauses)))
+             (if blk?
+                 `(block ,@(map expand-forms stmts) ,clauses)
+                 clauses))
+           (expand-forms (cadr e))))
+    (break-block loop-cont
+                 (scope-block ,(blockify (expand-forms (caddr e))))))))
+
 (define (expand-vcat e
                      (vcat '((top vcat)))
                      (hvcat '((top hvcat)))
@@ -2565,13 +2583,7 @@
 
    'if expand-if
    'elseif expand-if
-
-   'while
-   (lambda (e)
-     `(break-block loop-exit
-                   (_while ,(expand-forms (cadr e))
-                           (break-block loop-cont
-                                        (scope-block ,(blockify (expand-forms (caddr e))))))))
+   'while expand-while
 
    'break
    (lambda (e)
@@ -4391,8 +4403,28 @@ f(x) = yt(x)
             ((_while)
              (let* ((endl (make-label))
                     (topl (make&mark-label))
-                    (test (compile-cond (cadr e) break-labels)))
-               (emit `(gotoifnot ,test ,endl))
+                    (cnd (cadr e))
+                    (cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
+                              (begin (if (length> cnd 2) (compile (butlast cnd) break-labels #f #f))
+                                     (last cnd))
+                              cnd))
+                    (or? (and (pair? cnd) (eq? (car cnd) '|\|\||)))
+                    (tests (if or?
+                               (let ((short-circuit `(goto _)))
+                                 (for-each
+                                   (lambda (clause)
+                                     (let ((jmp (emit `(gotoifnot ,(compile-cond clause break-labels) ,endl))))
+                                       (emit short-circuit)
+                                       (set-car! (cddr jmp) (make&mark-label))))
+                                   (butlast (cdr cnd)))
+                                 (let ((last-jmp (emit `(gotoifnot ,(compile-cond (last (cdr cnd)) break-labels) ,endl))))
+                                   (set-car! (cdr short-circuit) (make&mark-label))
+                                   (list last-jmp)))
+                               (map (lambda (clause)
+                                      (emit `(gotoifnot ,(compile-cond clause break-labels) ,endl)))
+                                    (if (and (pair? cnd) (eq? (car cnd) '&&))
+                                        (cdr cnd)
+                                        (list cnd))))))
                (compile (caddr e) break-labels #f #f)
                (emit `(goto ,topl))
                (mark-label endl))
