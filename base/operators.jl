@@ -137,7 +137,7 @@ julia> isequal(missing, missing)
 true
 ```
 """
-isequal(x, y) = x == y
+isequal(x, y) = (x == y)::Bool # all `missing` cases are handled in missing.jl
 
 signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
 signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
