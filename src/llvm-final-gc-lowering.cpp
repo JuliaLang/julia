@@ -227,7 +227,7 @@ bool FinalLowerGC::doFinalization(Module &M)
         functionList + sizeof(functionList) / sizeof(void*));
     bool changed = false;
     SmallVector<Constant*, 16> init;
-    ConstantArray *CA = dyn_cast<ConstantArray>(used->getInitializer());
+    ConstantArray *CA = cast<ConstantArray>(used->getInitializer());
     for (auto &Op : CA->operands()) {
         Constant *C = cast_or_null<Constant>(Op);
         if (InitAsSet.count(C->stripPointerCasts())) {

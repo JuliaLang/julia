@@ -1674,7 +1674,7 @@ static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, jl_gc_ma
 
     sp->pc_start = gc_cache->pc_stack = (void**)realloc_s(pc_stack, stack_size * 2 * sizeof(void*));
     gc_cache->pc_stack_end = sp->pc_end = sp->pc_start + stack_size * 2;
-    sp->pc += sp->pc_start - pc_stack;
+    sp->pc = sp->pc_start + (sp->pc - pc_stack);
     JL_UNLOCK_NOGC(&gc_cache->stack_lock);
 }
 
