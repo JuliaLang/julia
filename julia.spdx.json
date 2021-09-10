@@ -87,8 +87,8 @@
             "filesAnalyzed": false,
             "homepage": "https://nixos.org/patchelf.html",
             "sourceInfo": "The version in use can be found in the file deps/Versions.make",
-            "licenseConcluded": "GPL-3.0-only",
-            "licenseDeclared": "GPL-3.0-only",
+            "licenseConcluded": "GPL-3.0-or-later",
+            "licenseDeclared": "GPL-3.0-or-later",
             "copyrightText": "Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>",
             "summary": "A small utility to modify the dynamic linker and RPATH of ELF executables.",
             "comment": "PATCHELF is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
