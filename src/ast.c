@@ -59,7 +59,7 @@ jl_sym_t *static_parameter_sym; jl_sym_t *inline_sym;
 jl_sym_t *noinline_sym; jl_sym_t *generated_sym;
 jl_sym_t *generated_only_sym; jl_sym_t *isdefined_sym;
 jl_sym_t *propagate_inbounds_sym; jl_sym_t *specialize_sym;
-jl_sym_t *aggressive_constprop_sym;
+jl_sym_t *aggressive_constprop_sym; jl_sym_t *no_constprop_sym;
 jl_sym_t *nospecialize_sym; jl_sym_t *macrocall_sym;
 jl_sym_t *colon_sym; jl_sym_t *hygienicscope_sym;
 jl_sym_t *throw_undef_if_not_sym; jl_sym_t *getfield_undefref_sym;
@@ -399,6 +399,7 @@ void jl_init_common_symbols(void)
     polly_sym = jl_symbol("polly");
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
     aggressive_constprop_sym = jl_symbol("aggressive_constprop");
+    no_constprop_sym = jl_symbol("no_constprop");
     isdefined_sym = jl_symbol("isdefined");
     nospecialize_sym = jl_symbol("nospecialize");
     specialize_sym = jl_symbol("specialize");

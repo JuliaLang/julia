@@ -288,7 +288,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 else if (ma == (jl_value_t*)propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
                 else if (ma == (jl_value_t*)aggressive_constprop_sym)
-                    li->aggressive_constprop = 1;
+                    li->constprop = 1;
+                else if (ma == (jl_value_t*)no_constprop_sym)
+                    li->constprop = 2;
                 else
                     jl_array_ptr_set(meta, ins++, ma);
             }
@@ -379,7 +381,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->propagate_inbounds = 0;
     src->pure = 0;
     src->edges = jl_nothing;
-    src->aggressive_constprop = 0;
+    src->constprop = 0;
     return src;
 }
 
@@ -566,7 +568,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     }
     m->called = called;
     m->pure = src->pure;
-    m->aggressive_constprop = src->aggressive_constprop;
+    m->constprop = src->constprop;
     jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
@@ -682,7 +684,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->primary_world = 1;
     m->deleted_world = ~(size_t)0;
     m->is_for_opaque_closure = 0;
-    m->aggressive_constprop = 0;
+    m->constprop = 0;
     JL_MUTEX_INIT(&m->writelock);
     return m;
 }

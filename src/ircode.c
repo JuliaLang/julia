@@ -381,6 +381,17 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
     }
 }
 
+static jl_code_info_flags_t code_info_flags(uint8_t pure, uint8_t propagate_inbounds, uint8_t inlineable, uint8_t inferred, uint8_t constprop)
+{
+    jl_code_info_flags_t flags;
+    flags.bits.pure = pure;
+    flags.bits.propagate_inbounds = propagate_inbounds;
+    flags.bits.inlineable = inlineable;
+    flags.bits.inferred = inferred;
+    flags.bits.constprop = constprop;
+    return flags;
+}
+
 // --- decoding ---
 
 static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED;
@@ -702,12 +713,8 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         jl_current_task->ptls
     };
 
-    uint8_t flags = (code->aggressive_constprop << 4)
-                  | (code->inferred << 3)
-                  | (code->inlineable << 2)
-                  | (code->propagate_inbounds << 1)
-                  | (code->pure << 0);
-    write_uint8(s.s, flags);
+    jl_code_info_flags_t flags = code_info_flags(code->pure, code->propagate_inbounds, code->inlineable, code->inferred, code->constprop);
+    write_uint8(s.s, flags.packed);
 
     size_t nslots = jl_array_len(code->slotflags);
     assert(nslots >= m->nargs && nslots < INT32_MAX); // required by generated functions
@@ -787,12 +794,13 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     };
 
     jl_code_info_t *code = jl_new_code_info_uninit();
-    uint8_t flags = read_uint8(s.s);
-    code->aggressive_constprop = !!(flags & (1 << 4));
-    code->inferred = !!(flags & (1 << 3));
-    code->inlineable = !!(flags & (1 << 2));
-    code->propagate_inbounds = !!(flags & (1 << 1));
-    code->pure = !!(flags & (1 << 0));
+    jl_code_info_flags_t flags;
+    flags.packed = read_uint8(s.s);
+    code->constprop = flags.bits.constprop;
+    code->inferred = flags.bits.inferred;
+    code->inlineable = flags.bits.inlineable;
+    code->propagate_inbounds = flags.bits.propagate_inbounds;
+    code->pure = flags.bits.pure;
 
     size_t nslots = read_int32(&src);
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
@@ -847,8 +855,9 @@ JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data)
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inferred;
     assert(jl_typeis(data, jl_array_uint8_type));
-    uint8_t flags = ((uint8_t*)data->data)[0];
-    return !!(flags & (1 << 3));
+    jl_code_info_flags_t flags;
+    flags.packed = ((uint8_t*)data->data)[0];
+    return flags.bits.inferred;
 }
 
 JL_DLLEXPORT uint8_t jl_ir_flag_inlineable(jl_array_t *data)
@@ -856,8 +865,9 @@ JL_DLLEXPORT uint8_t jl_ir_flag_inlineable(jl_array_t *data)
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inlineable;
     assert(jl_typeis(data, jl_array_uint8_type));
-    uint8_t flags = ((uint8_t*)data->data)[0];
-    return !!(flags & (1 << 2));
+    jl_code_info_flags_t flags;
+    flags.packed = ((uint8_t*)data->data)[0];
+    return flags.bits.inlineable;
 }
 
 JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data)
@@ -865,8 +875,9 @@ JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data)
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->pure;
     assert(jl_typeis(data, jl_array_uint8_type));
-    uint8_t flags = ((uint8_t*)data->data)[0];
-    return !!(flags & (1 << 0));
+    jl_code_info_flags_t flags;
+    flags.packed = ((uint8_t*)data->data)[0];
+    return flags.bits.pure;
 }
 
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms)

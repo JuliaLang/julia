@@ -457,9 +457,24 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
     return v;
 }
 
+// -- helper types -- //
+
+typedef struct {
+    uint8_t pure:1;
+    uint8_t propagate_inbounds:1;
+    uint8_t inlineable:1;
+    uint8_t inferred:1;
+    uint8_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
+} jl_code_info_flags_bitfield_t;
+
+typedef union {
+    jl_code_info_flags_bitfield_t bits;
+    uint8_t packed;
+} jl_code_info_flags_t;
 
 // -- functions -- //
 
+// jl_code_info_flag_t code_info_flags(uint8_t pure, uint8_t propagate_inbounds, uint8_t inlineable, uint8_t inferred, uint8_t constprop);
 jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
 jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
@@ -1358,7 +1373,7 @@ extern jl_sym_t *static_parameter_sym; extern jl_sym_t *inline_sym;
 extern jl_sym_t *noinline_sym; extern jl_sym_t *generated_sym;
 extern jl_sym_t *generated_only_sym; extern jl_sym_t *isdefined_sym;
 extern jl_sym_t *propagate_inbounds_sym; extern jl_sym_t *specialize_sym;
-extern jl_sym_t *aggressive_constprop_sym;
+extern jl_sym_t *aggressive_constprop_sym; extern jl_sym_t *no_constprop_sym;
 extern jl_sym_t *nospecialize_sym; extern jl_sym_t *macrocall_sym;
 extern jl_sym_t *colon_sym; extern jl_sym_t *hygienicscope_sym;
 extern jl_sym_t *throw_undef_if_not_sym; extern jl_sym_t *getfield_undefref_sym;

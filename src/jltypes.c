@@ -2348,7 +2348,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inlineable",
                             "propagate_inbounds",
                             "pure",
-                            "aggressive_constprop"),
+                            "constprop"),
                         jl_svec(19,
                             jl_array_any_type,
                             jl_array_int32_type,
@@ -2368,7 +2368,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_bool_type),
+                            jl_uint8_type),
                         jl_emptysvec,
                         0, 1, 19);
 
@@ -2401,7 +2401,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "isva",
                             "pure",
                             "is_for_opaque_closure",
-                            "aggressive_constprop"),
+                            "constprop"),
                         jl_svec(26,
                             jl_symbol_type,
                             jl_module_type,
@@ -2428,7 +2428,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_bool_type),
+                            jl_uint8_type),
                         jl_emptysvec,
                         0, 1, 10);
 

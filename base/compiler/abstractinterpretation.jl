@@ -570,6 +570,12 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
                                          sv::InferenceState)
     const_prop_entry_heuristic(interp, result, sv) || return nothing
     method = match.method
+    if method.constprop == 0x02
+        add_remark!(interp, sv, "[constprop] Disabled by method parameter")
+        return nothing
+    end
+    force = force_const_prop(interp, f, method)
+    force || const_prop_entry_heuristic(interp, result, sv) || return nothing
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
     if length(argtypes) < nargs
@@ -639,7 +645,7 @@ function is_allconst(argtypes::Vector{Any})
 end
 
 function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method::Method)
-    return method.aggressive_constprop ||
+    return method.constprop == 0x01 ||
            InferenceParams(interp).aggressive_constant_propagation ||
            istopfunction(f, :getproperty) ||
            istopfunction(f, :setproperty!)
