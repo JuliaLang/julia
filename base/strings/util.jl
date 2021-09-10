@@ -432,6 +432,7 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
     i - 1 > ncodeunits(iter.str)::Int && return nothing
     r = findnext(iter.splitter, iter.str, k)::Union{Nothing,Int,UnitRange{Int}}
     while r !== nothing && n != iter.limit - 1 && first(r) <= ncodeunits(iter.str)
+        r = r::Union{Int,UnitRange{Int}}
         j, k = first(r), nextind(iter.str, last(r))::Int
         k_ = k <= j ? nextind(iter.str, j) : k
         if i < k
