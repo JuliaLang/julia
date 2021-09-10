@@ -2329,18 +2329,45 @@ function findall(A)
 end
 
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
-function findall(A::AbstractArray{Bool})
-    n = count(A)
+function _findall(f::Function, A::AbstractArray{Bool})
+    # Compute f for true and false only once
+    ft, ff = f(true), f(false)
+    (ft | ff) || return Vector{eltype(keys(A))}()
+    (ft & ff) && return vec(Array(keys(A)))
+    n = let
+        c = count(A)
+        ft ? c : length(A) - c
+    end
     I = Vector{eltype(keys(A))}(undef, n)
+    _findall(ff, I, A)
+end
+
+function _findall(invert::Bool, I::Vector, A::AbstractArray{Bool})
     cnt = 1
-    for (i,a) in pairs(A)
-        if a
-            I[cnt] = i
-            cnt += 1
-        end
+    len = length(I)
+    for (k, v) in pairs(A)
+        cnt > len && break
+        I[cnt] = k
+        cnt += v ⊻ invert
     end
     I
 end
+
+function _findall(invert::Bool, I::Vector, A::AbstractVector{Bool})
+    i = firstindex(A)
+    cnt = 1
+    len = length(I)
+    @inbounds while cnt ≤ len
+        I[cnt] = i
+        cnt += A[i] ⊻ invert
+        i = nextind(A, i)
+    end
+    I
+end
+
+findall(f::Function, A::AbstractArray{Bool}) = _findall(f, A)
+findall(f::Fix2{typeof(in)}, A::AbstractArray{Bool}) = _findall(f, A)
+findall(A::AbstractArray{Bool}) = _findall(identity, A)
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()

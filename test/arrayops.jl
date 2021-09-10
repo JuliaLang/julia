@@ -547,9 +547,17 @@ end
 
 @testset "findall, findfirst, findnext, findlast, findprev" begin
     a = [0,1,2,3,0,1,2,3]
+    m = [false false; true false]
     @test findall(!iszero, a) == [2,3,4,6,7,8]
     @test findall(a.==2) == [3,7]
     @test findall(isodd,a) == [2,4,6,8]
+    @test findall(Bool[]) == Int[]
+    @test findall([false, false]) == Int[]
+    @test findall(m) == [k for (k,v) in pairs(m) if v]
+    @test findall(!, [false, true, true]) == [1]
+    @test findall(i -> true, [false, true, false]) == [1, 2, 3]
+    @test findall(i -> false, rand(2, 2)) == Int[]
+    @test findall(!, m) == [k for (k,v) in pairs(m) if !v]
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
