@@ -37,10 +37,12 @@ elseif Sys.iswindows()
     const splitdrive_re = let
         # Slash in either direction.
         S = raw"[\\/]"
-        # Not a slash in either direction.
-        N = raw"[^\\/]"
+        # Not a slash in either direction, or any of the other
+        # reserved characters from
+        # https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions.
+        N = raw"[^\\/<>:\"|?*]"
         # Drive letter, e.g. `C:`
-        drive = "$(N)+:"
+        drive = "[a-zA-Z]:"
         # UNC path, e.g. `\\server\share`
         unc = "$(S)$(S)$(N)+$(S)$(N)+"
         # Long drive letter, e.g. `\\?\C:`
