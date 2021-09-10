@@ -330,9 +330,9 @@ conj(A::Transpose) = adjoint(A.parent)
 conj(A::Adjoint) = transpose(A.parent)
 
 # Structured matrix display
-nonzeroindex(A::AdjOrTransAbsMat, i, j) = nonzeroindex(parent(A), j, i)
-nonzeroindex(A::AdjOrTransAbsVec, i, j) = nonzeroindex(parent(A), j)
+isnonzeroindex(A::AdjOrTransAbsMat, i, j) = isnonzeroindex(parent(A), j, i)
+isnonzeroindex(A::AdjOrTransAbsVec, i, j) = isnonzeroindex(parent(A), j)
 function Base.replace_in_print_matrix(A::AdjOrTrans,
         i::Integer, j::Integer, s::AbstractString)
-    return _replace_in_print_matrix(A, i, j, s)
+    return Base.replace_in_print_matrix(A.parent, j, i, s)
 end

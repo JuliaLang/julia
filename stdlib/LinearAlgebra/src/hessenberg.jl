@@ -85,7 +85,7 @@ function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     return A
 end
 
-nonzeroindex(::UpperHessenberg, i, j) = i <= j+1
+isnonzeroindex(::UpperHessenberg, i, j) = i <= j+1
 function Base.replace_in_print_matrix(A::UpperHessenberg, i::Integer, j::Integer, s::AbstractString)
     return _replace_in_print_matrix(A, i, j, s)
 end

@@ -121,7 +121,7 @@ end
 
 
 ## structured matrix methods ##
-nonzeroindex(::Diagonal, i, j) = i == j
+isnonzeroindex(::Diagonal, i, j) = i == j
 function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::AbstractString)
     return _replace_in_print_matrix(A, i, j, s)
 end

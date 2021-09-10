@@ -15,7 +15,7 @@ end
 Base.getindex(M::MyArrayWrapper, i::Int...) = parent(M)[i...]
 Base.replace_in_print_matrix(M::MyArrayWrapper, i::Integer, j::Integer, s::AbstractString) =
     Base.replace_in_print_matrix(parent(M), i, j, s)
-Base.nonzeroindex(M::MyArrayWrapper{<:Any,N}, i::Vararg{Int,N}) where {N} = Base.nonzeroindex(parent(M), i...)
+Base.isnonzeroindex(M::MyArrayWrapper{<:Any,N}, i::Vararg{Int,N}) where {N} = Base.isnonzeroindex(parent(M), i...)
 
 function print_array_str(io::IO, a)
     Base.print_array(io, a)
@@ -48,7 +48,7 @@ end
 function Base.replace_in_print_matrix(::Zeros, ::Integer, ::Integer, s::AbstractString)
     Base.replace_with_centered_mark(s)
 end
-Base.nonzeroindex(z::Zeros{<:Any,N}, i::Vararg{Int,N}) where {N} = false
+Base.isnonzeroindex(z::Zeros{<:Any,N}, i::Vararg{Int,N}) where {N} = false
 
 @testset "Display of structured matrices" begin
     @testset "Diagonal" begin

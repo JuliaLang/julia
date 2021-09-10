@@ -409,7 +409,7 @@ copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, s
 # Typically this is called within replace_in_print_matrix,
 # which is specialized for each matrix type
 function _replace_in_print_matrix(A, i, j, s)
-    return nonzeroindex(A, i, j) ? s : Base.replace_with_centered_mark(s)
+    return isnonzeroindex(A, i, j) ? s : Base.replace_with_centered_mark(s)
 end
 
 include("adjtrans.jl")
