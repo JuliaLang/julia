@@ -82,12 +82,22 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
+function move_to_front!(f::Function, tests::AbstractVector)
+    selected_test_ids = findall(f, tests)
+    selected_tests = tests[selected_test_ids]
+    deleteat!(tests, selected_test_ids)
+    prepend!(tests, selected_tests)
+    return nothing
+end
+
 # Shuffle LinearAlgebra tests to the front, because they take a while, so we might
 # as well get them all started early.
-linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
-linalg_tests = tests[linalg_test_ids]
-deleteat!(tests, linalg_test_ids)
-prepend!(tests, linalg_tests)
+move_to_front!(x->occursin("LinearAlgebra", x), tests)
+
+# The `cmdlineargs` test set can take a very long time in certain contexts. For
+# example,with `--sysimage-native-code=0` and `--code-coverage=all`, they take
+# almost 2 hours on CI. So let's put them at the very front.
+move_to_front!(x->occursin("cmdlineargs", x), tests)
 
 import LinearAlgebra
 cd(@__DIR__) do
