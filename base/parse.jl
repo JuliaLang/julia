@@ -176,8 +176,12 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     return n
 end
 
-function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
+function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
         startpos::Int, endpos::Int, base::Integer, raise::Bool)
+    if !(typeof(sbuff) <: Union{String,SubString{String}})
+        return tryparse_internal(Bool, String(sbuff),
+        startpos, endpos, base, raise)
+    end
     if isempty(sbuff)
         raise && throw(ArgumentError("input string is empty"))
         return nothing
