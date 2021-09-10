@@ -403,13 +403,13 @@ code_typed1(args...; kwargs...) = (first(only(code_typed(args...; kwargs...)))::
         def_noinline(x) = _def_noinline(x)
 
         # test that they don't conflict with other "before-definition" macros
-        @inline Base.@aggressive_constprop function _def_inline_noconflict(x)
+        @inline Base.@constprop :aggressive function _def_inline_noconflict(x)
             # this call won't be resolved and thus will prevent inlining to happen if we don't
             # annotate `@inline` at the top of this function body
             return unresolved_call(x)
         end
         def_inline_noconflict(x) = _def_inline_noconflict(x)
-        @noinline Base.@aggressive_constprop _def_noinline_noconflict(x) = x # obviously will be inlined otherwise
+        @noinline Base.@constprop :aggressive _def_noinline_noconflict(x) = x # obviously will be inlined otherwise
         def_noinline_noconflict(x) = _def_noinline_noconflict(x)
     end
 
@@ -519,14 +519,14 @@ end
 
         # test callsite annotations for constant-prop'ed calls
 
-        @noinline Base.@aggressive_constprop noinlined_constprop_explicit(a) = a+g
+        @noinline Base.@constprop :aggressive noinlined_constprop_explicit(a) = a+g
         force_inline_constprop_explicit()                                    = @inline noinlined_constprop_explicit(0)
-        Base.@aggressive_constprop noinlined_constprop_implicit(a) = a+g
+        Base.@constprop :aggressive noinlined_constprop_implicit(a) = a+g
         force_inline_constprop_implicit()                          = @inline noinlined_constprop_implicit(0)
 
-        @inline Base.@aggressive_constprop inlined_constprop_explicit(a) = a+g
+        @inline Base.@constprop :aggressive inlined_constprop_explicit(a) = a+g
         force_noinline_constprop_explicit()                              = @noinline inlined_constprop_explicit(0)
-        @inline Base.@aggressive_constprop inlined_constprop_implicit(a) = a+g
+        @inline Base.@constprop :aggressive inlined_constprop_implicit(a) = a+g
         force_noinline_constprop_implicit()                              = @noinline inlined_constprop_implicit(0)
 
         @noinline notinlined(a) = a

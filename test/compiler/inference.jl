@@ -3168,9 +3168,9 @@ g38888() = S38888(Base.inferencebarrier(3), nothing)
 f_inf_error_bottom(x::Vector) = isempty(x) ? error(x[1]) : x
 @test Core.Compiler.return_type(f_inf_error_bottom, Tuple{Vector{Any}}) == Vector{Any}
 
-# @aggressive_constprop
+# @constprop :aggressive
 @noinline g_nonaggressive(y, x) = Val{x}()
-@noinline @Base.aggressive_constprop g_aggressive(y, x) = Val{x}()
+@noinline Base.@constprop :aggressive g_aggressive(y, x) = Val{x}()
 
 f_nonaggressive(x) = g_nonaggressive(x, 1)
 f_aggressive(x) = g_aggressive(x, 1)
@@ -3179,6 +3179,12 @@ f_aggressive(x) = g_aggressive(x, 1)
 # render the annotation effectless.
 @test Base.return_types(f_nonaggressive, Tuple{Int})[1] == Val
 @test Base.return_types(f_aggressive, Tuple{Int})[1] == Val{1}
+
+# @constprop :none
+@noinline Base.@constprop :none g_noaggressive(flag::Bool) = flag ? 1 : 1.0
+ftrue_noaggressive() = g_noaggressive(true)
+@test only(Base.return_types(ftrue_noaggressive, Tuple{})) == Union{Int,Float64}
+
 
 function splat_lotta_unions()
     a = Union{Tuple{Int},Tuple{String,Vararg{Int}},Tuple{Int,Vararg{Int}}}[(2,)][1]
