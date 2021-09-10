@@ -7394,7 +7394,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 #endif
                 continue;
             }
-            assert(find(pred_begin(PhiBB), pred_end(PhiBB), FromBB) != pred_end(PhiBB)); // consistency check
+            assert(std::find(pred_begin(PhiBB), pred_end(PhiBB), FromBB) != pred_end(PhiBB)); // consistency check
             TerminatorInst *terminator = FromBB->getTerminator();
             if (!terminator->getParent()->getUniqueSuccessor()) {
                 // Can't use `llvm::SplitCriticalEdge` here because
