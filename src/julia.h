@@ -279,7 +279,7 @@ typedef struct _jl_code_info_t {
     uint8_t propagate_inbounds;
     uint8_t pure;
     // uint8 settings
-    uint8_t constprop;     // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
+    uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
 } jl_code_info_t;
 
 // This type describes a single method definition, and stores data
