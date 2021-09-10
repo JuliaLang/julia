@@ -2076,7 +2076,7 @@ end
 end
 
 @testset "sparse matrix opnormestinv" begin
-    Random.seed!(1234)
+    Random.seed!(1235)
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
     Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
