@@ -5,7 +5,7 @@ Julia v1.8 Release Notes
 New language features
 ---------------------
 
-* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
+* `Module(:name, false, false)` can be used to create a `module` that contains no names (it does not import `Base` or `Core` and does not contain a reference to itself). ([#40110, #42154])
 * `@inline` and `@noinline` annotations can be used within a function body to give an extra
   hint about the inlining cost to the compiler. ([#41312])
 * `@inline` and `@noinline` annotations can now be applied to a function callsite or block
