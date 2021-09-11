@@ -664,7 +664,7 @@ JL_DLLEXPORT uint64_t jl_tasklocal_genrandom(jl_task_t *task) JL_NOTSAFEPOINT
     uint64_t s2 = task->rngState2;
     uint64_t s3 = task->rngState3;
 
-    uint64_t t = s0 << 17;
+    uint64_t t = s1 << 17;
     uint64_t tmp = s0 + s3;
     uint64_t res = ((tmp << 23) | (tmp >> 41)) + s0;
     s2 ^= s0;

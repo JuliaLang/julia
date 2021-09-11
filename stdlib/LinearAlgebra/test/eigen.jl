@@ -163,6 +163,7 @@ end
 end
 
 @testset "eigen of an Adjoint" begin
+    Random.seed!(1)
     A = randn(3,3)
     @test eigvals(A') == eigvals(copy(A'))
     @test eigen(A')   == eigen(copy(A'))

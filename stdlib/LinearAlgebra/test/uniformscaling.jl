@@ -133,7 +133,7 @@ end
 end
 
 @testset "arithmetic with Number" begin
-    α = randn()
+    α = rand()
     @test α + I == α + 1
     @test I + α == α + 1
     @test α - I == α - 1
