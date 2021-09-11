@@ -72,7 +72,10 @@ function init(n::Integer, delay::Real)
         buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
         buffer_samples = buffer_samples_per_thread * nthreads
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        # To suppress this warning, do e.g. `export JULIA_SUPPRESS_PROFILE_WARNINGS=true` in bash
+        if tryparse(Bool, get(ENV, "JULIA_SUPPRESS_PROFILE_WARNINGS", "")) !== true
+            @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        end
     end
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
     if status == -1
