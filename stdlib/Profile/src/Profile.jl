@@ -39,7 +39,7 @@ end
 ####
 
 """
-    init(; n::Integer, delay::Real))
+    init(; n::Integer, delay::Real)
 
 Configure the `delay` between backtraces (measured in seconds), and the number `n` of instruction pointers that may be
 stored per thread. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long
@@ -51,7 +51,7 @@ using keywords or in the order `(n, delay)`.
     As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
     Previously this was `n` total.
 """
-function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
@@ -59,10 +59,10 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
-    init(nnew, delaynew)
+    init(nnew, delaynew; limitwarn)
 end
 
-function init(n::Integer, delay::Real)
+function init(n::Integer, delay::Real; limitwarn::Bool = true)
     nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
     buffer_samples = n * nthreads
@@ -72,7 +72,7 @@ function init(n::Integer, delay::Real)
         buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
         buffer_samples = buffer_samples_per_thread * nthreads
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
     end
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
     if status == -1
@@ -86,9 +86,9 @@ end
 if Sys.iswindows() && Sys.WORD_SIZE == 32
     # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
     # so we don't want to slow the program down by quite that much
-    __init__() = init(1_000_000, 0.01)
+    __init__() = init(1_000_000, 0.01, limitwarn = false)
 else
-    __init__() = init(10_000_000, 0.001)
+    __init__() = init(10_000_000, 0.001, limitwarn = false)
 end
 
 """
