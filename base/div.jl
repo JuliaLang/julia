@@ -14,6 +14,9 @@ without any intermediate rounding.
 
 See also [`fld`](@ref) and [`cld`](@ref), which are special cases of this function.
 
+!!! compat "Julia 1.8"
+    `RoundFromZero` requires at least Julia 1.8.
+
 # Examples:
 ```jldoctest
 julia> div(4, 3, RoundDown) # Matches fld(4, 3)
@@ -67,6 +70,9 @@ without any intermediate rounding.
 - if `r == RoundFromZero`, then the result is in the interval `(-y, 0]` if `y` is positive, or
   `[0, -y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundFromZero`](@ref).
+
+!!! compat "Julia 1.8"
+    `RoundFromZero` requires at least Julia 1.8.
 
 # Examples:
 ```jldoctest
