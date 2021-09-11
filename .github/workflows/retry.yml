@@ -2,7 +2,7 @@
 
 # Here are some steps that we take in this workflow file for security reasons:
 # 1. We do not checkout any code.
-# 2. We do not run any external actions.
+# 2. We only run actions that are defined in a repository in the `JuliaLang` GitHub organization.
 # 3. We do not give the `GITHUB_TOKEN` any permissions.
 # 4. We only give the Buildkite API token (`BUILDKITE_API_TOKEN_RETRY`) the minimum necessary
 #    set of permissions.
