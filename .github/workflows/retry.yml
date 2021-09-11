@@ -26,8 +26,7 @@ on:
   # variables (such as the `BUILDKITE_API_TOKEN_RETRY` secret environment variable), even if
   # the PR is from a fork. Therefore, for security reasons, we do not checkout any code in
   # this workflow.
-  # TODO: change `pull_request` to `pull_request_target`.
-  pull_request:
+  pull_request_target:
 
     # TODO: delete the following line (once we have completely transitioned from Buildbot to Buildkite)
     types: [ reopened, labeled ]
