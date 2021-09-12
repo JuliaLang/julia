@@ -92,6 +92,12 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
+    if Base.GIT_VERSION_INFO.tagged_commit
+        # If this is a tagged commit, print the tagged release banner.
+        # For example, for official release binaries, the tagged release banner is
+        # something like "Official https://julialang.org/ release".
+        println(io, Base.TAGGED_RELEASE_BANNER)
+    end
     if ccall(:jl_is_debugbuild, Cint, ())!=0
         println(io, "DEBUG build")
     end
