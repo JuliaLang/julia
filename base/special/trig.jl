@@ -762,7 +762,7 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function (x::T) where T<:Union{Float32, Float64}
+function sinpi(x::T) where T<:Union{Float32, Float64}
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
