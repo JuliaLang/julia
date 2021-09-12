@@ -159,10 +159,19 @@ seekstart(s::IO) = seek(s,0)
 Seek a stream to its end.
 """
 function seekend(s::IOStream)
-    err = @_lock_ios s ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
-    systemerror("seekend", err)
+    systemerror("seekend", _seekend(s))
     return s
 end
+
+_seekend(s::IOStream) = @_lock_ios s ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
+
+function _maybe_seekend(s::IOStream)
+    err = _seekend(s)
+    err == Libc.ESPIPE && return false
+    systemerror("seekend", err)
+    return true
+end
+
 
 """
     skip(s, offset)

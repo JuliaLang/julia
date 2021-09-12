@@ -265,6 +265,8 @@ function seekend(io::GenericIOBuffer)
     return io
 end
 
+_maybe_seekend(io::IOBuffer) = io.seekable ? (seekend(io); true) : false
+
 function truncate(io::GenericIOBuffer, n::Integer)
     io.writable || throw(ArgumentError("truncate failed, IOBuffer is not writeable"))
     io.seekable || throw(ArgumentError("truncate failed, IOBuffer is not seekable"))

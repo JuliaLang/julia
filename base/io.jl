@@ -1053,13 +1053,20 @@ IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
 isdone(itr::EachLine, state...) = eof(itr.stream)
 
+"""
+    _maybe_seekend(io)
+
+`seekend(io)` and return `true` if possible, or return `false` if
+it is detected that `seekend` is not supported for this `IO` type.
+"""
+_maybe_seekend(io::IO) = applicable(seekend, io) ? (seekend(io); true) : false
+
 # Reverse-order iteration for the EachLine iterator.   (For seekable streams,
 # this reads the stream from the end in 4kB chunks.   For non-seekable streams,
 # we read the whole stream into memory, up to maxlines lines.)
 function iterate(r::Iterators.Reverse{<:EachLine}; maxlines::Integer=typemax(Int))
-    try
-        seekend(r.itr.stream) # may throw for some stream types
-    catch
+    seekable = _maybe_seekend(r.itr.stream)
+    if !seekable
         if maxlines < typemax(Int)
             # read stream in a 4kiB chunks, keeping > maxlines newlines
             # worth of chunks stored in a circular buffer:

@@ -629,9 +629,21 @@ end
 end
 
 # exercise buffer code for reverse(eachline)
-let lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
-    buf = IOBuffer(join(lines, '\n'))
-    @test reverse!(collect(Iterators.reverse(eachline(buf)))) == lines
+@testset "reverse(eachline)" begin
+    lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
+    for seekable in (true, false)
+        buf = IOBuffer(join(lines, '\n'))
+        buf.seekable = seekable
+        @test reverse!(collect(Iterators.reverse(eachline(buf)))) == lines
+        buf.seekable = true
+        seekstart(buf)
+        buf.seekable = seekable
+        @test last(eachline(buf)) == last(lines)
+        buf.seekable = true
+        seekstart(buf)
+        buf.seekable = seekable
+        @test last(eachline(buf),10^4) == last(lines,10^4)
+    end
 
     buf = IOBuffer()
     @test isempty(collect(Iterators.reverse(eachline(buf))))
