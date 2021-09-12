@@ -127,6 +127,7 @@ const DC3 = 2.48015872894767294178e-05
 const DC4 = -2.75573143513906633035e-07
 const DC5 = 2.08757232129817482790e-09
 const DC6 = -1.13596475577881948265e-11
+
 """
     cos_kernel(y)
 
@@ -761,7 +762,7 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function sinpi(x::T) where T<:AbstractFloat
+function (x::T) where T<:Union{Float32, Float64}
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
@@ -784,13 +785,12 @@ function sinpi(x::T) where T<:AbstractFloat
         return sinpi_kernel(copysign(one(T), rx) - rx)
     end
 end
-
 """
     cospi(x)
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 """
-function cospi(x::T) where T<:AbstractFloat
+function cospi(x::T) where T<:Union{Float32, Float64}
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
@@ -812,7 +812,6 @@ function cospi(x::T) where T<:AbstractFloat
         -cospi_kernel(one(T) - rx)
     end
 end
-
 """
     sincospi(x)
 
@@ -824,7 +823,7 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
-function sincospi(x::T) where T<:AbstractFloat
+function sincospi(x::T) where T<:Union{Float32, Float64}
     if !isfinite(x)
         isnan(x) && return x, x
         throw(DomainError(x, "`x` cannot be infinite."))
@@ -852,7 +851,6 @@ function sincospi(x::T) where T<:AbstractFloat
         return sinpi_kernel(one(T) - arx), -cospi_kernel(copysign(one(T), rx) - rx)
     end
 end
-
 
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
