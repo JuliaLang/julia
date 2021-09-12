@@ -293,6 +293,12 @@ for (name, f) in l
         @test collect(eachline(io(), keep=true)) == collect(eachline(filename, keep=true))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(@inferred(eachline(io()))) == collect(@inferred(eachline(filename))) #20351
+        for keep in (true, false)
+            lines = readlines(io(); keep)
+            @test last(lines) == last(eachline(io(); keep))
+            @test last(lines,2) == last(eachline(io(); keep),2)
+            @test reverse!(lines) == collect(Iterators.reverse(eachline(io(); keep))) == collect(Iterators.reverse(eachline(IOBuffer(text); keep)))
+        end
 
         cleanup()
 
@@ -621,3 +627,13 @@ end
     first(itr) # consume the iterator
     @test  isempty(itr) # now it is empty
 end
+
+# exercise buffer code for reverse(eachline)
+let lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
+    buf = IOBuffer(join(lines, '\n'))
+    @test reverse!(collect(Iterators.reverse(eachline(buf)))) == lines
+
+    buf = IOBuffer()
+    @test isempty(collect(Iterators.reverse(eachline(buf))))
+end
+

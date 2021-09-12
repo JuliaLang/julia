@@ -1053,6 +1053,114 @@ IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
 isdone(itr::EachLine, state...) = eof(itr.stream)
 
+# Reverse-order iteration for the EachLine iterator.   (For seekable streams,
+# this reads the stream from the end in 4kB chunks.)
+function iterate(r::Iterators.Reverse{<:EachLine})
+    try
+        seekend(r.itr.stream) # may throw for some stream types
+    catch
+        # fallback: read entire stream into a buffer
+        chunk = read(r.itr.stream)
+        isempty(chunk) && return (r.itr.ondone(); nothing)
+        jnewline = chunk[end] == UInt8('\n') ? length(chunk) : length(chunk)+1
+        inewline = something(findprev(==(UInt8('\n')), chunk, jnewline-1), 0)
+        return iterate(r, (0, [chunk], 1, inewline, 1, jnewline))
+    end
+    p = position(r.itr.stream)
+    # chunks = circular buffer of 4kiB blocks read from end of stream
+    chunks = empty!(Vector{Vector{UInt8}}(undef, 2)) # allocate space for 2 buffers (common case)
+    inewline = jnewline = 0
+    while p > 0 # read chunks until we find a newline or we read whole file
+        chunk = Vector{UInt8}(undef, min(4096, p))
+        p -= length(chunk)
+        readbytes!(seek(r.itr.stream, p), chunk)
+        pushfirst!(chunks, chunk)
+        inewline = something(findlast(==(UInt8('\n')), chunk), 0)
+        if inewline > 0
+            if length(chunks) == 1 && inewline == length(chunks[1])
+                # found newline at end of file … keep looking
+                jnewline = inewline
+                inewline = something(findprev(==(UInt8('\n')), chunk, inewline-1), 0)
+            else
+                break
+            end
+        end
+        p == 0 && break
+    end
+    return iterate(r, (p, chunks, 1, inewline, length(chunks), jnewline == 0 && !isempty(chunks) ? length(chunks[end])+1 : jnewline))
+end
+function iterate(r::Iterators.Reverse{<:EachLine}, state)
+    p, chunks, ichunk, inewline, jchunk, jnewline = state
+    if inewline == 0 # no newline found, remaining line = rest of chunks (if any)
+        isempty(chunks) && return (r.itr.ondone(); nothing)
+        buf = IOBuffer(sizehint = ichunk==jchunk ? jnewline : 4096)
+        while ichunk != jchunk
+            write(buf, chunks[ichunk])
+            ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
+        end
+        chunk = chunks[jchunk]
+        write(buf, view(chunk, 1:min(length(chunk), jnewline - 1 + r.itr.keep)))
+        empty!(chunks) # will cause next iteration to terminate
+        return (String(take!(buf)), state)
+    else
+        # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
+        jnewline = min(length(chunks[jchunk]), jnewline - 1 + r.itr.keep)
+        if ichunk == jchunk # common case: current and previous newline in same chunk
+            s = String(view(chunks[ichunk], inewline+1:jnewline))
+        else
+            buf = IOBuffer(sizehint=128)
+            write(buf, chunks[ichunk][inewline+1:end])
+            i = ichunk
+            while true
+                i = i == length(chunks) ? 1 : i + 1
+                i == jchunk && break
+                write(buf, chunks[i])
+            end
+            write(buf, view(chunks[jchunk], 1:jnewline))
+            s = String(take!(buf))
+
+            # overwrite obsolete chunks (ichunk+1:jchunk)
+            i = jchunk
+            while i != ichunk
+                chunk = chunks[i]
+                p -= length(resize!(chunk, min(4096, p)))
+                readbytes!(seek(r.itr.stream, p), chunk)
+                i = i == 1 ? length(chunks) : i - 1
+            end
+        end
+
+        # find the newline previous to inewline
+        jchunk = ichunk
+        jnewline = inewline
+        while true
+            inewline = something(findprev(==(UInt8('\n')), chunks[ichunk], inewline-1), 0)
+            inewline > 0 && break
+            ichunk = ichunk == 1 ? length(chunks) : ichunk - 1
+            ichunk == jchunk && break # found nothing — may need to read more chunks
+            inewline = length(chunks[ichunk])+1 # start for next findprev
+        end
+
+        # read more chunks to look for a newline (should rarely happen)
+        if inewline == 0 && p > 0
+            ichunk = jchunk + 1
+            while true
+                chunk = Vector{UInt8}(undef, min(4096, p))
+                p -= length(chunk)
+                readbytes!(seek(r.itr.stream, p), chunk)
+                insert!(chunks, ichunk, chunk)
+                inewline = something(findlast(==(UInt8('\n')), chunk), 0)
+                (p == 0 || inewline > 0) && break
+            end
+        end
+
+        return (s, (p, chunks, ichunk, inewline, jchunk, jnewline))
+    end
+end
+
+# use reverse iteration to get end of EachLines
+# (todo: reduce memory usage for non-seekable streams)
+last(itr::EachLine) = first(Iterators.reverse(itr))
+
 struct ReadEachIterator{T, IOT <: IO}
     stream::IOT
 end
