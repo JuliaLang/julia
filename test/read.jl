@@ -640,7 +640,8 @@ end
         @test last(eachline(_seekstart!(buf, seekable)),length(lines)*2) == lines
     end
 
-    buf = IOBuffer()
-    @test isempty(collect(Iterators.reverse(eachline(buf))))
+    for seekable in (true, false)
+        @test isempty(collect(Iterators.reverse(eachline(_seekstart!(IOBuffer(), seekable)))))
+    end
 end
 
