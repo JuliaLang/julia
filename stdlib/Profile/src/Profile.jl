@@ -555,7 +555,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - (nmeta + 1) && continue # skip metadata (it's read ahead below) and extra block-end NULL IP
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
         ip = data[i]
         if is_block_end(data, i)
             # read metadata
@@ -803,7 +803,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - (nmeta + 1) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
