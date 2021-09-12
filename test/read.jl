@@ -631,22 +631,13 @@ end
 # exercise buffer code for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
+    _seekstart!(buf, seekable) = (buf.seekable=true; seekstart(buf); buf.seekable=seekable; buf)
     for seekable in (true, false), lines in (lines, reverse(lines))
         buf = IOBuffer(join(lines, '\n'))
-        buf.seekable = seekable
-        @test reverse!(collect(Iterators.reverse(eachline(buf)))) == lines
-        buf.seekable = true
-        seekstart(buf)
-        buf.seekable = seekable
-        @test last(eachline(buf)) == last(lines)
-        buf.seekable = true
-        seekstart(buf)
-        buf.seekable = seekable
-        @test last(eachline(buf),10^4) == last(lines,10^4)
-        buf.seekable = true
-        seekstart(buf)
-        buf.seekable = seekable
-        @test last(eachline(buf),length(lines)*2) == lines
+        @test reverse!(collect(Iterators.reverse(eachline(_seekstart!(buf, seekable))))) == lines
+        @test last(eachline(_seekstart!(buf, seekable))) == last(lines)
+        @test last(eachline(_seekstart!(buf, seekable)),10^4) == last(lines,10^4)
+        @test last(eachline(_seekstart!(buf, seekable)),length(lines)*2) == lines
     end
 
     buf = IOBuffer()
