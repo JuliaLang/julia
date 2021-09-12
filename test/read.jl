@@ -643,6 +643,10 @@ end
         seekstart(buf)
         buf.seekable = seekable
         @test last(eachline(buf),10^4) == last(lines,10^4)
+        buf.seekable = true
+        seekstart(buf)
+        buf.seekable = seekable
+        @test last(eachline(buf),length(lines)*2) == lines
     end
 
     buf = IOBuffer()
