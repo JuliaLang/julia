@@ -53,7 +53,20 @@ Base.isnonzeroindex(z::Zeros{<:Any,N}, i::Vararg{Int,N}) where {N} = false
 @testset "Display of structured matrices" begin
     @testset "Diagonal" begin
         for r in Any[3:2, 3:3, 3:6, LinRange(0, 1, 7), LinRange(0, 1, 7)*im]
-            test_print_array(Diagonal(r))
+            D = Diagonal(r)
+            test_print_array(D)
+            if length(D) > 0
+                for i in Any[(1,), (1,1), (1,1,1)]
+                    @test Base.isnonzeroindex(D, i...)
+                    @test Base.isnonzeroindex(D, CartesianIndex(i...))
+                end
+            end
+            if length(D) > 1
+                for i in Any[(2,), (2,1), (2,1,1)]
+                    @test !Base.isnonzeroindex(D, i...)
+                    @test !Base.isnonzeroindex(D, CartesianIndex(i...))
+                end
+            end
         end
     end
     @testset "BiDiagonal" begin
@@ -84,7 +97,20 @@ Base.isnonzeroindex(z::Zeros{<:Any,N}, i::Vararg{Int,N}) where {N} = false
     end
     @testset "Zeros" begin
         for T in [Int, Float64], s in Any[(2,), (2,2)]
-            test_print_array(Zeros(T, s))
+            z = Zeros(T, s)
+            test_print_array(z)
+            if length(z) > 0
+                for i in Any[(1,), (1,1), (1,1,1)]
+                    @test !Base.isnonzeroindex(z, i...)
+                    @test !Base.isnonzeroindex(z, CartesianIndex(i...))
+                end
+            end
+            if length(z) > 1
+                for i in Any[(2,), (2,1), (2,1,1)]
+                    @test !Base.isnonzeroindex(z, i...)
+                    @test !Base.isnonzeroindex(z, CartesianIndex(i...))
+                end
+            end
         end
     end
 end

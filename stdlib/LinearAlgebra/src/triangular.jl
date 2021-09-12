@@ -276,8 +276,8 @@ end
 
 
 ## structured matrix methods ##
-isnonzeroindex(::Union{UpperTriangular,UnitUpperTriangular}, i, j) = i <= j
-isnonzeroindex(::Union{LowerTriangular,UnitLowerTriangular}, i, j) = i >= j
+isnonzeroindex(::Union{UpperTriangular,UnitUpperTriangular}, i::Integer, j::Integer) = i <= j
+isnonzeroindex(::Union{LowerTriangular,UnitLowerTriangular}, i::Integer, j::Integer) = i >= j
 function Base.replace_in_print_matrix(A::AbstractTriangular,
                                       i::Integer, j::Integer, s::AbstractString)
     return _replace_in_print_matrix(A, i, j, s)

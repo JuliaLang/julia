@@ -146,7 +146,7 @@ function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
 end
 
 ## structured matrix methods ##
-isnonzeroindex(A::Bidiagonal, i, j) = (i == j) || (A.uplo == 'U' ? (i == j-1) : (i == j+1))
+isnonzeroindex(A::Bidiagonal, i::Integer, j::Integer) = (i == j) || (A.uplo == 'U' ? (i == j-1) : (i == j+1))
 function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::AbstractString)
     return _replace_in_print_matrix(A, i, j, s)
 end

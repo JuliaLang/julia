@@ -667,7 +667,7 @@ function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
 end
 
 ## structured matrix methods ##
-isnonzeroindex(::Union{SymTridiagonal, Tridiagonal}, i, j) = i==j-1||i==j||i==j+1
+isnonzeroindex(::Union{SymTridiagonal, Tridiagonal}, i::Integer, j::Integer) = i==j-1||i==j||i==j+1
 function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::AbstractString)
     return _replace_in_print_matrix(A, i, j, s)
 end
