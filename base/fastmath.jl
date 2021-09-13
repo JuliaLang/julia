@@ -345,7 +345,7 @@ end
 # fall-back implementations and type promotion
 
 for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
-          :cosh, :exp10, :exp2, :exp, :expm1,
+          :cis, :cosh, :exp10, :exp2, :exp, :expm1,
           :log10, :log1p, :log2, :log, :sinh, :sqrt, :tan,
           :tanh)
     f_fast = fast_op[f]
