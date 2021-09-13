@@ -100,9 +100,9 @@ mutable struct Worker
     add_msgs::Array{Any,1}
     @atomic gcflag::Bool
     state::WorkerState
-    c_state::Condition      # wait for state changes
-    ct_time::Float64        # creation time
-    conn_func::Any          # used to setup connections lazily
+    c_state::Threads.Condition # wait for state changes, lock for state
+    ct_time::Float64           # creation time
+    conn_func::Any             # used to setup connections lazily
 
     r_stream::IO
     w_stream::IO
@@ -134,7 +134,7 @@ mutable struct Worker
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
-        w=new(id, Threads.ReentrantLock(), [], [], false, W_CREATED, Condition(), time(), conn_func)
+        w=new(id, Threads.ReentrantLock(), [], [], false, W_CREATED, Threads.Condition(), time(), conn_func)
         w.initialized = Event()
         register_worker(w)
         w
@@ -144,12 +144,16 @@ mutable struct Worker
 end
 
 function set_worker_state(w, state)
-    w.state = state
-    notify(w.c_state; all=true)
+    lock(w.c_state) do
+        w.state = state
+        notify(w.c_state; all=true)
+    end
 end
 
 function check_worker_state(w::Worker)
+    lock(w.c_state)
     if w.state === W_CREATED
+        unlock(w.c_state)
         if !isclusterlazy()
             if PGRP.topology === :all_to_all
                 # Since higher pids connect with lower pids, the remote worker
@@ -169,6 +173,8 @@ function check_worker_state(w::Worker)
             errormonitor(t)
             wait_for_conn(w)
         end
+    else
+        unlock(w.c_state)
     end
 end
 
@@ -187,13 +193,25 @@ function exec_conn_func(w::Worker)
 end
 
 function wait_for_conn(w)
+    lock(w.c_state)
     if w.state === W_CREATED
+        unlock(w.c_state)
         timeout =  worker_timeout() - (time() - w.ct_time)
         timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
 
-        @async (sleep(timeout); notify(w.c_state; all=true))
-        wait(w.c_state)
-        w.state === W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+        T = Threads.@spawn begin
+            sleep($timeout)
+            lock(w.c_state) do
+                notify(w.c_state; all=true)
+            end
+        end
+        errormonitor(T)
+        lock(w.c_state) do
+            wait(w.c_state)
+            w.state === W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+        end
+    else
+        unlock(w.c_state)
     end
     nothing
 end
@@ -488,7 +506,10 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
         while true
             if isempty(launched)
                 istaskdone(t_launch) && break
-                @async (sleep(1); notify(launch_ntfy))
+                @async begin
+                    sleep(1)
+                    notify(launch_ntfy)
+                end
                 wait(launch_ntfy)
             end
 
@@ -641,7 +662,12 @@ function create_worker(manager, wconfig)
         # require the value of config.connect_at which is set only upon connection completion
         for jw in PGRP.workers
             if (jw.id != 1) && (jw.id < w.id)
-                (jw.state === W_CREATED) && wait(jw.c_state)
+                # wait for wl to join
+                lock(jw.c_state) do
+                    if jw.state === W_CREATED
+                        wait(jw.c_state)
+                    end
+                end
                 push!(join_list, jw)
             end
         end
@@ -664,7 +690,12 @@ function create_worker(manager, wconfig)
         end
 
         for wl in wlist
-            (wl.state === W_CREATED) && wait(wl.c_state)
+            lock(wl.c_state) do
+                if wl.state === W_CREATED
+                    # wait for wl to join
+                    wait(wl.c_state)
+                end
+            end
             push!(join_list, wl)
         end
     end
@@ -681,7 +712,11 @@ function create_worker(manager, wconfig)
     @async manage(w.manager, w.id, w.config, :register)
     # wait for rr_ntfy_join with timeout
     timedout = false
-    @async (sleep($timeout); timedout = true; put!(rr_ntfy_join, 1))
+    @async begin
+        sleep($timeout)
+        timedout = true
+        put!(rr_ntfy_join, 1)
+    end
     wait(rr_ntfy_join)
     if timedout
         error("worker did not connect within $timeout seconds")
