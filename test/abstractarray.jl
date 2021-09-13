@@ -1571,3 +1571,37 @@ end
     r = Base.IdentityUnitRange(3:4)
     @test reshape(r, :) === reshape(r, (:,)) === r
 end
+
+@testset "iterate using traits" begin
+    # check that iteration with wrapper types works the same whether or not they
+    # inherit their parent's IterationStyle
+    for S in [:IterateTraits1, :IterateTraits2]
+        @eval struct $S{T, N, A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+            x :: A
+        end
+        @eval Base.size(A::$S) = size(A.x)
+        @eval Base.axes(A::$S) = axes(A.x)
+        @eval Base.getindex(A::$S, i::Int...) = getindex(A.x, i...)
+        @eval Base.IndexStyle(::Type{<:$S{<:Any,<:Any,A}}) where {A} = IndexStyle(A)
+    end
+    Base.IterationStyle(A::IterateTraits1) = Base.IterationStyle(A.x)
+    Base.step(A::IterateTraits1{<:Any,<:Any,<:AbstractRange}) = step(A.x)
+    # IterateTraits2 uses the fallback iterate implementation
+
+    for r in Any[3:5, 3:1:5, LinRange(3,5,3), collect(3:5), view(3:5, :),
+            Base.OneTo(3), Base.IdentityUnitRange(4:5), 'a':'d',
+            CartesianIndex(1,1):CartesianIndex(2,2):CartesianIndex(5,7),
+            reshape(1:4, 2, 2), Base.PermutedDimsArray(reshape(1:4, 2, 2), (2,1))]
+        r1 = IterateTraits1(r)
+        r2 = IterateTraits2(r)
+        for (a, b, c) in zip(r, r1, r2)
+            @test a == b == c
+        end
+        # check that indexing and iteration are equivalent
+        map((r1, r2)) do s
+            for (i, v) in pairs(s)
+                @test r1[i] == v
+            end
+        end
+    end
+end

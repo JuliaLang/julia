@@ -355,6 +355,8 @@ end
     A
 end
 
+Base.IterationStyle(A::OffsetArray) = Base.IterationStyle(parent(A))
+
 # For fast broadcasting: ref https://discourse.julialang.org/t/why-is-there-a-performance-hit-on-broadcasting-with-offsetarrays/32194
 Base.dataids(A::OffsetArray) = Base.dataids(parent(A))
 Broadcast.broadcast_unalias(dest::OffsetArray, src::OffsetArray) = parent(dest) === parent(src) ? src : Broadcast.unalias(dest, src)

@@ -822,3 +822,17 @@ end
     @test (@view x[end, -y[end]])[] == 3
     @test (@view x[y[end], end])[] == 4
 end
+
+@testset "iteration" begin
+    for r in Any[1:5, 1:1:5, UnitRange(1.0, 5.0), 1.0:5.0, LinRange(1, 5, 5),
+            Base.IdentityUnitRange(4:5), Base.OneTo(4), view(1:5, :)]
+        ro = OffsetArray(r, 0)
+        for (a, b) in zip(r, ro)
+            @test a == b
+        end
+        s = collect(r); so = collect(ro)
+        for (a, b) in zip(s, so)
+            @test a == b
+        end
+    end
+end
