@@ -633,8 +633,8 @@ end
 # exercise buffer code for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
-    for lines in (lines, reverse(lines))
-        buf = IOBuffer(join(lines, '\n'))
+    for lines in (lines, reverse(lines)), finalnewline in (true, false)
+        buf = IOBuffer(join(lines, '\n') * (finalnewline ? "\n" : ""))
         @test reverse!(collect(Iterators.reverse(eachline(seekstart(buf))))) == lines
         @test last(eachline(seekstart(buf))) == last(lines)
         @test last(eachline(seekstart(buf)),10^4) == last(lines,10^4)
