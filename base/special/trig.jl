@@ -767,22 +767,21 @@ function sinpi(x::T) where T<:Union{Float32, Float64}
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
+    # For large x, answers are all 1 or zero.
+    abs(x) >= maxintfloat(T) && return copysign(zero(T), x)
 
-    ax = abs(x)
-    s = maxintfloat(T)/2
-    ax >= s && return copysign(zero(T),x) # integer-valued
-
-    # reduce to interval [-1,1]
-    # assumes RoundNearest rounding mode
-    t = 3*s
-    rx = x-((x+t)-t) # zeros may be incorrectly signed
-    arx = abs(rx)
-    if arx < 0.25
-        return sinpi_kernel(rx)
-    elseif arx < .75
-        return copysign(cospi_kernel(T(0.5) - arx), rx)
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = muladd(T(-.5), n, x)
+    n = Int(n)&3
+    if n==0
+        return cospi_kernel(rx)
+    elseif n==1
+        return -sinpi_kernel(rx)
+    elseif n==2
+        return -cospi_kernel(rx)
     else
-        return sinpi_kernel(copysign(one(T), rx) - rx)
+        return sinpi_kernel(rx)
     end
 end
 """
@@ -795,21 +794,21 @@ function cospi(x::T) where T<:Union{Float32, Float64}
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
+    # For large x, answers are all 1 or zero.
+    abs(x) >= maxintfloat(T) && return one(T)
 
-    ax = abs(x)
-    s = maxintfloat(T)
-    ax >= s && return one(T) # even integer-valued
-
-    # reduce to interval [-1,1], then [0,1]
-    # assumes RoundNearest rounding mode
-    rx = abs(ax-((ax+s)-s))
-
-    if rx <= 0.25
-        cospi_kernel(rx)
-    elseif rx < 0.75
-        sinpi_kernel(T(0.5) - rx)
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = muladd(T(-.5), n, x)
+    n = Int(n)&3
+    if n==0
+        return cospi_kernel(rx)
+    elseif n==1
+        return -sinpi_kernel(rx)
+    elseif n==2
+        return -cospi_kernel(rx)
     else
-        -cospi_kernel(one(T) - rx)
+        return sinpi_kernel(rx)
     end
 end
 """
@@ -823,32 +822,28 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
+
 function sincospi(x::T) where T<:Union{Float32, Float64}
     if !isfinite(x)
         isnan(x) && return x, x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
+    # For large x, answers are all 1 or zero.
+    abs(x) >= maxintfloat(T) && return (copysign(zero(T), x), one(T))
 
-    ax = abs(x)
-    s = maxintfloat(T)
-    ax >= s && return (copysign(zero(T), x), one(T)) # even integer-valued
-
-    # reduce to interval [-1,1]
-    # assumes RoundNearest rounding mode
-    t = 3*(s/2)
-    rx = x-((x+t)-t) # zeros may be incorrectly signed
-    arx = abs(rx)
-
-    # same selection scheme as sinpi and cospi
-    if (arx == 0) | (arx == 1)
-        return copysign(zero(T), x), ifelse(ax % 2 == 0, one(T), -one(T))
-    elseif arx < 0.25
-        return sinpi_kernel(rx), cospi_kernel(rx)
-    elseif arx < 0.75
-        y = T(0.5) - arx
-        return copysign(cospi_kernel(y), rx), sinpi_kernel(y)
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = muladd(T(-.5), n, x)
+    n = Int(n)&3
+    si, co = sinpi_kernel(rx),cospi_kernel(rx)
+    if n==0
+        return si,co
+    elseif n==1
+        return co,-si
+    elseif n==2
+        return -si,-co
     else
-        return sinpi_kernel(one(T) - arx), -cospi_kernel(copysign(one(T), rx) - rx)
+        return -co,si
     end
 end
 
