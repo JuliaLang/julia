@@ -724,7 +724,7 @@ function acos(x::T) where T <: Union{Float32, Float64}
 end
 
 # Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
-@inline function sinpi_kernel(x::Float64) 
+@inline function sinpi_kernel(x::Float64)
     x² = x*x
     x⁴ = x²*x²
     r  = evalpoly(x², (2.5501640398773415, -0.5992645293202981, 0.08214588658006512,
@@ -736,6 +736,11 @@ end
     x = Float64(x)
     return Float32(x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
                                     2.5501626483206374, -0.5992021090314925, 0.08100185277841528)))
+end
+
+@inline function sinpi_kernel(x::Float16)
+    x = Float32(x)
+    return Float16(x*evalpoly(x*x, (3.1415927f0, -5.1677127f0, 2.5501626f0, -0.5992021f0, 0.081001855f0)))
 end
 
 # Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
@@ -754,6 +759,10 @@ end
     return Float32(evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
                                  -1.3352624040152927, 0.23531426791507182, -0.02550710082498761)))
 end
+@inline function cospi_kernel(x::Float16)
+    x = Float32(x)
+    return Float16(evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0)))
+end
 
 """
     sinpi(x)
@@ -762,7 +771,7 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function sinpi(x::T) where T<:Union{Float32, Float64}
+function sinpi(x::T) where T<:Union{Float16, Float32, Float64}
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
@@ -775,13 +784,13 @@ function sinpi(x::T) where T<:Union{Float32, Float64}
     rx = muladd(T(-.5), n, x)
     n = Int(n)&3
     if n==0
-        return cospi_kernel(rx)
-    elseif n==1
-        return -sinpi_kernel(rx)
-    elseif n==2
-        return -cospi_kernel(rx)
-    else
         return sinpi_kernel(rx)
+    elseif n==1
+        return cospi_kernel(rx)
+    elseif n==2
+        return -sinpi_kernel(rx)
+    else
+        return -cospi_kernel(rx)
     end
 end
 """
@@ -789,7 +798,7 @@ end
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 """
-function cospi(x::T) where T<:Union{Float32, Float64}
+function cospi(x::T) where T<:Union{Float16, Float32, Float64}
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
@@ -822,8 +831,7 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
-
-function sincospi(x::T) where T<:Union{Float32, Float64}
+function sincospi(x::T) where T<:Union{Float16, Float32, Float64}
     if !isfinite(x)
         isnan(x) && return x, x
         throw(DomainError(x, "`x` cannot be infinite."))
@@ -850,9 +858,9 @@ end
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 sincospi(x::Integer) = (sinpi(x), cospi(x))
-sinpi(x::Real) = sinpi(float(x))
-cospi(x::Real) = cospi(float(x))
-sincospi(x::Real) = sincospi(float(x))
+sinpi(x::Real) = sin(pi*x)
+cospi(x::Real) = cos(pi*x)
+sincospi(x::Real) = sincos(pi*x)
 
 function sinpi(z::Complex{T}) where T
     F = float(T)
