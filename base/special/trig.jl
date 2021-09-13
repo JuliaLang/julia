@@ -777,7 +777,9 @@ function sinpi(x::T) where T<:Union{Float16, Float32, Float64, Rational}
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
-    abs(x) >= maxintfloat(T) && return copysign(zero(T), x)
+    if T <: AbstractFloat
+        abs(x) >= maxintfloat(T) && return copysign(zero(T), x)
+    end
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -804,7 +806,9 @@ function cospi(x::T) where T<:Union{Float16, Float32, Float64, Rational}
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
-    abs(x) >= maxintfloat(T) && return one(T)
+    if T <: AbstractFloat
+        abs(x) >= maxintfloat(T) && return one(T)
+    end
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -837,7 +841,9 @@ function sincospi(x::T) where T<:Union{Float16, Float32, Float64, Rational}
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
-    abs(x) >= maxintfloat(T) && return (copysign(zero(T), x), one(T))
+    if T <: AbstractFloat
+        abs(x) >= maxintfloat(T) && return (copysign(zero(T), x), one(T))
+    end
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
