@@ -1683,6 +1683,9 @@ Provides a convenient way to call [`invoke`](@ref);
 `@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
 When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
 `@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
+
+!!! compat "Julia 1.7"
+    This macro requires Julia 1.7 or later.
 """
 macro invoke(ex)
     f, args, kwargs = destructure_callex(ex)
@@ -1699,6 +1702,9 @@ end
 Provides a convenient way to call [`Base.invokelatest`](@ref).
 `@invokelatest f(args...; kwargs...)` will simply be expanded into
 `Base.invokelatest(f, args...; kwargs...)`.
+
+!!! compat "Julia 1.7"
+    This macro requires Julia 1.7 or later.
 """
 macro invokelatest(ex)
     f, args, kwargs = destructure_callex(ex)
