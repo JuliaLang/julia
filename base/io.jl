@@ -1101,8 +1101,8 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         if ichunk == jchunk # common case: current and previous newline in same chunk
             s = String(view(chunks[ichunk], inewline+1:jnewline))
         else
-            buf = IOBuffer(sizehint=128)
-            write(buf, chunks[ichunk][inewline+1:end])
+            buf = IOBuffer(sizehint=max(128, length(chunks[ichunk])-inewline+jnewline))
+            write(buf, view(chunks[ichunk], inewline+1:end))
             i = ichunk
             while true
                 i = i == length(chunks) ? 1 : i + 1
