@@ -50,6 +50,21 @@ function sin(x::T) where T<:Union{Float32, Float64}
         return -cos_kernel(y)
     end
 end
+function sin_fast(x::T) where T<:Union{Float32, Float64}
+    n = round(Int, x*T(0.6366197723675814))  # 2/pi
+    y = muladd(T(1.5707963267948966), n, -x) #pi/2
+    n = Int(n)&3
+    if n == 0
+        return sin_kernel_fast(y)
+    elseif n == 1
+        return cos_kernel_fast(y)
+    elseif n == 2
+        return -sin_kernel_fast(y)
+    else
+        return -cos_kernel_fast(y)
+    end
+end
+sin_fast(x) = sin(x)
 
 # Coefficients in 13th order polynomial approximation on [0; π/4]
 #     sin(x) ≈ x + S1*x³ + S2*x⁵ + S3*x⁷ + S4*x⁹ + S5*x¹¹ + S6*x¹³
@@ -92,6 +107,14 @@ end
     s = z*y.hi
     Float32((y.hi + s*@horner(z, S1, S2)) + s*w*r)
 end
+@inline function sin_kernel_fast(y::Float64)
+    y² = y*y
+    return y*evalpoly(y², (1.0, DS1, DS2, DS3, DS4, DS5, DS6))
+end
+@inline function sin_kernel_fast(y::Float32)
+    y² = y*y
+    return y*evalpoly(y², (1f0, -0.16666667f0, 0.008333329f0, -0.00019839335f0, 2.7183114f-6))
+end
 
 # cos methods
 @noinline cos_domain_error(x) = throw(DomainError(x, "cos(x) is only defined for finite x."))
@@ -121,12 +144,29 @@ function cos(x::T) where T<:Union{Float32, Float64}
     end
 end
 
+function cos_fast(x::T) where T<:Union{Float32, Float64}
+    n = round(Int, x*T(0.6366197723675814))  # 2/pi
+    y = muladd(T(1.5707963267948966), n, -x) #pi/2
+    n = Int(n)&3
+    if n == 0
+        return cos_kernel_fast(y)
+    elseif n == 1
+        return -sin_kernel_fast(y)
+    elseif n == 2
+        return -cos_kernel_fast(y)
+    else
+        return sin_kernel_fast(y)
+    end
+end
+cos_fast(x) = cos(x)
+
 const DC1 = 4.16666666666666019037e-02
 const DC2 = -1.38888888888741095749e-03
 const DC3 = 2.48015872894767294178e-05
 const DC4 = -2.75573143513906633035e-07
 const DC5 = 2.08757232129817482790e-09
 const DC6 = -1.13596475577881948265e-11
+
 """
     cos_kernel(y)
 
@@ -148,7 +188,6 @@ end
     w  = 1.0-half_y²
     w + (((1.0-w)-half_y²) + (y²*r))
 end
-
 # cos_kernels accepting values from rem_pio2 in the Float32 case
 cos_kernel(x::Float32) = cos_kernel(DoubleFloat32(x))
 @inline function cos_kernel(y::DoubleFloat32)
@@ -158,6 +197,14 @@ cos_kernel(x::Float32) = cos_kernel(DoubleFloat32(x))
     y⁴ = y²*y²
     r = @horner(y², -0.001388676377460993, 2.439044879627741e-5)
     Float32(((1.0+y²*C0) + y⁴*C1) + (y⁴*y²)*r)
+end
+@inline function cos_kernel_fast(y::Float64)
+    y² = y*y
+    return evalpoly(y², (1.0, -.5, DC1, DC2, DC3, DC4, DC5, DC6))
+end
+@inline function cos_kernel_fast(y::Float32)
+    y² = y*y
+    return evalpoly(y², (1f0, -0.5f0, 0.041666623f0, -0.0013886763f0, 2.4390449f-5))
 end
 
 ### sincos methods
@@ -188,6 +235,21 @@ function sincos(x::T) where T<:Union{Float32, Float64}
     si, co = sincos_kernel(y)
     # ... and use the same selection scheme as above: (sin, cos, -sin, -cos) for
     # for sin and (cos, -sin, -cos, sin) for cos
+    if n == 0
+        return si, co
+    elseif n == 1
+        return co, -si
+    elseif n == 2
+        return -si, -co
+    else
+        return -co, si
+    end
+end
+function sincos_fast(x::T) where T<:Union{Float32, Float64}
+    n = round(Int, x*T(0.6366197723675814))  # 2/pi
+    y = muladd(T(1.5707963267948966), n, -x) #pi/2
+    n = Int(n)&3
+    si, co = sin_kernel_fast(y), cos_kernel_fast(y)
     if n == 0
         return si, co
     elseif n == 1

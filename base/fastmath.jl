@@ -276,9 +276,13 @@ end
 exp2_fast(x::Union{Float32,Float64})  = Base.Math.exp2_fast(x)
 exp_fast(x::Union{Float32,Float64})   = Base.Math.exp_fast(x)
 exp10_fast(x::Union{Float32,Float64}) = Base.Math.exp10_fast(x)
+sin_fast(x) = Base.Math.sin_fast(x)
+cos_fast(x) = Base.Math.cos_fast(x)
+sincos_fast(x) = Base.Math.sincos_fast(x)
 
 # builtins
 
+pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
 pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
 pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
 pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
@@ -341,8 +345,8 @@ end
 # fall-back implementations and type promotion
 
 for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
-          :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1,
-          :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan,
+          :cosh, :exp10, :exp2, :exp, :expm1,
+          :log10, :log1p, :log2, :log, :sinh, :sqrt, :tan,
           :tanh)
     f_fast = fast_op[f]
     @eval begin
