@@ -293,7 +293,7 @@ for (name, f) in l
         @test collect(eachline(io(), keep=true)) == collect(eachline(filename, keep=true))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(@inferred(eachline(io()))) == collect(@inferred(eachline(filename))) #20351
-        if Base._maybe_seekend(io()) # reverse iteration only supports seekable streams
+        if try; seekend(io()); true; catch; false; end # reverse iteration only supports seekable streams
             for keep in (true, false)
                 lines = readlines(io(); keep)
                 @test last(lines) == last(eachline(io(); keep))
