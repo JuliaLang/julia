@@ -9,6 +9,7 @@ using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape, tail,
     require_one_based_indexing
 using Base.Sort: Forward
 using LinearAlgebra
+using LinearAlgebra: AdjOrTrans
 
 import Base: +, -, *, \, /, &, |, xor, ==, zero
 import LinearAlgebra: mul!, ldiv!, rdiv!, cholesky, adjoint!, diag, eigen, dot,
