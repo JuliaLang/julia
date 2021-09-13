@@ -1102,7 +1102,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             s = String(view(chunks[ichunk], inewline+1:jnewline))
         else
             buf = IOBuffer(sizehint=max(128, length(chunks[ichunk])-inewline+jnewline))
-            write(buf, view(chunks[ichunk], inewline+1:end))
+            write(buf, view(chunks[ichunk], inewline+1:length(chunks[ichunk])))
             i = ichunk
             while true
                 i = i == length(chunks) ? 1 : i + 1
