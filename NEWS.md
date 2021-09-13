@@ -1,6 +1,7 @@
 Julia v1.8 Release Notes
 ========================
 
+Hello world
 
 New language features
 ---------------------
