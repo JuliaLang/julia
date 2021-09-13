@@ -1019,6 +1019,11 @@ closed when the `EachLine` object is garbage collected.
 
 To iterate over each line of a `String`, `eachline(IOBuffer(str))` can be used.
 
+[`Iterators.reverse`](@ref) can be used on an `EachLine` object to read the lines
+in reverse order (for files, buffers, and other I/O streams supporting [`seek`](@ref)),
+and [`first`](@ref) or [`last`](@ref) can be used to extract the initial or final
+lines, respectively.
+
 # Examples
 ```jldoctest
 julia> open("my_file.txt", "w") do io
