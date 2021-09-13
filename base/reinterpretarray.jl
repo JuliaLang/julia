@@ -131,18 +131,16 @@ julia> reinterpret(reshape, Int, a)             # the result is a matrix
  2  5
  3  6
 
-julia> R = CartesianIndices((2, 1, 1))
-2×1×1 CartesianIndices{3, Tuple{Base.OneTo{$Int}, Base.OneTo{$Int}, Base.OneTo{$Int}}}:
-[:, :, 1] =
- CartesianIndex(1, 1, 1)
- CartesianIndex(2, 1, 1)
+julia> M = LinearIndices((2, 3))
+2×3 LinearIndices{2, Tuple{$(Base.OneTo{Int}), $(Base.OneTo{Int})}}:
+ 1  3  5
+ 2  4  6
 
-julia> reinterpret(reshape, Int, R)
-3×2×1×1 reinterpret(reshape, $Int, ::CartesianIndices{3, Tuple{Base.OneTo{$Int}, Base.OneTo{$Int}, Base.OneTo{$Int}}}) with eltype $Int:
-[:, :, 1, 1] =
- 1  2
- 1  1
- 1  1
+julia> reinterpret(reshape, Complex{Int}, M) # `LinearIndices` does not have a buffer holding array values
+3-element reinterpret(reshape, Complex{$Int}, ::$(typeof(M))) with eltype Complex{$Int}:
+ 1 + 2im
+ 3 + 4im
+ 5 + 6im
 ```
 """
 reinterpret(::typeof(reshape), T::Type, a::AbstractArray)

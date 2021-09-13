@@ -519,12 +519,11 @@ For lazy array containers, the `reinterpret` works on an element-wise sense, so 
 might not reflect the actual memory storage:
 
 ```jldoctest
-julia> reinterpret(Int, CartesianIndices((2, 2))) # `CartesianIndices` doesn't allocates memory
-4×2 reinterpret($Int, ::CartesianIndices{2, Tuple{Base.OneTo{$Int}, Base.OneTo{$Int}}}):
- 1  1
- 1  2
- 2  2
- 1  2
+julia> reinterpret(Complex{Int}, 1:6) # `UnitRange` does not have a buffer holding array values
+3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
+ 1 + 2im
+ 3 + 4im
+ 5 + 6im
 ```
 
 """
