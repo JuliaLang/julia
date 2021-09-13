@@ -24,8 +24,6 @@ steps:
     # notify:
     #   - github_commit_status:
     #       context: "asan"
-    # soft_fail:
-    #   - exit_status: '*'
     commands: |
       echo "--- Build julia-debug with ASAN"
       contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_NUM_CORES} debug
