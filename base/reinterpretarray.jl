@@ -137,7 +137,7 @@ julia> M = LinearIndices((2, 3))
  2  4  6
 
 julia> reinterpret(reshape, Complex{Int}, M) # `LinearIndices` does not have a buffer holding array values
-3-element reinterpret(reshape, Complex{$Int}, ::$(typeof(M))) with eltype Complex{$Int}:
+3-element reinterpret(reshape, Complex{$Int}, ::LinearIndices{2, Tuple{$(Base.OneTo{Int}), $(Base.OneTo{Int})}}) with eltype Complex{$Int}:
  1 + 2im
  3 + 4im
  5 + 6im
