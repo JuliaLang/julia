@@ -1061,56 +1061,10 @@ it is detected that `seekend` is not supported for this `IO` type.
 """
 _maybe_seekend(io::IO) = applicable(seekend, io) ? (seekend(io); true) : false
 
-# Reverse-order iteration for the EachLine iterator.   (For seekable streams,
-# this reads the stream from the end in 4kB chunks.   For non-seekable streams,
-# we read the whole stream into memory, up to maxlines lines.)
-function iterate(r::Iterators.Reverse{<:EachLine}; maxlines::Integer=typemax(Int))
-    seekable = _maybe_seekend(r.itr.stream)
-    if !seekable
-        if maxlines < typemax(Int)
-            # read stream in a 4kiB chunks, keeping > maxlines newlines
-            # worth of chunks stored in a circular buffer:
-            chunks = Vector{UInt8}[]
-            newlines = Int[]
-            total_newlines = 0
-            ichunk = 0
-            chunkbuf = Vector{UInt8}(undef, 4096)
-            while !eof(r.itr.stream)
-                resize!(chunkbuf, readbytes!(r.itr.stream, chunkbuf))
-                total_newlines += buf_newlines = count(==(UInt8('\n')), chunkbuf)
-                if isempty(chunks) || total_newlines - newlines[ichunk] ≤ maxlines
-                    ichunk += 1
-                    insert!(chunks, ichunk, copy(chunkbuf))
-                    insert!(newlines, ichunk, buf_newlines)
-                else # replace oldest chunk in circular buffer
-                    ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
-                    copyto!(resize!(chunks[ichunk], length(chunkbuf)), chunkbuf)
-                    total_newlines -= newlines[ichunk]
-                    newlines[ichunk] = buf_newlines
-                end
-            end
-            isempty(chunks) && return iterate(r, (0, chunks, 1, 0, 1, 0))
-            jchunk = ichunk
-            jnewline = length(chunks[ichunk]) + (chunks[ichunk][end] == UInt8('\n') ? 0 : 1)
-            inewline = something(findprev(==(UInt8('\n')), chunks[ichunk], jnewline-1), 0)
-            while inewline == 0
-                ichunk = ichunk == 1 ? length(chunks) : ichunk - 1
-                if ichunk == jchunk # no preceding newline was found
-                    ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
-                    break
-                end
-                inewline = something(findlast(==(UInt8('\n')), chunks[ichunk]), 0)
-            end
-            return iterate(r, (0, chunks, ichunk, inewline, jchunk, jnewline))
-        else
-            # fallback: read entire stream into a buffer
-            chunk = read(r.itr.stream)
-            isempty(chunk) && return (r.itr.ondone(); nothing)
-            jnewline = chunk[end] == UInt8('\n') ? length(chunk) : length(chunk)+1
-            inewline = something(findprev(==(UInt8('\n')), chunk, jnewline-1), 0)
-            return iterate(r, (0, [chunk], 1, inewline, 1, jnewline))
-        end
-    end
+# Reverse-order iteration for the EachLine iterator for seekable streams,
+# which works by reading the stream from the end in 4kiB chunks.
+function iterate(r::Iterators.Reverse{<:EachLine})
+    _maybe_seekend(r.itr.stream) || throw(ArgumentError("reverse eachline iteration requires a seekable IO stream"))
     p = position(r.itr.stream)
     # chunks = circular buffer of 4kiB blocks read from end of stream
     chunks = empty!(Vector{Vector{UInt8}}(undef, 2)) # allocate space for 2 buffers (common case)
@@ -1202,22 +1156,8 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
     end
 end
 
-# use reverse iteration to get end of EachLines
+# use reverse iteration to get end of EachLines (if possible)
 last(itr::EachLine) = first(Iterators.reverse(itr))
-
-# override the default implementation of these functions so that we can
-# pass maxlines, to minimize memory usage for non-seekable streams
-function first(itr::Iterators.Reverse{<:EachLine})
-    x = iterate(itr; maxlines=1)
-    x === nothing && throw(ArgumentError("collection must be non-empty"))
-    x[1]
-end
-function iterate(itr::Iterators.Take{Iterators.Reverse{<:EachLine}})
-    itr.n <= 0 && return nothing
-    y = iterate(itr.xs; maxlines=itr.n)
-    y === nothing && return nothing
-    return y[1], (itr.n - 1, y[2])
-end
 
 struct ReadEachIterator{T, IOT <: IO}
     stream::IOT

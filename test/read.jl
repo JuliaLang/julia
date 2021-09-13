@@ -293,11 +293,13 @@ for (name, f) in l
         @test collect(eachline(io(), keep=true)) == collect(eachline(filename, keep=true))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(@inferred(eachline(io()))) == collect(@inferred(eachline(filename))) #20351
-        for keep in (true, false)
-            lines = readlines(io(); keep)
-            @test last(lines) == last(eachline(io(); keep))
-            @test last(lines,2) == last(eachline(io(); keep),2)
-            @test reverse!(lines) == collect(Iterators.reverse(eachline(io(); keep))) == collect(Iterators.reverse(eachline(IOBuffer(text); keep)))
+        if Base._maybe_seekend(io()) # reverse iteration only supports seekable streams
+            for keep in (true, false)
+                lines = readlines(io(); keep)
+                @test last(lines) == last(eachline(io(); keep))
+                @test last(lines,2) == last(eachline(io(); keep),2)
+                @test reverse!(lines) == collect(Iterators.reverse(eachline(io(); keep))) == collect(Iterators.reverse(eachline(IOBuffer(text); keep)))
+            end
         end
 
         cleanup()
@@ -631,17 +633,14 @@ end
 # exercise buffer code for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
-    _seekstart!(buf, seekable) = (buf.seekable=true; seekstart(buf); buf.seekable=seekable; buf)
-    for seekable in (true, false), lines in (lines, reverse(lines))
+    for lines in (lines, reverse(lines))
         buf = IOBuffer(join(lines, '\n'))
-        @test reverse!(collect(Iterators.reverse(eachline(_seekstart!(buf, seekable))))) == lines
-        @test last(eachline(_seekstart!(buf, seekable))) == last(lines)
-        @test last(eachline(_seekstart!(buf, seekable)),10^4) == last(lines,10^4)
-        @test last(eachline(_seekstart!(buf, seekable)),length(lines)*2) == lines
+        @test reverse!(collect(Iterators.reverse(eachline(seekstart(buf))))) == lines
+        @test last(eachline(seekstart(buf))) == last(lines)
+        @test last(eachline(seekstart(buf)),10^4) == last(lines,10^4)
+        @test last(eachline(seekstart(buf)),length(lines)*2) == lines
     end
 
-    for seekable in (true, false)
-        @test isempty(collect(Iterators.reverse(eachline(_seekstart!(IOBuffer(), seekable)))))
-    end
+    @test isempty(collect(Iterators.reverse(eachline(seekstart(IOBuffer())))))
 end
 
