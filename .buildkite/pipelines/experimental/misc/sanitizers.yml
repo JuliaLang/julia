@@ -20,12 +20,10 @@ steps:
       # `contrib/check-asan.jl` needs a `julia` binary:
       - JuliaCI/julia#v1:
           version: 1.6
+    timeout_in_minutes: 120
+    # notify:
+    #   - github_commit_status:
+    #       context: "asan"
     commands: |
       echo "--- Build julia-debug with ASAN"
       contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_NUM_CORES} debug
-      echo "--- Test that ASAN is enabled"
-      contrib/asan/check.jl ./tmp/test-asan/asan/usr/bin/julia-debug
-    timeout_in_minutes: 120
-    # notify:                   # TODO: uncomment this line
-    #   - github_commit_status: # TODO: uncomment this line
-    #       context: "asan"     # TODO: uncomment this line
