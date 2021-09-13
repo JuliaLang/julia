@@ -29,5 +29,3 @@ steps:
     commands: |
       echo "--- Build julia-debug with ASAN"
       contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_NUM_CORES} debug
-      echo "--- Test that ASAN is enabled"
-      contrib/asan/check.jl ./tmp/test-asan/asan/usr/bin/julia-debug
