@@ -1066,21 +1066,16 @@ function iterate(r::Iterators.Reverse{<:EachLine})
     # chunks = circular buffer of 4kiB blocks read from end of stream
     chunks = empty!(Vector{Vector{UInt8}}(undef, 2)) # allocate space for 2 buffers (common case)
     inewline = jnewline = 0
-    while p > 0 # read chunks until we find a newline or we read whole file
+    while p > 0 && inewline > 0 # read chunks until we find a newline or we read whole file
         chunk = Vector{UInt8}(undef, min(4096, p))
         p -= length(chunk)
         readbytes!(seek(r.itr.stream, p), chunk)
         pushfirst!(chunks, chunk)
         inewline = something(findlast(==(UInt8('\n')), chunk), 0)
-        if inewline > 0
-            if length(chunks) == 1 && inewline == length(chunks[1])
-                # found newline at end of file … keep looking
-                jnewline = inewline
-                inewline = something(findprev(==(UInt8('\n')), chunk, inewline-1), 0)
-                inewline > 0 && break
-            else
-                break
-            end
+        if length(chunks) == 1 && inewline == length(chunks[1])
+            # found newline at end of file … keep looking
+            jnewline = inewline
+            inewline = something(findprev(==(UInt8('\n')), chunk, inewline-1), 0)
         end
     end
     return iterate(r, (p, chunks, 1, inewline, length(chunks), jnewline == 0 && !isempty(chunks) ? length(chunks[end])+1 : jnewline))
