@@ -1082,6 +1082,8 @@ function iterate(r::Iterators.Reverse{<:EachLine})
     return iterate(r, (p, chunks, 1, inewline, length(chunks), jnewline == 0 && !isempty(chunks) ? length(chunks[end])+1 : jnewline))
 end
 function iterate(r::Iterators.Reverse{<:EachLine}, state)
+    # state tuple: p = file position, chunks = circular array of chunk buffers,
+    #              current line is from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
     p, chunks, ichunk, inewline, jchunk, jnewline = state
     if inewline == 0 # no newline found, remaining line = rest of chunks (if any)
         isempty(chunks) && return (r.itr.ondone(); nothing)
