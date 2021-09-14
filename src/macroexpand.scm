@@ -271,7 +271,9 @@
   (define (other x) (resolve-expansion-vars-with-new-env x env m parent-scope inarg))
   (case (car e)
     ((where) `(where ,(recur (cadr e)) ,@(map other (cddr e))))
-    ((|::|)  `(|::| ,(recur (cadr e)) ,(other (caddr e))))
+    ((|::|)  (if (length= e 2)
+                 `(|::| ,(other (cadr e)))
+                 `(|::| ,(recur (cadr e)) ,(other (caddr e)))))
     ((call)  `(call ,(other (cadr e))
                     ,@(map (lambda (x)
                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
@@ -397,13 +399,18 @@
              ((not (length> e 2)) e)
              ((and (pair? (cadr e))
                    (eq? (caadr e) '|::|))
-              `(kw (|::|
-                    ,(if inarg
-                         (resolve-expansion-vars- (cadr (cadr e)) env m parent-scope inarg)
-                         ;; in keyword arg A=B, don't transform "A"
-                         (unescape (cadr (cadr e))))
-                    ,(resolve-expansion-vars- (caddr (cadr e)) env m parent-scope inarg))
-                   ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
+              (let* ((type-decl (cadr e)) ;; [argname]::type
+                     (argname   (and (length> type-decl 2) (cadr type-decl)))
+                     (type      (if argname (caddr type-decl) (cadr type-decl))))
+                `(kw (|::|
+                      ,@(if argname
+                            (list (if inarg
+                                      (resolve-expansion-vars- argname env m parent-scope inarg)
+                                      ;; in keyword arg A=B, don't transform "A"
+                                      (unescape argname)))
+                            '())
+                      ,(resolve-expansion-vars- type env m parent-scope inarg))
+                     ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg))))
              (else
               `(kw ,(if inarg
                         (resolve-expansion-vars- (cadr e) env m parent-scope inarg)
