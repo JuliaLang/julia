@@ -1187,7 +1187,8 @@ struct StatFS
     bavail::UInt64
     files::UInt64
     ffree::UInt64
-    fspare::UInt64
+    fspare1::UInt128
+    fspare2::UInt128
 end
 
 struct DiskStats
@@ -1198,7 +1199,7 @@ struct DiskStats
         isdir(path) || isfile(path) || throw(ArgumentError("'$path' is not a file or directory. Please provide a valid path."))
 
         # Call libuv's cross-platform statfs implementation
-        req = Libc.malloc(Base._sizeof_uv_fs)
+        req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
         err = ccall(:uv_fs_statfs, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
                     C_NULL, req, path, C_NULL)
         err < 0 && Base.uv_error("statfs($(repr(path)))", err)
@@ -1211,8 +1212,6 @@ struct DiskStats
 
         # Cleanup
         ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-        uv_fs_req_cleanup(req)
-        Libc.free(req)
 
         return disk_stats
     end
