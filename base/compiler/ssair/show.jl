@@ -382,7 +382,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     # if so, drop all existing calls to it from the top of the context
                     # AND check if instead the context was previously printed that way
                     # but now has removed the recursive frames
-                    let method = method_name(context[nctx])
+                    let method = method_name(context[nctx]) # last matching frame
                         if (nctx < nframes && method_name(DI[nframes - nctx]) === method) ||
                            (nctx < length(context) && method_name(context[nctx + 1]) === method)
                             update_line_only = true
@@ -391,8 +391,15 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                             end
                         end
                     end
-                elseif length(context) > 0
-                    update_line_only = true
+                end
+                # look at the first non-matching element to see if we are only changing the line number
+                if !update_line_only && nctx < length(context) && nctx < nframes
+                    let CtxLine = context[nctx + 1],
+                        FrameLine = DI[nframes - nctx]
+                        if method_name(CtxLine) === method_name(FrameLine)
+                            update_line_only = true
+                        end
+                    end
                 end
             elseif nctx < length(context) && nctx < nframes
                 # look at the first non-matching element to see if we are only changing the line number
