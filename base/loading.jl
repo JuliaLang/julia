@@ -757,7 +757,7 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
     if !isa(restored, Exception)
         for M in restored::Vector{Any}
             M = M::Module
-            if isdefined(M, Base.Docs.META)
+            if isdefined(M, Base.Docs.META) && getfield(M, Base.Docs.META) !== nothing
                 push!(Base.Docs.modules, M)
             end
             if parentmodule(M) === M

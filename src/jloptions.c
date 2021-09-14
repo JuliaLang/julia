@@ -83,6 +83,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
                         0, // image-codegen
                         0, // rr-detach
+                        0, // strip-metadata
     };
     jl_options_initialized = 1;
 }
@@ -167,6 +168,7 @@ static const char opts_hidden[]  =
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
     " --output-ji name          Generate a system image data file (.ji)\n"
+    " --strip-metadata          Remove docstrings and source location info from system image\n"
 
     // compiler debugging (see the devdocs for tips on using these options)
     " --output-unopt-bc name    Generate unoptimized LLVM bitcode (.bc)\n"
@@ -216,6 +218,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_bug_report,
            opt_image_codegen,
            opt_rr_detach,
+           opt_strip_metadata,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -269,6 +272,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "lisp",            no_argument,       0, 1 },
         { "image-codegen",   no_argument,       0, opt_image_codegen },
         { "rr-detach",       no_argument,       0, opt_rr_detach },
+        { "strip-metadata",  no_argument,       0, opt_strip_metadata },
         { 0, 0, 0, 0 }
     };
 
@@ -698,6 +702,9 @@ restart_switch:
             break;
         case opt_rr_detach:
             jl_options.rr_detach = 1;
+            break;
+        case opt_strip_metadata:
+            jl_options.strip_metadata = 1;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

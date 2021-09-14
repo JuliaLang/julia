@@ -27,6 +27,8 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* New option `--strip-metadata` to remove docstrings, source location information, and local
+  variable names when building a system image.
 
 Multi-threading changes
 -----------------------
