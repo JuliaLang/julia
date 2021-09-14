@@ -21,6 +21,7 @@
 
 #include "julia.h"
 #include "julia_assert.h"
+#include "codegen_shared.h"
 
 #define DEBUG_TYPE "lower_handlers"
 #undef DEBUG
@@ -95,11 +96,11 @@ static void ensure_enter_function(Module &M)
     auto T_pint8 = PointerType::get(T_int8, 0);
     auto T_void = Type::getVoidTy(M.getContext());
     auto T_int32 = Type::getInt32Ty(M.getContext());
-    if (!M.getNamedValue("jl_enter_handler")) {
+    if (!M.getNamedValue(XSTR(jl_enter_handler))) {
         std::vector<Type*> ehargs(0);
         ehargs.push_back(T_pint8);
         Function::Create(FunctionType::get(T_void, ehargs, false),
-                         Function::ExternalLinkage, "jl_enter_handler", &M);
+                         Function::ExternalLinkage, XSTR(jl_enter_handler), &M);
     }
     if (!M.getNamedValue(jl_setjmp_name)) {
         std::vector<Type*> args2(0);
@@ -118,8 +119,8 @@ bool LowerExcHandlers::doInitialization(Module &M) {
     if (!except_enter_func)
         return false;
     ensure_enter_function(M);
-    leave_func = M.getFunction("jl_pop_handler");
-    jlenter_func = M.getFunction("jl_enter_handler");
+    leave_func = M.getFunction(XSTR(jl_pop_handler));
+    jlenter_func = M.getFunction(XSTR(jl_enter_handler));
     setjmp_func = M.getFunction(jl_setjmp_name);
 
     auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0);

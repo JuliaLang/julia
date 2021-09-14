@@ -1551,8 +1551,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Known functions emitted in codegen that are not safepoints
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                         callee == gc_preserve_end_func || callee == typeof_func ||
-                        callee == pgcstack_getter || callee->getName() == "jl_egal__unboxed" ||
-                        callee->getName() == "jl_lock_value" || callee->getName() == "jl_unlock_value" ||
+                        callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
+                        callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                         callee == write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
