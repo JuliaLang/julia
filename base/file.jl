@@ -1164,3 +1164,86 @@ function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err < 0 && uv_error("chown($(repr(path)), $owner, $group)", err)
     path
 end
+
+
+# typedef struct uv_statfs_s {
+#     uint64_t f_type;
+#     uint64_t f_bsize;    <- block size
+#     uint64_t f_blocks;   <- total blocks
+#     uint64_t f_bfree;
+#     uint64_t f_bavail;   <- available blocks
+#     uint64_t f_files;
+#     uint64_t f_ffree;
+#     uint64_t f_spare[4];
+# } uv_statfs_t;
+# See also
+# - http://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_statfs (libuv function docs)
+# - http://docs.libuv.org/en/v1.x/fs.html#c.uv_statfs_t (libuv docs of the returned struct)
+struct StatFS
+    ftype::UInt64
+    bsize::UInt64
+    blocks::UInt64
+    bfree::UInt64
+    bavail::UInt64
+    files::UInt64
+    ffree::UInt64
+    fspare::UInt64
+end
+
+struct DiskStats
+    total::Int
+    available::Int
+
+    function DiskStats(path::AbstractString)
+        isdir(path) || isfile(path) || throw(ArgumentError("'$path' is not a file or directory. Please provide a valid path."))
+
+        # Call libuv's cross-platform statfs implementation
+        req = Libc.malloc(Base._sizeof_uv_fs)
+        err = ccall(:uv_fs_statfs, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                    C_NULL, req, path, C_NULL)
+        err < 0 && Base.uv_error("statfs($(repr(path)))", err)
+        statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
+
+        stats = unsafe_load(reinterpret(Ptr{StatFS}, statfs_ptr))
+        total = Int(stats.bsize * stats.blocks)
+        available = Int(stats.bsize * stats.bavail)
+        disk_stats = new(total, available)
+
+        # Cleanup
+        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
+        Libc.free(req)
+
+        return disk_stats
+    end
+end
+
+"""
+    disk_total(path=pwd())
+
+Returns the size in bytes of the disk that contains the file or directory pointed at by
+`path`. If no argument is passed, the size of the disk that contains the current working
+directory is returned.
+"""
+disk_total(path::AbstractString=pwd()) = DiskStats(path).total
+
+"""
+    disk_available(path=pwd())
+
+Returns the available space in bytes on the disk that contains the file or directory pointed
+at by `path`. If no argument is passed, the available space on the disk that contains the
+current working directory is returned.
+"""
+disk_available(path::AbstractString=pwd()) = DiskStats(path).available
+
+"""
+    disk_used(path=pwd())
+
+Returns the used space in bytes of the disk that contains the file or directory pointed
+at by `path`. If no argument is passed, the used space of the disk that contains the
+current working directory is returned.
+"""
+function disk_used(path::AbstractString=pwd())
+    disk_stats = DiskStats(path)
+    return disk_stats.total - disk_stats.available
+end

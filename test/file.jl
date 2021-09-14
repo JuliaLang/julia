@@ -1692,3 +1692,17 @@ end
         @test !isnothing(Base.Filesystem.getgroupname(s.gid))
     end
 end
+
+@testset "Disk space calculations work" begin
+    @test disk_total() == disk_total(pwd())
+    @test disk_used() == disk_used(pwd())
+    @test disk_available() == disk_available(pwd())
+
+    # Sanity check assuming disk is smaller than 16TB
+    TB = 2^40
+    @test disk_total() < 16 * 2^40
+
+    @test disk_used() < disk_total()
+    @test disk_available() < disk_total()
+    @test disk_used() + disk_available() == disk_total()
+end
