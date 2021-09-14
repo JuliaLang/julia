@@ -1956,39 +1956,28 @@
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
-(define (expand-if e)
-  (let* ((test (cadr e))
-         (blk? (and (pair? test) (eq? (car test) 'block)))
-         (stmts (if blk? (cdr (butlast test)) '()))
-         (test  (if blk? (last test) test)))
+(define (expand-condition cnd)
+  (let* ((blk? (and (pair? cnd) (eq? (car cnd) 'block)))
+         (stmts (if blk? (cdr (butlast cnd)) '()))
+         (test  (if blk? (last cnd) cnd)))
     (if (and (pair? test) (memq (car test) '(&& |\|\||)))
         (let* ((clauses `(,(car test) ,@(map expand-forms (cdr (flatten-ex (car test) test)))))
                (clauses (if (null? (cdr clauses))
                             (if (eq? (car clauses) '&&) '(true) '(false))
                             clauses)))
-          `(if ,(if blk?
-                    `(block ,@(map expand-forms stmts) ,clauses)
-                    clauses)
-               ,@(map expand-forms (cddr e))))
-        (cons (car e) (map expand-forms (cdr e))))))
+          (if blk?
+              `(block ,@(map expand-forms stmts) ,clauses)
+              clauses))
+        (expand-forms cnd))))
+
+(define (expand-if e)
+  (list* (car e) (expand-condition (cadr e)) (map expand-forms (cddr e))))
 
 (define (expand-while e)
-  `(break-block loop-exit (_while
-    ,(let* ((test (cadr e))
-            (blk? (and (pair? test) (eq? (car test) 'block)))
-            (stmts (if blk? (cdr (butlast test)) '()))
-            (test  (if blk? (last test) test)))
-       (if (and (pair? test) (memq (car test) '(&& |\|\||)))
-           (let* ((clauses `(,(car test) ,@(map expand-forms (cdr (flatten-ex (car test) test)))))
-                  (clauses (if (null? (cdr clauses))
-                               (if (eq? (car clauses) '&&) '(true) '(false))
-                               clauses)))
-             (if blk?
-                 `(block ,@(map expand-forms stmts) ,clauses)
-                 clauses))
-           (expand-forms (cadr e))))
-    (break-block loop-cont
-                 (scope-block ,(blockify (expand-forms (caddr e))))))))
+  `(break-block loop-exit
+                (_while ,(expand-condition (cadr e))
+                        (break-block loop-cont
+                                     (scope-block ,(blockify (expand-forms (caddr e))))))))
 
 (define (expand-vcat e
                      (vcat '((top vcat)))
