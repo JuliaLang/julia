@@ -1202,7 +1202,7 @@ struct DiskStats
         req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
         err = ccall(:uv_fs_statfs, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
                     C_NULL, req, path, C_NULL)
-        err < 0 && Base.uv_error("statfs($(repr(path)))", err)
+        err < 0 && uv_error("statfs($(repr(path)))", err)
         statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
 
         stats = unsafe_load(reinterpret(Ptr{StatFS}, statfs_ptr))
@@ -1211,7 +1211,7 @@ struct DiskStats
         disk_stats = new(total, available)
 
         # Cleanup
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
 
         return disk_stats
     end
