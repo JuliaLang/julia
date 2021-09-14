@@ -1700,7 +1700,7 @@ end
 
     # Sanity check assuming disk is smaller than 16TB
     TB = 2^40
-    @test disk_total() < 16 * 2^40
+    @test disk_total() < 16TB
 
     @test disk_used() < disk_total()
     @test disk_available() < disk_total()
