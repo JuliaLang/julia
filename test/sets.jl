@@ -803,3 +803,8 @@ end
     A = empty!(A)
     @test isempty(A)
 end
+
+@testset "⊊, ⊋" begin
+    @test !((1, 2) ⊊ (1, 2, 2))
+    @test !((1, 2, 2) ⊋ (1, 2))
+end

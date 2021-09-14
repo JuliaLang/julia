@@ -10,6 +10,9 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
+#if JL_LLVM_VERSION >= 130000
+#include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
+#endif
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
@@ -654,7 +657,11 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
     MemMgr(createRTDyldMemoryManager()),
     JuliaListener(CreateJuliaJITEventListener()),
     TSCtx(std::unique_ptr<LLVMContext>(LLVMCtx)),
+#if JL_LLVM_VERSION >= 130000
+    ES(cantFail(orc::SelfExecutorProcessControl::Create())),
+#else
     ES(),
+#endif
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ObjectLayer(

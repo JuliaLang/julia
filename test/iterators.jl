@@ -293,11 +293,14 @@ let (a, b) = (1:3, [4 6;
 end
 
 # collect stateful iterator
-let
-    itr = (i+1 for i in Base.Stateful([1,2,3]))
+let itr
+    itr = Iterators.Stateful(Iterators.map(identity, 1:5))
+    @test collect(itr) == 1:5
+    @test collect(itr) == Int[] # Stateful do not preserve shape
+    itr = (i+1 for i in Base.Stateful([1, 2, 3]))
     @test collect(itr) == [2, 3, 4]
-    A = zeros(Int, 0, 0)
-    itr = (i-1 for i in Base.Stateful(A))
+    @test collect(itr) == Int[] # Stateful do not preserve shape
+    itr = (i-1 for i in Base.Stateful(zeros(Int, 0, 0)))
     @test collect(itr) == Int[] # Stateful do not preserve shape
 end
 

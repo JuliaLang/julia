@@ -135,6 +135,8 @@ REPL.stripmd
 Base.Docs.apropos
 ```
 
+Another feature of help mode is the ability to access extended docstrings. You can do this by typing something like `??Print` rather than `?Print` which will display the `# Extended help` section from the source codes documentation.
+
 Help mode can be exited by pressing backspace at the beginning of the line.
 
 ### [Shell mode](@id man-shell-mode)

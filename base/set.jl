@@ -44,7 +44,7 @@ empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 # by default, a Set is returned
 emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
-_similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
+_similar_for(c::AbstractSet, ::Type{T}, itr, isz, len) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
     if isempty(s)

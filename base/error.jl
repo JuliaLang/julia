@@ -142,7 +142,7 @@ arbitrary task. This is useful for inspecting tasks which have failed due to
 uncaught exceptions.
 
 !!! compat "Julia 1.7"
-    This function went by the experiemental name `catch_stack()` in Julia
+    This function went by the experimental name `catch_stack()` in Julia
     1.1–1.6, and had a plain Vector-of-tuples as a return type.
 """
 function current_exceptions(task::Task=current_task(); backtrace::Bool=true)

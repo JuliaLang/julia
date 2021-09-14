@@ -857,8 +857,16 @@ static void jl_dump_asm_internal(
     assert(MRI && "Unable to create target register info!");
 
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
+#if JL_LLVM_VERSION >= 130000
+    MCSubtargetInfo *MSTI = TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features);
+    assert(MSTI && "Unable to create subtarget info!");
+
+    MCContext Ctx(TheTriple, MAI.get(), MRI.get(), MSTI, &SrcMgr);
+    MOFI->initMCObjectFileInfo(Ctx, /* PIC */ false, /* LargeCodeModel */ false);
+#else
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
     MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
+#endif
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>
