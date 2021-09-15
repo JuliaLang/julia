@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-26ce6dfe-7843-4342-9970-dda3d15f01e8",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-d9d5c994-5165-4aae-ac2a-483850320902",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-02T04:53:52Z"
+        "created": "2021-09-15T05:07:46Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -40,6 +40,18 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2017-2021: Stefan Karpinski, Kristoffer Carlsson, Fredrik Ekre, David Varela, Ian Butterworth, and contributors: https://github.com/JuliaLang/Pkg.jl/graphs/contributors",
             "summary": "Julia's package manager, shipped with Julia v1.0 and above"
+        },
+        {
+            "name": "Statistics",
+            "SPDXID": "SPDXRef-JuliaStatistics",
+            "downloadLocation": "git+https://github.com/JuliaLang/Statistics.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/Statistics.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2012-2016: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, Dahua Lin, Simon Byrne, Andreas Noack, Douglas Bates, John Myles White, Simon Kornblith, and other contributors.",
+            "summary": "Development repository for the Statistics standard library (stdlib) that ships with Julia."
         },
         {
             "name": "OpenBLAS",
@@ -97,6 +109,11 @@
     "relationships": [
         {
             "spdxElementId": "SPDXRef-JuliaPkg",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaStatistics",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
