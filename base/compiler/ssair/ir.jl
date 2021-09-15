@@ -172,7 +172,7 @@ end
 NewInstruction(@nospecialize(stmt), @nospecialize(type)) =
     NewInstruction(stmt, type, nothing)
 NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Nothing, Int32}) =
-    NewInstruction(stmt, type, nothing, line, 0x00, false)
+    NewInstruction(stmt, type, nothing, line, IR_FLAG_NULL, false)
 
 effect_free(inst::NewInstruction) =
     NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | IR_FLAG_EFFECT_FREE, true)
@@ -193,7 +193,7 @@ function InstructionStream(len::Int)
     info = Array{Any}(undef, len)
     fill!(info, nothing)
     lines = fill(Int32(0), len)
-    flags = fill(0x00, len)
+    flags = fill(IR_FLAG_NULL, len)
     return InstructionStream(insts, types, info, lines, flags)
 end
 InstructionStream() = InstructionStream(0)
@@ -221,7 +221,7 @@ function resize!(stmts::InstructionStream, len)
     resize!(stmts.flag, len)
     for i in (old_length + 1):len
         stmts.line[i] = 0
-        stmts.flag[i] = 0x00
+        stmts.flag[i] = IR_FLAG_NULL
         stmts.info[i] = nothing
     end
     return stmts

@@ -48,7 +48,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         push!(ci.code, metanode)
         push!(ci.codelocs, 1)
         push!(ci.ssavaluetypes::Vector{Any}, Any)
-        push!(ci.ssaflags, 0x00)
+        push!(ci.ssaflags, IR_FLAG_NULL)
     end
     # Translate BB Edges to statement edges
     # (and undo normalization for now)

@@ -195,7 +195,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
         push!(ssavaluetypes, Union{})
         push!(ci.codelocs, 0)
         push!(info, nothing)
-        push!(ci.ssaflags, 0x00)
+        push!(ci.ssaflags, IR_FLAG_NULL)
     end
     nothing
 end

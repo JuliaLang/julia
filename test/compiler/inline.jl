@@ -650,3 +650,25 @@ let
         @test ninlined == length(code)
     end
 end
+
+# https://github.com/JuliaLang/julia/issues/42246
+@test mktempdir() do dir
+    cd(dir) do
+        code = quote
+            issue42246() = @noinline IOBuffer("a")
+            let
+                ci, rt = only(code_typed(issue42246))
+                if any(ci.code) do stmt
+                       Meta.isexpr(stmt, :invoke) &&
+                       stmt.args[1].def.name === nameof(IOBuffer)
+                   end
+                    exit(0)
+                else
+                    exit(1)
+               end
+            end
+        end |> string
+        cmd = `$(Base.julia_cmd()) --code-coverage=tmp.info -e $code`
+        success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr))
+    end
+end
