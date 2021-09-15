@@ -552,3 +552,5 @@
     XX(jl_wakeup_thread) \
     XX(jl_yield) \
 
+#define JL_EXPORTED_FUNCS_WIN(XX) \
+    XX(jl_setjmp)
