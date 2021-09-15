@@ -2889,6 +2889,21 @@ function symcmp36230(vec)
 end
 @test Base.return_types(symcmp36230, (Vector{Any},)) == Any[Bool]
 
+function foo42190(r::Union{Nothing,Int}, n::Int)
+    while r !== nothing && r < n
+        return r # `r::Int`
+    end
+    return n
+end
+@test Base.return_types(foo42190, (Union{Nothing, Int}, Int)) == Any[Int]
+function bar42190(r::Union{Nothing,Int}, n::Int)
+    while r === nothing || r < n
+        return n
+    end
+    return r # `r::Int`
+end
+@test Base.return_types(bar42190, (Union{Nothing, Int}, Int)) == Any[Int]
+
 # Issue #36531, double varargs in abstract_iteration
 f36531(args...) = tuple((args...)...)
 @test @inferred(f36531(1,2,3)) == (1,2,3)
