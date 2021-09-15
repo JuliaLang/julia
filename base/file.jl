@@ -1194,27 +1194,27 @@ end
 struct DiskStats
     total::Int
     available::Int
+end
 
-    function DiskStats(path::AbstractString)
-        isdir(path) || isfile(path) || throw(ArgumentError("'$path' is not a file or directory. Please provide a valid path."))
+function DiskStats(path::AbstractString)
+    ispath(path) || throw(ArgumentError("'$path' is not a file or directory. Please provide a valid path."))
 
-        # Call libuv's cross-platform statfs implementation
-        req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
-        err = ccall(:uv_fs_statfs, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
-                    C_NULL, req, path, C_NULL)
-        err < 0 && uv_error("statfs($(repr(path)))", err)
-        statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
+    # Call libuv's cross-platform statfs implementation
+    req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
+    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                C_NULL, req, path, C_NULL)
+    err < 0 && uv_error("statfs($(repr(path)))", err)
+    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
 
-        stats = unsafe_load(reinterpret(Ptr{StatFS}, statfs_ptr))
-        total = Int(stats.bsize * stats.blocks)
-        available = Int(stats.bsize * stats.bavail)
-        disk_stats = new(total, available)
+    stats = unsafe_load(reinterpret(Ptr{StatFS}, statfs_ptr))
+    total = Int(stats.bsize * stats.blocks)
+    available = Int(stats.bsize * stats.bavail)
+    disk_stats = DiskStats(total, available)
 
-        # Cleanup
-        uv_fs_req_cleanup(req)
+    # Cleanup
+    uv_fs_req_cleanup(req)
 
-        return disk_stats
-    end
+    return disk_stats
 end
 
 """
@@ -1223,6 +1223,9 @@ end
 Returns the size in bytes of the disk that contains the file or directory pointed at by
 `path`. If no argument is passed, the size of the disk that contains the current working
 directory is returned.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
 """
 disk_total(path::AbstractString=pwd()) = DiskStats(path).total
 
@@ -1232,6 +1235,9 @@ disk_total(path::AbstractString=pwd()) = DiskStats(path).total
 Returns the available space in bytes on the disk that contains the file or directory pointed
 at by `path`. If no argument is passed, the available space on the disk that contains the
 current working directory is returned.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
 """
 disk_available(path::AbstractString=pwd()) = DiskStats(path).available
 
@@ -1241,6 +1247,9 @@ disk_available(path::AbstractString=pwd()) = DiskStats(path).available
 Returns the used space in bytes of the disk that contains the file or directory pointed
 at by `path`. If no argument is passed, the used space of the disk that contains the
 current working directory is returned.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
 """
 function disk_used(path::AbstractString=pwd())
     disk_stats = DiskStats(path)

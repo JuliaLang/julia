@@ -1704,5 +1704,5 @@ end
 
     @test disk_used() < disk_total()
     @test disk_available() < disk_total()
-    @test disk_used() + disk_available() == disk_total()
+    @test disk_used() + disk_available() <= disk_total()
 end
