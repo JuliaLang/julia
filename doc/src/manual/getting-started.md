@@ -102,7 +102,7 @@ command-line-options).
 
 ## Resources
 
-A curated list of useful learning resources to help new users get started can be found on the [learning](https://julialang.org/learning/) page of the main Julia web site.
+A curated list of useful learning resources to help new users get started can be found on the [learning](https://julialang.org/learning/) page of the main Julia website.
 
 You can use the REPL as a learning resource by switching into the help mode.
 Switch to help mode by pressing `?` at an empty `julia> ` prompt, before typing
