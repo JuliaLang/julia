@@ -780,7 +780,22 @@ static void *signal_listener(void *arg)
                     }
                     jl_set_safe_restore(old_buf);
 
-                    // Mark the end of this block with 0
+                    jl_ptls_t ptls = jl_all_tls_states[i];
+
+                    // store threadid but add 1 as 0 is preserved to indicate end of block
+                    bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+
+                    // store task id
+                    bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)ptls->current_task;
+
+                    // store cpu cycle clock
+                    bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+
+                    // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                    bt_data_prof[bt_size_cur++].uintptr = ptls->sleep_check_state + 1;
+
+                    // Mark the end of this block with two 0's
+                    bt_data_prof[bt_size_cur++].uintptr = 0;
                     bt_data_prof[bt_size_cur++].uintptr = 0;
                 }
             }

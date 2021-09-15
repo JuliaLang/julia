@@ -60,7 +60,7 @@ typedef struct taskheap_tag {
     uv_mutex_t lock;
     jl_task_t **tasks;
     int32_t ntasks;
-    int16_t prio;
+    _Atomic(int16_t) prio;
 } taskheap_t;
 
 /* multiqueue parameters */

@@ -181,7 +181,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
 // Hash tables don't generically root their contents, but they do for bindings.
 // Express this to the analyzer.
 // NOTE: Must hold m->lock while calling these.
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 jl_binding_t *_jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 jl_binding_t **_jl_get_module_binding_bp(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 #else
@@ -257,7 +257,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t
 
 static inline jl_module_t *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
 // The analyzer doesn't like looking through the arraylist, so just model the
 // access for it using this function
 static inline jl_module_t *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
@@ -375,12 +375,17 @@ JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var)
         JL_UNLOCK(&m->lock);
         return jl_new_struct(jl_globalref_type, m, var);
     }
-    if (b->globalref == NULL) {
-        b->globalref = jl_new_struct(jl_globalref_type, m, var);
-        jl_gc_wb(m, b->globalref);
+    jl_value_t *globalref = jl_atomic_load_relaxed(&b->globalref);
+    if (globalref == NULL) {
+        jl_value_t *newref = jl_new_struct(jl_globalref_type, m, var);
+        if (jl_atomic_cmpswap_relaxed(&b->globalref, &globalref, newref)) {
+            JL_GC_PROMISE_ROOTED(newref);
+            globalref = newref;
+            jl_gc_wb(m, globalref);
+        }
     }
-    JL_UNLOCK(&m->lock);
-    return b->globalref;
+    JL_UNLOCK(&m->lock); // may GC
+    return globalref;
 }
 
 static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
@@ -635,7 +640,8 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     if (bp->value == NULL) {
         uint8_t constp = 0;
-        if (jl_atomic_cmpswap(&bp->constp, &constp, 1)) {
+        // if (jl_atomic_cmpswap(&bp->constp, &constp, 1)) {
+        if (constp = bp->constp, bp->constp = 1, constp == 0) {
             jl_value_t *old = NULL;
             if (jl_atomic_cmpswap(&bp->value, &old, val)) {
                 jl_gc_wb_binding(bp, val);
@@ -769,7 +775,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs) JL_NOT
         if (jl_egal(rhs, old))
             return;
         if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs)) {
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
             jl_errorf("invalid redefinition of constant %s",
                       jl_symbol_name(b->name));
 #endif
