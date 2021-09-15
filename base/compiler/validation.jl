@@ -48,6 +48,7 @@ const EMPTY_SLOTNAMES = "slotnames field is empty"
 const SLOTFLAGS_MISMATCH = "length(slotnames) < length(slotflags)"
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
+const SSAFLAGS_MISMATCH = "not all SSAValues have a corresponding `ssaflags`"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
 const NON_TOP_LEVEL_GLOBAL = "encountered `Expr` head `:global` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
@@ -183,13 +184,16 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     nssavals = length(c.code)
     !is_top_level && nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
     nslotnames < nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
-    if c.inferred
-        nssavaluetypes = length(c.ssavaluetypes::Vector{Any})
+    ssavaluetypes = c.ssavaluetypes
+    if isa(ssavaluetypes, Vector{Any})
+        nssavaluetypes = length(ssavaluetypes)
         nssavaluetypes < nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes)))
     else
-        ssavaluetypes = c.ssavaluetypes::Int
-        ssavaluetypes != nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, ssavaluetypes)))
+        nssavaluetypes = ssavaluetypes::Int
+        nssavaluetypes ≠ nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, nssavaluetypes)))
     end
+    nssaflags = length(c.ssaflags)
+    nssavals ≠ nssaflags && push!(errors, InvalidCodeError(SSAFLAGS_MISMATCH, (nssavals, nssaflags)))
     return errors
 end
 

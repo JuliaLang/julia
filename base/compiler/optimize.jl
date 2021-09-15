@@ -85,7 +85,7 @@ mutable struct OptimizationState
         if nssavalues isa Int
             src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
         else
-            nssavalues = length(src.ssavaluetypes)
+            nssavalues = length(src.ssavaluetypes::Vector{Any})
         end
         nslots = length(src.slotflags)
         slottypes = src.slottypes
