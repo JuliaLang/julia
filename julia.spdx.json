@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-e4b57066-090f-42ea-b236-0a96a182e345",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8cfd1c8b-14b7-470d-bae7-aea217ff9a7f",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-15T05:20:06Z"
+        "created": "2021-09-15T05:22:55Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -30,7 +30,7 @@
             "comment": "In addition to the source code described by this package, Julia pulls in code from many other respositories, which are also described in this document. See relationships for details."
         },
         {
-            "name": "Pkg",
+            "name": "Pkg.jl",
             "SPDXID": "SPDXRef-JuliaPkg",
             "downloadLocation": "git+https://github.com/JuliaLang/Pkg.jl.git",
             "filesAnalyzed": false,
@@ -42,7 +42,7 @@
             "summary": "Julia's package manager, shipped with Julia v1.0 and above"
         },
         {
-            "name": "Statistics",
+            "name": "Statistics.jl",
             "SPDXID": "SPDXRef-JuliaStatistics",
             "downloadLocation": "git+https://github.com/JuliaLang/Statistics.jl.git",
             "filesAnalyzed": false,
