@@ -305,8 +305,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     }
     else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
         const DataLayout &DL = jl_data_layout;
-        unsigned nb = DL.getTypeSizeInBits(ty);
-        assert(nb == DL.getTypeSizeInBits(to));
+        assert(DL.getTypeSizeInBits(ty) == DL.getTypeSizeInBits(to));
         AllocaInst *cast = ctx.builder.CreateAlloca(ty);
         ctx.builder.CreateStore(unboxed, cast);
         unboxed = ctx.builder.CreateLoad(to, ctx.builder.CreateBitCast(cast, to->getPointerTo()));
