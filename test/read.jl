@@ -630,7 +630,7 @@ end
     @test  isempty(itr) # now it is empty
 end
 
-# exercise buffer code for reverse(eachline)
+# more tests for reverse(eachline)
 @testset "reverse(eachline)" begin
     lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
     for lines in (lines, reverse(lines)), finalnewline in (true, false)
@@ -639,8 +639,23 @@ end
         @test last(eachline(seekstart(buf))) == last(lines)
         @test last(eachline(seekstart(buf)),10^4) == last(lines,10^4)
         @test last(eachline(seekstart(buf)),length(lines)*2) == lines
+        @test reverse!(collect(Iterators.reverse(eachline(seek(buf, sum(sizeof, lines[1:100]) + 100))))) == lines[101:end]
+        @test isempty(Iterators.reverse(eachline(buf)))
     end
 
-    @test isempty(collect(Iterators.reverse(eachline(seekstart(IOBuffer())))))
+    let rempty = Iterators.reverse(eachline(IOBuffer()))
+        @test isempty(rempty)
+        @test isempty(collect(rempty))
+    end
+
+    let buf = IOBuffer("foo\nbar")
+        @test readline(buf) == "foo"
+        r = Iterators.reverse(eachline(buf))
+        line, state = iterate(r)
+        @test line == "bar"
+        @test Base.isdone(r, state)
+        @test Base.isdone(r)
+        @test isempty(r) && isempty(collect(r))
+    end
 end
 

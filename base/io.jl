@@ -1061,13 +1061,14 @@ isdone(itr::EachLine, state...) = eof(itr.stream)
 # Reverse-order iteration for the EachLine iterator for seekable streams,
 # which works by reading the stream from the end in 4kiB chunks.
 function iterate(r::Iterators.Reverse{<:EachLine})
+    p0 = position(r.itr.stream)
     seekend(r.itr.stream) # may throw if io is non-seekable
     p = position(r.itr.stream)
     # chunks = circular buffer of 4kiB blocks read from end of stream
     chunks = empty!(Vector{Vector{UInt8}}(undef, 2)) # allocate space for 2 buffers (common case)
     inewline = jnewline = 0
-    while p > 0 && inewline == 0 # read chunks until we find a newline or we read whole file
-        chunk = Vector{UInt8}(undef, min(4096, p))
+    while p > p0 && inewline == 0 # read chunks until we find a newline or we read whole file
+        chunk = Vector{UInt8}(undef, min(4096, p-p0))
         p -= length(chunk)
         readbytes!(seek(r.itr.stream, p), chunk)
         pushfirst!(chunks, chunk)
@@ -1078,12 +1079,13 @@ function iterate(r::Iterators.Reverse{<:EachLine})
             inewline = something(findprev(==(UInt8('\n')), chunk, inewline-1), 0)
         end
     end
-    return iterate(r, (p, chunks, 1, inewline, length(chunks), jnewline == 0 && !isempty(chunks) ? length(chunks[end])+1 : jnewline))
+    return iterate(r, (p0, p, chunks, 1, inewline, length(chunks), jnewline == 0 && !isempty(chunks) ? length(chunks[end])+1 : jnewline))
 end
 function iterate(r::Iterators.Reverse{<:EachLine}, state)
-    # state tuple: p = file position, chunks = circular array of chunk buffers,
+    # state tuple: p0 = initial file position, p = current position,
+    #              chunks = circular array of chunk buffers,
     #              current line is from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
-    p, chunks, ichunk, inewline, jchunk, jnewline = state
+    p0, p, chunks, ichunk, inewline, jchunk, jnewline = state
     if inewline == 0 # no newline found, remaining line = rest of chunks (if any)
         isempty(chunks) && return (r.itr.ondone(); nothing)
         buf = IOBuffer(sizehint = ichunk==jchunk ? jnewline : 4096)
@@ -1094,7 +1096,8 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         chunk = chunks[jchunk]
         write(buf, view(chunk, 1:min(length(chunk), jnewline - 1 + r.itr.keep)))
         empty!(chunks) # will cause next iteration to terminate
-        return (String(take!(buf)), state)
+        seekend(r.itr.stream) # reposition to end of stream for isdone
+        s = String(take!(buf))
     else
         # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
         jnewline = min(length(chunks[jchunk]), jnewline - 1 + r.itr.keep)
@@ -1116,7 +1119,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             i = jchunk
             while i != ichunk
                 chunk = chunks[i]
-                p -= length(resize!(chunk, min(4096, p)))
+                p -= length(resize!(chunk, min(4096, p-p0)))
                 readbytes!(seek(r.itr.stream, p), chunk)
                 i = i == 1 ? length(chunks) : i - 1
             end
@@ -1134,21 +1137,22 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         end
 
         # read more chunks to look for a newline (should rarely happen)
-        if inewline == 0 && p > 0
+        if inewline == 0 && p > p0
             ichunk = jchunk + 1
             while true
-                chunk = Vector{UInt8}(undef, min(4096, p))
+                chunk = Vector{UInt8}(undef, min(4096, p-p0))
                 p -= length(chunk)
                 readbytes!(seek(r.itr.stream, p), chunk)
                 insert!(chunks, ichunk, chunk)
                 inewline = something(findlast(==(UInt8('\n')), chunk), 0)
-                (p == 0 || inewline > 0) && break
+                (p == p0 || inewline > 0) && break
             end
         end
-
-        return (s, (p, chunks, ichunk, inewline, jchunk, jnewline))
     end
+    return (s, (p0, p, chunks, ichunk, inewline, jchunk, jnewline))
 end
+isdone(r::Iterators.Reverse{<:EachLine}, state) = isempty(state[3]) # isempty(chunks)
+isdone(r::Iterators.Reverse{<:EachLine}) = isdone(r.itr)
 
 # use reverse iteration to get end of EachLines (if possible)
 last(itr::EachLine) = first(Iterators.reverse(itr))
