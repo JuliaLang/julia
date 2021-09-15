@@ -16,30 +16,32 @@ end
 function matching_cache_argtypes(linfo::MethodInstance, given_argtypes::Vector, va_override::Bool)
     @assert isa(linfo.def, Method) # ensure the next line works
     nargs::Int = linfo.def.nargs
-    @assert length(given_argtypes) >= (nargs - 1)
     given_argtypes = anymap(widenconditional, given_argtypes)
-    if va_override || linfo.def.isva
+    isva = va_override || linfo.def.isva
+    if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
-        for i = 1:(nargs - 1)
+        for i = 1:(nargs - isva)
             isva_given_argtypes[i] = argtype_by_index(given_argtypes, i)
         end
-        if length(given_argtypes) >= nargs || !isvarargtype(given_argtypes[end])
-            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[nargs:end])
-        else
-            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[end:end])
+        if isva
+            if length(given_argtypes) < nargs && isvarargtype(given_argtypes[end])
+                last = length(given_argtypes)
+            else
+                last = nargs
+            end
+            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[last:end])
         end
         given_argtypes = isva_given_argtypes
     end
+    @assert length(given_argtypes) == nargs
     cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing, va_override)
-    if nargs === length(given_argtypes)
-        for i in 1:nargs
-            given_argtype = given_argtypes[i]
-            cache_argtype = cache_argtypes[i]
-            if !is_argtype_match(given_argtype, cache_argtype, overridden_by_const[i])
-                # prefer the argtype we were given over the one computed from `linfo`
-                cache_argtypes[i] = given_argtype
-                overridden_by_const[i] = true
-            end
+    for i in 1:nargs
+        given_argtype = given_argtypes[i]
+        cache_argtype = cache_argtypes[i]
+        if !is_argtype_match(given_argtype, cache_argtype, overridden_by_const[i])
+            # prefer the argtype we were given over the one computed from `linfo`
+            cache_argtypes[i] = given_argtype
+            overridden_by_const[i] = true
         end
     end
     return cache_argtypes, overridden_by_const

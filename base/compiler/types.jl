@@ -53,8 +53,6 @@ struct OptimizationParams
     MAX_TUPLE_SPLAT::Int
     MAX_UNION_SPLITTING::Int
 
-    unoptimize_throw_blocks::Bool
-
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
             inline_cost_threshold::Int = 100,
@@ -64,7 +62,6 @@ struct OptimizationParams
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
-            unoptimize_throw_blocks::Bool = true,
         )
         return new(
             inlining,
@@ -75,7 +72,6 @@ struct OptimizationParams
             max_methods,
             tuple_splat,
             union_splitting,
-            unoptimize_throw_blocks,
         )
     end
 end

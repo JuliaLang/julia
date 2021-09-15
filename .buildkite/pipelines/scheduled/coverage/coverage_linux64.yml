@@ -29,7 +29,10 @@ steps:
       git config --global init.defaultBranch master
 
       echo "--- Run Julia tests in parallel with code coverage enabled"
-      ./julia --code-coverage=all --sysimage-native-code=no .buildkite/pipelines/scheduled/coverage/run_tests_parallel.jl
+      export JULIA_NUM_THREADS=1
+      export JULIA_WORKER_TIMEOUT=1200 # 1200 seconds = 20 minutes
+      ./julia -e 'import Distributed; @info "" Distributed.worker_timeout()'
+      ./julia .buildkite/pipelines/scheduled/coverage/run_tests_parallel.jl
 
       echo "--- Process and upload coverage information"
       ./julia .buildkite/pipelines/scheduled/coverage/upload_coverage.jl

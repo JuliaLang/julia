@@ -647,8 +647,8 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
     @int128_str str
     @int128_str(str)
 
-`@int128_str` parses a string into a Int128
-Throws an `ArgumentError` if the string is not a valid integer
+`@int128_str` parses a string into a Int128.
+Throws an `ArgumentError` if the string is not a valid integer.
 """
 macro int128_str(s)
     return parse(Int128, s)
@@ -658,8 +658,8 @@ end
     @uint128_str str
     @uint128_str(str)
 
-`@uint128_str` parses a string into a UInt128
-Throws an `ArgumentError` if the string is not a valid integer
+`@uint128_str` parses a string into a UInt128.
+Throws an `ArgumentError` if the string is not a valid integer.
 """
 macro uint128_str(s)
     return parse(UInt128, s)

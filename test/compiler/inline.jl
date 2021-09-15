@@ -172,8 +172,7 @@ function f_ifelse(x)
     b = ifelse(a, true, false)
     return b ? x + 1 : x
 end
-# 2 for now because the compiler leaves a GotoNode around
-@test_broken length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
 
 # Test that inlining of _apply_iterate properly hits the inference cache
 @noinline cprop_inline_foo1() = (1, 1)
@@ -404,13 +403,13 @@ code_typed1(args...; kwargs...) = (first(only(code_typed(args...; kwargs...)))::
         def_noinline(x) = _def_noinline(x)
 
         # test that they don't conflict with other "before-definition" macros
-        @inline Base.@aggressive_constprop function _def_inline_noconflict(x)
+        @inline Base.@constprop :aggressive function _def_inline_noconflict(x)
             # this call won't be resolved and thus will prevent inlining to happen if we don't
             # annotate `@inline` at the top of this function body
             return unresolved_call(x)
         end
         def_inline_noconflict(x) = _def_inline_noconflict(x)
-        @noinline Base.@aggressive_constprop _def_noinline_noconflict(x) = x # obviously will be inlined otherwise
+        @noinline Base.@constprop :aggressive _def_noinline_noconflict(x) = x # obviously will be inlined otherwise
         def_noinline_noconflict(x) = _def_noinline_noconflict(x)
     end
 
@@ -520,14 +519,14 @@ end
 
         # test callsite annotations for constant-prop'ed calls
 
-        @noinline Base.@aggressive_constprop noinlined_constprop_explicit(a) = a+g
+        @noinline Base.@constprop :aggressive noinlined_constprop_explicit(a) = a+g
         force_inline_constprop_explicit()                                    = @inline noinlined_constprop_explicit(0)
-        Base.@aggressive_constprop noinlined_constprop_implicit(a) = a+g
+        Base.@constprop :aggressive noinlined_constprop_implicit(a) = a+g
         force_inline_constprop_implicit()                          = @inline noinlined_constprop_implicit(0)
 
-        @inline Base.@aggressive_constprop inlined_constprop_explicit(a) = a+g
+        @inline Base.@constprop :aggressive inlined_constprop_explicit(a) = a+g
         force_noinline_constprop_explicit()                              = @noinline inlined_constprop_explicit(0)
-        @inline Base.@aggressive_constprop inlined_constprop_implicit(a) = a+g
+        @inline Base.@constprop :aggressive inlined_constprop_implicit(a) = a+g
         force_noinline_constprop_implicit()                              = @noinline inlined_constprop_implicit(0)
 
         @noinline notinlined(a) = a
@@ -614,3 +613,40 @@ end
 # Issue #41299 - inlining deletes error check in :>
 g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 @test_throws TypeError g41299(>:, 1, 2)
+
+# https://github.com/JuliaLang/julia/issues/42078
+# idempotency of callsite inling
+function getcache(mi::Core.MethodInstance)
+    cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
+    codeinf = Core.Compiler.get(cache, mi, nothing)
+    return isnothing(codeinf) ? nothing : codeinf
+end
+@noinline f42078(a) = sum(sincos(a))
+let
+    ninlined = let
+        code = code_typed1((Int,)) do a
+            @inline f42078(a)
+        end
+        @test all(x->!isinvoke(x, :f42078), code)
+        length(code)
+    end
+
+    let # codegen will discard the source because it's not supposed to be inlined in general context
+        a = 42
+        f42078(a)
+    end
+    let # make sure to discard the inferred source
+        specs = collect(only(methods(f42078)).specializations)
+        mi = specs[findfirst(!isnothing, specs)]::Core.MethodInstance
+        codeinf = getcache(mi)::Core.CodeInstance
+        codeinf.inferred = nothing
+    end
+
+    let # inference should re-infer `f42078(::Int)` and we should get the same code
+        code = code_typed1((Int,)) do a
+            @inline f42078(a)
+        end
+        @test all(x->!isinvoke(x, :f42078), code)
+        @test ninlined == length(code)
+    end
+end

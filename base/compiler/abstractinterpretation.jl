@@ -31,7 +31,7 @@ end
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int = InferenceParams(interp).MAX_METHODS)
-    if sv.params.unoptimize_throw_blocks && sv.currpc in sv.throw_blocks
+    if sv.params.unoptimize_throw_blocks && is_stmt_throw_block(get_curr_ssaflag(sv))
         add_remark!(interp, sv, "Skipped call in throw block")
         return CallMeta(Any, false)
     end
@@ -546,10 +546,13 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
             end
         end
         inf_result = InferenceResult(mi, argtypes, va_override)
-        frame = InferenceState(inf_result, #=cache=#false, interp)
+        if !any(inf_result.overridden_by_const)
+            add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
+            return nothing
+        end
+        frame = InferenceState(inf_result, #=cache=#:local, interp)
         frame === nothing && return nothing # this is probably a bad generated function (unsound), but just ignore it
         frame.parent = sv
-        push!(inf_cache, inf_result)
         typeinf(interp, frame) || return nothing
     end
     result = inf_result.result
@@ -569,6 +572,10 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         return nothing
     end
     method = match.method
+    if method.constprop == 0x02
+        add_remark!(interp, sv, "[constprop] Disabled by method parameter")
+        return nothing
+    end
     force = force_const_prop(interp, f, method)
     force || const_prop_entry_heuristic(interp, result, sv) || return nothing
     nargs::Int = method.nargs
@@ -592,7 +599,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         return nothing
     end
     mi = mi::MethodInstance
-    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, sv)
+    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, argtypes, sv)
         add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
     end
@@ -650,7 +657,7 @@ function is_allconst(argtypes::Vector{Any})
 end
 
 function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method::Method)
-    return method.aggressive_constprop ||
+    return method.constprop == 0x01 ||
            InferenceParams(interp).aggressive_constant_propagation ||
            istopfunction(f, :getproperty) ||
            istopfunction(f, :setproperty!)
@@ -696,7 +703,9 @@ end
 # This is a heuristic to avoid trying to const prop through complicated functions
 # where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
-function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, match::MethodMatch, mi::MethodInstance, sv::InferenceState)
+function const_prop_methodinstance_heuristic(
+    interp::AbstractInterpreter, match::MethodMatch, mi::MethodInstance,
+    argtypes::Vector{Any}, sv::InferenceState)
     method = match.method
     if method.is_for_opaque_closure
         # Not inlining an opaque closure can be very expensive, so be generous
@@ -715,7 +724,7 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter, match:
     if isdefined(code, :inferred) && !cache_inlineable
         cache_inf = code.inferred
         if !(cache_inf === nothing)
-            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv))
+            src = inlining_policy(interp, cache_inf, get_curr_ssaflag(sv), mi, argtypes)
             cache_inlineable = src !== nothing
         end
     end

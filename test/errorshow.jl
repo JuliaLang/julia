@@ -184,6 +184,11 @@ addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), un
 Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), pairs((uncset = nothing,)))
 @test String(take!(buf)) == "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)"
 
+# Busted Vararg method definitions
+bad_vararg_decl(x::Int, y::Vararg) = 1   # don't do this, instead use (x::Int, y...)
+Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
+@test occursin("bad_vararg_decl(!Matched::$Int, ::Any...)", String(take!(buf)))
+
 macro except_str(expr, err_type)
     return quote
         let err = nothing

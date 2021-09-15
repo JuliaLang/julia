@@ -349,16 +349,26 @@ macro pure(ex)
 end
 
 """
-    @aggressive_constprop ex
-    @aggressive_constprop(ex)
+    @constprop setting ex
+    @constprop(setting, ex)
 
-`@aggressive_constprop` requests more aggressive interprocedural constant
-propagation for the annotated function. For a method where the return type
-depends on the value of the arguments, this can yield improved inference results
-at the cost of additional compile time.
+`@constprop` controls the mode of interprocedural constant propagation for the
+annotated function. Two `setting`s are supported:
+
+- `@constprop :aggressive ex`: apply constant propagation aggressively.
+  For a method where the return type depends on the value of the arguments,
+  this can yield improved inference results at the cost of additional compile time.
+- `@constprop :none ex`: disable constant propagation. This can reduce compile
+  times for functions that Julia might otherwise deem worthy of constant-propagation.
+  Common cases are for functions with `Bool`- or `Symbol`-valued arguments or keyword arguments.
 """
-macro aggressive_constprop(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+macro constprop(setting, ex)
+    if isa(setting, QuoteNode)
+        setting = setting.value
+    end
+    setting === :aggressive && return esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+    setting === :none && return esc(isa(ex, Expr) ? pushmeta!(ex, :no_constprop) : ex)
+    throw(ArgumentError("@constprop $setting not supported"))
 end
 
 """
@@ -373,6 +383,13 @@ macro propagate_inbounds(ex)
     end
     esc(ex)
 end
+
+"""
+    @compile
+
+Force compilation of the block or function (Julia's built-in interpreter is blocked from executing it).
+"""
+macro compile() Expr(:meta, :compile) end
 
 """
     @polly

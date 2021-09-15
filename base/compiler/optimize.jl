@@ -28,20 +28,30 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, T, I<:AbstractInterpreter
     interp::I
 end
 
-function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8)
+function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
+                         mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
         src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
     elseif isa(src, OptimizationState) && isdefined(src, :ir)
         return (is_stmt_inline(stmt_flag) || src.src.inlineable) ? src.ir : nothing
-    else
-        # maybe we want to make inference keep the source in a local cache if a statement is going to inlined
-        # and re-optimize it here with disabling further inlining to avoid infinite optimization loop
-        # (we can even naively try to re-infer it entirely)
-        # but it seems like that "single-level-inlining" is more trouble and complex than it's worth
-        # see https://github.com/JuliaLang/julia/pull/41328/commits/0fc0f71a42b8c9d04b0dafabf3f1f17703abf2e7
-        return nothing
+    elseif src === nothing && is_stmt_inline(stmt_flag)
+        # if this statement is forced to be inlined, make an additional effort to find the
+        # inferred source in the local cache
+        # we still won't find a source for recursive call because the "single-level" inlining
+        # seems to be more trouble and complex than it's worth
+        inf_result = cache_lookup(mi, argtypes, get_inference_cache(interp))
+        inf_result === nothing && return nothing
+        src = inf_result.src
+        if isa(src, CodeInfo)
+            src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+            return src_inferred ? src : nothing
+        elseif isa(src, OptimizationState)
+            return isdefined(src, :ir) ? src.ir : nothing
+        else
+            return nothing
+        end
     end
 end
 
@@ -134,14 +144,15 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # This statement is marked as @inbounds by user.
 # Ff replaced by inlining, any contained boundschecks may be removed.
-const IR_FLAG_INBOUNDS       = 0x01 << 0
+const IR_FLAG_INBOUNDS    = 0x01 << 0
 # This statement is marked as @inline by user
-const IR_FLAG_INLINE         = 0x01 << 1
+const IR_FLAG_INLINE      = 0x01 << 1
 # This statement is marked as @noinline by user
-const IR_FLAG_NOINLINE       = 0x01 << 2
+const IR_FLAG_NOINLINE    = 0x01 << 2
+const IR_FLAG_THROW_BLOCK = 0x01 << 3
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
-const IR_FLAG_EFFECT_FREE    = 0x01 << 4
+const IR_FLAG_EFFECT_FREE = 0x01 << 4
 
 # known to be always effect-free (in particular nothrow)
 const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
@@ -184,8 +195,9 @@ function isinlineable(m::Method, me::OptimizationState, params::OptimizationPara
     return inlineable
 end
 
-is_stmt_inline(stmt_flag::UInt8)   = stmt_flag & IR_FLAG_INLINE   != 0
-is_stmt_noinline(stmt_flag::UInt8) = stmt_flag & IR_FLAG_NOINLINE != 0
+is_stmt_inline(stmt_flag::UInt8)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
+is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
+is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
 
 # These affect control flow within the function (so may not be removed
 # if there is no usage within the function), but don't affect the purity
@@ -523,13 +535,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
 end
 
 function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
-                                  slottypes::Vector{Any}, union_penalties::Bool, params::OptimizationParams,
-                                  throw_blocks::Union{Nothing,BitSet})
+                                  slottypes::Vector{Any}, union_penalties::Bool, params::OptimizationParams)
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
         thiscost = statement_cost(stmt, line, src, sptypes, slottypes, union_penalties, params,
-                                  throw_blocks !== nothing && line in throw_blocks)::Int
+                                  is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
@@ -544,10 +555,9 @@ end
 function inline_worthy(ir::IRCode,
                        params::OptimizationParams, union_penalties::Bool=false, cost_threshold::Integer=params.inline_cost_threshold)
     bodycost::Int = 0
-    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(ir.stmts.inst, RefValue(ir)) : nothing
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, ir.argtypes, union_penalties, params, throw_blocks)
+        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, ir.argtypes, union_penalties, params)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return false
     end
@@ -555,13 +565,12 @@ function inline_worthy(ir::IRCode,
 end
 
 function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
-    throw_blocks = params.unoptimize_throw_blocks ? find_throw_blocks(body) : nothing
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
         thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
                                             src isa CodeInfo ? src.slottypes : src.argtypes,
-                                            unionpenalties, params, throw_blocks)
+                                            unionpenalties, params)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost

@@ -31,7 +31,6 @@ mutable struct InferenceState
     handler_at::Vector{LineNum}
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{BitSet}
-    throw_blocks::BitSet
 
     cycle_backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
@@ -53,9 +52,11 @@ mutable struct InferenceState
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo,
-                            cached::Bool, interp::AbstractInterpreter)
+                            cache::Symbol, interp::AbstractInterpreter)
         (; def) = linfo = result.linfo
-        code = src.code::Array{Any,1}
+        code = src.code::Vector{Any}
+
+        params = InferenceParams(interp)
 
         sp = sptypes_from_meth_instance(linfo::MethodInstance)
 
@@ -81,33 +82,36 @@ mutable struct InferenceState
         s_types[1] = s_argtypes
 
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-        throw_blocks = find_throw_blocks(code)
 
         # exception handlers
         ip = BitSet()
         handler_at = compute_trycatch(src.code, ip)
         push!(ip, 1)
 
+        # `throw` block deoptimization
+        params.unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
+
         mod = isa(def, Method) ? def.module : def
         valid_worlds = WorldRange(src.min_world,
             src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
 
+        @assert cache === :no || cache === :local || cache === :global
         frame = new(
-            InferenceParams(interp), result, linfo,
+            params, result, linfo,
             sp, slottypes, mod, 0,
             IdSet{InferenceState}(), IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,
             Union{}, ip, 1, n, handler_at,
-            ssavalue_uses, throw_blocks,
+            ssavalue_uses,
             Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
-            cached, false, false,
+            cache === :global, false, false,
             CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame
-        cached && push!(get_inference_cache(interp), result)
+        cache !== :no && push!(get_inference_cache(interp), result)
         return frame
     end
 end
@@ -196,7 +200,6 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     return handler_at
 end
 
-
 """
     Iterate through all callers of the given InferenceState in the abstract
     interpretation stack (including the given InferenceState itself), vising
@@ -222,12 +225,12 @@ end
 
 method_table(interp::AbstractInterpreter, sv::InferenceState) = sv.method_table
 
-function InferenceState(result::InferenceResult, cached::Bool, interp::AbstractInterpreter)
+function InferenceState(result::InferenceResult, cache::Symbol, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     src = retrieve_code_info(result.linfo)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
-    return InferenceState(result, src, cached, interp)
+    return InferenceState(result, src, cache, interp)
 end
 
 function sptypes_from_meth_instance(linfo::MethodInstance)

@@ -54,7 +54,7 @@ rng_native_52(::Xoshiro) = UInt64
 @inline function rand(rng::Xoshiro, ::SamplerType{UInt64})
     s0, s1, s2, s3 = rng.s0, rng.s1, rng.s2, rng.s3
     tmp = s0 + s3
-    res = tmp << 23 | tmp >> 41
+    res = ((tmp << 23) | (tmp >> 41)) + s0
     t = s1 << 17
     s2 = xor(s2, s0)
     s3 = xor(s3, s1)
@@ -103,7 +103,7 @@ end
     task = current_task()
     s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
     tmp = s0 + s3
-    res = tmp << 23 | tmp >> 41
+    res = ((tmp << 23) | (tmp >> 41)) + s0
     t = s1 << 17
     s2 = xor(s2, s0)
     s3 = xor(s3, s1)

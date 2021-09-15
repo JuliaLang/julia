@@ -11,6 +11,7 @@ New language features
 * `@inline` and `@noinline` annotations can now be applied to a function callsite or block
   to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
+* New function `eachsplit(str)` for iteratively performing `split(str)`.
 
 Language changes
 ----------------

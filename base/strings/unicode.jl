@@ -681,7 +681,7 @@ function iterate(g::GraphemeIterator, i_=(Int32(0),firstindex(g.s)))
     y === nothing && return nothing
     c0, k = y
     while k <= ncodeunits(s) # loop until next grapheme is s[i:j]
-        c, ℓ = iterate(s, k)
+        c, ℓ = iterate(s, k)::NTuple{2,Any}
         isgraphemebreak!(state, c0, c) && break
         j = k
         k = ℓ
