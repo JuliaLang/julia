@@ -2366,7 +2366,7 @@ function findall(A::AbstractArray{Bool})
     end
     I
 end
-findall(A::AbstractVector{Bool}) = (1:length(A))[A]
+findall(A::AbstractVector{Bool}) = eachindex(A)[A]
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
