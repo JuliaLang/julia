@@ -105,14 +105,15 @@ end
 end
 
 @testset "setting sample count and delay in init" begin
+    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     n_, delay_ = Profile.init()
     def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
-    @test n_ == def_n
+    @test n_ == floor(Int, def_n / nthreads) * nthreads
     def_delay = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 0.01 : 0.001
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    @test n_ == 1_000_001
+    @test n_ == 1_000_001 * nthreads
     @test delay_ == 0.0005
     Profile.init(n=def_n, delay=def_delay)
 end
@@ -120,6 +121,12 @@ end
 @testset "warning for buffer full" begin
     n_, delay_ = Profile.init()
     Profile.init(n=17)
+
+    # We have to make sure that we take enough samples to fill up the buffer
+    Profile.@profile for i = 1:(100_000 * Threads.nthreads())
+        println(devnull, sin(123) + cos(456))
+    end
+
     @test_logs (:warn, r"The profile data buffer is full") Profile.fetch()
     Profile.init(n=n_, delay=delay_)
 end
