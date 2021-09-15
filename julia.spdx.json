@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-d9d5c994-5165-4aae-ac2a-483850320902",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-e4b57066-090f-42ea-b236-0a96a182e345",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-15T05:07:46Z"
+        "created": "2021-09-15T05:20:06Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -52,6 +52,18 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2012-2016: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, Dahua Lin, Simon Byrne, Andreas Noack, Douglas Bates, John Myles White, Simon Kornblith, and other contributors.",
             "summary": "Development repository for the Statistics standard library (stdlib) that ships with Julia."
+        },
+        {
+            "name": "libCURL.jl",
+            "SPDXID": "SPDXRef-JuliaCurl",
+            "downloadLocation": "git+https://github.com/JuliaWeb/LibCURL.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/libCURL.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2013: JuliaWeb contributors",
+            "summary": "Julia wrapper for libCURL"
         },
         {
             "name": "OpenBLAS",
@@ -114,6 +126,11 @@
         },
         {
             "spdxElementId": "SPDXRef-JuliaStatistics",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaCurl",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
