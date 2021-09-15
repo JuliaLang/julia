@@ -83,12 +83,17 @@ end
 # init with default values
 # Use a max size of 10M profile samples, and fire timer every 1ms
 # (that should typically give around 100 seconds of record)
-if Sys.iswindows() && Sys.WORD_SIZE == 32
-    # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
-    # so we don't want to slow the program down by quite that much
-    __init__() = init(1_000_000, 0.01, limitwarn = false)
+if Sys.iswindows()
+    if Sys.WORD_SIZE == 32
+        # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
+        # so we don't want to slow the program down by quite that much
+        __init__() = init(1_000_000, 0.01, limitwarn = false)
+    else
+        # windows only profiles the main thread, so we don't need to divide by the number of threads
+        __init__() = init(10_000_000, 0.001, limitwarn = false)
+    end
 else
-    __init__() = init(10_000_000, 0.001, limitwarn = false)
+    __init__() = init(floor(Int, 10_000_000/Threads.nthreads()), 0.001, limitwarn = false)
 end
 
 """
