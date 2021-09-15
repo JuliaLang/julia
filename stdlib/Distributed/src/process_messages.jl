@@ -57,7 +57,7 @@ function showerror(io::IO, re::RemoteException)
     showerror(io, re.captured)
 end
 
-function run_work_thunk(thunk, print_error)
+function run_work_thunk(thunk::Function, print_error::Bool)
     local result
     try
         result = thunk()
@@ -271,11 +271,11 @@ function process_hdr(s, validate_cookie)
 end
 
 function handle_msg(msg::CallMsg{:call}, header, r_stream, w_stream, version)
-    schedule_call(header.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
+    schedule_call(header.response_oid, ()->invokelatest(msg.f, msg.args...; msg.kwargs...))
 end
 function handle_msg(msg::CallMsg{:call_fetch}, header, r_stream, w_stream, version)
     errormonitor(@async begin
-        v = run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), false)
+        v = run_work_thunk(()->invokelatest(msg.f, msg.args...; msg.kwargs...), false)
         if isa(v, SyncTake)
             try
                 deliver_result(w_stream, :call_fetch, header.notify_oid, v.v)
@@ -291,14 +291,14 @@ end
 
 function handle_msg(msg::CallWaitMsg, header, r_stream, w_stream, version)
     errormonitor(@async begin
-        rv = schedule_call(header.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
+        rv = schedule_call(header.response_oid, ()->invokelatest(msg.f, msg.args...; msg.kwargs...))
         deliver_result(w_stream, :call_wait, header.notify_oid, fetch(rv.c))
         nothing
     end)
 end
 
 function handle_msg(msg::RemoteDoMsg, header, r_stream, w_stream, version)
-    errormonitor(@async run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), true))
+    errormonitor(@async run_work_thunk(()->invokelatest(msg.f, msg.args...; msg.kwargs...), true))
 end
 
 function handle_msg(msg::ResultMsg, header, r_stream, w_stream, version)

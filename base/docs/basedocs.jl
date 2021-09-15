@@ -1533,8 +1533,9 @@ DomainError
 """
     Task(func)
 
-Create a `Task` (i.e. coroutine) to execute the given function `func` (which must be
-callable with no arguments). The task exits when this function returns.
+Create a `Task` (i.e. coroutine) to execute the given function `func` (which
+must be callable with no arguments). The task exits when this function returns.
+The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
 
 # Examples
 ```jldoctest

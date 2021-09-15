@@ -370,10 +370,7 @@ end
 # make a thunk to call f on args in a way that simulates what would happen if
 # the function were sent elsewhere
 function local_remotecall_thunk(f, args, kwargs)
-    if isempty(args) && isempty(kwargs)
-        return f
-    end
-    return ()->f(args...; kwargs...)
+    return ()->invokelatest(f, args...; kwargs...)
 end
 
 function remotecall(f, w::LocalProcess, args...; kwargs...)

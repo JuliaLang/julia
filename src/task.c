@@ -754,7 +754,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->prio = -1;
     jl_atomic_store_relaxed(&t->tid, t->copy_stack ? ct->tid : -1); // copy_stacks are always pinned since they can't be moved
     t->ptls = NULL;
-    t->world_age = 0;
+    t->world_age = ct->world_age;
 
 #ifdef COPY_STACKS
     if (!t->copy_stack) {
@@ -880,7 +880,6 @@ CFI_NORETURN
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT);
-            ct->world_age = jl_world_counter;
             res = jl_apply(&ct->start, 1);
         }
         JL_CATCH {
