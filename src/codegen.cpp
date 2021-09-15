@@ -687,7 +687,7 @@ static const auto jl_write_barrier_func = new JuliaFunction{
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::NoUnwind, Attribute::NoRecurse, Attribute::InaccessibleMemOnly}),
             AttributeSet(),
-            None); },
+            {Attributes(C, {Attribute::ReadOnly})}); },
 };
 static const auto jlisa_func = new JuliaFunction{
     "jl_isa",
