@@ -27,31 +27,6 @@ function try_compute_fieldidx_args(typ::DataType, args::Vector{Any})
     return try_compute_fieldidx(typ, field)
 end
 
-function lift_defuse(cfg::CFG, ssa::SSADefUse)
-    # We remove from `uses` any block where all uses are dominated
-    # by a def. This prevents insertion of dead phi nodes at the top
-    # of such a block if that block happens to be in a loop
-    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in ssa.uses]
-    for x in ssa.defs
-        push!(ordered, (x, block_for_inst(cfg, x), false))
-    end
-    ordered = sort(ordered, by=x->x[1])
-    bb_defs = Int[]
-    bb_uses = Int[]
-    last_bb = last_def_bb = 0
-    for (_, bb, is_use) in ordered
-        if bb != last_bb && is_use
-            push!(bb_uses, bb)
-        end
-        last_bb = bb
-        if last_def_bb != bb && !is_use
-            push!(bb_defs, bb)
-            last_def_bb = bb
-        end
-    end
-    SSADefUse(bb_uses, bb_defs, Int[])
-end
-
 function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
@@ -1209,12 +1184,12 @@ function cfg_simplify!(ir::IRCode)
         # Compute (renamed) successors and predecessors given (renamed) block
         function compute_succs(i)
             orig_bb = follow_merged_succ(result_bbs[i])
-            return map(i -> bb_rename_succ[i], bbs[orig_bb].succs)
+            return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
         end
         function compute_preds(i)
             orig_bb = result_bbs[i]
             preds = bbs[orig_bb].preds
-            return map(pred -> bb_rename_pred[pred], preds)
+            return Int[bb_rename_pred[pred] for pred in preds]
         end
 
         BasicBlock[

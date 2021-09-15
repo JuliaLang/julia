@@ -515,7 +515,7 @@ $(eval $(call LLVM_PROJ_PATCH,llvm-11-D97571-AArch64-loh)) # remove for LLVM 13
 $(eval $(call LLVM_PROJ_PATCH,llvm-11-aarch64-addrspace)) # remove for LLVM 13
 $(eval $(call LLVM_PROJ_PATCH,llvm-12-fde-symbols-aarch64)) # remove for LLVM 13
 $(eval $(call LLVM_PROJ_PATCH,llvm-12-force-eh_frame-aarch64)) # remove for LLVM 13
-$(eval $(call LLVM_PROJ_PATCH,llvm-12-D109203-stackprobe-x86)) # remove for LLVM 14
+$(eval $(call LLVM_PROJ_PATCH,llvm-12-D109203-stackprobe-x86)) # remove for LLVM 13
 endif # LLVM_VER 12.0
 
 ifeq ($(LLVM_VER_SHORT),13.0)
@@ -530,7 +530,6 @@ $(eval $(call LLVM_PATCH,llvm-11-D93154-globalisel-as))
 $(eval $(call LLVM_PATCH,llvm-11-D94813-mergeicmps)) # remove for LLVM 14
 $(eval $(call LLVM_PATCH,llvm-13-AArch64-FastIsel-bug))
 $(eval $(call LLVM_PATCH,llvm-13-D97435-AArch64-movaddrreg))
-$(eval $(call LLVM_PROJ_PATCH,llvm-13-D109203-stackprobe-x86)) # remove for LLVM 14 (nominated for backport)
 endif # LLVM_VER 13.0
 
 # Add a JL prefix to the version map. DO NOT REMOVE
