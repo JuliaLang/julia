@@ -1281,9 +1281,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             return false;
 #endif
         }
-        return f_name && (f_name == name || (name[0] == 'i' && f_name == name.drop_front()));
+        return f_name && f_name == name;
     };
-#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), StringRef(XSTR(#name)))
+#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), StringRef(#name))
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);
