@@ -40,15 +40,13 @@ private:
     vector<Edge> edges;
 };
 
-
-
-
-
-
+HeapSnapshot *g_snapshot = 0;
 
 JL_DLLEXPORT void take_gc_snapshot() {
     jl_printf(JL_STDERR, "%s\n", "HELLO");
     // Create the snapshot object
+    HeapSnapshot snapshot;
+    g_snapshot = &snapshot;
 
     // Enable GC Snapshotting
 
@@ -59,9 +57,22 @@ JL_DLLEXPORT void take_gc_snapshot() {
     // Disable snapshotting
 
     // Dump the snapshot
+    serialize_heap_snapshot(JL_STDERR, &snapshot);
+    g_snapshot = 0;
 }
 
 // TODO: remove JL_DLLEXPORT
 JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b) {
+    // check if snapshot is 0
+
     jl_printf(JL_STDERR, "edge: %p -> %p\n", a, b);
+}
+
+void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot *snapshot) {
+    jl_printf(stream, "{");
+
+    // ...
+    // ...
+
+    jl_printf(stream, "}");
 }

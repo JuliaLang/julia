@@ -7,6 +7,10 @@
 extern "C" {
 #endif
 
+class HeapSnapshot;
+
+void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot *snapshot);
+
 // ---------------------------------------------------------------------
 // Functions to call from GC when heap snapshot is enabled
 // ---------------------------------------------------------------------
