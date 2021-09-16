@@ -5,6 +5,8 @@
 
 #ifdef LIBRARY_EXPORTS
 #include "jl_internal_funcs.inc"
+#undef jl_setjmp
+#undef jl_longjmp
 #endif
 
 //** Configuration options that affect the Julia ABI **//
@@ -1885,14 +1887,25 @@ JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT;
 #if defined(_COMPILER_GCC_)
 JL_DLLEXPORT int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
 __declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Buf, int _Value);
+JL_DLLEXPORT int __attribute__ ((__nothrow__,__returns_twice__)) (ijl_setjmp)(jmp_buf _Buf);
+__declspec(noreturn) __attribute__ ((__nothrow__)) void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #else
 JL_DLLEXPORT int (jl_setjmp)(jmp_buf _Buf);
 void (jl_longjmp)(jmp_buf _Buf, int _Value);
+JL_DLLEXPORT int (ijl_setjmp)(jmp_buf _Buf);
+void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #endif
+#ifdef LIBRARY_EXPORTS
+#define jl_setjmp_f ijl_setjmp
+#define jl_setjmp_name "ijl_setjmp"
+#define jl_setjmp(a,b) ijl_setjmp(a)
+#define jl_longjmp(a,b) ijl_longjmp(a,b)
+#else
 #define jl_setjmp_f jl_setjmp
 #define jl_setjmp_name "jl_setjmp"
 #define jl_setjmp(a,b) jl_setjmp(a)
 #define jl_longjmp(a,b) jl_longjmp(a,b)
+#endif
 #elif defined(_OS_EMSCRIPTEN_)
 #define jl_setjmp(a,b) setjmp(a)
 #define jl_longjmp(a,b) longjmp(a,b)
