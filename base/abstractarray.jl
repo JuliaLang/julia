@@ -1237,9 +1237,9 @@ _getindex(::IndexStyle, A::AbstractArray, I...) =
     error("getindex for $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## IndexLinear Scalar indexing: canonical method is one Int
-_getindex(::IndexLinear, A::AbstractVector, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))  # ambiguity resolution in case packages specialize this (to be avoided if at all possible, but see Interpolations.jl)
-_getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
-function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
+_getindex(::IndexLinear, A::AbstractVector, i::Integer) = (@_propagate_inbounds_meta; getindex(A, i))  # ambiguity resolution in case packages specialize this (to be avoided if at all possible, but see Interpolations.jl)
+_getindex(::IndexLinear, A::AbstractArray, i::Integer) = (@_propagate_inbounds_meta; getindex(A, i))
+function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Integer,M}) where M
     @inline
     @boundscheck checkbounds(A, I...) # generally _to_linear_index requires bounds checking
     @inbounds r = getindex(A, _to_linear_index(A, I...))
@@ -1251,13 +1251,13 @@ _to_linear_index(A::AbstractArray) = first(LinearIndices(A))
 _to_linear_index(A::AbstractArray, I::Integer...) = (@inline; _sub2ind(A, I...))
 
 ## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
-function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Int,M}) where M
+function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Integer,M}) where M
     @inline
     @boundscheck checkbounds(A, I...) # generally _to_subscript_indices requires bounds checking
     @inbounds r = getindex(A, _to_subscript_indices(A, I...)...)
     r
 end
-function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) where {T,N}
+function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Integer, N}) where {T,N}
     @_propagate_inbounds_meta
     getindex(A, I...)
 end
@@ -1279,7 +1279,7 @@ function __to_subscript_indices(A::AbstractArray,
     (J..., map(first, tail(_remaining_size(J, axes(A))))...)
 end
 _to_subscript_indices(A, J::Tuple, Jrem::Tuple) = J # already bounds-checked, safe to drop
-_to_subscript_indices(A::AbstractArray{T,N}, I::Vararg{Int,N}) where {T,N} = I
+_to_subscript_indices(A::AbstractArray{T,N}, I::Vararg{Integer,N}) where {T,N} = I
 _remaining_size(::Tuple{Any}, t::Tuple) = t
 _remaining_size(h::Tuple, t::Tuple) = (@inline; _remaining_size(tail(h), tail(t)))
 _unsafe_ind2sub(::Tuple{}, i) = () # _ind2sub may throw(BoundsError()) in this case
@@ -1331,8 +1331,8 @@ _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
     error("setindex! for $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## IndexLinear Scalar indexing
-_setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
-function _setindex!(::IndexLinear, A::AbstractArray, v, I::Vararg{Int,M}) where M
+_setindex!(::IndexLinear, A::AbstractArray, v, i::Integer) = (@_propagate_inbounds_meta; setindex!(A, v, i))
+function _setindex!(::IndexLinear, A::AbstractArray, v, I::Vararg{Integer,M}) where M
     @inline
     @boundscheck checkbounds(A, I...)
     @inbounds r = setindex!(A, v, _to_linear_index(A, I...))
@@ -1340,11 +1340,11 @@ function _setindex!(::IndexLinear, A::AbstractArray, v, I::Vararg{Int,M}) where 
 end
 
 # IndexCartesian Scalar indexing
-function _setindex!(::IndexCartesian, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) where {T,N}
+function _setindex!(::IndexCartesian, A::AbstractArray{T,N}, v, I::Vararg{Integer, N}) where {T,N}
     @_propagate_inbounds_meta
     setindex!(A, v, I...)
 end
-function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) where M
+function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Integer,M}) where M
     @inline
     @boundscheck checkbounds(A, I...)
     @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
