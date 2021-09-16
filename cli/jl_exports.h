@@ -18,12 +18,18 @@ JL_EXPORTED_DATA_SYMBOLS(XX)
 // Define holder locations for function addresses as `const void * $(name)_addr`
 #define XX(name)    JL_HIDDEN const void * name##_addr;
 JL_EXPORTED_FUNCS(XX)
+#ifdef _OS_WINDOWS_
+JL_EXPORTED_FUNCS_WIN(XX)
+#endif
 #undef XX
 
 // Generate lists of function names and addresses
 #define XX(name)    #name,
 static const char *const jl_exported_func_names[] = {
     JL_EXPORTED_FUNCS(XX)
+#ifdef _OS_WINDOWS_
+    JL_EXPORTED_FUNCS_WIN(XX)
+#endif
     NULL
 };
 #undef XX
@@ -31,6 +37,9 @@ static const char *const jl_exported_func_names[] = {
 #define XX(name)    &name##_addr,
 static const void ** jl_exported_func_addrs[] = {
     JL_EXPORTED_FUNCS(XX)
+#ifdef _OS_WINDOWS_
+    JL_EXPORTED_FUNCS_WIN(XX)
+#endif
     NULL
 };
 #undef XX

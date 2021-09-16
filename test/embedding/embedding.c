@@ -175,6 +175,13 @@ int main()
         checked_eval_string("f28825()");
     }
 
+    JL_TRY {
+        jl_error("exception thrown");
+    }
+    JL_CATCH {
+        jl_printf(jl_stderr_stream(), "exception caught from C\n");
+    }
+
     int ret = 0;
     jl_atexit_hook(ret);
     return ret;

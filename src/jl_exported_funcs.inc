@@ -757,3 +757,6 @@
     XX(jl_xor_int) \
     XX(jl_yield) \
     XX(jl_zext_int) \
+
+#define JL_EXPORTED_FUNCS_WIN(XX) \
+    XX(jl_setjmp)
