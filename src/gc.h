@@ -26,6 +26,7 @@
 #endif
 #endif
 #include "julia_assert.h"
+#include "gc-heap-snapshot.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -639,6 +640,18 @@ extern int gc_verifying;
 #define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
 #define gc_verifying (0)
 #endif
+
+
+// For GC Debugging
+#define gc_debug_edge1(ty,obj,slot,arg1) do {                           \
+    verify_parent1(ty,obj,slot,arg1);                                     \
+    record_edge_to_gc_snapshot(obj,slot);                               \
+} while (0)
+#define gc_debug_edge2(ty,obj,slot,arg1,arg2) do {                      \
+    verify_parent2(ty,obj,slot,arg1,arg2);                                \
+    record_edge_to_gc_snapshot(obj,slot);                               \
+} while (0)
+
 int gc_slot_to_fieldidx(void *_obj, void *slot);
 int gc_slot_to_arrayidx(void *_obj, void *begin);
 NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset);
