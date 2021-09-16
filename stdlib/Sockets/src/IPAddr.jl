@@ -236,9 +236,9 @@ function parse(::Type{IPv6}, str::AbstractString)
         return IPv6(parseipv6fields(fields))
     end
 end
-                                            
+
 # Conversion
-                                            
+
 Base.convert(::Type{IPAddr}, str::AbstractString) = parse(IPAddr, str)
 
 #
