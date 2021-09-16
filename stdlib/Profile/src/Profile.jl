@@ -55,7 +55,8 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        return round(Int, n_cur / Threads.nthreads()), delay_cur
+        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
+        return round(Int, n_cur / nthreads), delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
