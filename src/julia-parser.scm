@@ -1515,7 +1515,7 @@
             (cond
              ((eq? nxt 'end)
               (list* 'try try-block (or catchv '(false))
-                     (or catchb (if (or finalb elseb) '(false) (error "try without catch, else or finally")))
+                     (or catchb (if finalb '(false) (error "try without catch or finally")))
                      (cond (elseb  (list (or finalb '(false)) elseb))
                            (finalb (list finalb))
                            (else   '()))))
@@ -1561,6 +1561,8 @@
                       elseb)))
              ((and (eq? nxt 'else)
                    (not elseb))
+              (if (or (not catchb) finalb)
+                  (error "else inside try block needs to be immediately after catch"))
               (let ((eb (if (eq? (require-token s) '(catch finally))
                             '(block)
                             (parse-block s))))

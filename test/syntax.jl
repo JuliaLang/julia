@@ -2983,9 +2983,15 @@ end
     @test fails(error)
     @test !fails(() -> 1 + 2)
 
+    @test_throws ParseError Meta.parse("try foo() else bar() end")
+    @test_throws ParseError Meta.parse("try foo() else bar() catch; baz() end")
+    @test_throws ParseError Meta.parse("try foo() catch; baz() finally foobar() else bar() end")
+    @test_throws ParseError Meta.parse("try foo() finally foobar() else bar() catch; baz() end")
+
     err = try
         try
             1 + 2
+        catch
         else
             error("foo")
         end
@@ -2998,6 +3004,7 @@ end
     err = try
         try
             1 + 2
+        catch
         else
             error("foo")
         finally
@@ -3007,21 +3014,6 @@ end
         e
     end
     @test err == ErrorException("foo")
-    @test x == 1
-
-    x = 0
-    err = try
-        try
-            1 + 2
-        else
-            3 + 4
-        finally
-            x += 1
-        end
-    catch e
-        e
-    end
-    @test err == 3 + 4
     @test x == 1
 
     x = 0
