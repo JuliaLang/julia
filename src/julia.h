@@ -1897,10 +1897,10 @@ JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT;
 
 #if defined(_OS_WINDOWS_)
 #if defined(_COMPILER_GCC_)
-int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
+JL_DLLEXPORT int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
 __declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #else
-int (jl_setjmp)(jmp_buf _Buf);
+JL_DLLEXPORT int (jl_setjmp)(jmp_buf _Buf);
 void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #endif
 #define jl_setjmp_f jl_setjmp

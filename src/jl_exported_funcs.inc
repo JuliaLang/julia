@@ -545,3 +545,5 @@
     XX(jl_print_backtrace) \
     XX(jl_get_pgcstack) \
 
+#define JL_EXPORTED_FUNCS_WIN(XX) \
+    XX(jl_setjmp)
