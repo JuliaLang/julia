@@ -5,6 +5,79 @@ A lot of the power and extensibility in Julia comes from a collection of informa
 receive those functionalities, but they are also able to be used in other methods that are written
 to generically build upon those behaviors.
 
+## [Type Properties](@id man-type-properties)
+
+| Methods to implement              | Default definition           | Brief description                                                                     |
+|:--------------------------------- |:---------------------------- |:------------------------------------------------------------------------------------- |
+| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof((x))`     | Returns a tuple of the properties (`x.property`) of an object `x`. `private=true` returns fieldnames intended to be kept as private |
+| `getproperty(x::ObjType, s::Symbol)`       | `getfield(x, s)`     | Returns property `s` of `x`. `x.s` calls `getproperty`.  |
+| `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Sets property `s` of `x` to `v`. `x.s = v` calls `setproperty!`. |
+
+Sometimes, it is desirable to change how end-user interacts with the fields of an object. 
+Instead of granting direct access to type fields, an extra layer of abstraction between 
+the user and the code can be provided through *type properties*. Properties are what the 
+user *sees of* the object, fields what the object *actually is*. 
+
+By default, properties and fields are the same. However, this behavior can be changed. 
+For example, take this representation of a point in a plane in [polar coordiantes](https://en.wikipedia.org/wiki/Polar_coordinate_system):
+
+```jldoctest polartype
+# Internally use polar coordinates to store the point.
+julia> mutable struct Point
+    r::Float64
+    ϕ::Float64
+end
+```
+
+We may want the users to be unaware that `Point` stores the coordinates as `r` and `ϕ` (fields), 
+and instead interact with `x` and `y` (properties). The methods in the first column can be 
+defined to add new functionality:
+
+```jldoctest polartype
+julia> Base.propertynames(::Point, private::Bool=false) = private ? (:x, :y, :r, :ϕ) : (:x, :y)
+
+julia> function Base.getproperty(p::Point, s::Symbol)
+    if s == :x
+        return getfield(p, :r) * cos(getfield(p, :ϕ))
+    elseif s == :y
+        return getfield(p, :r) * sin(getfield(p, :ϕ))
+    else
+        # This allows accessing fields with p.r and p.ϕ
+        return getfield(p, s) 
+    end
+end
+
+julia> function Base.setproperty!(p::Point, s::Symbol, f)
+    if s == :x
+        y = p.y
+        setfield!(p, :r, sqrt(f^2 + y^2))
+        setfield!(p, :ϕ, atan(y, f))
+    elseif s == :y
+        x = p.x
+        setfield!(p, :r, sqrt(x^2 + f^2))
+        setfield!(p, :ϕ, atan(f, x))
+    else
+        # This allow modifying fields with p.r and p.ϕ
+        return setfield!(p, s, f) 
+    end
+end
+
+julia> p = Point(7.0, pi/2)
+Point(7.0, 1.5707963267948966)
+
+julia> propertynames(p)
+(:x, :y)
+
+julia> p.x = 3.0 # This translates to setproperty!(p, :x, 7)
+3.0
+
+julia> p.y = 4.0
+4.0
+
+julia> p.r # Fields can still be accessed through default behavior of getfield(p, :r)
+5.0
+```
+
 ## [Iteration](@id man-interface-iteration)
 
 | Required methods               |                        | Brief description                                                                     |
