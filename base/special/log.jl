@@ -411,28 +411,22 @@ end
 
 
 @inline function log_ext_kernel(x_hi::Float64, x_lo::Float64)
-    c10 = 0.116255524079935043668677
-    c9 = 0.103239680901072952701192
-    c8 = 0.117754809412463995466069
-    c7 = 0.13332981086846273921509
-    c6 = 0.153846227114512262845736
-    c5 = 0.181818180850050775676507
-    c4 = 0.222222222230083560345903
-    c3 = 0.285714285714249172087875
-    c2 = 0.400000000000000077715612
     c1hi = 0.666666666666666629659233
-    c1lo = 3.80554962542412056336616e-17
-    estr =  evalpoly(x_hi, (c2, c3, c4, c5, c6, c7, c8, c9, c10))
-    res_hi = estr*x_hi
-    res_lo = fma(x_lo, estr, fma(estr, x_hi, -res_hi))
+    hi_order =  evalpoly(x_hi, (0.400000000000000077715612, 0.285714285714249172087875,
+                                0.222222222230083560345903, 0.181818180850050775676507,
+                                0.153846227114512262845736, 0.13332981086846273921509,
+                                0.117754809412463995466069, 0.103239680901072952701192,
+                                0.116255524079935043668677))
+    res_hi = hi_order * x_hi
+    res_lo = fma(x_lo, estr, fma(hi_order, x_hi, -res_hi))
     ans_hi = c1hi + res_hi
-    ans_lo = (c1hi - ans_hi) + res_hi + (res_lo + c1lo)
+    ans_lo = ((c1hi - ans_hi) + res_hi) + (res_lo + 3.80554962542412056336616e-17)
     return ans_hi, ans_lo
 end
 
 # Log implimentation that returns 2 numbers which sum to give true value with about 68 bits of precision
 # Implimentation adapted from SLEEFPirates.jl
-# Does not normalize results. 
+# Does not normalize results.
 function _log_ext(d::Float64)
   m, e = significand(d), exponent(d)
   if m > 1.5
