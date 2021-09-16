@@ -643,12 +643,14 @@ extern int gc_verifying;
 
 
 // For GC Debugging
+// TODO: Is slot the right target object?
 #define gc_debug_edge1(ty,obj,slot,arg1) do {                           \
-    verify_parent1(ty,obj,slot,arg1);                                     \
+    verify_parent1(ty,obj,slot,arg1);                                   \
     record_edge_to_gc_snapshot(obj,slot);                               \
 } while (0)
+// TODO: Is slot the right target object?                            
 #define gc_debug_edge2(ty,obj,slot,arg1,arg2) do {                      \
-    verify_parent2(ty,obj,slot,arg1,arg2);                                \
+    verify_parent2(ty,obj,slot,arg1,arg2);                              \
     record_edge_to_gc_snapshot(obj,slot);                               \
 } while (0)
 
