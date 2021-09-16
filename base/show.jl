@@ -1315,7 +1315,8 @@ is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
      isidentifier(s) -> Bool
 
 Return whether the symbol or string `s` contains characters that are parsed as
-a valid ordinary identifier (not a binary/unary operator) in Julia code.
+a valid ordinary identifier (not a binary/unary operator) in Julia code;
+see also [`Base.isoperator`](@ref).
 
 Internally Julia allows any sequence of characters in a `Symbol` (except `\\0`s),
 and macros automatically use variable names containing `#` in order to avoid
@@ -1348,6 +1349,9 @@ _isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
     isoperator(s::Symbol)
 
 Return `true` if the symbol can be used as an operator, `false` otherwise.
+
+See also [`Base.isunaryoperator`](@ref), [`Base.isbinaryoperator`](@ref),
+and [`Base.operator_precedence`](@ref).
 
 # Examples
 ```jldoctest
@@ -1410,6 +1414,8 @@ end
 Return an integer representing the precedence of operator `s`, relative to
 other operators. Higher-numbered operators take precedence over lower-numbered
 operators. Return `0` if `s` is not a valid operator.
+
+See also [`Base.operator_associativity`](@ref).
 
 # Examples
 ```jldoctest
