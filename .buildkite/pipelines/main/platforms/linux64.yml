@@ -52,9 +52,6 @@ steps:
       echo "--- Upload build artifacts"
       buildkite-agent artifact upload $$ARTIFACT_FILENAME
     timeout_in_minutes: 60
-    notify:
-      - github_commit_status:
-          context: "package_linux64"
 
   # TODO: uncomment the following lines in order to enable the `tester_linux64` builder
   # - label: "tester_linux64"
@@ -90,6 +87,3 @@ steps:
   #     unset JULIA_DEPOT_PATH
   #     julia-artifact/bin/julia .buildkite/utilities/rr/rr_capture.jl julia-artifact/bin/julia -e 'Base.runtests(["all"]; ncores = Sys.CPU_THREADS)'
   #   timeout_in_minutes: 120
-  #   notify:
-  #     - github_commit_status:
-  #         context: "tester_linux64"

@@ -23,9 +23,6 @@ steps:
       make -j$${JULIA_NUM_CORES} -C test/clangsa
       make -j$${JULIA_NUM_CORES} -C src analyzegc
     timeout_in_minutes: 60
-    notify:
-      - github_commit_status:
-          context: "analyzegc"
 
   - label: "llvmpasses"
     key: "llvmpasses"
@@ -47,6 +44,3 @@ steps:
       echo "+++ make test/llvmpasses"
       make -j$${JULIA_NUM_CORES} -C test/llvmpasses
     timeout_in_minutes: 60
-    notify:
-      - github_commit_status:
-          context: "llvmpasses"

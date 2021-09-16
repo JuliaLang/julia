@@ -31,6 +31,3 @@ steps:
       echo "--- Run Julia doctests"
       JULIA_NUM_THREADS=1 make -C doc doctest=true
     timeout_in_minutes: 45
-    notify:
-      - github_commit_status:
-          context: "doctest"

@@ -29,6 +29,3 @@ steps:
       make -j$${JULIA_NUM_CORES} -C test/embedding JULIA="$${prefix}/bin/julia" BIN="$${embedding_output}"
 
     timeout_in_minutes: 60
-    notify:
-      - github_commit_status:
-          context: "embedding"
