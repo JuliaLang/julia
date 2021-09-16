@@ -1469,7 +1469,7 @@ function deleteat!(a::Vector, i::Integer)
 end
 
 function deleteat!(a::Vector, r::AbstractUnitRange{<:Integer})
-    if eltype(r) isa Bool
+    if eltype(r) === Bool
         return invoke(deleteat!, Tuple{Vector, AbstractVector{Bool}}, a, r)
     else
         n = length(a)
