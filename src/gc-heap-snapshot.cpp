@@ -157,8 +157,6 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b) {
     record_node_to_gc_snapshot(a);
     record_node_to_gc_snapshot(b);
     g_snapshot->edges.push_back(Edge{"property", (size_t)a, (size_t)b});
-
-    jl_printf(JL_STDERR, "edge: %p -> %p\n", a, b);
 }
 
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
