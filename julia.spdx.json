@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8cfd1c8b-14b7-470d-bae7-aea217ff9a7f",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-f4ceb281-d283-49d7-8859-b476368ac06e",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-15T05:22:55Z"
+        "created": "2021-09-16T05:00:28Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -64,6 +64,18 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2013: JuliaWeb contributors",
             "summary": "Julia wrapper for libCURL"
+        },
+        {
+            "name": "Downloads.jl",
+            "SPDXID": "SPDXRef-JuliaDownloads",
+            "downloadLocation": "git+https://github.com/JuliaLang/Downloads.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/Downloads.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2020 Stefan Karpinski <stefan@karpinski.org> and contributors",
+            "summary": "The Downloads package provides a single function, download, which provides cross-platform, multi-protocol, in-process download functionality implemented with libcurl."
         },
         {
             "name": "OpenBLAS",
@@ -131,6 +143,11 @@
         },
         {
             "spdxElementId": "SPDXRef-JuliaCurl",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaDownloads",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
