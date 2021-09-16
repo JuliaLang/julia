@@ -46,7 +46,7 @@ struct Edge {
 //}
 
 struct StringTable {
-    typedef unordered_map<string, size_t> MapType;    
+    typedef unordered_map<string, size_t> MapType;
 
     MapType map;
     vector<string> strings;
@@ -166,10 +166,12 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
     jl_printf(stream, "\"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"],");
     jl_printf(stream, "\"node_types\":[");
     snapshot.node_types.print_json_array(stream, false);
-    jl_printf(stream, ",\"string\", \"number\", \"number\", \"number\", \"number\", \"number\"]");
+    jl_printf(stream, ",");
+    jl_printf(stream, "\"string\", \"number\", \"number\", \"number\", \"number\", \"number\"],");
     jl_printf(stream, "\"edge_fields\":[\"type\",\"name_or_index\",\"to_node\"],");
     jl_printf(stream, "\"edge_types\":[");
     snapshot.edge_types.print_json_array(stream, false);
+    jl_printf(stream, ",");
     jl_printf(stream, "\"string_or_number\",\"node\"],");
     jl_printf(stream, "\"trace_function_info_fields\":[],");
     jl_printf(stream, "\"trace_node_fields\":[],");
