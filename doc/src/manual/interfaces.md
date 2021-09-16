@@ -15,7 +15,7 @@ to generically build upon those behaviors.
 
 Sometimes, it is desirable to change how end-user interacts with the fields of an object. 
 Instead of granting direct access to type fields, an extra layer of abstraction between 
-the user and the code can be provided through *type properties*. Properties are what the 
+the user and the code can be provided overloading `object.field`. Properties are what the 
 user *sees of* the object, fields what the object *actually is*. 
 
 By default, properties and fields are the same. However, this behavior can be changed. 
