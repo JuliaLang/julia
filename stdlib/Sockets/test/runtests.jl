@@ -87,12 +87,12 @@ end
     end
     
     let test_struct = IPAddrTestStruct("127.0.0.1")
-        @test isa(test_struct, IPv4)
+        @test isa(test_struct.ip, IPv4)
         @test test_struct.ip == ip"127.0.0.1"
     end
     
     let test_struct = IPAddrTestStruct("0:0:0:0:0:ffff:127.0.0.1")
-        @test isa(test_struct, IPv6)
+        @test isa(test_struct.ip, IPv6)
         @test test_struct.ip == ip"0:0:0:0:0:ffff:127.0.0.1"
     end
 end
