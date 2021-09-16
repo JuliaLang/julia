@@ -1351,7 +1351,7 @@ _isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
 Return `true` if the symbol can be used as an operator, `false` otherwise.
 
 See also [`Base.isunaryoperator`](@ref), [`Base.isbinaryoperator`](@ref),
-and [`Base.operator_precedence`](@ref).
+[`Base.ispostfixoperator`](@ref), and [`Base.operator_precedence`](@ref).
 
 # Examples
 ```jldoctest
