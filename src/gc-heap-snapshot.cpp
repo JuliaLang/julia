@@ -62,12 +62,14 @@ size_t find_or_create_string_id(HeapSnapshot& snapshot, string key) {
     return val->second;
 }
 
-HeapSnapshot *g_snapshot = 0;
+HeapSnapshot *g_snapshot = nullptr;
 
 JL_DLLEXPORT void take_gc_snapshot() {
     // Create the snapshot object
-    HeapSnapshot snapshot;
-    g_snapshot = &snapshot;
+    //HeapSnapshot snapshot;
+    //g_snapshot = &snapshot;
+    if (!g_snapshot)
+        g_snapshot = new HeapSnapshot();
 
     // Enable GC Snapshotting
 
@@ -78,8 +80,9 @@ JL_DLLEXPORT void take_gc_snapshot() {
     // Disable snapshotting
 
     // Dump the snapshot
-    serialize_heap_snapshot(JL_STDERR, snapshot);
-    g_snapshot = 0;
+    serialize_heap_snapshot(JL_STDERR, *g_snapshot);
+    // TODO(PR): Put this back, but disabled for debugging
+    //g_snapshot = nullptr;
 }
 
 // TODO: remove JL_DLLEXPORT
@@ -99,9 +102,10 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
     jl_printf(stream, "\"nodes\":[");
     bool first_node = true;
     for (const auto &node : snapshot.nodes) {
-        if (!first_node) {
-            jl_printf(stream, ",");
+        if (first_node) {
             first_node = false;
+        } else {
+            jl_printf(stream, ",");
         }
         // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
         jl_printf(stream, "%d", find_or_create_string_id(snapshot, node.type)); // type
@@ -118,12 +122,13 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
     jl_printf(stream, "\"edges\":[");
     bool first_edge = true;
     for (const auto &edge : snapshot.edges) {
-        if (!first_edge) {
-            jl_printf(stream, ",");
+        if (first_edge) {
             first_edge = false;
+        } else {
+            jl_printf(stream, ",");
         }
         // edge type
-        jl_printf(stream, ",%d", find_or_create_string_id(snapshot, edge.type));
+        jl_printf(stream, "%d", find_or_create_string_id(snapshot, edge.type));
         // edge from
         jl_printf(stream, ",%d", edge.name_or_index);
         // edge to
