@@ -81,6 +81,22 @@ sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"
     @test_throws BoundsError Sockets.ipv6_field(IPv6(0xffff7f000001), 9)
 end
 
+@testset "conversion" begin
+    struct IPAddrTestStruct
+        ip::IPAddr
+    end
+    
+    let test_struct = IPAddrTestStruct("127.0.0.1")
+        @test isa(test_struct, IPv4)
+        @test test_struct.ip == ip"127.0.0.1"
+    end
+    
+    let test_struct = IPAddrTestStruct("0:0:0:0:0:ffff:127.0.0.1")
+        @test isa(test_struct, IPv6)
+        @test test_struct.ip == ip"0:0:0:0:0:ffff:127.0.0.1"
+    end
+end
+
 @testset "InetAddr constructor" begin
     inet = Sockets.InetAddr(IPv4(127,0,0,1), 1024)
     @test inet.host == ip"127.0.0.1"
