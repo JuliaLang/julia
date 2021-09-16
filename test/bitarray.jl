@@ -1711,3 +1711,22 @@ end
     @test typeof([a a ;;; a a]) <: BitArray
     @test typeof([a a ;;; [a a]]) <: BitArray
 end
+
+@testset "deleteat! with Bool indices" begin
+    function test_equivalence(n::Int)
+        x1 = rand(Bool, n)
+        x2 = BitVector(x1)
+        inds1 = rand(Bool, n)
+        inds2 = BitVector(inds1)
+        return deleteat!(copy(x1), findall(inds1)) ==
+               deleteat!(copy(x1), inds1) ==
+               deleteat!(copy(x2), inds1) ==
+               deleteat!(copy(x1), inds2) ==
+               deleteat!(copy(x2), inds2)
+    end
+
+    Random.seed!(1234)
+    for n in 1:20, _ in 1:100
+        @test test_equivalence(n)
+    end
+end

@@ -1025,7 +1025,43 @@ function deleteat!(B::BitVector, inds::AbstractVector{Bool})
     if length(B) != length(inds)
         throw(ArgumentError("length of Bool indices inds must match the length of B"))
     end
-    return deleteat!(B, findall(inds))
+
+    n = new_l = length(B)
+    y = findfirst(inds)
+    y === nothing && return B
+
+    Bc = B.chunks
+
+    p = y
+    s = y + 1
+    checkbounds(B, p)
+    q = p + 1
+    new_l -= 1
+    y = findnext(inds, s)
+    while y !== nothing
+        i = y
+        s = y + 1
+        new_l -= 1
+        if i > q
+            copy_chunks!(Bc, Int(p), Bc, Int(q), Int(i-q))
+            p += i - q
+        end
+        q = i + 1
+        y = findnext(inds, s)
+    end
+
+    q <= n && copy_chunks!(Bc, p, Bc, Int(q), Int(n - q + 1))
+
+    delta_k = num_bit_chunks(new_l) - length(Bc)
+    delta_k < 0 && _deleteend!(Bc, -delta_k)
+
+    B.len = new_l
+
+    if new_l > 0
+        Bc[end] &= _msk_end(new_l)
+    end
+
+    return B
 end
 
 function splice!(B::BitVector, i::Integer)
