@@ -106,15 +106,32 @@ end
 
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
-    def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
-    @test n_ == def_n
+    n_original = n_
+    if Sys.iswindows() && Sys.WORD_SIZE == 32
+        if 1_000_000 * Threads.nthreads() > 2^29
+            @test n_ <= 2^29
+        else
+            @test n_ == 1_000_000
+        end
+    else
+        @test n_ == 10_000_000
+    end
+
     def_delay = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 0.01 : 0.001
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    @test n_ == 1_000_001
+    if Sys.iswindows() && Sys.WORD_SIZE == 32
+        if 1_000_001 * Threads.nthreads() > 2^29
+            @test n_ <= 2^29
+        else
+            @test n_ == 1_000_001
+        end
+    else
+        @test n_ == 1_000_001
+    end
     @test delay_ == 0.0005
-    Profile.init(n=def_n, delay=def_delay)
+    Profile.init(n=n_original, delay=def_delay)
 end
 
 @testset "warning for buffer full" begin
