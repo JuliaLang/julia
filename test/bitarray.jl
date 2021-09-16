@@ -1712,7 +1712,20 @@ end
     @test typeof([a a ;;; [a a]]) <: BitArray
 end
 
-@testset "deleteat! with Bool indices" begin
+@testset "deleteat! additional tests" begin
+    for v in ([1, 2, 3], [true, true, true], trues(3))
+        @test_throws BoundsError deleteat!(v, true:true)
+    end
+
+    for v in ([1], [true], trues(1))
+        @test length(deleteat!(v, false:false)) == 1
+        @test isempty(deleteat!(v, true:true))
+    end
+
+    x = trues(3)
+    x[3] = false
+    @test deleteat!(x, [UInt8(2)]) == [true, false]
+
     function test_equivalence(n::Int)
         x1 = rand(Bool, n)
         x2 = BitVector(x1)
