@@ -1197,7 +1197,7 @@ struct DiskStats
 end
 
 function DiskStats(path::AbstractString)
-    ispath(path) || throw(ArgumentError("'$path' is not a file or directory. Please provide a valid path."))
+    ispath(path) || throw(ArgumentError("'$path' is not a file or directory."))
 
     # Call libuv's cross-platform statfs implementation
     req = Ref{NTuple{Int(_sizeof_uv_fs), UInt8}}()
@@ -1218,6 +1218,18 @@ function DiskStats(path::AbstractString)
 end
 
 """
+    diskstat(path=pwd())
+
+Returns statistics in bytes about the disk that contains the file or directory pointed at by
+`path`. If no argument is passed, statistics about the disk that contains the current
+working directory are returned.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+"""
+diskstat(path::AbstractString=pwd()) = DiskStats(path)
+
+"""
     disk_total(path=pwd())
 
 Returns the size in bytes of the disk that contains the file or directory pointed at by
@@ -1227,7 +1239,7 @@ directory is returned.
 !!! compat "Julia 1.8"
     This method was added in Julia 1.8.
 """
-disk_total(path::AbstractString=pwd()) = DiskStats(path).total
+disk_total(path::AbstractString=pwd()) = diskstat(path).total
 
 """
     disk_available(path=pwd())
@@ -1239,7 +1251,7 @@ current working directory is returned.
 !!! compat "Julia 1.8"
     This method was added in Julia 1.8.
 """
-disk_available(path::AbstractString=pwd()) = DiskStats(path).available
+disk_available(path::AbstractString=pwd()) = diskstat(path).available
 
 """
     disk_used(path=pwd())
@@ -1252,6 +1264,6 @@ current working directory is returned.
     This method was added in Julia 1.8.
 """
 function disk_used(path::AbstractString=pwd())
-    disk_stats = DiskStats(path)
+    disk_stats = diskstat(path)
     return disk_stats.total - disk_stats.available
 end

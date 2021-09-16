@@ -1693,7 +1693,7 @@ end
     end
 end
 
-@testset "Disk space calculations work" begin
+@testset "Disk stats work" begin
     @test disk_total() == disk_total(pwd())
     @test disk_used() == disk_used(pwd())
     @test disk_available() == disk_available(pwd())
@@ -1705,4 +1705,7 @@ end
     @test disk_used() < disk_total()
     @test disk_available() < disk_total()
     @test disk_used() + disk_available() <= disk_total()
+
+    stats = diskstat()
+    @test stats.available < stats.total
 end
