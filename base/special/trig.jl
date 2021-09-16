@@ -772,13 +772,14 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
 function sinpi(x::T) where T<:Union{Float16, Float32, Float64, Rational}
+    isless(x, 0.0) && return -sinpi(-x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
     if T <: AbstractFloat
-        abs(x) >= maxintfloat(T) && return copysign(zero(T), x)
+        abs(x) >= maxintfloat(T) && return zero(T)
     end
 
     # reduce to interval [0, 0.5]
@@ -836,6 +837,7 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
 function sincospi(x::T) where T<:Union{Float16, Float32, Float64, Rational}
+    isless(x, 0.0) && return -sinpi(-x)
     if !isfinite(x)
         isnan(x) && return x, x
         throw(DomainError(x, "`x` cannot be infinite."))
