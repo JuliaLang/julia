@@ -1022,9 +1022,7 @@ function deleteat!(B::BitVector, inds)
 end
 
 function deleteat!(B::BitVector, inds::AbstractVector{Bool})
-    if length(B) != length(inds)
-        throw(ArgumentError("length of Bool indices inds must match the length of B"))
-    end
+    length(inds) == length(B) || throw(BoundsError(a, inds))
 
     n = new_l = length(B)
     y = findfirst(inds)
