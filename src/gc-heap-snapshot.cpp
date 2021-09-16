@@ -124,16 +124,28 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b) {
 
     record_node_to_gc_snapshot(a);
     record_node_to_gc_snapshot(b);
-    g_snapshot->edges.push_back(Edge{"", (size_t)a, (size_t)b});
+    g_snapshot->edges.push_back(Edge{"property", (size_t)a, (size_t)b});
 
     jl_printf(JL_STDERR, "edge: %p -> %p\n", a, b);
 }
 
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
+    // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2567-L2567
     jl_printf(stream, "{\"snapshot\":{");
     jl_printf(stream, "\"meta\":{");
-    jl_printf(stream, "\"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"]");
-    // jl_printf(stream, "\"node_types\":XXX");
+    jl_printf(stream, "\"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"],");
+    jl_printf(stream, "\"node_types\":[[");
+    // TODO: print string table
+    jl_printf(stream, "], \"string\", \"number\", \"number\", \"number\", \"number\", \"number\"]");
+    jl_printf(stream, "\"edge_fields\":[\"type\",\"name_or_index\",\"to_node\"],");
+    jl_printf(stream, "\"edge_types\":[[\"property\"],\"string_or_number\",\"node\"],");
+    jl_printf(stream, "\"trace_function_info_fields\":[],");
+    jl_printf(stream, "\"trace_node_fields\":[],");
+    jl_printf(stream, "\"sample_fields\":[],");
+    jl_printf(stream, "\"location_fields\":[],");
+    jl_printf(stream, "\"node_count\":%zu,", snapshot.nodes.size());
+    jl_printf(stream, "\"edge_count\":%zu,", snapshot.edges.size());
+    jl_printf(stream, "\"trace_function_count\":0");
     jl_printf(stream, "},\n"); // end "meta"
 
     jl_printf(stream, "\"nodes\":[");
