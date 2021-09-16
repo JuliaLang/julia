@@ -3,10 +3,12 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 using std::vector;
 using std::string;
 using std::unordered_map;
+using std::unordered_set;
 
 struct HeapSnapshot;
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot);
@@ -49,18 +51,27 @@ public:
     vector<Edge> edges;
 
     MapType names;
+    unordered_set<size_t> seen_node_ids;
 };
 
 
+template<typename K, typename V>
+auto find_or_insert_iter(unordered_map<K,V>& map, const K &key) {
+    auto val = map.find(key);
+    if (val == map.end()) {
+        val = map.insert(val, {key, map.size()});
+    }
+    return val;
+}
 size_t find_or_create_string_id(HeapSnapshot& snapshot, string key) {
     auto &names = snapshot.names;
 
-    auto val = names.find(key);
-    if (val == names.end()) {
-        val = names.insert(val, {key, names.size()});
-    }
-    return val->second;
+    return find_or_insert_iter(names, key)->second;
 }
+// TODO: Do we need to refer to nodes by their index in the node array?
+//size_t find_or_create_node_id(HeapSnapshot& snapshot, string key) {
+//    return find_or_insert_iter(snapshot.nodes_map, key)->second;
+//}
 
 HeapSnapshot *g_snapshot = nullptr;
 
@@ -85,19 +96,45 @@ JL_DLLEXPORT void take_gc_snapshot() {
     //g_snapshot = nullptr;
 }
 
+JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
+    auto val = g_snapshot->seen_node_ids.find((size_t)a);
+    if (val != g_snapshot->seen_node_ids.end()) {
+        return;
+    }
+    // Insert a new Node
+    g_snapshot->seen_node_ids.insert(val, (size_t)a);
+
+    Node node{
+        "", // string type;
+        "", // string name;
+        (size_t)a, // size_t id;
+        0, // size_t self_size;
+        0, // int edge_count;
+        0, // size_t trace_node_id;
+        0 // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+    };
+    g_snapshot->nodes.push_back(node);
+}
+
 // TODO: remove JL_DLLEXPORT
 JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b) {
     if (!g_snapshot) {
         return;
     }
 
+    record_node_to_gc_snapshot(a);
+    record_node_to_gc_snapshot(b);
     g_snapshot->edges.push_back(Edge{"", (size_t)a, (size_t)b});
 
     jl_printf(JL_STDERR, "edge: %p -> %p\n", a, b);
 }
 
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
-    jl_printf(stream, "{");
+    jl_printf(stream, "{\"snapshot\":{");
+    jl_printf(stream, "\"meta\":{");
+    jl_printf(stream, "\"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"]");
+    // jl_printf(stream, "\"node_types\":XXX");
+    jl_printf(stream, "},\n"); // end "meta"
 
     jl_printf(stream, "\"nodes\":[");
     bool first_node = true;
@@ -108,13 +145,13 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
             jl_printf(stream, ",");
         }
         // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
-        jl_printf(stream, "%d", find_or_create_string_id(snapshot, node.type)); // type
-        jl_printf(stream, ",%d", find_or_create_string_id(snapshot, node.name)); // name
-        jl_printf(stream, ",%d", 0);//XXX); // id
-        jl_printf(stream, ",%d", 0);//XXX); // self_size
-        jl_printf(stream, ",%d", 0);//XXX); // edge_count
-        jl_printf(stream, ",%d", 0);//XXX); // trace_node_id
-        jl_printf(stream, ",%d", 0);//XXX); // detachedness
+        jl_printf(stream, "%zu", find_or_create_string_id(snapshot, node.type));
+        jl_printf(stream, ",%zu", find_or_create_string_id(snapshot, node.name));
+        jl_printf(stream, ",%zu", node.id);
+        jl_printf(stream, ",%zu", 0);//XXX); // self_size
+        jl_printf(stream, ",%zu", 0);//XXX); // edge_count
+        jl_printf(stream, ",%zu", 0);//XXX); // trace_node_id
+        jl_printf(stream, ",%zu", 0);//XXX); // detachedness
         jl_printf(stream, "\n");
     }
     jl_printf(stream, "],\n");
@@ -127,16 +164,13 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
         } else {
             jl_printf(stream, ",");
         }
-        // edge type
-        jl_printf(stream, "%d", find_or_create_string_id(snapshot, edge.type));
-        // edge from
-        jl_printf(stream, ",%d", edge.name_or_index);
-        // edge to
-        // TODO: don't print comma after the last
-        jl_printf(stream, ",%d", edge.to_node);
+        jl_printf(stream, "%zu", find_or_create_string_id(snapshot, edge.type));
+        jl_printf(stream, ",%zu", edge.name_or_index);
+        jl_printf(stream, ",%zu", edge.to_node);
         jl_printf(stream, "\n");
     }
-    jl_printf(stream, "]");
+    jl_printf(stream, "]"); // end "edges"
 
+    jl_printf(stream, "}"); // end "snapshot"
     jl_printf(stream, "}");
 }
