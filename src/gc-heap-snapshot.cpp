@@ -107,7 +107,7 @@ public:
 
 HeapSnapshot *g_snapshot = nullptr;
 
-JL_DLLEXPORT void take_gc_snapshot() {
+JL_DLLEXPORT void take_gc_snapshot(JL_STREAM *stream) {
     // Create the snapshot object
     //HeapSnapshot snapshot;
     //g_snapshot = &snapshot;
@@ -123,7 +123,7 @@ JL_DLLEXPORT void take_gc_snapshot() {
     // Disable snapshotting
 
     // Dump the snapshot
-    serialize_heap_snapshot(JL_STDERR, *g_snapshot);
+    serialize_heap_snapshot(stream, *g_snapshot);
     // TODO(PR): Put this back, but disabled for debugging
     //g_snapshot = nullptr;
 }
@@ -174,11 +174,12 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
     jl_printf(stream, "\"trace_function_info_fields\":[],");
     jl_printf(stream, "\"trace_node_fields\":[],");
     jl_printf(stream, "\"sample_fields\":[],");
-    jl_printf(stream, "\"location_fields\":[],");
+    jl_printf(stream, "\"location_fields\":[]");
+    jl_printf(stream, "},\n"); // end "meta"
     jl_printf(stream, "\"node_count\":%zu,", snapshot.nodes.size());
     jl_printf(stream, "\"edge_count\":%zu,", snapshot.edges.size());
     jl_printf(stream, "\"trace_function_count\":0");
-    jl_printf(stream, "},\n"); // end "meta"
+    jl_printf(stream, "},\n"); // end "snapshot"
 
     jl_printf(stream, "\"nodes\":[");
     bool first_node = true;
@@ -219,6 +220,5 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
 
     snapshot.names.print_json_array(stream, true);
 
-    jl_printf(stream, "}"); // end "snapshot"
     jl_printf(stream, "}");
 }
