@@ -10,7 +10,8 @@ extern "C" {
 // ---------------------------------------------------------------------
 // Functions to call from GC when heap snapshot is enabled
 // ---------------------------------------------------------------------
-void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b);
+// TODO: remove JL_DLLEXPORT
+JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b);
 
 // ---------------------------------------------------------------------
 // Functions to call from Julia to start heap snapshot
