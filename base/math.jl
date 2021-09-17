@@ -49,6 +49,9 @@ are promoted to a common type.
 
 See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
 
+!!! compat "Julia 1.3"
+    `missing` as the first argument requires at least Julia 1.3.
+
 # Examples
 ```jldoctest
 julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
@@ -97,6 +100,9 @@ clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` entries in `array` require at least Julia 1.3.
 
 # Examples
 ```jldoctest
