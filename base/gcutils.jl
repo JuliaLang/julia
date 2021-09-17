@@ -116,6 +116,10 @@ another Task or thread.
 """
 enable_finalizers(on::Bool) = on ? enable_finalizers() : disable_finalizers()
 
+function take_heap_snapshot(io::IOStream)
+    ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid},), io.handle)
+end
+
 function enable_finalizers()
     Base.@inline
     ccall(:jl_gc_enable_finalizers_internal, Cvoid, ())
