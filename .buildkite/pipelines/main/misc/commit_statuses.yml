@@ -75,7 +75,8 @@ steps:
     depends_on:
       - "embedding"
       - "llvmpasses"
-      - "tester_linux32"
+      - "tester_linux32_st"
+      - "tester_linux32_mt"
       - "tester_linux64_st"
       - "tester_linux64_mt"
       - "tester_linux64_st_rr"
