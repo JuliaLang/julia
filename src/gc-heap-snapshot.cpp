@@ -27,7 +27,7 @@ struct Node {
     size_t id;
     size_t self_size;
     size_t edge_count;
-    size_t trace_node_id;
+    size_t trace_node_id;  // This is ALWAYS 0 in Javascript heap-snapshots.
     // whether the node is attached or dettached from the main application state
     // TODO: .... meaning not yet understood.
     // https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/include/v8-profiler.h#L739-L745
@@ -143,14 +143,14 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     // Insert a new Node
     jl_value_t* type = jl_typeof(a);
 
-    size_t self_size = 0;
+    size_t self_size = 1;
     string name = "<missing>";
     if (type != nullptr) {
         //jl_printf(JL_STDERR, "value: %p\n", a);
         //jl_printf(JL_STDERR, "type: %p\n", type);
         //jl_static_show(JL_STDERR, a);
         //self_size = (size_t)jl_datatype_size(type);
-        name = "...";
+        name = "name";
     }
 
 
