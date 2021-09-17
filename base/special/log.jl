@@ -424,7 +424,7 @@ end
     return ans_hi, ans_lo
 end
 
-# Log implimentation that returns 2 numbers which sum to give true value with about 68 bits of precision
+# Log implementation that returns 2 numbers which sum to give true value with about 68 bits of precision
 # Implimentation adapted from SLEEFPirates.jl
 # Does not normalize results.
 function _log_ext(d::Float64)
