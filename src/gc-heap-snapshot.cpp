@@ -149,7 +149,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     //self_size = jl_f_sizeof(a);
 
     if (jl_is_datatype(a)) {
-        self_size = (size_t)jl_datatype_size(type);
+        self_size = (size_t)jl_datatype_size(a);
         name = jl_typeof_str(a);
     }
 
