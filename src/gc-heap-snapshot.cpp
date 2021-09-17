@@ -18,6 +18,7 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot);
 // "node_fields":
 //   [ "type", "name", "id", "self_size", "edge_count", "trace_node_id", "detachedness" ]
 
+const int k_node_number_of_fields = 7;
 struct Node {
     string type;
     string name;
@@ -34,6 +35,8 @@ struct Node {
 // Edges
 // "edge_fields":
 //   [ "type", "name_or_index", "to_node" ]
+
+const int k_edge_number_of_fields = 3;
 
 struct Edge {
     string type;
@@ -148,7 +151,8 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     }
 
 
-    g_snapshot->node_ptr_to_index_map.insert(val, {a, g_snapshot->nodes.size()});
+    g_snapshot->node_ptr_to_index_map.insert(val,
+            {a, g_snapshot->nodes.size() * k_node_number_of_fields});
     count_nodes += 1;
 
     Node node{
