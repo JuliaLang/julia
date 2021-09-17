@@ -194,7 +194,7 @@ function lmul!(A::LQ, B::StridedVecOrMat)
 end
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    _cut_B(lmul!(convert(Factorization{TAB}, A), copy_oftype(B, TAB)), 1:size(A,1))
+    _cut_B(lmul!(convert(Factorization{TAB}, A), copy_oftype(B, TAB)), OneTo(size(A,1)))
 end
 
 ## Multiplication by Q
