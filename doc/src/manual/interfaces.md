@@ -19,7 +19,7 @@ the user and the code can be provided overloading `object.field`. Properties are
 user *sees of* the object, fields what the object *actually is*. 
 
 By default, properties and fields are the same. However, this behavior can be changed. 
-For example, take this representation of a point in a plane in [polar coordiantes](https://en.wikipedia.org/wiki/Polar_coordinate_system):
+For example, take this representation of a point in a plane in [polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system):
 
 ```jldoctest polartype
 # Internally use polar coordinates to store the point.
