@@ -949,7 +949,7 @@ end
 		!isfinite(x) && return x*y
 		return muladd(x, y, muladd(y, xnlo, x*ynlo))
 	end
-	n < 0 && return inv(x^(-n))
+	n < 0 && return inv(x)^(-n)
 	return one(n) # n == 0
 end
 @inline function ^(x::Float32, y::Integer)
