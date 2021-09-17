@@ -911,10 +911,8 @@ function modf(x::Float64)
 end
 
 @inline function ^(x::Float64, y::Float64)
-    if isfinite(x)
-        yint = round(Int, y)
-        y == yint && return x^yint
-    end
+    yint = unsafe_trunc(Int, y)
+    y == yint && return x^yint
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
@@ -922,10 +920,8 @@ end
     z
 end
 @inline function ^(x::Float32, y::Float32)
-    if isfinite(x)
-        yint = round(Int, y)
-        y == yint && return x^yint
-    end
+    yint = unsafe_trunc(Int, y)
+    y == yint && return x^yint
     z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
