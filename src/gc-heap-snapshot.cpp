@@ -95,7 +95,7 @@ public:
 
     StringTable names;
     StringTable node_types = {"object"};
-    StringTable edge_types = {"edge_type1", "edge_type2"};
+    StringTable edge_types = {"property"};
     unordered_set<size_t> seen_node_ids;
 };
 
