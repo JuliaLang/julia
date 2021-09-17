@@ -3,13 +3,21 @@
 struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Nothing}
 
-    Set{T}() where {T} = new(Dict{T,Nothing}())
-    Set{T}(s::Set{T}) where {T} = new(Dict{T,Nothing}(s.dict))
+    global _Set(dict::Dict{T,Nothing}) where {T} = new{T}(dict)
 end
 
+Set{T}() where {T} = _Set(Dict{T,Nothing}())
+Set{T}(s::Set{T}) where {T} = _Set(Dict{T,Nothing}(s.dict))
 Set{T}(itr) where {T} = union!(Set{T}(), itr)
 Set() = Set{Any}()
 
+function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
+    d = s.dict
+    slots = copy(d.slots)
+    keys = copy(d.keys)
+    vals = similar(d.vals, Nothing)
+    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
+end
 
 """
     Set([itr])
@@ -36,7 +44,7 @@ empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 # by default, a Set is returned
 emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
-_similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
+_similar_for(c::AbstractSet, ::Type{T}, itr, isz, len) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
     if isempty(s)
@@ -761,7 +769,7 @@ replace(f::Callable, t::Tuple; count::Integer=typemax(Int)) =
 
 function _replace(t::Tuple, count::Int, old_new::Tuple{Vararg{Pair}})
     _replace(t, count) do x
-        @_inline_meta
+        @inline
         for o_n in old_new
             isequal(first(o_n), x) && return last(o_n)
         end

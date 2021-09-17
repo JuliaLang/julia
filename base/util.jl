@@ -97,7 +97,7 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
                            (bold ? disable_text_style[:bold] : "") *
                                get(disable_text_style, color, text_colors[:default])
             first = true
-            for line in split(str, '\n')
+            for line in eachsplit(str, '\n')
                 first || print(buf, '\n')
                 first = false
                 isempty(line) && continue
@@ -207,6 +207,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     end
     if opts.startupfile == 2
         push!(addflags, "--startup-file=no")
+    end
+    if opts.use_sysimage_native_code == 0
+        push!(addflags, "--sysimage-native-code=no")
     end
     return `$julia -C$cpu_target -J$image_file $addflags`
 end

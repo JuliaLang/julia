@@ -815,8 +815,8 @@ Set the precision (in bits) to be used for `T` arithmetic.
     setting.
 """
 function setprecision(::Type{BigFloat}, precision::Integer)
-    if precision < 2
-        throw(DomainError(precision, "`precision` cannot be less than 2."))
+    if precision < 1
+        throw(DomainError(precision, "`precision` cannot be less than 1."))
     end
     DEFAULT_PRECISION[] = precision
     return precision
@@ -962,7 +962,7 @@ function string_mpfr(x::BigFloat, fmt::String)
 end
 
 function _prettify_bigfloat(s::String)::String
-    mantissa, exponent = split(s, 'e')
+    mantissa, exponent = eachsplit(s, 'e')
     if !occursin('.', mantissa)
         mantissa = string(mantissa, '.')
     end
@@ -973,7 +973,7 @@ function _prettify_bigfloat(s::String)::String
     expo = parse(Int, exponent)
     if -5 < expo < 6
         expo == 0 && return mantissa
-        int, frac = split(mantissa, '.')
+        int, frac = eachsplit(mantissa, '.')
         if expo > 0
             expo < length(frac) ?
                 string(int, frac[1:expo], '.', frac[expo+1:end]) :

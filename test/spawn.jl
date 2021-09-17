@@ -579,8 +579,8 @@ end
 @test_throws ArgumentError run(Base.AndCmds(`$truecmd`, ``))
 
 # tests for reducing over collection of Cmd
-@test_throws ArgumentError reduce(&, Base.AbstractCmd[])
-@test_throws ArgumentError reduce(&, Base.Cmd[])
+@test_throws "reducing over an empty collection is not allowed" reduce(&, Base.AbstractCmd[])
+@test_throws "reducing over an empty collection is not allowed" reduce(&, Base.Cmd[])
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
 # readlines(::Cmd), accidentally broken in #20203
@@ -650,7 +650,7 @@ end
 psep = if Sys.iswindows() ";" else ":" end
 withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
     julia_exe = joinpath(Sys.BINDIR, Base.julia_exename())
-    @test Sys.which("julia") == abspath(julia_exe)
+    @test Sys.which(Base.julia_exename()) == abspath(julia_exe)
     @test Sys.which(julia_exe) == abspath(julia_exe)
 end
 
@@ -771,6 +771,12 @@ let text = "input-test-text"
     @test proc.out === out
     @test read(out, String) == text
     @test success(proc)
+
+    out = PipeBuffer()
+    proc = run(catcmd, IOBuffer(SubString(text)), out)
+    @test success(proc)
+    @test proc.out === proc.err === proc.in === devnull
+    @test String(take!(out)) == text
 end
 
 

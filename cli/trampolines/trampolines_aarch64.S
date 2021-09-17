@@ -12,4 +12,7 @@ CNAME(name)##: SEP \
 .cfi_endproc SEP \
 
 JL_EXPORTED_FUNCS(XX)
+#ifdef _OS_WINDOWS_
+JL_EXPORTED_FUNCS_WIN(XX)
+#endif
 #undef XX

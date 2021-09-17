@@ -403,7 +403,12 @@ void CloneCtx::clone_function(Function *F, Function *new_f, ValueToValueMapTy &v
         vmap[&*J] = &*DestI++;
     }
     SmallVector<ReturnInst*,8> Returns;
+#if JL_LLVM_VERSION >= 130000
+    // We are cloning into the same module
+    CloneFunctionInto(new_f, F, vmap, CloneFunctionChangeType::GlobalChanges, Returns);
+#else
     CloneFunctionInto(new_f, F, vmap, true, Returns);
+#endif
 }
 
 // Clone all clone_all targets. Makes sure that the base targets are all available.

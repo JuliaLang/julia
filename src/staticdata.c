@@ -30,7 +30,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    150
+#define NUM_TAGS    151
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -127,6 +127,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_floatingpoint_type);
         INSERT_TAG(jl_number_type);
         INSERT_TAG(jl_signed_type);
+        INSERT_TAG(jl_pair_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -402,8 +403,8 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
             jl_serialize_value(s, (jl_value_t*)table[i]);
             jl_binding_t *b = (jl_binding_t*)table[i+1];
             jl_serialize_value(s, b->name);
-            jl_serialize_value(s, b->value);
-            jl_serialize_value(s, b->globalref);
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->value));
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->globalref));
             jl_serialize_value(s, b->owner);
         }
     }
@@ -654,8 +655,8 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             record_gvar(s, jl_get_llvm_gv(native_functions, (jl_value_t*)b),
                     ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + binding_reloc_offset);
             write_pointerfield(s, (jl_value_t*)b->name);
-            write_pointerfield(s, b->value);
-            write_pointerfield(s, b->globalref);
+            write_pointerfield(s, jl_atomic_load_relaxed(&b->value));
+            write_pointerfield(s, jl_atomic_load_relaxed(&b->globalref));
             write_pointerfield(s, (jl_value_t*)b->owner);
             size_t flag_offset = offsetof(jl_binding_t, owner) + sizeof(b->owner);
             ios_write(s->s, (char*)b + flag_offset, sizeof(*b) - flag_offset);

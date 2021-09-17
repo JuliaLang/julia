@@ -79,7 +79,7 @@ import LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismat
 include("lbt.jl")
 
 """
-get_config()
+    get_config()
 
 Return an object representing the current `libblastrampoline` configuration.
 
@@ -664,13 +664,19 @@ for (fname, elty) in ((:dgemv_,:Float64),
                 throw(DimensionMismatch("the transpose of A has dimensions $n, $m, X has length $(length(X)) and Y has length $(length(Y))"))
             end
             chkstride1(A)
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            lda = stride(A,2)
+            lda >= max(1, size(A,1)) || error("`stride(A,2)` must be at least `max(1, size(A,1))`")
+            sX = stride(X,1)
+            pX = pointer(X, sX > 0 ? firstindex(X) : lastindex(X))
+            sY = stride(Y,1)
+            pY = pointer(Y, sY > 0 ? firstindex(Y) : lastindex(Y))
+            GC.@preserve X Y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Clong),
                  trans, size(A,1), size(A,2), alpha,
-                 A, max(1,stride(A,2)), X, stride(X,1),
-                 beta, Y, stride(Y,1), 1)
+                 A, lda, pX, sX,
+                 beta, pY, sY, 1)
             Y
         end
         function gemv(trans::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, X::AbstractVector{$elty})

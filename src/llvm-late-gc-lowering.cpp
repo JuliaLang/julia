@@ -709,7 +709,7 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
         else
             Numbers[i] = Number;
     }
-    if (auto VTy = dyn_cast<VectorType>(SI->getType())) {
+    if (auto VTy = dyn_cast<FixedVectorType>(SI->getType())) {
         if (NumRoots != Numbers.size()) {
             // broadcast the scalar root number to fill the vector
             assert(NumRoots == 1);
@@ -736,11 +736,12 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
     SmallVector<PHINode *, 2> lifted;
     std::vector<int> Numbers;
     unsigned NumRoots = 1;
-    if (auto VTy = dyn_cast<VectorType>(Phi->getType())) {
+    if (auto VTy = dyn_cast<FixedVectorType>(Phi->getType())) {
         NumRoots = VTy->getNumElements();
         Numbers.resize(NumRoots);
     }
     else {
+        // TODO: SVE
         assert(isa<PointerType>(Phi->getType()) && "unimplemented");
     }
     for (unsigned i = 0; i < NumRoots; ++i) {
@@ -1573,7 +1574,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 for (Use &U : CI->arg_operands()) {
                     // Find all callee rooted arguments.
                     // Record them instead of simply remove them from live values here
-                    // since they can be useful during refinment
+                    // since they can be useful during refinement
                     // (e.g. to remove roots of objects that are refined to these)
                     Value *V = U;
                     if (isa<Constant>(V) || !isa<PointerType>(V->getType()) ||

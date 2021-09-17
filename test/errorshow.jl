@@ -184,6 +184,11 @@ addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), un
 Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), pairs((uncset = nothing,)))
 @test String(take!(buf)) == "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)"
 
+# Busted Vararg method definitions
+bad_vararg_decl(x::Int, y::Vararg) = 1   # don't do this, instead use (x::Int, y...)
+Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
+@test occursin("bad_vararg_decl(!Matched::$Int, ::Any...)", String(take!(buf)))
+
 macro except_str(expr, err_type)
     return quote
         let err = nothing
@@ -723,7 +728,7 @@ end
 
 # Test that implementation detail of include() is hidden from the user by default
 let bt = try
-        include("testhelpers/include_error.jl")
+        @noinline include("testhelpers/include_error.jl")
     catch
         catch_backtrace()
     end
@@ -735,7 +740,7 @@ end
 # Test backtrace printing
 module B
     module C
-        f(x; y=2.0) = error()
+        @noinline f(x; y=2.0) = error()
     end
     module D
         import ..C: f
@@ -744,7 +749,8 @@ module B
 end
 
 @testset "backtrace" begin
-    bt = try B.D.g()
+    bt = try
+        B.D.g()
     catch
         catch_backtrace()
     end
@@ -772,7 +778,8 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
     pair_repeater_b() = pair_repeater_a()
 
     @testset "repeated stack frames" begin
-        let bt = try single_repeater()
+        let bt = try
+                single_repeater()
             catch
                 catch_backtrace()
             end
@@ -780,7 +787,8 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
             @test occursin(r"repeats \d+ times", bt_str)
         end
 
-        let bt = try pair_repeater_a()
+        let bt = try
+                pair_repeater_a()
             catch
                 catch_backtrace()
             end

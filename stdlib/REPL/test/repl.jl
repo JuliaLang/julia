@@ -1332,6 +1332,8 @@ end
         @test mods == [:Foo, :Bar]
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
         @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo.bar, Foo.baz"))
+        @test mods == [:Foo]
 
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
         @test mods == [:Foo]
@@ -1355,8 +1357,11 @@ end
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("# comment"))
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line(":(using Foo)"))
         @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("ex = :(using Foo)"))
+        @test isempty(mods)
+
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
         @test isempty(mods)
     end

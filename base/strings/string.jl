@@ -252,7 +252,7 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     return reinterpret(Char, u)
 end
 
-getindex(s::String, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
+getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 
 @inline function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""

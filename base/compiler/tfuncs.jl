@@ -466,29 +466,51 @@ add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
 add_tfunc(arraysize, 2, 2, (@nospecialize(a), @nospecialize(d))->Int, 4)
+
 function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
-    if a <: Ptr
-        if isa(a, DataType) && isa(a.parameters[1], Type)
-            return a.parameters[1]
-        elseif isa(a, UnionAll) && !has_free_typevars(a)
-            unw = unwrap_unionall(a)
-            if isa(unw, DataType)
-                return rewrap_unionall(unw.parameters[1], a)
-            end
+    if !has_free_typevars(a)
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType) && unw.name === Ptr.body.name
+            T = unw.parameters[1]
+            T isa Type && return rewrap_unionall(T, a)
         end
     end
     return Any
 end
+function atomic_pointermodify_tfunc(ptr, op, v, order)
+    @nospecialize
+    a = widenconst(ptr)
+    if !has_free_typevars(a)
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType) && unw.name === Ptr.body.name
+            T = unw.parameters[1]
+            # note: we could sometimes refine this to a PartialStruct if we analyzed `op(T, T)::T`
+            T isa Type && return rewrap_unionall(Pair{T, T}, a)
+        end
+    end
+    return Pair
+end
+function atomic_pointerreplace_tfunc(ptr, x, v, success_order, failure_order)
+    @nospecialize
+    a = widenconst(ptr)
+    if !has_free_typevars(a)
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType) && unw.name === Ptr.body.name
+            T = unw.parameters[1]
+            T isa Type && return rewrap_unionall(ccall(:jl_apply_cmpswap_type, Any, (Any,), T), a)
+        end
+    end
+    return ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
+end
 add_tfunc(pointerref, 3, 3, (a, i, align) -> (@nospecialize; pointer_eltype(a)), 4)
 add_tfunc(pointerset, 4, 4, (a, v, i, align) -> (@nospecialize; a), 5)
-
 add_tfunc(atomic_fence, 1, 1, (order) -> (@nospecialize; Nothing), 4)
 add_tfunc(atomic_pointerref, 2, 2, (a, order) -> (@nospecialize; pointer_eltype(a)), 4)
 add_tfunc(atomic_pointerset, 3, 3, (a, v, order) -> (@nospecialize; a), 5)
 add_tfunc(atomic_pointerswap, 3, 3, (a, v, order) -> (@nospecialize; pointer_eltype(a)), 5)
-add_tfunc(atomic_pointermodify, 4, 4, (a, op, v, order) -> (@nospecialize; T = pointer_eltype(a); Tuple{T, T}), 5)
-add_tfunc(atomic_pointerreplace, 5, 5, (a, x, v, success_order, failure_order) -> (@nospecialize; Tuple{pointer_eltype(a), Bool}), 5)
+add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
+add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
 function typeof_concrete_vararg(t::DataType)
@@ -804,17 +826,18 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
             end
         end
         s = typeof(sv)
-    elseif isa(s, PartialStruct)
+    elseif isa(s00, PartialStruct)
+        s = widenconst(s00)
+        sty = unwrap_unionall(s)::DataType
         if isa(name, Const)
             nv = name.val
             if isa(nv, Symbol)
-                nv = fieldindex(widenconst(s), nv, false)
+                nv = fieldindex(sty, nv, false)
             end
-            if isa(nv, Int) && 1 <= nv <= length(s.fields)
-                return unwrapva(s.fields[nv])
+            if isa(nv, Int) && 1 <= nv <= length(s00.fields)
+                return unwrapva(s00.fields[nv])
             end
         end
-        s = widenconst(s)
     end
     if isType(s) || !isa(s, DataType) || isabstracttype(s)
         return Any
@@ -911,11 +934,55 @@ setfield!_tfunc(o, f, v) = (@nospecialize; v)
 
 swapfield!_tfunc(o, f, v, order) = (@nospecialize; getfield_tfunc(o, f))
 swapfield!_tfunc(o, f, v) = (@nospecialize; getfield_tfunc(o, f))
-modifyfield!_tfunc(o, f, op, v, order) = (@nospecialize; T = getfield_tfunc(o, f); T === Bottom ? T : Tuple{T, T})
-modifyfield!_tfunc(o, f, op, v) = (@nospecialize; T = getfield_tfunc(o, f); T === Bottom ? T : Tuple{T, T}) # TODO: also model op(o.f, v) call
+modifyfield!_tfunc(o, f, op, v, order) = (@nospecialize; modifyfield!_tfunc(o, f, op, v))
+function modifyfield!_tfunc(o, f, op, v)
+    @nospecialize
+    T = _fieldtype_tfunc(o, isconcretetype(o), f)
+    T === Bottom && return Bottom
+    PT = Const(Pair)
+    return instanceof_tfunc(apply_type_tfunc(PT, T, T))[1]
+end
+function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    nargs = length(argtypes)
+    if !isempty(argtypes) && isvarargtype(argtypes[nargs])
+        nargs - 1 <= 6 || return CallMeta(Bottom, false)
+        nargs > 3 || return CallMeta(Any, false)
+    else
+        5 <= nargs <= 6 || return CallMeta(Bottom, false)
+    end
+    o = unwrapva(argtypes[2])
+    f = unwrapva(argtypes[3])
+    RT = modifyfield!_tfunc(o, f, Any, Any)
+    info = false
+    if nargs >= 5 && RT !== Bottom
+        # we may be able to refine this to a PartialStruct by analyzing `op(o.f, v)::T`
+        # as well as compute the info for the method matches
+        op = unwrapva(argtypes[4])
+        v = unwrapva(argtypes[5])
+        TF = getfield_tfunc(o, f)
+        push!(sv.ssavalue_uses[sv.currpc], sv.currpc) # temporarily disable `call_result_unused` check for this call
+        callinfo = abstract_call(interp, nothing, Any[op, TF, v], sv, #=max_methods=# 1)
+        pop!(sv.ssavalue_uses[sv.currpc], sv.currpc)
+        TF2 = tmeet(callinfo.rt, widenconst(TF))
+        if TF2 === Bottom
+            RT = Bottom
+        elseif isconcretetype(RT) && has_nontrivial_const_info(TF2) # isconcrete condition required to form a PartialStruct
+            RT = PartialStruct(RT, Any[TF, TF2])
+        end
+        info = callinfo.info
+    end
+    return CallMeta(RT, info)
+end
 replacefield!_tfunc(o, f, x, v, success_order, failure_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
 replacefield!_tfunc(o, f, x, v, success_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
-replacefield!_tfunc(o, f, x, v) = (@nospecialize; T = getfield_tfunc(o, f); T === Bottom ? T : Tuple{widenconst(T), Bool})
+function replacefield!_tfunc(o, f, x, v)
+    @nospecialize
+    T = _fieldtype_tfunc(o, isconcretetype(o), f)
+    T === Bottom && return Bottom
+    PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
+    return instanceof_tfunc(apply_type_tfunc(PT, T))[1]
+end
+
 # we could use tuple_tfunc instead of widenconst, but `o` is mutable, so that is unlikely to be beneficial
 
 add_tfunc(getfield, 2, 4, getfield_tfunc, 1)
@@ -1141,7 +1208,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     else
         return false
     end
-    # We know the apply_type is well formed. Oherwise our rt would have been
+    # We know the apply_type is well formed. Otherwise our rt would have been
     # Bottom (or Type).
     (headtype === Union) && return true
     isa(rt, Const) && return true

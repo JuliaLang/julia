@@ -310,3 +310,7 @@ let cfg = CFG(BasicBlock[
     Compiler.domtree_insert_edge!(domtree, cfg.blocks, 1, 3)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 end
+
+# Issue #41975 - SSA conversion drops type check
+f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
+@test_throws TypeError f_if_typecheck()

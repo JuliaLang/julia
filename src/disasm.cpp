@@ -5,11 +5,45 @@
 //
 // Original copyright:
 //
-//                     The LLVM Compiler Infrastructure
+// University of Illinois/NCSA
+// Open Source License
+// Copyright (c) 2003-2016 University of Illinois at Urbana-Champaign.
+// All rights reserved.
 //
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+//  Developed by:
 //
+//    LLVM Team
+//
+//    University of Illinois at Urbana-Champaign
+//
+//    http://llvm.org
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal with
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is furnished to do
+// so, subject to the following conditions:
+//
+//    * Redistributions of source code must retain the above copyright notice,
+//      this list of conditions and the following disclaimers.
+//
+//    * Redistributions in binary form must reproduce the above copyright notice,
+//      this list of conditions and the following disclaimers in the
+//      documentation and/or other materials provided with the distribution.
+//
+//    * Neither the names of the LLVM Team, University of Illinois at
+//      Urbana-Champaign, nor the names of its contributors may be used to
+//      endorse or promote products derived from this Software without specific
+//      prior written permission.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+// FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+// CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE
+// SOFTWARE.
 //===----------------------------------------------------------------------===//
 //
 // This class implements a disassembler of a memory block, given a function
@@ -22,43 +56,53 @@
 #include <string>
 
 #include "llvm-version.h"
-#include <llvm/Object/ObjectFile.h>
-#include <llvm/BinaryFormat/MachO.h>
-#include <llvm/BinaryFormat/COFF.h>
-#include <llvm/MC/MCInst.h>
-#include <llvm/MC/MCStreamer.h>
-#include <llvm/MC/MCSubtargetInfo.h>
-#include <llvm/MC/MCObjectFileInfo.h>
-#include <llvm/MC/MCRegisterInfo.h>
-#include <llvm/MC/MCAsmInfo.h>
-#include <llvm/MC/MCAsmBackend.h>
-#include <llvm/MC/MCCodeEmitter.h>
-#include <llvm/MC/MCInstPrinter.h>
-#include <llvm/MC/MCInstrInfo.h>
-#include <llvm/MC/MCContext.h>
-#include <llvm/MC/MCExpr.h>
-#include <llvm/MC/MCInstrAnalysis.h>
-#include <llvm/MC/MCSymbol.h>
+
+// for outputting disassembly
+#include <llvm/ADT/Triple.h>
 #include <llvm/AsmParser/Parser.h>
+#include <llvm/BinaryFormat/COFF.h>
+#include <llvm/BinaryFormat/MachO.h>
+#include <llvm/DebugInfo/DIContext.h>
+#include <llvm/DebugInfo/DWARF/DWARFContext.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
+#include <llvm/IR/AssemblyAnnotationWriter.h>
+#include <llvm/IR/DebugInfo.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
+#include <llvm/MC/MCAsmBackend.h>
+#include <llvm/MC/MCAsmInfo.h>
+#include <llvm/MC/MCCodeEmitter.h>
+#include <llvm/MC/MCContext.h>
 #include <llvm/MC/MCDisassembler/MCDisassembler.h>
 #include <llvm/MC/MCDisassembler/MCExternalSymbolizer.h>
-#include <llvm/ADT/Triple.h>
+#include <llvm/MC/MCExpr.h>
+#include <llvm/MC/MCInst.h>
+#include <llvm/MC/MCInstPrinter.h>
+#include <llvm/MC/MCInstrAnalysis.h>
+#include <llvm/MC/MCInstrInfo.h>
+#include <llvm/MC/MCObjectFileInfo.h>
+#include <llvm/MC/MCRegisterInfo.h>
+#include <llvm/MC/MCStreamer.h>
+#include <llvm/MC/MCSubtargetInfo.h>
+#include <llvm/MC/MCSymbol.h>
+#include <llvm/Object/ObjectFile.h>
+#include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/NativeFormatting.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/FormattedStream.h>
-#include <llvm/Support/NativeFormatting.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/DebugInfo/DIContext.h>
-#include <llvm/DebugInfo/DWARF/DWARFContext.h>
-#include <llvm/IR/DebugInfo.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/Module.h>
-#include <llvm/IR/IntrinsicInst.h>
-#include <llvm/IR/AssemblyAnnotationWriter.h>
+
+// for outputting assembly
+#include <llvm/CodeGen/AsmPrinter.h>
+#include <llvm/CodeGen/AsmPrinterHandler.h>
+#include <llvm/CodeGen/MachineModuleInfo.h>
+#include <llvm/CodeGen/Passes.h>
+#include <llvm/CodeGen/TargetPassConfig.h>
+#include <llvm/Support/CodeGen.h>
 #include <llvm/IR/LegacyPassManager.h>
 
 #include "julia.h"
@@ -279,19 +323,25 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
 
 // adaptor class for printing line numbers before llvm IR lines
 class LineNumberAnnotatedWriter : public AssemblyAnnotationWriter {
-    DILocation *InstrLoc = nullptr;
-    DILineInfoPrinter LinePrinter{"; ", false};
+    const DILocation *InstrLoc = nullptr;
+    DILineInfoPrinter LinePrinter;
     DenseMap<const Instruction *, DILocation *> DebugLoc;
     DenseMap<const Function *, DISubprogram *> Subprogram;
 public:
-    LineNumberAnnotatedWriter(const char *debuginfo)
-    {
+    LineNumberAnnotatedWriter(const char *LineStart, bool bracket_outer, const char *debuginfo)
+      : LinePrinter(LineStart, bracket_outer) {
         LinePrinter.SetVerbosity(debuginfo);
     }
     virtual void emitFunctionAnnot(const Function *, formatted_raw_ostream &);
     virtual void emitInstructionAnnot(const Instruction *, formatted_raw_ostream &);
+    virtual void emitInstructionAnnot(const DILocation *, formatted_raw_ostream &);
     virtual void emitBasicBlockEndAnnot(const BasicBlock *, formatted_raw_ostream &);
     // virtual void printInfoComment(const Value &, formatted_raw_ostream &) {}
+
+    void emitEnd(formatted_raw_ostream &Out) {
+        LinePrinter.emit_finish(Out);
+        InstrLoc = nullptr;
+    }
 
     void addSubprogram(const Function *F, DISubprogram *SP)
     {
@@ -327,12 +377,19 @@ void LineNumberAnnotatedWriter::emitFunctionAnnot(
 void LineNumberAnnotatedWriter::emitInstructionAnnot(
       const Instruction *I, formatted_raw_ostream &Out)
 {
-    DILocation *NewInstrLoc = I->getDebugLoc();
+    const DILocation *NewInstrLoc = I->getDebugLoc();
     if (!NewInstrLoc) {
         auto Loc = DebugLoc.find(I);
         if (Loc != DebugLoc.end())
             NewInstrLoc = Loc->second;
     }
+    emitInstructionAnnot(NewInstrLoc, Out);
+    Out << LinePrinter.inlining_indent(" ");
+}
+
+void LineNumberAnnotatedWriter::emitInstructionAnnot(
+      const DILocation *NewInstrLoc, formatted_raw_ostream &Out)
+{
     if (NewInstrLoc && NewInstrLoc != InstrLoc) {
         InstrLoc = NewInstrLoc;
         std::vector<DILineInfo> DIvec;
@@ -348,14 +405,13 @@ void LineNumberAnnotatedWriter::emitInstructionAnnot(
         } while (NewInstrLoc);
         LinePrinter.emit_lineinfo(Out, DIvec);
     }
-    Out << LinePrinter.inlining_indent(" ");
 }
 
 void LineNumberAnnotatedWriter::emitBasicBlockEndAnnot(
         const BasicBlock *BB, formatted_raw_ostream &Out)
 {
     if (BB == &BB->getParent()->back())
-        LinePrinter.emit_finish(Out);
+        emitEnd(Out);
 }
 
 static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWriter *AAW)
@@ -435,7 +491,7 @@ jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_modul
             jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
         JL_LOCK(&codegen_lock); // Might GC
-        LineNumberAnnotatedWriter AAW{debuginfo};
+        LineNumberAnnotatedWriter AAW{"; ", false, debuginfo};
         if (!llvmf->getParent()) {
             // print the function declaration as-is
             llvmf->print(stream, &AAW);
@@ -507,7 +563,7 @@ static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
 
 // print a native disassembly for the function starting at fptr
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant, const char *debuginfo, char binary)
+jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
 {
     assert(fptr != 0);
     std::string code;
@@ -801,8 +857,16 @@ static void jl_dump_asm_internal(
     assert(MRI && "Unable to create target register info!");
 
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
+#if JL_LLVM_VERSION >= 130000
+    MCSubtargetInfo *MSTI = TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features);
+    assert(MSTI && "Unable to create subtarget info!");
+
+    MCContext Ctx(TheTriple, MAI.get(), MRI.get(), MSTI, &SrcMgr);
+    MOFI->initMCObjectFileInfo(Ctx, /* PIC */ false, /* LargeCodeModel */ false);
+#else
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
     MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
+#endif
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>
@@ -1044,6 +1108,138 @@ static void jl_dump_asm_internal(
             }
         }
     }
+}
+
+/// addPassesToX helper drives creation and initialization of TargetPassConfig.
+static MCContext *
+addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
+    TargetPassConfig *PassConfig = TM->createPassConfig(PM);
+    PassConfig->setDisableVerify(false);
+    PM.add(PassConfig);
+    MachineModuleInfoWrapperPass *MMIWP =
+        new MachineModuleInfoWrapperPass(TM);
+    PM.add(MMIWP);
+    if (PassConfig->addISelPasses())
+        return NULL;
+    PassConfig->addMachinePasses();
+    PassConfig->setInitialized();
+    return &MMIWP->getMMI().getContext();
+}
+
+class LineNumberPrinterHandler : public AsmPrinterHandler {
+    MCStreamer &S;
+    LineNumberAnnotatedWriter LinePrinter;
+    std::string Buffer;
+    llvm::raw_string_ostream RawStream;
+    llvm::formatted_raw_ostream Stream;
+
+public:
+    LineNumberPrinterHandler(AsmPrinter &Printer, const char *debuginfo)
+        : S(*Printer.OutStreamer),
+          LinePrinter("; ", true, debuginfo),
+          RawStream(Buffer),
+          Stream(RawStream) {}
+
+    void emitAndReset() {
+        Stream.flush();
+        RawStream.flush();
+        if (Buffer.empty())
+            return;
+        S.emitRawText(Buffer);
+        Buffer.clear();
+    }
+
+    virtual void setSymbolSize(const MCSymbol *Sym, uint64_t Size) override {}
+    //virtual void beginModule(Module *M) override {}
+    virtual void endModule() override {}
+    /// note that some AsmPrinter implementations may not call beginFunction at all
+    virtual void beginFunction(const MachineFunction *MF) override {
+        LinePrinter.emitFunctionAnnot(&MF->getFunction(), Stream);
+        emitAndReset();
+    }
+    //virtual void markFunctionEnd() override {}
+    virtual void endFunction(const MachineFunction *MF) override {
+        LinePrinter.emitEnd(Stream);
+        emitAndReset();
+    }
+    //virtual void beginFragment(const MachineBasicBlock *MBB,
+    //                           ExceptionSymbolProvider ESP) override {}
+    //virtual void endFragment() override {}
+    //virtual void beginFunclet(const MachineBasicBlock &MBB,
+    //                          MCSymbol *Sym = nullptr) override {}
+    //virtual void endFunclet() override {}
+    virtual void beginInstruction(const MachineInstr *MI) override {
+        LinePrinter.emitInstructionAnnot(MI->getDebugLoc(), Stream);
+        emitAndReset();
+    }
+    virtual void endInstruction() override {}
+};
+
+// get a native assembly for llvm::Function
+extern "C" JL_DLLEXPORT
+jl_value_t *jl_dump_function_asm(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
+{
+    // precise printing via IR assembler
+    SmallVector<char, 4096> ObjBufferSV;
+    { // scope block
+        Function *f = (Function*)F;
+        llvm::raw_svector_ostream asmfile(ObjBufferSV);
+        assert(!f->isDeclaration());
+        std::unique_ptr<Module> m(f->getParent());
+        for (auto &f2 : m->functions()) {
+            if (f != &f2 && !f->isDeclaration())
+                f2.deleteBody();
+        }
+        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(jl_TargetMachine);
+        legacy::PassManager PM;
+        addTargetPasses(&PM, TM);
+        if (raw_mc) {
+            raw_svector_ostream obj_OS(ObjBufferSV);
+            if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false, nullptr))
+                return jl_an_empty_string;
+            PM.run(*m);
+        }
+        else {
+            MCContext *Context = addPassesToGenerateCode(TM, PM);
+            if (!Context)
+                return jl_an_empty_string;
+            Context->setGenDwarfForAssembly(false);
+            // Duplicate LLVMTargetMachine::addAsmPrinter here so we can set the asm dialect and add the custom annotation printer
+            const MCSubtargetInfo &STI = *TM->getMCSubtargetInfo();
+            const MCAsmInfo &MAI = *TM->getMCAsmInfo();
+            const MCRegisterInfo &MRI = *TM->getMCRegisterInfo();
+            const MCInstrInfo &MII = *TM->getMCInstrInfo();
+            unsigned OutputAsmDialect = MAI.getAssemblerDialect();
+            if (!strcmp(asm_variant, "att"))
+                OutputAsmDialect = 0;
+            if (!strcmp(asm_variant, "intel"))
+                OutputAsmDialect = 1;
+            MCInstPrinter *InstPrinter = TM->getTarget().createMCInstPrinter(
+                TM->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
+             std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
+                STI, MRI, TM->Options.MCOptions));
+            std::unique_ptr<MCCodeEmitter> MCE;
+            if (binary) // enable MCAsmStreamer::AddEncodingComment printing
+                MCE.reset(TM->getTarget().createMCCodeEmitter(MII, MRI, *Context));
+            auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
+            std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
+                *Context, std::move(FOut), true,
+                true, InstPrinter,
+                std::move(MCE), std::move(MAB),
+                false));
+            std::unique_ptr<AsmPrinter> Printer(
+                TM->getTarget().createAsmPrinter(*TM, std::move(S)));
+            Printer->addAsmPrinterHandler(AsmPrinter::HandlerInfo(
+                        std::unique_ptr<AsmPrinterHandler>(new LineNumberPrinterHandler(*Printer, debuginfo)),
+                        "emit", "Debug Info Emission", "Julia", "Julia::LineNumberPrinterHandler Markup"));
+            if (!Printer)
+                return jl_an_empty_string;
+            PM.add(Printer.release());
+            PM.add(createFreeMachineFunctionPass());
+            PM.run(*m);
+        }
+    }
+    return jl_pchar_to_string(ObjBufferSV.data(), ObjBufferSV.size());
 }
 
 extern "C" JL_DLLEXPORT

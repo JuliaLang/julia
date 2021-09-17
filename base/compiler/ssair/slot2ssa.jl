@@ -33,16 +33,6 @@ function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
 end
 
 
-function lift_defuse(cfg::CFG, defuse)
-    map(defuse) do slot
-        SlotInfo(
-            Int[block_for_inst(cfg, x) for x in slot.defs],
-            Int[block_for_inst(cfg, x) for x in slot.uses],
-            slot.any_newvar
-        )
-    end
-end
-
 function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     nslots = length(ci.slotflags)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
@@ -183,7 +173,7 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}, flags::Vector{UInt8})
+function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any})
     # Remove `nothing`s at the end, we don't handle them well
     # (we expect the last instruction to be a terminator)
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
@@ -193,7 +183,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
             resize!(ssavaluetypes, i)
             resize!(ci.codelocs, i)
             resize!(info, i)
-            resize!(flags, i)
+            resize!(ci.ssaflags, i)
             break
         end
     end
@@ -205,7 +195,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Any}
         push!(ssavaluetypes, Union{})
         push!(ci.codelocs, 0)
         push!(info, nothing)
-        push!(flags, 0x00)
+        push!(ci.ssaflags, 0x00)
     end
     nothing
 end
@@ -524,7 +514,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     return new_ir
 end
 
-function compute_live_ins(cfg::CFG, defuse)
+function compute_live_ins(cfg::CFG, defuse #=::Union{SlotInfo,SSADefUse}=#)
     # We remove from `uses` any block where all uses are dominated
     # by a def. This prevents insertion of dead phi nodes at the top
     # of such a block if that block happens to be in a loop
@@ -586,8 +576,8 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
-function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
-                        slottypes::Vector{Any})
+function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
+                        defuses::Vector{SlotInfo}, slottypes::Vector{Any})
     code = ir.stmts.inst
     cfg = ir.cfg
     left = Int[]
@@ -616,7 +606,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
     for (_, exc) in catch_entry_blocks
         phicnodes[exc] = Vector{Tuple{SlotNumber, NewSSAValue, PhiCNode}}()
     end
-    @timeit "idf" for (idx, slot) in Iterators.enumerate(defuse)
+    @timeit "idf" for (idx, slot) in Iterators.enumerate(defuses)
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
         # TODO: Restore this optimization
@@ -671,9 +661,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
     end
     # Perform SSA renaming
     initial_incoming_vals = Any[
-        if 0 in defuse[x].defs
+        if 0 in defuses[x].defs
             Argument(x)
-        elseif !defuse[x].any_newvar
+        elseif !defuses[x].any_newvar
             undef_token
         else
             SSAValue(-2)
@@ -825,7 +815,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree, defuse,
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1
                 # Drop this node - it's a noop
-                new_code[idx] = stmt.cond
+                new_code[idx] = Expr(:call, GlobalRef(Core, :typeassert), stmt.cond, GlobalRef(Core, :Bool))
             else
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end

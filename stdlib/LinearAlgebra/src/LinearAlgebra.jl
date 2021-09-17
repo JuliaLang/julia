@@ -9,7 +9,7 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copyto!, cos,
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!, cos,
     cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
     getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!, length, log, map, ndims,
     oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
@@ -291,14 +291,14 @@ julia> ldiv!(Y, qr(A), X);
 julia> Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983806
-  0.10020661157024781
+ -0.051652892561983674
+  0.10020661157024757
 
 julia> A\\X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198342
-  0.1002066115702479
+ -0.05165289256198333
+  0.10020661157024785
 ```
 """
 ldiv!(Y, A, B)
@@ -328,14 +328,14 @@ julia> ldiv!(qr(A), X);
 julia> X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983806
-  0.10020661157024781
+ -0.051652892561983674
+  0.10020661157024757
 
 julia> A\\Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198342
-  0.1002066115702479
+ -0.05165289256198333
+  0.10020661157024785
 ```
 """
 ldiv!(A, B)

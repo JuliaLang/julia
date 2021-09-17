@@ -128,7 +128,7 @@ let nt = (a=1, b=2)
     @test_throws ArgumentError blah31139(nt)
 end
 
-# Expr(:new) annoted as PartialStruct
+# Expr(:new) annotated as PartialStruct
 struct FooPartial
     x
     y

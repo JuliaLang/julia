@@ -350,7 +350,7 @@ struct Const{T<:Array}
 end
 
 @eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (Base.@_inline_meta; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 function foo31018!(a, b)
     @aliasscope for i in eachindex(a, b)
@@ -593,6 +593,14 @@ f41438(y) = y[].x
 @test B41438.body.layout === C_NULL
 @test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
 @test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL
+
+const S41438 = Pair{Any, Ptr{T}} where T
+g41438() = Array{S41438,1}(undef,1)[1].first
+get_llvm(g41438, ()); # cause allocation of layout
+@test S41438.body.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438.body)
+@test S41438{Int}.layout != C_NULL
+@test !Base.datatype_pointerfree(S41438{Int})
 
 # issue #41157
 f41157(a, b) = a[1] = b[1]

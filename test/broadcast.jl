@@ -991,10 +991,6 @@ end
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
-    @test isequal([1, 2] + [3.0, missing], [4.0, missing])
-    @test Core.Compiler.return_type(+, Tuple{Vector{Int},
-                                             Vector{Union{Float64, Missing}}}) ==
-        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}

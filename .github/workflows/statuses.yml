@@ -1,0 +1,68 @@
+# Please ping @DilumAluthge when making any changes to this file.
+
+# This is just a short-term solution until we have migrated all of CI to Buildkite.
+#
+# 1. TODO: delete this file once we have migrated all of CI to Buildkite.
+
+# Here are some steps that we take in this workflow file for security reasons:
+# 1. We do not checkout any code.
+# 2. We do not run any external actions.
+# 3. We only give the `GITHUB_TOKEN` the minimum necessary set of permissions.
+
+name: Statuses
+
+on:
+  push:
+    branches:
+      - 'master'
+      - 'release-*'
+  # When using the `pull_request_target` event, all PRs will get a `GITHUB_TOKEN` that has
+  # write permissions, even if the PR is from a fork.
+  # Therefore, for security reasons, we do not checkout any code in this workflow.
+  pull_request_target:
+    branches:
+      - 'master'
+      - 'release-*'
+
+# These are the permissions for the `GITHUB_TOKEN`.
+# We should only give the token the minimum necessary set of permissions.
+permissions:
+  statuses: write
+
+jobs:
+  statuses:
+    name: statuses
+    runs-on: ubuntu-latest
+    if: github.repository == 'JuliaLang/julia'
+    steps:
+      # For security reasons, we do not checkout any code in this workflow.
+      - run: echo "SHA=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+        if: github.event_name == 'pull_request_target'
+      - run: echo "SHA=${{ github.sha }}" >> $GITHUB_ENV
+        if: github.event_name != 'pull_request_target'
+      - run: echo "The SHA is ${{ env.SHA }}"
+
+      # As we incrementally migrate individual jobs from Buildbot to Buildkite, we should
+      # remove them from the `context_list`.
+      - run: |
+          declare -a CONTEXT_LIST=(
+                "buildbot/tester_freebsd64"
+                "buildbot/tester_linux32"
+                "buildbot/tester_linux64"
+                "buildbot/tester_linuxaarch64"
+                "buildbot/tester_macos64"
+                "buildbot/tester_win32"
+                "buildbot/tester_win64"
+                )
+          for CONTEXT in "${CONTEXT_LIST[@]}"
+          do
+            curl \
+              -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"context\": \"$CONTEXT\", \"state\": \"$STATE\"}" \
+            https://api.github.com/repos/JuliaLang/julia/statuses/${{ env.SHA }}
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STATE: "pending"

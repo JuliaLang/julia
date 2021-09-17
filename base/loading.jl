@@ -1252,7 +1252,7 @@ Base.include # defined in Base.jl
 
 # Full include() implementation which is used after bootstrap
 function _include(mapexpr::Function, mod::Module, _path::AbstractString)
-    @_noinline_meta # Workaround for module availability in _simplify_include_frames
+    @noinline # Workaround for module availability in _simplify_include_frames
     path, prev = _include_dependency(mod, _path)
     for callback in include_callbacks # to preserve order, must come before eval in include_string
         invokelatest(callback, mod, path)
@@ -1937,11 +1937,13 @@ function precompile(@nospecialize(f), args::Tuple)
     precompile(Tuple{Core.Typeof(f), args...})
 end
 
+const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
 function precompile(argt::Type)
-    if ccall(:jl_compile_hint, Int32, (Any,), argt) == 0
+    ret = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
+    if !ret && ENABLE_PRECOMPILE_WARNINGS[]
         @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
     end
-    true
+    return ret
 end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))

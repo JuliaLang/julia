@@ -20,6 +20,20 @@ using Base.Checked: checked_length
     # the next ones use ==, because it changes the eltype
     @test r ==  range(first(r),       last(r),      length(r)       )
     @test r ==  range(start=first(r), stop=last(r), length=length(r))
+    @test r === range(                stop=last(r), length=length(r))
+
+    r = 1:5
+    o = Base.OneTo(5)
+    let start=first(r), step=step(r), stop=last(r), length=length(r)
+        @test o === range(;              stop        )
+        @test o === range(;                    length)
+        @test r === range(; start,       stop        )
+        @test r === range(;              stop, length)
+        # the next three lines uses ==, because it changes the eltype
+        @test r ==  range(; start,       stop, length)
+        @test r ==  range(; start, step,       length)
+        @test r ==  range(; stop=Float64(stop))
+    end
 
     for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
         @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
@@ -403,6 +417,9 @@ end
         @test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
         @test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
 
+        @test intersect(1:typemax(Int), [1, 3]) == [1, 3]
+        @test intersect([1, 3], 1:typemax(Int)) == [1, 3]
+
         @testset "Support StepRange with a non-numeric step" begin
             start = Date(1914, 7, 28)
             stop = Date(1918, 11, 11)
@@ -411,6 +428,21 @@ end
             @test intersect(start:Day(1):stop, start:Day(5):stop) == start:Day(5):stop
             @test intersect(start-Day(10):Day(1):stop-Day(10), start:Day(5):stop) ==
                 start:Day(5):stop-Day(10)-mod(stop-start, Day(5))
+        end
+
+        @testset "Two AbstractRanges" begin
+            struct DummyRange{T} <: AbstractRange{T}
+                r
+            end
+            Base.iterate(dr::DummyRange) = iterate(dr.r)
+            Base.iterate(dr::DummyRange, state) = iterate(dr.r, state)
+            Base.length(dr::DummyRange) = length(dr.r)
+            Base.in(x::Int, dr::DummyRange) = in(x, dr.r)
+            Base.unique(dr::DummyRange) = unique(dr.r)
+            r1 = DummyRange{Int}([1, 2, 3, 3, 4, 5])
+            r2 = DummyRange{Int}([3, 3, 4, 5, 6])
+            @test intersect(r1, r2) == [3, 4, 5]
+            @test intersect(r2, r1) == [3, 4, 5]
         end
     end
     @testset "issubset" begin
@@ -1508,8 +1540,12 @@ end
     @test_throws ArgumentError range(1)
     @test_throws ArgumentError range(nothing)
     @test_throws ArgumentError range(1, step=4)
-    @test_throws ArgumentError range(nothing, length=2)
+    @test_throws ArgumentError range(; step=1, length=6)
+    @test_throws ArgumentError range(; step=2, stop=7.5)
     @test_throws ArgumentError range(1.0, step=0.25, stop=2.0, length=5)
+    @test_throws ArgumentError range(; stop=nothing)
+    @test_throws ArgumentError range(; length=nothing)
+    @test_throws TypeError range(; length=5.5)
 end
 
 @testset "issue #23300#issuecomment-371575548" begin
@@ -1881,6 +1917,40 @@ end
     @test typeof(step(StepRangeLen(Int8(1), Int8(2), 3, 2))) === Int8
 end
 
+@testset "LinRange eltype for element types that wrap integers" begin
+    struct RealWrapper{T <: Real} <: Real
+        x :: T
+    end
+    Base.promote_rule(::Type{S}, ::Type{RealWrapper{T}}) where {T,S<:Real} = RealWrapper{promote_type(S, T)}
+    Base.:(-)(w::RealWrapper) = RealWrapper(-w.x)
+    for f in [:(+), :(-), :(*), :(/)]
+        @eval Base.$f(w::RealWrapper, y::RealWrapper) = RealWrapper($f(w.x, y.x))
+    end
+    for f in [:(<), :(==), :(<=)]
+        @eval Base.$f(w::RealWrapper, y::RealWrapper) = $f(w.x, y.x)
+    end
+    for T in [:Float32, :Float64]
+        @eval Base.$T(w::RealWrapper) = $T(w.x)
+    end
+    (::Type{RealWrapper{T}})(w::RealWrapper) where {T<:Real} = RealWrapper{T}(T(w.x))
+    (::Type{T})(w::RealWrapper{T}) where {T<:Real} = T(w.x)
+    Base.:(==)(w::RealWrapper, y::RealWrapper) = w.x == y.x
+    Base.isfinite(w::RealWrapper) = isfinite(w.x)
+    Base.signbit(w::RealWrapper) = signbit(w.x)
+
+    x = RealWrapper(2)
+    r1 = range(x, stop = 2x, length = 10)
+    r2 = range(Int(x), stop = Int(2x), length = 10)
+    for i in eachindex(r1, r2)
+        @test r1[i] ≈ r2[i]
+    end
+    r3 = LinRange(x, 2x, 10)
+    r4 = LinRange(x, 2x, 10)
+    for i in eachindex(r3, r4)
+        @test r3[i] ≈ r4[i]
+    end
+end
+
 @testset "Bool indexing of ranges" begin
     @test_throws ArgumentError Base.OneTo(true)
     @test_throws ArgumentError Base.OneTo(true:true:true)
@@ -2094,3 +2164,20 @@ end
 @test length(range(1, 100, length=big(100)^100)) == big(100)^100
 @test length(range(big(1), big(100)^100, length=big(100)^100)) == big(100)^100
 @test length(0 * (1:big(100)^100)) == big(100)^100
+
+@testset "issue #41784" begin
+    # tests `in` when step equals 0
+    # test for Int
+    x = 41784
+    @test (x in StepRangeLen(x, 0, 0)) == false
+    @test (x in StepRangeLen(x, 0, rand(1:100))) == true
+    @test ((x - 1) in StepRangeLen(x, 0, rand(1:100))) == false
+    @test ((x + 1) in StepRangeLen(x, 0, rand(1:100))) == false
+
+    # test for Char
+    x = 'z'
+    @test (x in StepRangeLen(x, 0, 0)) == false
+    @test (x in StepRangeLen(x, 0, rand(1:100))) == true
+    @test ((x - 1) in StepRangeLen(x, 0, rand(1:100))) == false
+    @test ((x + 1) in StepRangeLen(x, 0, rand(1:100))) == false
+end

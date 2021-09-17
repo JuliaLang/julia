@@ -1433,7 +1433,8 @@ using Base: typed_hvncat
             v1 == v2 == 1 && continue
             for v3 ∈ ((), (1,), ([1],), (1, [1]), ([1], 1), ([1], [1]))
                 @test_throws ArgumentError hvncat((v1, v2), true, v3...)
-                @test_throws ArgumentError hvncat(((v1,), (v2,)), true, v3...)
+                @test_throws str->(occursin("`shape` argument must consist of positive integers", str) ||
+                                   occursin("reducing over an empty collection is not allowed", str)) hvncat(((v1,), (v2,)), true, v3...)
             end
         end
     end

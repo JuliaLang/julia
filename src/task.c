@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
 #include "julia.h"
@@ -67,8 +68,8 @@ static inline void tsan_switch_to_ctx(void *state)  {
 
 // empirically, jl_finish_task needs about 64k stack space to infer/run
 // and additionally, gc-stack reserves 64k for the guard pages
-#if defined(MINSIGSTKSZ) && MINSIGSTKSZ > 131072
-#define MINSTKSZ MINSIGSTKSZ
+#if defined(MINSIGSTKSZ)
+#define MINSTKSZ (MINSIGSTKSZ > 131072 ? MINSIGSTKSZ : 131072)
 #else
 #define MINSTKSZ 131072
 #endif
@@ -188,7 +189,7 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 #endif
 
 /* Rooted by the base module */
-static jl_function_t *task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
+static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
 void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
@@ -561,7 +562,10 @@ static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_M
     ptls->io_wait = 0;
     // @time needs its compile timer disabled on error,
     // and cannot use a try-finally as it would break scope for assignments
-    jl_measure_compile_time[ptls->tid] = 0;
+    // We blindly disable compilation time tracking here, for all running Tasks, even though
+    // it may cause some incorrect measurements. This is a known bug, and is being tracked
+    // here: https://github.com/JuliaLang/julia/pull/39138
+    jl_atomic_store_relaxed(&jl_measure_compile_time_enabled, 0);
     JL_GC_PUSH1(&exception);
     jl_gc_unsafe_enter(ptls);
     if (exception) {
@@ -663,7 +667,7 @@ JL_DLLEXPORT uint64_t jl_tasklocal_genrandom(jl_task_t *task) JL_NOTSAFEPOINT
     uint64_t s2 = task->rngState2;
     uint64_t s3 = task->rngState3;
 
-    uint64_t t = s0 << 17;
+    uint64_t t = s1 << 17;
     uint64_t tmp = s0 + s3;
     uint64_t res = ((tmp << 23) | (tmp >> 41)) + s0;
     s2 ^= s0;
@@ -732,7 +736,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->next = jl_nothing;
     t->queue = jl_nothing;
     t->tls = jl_nothing;
-    t->_state = JL_TASK_STATE_RUNNABLE;
+    jl_atomic_store_relaxed(&t->_state, JL_TASK_STATE_RUNNABLE);
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
@@ -748,9 +752,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->excstack = NULL;
     t->started = 0;
     t->prio = -1;
-    t->tid = t->copy_stack ? ct->tid : -1; // copy_stacks are always pinned since they can't be moved
+    jl_atomic_store_relaxed(&t->tid, t->copy_stack ? ct->tid : -1); // copy_stacks are always pinned since they can't be moved
     t->ptls = NULL;
-    t->world_age = 0;
+    t->world_age = ct->world_age;
 
 #ifdef COPY_STACKS
     if (!t->copy_stack) {
@@ -845,7 +849,7 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 CFI_NORETURN
     // this runs the first time we switch to a task
     sanitizer_finish_switch_fiber();
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
     jl_task_t *ct = jl_get_current_task();
     JL_GC_PROMISE_ROOTED(ct);
 #else
@@ -876,7 +880,6 @@ CFI_NORETURN
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT);
-            ct->world_age = jl_world_counter;
             res = jl_apply(&ct->start, 1);
         }
         JL_CATCH {
@@ -945,7 +948,7 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
     char *stkbuf = (char*)jl_malloc_stack(ssize, owner);
     if (stkbuf == NULL)
         return NULL;
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     ((char**)t)[0] = stkbuf; // stash the stack pointer somewhere for start_fiber
     ((size_t*)t)[1] = *ssize; // stash the stack size somewhere for start_fiber
 #endif
@@ -1294,7 +1297,7 @@ void jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->next = jl_nothing;
     ct->queue = jl_nothing;
     ct->tls = jl_nothing;
-    ct->_state = JL_TASK_STATE_RUNNABLE;
+    jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     ct->start = NULL;
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
@@ -1303,7 +1306,7 @@ void jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;
-    ct->tid = ptls->tid;
+    jl_atomic_store_relaxed(&ct->tid, ptls->tid);
     ct->sticky = 1;
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task

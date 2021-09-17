@@ -95,8 +95,8 @@ endif
 
 # headers are used for dependency tracking, while public headers will be part of the dist
 UV_HEADERS :=
-HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h locks.h atomics.h julia_internal.h options.h timing.h) $(addprefix $(BUILDDIR)/, $(DTRACE_HEADERS))
-PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h locks.h atomics.h julia_gcext.h)
+HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h julia_internal.h options.h timing.h) $(addprefix $(BUILDDIR)/, $(DTRACE_HEADERS))
+PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h julia_gcext.h)
 ifeq ($(USE_SYSTEM_LIBUV),0)
 UV_HEADERS += uv.h
 UV_HEADERS += uv/*.h
@@ -113,7 +113,7 @@ LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
 #       https://github.com/JuliaLang/julia/issues/29981
 else
 ifneq ($(USE_LLVM_SHLIB),1)
-LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
+LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS) --link-static) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
 LLVMLINK += $(LLVM_LDFLAGS) -lLLVM
 endif
@@ -230,7 +230,7 @@ endif
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
-	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCXXFLAGS) $(JCPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) $(NO_WHOLE_ARCHIVE) $(LLVMLINK))
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(JCXXFLAGS) $(JCPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(JLDFLAGS) -L$(build_shlibdir) -L$(build_libdir) $(NO_WHOLE_ARCHIVE) $(LLVMLINK)) -lpthread
 
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
@@ -278,10 +278,10 @@ $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc.o gc.dbg.obj init.c in
 $(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): $(SRCDIR)/APInt-C.h
 
 # archive library file rules
-$(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S) $(SRCDIR)/support/*.c
+$(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
-$(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S) $(SRCDIR)/support/*.c
+$(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support debug BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
 $(FLISP_EXECUTABLE_release): $(BUILDDIR)/flisp/libflisp.a
@@ -376,15 +376,23 @@ endif
 
 clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 
-clang-sa-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS)  -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
-clang-sa-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) | analyzegc-deps-check
-	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
+clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS)  -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
+clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text -Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
 
-# Add C files as a target of `analyzegc`
-analyzegc: $(addprefix clang-sa-,$(RUNTIME_SRCS))
+clang-sa-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c $<)
+clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_bindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(DEBUGFLAGS) --analyzer-no-default-checks -fcolor-diagnostics -Werror -x c++ $<)
+
+
+# Add C files as a target of `analyzesrc` and `analyzegc`
+analyzesrc: $(addprefix clang-sa-,$(SRCS))
+analyzegc: analyzesrc $(addprefix clang-sagc-,$(RUNTIME_SRCS))
 
 clean-analyzegc:
 	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 
-.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc clang-sa-*
+.FORCE:
+.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc .FORCE
