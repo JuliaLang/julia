@@ -3,10 +3,9 @@ agents:
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
   sandbox.jl: "true"
   os: "linux"
-
 steps:
   - label: "package_linux64"
-    key: package_linux64
+    key: "package_linux64"
     plugins:
       - JuliaCI/julia#v1:
           # Drop default "registries" directory, so it is not persisted from execution to execution
@@ -28,8 +27,12 @@ steps:
       - github_commit_status:
           context: "package_linux64"
   - label: "tester_linux64"
-    key: tester_linux64
-    depends_on: package_linux64
+    key: "tester_linux64"
+    depends_on:
+      - package_linux64
     commands: |
       echo "Hello world"
       exit 0
+    notify:
+      - github_commit_status:
+          context: "tester_linux64"
