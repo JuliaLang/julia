@@ -4,7 +4,9 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <iostream>
 
+using std::cout; using std::endl;
 using std::vector;
 using std::string;
 using std::unordered_map;
@@ -24,7 +26,7 @@ struct Node {
     string name;
     size_t id;
     size_t self_size;
-    int edge_count;
+    size_t edge_count;
     size_t trace_node_id;
     // whether the node is attached or dettached from the main application state
     // TODO: .... meaning not yet understood.
@@ -136,6 +138,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     auto val = g_snapshot->node_ptr_to_index_map.find((void*)a);
     if (val != g_snapshot->node_ptr_to_index_map.end()) {
         return;
+        //return &g_snapshot->nodes[val->second];
     }
     // Insert a new Node
     jl_value_t* type = jl_typeof(a);
@@ -152,7 +155,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
 
 
     g_snapshot->node_ptr_to_index_map.insert(val,
-            {a, g_snapshot->nodes.size() * k_node_number_of_fields});
+            {a, g_snapshot->nodes.size()});
     count_nodes += 1;
 
     Node node{
@@ -168,7 +171,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
         0 // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
     };
     g_snapshot->nodes.push_back(node);
-
+    //return &g_snapshot->nodes.back();
 }
 
 // TODO: remove JL_DLLEXPORT
@@ -179,6 +182,11 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b) {
 
     record_node_to_gc_snapshot(a);
     record_node_to_gc_snapshot(b);
+
+    auto from_node_idx = g_snapshot->node_ptr_to_index_map[a];
+    //cout << from_node_idx << endl;
+
+    g_snapshot->nodes[from_node_idx].edge_count += 1;
     g_snapshot->edges.push_back(Edge{"property",
                                     g_snapshot->node_ptr_to_index_map[a],
                                     g_snapshot->node_ptr_to_index_map[b]});
@@ -217,10 +225,10 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
         jl_printf(stream, "%zu", snapshot.names.find_or_create_string_id(node.type));
         jl_printf(stream, ",%zu", snapshot.names.find_or_create_string_id(node.name));
         jl_printf(stream, ",%zu", node.id);
-        jl_printf(stream, ",%zu", (size_t)0);//XXX); // self_size
-        jl_printf(stream, ",%zu", (size_t)0);//XXX); // edge_count
-        jl_printf(stream, ",%zu", (size_t)0);//XXX); // trace_node_id
-        jl_printf(stream, ",%zu", (size_t)0);//XXX); // detachedness
+        jl_printf(stream, ",%zu", node.self_size);
+        jl_printf(stream, ",%zu", node.edge_count);
+        jl_printf(stream, ",%zu", node.trace_node_id);
+        jl_printf(stream, ",%d", node.detachedness);
         jl_printf(stream, "\n");
     }
     jl_printf(stream, "],\n");
@@ -234,8 +242,8 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
             jl_printf(stream, ",");
         }
         jl_printf(stream, "%zu", snapshot.names.find_or_create_string_id(edge.type));
-        jl_printf(stream, ",%zu", edge.name_or_index);
-        jl_printf(stream, ",%zu", edge.to_node);
+        jl_printf(stream, ",%zu", edge.name_or_index * k_node_number_of_fields);
+        jl_printf(stream, ",%zu", edge.to_node * k_node_number_of_fields);
         jl_printf(stream, "\n");
     }
     jl_printf(stream, "],\n"); // end "edges"
