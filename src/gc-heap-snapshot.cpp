@@ -96,7 +96,7 @@ public:
     StringTable names;
     StringTable node_types = {"object"};
     StringTable edge_types = {"property"};
-    unordered_set<size_t> seen_node_ids;
+    unordered_map<void*, size_t> node_ptr_to_index_map;
 };
 
 
@@ -130,14 +130,11 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
 }
 
 JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
-    auto val = g_snapshot->seen_node_ids.find((size_t)a);
-    if (val != g_snapshot->seen_node_ids.end()) {
+    auto val = g_snapshot->node_ptr_to_index_map.find((void*)a);
+    if (val != g_snapshot->node_ptr_to_index_map.end()) {
         return;
     }
     // Insert a new Node
-    g_snapshot->seen_node_ids.insert(val, (size_t)a);
-    count_nodes += 1;
-
     jl_value_t* type = jl_typeof(a);
 
     size_t self_size = 0;
@@ -149,6 +146,10 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
         //self_size = (size_t)jl_datatype_size(type);
         name = "...";
     }
+
+
+    g_snapshot->node_ptr_to_index_map.insert(val, {a, g_snapshot->nodes.size()});
+    count_nodes += 1;
 
     Node node{
         "object", // string type;
@@ -163,6 +164,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
         0 // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
     };
     g_snapshot->nodes.push_back(node);
+
 }
 
 // TODO: remove JL_DLLEXPORT
@@ -173,7 +175,9 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b) {
 
     record_node_to_gc_snapshot(a);
     record_node_to_gc_snapshot(b);
-    g_snapshot->edges.push_back(Edge{"property", (size_t)a, (size_t)b});
+    g_snapshot->edges.push_back(Edge{"property",
+                                    g_snapshot->node_ptr_to_index_map[a],
+                                    g_snapshot->node_ptr_to_index_map[b]});
 
     count_edges += 1;
 }
