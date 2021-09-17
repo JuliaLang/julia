@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-07d460f6-353c-4951-b576-bd280629f43d",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-878bedcd-7675-449b-9b06-08abdf71d406",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-17T05:11:42Z"
+        "created": "2021-09-17T05:19:36Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -90,6 +90,18 @@
             "summary": "ArgTools provides tools for creating consistent, flexible APIs that work with various kinds of function arguments."
         },
         {
+            "name": "Tar.jl",
+            "SPDXID": "SPDXRef-JuliaTar",
+            "downloadLocation": "git+https://github.com/JuliaIO/Tar.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/Tar.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2019 Stefan Karpinski <stefan@karpinski.org> and contributors",
+            "summary": "The Tar package can list, extract and create POSIX TAR archives (tarballs) as specified in POSIX 1003.1-2001."
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -165,6 +177,11 @@
         },
         {
             "spdxElementId": "SPDXRef-JuliaArgTools",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaTar",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
