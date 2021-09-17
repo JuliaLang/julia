@@ -272,7 +272,7 @@ special indexing behaviors. Note that some index types (like `Colon`) require
 more context in order to transform them into an array of indices; those get
 converted in the more complicated `to_indices` function. By default, this
 simply calls the generic `to_index(i)`. This must return either a subtype of `Integer`
-or an k`AbstractArray` of scalar indices that are supported by `A`.
+or an `AbstractArray` of scalar indices that are supported by `A`.
 """
 to_index(A, i) = to_index(i)
 
