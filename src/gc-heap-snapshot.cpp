@@ -130,8 +130,9 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     // Dump the snapshot
     serialize_heap_snapshot(stream, snapshot);
 
-    jl_printf(JL_STDERR, "nodes: %d\n", count_nodes);
-    jl_printf(JL_STDERR, "edges: %d\n", count_edges);
+    // Debugging
+    //jl_printf(JL_STDERR, "nodes: %d\n", count_nodes);
+    //jl_printf(JL_STDERR, "edges: %d\n", count_edges);
 }
 
 JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
@@ -145,13 +146,54 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
 
     size_t self_size = 1;
     string name = "<missing>";
-    if (type != nullptr) {
-        //jl_printf(JL_STDERR, "value: %p\n", a);
-        //jl_printf(JL_STDERR, "type: %p\n", type);
-        //jl_static_show(JL_STDERR, a);
-        //self_size = (size_t)jl_datatype_size(type);
-        name = "name";
+    //self_size = jl_f_sizeof(a);
+
+    if (jl_is_datatype(a)) {
+        self_size = (size_t)jl_datatype_size(type);
+        name = jl_typeof_str(a);
     }
+
+    // // Copied from jl_static_show_x_:
+    // if ((uintptr_t)type < 4096U) {
+    //     // Handle non-julia values:
+    //     // TODO:  sprintf the type pointer
+    //     //name = sprintf(..., "<?::%p>", (void*)type);
+    //     name = "<?::unknown>";
+    // } else if ((uintptr_t)a < 4096U) {
+    //     // TODO: understand this case?
+    //     // n += jl_printf(out, "<?#%p::", (void*)v);
+    //     // n += jl_static_show_x(out, (jl_value_t*)vt, depth);
+    //     // n += jl_printf(out, ">");
+    // }
+    // else if (v == (jl_value_t*)jl_simplevector_type) {
+    //     //n += jl_printf(out, "Core.SimpleVector");
+    // }
+    // else if (v == (jl_value_t*)jl_typename_type) {
+    //     //n += jl_printf(out, "Core.TypeName");
+    // }
+    // else if (v == (jl_value_t*)jl_symbol_type) {
+    //     //n += jl_printf(out, "Symbol");
+    // }
+    // else if (v == (jl_value_t*)jl_methtable_type) {
+    //     //n += jl_printf(out, "Core.MethodTable");
+    // }
+    // else if (v == (jl_value_t*)jl_any_type) {
+    //     //n += jl_printf(out, "Any");
+    // }
+    // else if (v == (jl_value_t*)jl_type_type) {
+    //     //n += jl_printf(out, "Type");
+    // }
+    // else if (vt == jl_method_type) {
+    //     //jl_method_t *m = (jl_method_t*)v;
+    //     //n += jl_static_show_func_sig(out, m->sig);
+    // } else {
+    //     // Handle julia values:
+    //     //jl_printf(JL_STDERR, "value: %p\n", a);
+    //     //jl_printf(JL_STDERR, "type: %p\n", type);
+    //     //jl_static_show(JL_STDERR, a);
+    //     self_size = (size_t)jl_datatype_size(type);
+    //     name = "name";
+    // }
 
 
     g_snapshot->node_ptr_to_index_map.insert(val,
