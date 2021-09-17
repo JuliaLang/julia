@@ -988,13 +988,14 @@ function deleteat!(B::BitVector, inds)
 
     (p, s) = y
     checkbounds(B, p)
+    p isa Bool && throw(ArgumentError("invalid index $p of type Bool"))
     q = p+1
     new_l -= 1
     y = iterate(inds, s)
     while y !== nothing
         (i, s) = y
-        i isa Bool && depwarn("passing Bool as an index is deprecated", deleteat!)
         if !(q <= i <= n)
+            i isa Bool && throw(ArgumentError("invalid index $i of type Bool"))
             i < q && throw(ArgumentError("indices must be unique and sorted"))
             throw(BoundsError(B, i))
         end
@@ -1007,7 +1008,7 @@ function deleteat!(B::BitVector, inds)
         y = iterate(inds, s)
     end
 
-    q <= n && copy_chunks!(Bc, p, Bc, Int(q), Int(n-q+1))
+    q <= n && copy_chunks!(Bc, Int(p), Bc, Int(q), Int(n-q+1))
 
     delta_k = num_bit_chunks(new_l) - length(Bc)
     delta_k < 0 && _deleteend!(Bc, -delta_k)
@@ -1048,7 +1049,7 @@ function deleteat!(B::BitVector, inds::AbstractVector{Bool})
         y = findnext(inds, s)
     end
 
-    q <= n && copy_chunks!(Bc, p, Bc, Int(q), Int(n - q + 1))
+    q <= n && copy_chunks!(Bc, Int(p), Bc, Int(q), Int(n - q + 1))
 
     delta_k = num_bit_chunks(new_l) - length(Bc)
     delta_k < 0 && _deleteend!(Bc, -delta_k)

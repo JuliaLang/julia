@@ -1725,6 +1725,11 @@ end
     x = trues(3)
     x[3] = false
     @test deleteat!(x, [UInt8(2)]) == [true, false]
+    @test_throws ArgumentError deleteat!(x, Any[true])
+    @test_throws ArgumentError deleteat!(x, Any[1, true])
+    @test_throws ArgumentError deleteat!(x, Any[2, 1])
+    @test_throws BoundsError deleteat!(x, Any[4])
+    @test_throws BoundsError deleteat!(x, Any[2, 4])
 
     function test_equivalence(n::Int)
         x1 = rand(Bool, n)
