@@ -358,6 +358,7 @@ false
 ```
 """
 <(x, y) = isless(x, y)
+≮(x, y) = !<(x, y)
 
 """
     >(x, y)
@@ -384,6 +385,7 @@ true
 ```
 """
 >(x, y) = y < x
+≯(x, y) = !>(x, y)
 
 """
     <=(x, y)
@@ -409,11 +411,12 @@ false
 """
 <=(x, y) = (x < y) | (x == y)
 const ≤ = <=
-const ⩽ = <=
+const ⩽ = ≤
+≰(x, y) = !≤(x, y)
 
 """
     >=(x, y)
-    ≥(x y)
+    ≥(x, y)
     ⩾(x, y)
 
 Greater-than-or-equals comparison operator. Falls back to `y <= x`.
@@ -435,7 +438,8 @@ true
 """
 >=(x, y) = (y <= x)
 const ≥ = >=
-const ⩾ = >=
+const ⩾ = ≥
+≱(x, y) = !≥(x, y)
 
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
@@ -1223,6 +1227,19 @@ used to implement specialized methods.
 >=(x) = Fix2(>=, x)
 
 """
+    ≱(x)
+
+Create a function that compares its argument to `x` using [`≱`](@ref), i.e.
+a function equivalent to `y -> y ≱ x`.
+The returned function is of type `Base.Fix2{typeof(≱)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+≱(x) = Fix2(≱, x)
+
+"""
     <=(x)
 
 Create a function that compares its argument to `x` using [`<=`](@ref), i.e.
@@ -1234,6 +1251,19 @@ used to implement specialized methods.
     This functionality requires at least Julia 1.2.
 """
 <=(x) = Fix2(<=, x)
+
+"""
+    ≰(x)
+
+Create a function that compares its argument to `x` using [`≰`](@ref), i.e.
+a function equivalent to `y -> y ≰ x`.
+The returned function is of type `Base.Fix2{typeof(≰)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+≰(x) = Fix2(≰, x)
 
 """
     >(x)
@@ -1249,6 +1279,19 @@ used to implement specialized methods.
 >(x) = Fix2(>, x)
 
 """
+    ≯(x)
+
+Create a function that compares its argument to `x` using [`≯`](@ref), i.e.
+a function equivalent to `y -> y ≯ x`.
+The returned function is of type `Base.Fix2{typeof(≯)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+≯(x) = Fix2(≯, x)
+
+"""
     <(x)
 
 Create a function that compares its argument to `x` using [`<`](@ref), i.e.
@@ -1260,6 +1303,19 @@ used to implement specialized methods.
     This functionality requires at least Julia 1.2.
 """
 <(x) = Fix2(<, x)
+
+"""
+    ≮(x)
+
+Create a function that compares its argument to `x` using [`≮`](@ref), i.e.
+a function equivalent to `y -> y ≮ x`.
+The returned function is of type `Base.Fix2{typeof(≮)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.2"
+    This functionality requires at least Julia 1.2.
+"""
+≮(x) = Fix2(≮, x)
 
 """
     splat(f)
