@@ -114,12 +114,12 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     // Do GC, which will callback into record_edge_to_gc_snapshot()...
     jl_gc_collect(JL_GC_FULL);
 
+    // Disable snapshotting
+    g_snapshot = nullptr;
+
     // When we return, the snapshot is full
     // Dump the snapshot
     serialize_heap_snapshot(stream, *g_snapshot);
-    
-    // Disable snapshotting
-    g_snapshot = nullptr;
 }
 
 JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
@@ -131,14 +131,14 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     g_snapshot->seen_node_ids.insert(val, (size_t)a);
 
     jl_value_t* type = jl_typeof(a);
-    jl_printf(JL_STDERR, "value: %p\n", a);
-    jl_printf(JL_STDERR, "type: %p\n", type);
-    jl_static_show(JL_STDERR, a);
+    // jl_printf(JL_STDERR, "value: %p\n", a);
+    // jl_printf(JL_STDERR, "type: %p\n", type);
+    // jl_static_show(JL_STDERR, a);
 
     size_t self_size = 0;
     string name = "<missing>";
     if (type != nullptr) {
-        self_size = (size_t)jl_datatype_size(type);
+        //self_size = (size_t)jl_datatype_size(type);
         name = "...";
     }
 
