@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-f4ceb281-d283-49d7-8859-b476368ac06e",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-07d460f6-353c-4951-b576-bd280629f43d",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-16T05:00:28Z"
+        "created": "2021-09-17T05:11:42Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -76,6 +76,18 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2020 Stefan Karpinski <stefan@karpinski.org> and contributors",
             "summary": "The Downloads package provides a single function, download, which provides cross-platform, multi-protocol, in-process download functionality implemented with libcurl."
+        },
+        {
+            "name": "ArgTools.jl",
+            "SPDXID": "SPDXRef-JuliaArgTools",
+            "downloadLocation": "git+https://github.com/JuliaIO/ArgTools.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/ArgTools.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2020 Stefan Karpinski <stefan@karpinski.org> and contributors",
+            "summary": "ArgTools provides tools for creating consistent, flexible APIs that work with various kinds of function arguments."
         },
         {
             "name": "OpenBLAS",
@@ -148,6 +160,11 @@
         },
         {
             "spdxElementId": "SPDXRef-JuliaDownloads",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaArgTools",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
