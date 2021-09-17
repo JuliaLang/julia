@@ -14,10 +14,10 @@ extern "C" {
 JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b);
 
 // ---------------------------------------------------------------------
-// Functions to call from Julia to start heap snapshot
+// Functions to call from Julia to take heap snapshot
 // ---------------------------------------------------------------------
 // ...
-JL_DLLEXPORT void take_gc_snapshot(JL_STREAM *stream);
+JL_DLLEXPORT void take_heap_snapshot(JL_STREAM *stream);
 
 
 #ifdef __cplusplus

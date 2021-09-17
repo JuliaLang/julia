@@ -107,7 +107,7 @@ public:
 
 HeapSnapshot *g_snapshot = nullptr;
 
-JL_DLLEXPORT void take_gc_snapshot(JL_STREAM *stream) {
+JL_DLLEXPORT void take_heap_snapshot(JL_STREAM *stream) {
     // Create the snapshot object
     //HeapSnapshot snapshot;
     //g_snapshot = &snapshot;
