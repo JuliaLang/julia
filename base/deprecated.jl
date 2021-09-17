@@ -262,4 +262,18 @@ end
 # This function was marked as experimental and not exported.
 @deprecate catch_stack(task=current_task(); include_bt=true) current_exceptions(task; backtrace=include_bt) false
 
+"""
+    @aggressive_constprop ex
+    @aggressive_constprop(ex)
+
+`@aggressive_constprop` requests more aggressive interprocedural constant
+propagation for the annotated function. For a method where the return type
+depends on the value of the arguments, this can yield improved inference results
+at the cost of additional compile time.
+"""
+macro aggressive_constprop(ex)
+    depwarn("use `@constprop :aggressive ex` instead of `@aggressive_constprop ex`", :var"@aggressive_constprop")
+    esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+end
+
 # END 1.7 deprecations

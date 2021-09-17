@@ -240,16 +240,25 @@ macro pure(ex)
 end
 
 """
-    @aggressive_constprop ex
-    @aggressive_constprop(ex)
+    @constprop setting ex
+    @constprop(setting, ex)
 
-`@aggressive_constprop` requests more aggressive interprocedural constant
-propagation for the annotated function. For a method where the return type
-depends on the value of the arguments, this can yield improved inference results
-at the cost of additional compile time.
+`@constprop` controls the mode of interprocedural constant propagation for the
+annotated function. Only `:aggressive` is supported in 1.7:
+
+- `@constprop :aggressive ex`: apply constant propagation aggressively.
+  For a method where the return type depends on the value of the arguments,
+  this can yield improved inference results at the cost of additional compile time.
+
+`@constprop :none ex` is a no-op, but is allowed for compatibility with Julia 1.8.
 """
-macro aggressive_constprop(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+macro constprop(setting, ex)
+    if isa(setting, QuoteNode)
+        setting = setting.value
+    end
+    setting === :aggressive && return esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+    setting === :none && return esc(ex)
+    throw(ArgumentError("@constprop $setting not supported"))
 end
 
 """
