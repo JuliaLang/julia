@@ -107,9 +107,10 @@ end
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
-    if Sys.iswindows() && Sys.WORD_SIZE == 32
-        if 1_000_000 * Threads.nthreads() > 2^29
-            @test n_ <= 2^29
+    nthreads = Sys.iswindows() ? 1 : Threads.nthreads()
+    if Sys.WORD_SIZE == 32
+        if 1_000_000 * nthreads > 2^29
+            @test n_ * nthreads <= 2^29
         else
             @test n_ == 1_000_000
         end
@@ -121,9 +122,9 @@ end
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    if Sys.iswindows() && Sys.WORD_SIZE == 32
-        if 1_000_001 * Threads.nthreads() > 2^29
-            @test n_ <= 2^29
+    if Sys.WORD_SIZE == 32
+        if 1_000_001 * nthreads > 2^29
+            @test n_ * nthreads <= 2^29
         else
             @test n_ == 1_000_001
         end
