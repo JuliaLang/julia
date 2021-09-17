@@ -950,7 +950,7 @@ end
 		return muladd(x, y, muladd(y, xnlo, x*ynlo))
 	end
 	n < 0 && return inv(x)^(-n)
-	return one(n) # n == 0
+	return one(x) # n == 0
 end
 @inline function ^(x::Float32, y::Integer)
     y < 0 && return inv(x^(-y))
