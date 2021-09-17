@@ -109,26 +109,19 @@ end
     n_original = n_
     nthreads = Sys.iswindows() ? 1 : Threads.nthreads()
     sample_size_bytes = sizeof(Ptr)
-    if Sys.WORD_SIZE == 32
-        if 1_000_000 * nthreads * sample_size_bytes > 2^29
-            @test n_ * nthreads * sample_size_bytes <= 2^29
-        else
-            @test n_ == 1_000_000
-        end
+    def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
+    if Sys.WORD_SIZE == 32 && (def_n * nthreads * sample_size_bytes) > 2^29
+        @test n_ * nthreads * sample_size_bytes <= 2^29
     else
-        @test n_ == 10_000_000
+        @test n_ == def_n
     end
 
     def_delay = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 0.01 : 0.001
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    if Sys.WORD_SIZE == 32
-        if 1_000_001 * nthreads * sample_size_bytes > 2^29
-            @test n_ * nthreads * sample_size_bytes <= 2^29
-        else
-            @test n_ == 1_000_001
-        end
+    if Sys.WORD_SIZE == 32 && (1_000_001 * nthreads * sample_size_bytes) > 2^29
+        @test n_ * nthreads * sample_size_bytes <= 2^29
     else
         @test n_ == 1_000_001
     end
