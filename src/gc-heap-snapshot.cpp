@@ -131,14 +131,16 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     g_snapshot->seen_node_ids.insert(val, (size_t)a);
 
     jl_value_t* type = jl_typeof(a);
+    jl_printf(JL_STDERR, "value: %p\n", a);
+    jl_printf(JL_STDERR, "type: %p\n", type);
 
     Node node{
         "object", // string type;
         "", // string name;
         (size_t)a, // size_t id;
         // TODO: This currently segfaults:
-        //(size_t)jl_datatype_size(type), // size_t self_size;
-        0, // size_t self_size;
+        (size_t)jl_datatype_size(type), // size_t self_size;
+        //0, // size_t self_size;
 
         0, // int edge_count;
         0, // size_t trace_node_id;
