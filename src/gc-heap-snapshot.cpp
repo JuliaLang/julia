@@ -107,9 +107,13 @@ public:
 
 HeapSnapshot *g_snapshot = nullptr;
 
+JL_DLLEXPORT int count_nodes = 0;
+JL_DLLEXPORT int count_edges = 0;
+
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     // Enable snapshotting
-    g_snapshot = new HeapSnapshot();
+    HeapSnapshot snapshot;
+    g_snapshot = &snapshot;
 
     // Do GC, which will callback into record_edge_to_gc_snapshot()...
     jl_gc_collect(JL_GC_FULL);
@@ -119,7 +123,10 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
 
     // When we return, the snapshot is full
     // Dump the snapshot
-    serialize_heap_snapshot(stream, *g_snapshot);
+    serialize_heap_snapshot(stream, snapshot);
+
+    jl_printf(JL_STDERR, "nodes: %d\n", count_nodes);
+    jl_printf(JL_STDERR, "edges: %d\n", count_edges);
 }
 
 JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
@@ -129,15 +136,16 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     }
     // Insert a new Node
     g_snapshot->seen_node_ids.insert(val, (size_t)a);
+    count_nodes += 1;
 
     jl_value_t* type = jl_typeof(a);
-    // jl_printf(JL_STDERR, "value: %p\n", a);
-    // jl_printf(JL_STDERR, "type: %p\n", type);
-    // jl_static_show(JL_STDERR, a);
 
     size_t self_size = 0;
     string name = "<missing>";
     if (type != nullptr) {
+        //jl_printf(JL_STDERR, "value: %p\n", a);
+        //jl_printf(JL_STDERR, "type: %p\n", type);
+        //jl_static_show(JL_STDERR, a);
         //self_size = (size_t)jl_datatype_size(type);
         name = "...";
     }
@@ -166,6 +174,8 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b) {
     record_node_to_gc_snapshot(a);
     record_node_to_gc_snapshot(b);
     g_snapshot->edges.push_back(Edge{"property", (size_t)a, (size_t)b});
+
+    count_edges += 1;
 }
 
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
@@ -199,10 +209,10 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
         jl_printf(stream, "%zu", snapshot.names.find_or_create_string_id(node.type));
         jl_printf(stream, ",%zu", snapshot.names.find_or_create_string_id(node.name));
         jl_printf(stream, ",%zu", node.id);
-        jl_printf(stream, ",%zu", 0);//XXX); // self_size
-        jl_printf(stream, ",%zu", 0);//XXX); // edge_count
-        jl_printf(stream, ",%zu", 0);//XXX); // trace_node_id
-        jl_printf(stream, ",%zu", 0);//XXX); // detachedness
+        jl_printf(stream, ",%zu", (size_t)0);//XXX); // self_size
+        jl_printf(stream, ",%zu", (size_t)0);//XXX); // edge_count
+        jl_printf(stream, ",%zu", (size_t)0);//XXX); // trace_node_id
+        jl_printf(stream, ",%zu", (size_t)0);//XXX); // detachedness
         jl_printf(stream, "\n");
     }
     jl_printf(stream, "],\n");
