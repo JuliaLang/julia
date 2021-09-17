@@ -23,6 +23,10 @@ checksum-gmp: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
 $(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
+	# Apply fix to avoid using Apple ARM reserved register X18
+	# Necessary for version 6.2.1, remove after next gmp release
+	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-HG-changeset.patch
+
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-exception.patch
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
 	echo 1 > $@
