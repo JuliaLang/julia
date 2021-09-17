@@ -107,25 +107,19 @@ public:
 
 HeapSnapshot *g_snapshot = nullptr;
 
-JL_DLLEXPORT void take_heap_snapshot(JL_STREAM *stream) {
-    // Create the snapshot object
-    //HeapSnapshot snapshot;
-    //g_snapshot = &snapshot;
-    if (!g_snapshot)
-        g_snapshot = new HeapSnapshot();
+JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
+    // Enable snapshotting
+    g_snapshot = new HeapSnapshot();
 
-    // Enable GC Snapshotting
-
-    // Do GC
-    //     - which will callback into record_edge_to_gc_snapshot()...
+    // Do GC, which will callback into record_edge_to_gc_snapshot()...
+    jl_gc_collect(JL_GC_FULL);
 
     // When we return, the snapshot is full
-    // Disable snapshotting
-
     // Dump the snapshot
     serialize_heap_snapshot(stream, *g_snapshot);
-    // TODO(PR): Put this back, but disabled for debugging
-    //g_snapshot = nullptr;
+    
+    // Disable snapshotting
+    g_snapshot = nullptr;
 }
 
 JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {

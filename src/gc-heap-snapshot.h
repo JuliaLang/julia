@@ -16,8 +16,7 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b);
 // ---------------------------------------------------------------------
 // Functions to call from Julia to take heap snapshot
 // ---------------------------------------------------------------------
-// ...
-JL_DLLEXPORT void take_heap_snapshot(JL_STREAM *stream);
+JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream);
 
 
 #ifdef __cplusplus
