@@ -911,6 +911,8 @@ function modf(x::Float64)
 end
 
 @inline function ^(x::Float64, y::Float64)
+	yint = round(Int, y)
+	y == yint && return x^yint
     z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
@@ -918,6 +920,8 @@ end
     z
 end
 @inline function ^(x::Float32, y::Float32)
+	yint = round(Int, y)
+	y == yint && return x^yint
     z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
     if isnan(z) & !isnan(x+y)
         throw_exp_domainerror(x)
@@ -928,22 +932,25 @@ end
 
 # compensated power by squaring
 @inline function ^(x::Float64, n::Integer)
-    n < 0 && return inv(x^(-n))
-    y = 1.0
-    xnlo = ynlo = 0.0
-    while n > 1
-        if n&1 > 0
-            yn = x*y
-            ynlo = fma(x, y , -yn) + muladd(y, xnlo, x*ynlo)
-            y = yn
-        end
-        xn = x * x
-        xnlo = muladd(x, 2*xnlo, fma(x, x, -xn))
-        x = xn
-        n >>>= 1
-    end
-    !isfinite(x) && return x*y
-    return muladd(x, y, muladd(y, xnlo, x*ynlo))
+	if n > 0
+		y = 1.0
+		xnlo = ynlo = 0.0
+		while n > 1
+			if n&1 > 0
+				yn = x*y
+				ynlo = fma(x, y , -yn) + muladd(y, xnlo, x*ynlo)
+				y = yn
+			end
+			xn = x * x
+			xnlo = muladd(x, 2*xnlo, fma(x, x, -xn))
+			x = xn
+			n >>>= 1
+		end
+		!isfinite(x) && return x*y
+		return muladd(x, y, muladd(y, xnlo, x*ynlo))
+	end
+	n < 0 && return inv(x^(-n))
+	return one(n) # n == 0
 end
 @inline function ^(x::Float32, y::Integer)
     y < 0 && return inv(x^(-y))
