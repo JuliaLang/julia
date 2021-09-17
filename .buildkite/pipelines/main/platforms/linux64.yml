@@ -25,7 +25,7 @@ steps:
     notify:
       - github_commit_status:
           context: "i_will_pass"
-        if: build.state != "passed"
+        if: job.state != "passed"
   - label: "i_will_fail"
     key: "i_will_fail"
     plugins:
@@ -43,6 +43,6 @@ steps:
     notify:
       - github_commit_status:
           context: "i_will_fail"
-        if: build.state != "passed"
+        if: job.state != "passed"
     commands: |
       exit 1
