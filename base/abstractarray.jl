@@ -1503,7 +1503,8 @@ get(A::AbstractArray, I::RangeVecIntList, default) =
 ## structured matrix methods ##
 isnonzeroindex(A::AbstractArray{<:Any, N}, inds::Vararg{Integer, N}) where {N} = true
 function isnonzeroindex(A::AbstractArray, inds...)
-    indsint = Tuple(CartesianIndices(A)[inds...])
+    Ainds = to_indices(A, inds)
+    indsint = Tuple(CartesianIndices(A)[Ainds...])
     isnonzeroindex(A, indsint...)
 end
 
