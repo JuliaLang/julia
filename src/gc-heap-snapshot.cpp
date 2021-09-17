@@ -94,7 +94,7 @@ public:
     vector<Edge> edges;
 
     StringTable names;
-    StringTable node_types = {"node_type1", "node_type2"};
+    StringTable node_types = {"object"};
     StringTable edge_types = {"edge_type1", "edge_type2"};
     unordered_set<size_t> seen_node_ids;
 };
@@ -131,7 +131,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     g_snapshot->seen_node_ids.insert(val, (size_t)a);
 
     Node node{
-        "", // string type;
+        "object", // string type;
         "", // string name;
         (size_t)a, // size_t id;
         /*jl_datatype_size(type)*/ 0, // size_t self_size;
