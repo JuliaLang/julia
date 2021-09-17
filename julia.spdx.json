@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-878bedcd-7675-449b-9b06-08abdf71d406",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8bec0855-e1e4-4bad-b098-ce45a651cc7d",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-17T05:19:36Z"
+        "created": "2021-09-17T05:30:02Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -102,6 +102,18 @@
             "summary": "The Tar package can list, extract and create POSIX TAR archives (tarballs) as specified in POSIX 1003.1-2001."
         },
         {
+            "name": "NetworkOptions.jl",
+            "SPDXID": "SPDXRef-JuliaNetworkOptions",
+            "downloadLocation": "git+https://github.com/JuliaLang/NetworkOptions.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/NetworkOptions.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2020 Stefan Karpinski <stefan@karpinski.org> and contributors",
+            "summary": "The NetworkOptions package acts as a mediator between ways of configuring network transport mechanisms (SSL/TLS, SSH, proxies, etc.) and Julia packages that provide access to transport mechanisms."
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -182,6 +194,11 @@
         },
         {
             "spdxElementId": "SPDXRef-JuliaTar",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaNetworkOptions",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
