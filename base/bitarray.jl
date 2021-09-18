@@ -1023,7 +1023,7 @@ function deleteat!(B::BitVector, inds)
 end
 
 function deleteat!(B::BitVector, inds::AbstractVector{Bool})
-    length(inds) == length(B) || throw(BoundsError(a, inds))
+    length(inds) == length(B) || throw(BoundsError(B, inds))
 
     n = new_l = length(B)
     y = findfirst(inds)
@@ -1064,6 +1064,10 @@ function deleteat!(B::BitVector, inds::AbstractVector{Bool})
 end
 
 function splice!(B::BitVector, i::Integer)
+    # TODO: after deprecation remove the four lines below
+    #       as v = B[i] is enough to do both bounds checking
+    #       and Bool check then just pass Int(i) to _deleteat!
+    i isa Bool && depwarn("passing Bool as an index is deprecated", splice!)
     i = Int(i)
     n = length(B)
     1 <= i <= n || throw(BoundsError(B, i))
@@ -1076,8 +1080,10 @@ end
 const _default_bit_splice = BitVector()
 
 function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins::AbstractArray = _default_bit_splice)
+    r isa Bool && depwarn("passing Bool as an index is deprecated", splice!)
     _splice_int!(B, isa(r, AbstractUnitRange{Int}) ? r : Int(r), ins)
 end
+
 function _splice_int!(B::BitVector, r, ins)
     n = length(B)
     i_f, i_l = first(r), last(r)
