@@ -356,6 +356,25 @@ function _atexit()
     end
 end
 
+## afteroutput: like atexit, but runs at the end of sysimage output
+## any hooks saved in the sysimage are cleared in Base._start
+const afteroutput_hooks = Callable[]
+
+afteroutput(f::Function) = (pushfirst!(afteroutput_hooks, f); nothing)
+
+function _afteroutput()
+    while !isempty(afteroutput_hooks)
+        f = popfirst!(afteroutput_hooks)
+        try
+            f()
+        catch ex
+            showerror(stderr, ex)
+            Base.show_backtrace(stderr, catch_backtrace())
+            println(stderr)
+        end
+    end
+end
+
 ## hook for disabling threaded libraries ##
 
 library_threading_enabled = true

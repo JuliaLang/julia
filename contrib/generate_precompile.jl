@@ -406,14 +406,21 @@ function generate_precompile_statements()
         n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
     end
 
-    tot_time = time_ns() - start_time
     include_time *= 1e9
-    gen_time = tot_time - include_time
-    println("Precompilation complete. Summary:")
-    print("Total ─────── "); Base.time_print(tot_time); println()
-    print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100); println("%")
-    print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
+    gen_time = (time_ns() - start_time) - include_time
 
+    println("Outputting sysimage file...")
+
+    # Print report after sysimage has been saved so to include all time spent
+    Base.afteroutput() do
+        tot_time = time_ns() - start_time
+        output_time = tot_time - gen_time - include_time
+        println("Precompilation complete. Summary:")
+        print("Total ─────── "); Base.time_print(tot_time);     println()
+        print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100);     println("%")
+        print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
+        print("Output ────── "); Base.time_print(output_time);  print(" "); show(IOContext(stdout, :compact=>true), output_time / tot_time * 100);  println("%")
+    end
     return
 end
 

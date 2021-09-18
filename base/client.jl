@@ -490,6 +490,8 @@ function _start()
     if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
         # clear old invalid pointers
         PCRE.__init__()
+        # clear any afteroutput hooks that were saved in the sysimage
+        empty!(Base.afteroutput_hooks)
     end
     try
         exec_options(JLOptions())

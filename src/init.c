@@ -200,6 +200,32 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     }
 }
 
+JL_DLLEXPORT void jl_afteroutput_hook(void)
+{
+    if (jl_all_tls_states == NULL)
+        return;
+
+    jl_task_t *ct = jl_current_task;
+    if (jl_base_module) {
+        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_afteroutput"));
+        if (f != NULL) {
+            JL_TRY {
+                size_t last_age = ct->world_age;
+                ct->world_age = jl_get_world_counter();
+                jl_apply(&f, 1);
+                ct->world_age = last_age;
+            }
+            JL_CATCH {
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\nafteroutput hook threw an error: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
+            }
+        }
+    }
+    return;
+}
+
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
     if (jl_all_tls_states == NULL)
