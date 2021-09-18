@@ -581,7 +581,7 @@ end
 
 let optstring = repr("text/plain", Base.JLOptions())
     @test startswith(optstring, "JLOptions(\n")
-    @test !occursin("Ptr", optstring)
+    @test !occursin("Ptr{UInt8}", optstring)
     @test endswith(optstring, "\n)")
     @test occursin(" = \"", optstring)
 end
@@ -589,7 +589,7 @@ let optstring = repr(Base.JLOptions())
     @test startswith(optstring, "JLOptions(")
     @test endswith(optstring, ")")
     @test !occursin("\n", optstring)
-    @test !occursin("Ptr", optstring)
+    @test !occursin("Ptr{UInt8}", optstring)
     @test occursin(" = \"", optstring)
 end
 
