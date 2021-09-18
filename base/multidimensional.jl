@@ -1147,7 +1147,7 @@ See also [`circshift`](@ref).
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
     inds = axes(src)
     axes(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(axes(dest)))"))
-    any(size(src) .== 0) && return dest
+    isempty(src) && return dest
     _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val(N)))
 end
 
