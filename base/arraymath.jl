@@ -26,9 +26,100 @@ julia> A
 """
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 
-for f in (:-, :conj, :real, :imag)
-    @eval ($f)(A::AbstractArray) = broadcast_preserving_zero_d($f, A)
-end
+"""
+    conj(A::AbstractArray)
+
+Return an array containing the complex conjugate of each entry in array `A`.
+
+Equivalent to `conj.(A)`, except when `A` is a 0-dimensional result,
+in which case a 0-dimensional container is returned (rather than a scalar).
+
+# Examples
+```jldoctest
+julia> A = [1+im 2-im; 2+2im 3+im]
+2×2 Matrix{Complex{Int64}}:
+ 1+1im  2-1im
+ 2+2im  3+1im
+
+julia> conj(A)
+2×2 Matrix{Complex{Int64}}:
+ 1-1im  2+1im
+ 2-2im  3-1im
+
+julia> A = fill(2-im)
+0-dimensional Array{Complex{Int64}, 0}:
+2 - 1im
+
+julia> conj(A)
+0-dimensional Array{Complex{Int64}, 0}:
+2 + 1im
+```
+"""
+conj(A::AbstractArray) = broadcast_preserving_zero_d(conj, A)
+
+"""
+    real(A::AbstractArray)
+
+Return an array containing the real part of each entry in array `A`.
+
+Equivalent to `real.(A)`, except when `A` is a 0-dimensional result,
+in which case a 0-dimensional container is returned (rather than a scalar).
+
+# Examples
+```jldoctest
+julia> A = [1+im 2-im; 2+2im 3+im]
+2×2 Matrix{Complex{Int64}}:
+ 1+1im  2-1im
+ 2+2im  3+1im
+
+julia> real(A)
+2×2 Matrix{Int64}:
+ 1  2
+ 2  3
+
+julia> A = fill(2-im)
+0-dimensional Array{Complex{Int64}, 0}:
+2 - 1im
+
+julia> real(A)
+0-dimensional Array{Int64, 0}:
+2
+```
+"""
+real(A::AbstractArray) = broadcast_preserving_zero_d(real, A)
+
+"""
+    imag(A::AbstractArray)
+
+Return an array containing the imaginary part of each entry in array `A`.
+
+Equivalent to `imag.(A)`, except when `A` is a 0-dimensional result,
+in which case a 0-dimensional container is returned (rather than a scalar).
+
+# Examples
+```jldoctest
+julia> A = [1+im 2-im; 2+2im 3+im]
+2×2 Matrix{Complex{Int64}}:
+ 1+1im  2-1im
+ 2+2im  3+1im
+
+julia> imag(A)
+2×2 Matrix{Int64}:
+ 1  -1
+ 2   1
+
+julia> A = fill(2-im)
+0-dimensional Array{Complex{Int64}, 0}:
+2 - 1im
+
+julia> imag(A)
+0-dimensional Array{Int64, 0}:
+-1
+```
+"""
+imag(A::AbstractArray) = broadcast_preserving_zero_d(imag, A)
+
+-(A::AbstractArray) = broadcast_preserving_zero_d(-, A)
 
 
 ## Binary arithmetic operators ##
