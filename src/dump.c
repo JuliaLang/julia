@@ -350,13 +350,13 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
             jl_serialize_value(s, (jl_value_t*)table[i]);
             jl_binding_t *b = (jl_binding_t*)table[i+1];
             jl_serialize_value(s, b->name);
-            jl_value_t *e = b->value;
+            jl_value_t *e = jl_atomic_load_relaxed(&b->value);
             if (!b->constp && e && jl_is_cpointer(e) && jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
                 // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                 jl_serialize_cnull(s, jl_typeof(e));
             else
                 jl_serialize_value(s, e);
-            jl_serialize_value(s, b->globalref);
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->globalref));
             jl_serialize_value(s, b->owner);
             write_int8(s->s, (b->deprecated<<3) | (b->constp<<2) | (b->exportp<<1) | (b->imported));
         }
@@ -660,7 +660,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         if (!(serialization_mode & METHOD_INTERNAL))
             return;
         jl_serialize_value(s, m->specializations);
-        jl_serialize_value(s, m->speckeyset);
+        jl_serialize_value(s, jl_atomic_load_relaxed(&m->speckeyset));
         jl_serialize_value(s, (jl_value_t*)m->name);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s->s, m->line);
@@ -1510,8 +1510,9 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     }
     m->specializations = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->specializations);
     jl_gc_wb(m, m->specializations);
-    m->speckeyset = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->speckeyset);
-    jl_gc_wb(m, m->speckeyset);
+    jl_array_t *speckeyset = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->speckeyset);
+    jl_atomic_store_relaxed(&m->speckeyset, speckeyset);
+    jl_gc_wb(m, speckeyset);
     m->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
     jl_gc_wb(m, m->name);
     m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
@@ -1650,10 +1651,12 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
             break;
         jl_binding_t *b = jl_get_binding_wr(m, asname, 1);
         b->name = (jl_sym_t*)jl_deserialize_value(s, (jl_value_t**)&b->name);
-        b->value = jl_deserialize_value(s, &b->value);
-        if (b->value != NULL) jl_gc_wb(m, b->value);
-        b->globalref = jl_deserialize_value(s, &b->globalref);
-        if (b->globalref != NULL) jl_gc_wb(m, b->globalref);
+        jl_value_t *bvalue = jl_deserialize_value(s, (jl_value_t**)&b->value);
+        *(jl_value_t**)&b->value = bvalue;
+        if (bvalue != NULL) jl_gc_wb(m, bvalue);
+        jl_value_t *bglobalref = jl_deserialize_value(s, (jl_value_t**)&b->globalref);
+        *(jl_value_t**)&b->globalref = bglobalref;
+        if (bglobalref != NULL) jl_gc_wb(m, bglobalref);
         b->owner = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&b->owner);
         if (b->owner != NULL) jl_gc_wb(m, b->owner);
         int8_t flags = read_int8(s->s);

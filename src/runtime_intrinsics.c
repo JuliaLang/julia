@@ -83,7 +83,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
     if (ety == (jl_value_t*)jl_any_type) {
-        return jl_atomic_load((jl_value_t**)pp);
+        return jl_atomic_load((_Atomic(jl_value_t*)*)pp);
     }
     else {
         if (!is_valid_intrinsic_elptr(ety))
@@ -103,7 +103,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_v
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
     if (ety == (jl_value_t*)jl_any_type) {
-        jl_atomic_store((jl_value_t**)pp, x);
+        jl_atomic_store((_Atomic(jl_value_t*)*)pp, x);
     }
     else {
         if (!is_valid_intrinsic_elptr(ety))
@@ -127,7 +127,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
     jl_value_t *y;
     char *pp = (char*)jl_unbox_long(p);
     if (ety == (jl_value_t*)jl_any_type) {
-        y = jl_atomic_exchange((jl_value_t**)pp, x);
+        y = jl_atomic_exchange((_Atomic(jl_value_t*)*)pp, x);
     }
     else {
         if (!is_valid_intrinsic_elptr(ety))
@@ -151,7 +151,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
     char *pp = (char*)jl_unbox_long(p);
     jl_value_t *expected;
     if (ety == (jl_value_t*)jl_any_type) {
-        expected = jl_atomic_load((jl_value_t**)pp);
+        expected = jl_atomic_load((_Atomic(jl_value_t*)*)pp);
     }
     else {
         if (!is_valid_intrinsic_elptr(ety))
@@ -169,7 +169,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
         jl_value_t *y = jl_apply_generic(f, args, 2);
         args[1] = y;
         if (ety == (jl_value_t*)jl_any_type) {
-            if (jl_atomic_cmpswap((jl_value_t**)pp, &expected, y))
+            if (jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &expected, y))
                 break;
         }
         else {
@@ -215,7 +215,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
         result = expected;
         int success;
         while (1) {
-            success = jl_atomic_cmpswap((jl_value_t**)pp, &result, x);
+            success = jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &result, x);
             if (success || !jl_egal(result, expected))
                 break;
         }

@@ -205,7 +205,7 @@ static intptr_t get_anon_hdl(void)
     return -1;
 }
 
-static size_t map_offset = 0;
+static _Atomic(size_t) map_offset{0};
 // Multiple of 128MB.
 // Hopefully no one will set a ulimit for this to be a problem...
 static constexpr size_t map_size_inc_default = 128 * 1024 * 1024;
@@ -239,7 +239,7 @@ static intptr_t init_shared_map()
     anon_hdl = get_anon_hdl();
     if (anon_hdl == -1)
         return -1;
-    map_offset = 0;
+    jl_atomic_store_relaxed(&map_offset, 0);
     map_size = get_map_size_inc();
     int ret = ftruncate(anon_hdl, map_size);
     if (ret != 0) {

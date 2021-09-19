@@ -176,14 +176,14 @@ static jl_callptr_t _jl_compile_codeinst(
             // once set, don't change invoke-ptr, as that leads to race conditions
             // with the (not) simultaneous updates to invoke and specptr
             if (!decls.specFunctionObject.empty()) {
-                this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
+                jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
                 this_code->isspecsig = isspecsig;
             }
             jl_atomic_store_release(&this_code->invoke, addr);
         }
         else if (this_code->invoke == jl_fptr_const_return && !decls.specFunctionObject.empty()) {
             // hack to export this pointer value to jl_dump_method_disasm
-            this_code->specptr.fptr = (void*)getAddressForFunction(decls.specFunctionObject);
+            jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
         }
         if (this_code== codeinst)
             fptr = addr;
@@ -413,10 +413,10 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
     // printing via disassembly
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
-        uintptr_t fptr = (uintptr_t)codeinst->invoke;
+        uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
         if (getwrapper)
             return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
-        uintptr_t specfptr = (uintptr_t)codeinst->specptr.fptr;
+        uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
             // (using sentinel value `1` instead)
@@ -426,7 +426,7 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
                 compiler_start_time = jl_hrtime();
-            specfptr = (uintptr_t)codeinst->specptr.fptr;
+            specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (specfptr == 0) {
                 jl_code_info_t *src = jl_type_infer(mi, world, 0);
                 JL_GC_PUSH1(&src);
@@ -439,12 +439,12 @@ jl_value_t *jl_dump_method_asm(jl_method_instance_t *mi, size_t world,
                     if (src && (jl_value_t*)src != jl_nothing)
                         src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
                 }
-                fptr = (uintptr_t)codeinst->invoke;
-                specfptr = (uintptr_t)codeinst->specptr.fptr;
+                fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
+                specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)&jl_fptr_const_return && specfptr == 0) {
                         fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world);
-                        specfptr = (uintptr_t)codeinst->specptr.fptr;
+                        specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
                 JL_GC_POP();
@@ -836,13 +836,14 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
         std::string string_fname;
         raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
-        if (Addr == (uintptr_t)codeinst->invoke) {
+        jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        if (Addr == (uintptr_t)invoke) {
             stream_fname << "jsysw_";
         }
-        else if (codeinst->invoke == &jl_fptr_args) {
+        else if (invoke == &jl_fptr_args) {
             stream_fname << "jsys1_";
         }
-        else if (codeinst->invoke == &jl_fptr_sparam) {
+        else if (invoke == &jl_fptr_sparam) {
             stream_fname << "jsys3_";
         }
         else {

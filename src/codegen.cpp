@@ -687,7 +687,7 @@ static const auto jl_write_barrier_func = new JuliaFunction{
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::NoUnwind, Attribute::NoRecurse, Attribute::InaccessibleMemOnly}),
             AttributeSet(),
-            None); },
+            {Attributes(C, {Attribute::ReadOnly})}); },
 };
 static const auto jlisa_func = new JuliaFunction{
     "jl_isa",
@@ -3674,12 +3674,14 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
         else {
             jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-            if (ci != jl_nothing && codeinst->invoke != jl_fptr_sparam) { // check if we know we definitely can't handle this specptr
-                if (codeinst->invoke == jl_fptr_const_return) {
+            if (ci != jl_nothing) {
+                auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+                 // check if we know how to handle this specptr
+                if (invoke == jl_fptr_const_return) {
                     result = mark_julia_const(codeinst->rettype_const);
                     handled = true;
                 }
-                else {
+                else if (invoke != jl_fptr_sparam) {
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(mi, codeinst->rettype, ctx.params->prefer_specsig);
                     std::string name;
@@ -3688,9 +3690,11 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     if (ctx.use_cache) {
                         // optimization: emit the correct name immediately, if we know it
                         // TODO: use `emitted` map here too to try to consolidate names?
-                        if (codeinst->specptr.fptr) {
-                            if (specsig ? codeinst->isspecsig : codeinst->invoke == jl_fptr_args) {
-                                protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->specptr.fptr, codeinst);
+                        auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+                        auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
+                        if (fptr) {
+                            if (specsig ? codeinst->isspecsig : invoke == jl_fptr_args) {
+                                protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
                                 need_to_emit = false;
                             }
                         }
@@ -5059,8 +5063,9 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     ctx.builder.SetInsertPoint(b0);
     Function *theFunc;
     Value *theFarg;
-    if (params.cache && codeinst->invoke != NULL) {
-        StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->invoke, codeinst);
+    auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+    if (params.cache && invoke != NULL) {
+        StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, codeinst);
         theFunc = cast<Function>(
             M->getOrInsertFunction(theFptrName, jlinvoke_func->_type(jl_LLVMContext)).getCallee());
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
@@ -5743,7 +5748,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     // some sanity checking and check whether there's a vararg
     size_t nargt = jl_svec_len(argt);
     bool isVa = (nargt > 0 && jl_is_vararg(jl_svecref(argt, nargt - 1)));
-    assert(!isVa);
+    assert(!isVa); (void)isVa;
 
     jl_array_t *closure_types = NULL;
     jl_value_t *sigt = NULL; // dispatch-sig = type signature with Ref{} annotations removed and applied to the env
@@ -7820,12 +7825,14 @@ void jl_compile_workqueue(
             "invalid world for code-instance");
         StringRef preal_decl = "";
         bool preal_specsig = false;
-        if (params.cache && codeinst->invoke != NULL) {
-            if (codeinst->invoke == jl_fptr_args) {
-                preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->specptr.fptr, codeinst);
+        auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        if (params.cache && invoke != NULL) {
+            auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
+            if (invoke == jl_fptr_args) {
+                preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
             }
             else if (codeinst->isspecsig) {
-                preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)codeinst->specptr.fptr, codeinst);
+                preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
                 preal_specsig = true;
             }
         }

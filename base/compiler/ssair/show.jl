@@ -79,14 +79,15 @@ show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io,
 
 show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
 function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String)
-    args = map(1:length(stmt.edges)) do i
+    args = String[let
         e = stmt.edges[i]
         v = !isassigned(stmt.values, i) ? "#undef" :
             sprint() do io′
                 show_unquoted(io′, stmt.values[i], indent)
             end
-        return "$prefix$e => $v"
-    end
+        "$prefix$e => $v"
+        end for i in 1:length(stmt.edges)
+    ]
     print(io, "φ ", '(')
     join(io, args, ", ")
     print(io, ')')

@@ -91,7 +91,8 @@ end
 Block the current task until some event occurs, depending on the type of the argument:
 
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
-* [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
+* [`Condition`](@ref): Wait for [`notify`](@ref) on a condition and return the `val`
+  parameter passed to `notify`.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
 * [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, a

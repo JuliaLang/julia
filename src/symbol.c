@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-static jl_sym_t *symtab = NULL;
+static _Atomic(jl_sym_t*) symtab = NULL;
 
 #define MAX_SYM_LEN ((size_t)INTPTR_MAX - sizeof(jl_taggedvalue_t) - sizeof(jl_sym_t) - 1)
 
@@ -48,9 +48,9 @@ static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
     return sym;
 }
 
-static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl_sym_t ***slot) JL_NOTSAFEPOINT
+static jl_sym_t *symtab_lookup(_Atomic(jl_sym_t*) *ptree, const char *str, size_t len, _Atomic(jl_sym_t*) **slot) JL_NOTSAFEPOINT
 {
-    jl_sym_t *node = jl_atomic_load_acquire(ptree); // consume
+    jl_sym_t *node = jl_atomic_load_relaxed(ptree); // consume
     uintptr_t h = hash_symbol(str, len);
 
     // Tree nodes sorted by major key of (int(hash)) and minor key of (str).
@@ -68,7 +68,7 @@ static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl
             ptree = &node->left;
         else
             ptree = &node->right;
-        node = jl_atomic_load_acquire(ptree); // consume
+        node = jl_atomic_load_relaxed(ptree); // consume
     }
     if (slot != NULL)
         *slot = ptree;
@@ -77,14 +77,14 @@ static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl
 
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT // (or throw)
 {
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     // Hide the error throwing from the analyser since there isn't a way to express
     // "safepoint only when throwing error" currently.
     if (len > MAX_SYM_LEN)
         jl_exceptionf(jl_argumenterror_type, "Symbol name too long");
 #endif
     assert(!memchr(str, 0, len));
-    jl_sym_t **slot;
+    _Atomic(jl_sym_t*) *slot;
     jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);
     if (node == NULL) {
         JL_LOCK_NOGC(&gc_perm_lock);
@@ -122,7 +122,7 @@ JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void)
     return symtab;
 }
 
-static uint32_t gs_ctr = 0;  // TODO: per-thread
+static _Atomic(uint32_t) gs_ctr = 0;  // TODO: per-module?
 uint32_t jl_get_gs_ctr(void) { return gs_ctr; }
 void jl_set_gs_ctr(uint32_t ctr) { gs_ctr = ctr; }
 

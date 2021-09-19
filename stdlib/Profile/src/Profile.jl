@@ -55,7 +55,8 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        return Int(n_cur), delay_cur
+        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
+        return round(Int, n_cur / nthreads), delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
@@ -555,7 +556,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - (nmeta + 1) && continue # skip metadata (it's read ahead below) and extra block-end NULL IP
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
         ip = data[i]
         if is_block_end(data, i)
             # read metadata
@@ -795,7 +796,7 @@ end
 
 # turn a list of backtraces into a tree (implicitly separated by NULL markers)
 function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, C::Bool, recur::Symbol,
-                threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}) where {T}
+                threads::Union{Int,AbstractVector{Int},Nothing}=nothing, tasks::Union{UInt,AbstractVector{UInt},Nothing}=nothing) where {T}
     parent = root
     tops = Vector{StackFrameTree{T}}()
     build = Vector{StackFrameTree{T}}()
@@ -803,7 +804,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     skip = false
     nsleeping = 0
     for i in startframe:-1:1
-        startframe - 1 <= i <= startframe - (nmeta + 1) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+        (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
@@ -811,7 +812,8 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             # cpu_cycle_clock = all[i - 3]
             taskid = all[i - 4]
             threadid = all[i - 5]
-            if !in(threadid, threads) || !in(taskid, tasks)
+            if (threads !== nothing && !in(threadid, threads)) ||
+               (tasks !== nothing && !in(taskid, tasks))
                 skip = true
                 continue
             end
