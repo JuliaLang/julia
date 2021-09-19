@@ -170,7 +170,7 @@ where `ex` is the parsed expression `println("Hello World!")`.
 
 [`jl_toplevel_eval_in()`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c) calls
 [`jl_toplevel_eval_flex()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which
-calls [`eval()` in `interpreter.c`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c).
+calls [`eval_body()` in `interpreter.c`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c).
 
 The stack dump below shows how the interpreter works its way through various methods of [`Base.println()`](@ref)
 and [`Base.print()`](@ref) before arriving at [`write(s::IO, a::Array{T}) where T`](https://github.com/JuliaLang/julia/blob/master/base/stream.jl)
@@ -209,7 +209,7 @@ Hello World!
 | `jl_apply_generic()`           | `gf.c`          | `Base.println(String,)`                              |
 | `jl_apply()`                   | `julia.h`       |                                                      |
 | `do_call()`                    | `interpreter.c` |                                                      |
-| `eval()`                       | `interpreter.c` |                                                      |
+| `eval_body()`                  | `interpreter.c` |                                                      |
 | `jl_interpret_toplevel_expr()` | `interpreter.c` |                                                      |
 | `jl_toplevel_eval_flex()`      | `toplevel.c`    |                                                      |
 | `jl_toplevel_eval()`           | `toplevel.c`    |                                                      |
