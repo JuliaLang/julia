@@ -130,7 +130,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.Main.include) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
