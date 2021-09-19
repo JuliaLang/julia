@@ -159,7 +159,7 @@ Base.flipsign
 Base.sqrt(::Real)
 Base.isqrt
 Base.Math.cbrt
-Base.real(::Complex)
+Base.real
 Base.imag
 Base.reim
 Base.conj
