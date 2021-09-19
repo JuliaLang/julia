@@ -60,7 +60,7 @@ typedef struct taskheap_tag {
     jl_mutex_t lock;
     jl_task_t **tasks;
     int32_t ntasks;
-    int16_t prio;
+    _Atomic(int16_t) prio;
 } taskheap_t;
 
 /* multiqueue parameters */
@@ -330,7 +330,7 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 static void wake_thread(int16_t tid)
 {
     jl_ptls_t other = jl_all_tls_states[tid];
-    uint8_t state = sleeping;
+    int8_t state = sleeping;
     jl_atomic_cmpswap(&other->sleep_check_state, &state, not_sleeping);
     if (state == sleeping) {
         uv_mutex_lock(&other->sleep_lock);
@@ -479,7 +479,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                     JL_UV_UNLOCK();
                     // optimization: check again first if we may have work to do
                     if (!may_sleep(ptls)) {
-                        assert(ptls->sleep_check_state == not_sleeping);
+                        assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
                         start_cycles = 0;
                         continue;
                     }
@@ -512,7 +512,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 // TODO: help with gc work here, if applicable
             }
-            assert(ptls->sleep_check_state == not_sleeping);
+            assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             uv_mutex_unlock(&ptls->sleep_lock);
             JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
             jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint

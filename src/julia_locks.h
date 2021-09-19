@@ -28,7 +28,7 @@ static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
         return;
     }
     while (1) {
-        if (owner == 0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+        if (owner == (jl_thread_t)0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
             return;
         }
@@ -42,7 +42,7 @@ static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
 
 static inline void jl_mutex_lock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     // Hide this body from the analyzer, otherwise it complains that we're calling
     // a non-safepoint from this function. The 0 arguments guarantees that we do
     // not reach the safepoint, but the analyzer can't figure that out
@@ -96,7 +96,7 @@ static inline int jl_mutex_trylock_nogc(jl_mutex_t *lock)
         lock->count++;
         return 1;
     }
-    if (owner == 0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+    if (owner == (jl_thread_t)0 && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
         lock->count = 1;
         return 1;
     }
@@ -114,11 +114,11 @@ static inline int jl_mutex_trylock(jl_mutex_t *lock)
 }
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
     assert(lock->owner == jl_thread_self() &&
            "Unlocking a lock in a different thread.");
     if (--lock->count == 0) {
-        jl_atomic_store_release(&lock->owner, 0);
+        jl_atomic_store_release(&lock->owner, (jl_thread_t)0);
         jl_cpu_wake();
     }
 #endif
@@ -136,7 +136,7 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
 
 static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
-    lock->owner = 0;
+    lock->owner = (jl_thread_t)0;
     lock->count = 0;
 }
 

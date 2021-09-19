@@ -109,7 +109,7 @@ function inline_into_block!(state::CFGInliningState, block::Int)
         new_range = state.first_bb+1:block
         l = length(state.new_cfg_blocks)
         state.bb_rename[new_range] = (l+1:l+length(new_range))
-        append!(state.new_cfg_blocks, map(copy, state.cfg.blocks[new_range]))
+        append!(state.new_cfg_blocks, (copy(block) for block in state.cfg.blocks[new_range]))
         push!(state.merged_orig_blocks, last(new_range))
     end
     state.first_bb = block
@@ -304,29 +304,47 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                          boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     spec = item.spec::ResolvedInliningSpec
+    sparam_vals = item.mi.sparam_vals
+    def = item.mi.def::Method
     inline_cfg = spec.ir.cfg
     stmt = compact.result[idx][:inst]
     linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
     inlined_at = Int(compact.result[idx][:line])
-    for entry in spec.ir.linetable
-        push!(linetable, LineInfoNode(entry.module, entry.method, entry.file, entry.line,
-            (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset : inlined_at)))
+    topline::Int32 = linetable_offset + Int32(1)
+    coverage = coverage_enabled(def.module)
+    push!(linetable, LineInfoNode(def.module, def.name, def.file, Int(def.line), inlined_at))
+    oldlinetable = spec.ir.linetable
+    for oldline in 1:length(oldlinetable)
+        entry = oldlinetable[oldline]
+        newentry = LineInfoNode(entry.module, entry.method, entry.file, entry.line,
+            (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset + (oldline == 1) : inlined_at))
+        if oldline == 1
+            # check for a duplicate on the first iteration (likely true)
+            if newentry === linetable[topline]
+                continue
+            else
+                linetable_offset += 1
+            end
+        end
+        push!(linetable, newentry)
     end
-    (; def, sparam_vals) = item.mi
+    if coverage && spec.ir.stmts[1][:line] + linetable_offset != topline
+        insert_node_here!(compact, NewInstruction(Expr(:code_coverage_effect), Nothing, topline))
+    end
     nargs_def = def.nargs::Int32
     isva = nargs_def > 0 && def.isva
     sig = def.sig
     if isva
-        vararg = mk_tuplecall!(compact, argexprs[nargs_def:end], compact.result[idx][:line])
+        vararg = mk_tuplecall!(compact, argexprs[nargs_def:end], topline)
         argexprs = Any[argexprs[1:(nargs_def - 1)]..., vararg]
     end
-    is_opaque = isa(def, Method) && def.is_for_opaque_closure
+    is_opaque = def.is_for_opaque_closure
     if is_opaque
         # Replace the first argument by a load of the capture environment
         argexprs[1] = insert_node_here!(compact,
             NewInstruction(Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
-            spec.ir.argtypes[1], compact.result[idx][:line]))
+            spec.ir.argtypes[1], topline))
     end
     flag = compact.result[idx][:flag]
     boundscheck_idx = boundscheck

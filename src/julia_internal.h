@@ -4,7 +4,7 @@
 #define JL_INTERNAL_H
 
 #include "options.h"
-#include "locks.h"
+#include "julia_locks.h"
 #include <uv.h>
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -105,7 +105,7 @@ void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
 
 extern jl_mutex_t jl_uv_mutex;
-extern int jl_uv_n_waiters;
+extern _Atomic(int) jl_uv_n_waiters;
 void JL_UV_LOCK(void);
 #define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
 
@@ -155,8 +155,8 @@ static inline uint64_t cycleclock(void)
 #include "timing.h"
 
 // Global *atomic* integers controlling *process-wide* measurement of compilation time.
-extern uint8_t jl_measure_compile_time_enabled;
-extern uint64_t jl_cumulative_compile_time;
+extern _Atomic(uint8_t) jl_measure_compile_time_enabled;
+extern _Atomic(uint64_t) jl_cumulative_compile_time;
 
 #ifdef _COMPILER_MICROSOFT_
 #  define jl_return_address() ((uintptr_t)_ReturnAddress())
@@ -184,14 +184,16 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOTSAFEPOINT
 {
     size_t i;
+    _Atomic(void*) *srcpa = (_Atomic(void*)*)srcp;
+    _Atomic(void*) *dstpa = (_Atomic(void*)*)dstp;
     if (dstp < srcp || dstp > srcp + n) {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstp + i, jl_atomic_load_relaxed(srcp + i));
+            jl_atomic_store_relaxed(dstpa + i, jl_atomic_load_relaxed(srcpa + i));
         }
     }
     else {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstp + n - i - 1, jl_atomic_load_relaxed(srcp + n - i - 1));
+            jl_atomic_store_relaxed(dstpa + n - i - 1, jl_atomic_load_relaxed(srcpa + n - i - 1));
         }
     }
 }
@@ -217,7 +219,7 @@ extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 extern size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func;
 extern size_t jl_typeinf_world;
-extern jl_typemap_entry_t *call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
+extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 extern jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
 JL_DLLEXPORT extern int jl_lineno;
@@ -752,7 +754,7 @@ STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
     uintptr_t safepoint_addr = (uintptr_t)jl_safepoint_pages;
     return addr >= safepoint_addr && addr < safepoint_addr + jl_page_size * 3;
 }
-extern uint32_t jl_gc_running;
+extern _Atomic(uint32_t) jl_gc_running;
 // All the functions are safe to be called from within a signal handler
 // provided that the thread will not be interrupted by another asynchronous
 // signal.
@@ -799,13 +801,13 @@ typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
 void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k);
 
-#if !defined(__clang_analyzer__)
+#if !defined(__clang_gcanalyzer__)
 static inline void jl_set_gc_and_wait(void)
 {
     jl_task_t *ct = jl_current_task;
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
-    int8_t state = ct->ptls->gc_state;
+    int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
     jl_safepoint_wait_gc();
     jl_atomic_store_release(&ct->ptls->gc_state, state);
@@ -831,7 +833,7 @@ void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
-jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT;
+_Atomic(jl_value_t*) *jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*);
 
@@ -1114,7 +1116,7 @@ extern void *jl_winsock_handle;
 
 void *jl_get_library_(const char *f_lib, int throw_err);
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
-JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd);
+JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
 JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
@@ -1262,11 +1264,11 @@ void jl_mach_gc_end(void);
 typedef uint_t (*smallintset_hash)(size_t val, jl_svec_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_svec_t *data, uint_t hv);
 ssize_t jl_smallintset_lookup(jl_array_t *cache, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv);
-void jl_smallintset_insert(jl_array_t **pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data);
+void jl_smallintset_insert(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data);
 
 // -- typemap.c -- //
 
-void jl_typemap_insert(jl_typemap_t **cache, jl_value_t *parent,
+void jl_typemap_insert(_Atomic(jl_typemap_t*) *cache, jl_value_t *parent,
         jl_typemap_entry_t *newrec, int8_t offs);
 jl_typemap_entry_t *jl_typemap_alloc(
         jl_tupletype_t *type, jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
@@ -1448,7 +1450,7 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #define JL_GCC_IGNORE_STOP
 #endif // _COMPILER_GCC_
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
   // Not a safepoint (so it dosn't free other values), but an artificial use.
   // Usually this is unnecessary because the analyzer can see all real uses,
   // but sometimes real uses are harder for the analyzer to see, or it may

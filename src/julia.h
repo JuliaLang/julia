@@ -78,7 +78,7 @@
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 
-#include "atomics.h"
+#include "julia_atomics.h"
 #include "julia_threads.h"
 #include "julia_assert.h"
 
@@ -108,7 +108,7 @@ JL_EXTENSION struct _jl_taggedvalue_t {
     // jl_value_t value;
 };
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 JL_DLLEXPORT jl_taggedvalue_t *_jl_astaggedvalue(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 #define jl_astaggedvalue(v) _jl_astaggedvalue((jl_value_t*)(v))
 jl_value_t *_jl_valueof(jl_taggedvalue_t *tv JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
@@ -127,7 +127,7 @@ static inline void jl_set_typeof(void *v, void *t) JL_NOTSAFEPOINT
 {
     // Do not call this on a value that is already initialized.
     jl_taggedvalue_t *tag = jl_astaggedvalue(v);
-    jl_atomic_store_relaxed(&tag->type, (jl_value_t*)t);
+    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)&tag->type, (jl_value_t*)t);
 }
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
@@ -135,8 +135,8 @@ static inline void jl_set_typeof(void *v, void *t) JL_NOTSAFEPOINT
 // The string data is nul-terminated and hangs off the end of the struct.
 typedef struct _jl_sym_t {
     JL_DATA_TYPE
-    struct _jl_sym_t *left;
-    struct _jl_sym_t *right;
+    _Atomic(struct _jl_sym_t*) left;
+    _Atomic(struct _jl_sym_t*) right;
     uintptr_t hash;    // precomputed hash value
     // JL_ATTRIBUTE_ALIGN_PTRSIZE(char name[]);
 } jl_sym_t;
@@ -229,14 +229,6 @@ typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_
 
 JL_DLLEXPORT extern jl_call_t jl_fptr_interpret_call;
 
-JL_EXTENSION typedef union {
-    void* fptr;
-    jl_fptr_args_t fptr1;
-    // 2 constant
-    jl_fptr_sparam_t fptr3;
-    // 4 interpreter
-} jl_generic_specptr_t;
-
 typedef struct _jl_method_instance_t jl_method_instance_t;
 
 typedef struct _jl_line_info_node_t {
@@ -297,13 +289,13 @@ typedef struct _jl_method_t {
     jl_value_t *sig;
 
     // table of all jl_method_instance_t specializations we have
-    jl_svec_t *specializations; // allocated as [hashable, ..., NULL, linear, ....]
-    jl_array_t *speckeyset; // index lookup by hash into specializations
+    _Atomic(jl_svec_t*) specializations; // allocated as [hashable, ..., NULL, linear, ....]
+    _Atomic(jl_array_t*) speckeyset; // index lookup by hash into specializations
 
     jl_value_t *slot_syms; // compacted list of slot names (String)
     jl_value_t *external_mt; // reference to the method table this method is part of, null if part of the internal table
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
-    struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
+    _Atomic(struct _jl_method_instance_t*) unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
@@ -311,7 +303,7 @@ typedef struct _jl_method_t {
     // cache of specializations of this method for invoke(), i.e.
     // cases where this method was called even though it was not necessarily
     // the most specific for the argument types.
-    jl_typemap_t *invokes;
+    _Atomic(jl_typemap_t*) invokes;
 
     // A function that compares two specializations of this method, returning
     // `true` if the first signature is to be considered "smaller" than the
@@ -350,7 +342,7 @@ struct _jl_method_instance_t {
     jl_value_t *uninferred; // cached uncompressed code, for generated functions, top-level thunks, or the interpreter
     jl_array_t *backedges; // list of method-instances which contain a call into this method-instance
     jl_array_t *callbacks; // list of callback functions to inform external caches about invalidations
-    struct _jl_code_instance_t *cache;
+    _Atomic(struct _jl_code_instance_t*) cache;
     uint8_t inInference; // flags to tell if inference is running on this object
 };
 
@@ -369,7 +361,7 @@ typedef struct jl_opaque_closure_t {
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
     jl_method_instance_t *def; // method this is specialized from
-    struct _jl_code_instance_t *next; // pointer to the next cache entry
+    _Atomic(struct _jl_code_instance_t*) next; // pointer to the next cache entry
 
     // world range for which this object is valid to use
     size_t min_world;
@@ -384,9 +376,15 @@ typedef struct _jl_code_instance_t {
 
     // compilation state cache
     uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype
-    uint8_t precompile;  // if set, this will be added to the output system image
-    jl_callptr_t invoke; // jlcall entry point
-    jl_generic_specptr_t specptr; // private data for `jlcall entry point`
+    _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
+    _Atomic(jl_callptr_t) invoke; // jlcall entry point
+    union _jl_generic_specptr_t {
+        _Atomic(void*) fptr;
+        _Atomic(jl_fptr_args_t) fptr1;
+        // 2 constant
+        _Atomic(jl_fptr_sparam_t) fptr3;
+        // 4 interpreter
+    } specptr; // private data for `jlcall entry point
 } jl_code_instance_t;
 
 // all values are callable as Functions
@@ -420,8 +418,8 @@ typedef struct {
     // `wrapper` is either the only instantiation of the type (if no parameters)
     // or a UnionAll accepting parameters to make an instantiation.
     jl_value_t *wrapper;
-    jl_svec_t *cache;        // sorted array
-    jl_svec_t *linearcache;  // unsorted array
+    _Atomic(jl_svec_t*) cache;        // sorted array
+    _Atomic(jl_svec_t*) linearcache;  // unsorted array
     struct _jl_methtable_t *mt;
     jl_array_t *partial;     // incomplete instantiations of this type
     intptr_t hash;
@@ -510,10 +508,10 @@ typedef struct {
 typedef struct {
     // not first-class
     jl_sym_t *name;
-    jl_value_t *value;
-    jl_value_t *globalref;  // cached GlobalRef for this binding
-    struct _jl_module_t *owner;  // for individual imported bindings
-    uint8_t constp;
+    _Atomic(jl_value_t*) value;
+    _Atomic(jl_value_t*) globalref;  // cached GlobalRef for this binding
+    struct _jl_module_t* owner;  // for individual imported bindings -- TODO: make _Atomic
+    uint8_t constp:1;
     uint8_t exportp:1;
     uint8_t imported:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
@@ -534,7 +532,7 @@ typedef struct _jl_module_t {
     uint64_t build_id;
     jl_uuid_t uuid;
     size_t primary_world;
-    uint32_t counter;
+    _Atomic(uint32_t) counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     int8_t optlevel;
     int8_t compile;
@@ -546,7 +544,7 @@ typedef struct _jl_module_t {
 // one Type-to-Value entry
 typedef struct _jl_typemap_entry_t {
     JL_DATA_TYPE
-    struct _jl_typemap_entry_t *next; // invasive linked list
+    _Atomic(struct _jl_typemap_entry_t*) next; // invasive linked list
     jl_tupletype_t *sig; // the type signature for this entry
     jl_tupletype_t *simplesig; // a simple signature for fast rejection
     jl_svec_t *guardsigs;
@@ -571,23 +569,23 @@ typedef struct _jl_typemap_level_t {
     // next split may be on Type{T} as LeafTypes then TypeName's parents up to Any
     // next split may be on LeafType
     // next split may be on TypeName
-    jl_array_t *arg1; // contains LeafType
-    jl_array_t *targ; // contains Type{LeafType}
-    jl_array_t *name1; // contains non-abstract TypeName, for parents up to (excluding) Any
-    jl_array_t *tname; // contains a dict of Type{TypeName}, for parents up to Any
+    _Atomic(jl_array_t*) arg1; // contains LeafType
+    _Atomic(jl_array_t*) targ; // contains Type{LeafType}
+    _Atomic(jl_array_t*) name1; // contains non-abstract TypeName, for parents up to (excluding) Any
+    _Atomic(jl_array_t*) tname; // contains a dict of Type{TypeName}, for parents up to Any
     // next a linear list of things too complicated at this level for analysis (no more levels)
-    jl_typemap_entry_t *linear;
+    _Atomic(jl_typemap_entry_t*) linear;
     // finally, start a new level if the type at offs is Any
-    jl_typemap_t *any;
+    _Atomic(jl_typemap_t*) any;
 } jl_typemap_level_t;
 
 // contains the TypeMap for one Type
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name; // sometimes a hack used by serialization to handle kwsorter
-    jl_typemap_t *defs;
-    jl_array_t *leafcache;
-    jl_typemap_t *cache;
+    _Atomic(jl_typemap_t*) defs;
+    _Atomic(jl_array_t*) leafcache;
+    _Atomic(jl_typemap_t*) cache;
     intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding
@@ -761,7 +759,7 @@ struct _jl_gcframe_t {
 #define JL_GC_ENCODE_PUSHARGS(n)   (((size_t)(n))<<2)
 #define JL_GC_ENCODE_PUSH(n)       ((((size_t)(n))<<2)|1)
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 
 // When running with the analyzer make these real function calls, that are
 // easier to detect in the analyzer
@@ -892,7 +890,7 @@ JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
 #define jl_svec_set_len_unsafe(t,n) (((jl_svec_t*)(t))->length=(n))
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_svecset(
     void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
@@ -904,7 +902,7 @@ STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NO
     assert(i < jl_svec_len(t));
     // while svec is supposedly immutable, in practice we sometimes publish it first
     // and set the values lazily
-    return jl_atomic_load_relaxed(jl_svec_data(t) + i);
+    return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i);
 }
 STATIC_INLINE jl_value_t *jl_svecset(
     void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
@@ -936,7 +934,7 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 
 JL_DLLEXPORT char *jl_array_typetagdata(jl_array_t *a) JL_NOTSAFEPOINT;
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 jl_value_t **jl_array_ptr_data(jl_array_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_array_ptr_set(
@@ -948,7 +946,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i)
 {
     assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
-    return jl_atomic_load_relaxed(((jl_value_t**)(jl_array_data(a))) + i);
+    return jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)(jl_array_data(a))) + i);
 }
 STATIC_INLINE jl_value_t *jl_array_ptr_set(
     void *a JL_ROOTING_ARGUMENT, size_t i,
@@ -956,7 +954,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 {
     assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
-    jl_atomic_store_relaxed(((jl_value_t**)(jl_array_data(a))) + i, (jl_value_t*)x);
+    jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)(jl_array_data(a))) + i, (jl_value_t*)x);
     if (x) {
         if (((jl_array_t*)a)->flags.how == 3) {
             a = jl_array_data_owner(a);
@@ -1412,7 +1410,7 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len);
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
-                                                 jl_value_t **bp, jl_value_t *bp_owner,
+                                                 _Atomic(jl_value_t*) *bp, jl_value_t *bp_owner,
                                                  jl_binding_t *bnd);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
@@ -1820,13 +1818,13 @@ typedef struct _jl_task_t {
     uint64_t rngState1;
     uint64_t rngState2;
     uint64_t rngState3;
-    uint8_t _state;
+    _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
-    uint8_t _isexception; // set if `result` is an exception to throw or that we exited with
+    _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
 
 // hidden state:
     // id of owning thread - does not need to be defined until the task runs
-    int16_t tid;
+    _Atomic(int16_t) tid;
     // multiqueue priority
     int16_t prio;
     // saved gc stack top for context switches
@@ -1871,7 +1869,7 @@ JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
 
-#include "locks.h"   // requires jl_task_t definition
+#include "julia_locks.h"   // requires jl_task_t definition
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
 JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh);
@@ -1881,10 +1879,10 @@ JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT;
 
 #if defined(_OS_WINDOWS_)
 #if defined(_COMPILER_GCC_)
-int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
+JL_DLLEXPORT int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
 __declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #else
-int (jl_setjmp)(jmp_buf _Buf);
+JL_DLLEXPORT int (jl_setjmp)(jmp_buf _Buf);
 void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #endif
 #define jl_setjmp_f jl_setjmp
@@ -1910,7 +1908,7 @@ void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #endif
 
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 
 // This is hard. Ideally we'd teach the static analyzer about the extra control
 // flow edges. But for now, just hide this as best we can

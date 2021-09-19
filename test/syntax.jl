@@ -2971,3 +2971,14 @@ end
 @test Meta.parse("\U2200", raise=false) == Symbol("∀")
 @test Meta.parse("\U2203", raise=false) == Symbol("∃")
 @test Meta.parse("a\U2203", raise=false) == Symbol("a∃")
+
+# issue 42220
+macro m42220()
+    return quote
+        function foo(::Type{T}=Float64) where {T}
+            return Vector{T}(undef, 10)
+        end
+    end
+end
+@test @m42220()() isa Vector{Float64}
+@test @m42220()(Bool) isa Vector{Bool}
