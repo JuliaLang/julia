@@ -14,7 +14,7 @@ and [Legacy `ios.c` library](@ref)).
 
 Next [`jl_parse_opts()`](https://github.com/JuliaLang/julia/blob/master/src/jloptions.c) is called to process
 command line options. Note that `jl_parse_opts()` only deals with options that affect code generation
-or early initialization. Other options are handled later by [`process_options()` in `base/client.jl`](https://github.com/JuliaLang/julia/blob/master/base/client.jl).
+or early initialization. Other options are handled later by [`exec_options()` in `base/client.jl`](https://github.com/JuliaLang/julia/blob/master/base/client.jl).
 
 `jl_parse_opts()` stores command line options in the [global `jl_options` struct](https://github.com/JuliaLang/julia/blob/master/src/julia.h).
 
@@ -156,7 +156,7 @@ executes it.
 
 ## `Base._start`
 
-[`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) calls [`Base.process_options`](https://github.com/JuliaLang/julia/blob/master/base/client.jl)
+[`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) calls [`Base.exec_options`](https://github.com/JuliaLang/julia/blob/master/base/client.jl)
 which calls [`jl_parse_input_line("println("Hello World!")")`](https://github.com/JuliaLang/julia/blob/master/src/ast.c)
 to create an expression object and [`Core.eval(Main, ex)`](@ref Core.eval) to execute the parsed expression `ex` in the module context of `Main`.
 
