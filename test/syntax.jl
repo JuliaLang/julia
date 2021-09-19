@@ -2966,3 +2966,8 @@ end
 
 @generated g25678(x) = return :x
 @test g25678(7) === 7
+
+# issue #19012
+@test Meta.parse("\U2200", raise=false) == Symbol("∀")
+@test Meta.parse("\U2203", raise=false) == Symbol("∃")
+@test Meta.parse("a\U2203", raise=false) == Symbol("a∃")
