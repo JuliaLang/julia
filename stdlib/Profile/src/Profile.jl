@@ -291,9 +291,13 @@ end
 
 function is_block_end(data, i)
     i < nmeta + 1 && return false
-    # 32-bit linux has been seen to have rogue NULL ips, so we use two to indicate block end, where the 2nd is the
-    # actual end index
-    return data[i] == 0 && data[i - 1] == 0
+    # double nulls have been seen to occur in the stack ips (#42292)
+    # so check for double nulls and two other narrow heuristics
+    data[i] != 0 && return false
+    data[i - 1] != 0 && return false
+    !in(data[i - 2], 1:2) && return false
+    !in(data[i - 5], 1:Threads.nthreads()) && return false
+    return true
 end
 
 """
