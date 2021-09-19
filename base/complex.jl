@@ -91,7 +91,7 @@ imag(x::Real) = zero(x)
 """
     reim(z)
 
-Return both the real and imaginary parts of the complex number `z`.
+Return  a tuple of the real and imaginary parts of the complex number `z`.
 
 # Examples
 ```jldoctest
