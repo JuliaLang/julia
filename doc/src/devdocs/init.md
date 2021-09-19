@@ -209,7 +209,7 @@ Hello World!
 | `eval_body()`                  | `interpreter.c` |                                                      |
 | `jl_interpret_toplevel_thunk`  | `interpreter.c` |                                                      |
 | `jl_toplevel_eval_flex`        | `toplevel.c`    |                                                      |
-| `jl_toplevel_eval_in`          | `builtins.c`    |                                                      |
+| `jl_toplevel_eval_in`          | `toplevel.c`    |                                                      |
 | `eval`                         | `boot.jl`       |                                                      |
 
 Since our example has just one function call, which has done its job of printing "Hello World!",
