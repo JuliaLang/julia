@@ -40,29 +40,15 @@ $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-# This can be removed once a release with https://github.com/libgit2/libgit2/pull/5685 lands
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-incdir.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-hostkey.patch
 	echo 1 > $@
 
-# This can be removed once a release with https://github.com/libgit2/libgit2/pull/5740 lands
-$(LIBGIT2_SRC_PATH)/libgit2-continue-zlib.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-continue-zlib.patch
-	echo 1 > $@
-
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-continue-zlib.patch-applied
-
+	$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied 
+	
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
