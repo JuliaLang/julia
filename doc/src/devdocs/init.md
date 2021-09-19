@@ -162,7 +162,7 @@ to create an expression object and [`Core.eval(Main, ex)`](@ref eval) to execute
 
 ## `Core.eval`
 
-[`Core.eval(Main, ex)`](@ref Core.eval) calls [`jl_toplevel_eval_in(m, ex)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c),
+[`Core.eval(Main, ex)`](@ref eval) calls [`jl_toplevel_eval_in(m, ex)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c),
 which calls [`jl_toplevel_eval_flex`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c).
 `jl_toplevel_eval_flex` implements a simple heuristic to decide whether to compile a given code thunk or run it by interpreter.
 When given `println("Hello World!")`, it would usually decide to run the code by interpreter, in which case it calls
