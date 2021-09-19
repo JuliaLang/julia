@@ -158,19 +158,16 @@ executes it.
 
 [`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) calls [`Base.process_options`](https://github.com/JuliaLang/julia/blob/master/base/client.jl)
 which calls [`jl_parse_input_line("println("Hello World!")")`](https://github.com/JuliaLang/julia/blob/master/src/ast.c)
-to create an expression object and [`Base.eval()`](@ref eval) to execute it.
+to create an expression object and [`Core.eval(Main, ex)`](@ref Core.eval) to execute the parsed expression `ex` in the module context of `Main`.
 
-## `Base.eval`
+## `Core.eval`
 
-[`Base.eval()`](@ref eval) was [mapped to `jl_f_top_eval`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c)
-by `jl_init_primitives()`.
-
-[`jl_f_top_eval()`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c) calls [`jl_toplevel_eval_in(jl_main_module, ex)`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c),
-where `ex` is the parsed expression `println("Hello World!")`.
-
-[`jl_toplevel_eval_in()`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c) calls
-[`jl_toplevel_eval_flex()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which
-calls [`eval_body()` in `interpreter.c`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c).
+[`Core.eval(Main, ex)`](@ref Core.eval) calls [`jl_toplevel_eval_in(m, ex)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c),
+which calls [`jl_toplevel_eval_flex`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c).
+`jl_toplevel_eval_flex` implements a simple heuristic to decide whether to compile a given code thunk or run it by interpreter.
+When given `println("Hello World!")`, it would usually decide to run the code by interpreter, in which case it calls
+[`jl_interpret_toplevel_thunk`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c), which then calls
+[`eval_body`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c).
 
 The stack dump below shows how the interpreter works its way through various methods of [`Base.println()`](@ref)
 and [`Base.print()`](@ref) before arriving at [`write(s::IO, a::Array{T}) where T`](https://github.com/JuliaLang/julia/blob/master/base/stream.jl)
@@ -210,11 +207,10 @@ Hello World!
 | `jl_apply()`                   | `julia.h`       |                                                      |
 | `do_call()`                    | `interpreter.c` |                                                      |
 | `eval_body()`                  | `interpreter.c` |                                                      |
-| `jl_interpret_toplevel_expr()` | `interpreter.c` |                                                      |
-| `jl_toplevel_eval_flex()`      | `toplevel.c`    |                                                      |
-| `jl_toplevel_eval()`           | `toplevel.c`    |                                                      |
-| `jl_toplevel_eval_in()`        | `builtins.c`    |                                                      |
-| `jl_f_top_eval()`              | `builtins.c`    |                                                      |
+| `jl_interpret_toplevel_thunk`  | `interpreter.c` |                                                      |
+| `jl_toplevel_eval_flex`        | `toplevel.c`    |                                                      |
+| `jl_toplevel_eval_in`          | `builtins.c`    |                                                      |
+| `eval`                         | `boot.jl`       |                                                      |
 
 Since our example has just one function call, which has done its job of printing "Hello World!",
 the stack now rapidly unwinds back to `main()`.
