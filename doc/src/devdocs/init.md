@@ -158,11 +158,11 @@ executes it.
 
 [`Base._start`](https://github.com/JuliaLang/julia/blob/master/base/client.jl) calls [`Base.exec_options`](https://github.com/JuliaLang/julia/blob/master/base/client.jl)
 which calls [`jl_parse_input_line("println("Hello World!")")`](https://github.com/JuliaLang/julia/blob/master/src/ast.c)
-to create an expression object and [`Core.eval(Main, ex)`](@ref eval) to execute the parsed expression `ex` in the module context of `Main`.
+to create an expression object and [`Core.eval(Main, ex)`](@ref Core.eval) to execute the parsed expression `ex` in the module context of `Main`.
 
 ## `Core.eval`
 
-[`Core.eval(Main, ex)`](@ref eval) calls [`jl_toplevel_eval_in(m, ex)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c),
+[`Core.eval(Main, ex)`](@ref Core.eval) calls [`jl_toplevel_eval_in(m, ex)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c),
 which calls [`jl_toplevel_eval_flex`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c).
 `jl_toplevel_eval_flex` implements a simple heuristic to decide whether to compile a given code thunk or run it by interpreter.
 When given `println("Hello World!")`, it would usually decide to run the code by interpreter, in which case it calls
@@ -210,7 +210,7 @@ Hello World!
 | `jl_interpret_toplevel_thunk`  | `interpreter.c` |                                                      |
 | `jl_toplevel_eval_flex`        | `toplevel.c`    |                                                      |
 | `jl_toplevel_eval_in`          | `toplevel.c`    |                                                      |
-| `eval`                         | `boot.jl`       |                                                      |
+| `Core.eval`                    | `boot.jl`       |                                                      |
 
 Since our example has just one function call, which has done its job of printing "Hello World!",
 the stack now rapidly unwinds back to `main()`.
