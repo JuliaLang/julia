@@ -1817,9 +1817,12 @@ STATIC_INLINE int gc_mark_scan_objarray(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
     (void)jl_assume(objary == (gc_mark_objarray_t*)sp->data);
     for (; begin < end; begin += objary->step) {
         *pnew_obj = *begin;
-        if (*pnew_obj)
+        if (*pnew_obj) {
+            verify_parent2("obj array", objary->parent, begin, "elem(%d)",
+                           gc_slot_to_arrayidx(objary->parent, begin));
             gc_debug_edge2("obj array", objary->parent, begin, "elem(%d)",
                            gc_slot_to_arrayidx(objary->parent, begin));
+        }
         if (!gc_try_setmark(*pnew_obj, &objary->nptr, ptag, pbits))
             continue;
         begin += objary->step;
@@ -1853,9 +1856,12 @@ STATIC_INLINE int gc_mark_scan_array8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
         for (; elem_begin < elem_end; elem_begin++) {
             jl_value_t **slot = &begin[*elem_begin];
             *pnew_obj = *slot;
-            if (*pnew_obj)
+            if (*pnew_obj) {
+                verify_parent2("array", ary8->elem.parent, slot, "elem(%d)",
+                               gc_slot_to_arrayidx(ary8->elem.parent, begin));
                 gc_debug_edge2("array", ary8->elem.parent, slot, "elem(%d)",
                                gc_slot_to_arrayidx(ary8->elem.parent, begin));
+            }
             if (!gc_try_setmark(*pnew_obj, &ary8->elem.nptr, ptag, pbits))
                 continue;
             elem_begin++;
@@ -1901,9 +1907,12 @@ STATIC_INLINE int gc_mark_scan_array16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
         for (; elem_begin < elem_end; elem_begin++) {
             jl_value_t **slot = &begin[*elem_begin];
             *pnew_obj = *slot;
-            if (*pnew_obj)
+            if (*pnew_obj) {
+                verify_parent2("array", ary16->elem.parent, slot, "elem(%d)",
+                               gc_slot_to_arrayidx(ary16->elem.parent, begin));
                 gc_debug_edge2("array", ary16->elem.parent, slot, "elem(%d)",
                                gc_slot_to_arrayidx(ary16->elem.parent, begin));
+            }
             if (!gc_try_setmark(*pnew_obj, &ary16->elem.nptr, ptag, pbits))
                 continue;
             elem_begin++;
@@ -1947,9 +1956,12 @@ STATIC_INLINE int gc_mark_scan_obj8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mark
     for (; begin < end; begin++) {
         jl_value_t **slot = &((jl_value_t**)parent)[*begin];
         *pnew_obj = *slot;
-        if (*pnew_obj)
+        if (*pnew_obj) {
+            verify_parent2("object", parent, slot, "field(%d)",
+                           gc_slot_to_fieldidx(parent, slot));
             gc_debug_edge2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
+        }
         if (!gc_try_setmark(*pnew_obj, &obj8->nptr, ptag, pbits))
             continue;
         begin++;
@@ -1980,9 +1992,12 @@ STATIC_INLINE int gc_mark_scan_obj16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
     for (; begin < end; begin++) {
         jl_value_t **slot = &((jl_value_t**)parent)[*begin];
         *pnew_obj = *slot;
-        if (*pnew_obj)
+        if (*pnew_obj) {
+            verify_parent2("object", parent, slot, "field(%d)",
+                           gc_slot_to_fieldidx(parent, slot));
             gc_debug_edge2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
+        }
         if (!gc_try_setmark(*pnew_obj, &obj16->nptr, ptag, pbits))
             continue;
         begin++;
@@ -2013,9 +2028,12 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
     for (; begin < end; begin++) {
         jl_value_t **slot = &((jl_value_t**)parent)[*begin];
         *pnew_obj = *slot;
-        if (*pnew_obj)
+        if (*pnew_obj) {
+            verify_parent2("object", parent, slot, "field(%d)",
+                           gc_slot_to_fieldidx(parent, slot));
             gc_debug_edge2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
+        }
         if (!gc_try_setmark(*pnew_obj, &obj32->nptr, ptag, pbits))
             continue;
         begin++;
@@ -2402,11 +2420,14 @@ module_binding: {
                 gc_setmark_buf_(ptls, b, mbits, sizeof(jl_binding_t));
             }
             void *vb = jl_astaggedvalue(b);
+            verify_parent1("module", binding->parent, &vb, "binding_buff");
             gc_debug_edge1("module", binding->parent, &vb, "binding_buff");
             (void)vb;
             jl_value_t *value = jl_atomic_load_relaxed(&b->value);
             jl_value_t *globalref = jl_atomic_load_relaxed(&b->globalref);
             if (value) {
+                verify_parent2("module", binding->parent,
+                               &b->value, "binding(%s)", jl_symbol_name(b->name));
                 gc_debug_edge2("module", binding->parent,
                                &b->value, "binding(%s)", jl_symbol_name(b->name));
                 if (gc_try_setmark(value, &binding->nptr, &tag, &bits)) {
@@ -2539,6 +2560,7 @@ mark: {
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_array_t));
             if (flags.how == 1) {
                 void *val_buf = jl_astaggedvalue((char*)a->data - a->offset * a->elsize);
+                verify_parent1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
                 gc_debug_edge1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
                 (void)val_buf;
                 gc_setmark_buf_(ptls, (char*)a->data - a->offset * a->elsize,
