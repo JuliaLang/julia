@@ -37,7 +37,7 @@ using std::unordered_set;
 // - gc_heap_snapshot_record_object_edge(value* from, value* to, int field_index)
 
 
-
+static inline void _record_gc_node(const char *node_type, const char *edge_type, jl_value_t *a, jl_value_t *b, size_t name_or_index);
 
 
 // https://stackoverflow.com/a/33799784/751061
@@ -194,30 +194,35 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
         return;
         //return &g_snapshot->nodes[val->second];
     }
-    // Insert a new Node
-    jl_datatype_t* type = (jl_datatype_t*)jl_typeof(a);
 
+    // Insert a new Node
     size_t self_size = 1;
     string name = "<missing>";
 
-    if ((uintptr_t)type < 4096U) {
-        name = "<unkown>";
-    } else if (type == (jl_datatype_t*)jl_buff_tag) {
-        name = "<buffer>";
-    } else if (type == (jl_datatype_t*)jl_malloc_tag) {
+    if (a == (jl_value_t*)jl_malloc_tag) {
         name = "<malloc>";
-    } else if (jl_is_datatype(type)) {
+    } else {
+        jl_datatype_t* type = (jl_datatype_t*)jl_typeof(a);
 
-        ios_t str_;
-        ios_mem(&str_, 1024);
-        JL_STREAM* str = (JL_STREAM*)&str_;
+        if ((uintptr_t)type < 4096U) {
+            name = "<unkown>";
+        } else if (type == (jl_datatype_t*)jl_buff_tag) {
+            name = "<buffer>";
+        } else if (type == (jl_datatype_t*)jl_malloc_tag) {
+            name = "<malloc>";
+        } else if (jl_is_datatype(type)) {
 
-        jl_static_show(str, (jl_value_t*)type);
+            ios_t str_;
+            ios_mem(&str_, 1024);
+            JL_STREAM* str = (JL_STREAM*)&str_;
 
-        name = string((const char*)str_.buf, str_.size);
-        ios_close(&str_);
+            jl_static_show(str, (jl_value_t*)type);
 
-        self_size = (size_t)jl_datatype_size(type);
+            name = string((const char*)str_.buf, str_.size);
+            ios_close(&str_);
+
+            self_size = (size_t)jl_datatype_size(type);
+        }
     }
 
     g_snapshot->node_ptr_to_index_map.insert(val,
@@ -242,11 +247,33 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     g_snapshot->nodes.push_back(from_node);
 }
 
-// TODO: remove JL_DLLEXPORT
-//JL_DLLEXPORT void record_edge_to_gc_snapshot(char *type_description, jl_value_t *a, jl_value_t *b) {
-//    record_edge_to_gc_snapshot2(type_description, a, b, "");
-//}
-JL_DLLEXPORT void record_edge_to_gc_snapshot2(char *type_description, jl_value_t *a, jl_value_t *b, char *fieldname) {
+JL_DLLEXPORT void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, int index) {
+    _record_gc_node("array", "element", from, to, index);
+}
+JL_DLLEXPORT void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) {
+    _record_gc_node("object", "property", (jl_value_t*)from, to,
+            g_snapshot->names.find_or_create_string_id(name));
+}
+JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, int field_index) {
+    // TODO: Field name
+    const char *field_name = "<field>";
+    _record_gc_node("object", "property", from, to,
+            g_snapshot->names.find_or_create_string_id(field_name));
+}
+JL_DLLEXPORT void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) {
+    // TODO: probably need to inline this here and make some changes
+    _record_gc_node("object", "internal", from, to,
+            g_snapshot->names.find_or_create_string_id("<internal>"));
+}
+JL_DLLEXPORT void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) {
+    // TODO: probably need to inline this here and make some changes
+    _record_gc_node("native", "hidden", from, (jl_value_t*)jl_malloc_tag,
+            g_snapshot->names.find_or_create_string_id("<native>"));
+
+    g_snapshot->nodes.back().self_size = bytes;
+}
+
+static inline void _record_gc_node(const char *node_type, const char *edge_type, jl_value_t *a, jl_value_t *b, size_t name_or_index) {
     if (!g_snapshot) {
         return;
     }
@@ -257,12 +284,12 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot2(char *type_description, jl_value_t
     auto from_node_idx = g_snapshot->node_ptr_to_index_map[a];
 
     auto &from_node = g_snapshot->nodes[from_node_idx];
-    from_node.type = g_snapshot->node_types.find_or_create_string_id(type_description);
+    from_node.type = g_snapshot->node_types.find_or_create_string_id(node_type);
     from_node.edge_count += 1;
 
     from_node.edges.push_back(Edge{
-        g_snapshot->edge_types.find_or_create_string_id("property"),
-        g_snapshot->names.find_or_create_string_id(fieldname), // name or index
+        g_snapshot->edge_types.find_or_create_string_id(edge_type),
+        name_or_index,
         g_snapshot->node_ptr_to_index_map[b], // to
         // book-keeping
     });

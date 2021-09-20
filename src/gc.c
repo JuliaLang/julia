@@ -1959,7 +1959,7 @@ STATIC_INLINE int gc_mark_scan_obj8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mark
         if (*pnew_obj) {
             verify_parent2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
-            gc_heap_snapshot_record_object_edge(parent, slot,
+            gc_heap_snapshot_record_object_edge(parent, *slot,
                            gc_slot_to_fieldidx(parent, slot));
         }
         if (!gc_try_setmark(*pnew_obj, &obj8->nptr, ptag, pbits))
@@ -1995,7 +1995,7 @@ STATIC_INLINE int gc_mark_scan_obj16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
         if (*pnew_obj) {
             verify_parent2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
-            gc_heap_snapshot_record_object_edge(parent, slot,
+            gc_heap_snapshot_record_object_edge(parent, *slot,
                            gc_slot_to_fieldidx(parent, slot));
         }
         if (!gc_try_setmark(*pnew_obj, &obj16->nptr, ptag, pbits))
@@ -2031,7 +2031,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
         if (*pnew_obj) {
             verify_parent2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
-            gc_heap_snapshot_record_object_edge(parent, slot,
+            gc_heap_snapshot_record_object_edge(parent, *slot,
                            gc_slot_to_fieldidx(parent, slot));
         }
         if (!gc_try_setmark(*pnew_obj, &obj32->nptr, ptag, pbits))
@@ -2571,7 +2571,7 @@ mark: {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
                                      jl_array_nbytes(a));
-                    gc_heap_snapshot_record_hidden_edge(new_obj, jl_malloc_tag, jl_array_nbytes(a));
+                    gc_heap_snapshot_record_hidden_edge(new_obj, jl_array_nbytes(a));
                     if (bits == GC_OLD_MARKED) {
                         ptls->gc_cache.perm_scanned_bytes += jl_array_nbytes(a);
                     }
