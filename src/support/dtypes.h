@@ -369,7 +369,7 @@ STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    void *p = malloc(sz);
+    void *p = malloc(sz == 0 ? 1 : sz);
     if (p == NULL) {
         perror("(julia) malloc");
         abort();
@@ -386,7 +386,7 @@ STATIC_INLINE void *realloc_s(void *p, size_t sz) JL_NOTSAFEPOINT {
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    p = realloc(p, sz);
+    p = realloc(p, sz == 0 ? 1 : sz);
     if (p == NULL) {
         perror("(julia) realloc");
         abort();

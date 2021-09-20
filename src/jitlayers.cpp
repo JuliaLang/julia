@@ -831,8 +831,8 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 static int globalUniqueGeneratedNames;
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
-    auto &fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
-    if (fname.empty()) {
+    std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
+    if (fname->empty()) {
         std::string string_fname;
         raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
@@ -851,10 +851,10 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
         stream_fname << unadorned_name << "_" << globalUniqueGeneratedNames++;
-        fname = strdup(stream_fname.str().c_str());
-        addGlobalMapping(fname, Addr);
+        *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
+        addGlobalMapping(*fname, Addr);
     }
-    return fname;
+    return *fname;
 }
 
 
