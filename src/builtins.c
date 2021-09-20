@@ -1761,7 +1761,9 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    return ((jl_typemap_entry_t*)jl_gf_mtable(b)->cache)->func.linfo->cache->specptr.fptr1;
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&jl_gf_mtable(b)->cache);
+    jl_code_instance_t *ci = jl_atomic_load_relaxed(&entry->func.linfo->cache);
+    return jl_atomic_load_relaxed(&ci->specptr.fptr1);
 }
 
 static jl_value_t *add_builtin_func(const char *name, jl_fptr_args_t fptr)

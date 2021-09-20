@@ -111,7 +111,7 @@ void jl_safepoint_init(void)
 int jl_safepoint_start_gc(void)
 {
     if (jl_n_threads == 1) {
-        jl_gc_running = 1;
+        jl_atomic_store_relaxed(&jl_gc_running, 1);
         return 1;
     }
     // The thread should have set this already
@@ -135,9 +135,9 @@ int jl_safepoint_start_gc(void)
 
 void jl_safepoint_end_gc(void)
 {
-    assert(jl_gc_running);
+    assert(jl_atomic_load_relaxed(&jl_gc_running));
     if (jl_n_threads == 1) {
-        jl_gc_running = 0;
+        jl_atomic_store_relaxed(&jl_gc_running, 0);
         return;
     }
     jl_mutex_lock_nogc(&safepoint_lock);

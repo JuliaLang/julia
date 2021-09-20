@@ -295,7 +295,7 @@ _Atomic(uint64_t) jl_cumulative_compile_time = 0;
 // type of the thread id.
 JL_DLLEXPORT int16_t jl_threadid(void)
 {
-    return jl_current_task->tid;
+    return jl_atomic_load_relaxed(&jl_current_task->tid);
 }
 
 jl_ptls_t jl_init_threadtls(int16_t tid)
@@ -314,7 +314,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     }
 #endif
     ptls->tid = tid;
-    ptls->gc_state = 0; // GC unsafe
+    jl_atomic_store_relaxed(&ptls->gc_state, 0); // GC unsafe
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {

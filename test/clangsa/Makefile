@@ -3,11 +3,11 @@ JULIAHOME := $(abspath $(SRCDIR)/../..)
 BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 
-check: $(SRCDIR)
+check: .
 
 TESTS = $(patsubst $(SRCDIR)/%,%,$(wildcard $(SRCDIR)/*.c) $(wildcard $(SRCDIR)/*.cpp))
 
-$(SRCDIR) $(TESTS):
+. $(TESTS):
 	@$(MAKE) -C $(BUILDDIR)/../../src $(build_includedir)/julia/julia_version.h
 	@$(MAKE) -C $(BUILDDIR)/../../src clangsa
 	PATH=$(build_bindir):$(build_depsbindir):$$PATH \
@@ -17,6 +17,6 @@ $(SRCDIR) $(TESTS):
 	CPPFLAGS_FLAGS="${CPPFLAGS_FLAGS}" \
 	CFLAGS_FLAGS="${CFLAGS_FLAGS}" \
 	CXXFLAGS_FLAGS="${CXXFLAGS_FLAGS}" \
-	$(build_depsbindir)/lit/lit.py -v $@
+	$(build_depsbindir)/lit/lit.py -v $(addprefix $(SRCDIR)/,$@)
 
-.PHONY: $(TESTS) $(SRCDIR) check all
+.PHONY: $(TESTS) check all .
