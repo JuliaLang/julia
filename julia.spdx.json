@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8ff9e376-ad37-49cf-8343-943254307b76",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-39a01124-e7ce-4be9-945d-ad48df05396a",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-20T05:26:40Z"
+        "created": "2021-09-20T05:47:15Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -126,6 +126,18 @@
             "summary": "SuiteSparse.jl provides Julia wrappers for the SuiteSparse library, and provides Julia's sparse linear algebra capabilities - specifically the solvers."
         },
         {
+            "name": "SHA.jl",
+            "SPDXID": "SPDXRef-JuliaSHA",
+            "downloadLocation": "git+https://github.com/JuliaCrypto/SHA.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/SHA.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2014: Elliot Saba",
+            "summary": "A performant, 100% native-julia SHA1, SHA2, and SHA3 implementation"
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -216,6 +228,11 @@
         },
         {
             "spdxElementId": "SPDXRef-JuliaSuiteSparse",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaSHA",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
