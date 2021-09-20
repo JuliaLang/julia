@@ -217,7 +217,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
 }
 
 // TODO: remove JL_DLLEXPORT
-JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b) {
+JL_DLLEXPORT void record_edge_to_gc_snapshot(char *type_description, jl_value_t *a, jl_value_t *b) {
     if (!g_snapshot) {
         return;
     }
@@ -228,6 +228,7 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot(jl_value_t *a, jl_value_t *b) {
     auto from_node_idx = g_snapshot->node_ptr_to_index_map[a];
     //cout << from_node_idx << endl;
 
+    g_snapshot->nodes[from_node_idx].type = type_description;
     g_snapshot->nodes[from_node_idx].edge_count += 1;
     g_snapshot->edges.push_back(Edge{"property",
                                     g_snapshot->node_ptr_to_index_map[a],
