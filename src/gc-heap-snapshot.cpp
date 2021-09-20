@@ -15,6 +15,29 @@ using std::string;
 using std::unordered_map;
 using std::unordered_set;
 
+// https://stackoverflow.com/a/33799784/751061
+void print_str_escape_json(JL_STREAM *stream, const std::string &s) {
+    jl_printf(stream, "\"");
+    for (auto c = s.cbegin(); c != s.cend(); c++) {
+        switch (*c) {
+        case '"': jl_printf(stream, "\\\""); break;
+        case '\\': jl_printf(stream, "\\\\"); break;
+        case '\b': jl_printf(stream, "\\b"); break;
+        case '\f': jl_printf(stream, "\\f"); break;
+        case '\n': jl_printf(stream, "\\n"); break;
+        case '\r': jl_printf(stream, "\\r"); break;
+        case '\t': jl_printf(stream, "\\t"); break;
+        default:
+            if ('\x00' <= *c && *c <= '\x1f') {
+                jl_printf(stream, "\\u%04x", (int)*c);
+            } else {
+                jl_printf(stream, "%c", *c);
+            }
+        }
+    }
+    jl_printf(stream, "\"");
+}
+
 struct HeapSnapshot;
 void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot);
 
@@ -87,7 +110,9 @@ struct StringTable {
                     jl_printf(stream, "\n");
                 }
             }
-            jl_printf(stream, "\"%s\"", str.c_str());
+            // Escape strings for JSON
+            // TODO
+            print_str_escape_json(stream, str);
         }
         jl_printf(stream, "]");
     }
