@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8bec0855-e1e4-4bad-b098-ce45a651cc7d",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-8ff9e376-ad37-49cf-8343-943254307b76",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-17T05:30:02Z"
+        "created": "2021-09-20T05:26:40Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -114,6 +114,18 @@
             "summary": "The NetworkOptions package acts as a mediator between ways of configuring network transport mechanisms (SSL/TLS, SSH, proxies, etc.) and Julia packages that provide access to transport mechanisms."
         },
         {
+            "name": "SuiteSparse.jl",
+            "SPDXID": "SPDXRef-JuliaSuiteSparse",
+            "downloadLocation": "git+https://github.com/JuliaLang/SuiteSparse.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/SuiteSparse.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2009-2021: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
+            "summary": "SuiteSparse.jl provides Julia wrappers for the SuiteSparse library, and provides Julia's sparse linear algebra capabilities - specifically the solvers."
+        },
+        {
             "name": "OpenBLAS",
             "SPDXID": "SPDXRef-OpenBLAS",
             "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
@@ -199,6 +211,11 @@
         },
         {
             "spdxElementId": "SPDXRef-JuliaNetworkOptions",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaSuiteSparse",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
