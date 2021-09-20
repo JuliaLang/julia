@@ -638,12 +638,12 @@ extern int gc_verifying;
 // TODO: Is slot the right target object?
 #define gc_debug_edge1(ty,obj,slot,arg1) do {                           \
     verify_parent1(ty,obj,slot,arg1);                                   \
-    record_edge_to_gc_snapshot(obj,*slot);                               \
+    record_edge_to_gc_snapshot(ty, obj,*slot);                               \
 } while (0)
-// TODO: Is slot the right target object?                            
+// TODO: Is slot the right target object?
 #define gc_debug_edge2(ty,obj,slot,arg1,arg2) do {                      \
     verify_parent2(ty,obj,slot,arg1,arg2);                              \
-    record_edge_to_gc_snapshot(obj,*slot);                               \
+    record_edge_to_gc_snapshot(ty, obj, *slot);                               \
 } while (0)
 
 int gc_slot_to_fieldidx(void *_obj, void *slot);
