@@ -578,6 +578,23 @@ let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
     @test LinearAlgebra.lmul!(adjoint(D1),copy(D2)) == adjoint(D1)*D2
 end
 
+@testset "multiplication of a Diagonal with a Matrix" begin
+    A = collect(reshape(1:8, 4, 2));
+    B = BigFloat.(A);
+    DL = Diagonal(collect(axes(A, 1)));
+    DR = Diagonal(Float16.(collect(axes(A, 2))));
+
+    @test DL * A == collect(DL) * A
+    @test A * DR == A * collect(DR)
+    @test DL * B == collect(DL) * B
+    @test B * DR == B * collect(DR)
+
+    A = reshape([ones(2,2), ones(2,2)*2, ones(2,2)*3, ones(2,2)*4], 2, 2)
+    D = Diagonal([collect(reshape(1:4, 2, 2)), collect(reshape(5:8, 2, 2))])
+    @test A * D == collect(A) * collect(D)
+    @test D * A == collect(D) * collect(A)
+end
+
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
     D = Diagonal(randn(5))
     Q = qr(randn(5, 5)).Q

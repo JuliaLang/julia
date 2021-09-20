@@ -219,6 +219,11 @@ end
 (*)(D::Diagonal, B::AbstractTriangular) =
     lmul!(D, copy_oftype(B, promote_op(*, eltype(B), eltype(D.diag))))
 
+(*)(A::AbstractMatrix{<:Number}, D::Diagonal{<:Number}) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
+(*)(D::Diagonal{<:Number}, A::AbstractMatrix{<:Number}) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
+
 (*)(A::AbstractMatrix, D::Diagonal) =
     rmul!(copy_similar(A, promote_op(*, eltype(A), eltype(D.diag))), D)
 (*)(D::Diagonal, A::AbstractMatrix) =
