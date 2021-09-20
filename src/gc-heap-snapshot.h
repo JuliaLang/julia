@@ -11,9 +11,9 @@ extern "C" {
 // Functions to call from GC when heap snapshot is enabled
 // ---------------------------------------------------------------------
 // TODO: remove JL_DLLEXPORT
-JL_DLLEXPORT void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, int index);
+JL_DLLEXPORT void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index);
 JL_DLLEXPORT void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name);
-JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, int field_index);
+JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index);
 // Used for objects managed by GC, but which aren't exposed in the julia object, so have no
 // field or index.  i.e. they're not reacahable from julia code, but we _will_ hit them in
 // the GC mark phase (so we can check their type tag to get the size).
