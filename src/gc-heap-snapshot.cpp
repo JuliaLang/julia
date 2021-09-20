@@ -272,7 +272,7 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
             jl_printf(stream, ",");
         }
         // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
-        jl_printf(stream, "%zu", snapshot.names.find_or_create_string_id(from_node.type));
+        jl_printf(stream, "%zu", snapshot.node_types.find_or_create_string_id(from_node.type));
         jl_printf(stream, ",%zu", snapshot.names.find_or_create_string_id(from_node.name));
         jl_printf(stream, ",%zu", from_node.id);
         jl_printf(stream, ",%zu", from_node.self_size);
@@ -292,7 +292,7 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
             } else {
                 jl_printf(stream, ",");
             }
-            jl_printf(stream, "%zu", snapshot.names.find_or_create_string_id(edge.type));
+            jl_printf(stream, "%zu", snapshot.edge_types.find_or_create_string_id(edge.type));
             jl_printf(stream, ",%zu", edge.name_or_index * k_node_number_of_fields);
             jl_printf(stream, ",%zu", edge.to_node * k_node_number_of_fields);
             jl_printf(stream, "\n");
