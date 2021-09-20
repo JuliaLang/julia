@@ -219,6 +219,9 @@ end
 (*)(D::Diagonal, B::AbstractTriangular) =
     lmul!(D, copy_oftype(B, promote_op(*, eltype(B), eltype(D.diag))))
 
+# Using mul! instead of (l/r)mul! provides a performance boost by avoiding a copy.
+# This is not possible in general, but works if the elements are numbers
+# See #42321
 (*)(A::AbstractMatrix{<:Number}, D::Diagonal{<:Number}) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
 (*)(D::Diagonal{<:Number}, A::AbstractMatrix{<:Number}) =
