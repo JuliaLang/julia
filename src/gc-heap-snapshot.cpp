@@ -157,8 +157,17 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     } else if (type == (jl_datatype_t*)jl_malloc_tag) {
         name = "<malloc>";
     } else if (jl_is_datatype(type)) {
+
+        ios_t str_;
+        ios_mem(&str_, 1024);
+        JL_STREAM* str = (JL_STREAM*)&str_;
+
+        jl_static_show(str, (jl_value_t*)type);
+
+        name = string((const char*)str_.buf, str_.size);
+        ios_close(&str_);
+
         self_size = (size_t)jl_datatype_size(type);
-        name = jl_typename_str((jl_value_t*)type);
     }
 
     g_snapshot->node_ptr_to_index_map.insert(val,
@@ -172,7 +181,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
         self_size, // size_t self_size;
 
         0, // int edge_count, will be incremented on every outgoing edge
-        0, // size_t trace_node_id;
+        0, // size_t trace_node_id (unused)
         0  // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
     };
     g_snapshot->nodes.push_back(node);
