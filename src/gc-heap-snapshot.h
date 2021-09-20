@@ -12,6 +12,7 @@ extern "C" {
 // ---------------------------------------------------------------------
 // TODO: remove JL_DLLEXPORT
 JL_DLLEXPORT void record_edge_to_gc_snapshot(char *ty, jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT void record_edge_to_gc_snapshot2(char *ty, jl_value_t *a, jl_value_t *b, char *name);
 
 // ---------------------------------------------------------------------
 // Functions to call from Julia to take heap snapshot
