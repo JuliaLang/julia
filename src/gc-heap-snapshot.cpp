@@ -247,16 +247,31 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     g_snapshot->nodes.push_back(from_node);
 }
 
-JL_DLLEXPORT void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, int index) {
+JL_DLLEXPORT void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) {
     _record_gc_node("array", "element", from, to, index);
 }
 JL_DLLEXPORT void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) {
     _record_gc_node("object", "property", (jl_value_t*)from, to,
             g_snapshot->names.find_or_create_string_id(name));
 }
-JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, int field_index) {
-    // TODO: Field name
-    const char *field_name = "<field>";
+JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) {
+    jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
+    if (jl_is_tuple_type(type)) {
+        // TODO: Maybe not okay to match element and object
+        _record_gc_node("object", "element", from, to, field_index);
+        return;
+    }
+    if (field_index < 0 || jl_datatype_nfields(type) <= field_index) {
+        // TODO: We're getting -1 in some cases
+        jl_printf(JL_STDERR, "WARNING - incorrect field index (%zu) for type\n", field_index);
+        jl_(type);
+        _record_gc_node("object", "element", from, to, field_index);
+        return;
+    }
+    jl_svec_t *field_names = jl_field_names(type);
+    jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, field_index);
+    const char *field_name = jl_symbol_name(name);
+
     _record_gc_node("object", "property", from, to,
             g_snapshot->names.find_or_create_string_id(field_name));
 }
