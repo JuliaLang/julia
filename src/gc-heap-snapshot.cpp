@@ -50,7 +50,7 @@ const int k_node_number_of_fields = 7;
 struct Node {
     string type;
     string name;
-    size_t id;
+    size_t id; // (vilterp) the memory address, right?
     size_t self_size;
     size_t edge_count;
     size_t trace_node_id;  // This is ALWAYS 0 in Javascript heap-snapshots.
@@ -67,9 +67,12 @@ struct Node {
 const int k_edge_number_of_fields = 3;
 
 struct Edge {
-    string type;
-    size_t name_or_index; // essentially 'from'
+    string type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
+    size_t name_or_index; // name of the field (for objects/modules) or index of array
     size_t to_node;
+
+    // Book-keeping fields (not used for serialization)
+    size_t from_node; // For asserting that we built the edges in the right order
 };
 
 //template<typename K, typename V>
@@ -225,9 +228,13 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot(char *type_description, jl_value_t 
 
     g_snapshot->nodes[from_node_idx].type = type_description;
     g_snapshot->nodes[from_node_idx].edge_count += 1;
+
     g_snapshot->edges.push_back(Edge{"property",
-                                    g_snapshot->node_ptr_to_index_map[a],
-                                    g_snapshot->node_ptr_to_index_map[b]});
+                                    g_snapshot->names.find_or_create_string_id(fieldname), // name or index
+                                    g_snapshot->node_ptr_to_index_map[b], // to
+                                    // book-keeping
+                                    g_snapshot->node_ptr_to_index_map[a],  // from
+                                    });
 
     count_edges += 1;
 }
@@ -272,11 +279,14 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
     jl_printf(stream, "],\n");
 
     jl_printf(stream, "\"edges\":[");
-    bool first_edge = true;
-    for (const auto &edge : snapshot.edges) {
-        if (first_edge) {
-            first_edge = false;
-        } else {
+    for (int i = 0; i < snapshot.edges.size(); ++i) {
+        // Check that we constructed our nodes & edges correctly.
+        assert(i == 0 ||
+           snapshot.edges[i - 1].from_node <= snapshot.edges[i].from_node);
+
+        const auto &edge = snapshot.edges[i];
+
+        if (i != 0) {
             jl_printf(stream, ",");
         }
         jl_printf(stream, "%zu", snapshot.names.find_or_create_string_id(edge.type));
