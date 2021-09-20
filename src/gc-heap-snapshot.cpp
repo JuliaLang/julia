@@ -16,25 +16,13 @@ using std::unordered_map;
 using std::unordered_set;
 
 // TODOs:
+// Roots
+//   - Correctly reporting the roots to JS somehow..?
+//   - Making sure we're actually encoding all the roots.
 // Field Names & node types
-//   - Proper node types/kinds
-//     1. map from the names provided to verify_parent to the correct JS names
-//     2. change the names at the callsite
-//     3. introduce an enum to be set a the callsite and mapped to correct names
-//   - Array indexes
-//     - already have these, just have to be able to let them know we're at an array
-//   - Field index -> names
-//     - same as above, but we need to convert field index to field name (either inside, or at caller)
-// Rich field names
-//   - Convert a field index to field name
+//   - Bug fixing
 // Sizes
-//   - array sizes
 //   - string sizes
-
-// Need three functions:
-// - gc_heap_snapshot_record_array_edge(value* from, value* to, int index)
-// - gc_heap_snapshot_record_module_edge(value* from, value* to, char* name)
-// - gc_heap_snapshot_record_object_edge(value* from, value* to, int field_index)
 
 
 static inline void _record_gc_node(const char *node_type, const char *edge_type, jl_value_t *a, jl_value_t *b, size_t name_or_index);
