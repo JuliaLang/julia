@@ -642,20 +642,6 @@ extern int gc_verifying;
 #endif
 
 
-// For GC Debugging
-// TODO: Is slot the right target object?
-#define gc_debug_edge1(ty,obj,slot,arg1) do {                           \
-    record_edge_to_gc_snapshot(ty, obj, jl_valueof(*slot));             \
-} while (0)
-// TODO: Is slot the right target object?
-#define gc_debug_edge2(ty,obj,slot,arg1,arg2) do {                      \
-    if (strcmp(ty, "module") == 0) {                                    \
-        record_edge_to_gc_snapshot2(ty, obj, *slot, arg2);         \
-    } else {                                                            \
-        record_edge_to_gc_snapshot2(ty, obj, *slot,  "<field>");              \
-    }                                                                   \
-} while (0)
-
 int gc_slot_to_fieldidx(void *_obj, void *slot);
 int gc_slot_to_arrayidx(void *_obj, void *begin);
 NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset);

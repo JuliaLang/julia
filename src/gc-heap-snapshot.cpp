@@ -243,9 +243,9 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
 }
 
 // TODO: remove JL_DLLEXPORT
-JL_DLLEXPORT void record_edge_to_gc_snapshot(char *type_description, jl_value_t *a, jl_value_t *b) {
-    record_edge_to_gc_snapshot2(type_description, a, b, "");
-}
+//JL_DLLEXPORT void record_edge_to_gc_snapshot(char *type_description, jl_value_t *a, jl_value_t *b) {
+//    record_edge_to_gc_snapshot2(type_description, a, b, "");
+//}
 JL_DLLEXPORT void record_edge_to_gc_snapshot2(char *type_description, jl_value_t *a, jl_value_t *b, char *fieldname) {
     if (!g_snapshot) {
         return;

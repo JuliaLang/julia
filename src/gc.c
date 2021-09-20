@@ -1820,7 +1820,7 @@ STATIC_INLINE int gc_mark_scan_objarray(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
         if (*pnew_obj) {
             verify_parent2("obj array", objary->parent, begin, "elem(%d)",
                            gc_slot_to_arrayidx(objary->parent, begin));
-            gc_debug_edge2("obj array", objary->parent, begin, "elem(%d)",
+            gc_heap_snapshot_record_array_edge(objary->parent, *begin,
                            gc_slot_to_arrayidx(objary->parent, begin));
         }
         if (!gc_try_setmark(*pnew_obj, &objary->nptr, ptag, pbits))
@@ -1859,7 +1859,7 @@ STATIC_INLINE int gc_mark_scan_array8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
             if (*pnew_obj) {
                 verify_parent2("array", ary8->elem.parent, slot, "elem(%d)",
                                gc_slot_to_arrayidx(ary8->elem.parent, begin));
-                gc_debug_edge2("array", ary8->elem.parent, slot, "elem(%d)",
+                gc_heap_snapshot_record_array_edge(ary8->elem.parent, *slot,
                                gc_slot_to_arrayidx(ary8->elem.parent, begin));
             }
             if (!gc_try_setmark(*pnew_obj, &ary8->elem.nptr, ptag, pbits))
@@ -1910,7 +1910,7 @@ STATIC_INLINE int gc_mark_scan_array16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
             if (*pnew_obj) {
                 verify_parent2("array", ary16->elem.parent, slot, "elem(%d)",
                                gc_slot_to_arrayidx(ary16->elem.parent, begin));
-                gc_debug_edge2("array", ary16->elem.parent, slot, "elem(%d)",
+                gc_heap_snapshot_record_array_edge(ary16->elem.parent, *slot,
                                gc_slot_to_arrayidx(ary16->elem.parent, begin));
             }
             if (!gc_try_setmark(*pnew_obj, &ary16->elem.nptr, ptag, pbits))
@@ -1959,7 +1959,7 @@ STATIC_INLINE int gc_mark_scan_obj8(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mark
         if (*pnew_obj) {
             verify_parent2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
-            gc_debug_edge2("object", parent, slot, "field(%d)",
+            gc_heap_snapshot_record_object_edge(parent, slot,
                            gc_slot_to_fieldidx(parent, slot));
         }
         if (!gc_try_setmark(*pnew_obj, &obj8->nptr, ptag, pbits))
@@ -1995,7 +1995,7 @@ STATIC_INLINE int gc_mark_scan_obj16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
         if (*pnew_obj) {
             verify_parent2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
-            gc_debug_edge2("object", parent, slot, "field(%d)",
+            gc_heap_snapshot_record_object_edge(parent, slot,
                            gc_slot_to_fieldidx(parent, slot));
         }
         if (!gc_try_setmark(*pnew_obj, &obj16->nptr, ptag, pbits))
@@ -2031,7 +2031,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
         if (*pnew_obj) {
             verify_parent2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
-            gc_debug_edge2("object", parent, slot, "field(%d)",
+            gc_heap_snapshot_record_object_edge(parent, slot,
                            gc_slot_to_fieldidx(parent, slot));
         }
         if (!gc_try_setmark(*pnew_obj, &obj32->nptr, ptag, pbits))
@@ -2421,15 +2421,16 @@ module_binding: {
             }
             void *vb = jl_astaggedvalue(b);
             verify_parent1("module", binding->parent, &vb, "binding_buff");
-            gc_debug_edge1("module", binding->parent, &vb, "binding_buff");
+            // Record the size used for the box for non-const bindings
+            gc_heap_snapshot_record_internal_edge(binding->parent, b);
             (void)vb;
             jl_value_t *value = jl_atomic_load_relaxed(&b->value);
             jl_value_t *globalref = jl_atomic_load_relaxed(&b->globalref);
             if (value) {
                 verify_parent2("module", binding->parent,
                                &b->value, "binding(%s)", jl_symbol_name(b->name));
-                gc_debug_edge2("module", binding->parent,
-                               &b->value, "binding(%s)", jl_symbol_name(b->name));
+                gc_heap_snapshot_record_module_edge(binding->parent, &b->value,
+                               jl_symbol_name(b->name));
                 if (gc_try_setmark(value, &binding->nptr, &tag, &bits)) {
                     new_obj = value;
                     begin += 2;
@@ -2561,7 +2562,7 @@ mark: {
             if (flags.how == 1) {
                 void *val_buf = jl_astaggedvalue((char*)a->data - a->offset * a->elsize);
                 verify_parent1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
-                gc_debug_edge1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
+                gc_heap_snapshot_record_internal_edge(new_obj, jl_valueof(val_buf));
                 (void)val_buf;
                 gc_setmark_buf_(ptls, (char*)a->data - a->offset * a->elsize,
                                 bits, jl_array_nbytes(a));
@@ -2570,6 +2571,7 @@ mark: {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
                                      jl_array_nbytes(a));
+                    gc_heap_snapshot_record_hidden_edge(new_obj, jl_malloc_tag, jl_array_nbytes(a));
                     if (bits == GC_OLD_MARKED) {
                         ptls->gc_cache.perm_scanned_bytes += jl_array_nbytes(a);
                     }
@@ -2581,6 +2583,8 @@ mark: {
             else if (flags.how == 3) {
                 jl_value_t *owner = jl_array_data_owner(a);
                 uintptr_t nptr = (1 << 2) | (bits & GC_OLD);
+                // TODO: Keep an eye on the edge type here, we're _pretty sure_ it's right..
+                gc_heap_snapshot_record_internal_edge(new_obj, owner);
                 int markowner = gc_try_setmark(owner, &nptr, &tag, &bits);
                 gc_mark_push_remset(ptls, new_obj, nptr);
                 if (markowner) {
