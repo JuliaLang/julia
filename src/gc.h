@@ -646,7 +646,7 @@ extern int gc_verifying;
 // TODO: Is slot the right target object?
 #define gc_debug_edge1(ty,obj,slot,arg1) do {                           \
     verify_parent1(ty,obj,slot,arg1);                                   \
-    record_edge_to_gc_snapshot(ty, obj,*slot);                               \
+    record_edge_to_gc_snapshot(ty, obj, jl_valueof(*slot));             \
 } while (0)
 // TODO: Is slot the right target object?
 #define gc_debug_edge2(ty,obj,slot,arg1,arg2) do {                      \
