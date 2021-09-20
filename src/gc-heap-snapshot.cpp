@@ -46,7 +46,7 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot);
 //   [ "type", "name_or_index", "to_node" ]
 
 struct Edge {
-    string type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
+    size_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
     size_t name_or_index; // name of the field (for objects/modules) or index of array
     size_t to_node;
 
@@ -59,7 +59,7 @@ struct Edge {
 
 const int k_node_number_of_fields = 7;
 struct Node {
-    string type;
+    size_t type;
     string name;
     size_t id; // (vilterp) the memory address, right?
     size_t self_size;
@@ -200,7 +200,9 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     count_nodes += 1;
 
     Node from_node{
-        "object", // string type;
+        // We pick a default type here, which will be set for the _targets_ of edges.
+        // TODO:  What's a good default?
+        g_snapshot->node_types.find_or_create_string_id("object"), // string type;
         name, // string name;
         (size_t)a, // size_t id;
         self_size, // size_t self_size;
@@ -230,11 +232,11 @@ JL_DLLEXPORT void record_edge_to_gc_snapshot2(char *type_description, jl_value_t
     auto from_node_idx = g_snapshot->node_ptr_to_index_map[a];
 
     auto &from_node = g_snapshot->nodes[from_node_idx];
-    from_node.type = type_description;
+    from_node.type = g_snapshot->node_types.find_or_create_string_id(type_description);
     from_node.edge_count += 1;
 
     from_node.edges.push_back(Edge{
-        "property",
+        g_snapshot->edge_types.find_or_create_string_id("property"),
         g_snapshot->names.find_or_create_string_id(fieldname), // name or index
         g_snapshot->node_ptr_to_index_map[b], // to
         // book-keeping
@@ -272,7 +274,7 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
             jl_printf(stream, ",");
         }
         // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
-        jl_printf(stream, "%zu", snapshot.node_types.find_or_create_string_id(from_node.type));
+        jl_printf(stream, "%zu", from_node.type);
         jl_printf(stream, ",%zu", snapshot.names.find_or_create_string_id(from_node.name));
         jl_printf(stream, ",%zu", from_node.id);
         jl_printf(stream, ",%zu", from_node.self_size);
@@ -292,7 +294,7 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
             } else {
                 jl_printf(stream, ",");
             }
-            jl_printf(stream, "%zu", snapshot.edge_types.find_or_create_string_id(edge.type));
+            jl_printf(stream, "%zu", edge.type);
             jl_printf(stream, ",%zu", edge.name_or_index * k_node_number_of_fields);
             jl_printf(stream, ",%zu", edge.to_node * k_node_number_of_fields);
             jl_printf(stream, "\n");
