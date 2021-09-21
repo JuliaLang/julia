@@ -84,6 +84,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // image-codegen
                         0, // rr-detach
                         0, // strip-metadata
+                        0, // strip-ir
     };
     jl_options_initialized = 1;
 }
@@ -169,6 +170,7 @@ static const char opts_hidden[]  =
     " --output-o name           Generate an object file (including system image data)\n"
     " --output-ji name          Generate a system image data file (.ji)\n"
     " --strip-metadata          Remove docstrings and source location info from system image\n"
+    " --strip-ir                Remove IR (intermediate representation) of compiled functions\n"
 
     // compiler debugging (see the devdocs for tips on using these options)
     " --output-unopt-bc name    Generate unoptimized LLVM bitcode (.bc)\n"
@@ -219,6 +221,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_image_codegen,
            opt_rr_detach,
            opt_strip_metadata,
+           opt_strip_ir,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -273,6 +276,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "image-codegen",   no_argument,       0, opt_image_codegen },
         { "rr-detach",       no_argument,       0, opt_rr_detach },
         { "strip-metadata",  no_argument,       0, opt_strip_metadata },
+        { "strip-ir",        no_argument,       0, opt_strip_ir },
         { 0, 0, 0, 0 }
     };
 
@@ -705,6 +709,9 @@ restart_switch:
             break;
         case opt_strip_metadata:
             jl_options.strip_metadata = 1;
+            break;
+        case opt_strip_ir:
+            jl_options.strip_ir = 1;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

@@ -1531,7 +1531,7 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
     }
 }
 
-static jl_value_t *strip_codeinfo(jl_method_t *m, jl_value_t *ci_, int orig)
+static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
 {
     jl_code_info_t *ci = NULL;
     JL_GC_PUSH1(&ci);
@@ -1573,10 +1573,21 @@ static void strip_specializations_(jl_method_instance_t *mi)
     jl_code_instance_t *codeinst = mi->cache;
     while (codeinst) {
         if (codeinst->inferred && codeinst->inferred != jl_nothing) {
-            codeinst->inferred = strip_codeinfo(mi->def.method, codeinst->inferred, 0);
-            jl_gc_wb(codeinst, codeinst->inferred);
+            if (jl_options.strip_ir) {
+                codeinst->inferred = jl_nothing;
+            }
+            else if (jl_options.strip_metadata) {
+                codeinst->inferred = strip_codeinfo_meta(mi->def.method, codeinst->inferred, 0);
+                jl_gc_wb(codeinst, codeinst->inferred);
+            }
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
+    }
+    if (jl_options.strip_ir) {
+        mi->uninferred = NULL;
+        mi->backedges = NULL;
+        mi->callbacks = NULL;
+        mi->specTypes = jl_emptytuple_type;
     }
 }
 
@@ -1584,21 +1595,46 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
 {
     jl_method_t *m = def->func.method;
     if (m->source) {
-        m->source = strip_codeinfo(m, m->source, 1);
-        jl_gc_wb(m, m->source);
+        if (jl_options.strip_ir) {
+            if (m->unspecialized) {
+                jl_code_instance_t *unspec = jl_atomic_load_relaxed(&m->unspecialized->cache);
+                if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
+                    // we have a generic compiled version, so can remove the IR
+                    m->source = jl_nothing;
+                }
+            }
+            if (m->source != jl_nothing) {
+                int mod_setting = jl_get_module_compile(m->module);
+                // if the method is declared not to be compiled, keep IR for interpreter
+                if (!(mod_setting == JL_OPTIONS_COMPILE_OFF || mod_setting == JL_OPTIONS_COMPILE_MIN))
+                    m->source = jl_nothing;
+            }
+        }
+        if (jl_options.strip_metadata && m->source != jl_nothing) {
+            m->source = strip_codeinfo_meta(m, m->source, 1);
+            jl_gc_wb(m, m->source);
+        }
     }
-    jl_svec_t *specializations = def->func.method->specializations;
+    jl_svec_t *specializations = m->specializations;
     size_t i, l = jl_svec_len(specializations);
     for (i = 0; i < l; i++) {
         jl_value_t *mi = jl_svecref(specializations, i);
         if (mi != jl_nothing)
             strip_specializations_((jl_method_instance_t*)mi);
     }
+    if (jl_options.strip_ir) {
+        m->specializations = jl_emptysvec;
+        m->speckeyset = (jl_array_t*)jl_an_empty_vec_any;
+    }
+    if (m->unspecialized)
+        strip_specializations_(m->unspecialized);
     return 1;
 }
 
 static void strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
 {
+    if (jl_options.strip_ir)
+        mt->backedges = NULL;
     jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
 }
 
@@ -1614,7 +1650,7 @@ static void jl_cleanup_serializer2(void);
 
 static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
 {
-    if (jl_options.strip_metadata)
+    if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers

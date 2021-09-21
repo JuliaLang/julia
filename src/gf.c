@@ -1939,10 +1939,11 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             compile_option = ((jl_method_t*)def)->module->compile;
     }
 
+    // if compilation is disabled or source is unavailable, try calling unspecialized version
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
-        compile_option == JL_OPTIONS_COMPILE_MIN) {
+        compile_option == JL_OPTIONS_COMPILE_MIN ||
+        def->source == jl_nothing) {
         // copy fptr from the template method definition
-        jl_method_t *def = mi->def.method;
         if (jl_is_method(def) && def->unspecialized) {
             jl_code_instance_t *unspec = jl_atomic_load_relaxed(&def->unspecialized->cache);
             if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
@@ -1957,6 +1958,10 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 return codeinst;
             }
         }
+    }
+    // if that didn't work and compilation is off, try running in the interpreter
+    if (compile_option == JL_OPTIONS_COMPILE_OFF ||
+        compile_option == JL_OPTIONS_COMPILE_MIN) {
         jl_code_info_t *src = jl_code_for_interpreter(mi);
         if (!jl_code_requires_compiler(src)) {
             jl_code_instance_t *codeinst = jl_new_codeinst(mi,
@@ -1978,8 +1983,16 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_method_instance_t *unspec = jl_get_unspecialized(mi);
         jl_code_instance_t *ucache = jl_get_method_inferred(unspec, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
         // ask codegen to make the fptr for unspec
-        if (jl_atomic_load_relaxed(&ucache->invoke) == NULL)
+        if (jl_atomic_load_relaxed(&ucache->invoke) == NULL) {
+            if (def->source == jl_nothing && (ucache->def->uninferred == jl_nothing ||
+                                              ucache->def->uninferred == NULL)) {
+                jl_printf(JL_STDERR, "source not available for ");
+                jl_static_show(JL_STDERR, (jl_value_t*)mi);
+                jl_printf(JL_STDERR, "\n");
+                jl_error("source missing for method that needs to be compiled");
+            }
             jl_generate_fptr_for_unspecialized(ucache);
+        }
         assert(jl_atomic_load_relaxed(&ucache->invoke) != NULL);
         if (jl_atomic_load_relaxed(&ucache->invoke) != jl_fptr_sparam &&
             jl_atomic_load_relaxed(&ucache->invoke) != jl_fptr_interpret_call) {
