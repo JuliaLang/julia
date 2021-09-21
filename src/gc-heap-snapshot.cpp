@@ -184,7 +184,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     }
 
     // Insert a new Node
-    size_t self_size = 1;
+    size_t self_size = 0;
     string name = "<missing>";
 
     if (a == (jl_value_t*)jl_malloc_tag) {
@@ -223,7 +223,9 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
         g_snapshot->node_types.find_or_create_string_id("object"), // string type;
         name, // string name;
         (size_t)a, // size_t id;
-        self_size, // size_t self_size;
+        // We add 1 to self-size for the type tag that all heap-allocated objects have.
+        // Also because the Chrome Snapshot viewer ignores size-0 leaves!
+        self_size + 1, // size_t self_size;
 
         0, // int edge_count, will be incremented on every outgoing edge
         0, // size_t trace_node_id (unused)
@@ -245,6 +247,7 @@ JL_DLLEXPORT void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_valu
     if (!g_snapshot) {
         return;
     }
+    //jl_printf(JL_STDERR, "module: %p  binding:%p  name:%s\n", from, to, name);
     _record_gc_node("object", "property", (jl_value_t*)from, to,
             g_snapshot->names.find_or_create_string_id(name));
 }
@@ -288,16 +291,19 @@ JL_DLLEXPORT void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t b
     _record_gc_node("native", "hidden", from, (jl_value_t*)jl_malloc_tag,
             g_snapshot->names.find_or_create_string_id("<native>"));
 
-    g_snapshot->nodes.back().self_size = bytes;
+    // Add the size to the "unknown malloc" tag
+    g_snapshot->nodes[g_snapshot->node_ptr_to_index_map[(jl_value_t*)jl_malloc_tag]].self_size += bytes;
 }
 
 static inline void _record_gc_node(const char *node_type, const char *edge_type, jl_value_t *a, jl_value_t *b, size_t name_or_index) {
     record_node_to_gc_snapshot(a);
     record_node_to_gc_snapshot(b);
 
+    // Have to look this up because it might not be created for this edge
     auto from_node_idx = g_snapshot->node_ptr_to_index_map[a];
 
     auto &from_node = g_snapshot->nodes[from_node_idx];
+    // TODO: can these ever disagree?:
     from_node.type = g_snapshot->node_types.find_or_create_string_id(node_type);
     from_node.edge_count += 1;
 
