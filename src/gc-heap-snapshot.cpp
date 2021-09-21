@@ -236,13 +236,22 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
 }
 
 JL_DLLEXPORT void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) {
+    if (!g_snapshot) {
+        return;
+    }
     _record_gc_node("array", "element", from, to, index);
 }
 JL_DLLEXPORT void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) {
+    if (!g_snapshot) {
+        return;
+    }
     _record_gc_node("object", "property", (jl_value_t*)from, to,
             g_snapshot->names.find_or_create_string_id(name));
 }
 JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) {
+    if (!g_snapshot) {
+        return;
+    }
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
     if (jl_is_tuple_type(type)) {
         // TODO: Maybe not okay to match element and object
@@ -264,11 +273,17 @@ JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value
             g_snapshot->names.find_or_create_string_id(field_name));
 }
 JL_DLLEXPORT void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) {
+    if (!g_snapshot) {
+        return;
+    }
     // TODO: probably need to inline this here and make some changes
     _record_gc_node("object", "internal", from, to,
             g_snapshot->names.find_or_create_string_id("<internal>"));
 }
 JL_DLLEXPORT void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) {
+    if (!g_snapshot) {
+        return;
+    }
     // TODO: probably need to inline this here and make some changes
     _record_gc_node("native", "hidden", from, (jl_value_t*)jl_malloc_tag,
             g_snapshot->names.find_or_create_string_id("<native>"));
@@ -277,10 +292,6 @@ JL_DLLEXPORT void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t b
 }
 
 static inline void _record_gc_node(const char *node_type, const char *edge_type, jl_value_t *a, jl_value_t *b, size_t name_or_index) {
-    if (!g_snapshot) {
-        return;
-    }
-
     record_node_to_gc_snapshot(a);
     record_node_to_gc_snapshot(b);
 
