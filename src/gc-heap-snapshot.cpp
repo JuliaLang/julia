@@ -139,7 +139,7 @@ public:
     // edges are stored on each from_node
 
     StringTable names;
-    StringTable node_types = {"object"};
+    StringTable node_types = {"object", "string", "symbol"};
     StringTable edge_types = {"property"};
     unordered_map<void*, size_t> node_ptr_to_index_map;
 
@@ -177,6 +177,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
     //jl_printf(JL_STDERR, "edges: %d\n", count_edges);
 }
 
+// mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
 JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     auto val = g_snapshot->node_ptr_to_index_map.find((void*)a);
     if (val != g_snapshot->node_ptr_to_index_map.end()) {
@@ -187,6 +188,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     // Insert a new Node
     size_t self_size = 0;
     string name = "<missing>";
+    string node_type = "object";
 
     if (a == (jl_value_t*)jl_malloc_tag) {
         name = "<malloc>";
@@ -199,8 +201,13 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
             name = "<buffer>";
         } else if (type == (jl_datatype_t*)jl_malloc_tag) {
             name = "<malloc>";
+        } else if (jl_is_string(a)) {
+            node_type = "string";
+            name = jl_string_data(a); // string value
+        } else if (jl_is_symbol(a)) {
+            node_type = "symbol";
+            name = jl_symbol_name((jl_sym_t*)a);
         } else if (jl_is_datatype(type)) {
-
             ios_t str_;
             ios_mem(&str_, 1024);
             JL_STREAM* str = (JL_STREAM*)&str_;
@@ -220,7 +227,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     Node from_node{
         // We pick a default type here, which will be set for the _targets_ of edges.
         // TODO:  What's a good default?
-        g_snapshot->node_types.find_or_create_string_id("object"), // string type;
+        g_snapshot->node_types.find_or_create_string_id(node_type), // size_t type;
         name, // string name;
         (size_t)a, // size_t id;
         // We add 1 to self-size for the type tag that all heap-allocated objects have.
