@@ -226,14 +226,22 @@ end
 function (*)(A::AbstractMatrix, D::Diagonal)
     Tdest = promote_op(*, eltype(A), eltype(D.diag))
     if eltype(A) <: Number && eltype(D) <: Number
-        return mul!(similar(A, Tdest), A, D)
+        nA, nD = size(A, 2), length(D.diag)
+        if nA != nD
+            throw(DimensionMismatch("second dimension of A, $nA, does not match the first of D, $nD"))
+        end
+        return mul!(similar(A, Tdest, size(A)), A, D)
     end
     return rmul!(copy_similar(A, Tdest), D)
 end
 function (*)(D::Diagonal, A::AbstractMatrix)
     Tdest = promote_op(*, eltype(A), eltype(D.diag))
     if eltype(A) <: Number && eltype(D) <: Number
-        return mul!(similar(A, Tdest), D, A)
+        nA, nD = size(A, 1), length(D.diag)
+        if nA != nD
+            throw(DimensionMismatch("second dimension of D, $nD, does not match the first of B, $nA"))
+        end
+        return mul!(similar(A, Tdest, size(A)), D, A)
     end
     return lmul!(D, copy_similar(A, Tdest))
 end
