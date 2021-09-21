@@ -748,6 +748,12 @@ end
     @test res === dst == [5 6 4; 2 3 1]
     res = circshift!(dst, src, (3.0, 2.0))
     @test res === dst == [5 6 4; 2 3 1]
+
+    # https://github.com/JuliaLang/julia/issues/41402
+    src = Float64[]
+    @test circshift(src, 1) == src
+    src = zeros(Bool, (4,0))
+    @test circshift(src, 1) == src
 end
 
 @testset "circcopy" begin
