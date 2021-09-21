@@ -361,7 +361,7 @@ void serialize_heap_snapshot(JL_STREAM *stream, HeapSnapshot &snapshot) {
                 jl_printf(stream, ",");
             }
             jl_printf(stream, "%zu", edge.type);
-            jl_printf(stream, ",%zu", edge.name_or_index * k_node_number_of_fields);
+            jl_printf(stream, ",%zu", edge.name_or_index);
             jl_printf(stream, ",%zu", edge.to_node * k_node_number_of_fields);
             jl_printf(stream, "\n");
         }
