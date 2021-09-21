@@ -3,13 +3,13 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-39a01124-e7ce-4be9-945d-ad48df05396a",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-357ee816-b115-4a3f-8a3d-73ec4e75b3ee",
     "creationInfo": {
         "creators": [
             "Organization: julialang.org ()",
             "Person: Simon Avery ()"
         ],
-        "created": "2021-09-20T05:47:15Z"
+        "created": "2021-09-21T03:57:34Z"
     },
     "documentDescribes": [
         "SPDXRef-JuliaMain"
@@ -150,6 +150,18 @@
             "summary": "OpenBLAS is an optimized BLAS library based on GotoBLAS2 1.13 BSD version."
         },
         {
+            "name": "libunwind",
+            "SPDXID": "SPDXRef-libunwind",
+            "downloadLocation": "git+https://github.com/libunwind/libunwind.git",
+            "filesAnalyzed": false,
+            "homepage": "http://www.nongnu.org/libunwind/",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2002 Hewlett-Packard Co.",
+            "summary": "The primary goal of this project is to define a portable and efficient C programming interface (API) to determine the call-chain of a program."
+        },
+        {
             "name": "libuv",
             "SPDXID": "SPDXRef-libuv",
             "supplier": "Organization: julialang.org ()",
@@ -238,6 +250,11 @@
         },
         {
             "spdxElementId": "SPDXRef-OpenBLAS",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-libunwind",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
