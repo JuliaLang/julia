@@ -614,6 +614,7 @@ end
 g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 @test_throws TypeError g41299(>:, 1, 2)
 
+<<<<<<< HEAD
 # https://github.com/JuliaLang/julia/issues/42078
 # idempotency of callsite inling
 function getcache(mi::Core.MethodInstance)
@@ -672,3 +673,8 @@ end
         success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr))
     end
 end
+=======
+# Issue #42264 - crash on certain union splits
+f(x) = (x...,)
+code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})
+>>>>>>> f9c4755f43... Fix problem with union spliting during inlining, add regression test
