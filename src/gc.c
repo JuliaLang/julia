@@ -1995,6 +1995,7 @@ STATIC_INLINE int gc_mark_scan_obj16(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
         if (*pnew_obj) {
             verify_parent2("object", parent, slot, "field(%d)",
                            gc_slot_to_fieldidx(parent, slot));
+            // TODO: Should this be *parent? Given the way it's used above?
             gc_heap_snapshot_record_object_edge(parent, *slot,
                            gc_slot_to_fieldidx(parent, slot));
         }
