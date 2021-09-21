@@ -256,7 +256,8 @@ JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value
         return;
     }
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
-    if (jl_is_tuple_type(type)) {
+    // TODO: It seems like NamedTuples should have field names? Maybe there's another way to get them?
+    if (jl_is_tuple_type(type) || jl_is_namedtuple_type(type)) {
         // TODO: Maybe not okay to match element and object
         _record_gc_node("object", "element", from, to, field_index);
         return;
