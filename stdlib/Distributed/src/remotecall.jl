@@ -27,11 +27,12 @@ mutable struct Future <: AbstractRemoteRef
     whence::Int
     id::Int
     v::Union{Some{Any}, Nothing}
+    local_lock::Threads.Condition
 
     Future(w::Int, rrid::RRID, v::Union{Some, Nothing}=nothing) =
-        (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
+        (r = new(w, rrid.whence, rrid.id, v, Threads.Condition()); return test_existing_ref(r))
 
-    Future(t::NTuple{4, Any}) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
+    Future(t::NTuple{4, Any}) = new(t[1], t[2], t[3], t[4], Threads.Condition())  # Useful for creating dummy, zeroed-out instances
 end
 
 """
@@ -582,8 +583,20 @@ is an exception, throws a [`RemoteException`](@ref) which captures the remote ex
 """
 function fetch(r::Future)
     r.v !== nothing && return something(r.v)
-    v = call_on_owner(fetch_ref, r)
-    r.v = Some(v)
+    if r.where == myid()
+        lock(r.local_lock)
+        try
+            while r.v === nothing
+                wait(r.local_lock)
+            end
+        finally
+            unlock(r.local_lock)
+        end
+        return something(r.v)
+    else
+        v = call_on_owner(fetch_ref, r)
+        r.v = Some(v)
+    end
     send_del_client(r)
     v
 end
@@ -611,8 +624,18 @@ value to the return value of the call upon completion.
 """
 function put!(rr::Future, v)
     rr.v !== nothing && error("Future can be set only once")
-    call_on_owner(put_future, rr, v, myid())
-    rr.v = Some(v)
+    if rr.where == myid()
+        lock(rr.local_lock)
+        try
+            rr.v = Some(v)
+            notify(rr.local_lock)
+        finally
+            unlock(rr.local_lock)
+        end
+    else
+        call_on_owner(put_future, rr, v, myid())
+        rr.v = Some(v)
+    end
     rr
 end
 function put_future(rid, v, caller)
