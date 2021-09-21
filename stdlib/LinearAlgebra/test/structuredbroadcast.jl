@@ -26,7 +26,7 @@ using Test, LinearAlgebra
         @test broadcast!(*, Z, s, X) == broadcast(*, s, fX)
         @test (Q = broadcast(+, fV, fA, X); Q isa Matrix && Q == broadcast(+, fV, fA, fX))
         @test broadcast!(+, Z, fV, fA, X) == broadcast(+, fV, fA, fX)
-        @test (Q = broadcast(*, s, fV, fA, X); Q isa Matrix && Q == broadcast(*, s, fV, fA, fX))
+        @test (Q = broadcast(*, s, fV, fA, X); typeof(Q) == typeof(X) && Q == broadcast(*, s, fV, fA, fX)) # (.*) can preserve zero structure
         @test broadcast!(*, Z, s, fV, fA, X) == broadcast(*, s, fV, fA, fX)
 
         @test X .* 2.0 == X .* (2.0,) == fX .* 2.0
