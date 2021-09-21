@@ -25,7 +25,8 @@ using std::unordered_set;
 //   - string sizes
 
 
-static inline void _record_gc_node(const char *node_type, const char *edge_type, jl_value_t *a, jl_value_t *b, size_t name_or_index);
+static inline void _record_gc_edge(const char *node_type, const char *edge_type,
+                                   jl_value_t *a, jl_value_t *b, size_t name_or_index);
 
 
 // https://stackoverflow.com/a/33799784/751061
@@ -213,8 +214,7 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
         }
     }
 
-    g_snapshot->node_ptr_to_index_map.insert(val,
-            {a, g_snapshot->nodes.size()});
+    g_snapshot->node_ptr_to_index_map.insert(val, {a, g_snapshot->nodes.size()});
     count_nodes += 1;
 
     Node from_node{
@@ -241,15 +241,15 @@ JL_DLLEXPORT void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_
     if (!g_snapshot) {
         return;
     }
-    _record_gc_node("array", "element", from, to, index);
+    _record_gc_edge("array", "element", from, to, index);
 }
 JL_DLLEXPORT void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) {
     if (!g_snapshot) {
         return;
     }
     //jl_printf(JL_STDERR, "module: %p  binding:%p  name:%s\n", from, to, name);
-    _record_gc_node("object", "property", (jl_value_t*)from, to,
-            g_snapshot->names.find_or_create_string_id(name));
+    _record_gc_edge("object", "property", (jl_value_t *)from, to,
+                    g_snapshot->names.find_or_create_string_id(name));
 }
 JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) {
     if (!g_snapshot) {
@@ -259,44 +259,47 @@ JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value
     // TODO: It seems like NamedTuples should have field names? Maybe there's another way to get them?
     if (jl_is_tuple_type(type) || jl_is_namedtuple_type(type)) {
         // TODO: Maybe not okay to match element and object
-        _record_gc_node("object", "element", from, to, field_index);
+        _record_gc_edge("object", "element", from, to, field_index);
         return;
     }
     if (field_index < 0 || jl_datatype_nfields(type) <= field_index) {
         // TODO: We're getting -1 in some cases
         jl_printf(JL_STDERR, "WARNING - incorrect field index (%zu) for type\n", field_index);
         jl_(type);
-        _record_gc_node("object", "element", from, to, field_index);
+        _record_gc_edge("object", "element", from, to, field_index);
         return;
     }
     jl_svec_t *field_names = jl_field_names(type);
     jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, field_index);
     const char *field_name = jl_symbol_name(name);
 
-    _record_gc_node("object", "property", from, to,
-            g_snapshot->names.find_or_create_string_id(field_name));
+    _record_gc_edge("object", "property", from, to,
+                    g_snapshot->names.find_or_create_string_id(field_name));
 }
-JL_DLLEXPORT void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) {
+JL_DLLEXPORT void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to)
+{
     if (!g_snapshot) {
         return;
     }
     // TODO: probably need to inline this here and make some changes
-    _record_gc_node("object", "internal", from, to,
-            g_snapshot->names.find_or_create_string_id("<internal>"));
+    _record_gc_edge("object", "internal", from, to,
+                    g_snapshot->names.find_or_create_string_id("<internal>"));
 }
 JL_DLLEXPORT void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) {
     if (!g_snapshot) {
         return;
     }
     // TODO: probably need to inline this here and make some changes
-    _record_gc_node("native", "hidden", from, (jl_value_t*)jl_malloc_tag,
-            g_snapshot->names.find_or_create_string_id("<native>"));
+    _record_gc_edge("native", "hidden", from, (jl_value_t *)jl_malloc_tag,
+                    g_snapshot->names.find_or_create_string_id("<native>"));
 
     // Add the size to the "unknown malloc" tag
     g_snapshot->nodes[g_snapshot->node_ptr_to_index_map[(jl_value_t*)jl_malloc_tag]].self_size += bytes;
 }
 
-static inline void _record_gc_node(const char *node_type, const char *edge_type, jl_value_t *a, jl_value_t *b, size_t name_or_index) {
+static inline void _record_gc_edge(const char *node_type, const char *edge_type,
+                                   jl_value_t *a, jl_value_t *b, size_t name_or_index)
+{
     record_node_to_gc_snapshot(a);
     record_node_to_gc_snapshot(b);
 
@@ -309,10 +312,8 @@ static inline void _record_gc_node(const char *node_type, const char *edge_type,
     from_node.edge_count += 1;
 
     from_node.edges.push_back(Edge{
-        g_snapshot->edge_types.find_or_create_string_id(edge_type),
-        name_or_index,
+        g_snapshot->edge_types.find_or_create_string_id(edge_type), name_or_index,
         g_snapshot->node_ptr_to_index_map[b], // to
-        // book-keeping
     });
 
     g_snapshot->num_edges += 1;
