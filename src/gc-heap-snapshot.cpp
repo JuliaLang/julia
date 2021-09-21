@@ -203,10 +203,12 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
             name = "<malloc>";
         } else if (jl_is_string(a)) {
             node_type = "string";
-            name = jl_string_data(a); // string value
+            name = jl_string_data(a);
+            self_size = jl_string_len(a);
         } else if (jl_is_symbol(a)) {
             node_type = "symbol";
             name = jl_symbol_name((jl_sym_t*)a);
+            self_size = name.length();
         } else if (jl_is_datatype(type)) {
             ios_t str_;
             ios_mem(&str_, 1024);
