@@ -132,6 +132,9 @@ fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v))
 # expression is stable.  We can test the zero-preservability by applying the function
 # in cases where all other arguments are known scalars against a zero from the structured
 # matrix. If any non-structured matrix argument is not a known scalar, we give up.
+fzero(f, x) = fzero(x) #General fallback
+fzero(::typeof(*), x::AbstractArray) = one(eltype(x)) #This can return any number except 0
+fzero(::typeof(*), x::StructuredMatrix) = fzero(x) #Return 0
 fzero(x::Number) = x
 fzero(::Type{T}) where T = T
 fzero(r::Ref) = r[]
@@ -139,7 +142,7 @@ fzero(t::Tuple{Any}) = t[1]
 fzero(S::StructuredMatrix) = zero(eltype(S))
 fzero(x) = missing
 function fzero(bc::Broadcast.Broadcasted)
-    args = map(fzero, bc.args)
+    args = map(arg -> fzero(bc.f, arg), bc.args)
     return any(ismissing, args) ? missing : bc.f(args...)
 end
 
