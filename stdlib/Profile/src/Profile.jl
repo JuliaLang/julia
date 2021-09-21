@@ -521,12 +521,7 @@ function fetch(;include_meta = false)
     if include_meta || isempty(data)
         return data
     else
-        nblocks = 0
-        for i = 2:length(data)
-            if is_block_end(data, i) # detect block ends and count them
-                nblocks += 1
-            end
-        end
+        nblocks = count(i -> is_block_end(data, i), eachindex(data))
         data_stripped = Vector{UInt}(undef, length(data) - (nblocks * (nmeta + 1)))
         j = length(data_stripped)
         i = length(data)
@@ -538,7 +533,7 @@ function fetch(;include_meta = false)
             i -= 1
             j -= 1
         end
-        @assert i == j == 0 "metadata stripping failed i=$i j=$j data[1:i]=$(data[1:i])"
+        i == j == 0 || @warn "Unexpected block ends found while stripping profiling metadata. Stack traces may be malformed"
         return data_stripped
     end
 end
