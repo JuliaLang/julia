@@ -508,9 +508,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     end
 
     # We're now in the join block.
-    compact.ssa_rename[compact.idx-1] = insert_node_here!(compact,
-        NewInstruction(pn, typ, line))
-    nothing
+    return insert_node_here!(compact, NewInstruction(pn, typ, line))
 end
 
 function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vector{LineInfoNode}, propagate_inbounds::Bool)
@@ -570,7 +568,7 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
                 if isa(item, InliningTodo)
                     compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
-                    ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
+                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact, 0)

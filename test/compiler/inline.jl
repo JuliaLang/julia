@@ -384,3 +384,7 @@ f_oc_getfield(x) = (@opaque ()->x)()
 # Issue #41299 - inlining deletes error check in :>
 g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 @test_throws TypeError g41299(>:, 1, 2)
+
+# Issue #42264 - crash on certain union splits
+f(x) = (x...,)
+code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})
