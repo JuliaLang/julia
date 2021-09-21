@@ -222,15 +222,21 @@ end
 # Using mul! instead of (l/r)mul! provides a performance boost by avoiding a copy.
 # This is not possible in general, but works if the elements are numbers
 # See #42321
-(*)(A::AbstractMatrix{<:Number}, D::Diagonal{<:Number}) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
-(*)(D::Diagonal{<:Number}, A::AbstractMatrix{<:Number}) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
-
-(*)(A::AbstractMatrix, D::Diagonal) =
-    rmul!(copy_similar(A, promote_op(*, eltype(A), eltype(D.diag))), D)
-(*)(D::Diagonal, A::AbstractMatrix) =
-    lmul!(D, copy_similar(A, promote_op(*, eltype(A), eltype(D.diag))))
+# Using runtime eltype checks instead of dispatch to avoid ambiguities
+function (*)(A::AbstractMatrix, D::Diagonal)
+    Tdest = promote_op(*, eltype(A), eltype(D.diag))
+    if eltype(A) <: Number && eltype(D) <: Number
+        return mul!(similar(A, Tdest), A, D)
+    end
+    return rmul!(copy_similar(A, Tdest), D)
+end
+function (*)(D::Diagonal, A::AbstractMatrix)
+    Tdest = promote_op(*, eltype(A), eltype(D.diag))
+    if eltype(A) <: Number && eltype(D) <: Number
+        return mul!(similar(A, Tdest), D, A)
+    end
+    return lmul!(D, copy_similar(A, Tdest))
+end
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
     require_one_based_indexing(A)
