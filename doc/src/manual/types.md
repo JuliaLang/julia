@@ -430,7 +430,7 @@ julia> bar.baz = 1//2
 1//2
 ```
 
-An extra interface between the fields and the user can be provided through [Type Properties](@ref man-type-properties).
+An extra interface between the fields and the user can be provided through [Instance Properties](@ref man-instance-properties).
 This grants more control on what can be accessed and modified using the `bar.baz` notation.
 
 In order to support mutation, such objects are generally allocated on the heap, and have
