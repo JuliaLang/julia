@@ -2822,8 +2822,10 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     // modules
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
+    _gc_heap_snapshot_record_root(jl_main_module);
 
     // tasks
+    // TODO: add tasks as roots
     jl_gc_mark_enqueued_tasks(gc_cache, sp);
 
     // invisible builtin values
@@ -2834,16 +2836,21 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
         if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
             gc_mark_queue_obj(gc_cache, sp, jl_current_modules.table[i]);
+            _gc_heap_snapshot_record_root(jl_current_modules.table[i]);
         }
     }
     gc_mark_queue_obj(gc_cache, sp, jl_anytuple_type_type);
     for (size_t i = 0; i < N_CALL_CACHE; i++) {
         jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
-        if (v != NULL)
+        if (v != NULL) {
             gc_mark_queue_obj(gc_cache, sp, v);
+            _gc_heap_snapshot_record_root(v);
+        }
     }
-    if (jl_all_methods != NULL)
+    if (jl_all_methods != NULL) {
         gc_mark_queue_obj(gc_cache, sp, jl_all_methods);
+        _gc_heap_snapshot_record_root(jl_all_methods);
+    }
     if (_jl_debug_method_invalidation != NULL)
         gc_mark_queue_obj(gc_cache, sp, _jl_debug_method_invalidation);
 
