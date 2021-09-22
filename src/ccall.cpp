@@ -1270,8 +1270,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (f_lib) {
 #ifdef _OS_WINDOWS_
             if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
-                (f_lib == JL_LIBJULIA_DL_LIBNAME) ||
                 (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+                (!strcmp(f_lib, JL_LIBJULIA_DL_LIBNAME)) ||
                 (!strcmp(f_lib, jl_crtdll_basename))) {
                 // libjulia-like
             }
