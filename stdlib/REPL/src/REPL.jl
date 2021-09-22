@@ -1150,29 +1150,27 @@ function setup_interface(
                     end
                 end
                 dump_tail = false
-                nl_pos = findfirst('\n', SubString(input, oldpos))
                 if s.current_mode == julia_prompt
-                    #while pos <= parse_until
-                        ast, pos = Meta.parse(SubString(input, 1, parse_until), oldpos, raise=false, depwarn=false)
+                    pos = oldpos
+                    while pos <= parse_until
+                        ast, pos = Meta.parse(SubString(input, 1, parse_until), pos, raise=false, depwarn=false)
                         if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                                 (pos > ncodeunits(input) && !endswith(input, '\n'))
                             # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
                             # Insert all the remaining text as one line (might be empty)
                             dump_tail = true
-                            #break
+                            break
                         end
-                    #end
-                elseif isnothing(nlpos) # no newline at end, so just dump the tail into the prompt and don't execute
-                    dump_tail = true
+                    end
                 elseif s.current_prompt == shell_prompt || s.current_prompt == pkg_prompt
                     pos = nextind(s, parse_until)
                 else
-                    #nl_pos = findfirst('\n', SubString(input, oldpos))
-                    #if isnothing(nl_pos) # no newline at end, so just dump the tail into the prompt and don't execute
-                    #    dump_tail = true
-                    #else
+                    nl_pos = findfirst('\n', SubString(input, oldpos))
+                    if isnothing(nl_pos) # no newline at end, so just dump the tail into the prompt and don't execute
+                        dump_tail = true
+                    else
                         pos = oldpos + nl_pos
-                    #end
+                    end
                 end
                 if dump_tail
                     tail = input[oldpos:end]
