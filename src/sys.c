@@ -587,7 +587,7 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-int num_threads_bound(void)
+int num_threads_bound(void) JL_NOTSAFEPOINT
 {
 #ifdef _OS_DARWIN_
     return INT_MAX;
@@ -598,8 +598,8 @@ int num_threads_bound(void)
     int err = uv_thread_getaffinity(&tid, cpumask, masksize);
     if (err) {
         free(cpumask);
-        jl_printf(JL_STDERR, "WARNING: failed to get thread affinity (%s %d)\n",
-                  uv_err_name(err), err);
+        jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
+                       err);
         return INT_MAX;
     }
     int n = 0;
@@ -611,7 +611,7 @@ int num_threads_bound(void)
 #endif
 }
 
-int intmin(int a, int b)
+int intmin(int a, int b) JL_NOTSAFEPOINT
 {
     if (a < b) {
         return a;
