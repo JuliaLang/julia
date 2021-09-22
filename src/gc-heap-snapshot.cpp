@@ -73,7 +73,7 @@ struct Edge {
 
 const int k_node_number_of_fields = 7;
 struct Node {
-    size_t type;
+    size_t type; // TODO: point at actual type here?
     string name;
     size_t id; // (vilterp) the memory address, right?
     size_t self_size;
@@ -178,7 +178,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
-JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
+void record_node_to_gc_snapshot(jl_value_t *a) JL_GC_DISABLED {
     auto val = g_snapshot->node_ptr_to_index_map.find((void*)a);
     if (val != g_snapshot->node_ptr_to_index_map.end()) {
         return;
@@ -246,13 +246,13 @@ JL_DLLEXPORT void record_node_to_gc_snapshot(jl_value_t *a) {
     g_snapshot->nodes.push_back(from_node);
 }
 
-JL_DLLEXPORT void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) {
+void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_GC_DISABLED {
     if (!g_snapshot) {
         return;
     }
     _record_gc_edge("array", "element", from, to, index);
 }
-JL_DLLEXPORT void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) {
+void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) JL_GC_DISABLED {
     if (!g_snapshot) {
         return;
     }
@@ -260,7 +260,7 @@ JL_DLLEXPORT void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_valu
     _record_gc_edge("object", "property", (jl_value_t *)from, to,
                     g_snapshot->names.find_or_create_string_id(name));
 }
-JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) {
+void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) JL_GC_DISABLED {
     if (!g_snapshot) {
         return;
     }
@@ -285,8 +285,7 @@ JL_DLLEXPORT void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value
     _record_gc_edge("object", "property", from, to,
                     g_snapshot->names.find_or_create_string_id(field_name));
 }
-JL_DLLEXPORT void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to)
-{
+void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) JL_GC_DISABLED {
     if (!g_snapshot) {
         return;
     }
@@ -294,7 +293,7 @@ JL_DLLEXPORT void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_val
     _record_gc_edge("object", "internal", from, to,
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
-JL_DLLEXPORT void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) {
+void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) JL_GC_DISABLED {
     if (!g_snapshot) {
         return;
     }
