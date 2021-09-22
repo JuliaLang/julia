@@ -25,28 +25,31 @@ JL_DLLEXPORT void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t 
 
 
 extern int gc_heap_snapshot_enabled;
-#define RETURN_IF_HEAP_SNAPSHOT_NOT_ENABLED() if (!gc_heap_snapshot_enabled) {return;}
-
 
 static inline void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) {
-    RETURN_IF_HEAP_SNAPSHOT_NOT_ENABLED();
-    _gc_heap_snapshot_record_array_edge(from, to, index);
+    if (__unlikely(gc_heap_snapshot_enabled)) {
+        _gc_heap_snapshot_record_array_edge(from, to, index);
+    }
 }
 static inline void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) {
-    RETURN_IF_HEAP_SNAPSHOT_NOT_ENABLED();
-    _gc_heap_snapshot_record_module_edge(from, to, name);
+    if (__unlikely(gc_heap_snapshot_enabled)) {
+        _gc_heap_snapshot_record_module_edge(from, to, name);
+    }
 }
 static inline void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) {
-    RETURN_IF_HEAP_SNAPSHOT_NOT_ENABLED();
-    _gc_heap_snapshot_record_object_edge(from, to, field_index);
+    if (__unlikely(gc_heap_snapshot_enabled)) {
+        _gc_heap_snapshot_record_object_edge(from, to, field_index);
+    }
 }
 static inline void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) {
-    RETURN_IF_HEAP_SNAPSHOT_NOT_ENABLED();
-    _gc_heap_snapshot_record_internal_edge(from, to);
+    if (__unlikely(gc_heap_snapshot_enabled)) {
+        _gc_heap_snapshot_record_internal_edge(from, to);
+    }
 }
 static inline void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) {
-    RETURN_IF_HEAP_SNAPSHOT_NOT_ENABLED();
-    _gc_heap_snapshot_record_hidden_edge(from, bytes);
+    if (__unlikely(gc_heap_snapshot_enabled)) {
+        _gc_heap_snapshot_record_hidden_edge(from, bytes);
+    }
 }
 
 // ---------------------------------------------------------------------
