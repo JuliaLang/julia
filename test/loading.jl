@@ -214,8 +214,6 @@ end
             @test root.uuid == root_uuid
             @test this == nothing
             @test that == nothing
-
-            @test Base.get_uuid_name(project_file, this_uuid) == "This"
         finally
             copy!(LOAD_PATH, old_load_path)
         end
@@ -982,8 +980,8 @@ end
             write(joinpath(tmp, "Env1", "Manifest.toml"), """
             """)
             # Package in current env not present in manifest
-            pkg, env = Base.identify_package_env("Baz")
-            @test Base.locate_package(pkg, env) === nothing
+            pkg = Base.identify_package("Baz")
+            @test Base.locate_package(pkg) === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
             copy!(DEPOT_PATH, old_depot_path)

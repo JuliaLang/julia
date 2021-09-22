@@ -335,8 +335,6 @@ Return the fully expanded value of [`LOAD_PATH`](@ref) that is searched for proj
 packages.
 """
 function load_path()
-    cache = LOADING_CACHE[]
-    cache !== nothing && return cache.load_path
     paths = String[]
     for env in LOAD_PATH
         path = load_path_expand(env)
