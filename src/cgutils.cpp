@@ -1564,7 +1564,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ret = mark_julia_type(ctx, callval, true, jl_any_type);
         }
         if (!jl_subtype(ret.typ, jltype)) {
-            emit_typecheck(ctx, ret, jltype, fname + "typed_store");
+            emit_typecheck(ctx, ret, jltype, fname);
             ret = update_julia_type(ctx, ret, jltype);
         }
         return ret;
