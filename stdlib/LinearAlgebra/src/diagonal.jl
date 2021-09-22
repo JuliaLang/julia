@@ -393,12 +393,12 @@ for Tri in (:UpperTriangular, :LowerTriangular)
         @eval $fun(D::Diagonal, A::$UTri) = $Tri(_set_diag!($fun(D, A.data), D.diag, $f))
     end
     # 3 args
-    @eval ldiv!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(out.data, D, A.Data))
-    @eval ldiv!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_set_diag!(ldiv!(out.data, D, A.Data), D.diag, inv))
-    @eval mul!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(mul!(out.data, D, A.Data))
-    @eval mul!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_set_diag!(mul!(out.data, D, A.Data), D.diag))
-    @eval mul!(out::$Tri, A::$Tri, D::Diagonal) = $Tri(mul!(out.data, A.Data, D))
-    @eval mul!(out::$Tri, A::$UTri, D::Diagonal) = $Tri(_set_diag!(mul!(out.data, A.Data, D), D.diag))
+    @eval ldiv!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(out.data, D, A.data))
+    @eval ldiv!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_set_diag!(ldiv!(out.data, D, A.data), D.diag, inv))
+    @eval mul!(out::$Tri, D::Diagonal, A::$Tri) = $Tri(mul!(out.data, D, A.data))
+    @eval mul!(out::$Tri, D::Diagonal, A::$UTri) = $Tri(_set_diag!(mul!(out.data, D, A.data), D.diag))
+    @eval mul!(out::$Tri, A::$Tri, D::Diagonal) = $Tri(mul!(out.data, A.data, D))
+    @eval mul!(out::$Tri, A::$UTri, D::Diagonal) = $Tri(_set_diag!(mul!(out.data, A.data, D), D.diag))
 end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
