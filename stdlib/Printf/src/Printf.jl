@@ -292,10 +292,9 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     bs = base(T)
     arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
-    one = oneunit(arg2)
     neg = arg2 < 0
     if typeof(arg2) <: Signed && !(typeof(arg2) <: BigInt)
-        x = neg ? unsigned(-(arg2+one))+unsigned(one) : unsigned(arg2)
+        x = unsigned(neg ? -arg2 : arg2)
     else
         x = neg ? -arg2 : arg2
     end
