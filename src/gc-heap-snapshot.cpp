@@ -178,7 +178,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
-void record_node_to_gc_snapshot(jl_value_t *a) JL_GC_DISABLED {
+void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
     auto val = g_snapshot->node_ptr_to_index_map.find((void*)a);
     if (val != g_snapshot->node_ptr_to_index_map.end()) {
         return;
@@ -246,13 +246,13 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_GC_DISABLED {
     g_snapshot->nodes.push_back(from_node);
 }
 
-void gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_GC_DISABLED {
+void gc_heap_snapshot_record_array_edge(jl_value_t *from , jl_value_t *to , size_t index) JL_NOTSAFEPOINT {
     if (!g_snapshot) {
         return;
     }
     _record_gc_edge("array", "element", from, to, index);
 }
-void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) JL_GC_DISABLED {
+void gc_heap_snapshot_record_module_edge(jl_module_t *from , jl_value_t *to , char *name) JL_NOTSAFEPOINT {
     if (!g_snapshot) {
         return;
     }
@@ -260,7 +260,7 @@ void gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char
     _record_gc_edge("object", "property", (jl_value_t *)from, to,
                     g_snapshot->names.find_or_create_string_id(name));
 }
-void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_t field_index) JL_GC_DISABLED {
+void gc_heap_snapshot_record_object_edge(jl_value_t *from , jl_value_t *to , size_t field_index) JL_NOTSAFEPOINT {
     if (!g_snapshot) {
         return;
     }
@@ -285,7 +285,7 @@ void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, size_
     _record_gc_edge("object", "property", from, to,
                     g_snapshot->names.find_or_create_string_id(field_name));
 }
-void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) JL_GC_DISABLED {
+void gc_heap_snapshot_record_internal_edge(jl_value_t *from , jl_value_t *to ) JL_NOTSAFEPOINT {
     if (!g_snapshot) {
         return;
     }
@@ -293,7 +293,7 @@ void gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) JL_
     _record_gc_edge("object", "internal", from, to,
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
-void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) JL_GC_DISABLED {
+void gc_heap_snapshot_record_hidden_edge(jl_value_t *from , size_t bytes ) JL_NOTSAFEPOINT {
     if (!g_snapshot) {
         return;
     }
@@ -306,7 +306,7 @@ void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) JL_GC_D
 }
 
 static inline void _record_gc_edge(const char *node_type, const char *edge_type,
-                                   jl_value_t *a, jl_value_t *b, size_t name_or_index)
+                                   jl_value_t *a, jl_value_t *b, size_t name_or_index) JL_NOTSAFEPOINT
 {
     record_node_to_gc_snapshot(a);
     record_node_to_gc_snapshot(b);
