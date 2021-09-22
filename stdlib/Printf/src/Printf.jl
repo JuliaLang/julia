@@ -292,7 +292,13 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     bs = base(T)
     arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
-    x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
+    one = oneunit(arg2)
+    neg = arg2 < 0
+    if typeof(arg2) <: Signed && !(typeof(arg2) <: BigInt)
+        x = neg ? unsigned(-(arg2+one))+one : unsigned(arg2)
+    else
+        x = neg ? -arg2 : arg2
+    end
     arglen = n + (neg || (plus | space)) +
         (T == Val{'o'} && hash ? 1 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
