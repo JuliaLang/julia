@@ -901,6 +901,21 @@ repl_filename(repl, hp) = "REPL"
 
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
+function parse_until_promptpaste(s, pos, prompt_len)
+    while pos < lastindex(s)
+        if s[pos] == '\n'
+            for i in 1:prompt_len
+                if pos + i > lastindex(s) || s[pos + i] != ' '
+                    return prevind(s, pos)
+                end
+            end
+            pos += prompt_len
+        else
+            pos = nextind(s, pos)
+        end
+    end
+    return pos
+end
 
 setup_interface(
     repl::LineEditREPL;
@@ -1022,10 +1037,10 @@ function setup_interface(
     search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
     search_prompt.complete = LatexCompletions()
 
-    jl_prompt_len = length(JULIA_PROMPT)
-    pkg_prompt_len = length(PKG_PROMPT)
-    shell_prompt_len = length(SHELL_PROMPT)
-    help_prompt_len = length(HELP_PROMPT)
+    jl_prompt_len = sizeof(JULIA_PROMPT)
+    pkg_prompt_len = sizeof(PKG_PROMPT)
+    shell_prompt_len = sizeof(SHELL_PROMPT)
+    help_prompt_len = sizeof(HELP_PROMPT)
     pkg_prompt_regex = r"^(?:\(.+\) )?pkg> "
 
     # Canonicalize user keymap input
@@ -1082,6 +1097,7 @@ function setup_interface(
             isprompt_paste = false
             curr_prompt_len = 0
             pasting_help = false
+            parse_until = lastindex(input)
 
             while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
@@ -1099,6 +1115,7 @@ function setup_interface(
                         curr_prompt_len = jl_prompt_len
                         transition(s, julia_prompt)
                         pasting_help = false
+                        parse_until = parse_until_promptpaste(input, oldpos, curr_prompt_len)
                     # Check if input line starts with "pkg> " or "(...) pkg> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), pkg_prompt_regex)
                         detected_pkg_prompt = match(pkg_prompt_regex, SubString(input, oldpos)).match
@@ -1114,6 +1131,7 @@ function setup_interface(
                         curr_prompt_len = shell_prompt_len
                         transition(s, shell_mode)
                         pasting_help = false
+                        parse_until = parse_until_promptpaste(input, oldpos, curr_prompt_len)
                     # Check if input line starts with "help?> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), HELP_PROMPT)
                         isprompt_paste = true
@@ -1121,6 +1139,7 @@ function setup_interface(
                         curr_prompt_len = help_prompt_len
                         transition(s, help_mode)
                         pasting_help = true
+                        parse_until = parse_until_promptpaste(input, oldpos, curr_prompt_len)
                     # If we are prompt pasting and current statement does not begin with a mode prefix, skip to next line
                     elseif isprompt_paste
                         while input[oldpos] != '\n'
@@ -1131,32 +1150,29 @@ function setup_interface(
                     end
                 end
                 dump_tail = false
-                nl_pos = findfirst('\n', input[oldpos:end])
+                nl_pos = findfirst('\n', SubString(input, oldpos))
                 if s.current_mode == julia_prompt
-                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
-                    if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
-                            (pos > ncodeunits(input) && !endswith(input, '\n'))
-                        # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
-                        # Insert all the remaining text as one line (might be empty)
-                        dump_tail = true
-                    end
-                elseif isnothing(nl_pos) # no newline at end, so just dump the tail into the prompt and don't execute
-                    dump_tail = true
-                elseif s.current_mode == shell_mode # handle multiline shell commands
-                    lines = split(input[oldpos:end], '\n')
-                    pos = oldpos + sizeof(lines[1]) + 1
-                    if length(lines) > 1
-                        for line in lines[2:end]
-                            # to be recognized as a multiline shell command, the lines must be indented to the
-                            # same prompt position
-                            if !startswith(line, ' '^curr_prompt_len)
-                                break
-                            end
-                            pos += sizeof(line) + 1
+                    #while pos <= parse_until
+                        ast, pos = Meta.parse(SubString(input, 1, parse_until), oldpos, raise=false, depwarn=false)
+                        if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
+                                (pos > ncodeunits(input) && !endswith(input, '\n'))
+                            # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
+                            # Insert all the remaining text as one line (might be empty)
+                            dump_tail = true
+                            #break
                         end
-                    end
+                    #end
+                elseif isnothing(nlpos) # no newline at end, so just dump the tail into the prompt and don't execute
+                    dump_tail = true
+                elseif s.current_prompt == shell_prompt || s.current_prompt == pkg_prompt
+                    pos = nextind(s, parse_until)
                 else
-                    pos = oldpos + nl_pos
+                    #nl_pos = findfirst('\n', SubString(input, oldpos))
+                    #if isnothing(nl_pos) # no newline at end, so just dump the tail into the prompt and don't execute
+                    #    dump_tail = true
+                    #else
+                        pos = oldpos + nl_pos
+                    #end
                 end
                 if dump_tail
                     tail = input[oldpos:end]
