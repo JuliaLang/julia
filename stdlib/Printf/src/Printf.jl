@@ -293,7 +293,7 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
     neg = arg2 < 0
-    if typeof(arg2) <: Signed && !(typeof(arg2) <: BigInt)
+    if typeof(arg2) <: Union{Int8, Int16, Int32, Int64, Int128}
         x = unsigned(neg ? -arg2 : arg2)
     else
         x = neg ? -arg2 : arg2
