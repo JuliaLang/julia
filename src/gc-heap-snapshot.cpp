@@ -143,7 +143,7 @@ public:
     StringTable node_types = {"object", "string", "symbol", "synthetic"};
     StringTable edge_types = {"property"};
     unordered_map<void*, size_t> node_ptr_to_index_map;
-    Node *gc_roots_node;
+    size_t gc_subroots_node_idx; // all gc roots hang off of this
 
     size_t num_edges = 0; // For metadata, updated as you add each edge. Needed because edges owned by nodes.
 };
@@ -186,9 +186,9 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(JL_STREAM *stream) {
 // adds a node at id 0 which is the "uber root":
 // a synthetic node which points to all the GC roots.
 void _add_uber_root(HeapSnapshot *snapshot) {
-    Node uber_root{
+    Node internal_root{
         snapshot->node_types.find_or_create_string_id("synthetic"),
-        "(uber root)", // name
+        "(internal root)", // name
         1, // id: uber root must have id 1
         0, // size
         
@@ -199,12 +199,12 @@ void _add_uber_root(HeapSnapshot *snapshot) {
         // outgoing edges
         vector<Edge>(),
     };
-    snapshot->nodes.push_back(uber_root);
+    snapshot->nodes.push_back(internal_root);
 
-    Node gc_roots_node{
+    Node root_node{
         snapshot->node_types.find_or_create_string_id("synthetic"),
-        "(GC roots)", // name
-        3, // id: GC root 2 higher than uber root
+        "(GC root)", // name
+        3, // id: GC root 2 higher than internal root
         0, // size
         
         0, // int edge_count, will be incremented on every outgoing edge
@@ -214,16 +214,39 @@ void _add_uber_root(HeapSnapshot *snapshot) {
         // outgoing edges
         vector<Edge>(),
     };
-    snapshot->nodes.push_back(gc_roots_node);
-    snapshot->gc_roots_node = &gc_roots_node;
+    snapshot->nodes.push_back(root_node);
 
     // add edge from uber root to gc roots node
-    uber_root.edges.push_back(Edge{
+    internal_root.edges.push_back(Edge{
         snapshot->names.find_or_create_string_id("internal"),
-        snapshot->names.find_or_create_string_id("uber_root to gc_roots_node"),
+        snapshot->names.find_or_create_string_id("internal_root to gc_root_node"),
         1,
     });
-    uber_root.edge_count++;
+    internal_root.edge_count++;
+
+    Node subroot_node{
+        snapshot->node_types.find_or_create_string_id("synthetic"),
+        "(GC subroot)", // name
+        5, // id: GC subroot 2 higher than root
+        0, // size
+        
+        0, // int edge_count, will be incremented on every outgoing edge
+        0, // size_t trace_node_id (unused)
+        0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+
+        // outgoing edges
+        vector<Edge>(),
+    };
+    snapshot->nodes.push_back(subroot_node);
+    snapshot->gc_subroots_node_idx = 2;
+
+    // add edge from uber root to gc roots node
+    root_node.edges.push_back(Edge{
+        snapshot->names.find_or_create_string_id("internal"),
+        snapshot->names.find_or_create_string_id("root_node to sub_root_node"),
+        2,
+    });
+    root_node.edge_count++;
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
@@ -296,7 +319,7 @@ void record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
 }
 
 void _gc_heap_snapshot_record_root(jl_value_t *root) {
-    auto &gc_roots_node = g_snapshot->gc_roots_node;
+    auto &gc_subroots_node = g_snapshot->nodes[g_snapshot->gc_subroots_node_idx];
     
     // add synthetic edge from uber root to it
     record_node_to_gc_snapshot(root);
@@ -305,12 +328,12 @@ void _gc_heap_snapshot_record_root(jl_value_t *root) {
     auto to_node_idx = g_snapshot->node_ptr_to_index_map[root];
     auto name_or_index = g_snapshot->names.find_or_create_string_id("root");
 
-    gc_roots_node->edges.push_back(Edge{
+    gc_subroots_node.edges.push_back(Edge{
         g_snapshot->edge_types.find_or_create_string_id("internal"),
         name_or_index,
         to_node_idx,
     });
-    gc_roots_node->edge_count++;
+    gc_subroots_node.edge_count++;
 }
 
 void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
