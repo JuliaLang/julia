@@ -674,5 +674,6 @@ end
 end
 
 # Issue #42264 - crash on certain union splits
-f(x) = (x...,)
-code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})
+let f(x) = (x...,)
+    @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
+end
